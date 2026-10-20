@@ -2,10 +2,8 @@
 
 ///|
 priv enum UiMessage {
-  Connectors
   Checking
   ToolCount(Int32)
-  Refresh
   EngineStopped
   EngineConnecting
   NotConfigured
@@ -17,16 +15,14 @@ priv enum UiMessage {
   LostReason
   Skipped
   SkippedReason
+  NotRunning
+  ConnectedCount(Int32)
+  FailedCount(Int32)
 }
 
 ///|
 fn text(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
-    (English, Connectors) => "Connectors"
-    (Spanish, Connectors) => "Conectores"
-    (SimplifiedChinese, Connectors) => "连接器"
-    (TraditionalChinese, Connectors) => "連接器"
-    (Japanese, Connectors) => "コネクタ"
     (English, Checking) => "Checking…"
     (Spanish, Checking) => "Comprobando…"
     (SimplifiedChinese, Checking) => "正在读取…"
@@ -39,11 +35,23 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ToolCount(count)) => "\{count} 个工具"
     (TraditionalChinese, ToolCount(count)) => "\{count} 個工具"
     (Japanese, ToolCount(count)) => "\{count} 個のツール"
-    (English, Refresh) => "Refresh"
-    (Spanish, Refresh) => "Actualizar"
-    (SimplifiedChinese, Refresh) => "刷新"
-    (TraditionalChinese, Refresh) => "重新整理"
-    (Japanese, Refresh) => "更新"
+    (English, NotRunning) => "Not running"
+    (Spanish, NotRunning) => "No está en ejecución"
+    (SimplifiedChinese, NotRunning) => "引擎未运行"
+    (TraditionalChinese, NotRunning) => "引擎未執行"
+    (Japanese, NotRunning) => "停止中"
+    (English, ConnectedCount(count)) => "\{count} connected"
+    (Spanish, ConnectedCount(1)) => "1 conectado"
+    (Spanish, ConnectedCount(count)) => "\{count} conectados"
+    (SimplifiedChinese, ConnectedCount(count)) => "已连接 \{count} 个"
+    (TraditionalChinese, ConnectedCount(count)) => "已連線 \{count} 個"
+    (Japanese, ConnectedCount(count)) => "\{count} 件接続済み"
+    (English, FailedCount(count)) => "\{count} failed"
+    (Spanish, FailedCount(1)) => "1 con error"
+    (Spanish, FailedCount(count)) => "\{count} con error"
+    (SimplifiedChinese, FailedCount(count)) => "\{count} 个失败"
+    (TraditionalChinese, FailedCount(count)) => "\{count} 個失敗"
+    (Japanese, FailedCount(count)) => "\{count} 件失敗"
     (English, EngineStopped) =>
       "Not running. Servers connect with the next message."
     (Spanish, EngineStopped) =>

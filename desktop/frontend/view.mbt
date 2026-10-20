@@ -1694,44 +1694,87 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-fn run_indicator(
+fn run_indicator(model : Model, conv : Conversation) -> @html.Html {
+  let status = model.display_status()
+  let label = status.label(locale=model.locale)
+  if conv.is_running() {
+    @html.div(class="run-status accent", [
+      @html.span(class="run-dot accent pulse", ""),
+      @html.span(class="run-text", label),
+    ])
+  } else {
+    @html.div(class="run-status", [
+      @html.span(class="run-dot \{status.kind().css()}", ""),
+      @html.span(class="run-text", label),
+    ])
+  }
+}
+
+///|
+/// Where `conv` runs, for the overview's environment card.
+fn Model::overview_environment(
+  self : Model,
+  conv : Conversation,
+) -> @conversation_overview.Environment {
+  let project = conv.project()
+  let remote = if self.is_desktop {
+    let status = self.remote_access
+    Some(
+      if status.map_or(false, status => status.managed_by_env) {
+        @conversation_overview.Managed
+      } else if self.account is None {
+        @conversation_overview.SignedOut
+      } else {
+        @conversation_overview.Switch(
+          enabled=status.map_or(false, status => status.device_url is Some(_)),
+          busy=self.remote_connecting,
+        )
+      },
+    )
+  } else {
+    None
+  }
+  {
+    device: self.device_name(conv.device),
+    project: @resource.label(project),
+    path: project.path,
+    branch: conv.branch.filter(branch => !branch.is_empty()),
+    worktree: match conv.workspace {
+      Worktree(name~, ..) => Some(name)
+      Project(..) => None
+    },
+    remote,
+  }
+}
+
+///|
+/// The overview beside `conv`: where it runs and what its engine is connected
+/// to.
+fn overview_view(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   conv : Conversation,
 ) -> @html.Html {
-  let status = model.display_status()
-  let label = status.label(locale=model.locale)
-  let (class, dot) = if conv.is_running() {
-    ("run-status accent", "run-dot accent pulse")
-  } else {
-    ("run-status", "run-dot \{status.kind().css()}")
+  let key : @interop.ConversationKey = {
+    channel: conv.device,
+    session: conv.session_id,
   }
-  let opened = if model.connectors_open { " open" } else { "" }
-  // The status is also the way into what this conversation's engine is
-  // connected to. The panel renders after the stable button, so opening it
-  // never replaces the node under the pointer.
-  let children : Array[@html.Html] = [
-    @html.button(
-      class="\{class} run-status-button\{opened}",
-      type_="button",
-      attrs=@html.Attrs::build().aria_expanded(
-        model.connectors_open.to_string(),
-      ),
-      on_click=dispatch(ToggleConnectors),
-      [@html.span(class=dot, ""), @html.span(class="run-text", label)],
-    ),
-  ]
-  if model.connectors_open {
-    children.push(
-      @mcp.panel(
-        locale=model.locale,
-        { channel: conv.device, session: conv.session_id, },
-        model.mcp,
-        dispatch.map(msg => Mcp(msg)),
-      ),
-    )
-  }
-  @html.div(class="run-status-control", children)
+  @conversation_overview.view(
+    locale=model.locale,
+    model.overview,
+    environment=model.overview_environment(conv),
+    connectors={
+      summary: @mcp.summary(locale=model.locale, key, model.mcp),
+      rows: @mcp.rows(locale=model.locale, key, model.mcp),
+      refresh: if @mcp.checking(key, model.mcp) {
+        None
+      } else {
+        Some(dispatch(Mcp(Refresh(key))))
+      },
+    },
+    dispatch.map(msg => Overview(msg)),
+    set_remote=enabled => dispatch(RemoteAccessSet(enabled)),
+  )
 }
 
 ///|
@@ -1798,7 +1841,7 @@ fn conversation_header(
     session_tooltip(model, conv),
     Some(workspace),
   )
-  items.push(run_indicator(dispatch, model, conv))
+  items.push(run_indicator(model, conv))
   if conv.turn.usage_tokens > 0 {
     items.push(
       @html.span(
@@ -1828,6 +1871,13 @@ fn conversation_header(
         },
         on_click=toggle_terminal,
         icon(icon_terminal),
+      ),
+    )
+    items.push(
+      @conversation_overview.toggle(
+        locale=model.locale,
+        model.overview_open,
+        dispatch(ToggleOverview),
       ),
     )
   }
@@ -2235,6 +2285,12 @@ fn view(
                 ])
               } else {
                 composer_html
+              },
+              // Last, so showing it never shifts the composer's position.
+              if model.overview_open && !model.narrow {
+                overview_view(dispatch, model, conv)
+              } else {
+                @html.nothing
               },
             ]
         }

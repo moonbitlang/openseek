@@ -70,6 +70,8 @@ pub fn icon_folder() -> @html.Html
 
 pub fn icon_folder_opened() -> @html.Html
 
+pub fn icon_git_branch() -> @html.Html
+
 pub fn icon_github() -> @html.Html
 
 pub fn icon_globe() -> @html.Html
@@ -102,11 +104,15 @@ pub fn icon_pin() -> @html.Html
 
 pub fn icon_play() -> @html.Html
 
+pub fn icon_preview() -> @html.Html
+
 pub fn icon_pull_request() -> @html.Html
 
 pub fn icon_question() -> @html.Html
 
 pub fn icon_region_capture() -> @html.Html
+
+pub fn icon_remote() -> @html.Html
 
 pub fn icon_reply() -> @html.Html
 
@@ -131,6 +137,8 @@ pub fn icon_terminal() -> @html.Html
 pub fn icon_tools() -> @html.Html
 
 pub fn icon_trash() -> @html.Html
+
+pub fn icon_vm() -> @html.Html
 
 pub fn icon_watch() -> @html.Html
 

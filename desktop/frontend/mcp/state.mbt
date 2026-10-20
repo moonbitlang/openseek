@@ -1,21 +1,21 @@
 // A conversation's connectors: what its engine holds of its MCP servers,
-// shown in the panel its run status opens. The host keeps no connections of
-// its own — every conversation's engine connects its servers when it
-// starts, and reports what came of it then and whenever it changes — so the
-// panel asks the host for that engine's latest report and shows it. Asking
-// starts nothing, so the panel asks every time it opens, again each time the
-// engine of its conversation reports, and again when that device
-// reconnects, since a report sent while the connection was down is not
-// replayed.
+// shown in the conversation overview's connectors card. The host keeps no
+// connections of its own — every conversation's engine connects its servers
+// when it starts, and reports what came of it then and whenever it changes —
+// so the overview asks the host for that engine's latest report and shows
+// it. Asking starts nothing, so the overview asks every time it comes on
+// screen for a conversation, again each time the engine of its conversation
+// reports, and again when that device reconnects, since a report sent while
+// the connection was down is not replayed.
 
 ///|
 pub(all) enum Msg {
-  /// The panel opened on this conversation.
+  /// The overview came on screen for this conversation.
   Opened(@interop.ConversationKey)
-  /// The user asked again about the conversation the panel is showing.
+  /// The user asked again about the conversation the overview is showing.
   Refresh(@interop.ConversationKey)
   /// This conversation's engine reported to the host, or the host may have
-  /// heard from it while unreachable: whatever the panel holds for it is out
+  /// heard from it while unreachable: whatever the overview holds for it is out
   /// of date.
   Changed(@interop.ConversationKey)
   /// The host answered question number `serial`.
@@ -23,7 +23,7 @@ pub(all) enum Msg {
 }
 
 ///|
-/// What the panel has to show for its conversation.
+/// What the overview has to show for its conversation.
 pub enum Phase {
   /// Nothing has been asked yet.
   Unchecked
@@ -32,7 +32,7 @@ pub enum Phase {
   /// The host answered.
   Loaded(@protocol.McpStatusReply)
   /// The host answered, and the question is out again. The last answer stays
-  /// up until its replacement arrives, so reopening the panel or a change the
+  /// up until its replacement arrives, so the overview coming back or a change the
   /// user did not ask about does not blank the list.
   Reloading(@protocol.McpStatusReply)
   /// The question itself failed — the host could not be reached, or could
@@ -46,8 +46,8 @@ pub extend Phase with Eq::{equal, not_equal}
 
 ///|
 pub struct State {
-  /// The conversation the phase describes; `None` before the panel first
-  /// opens.
+  /// The conversation the phase describes; `None` before the overview first
+  /// shows.
   conversation : @interop.ConversationKey?
   phase : Phase
   /// Counts questions, so the answer to a superseded one is recognized and
@@ -95,8 +95,8 @@ pub fn update(
         Unchecked | CheckFailed(_) =>
           ask(emit, conversation, state, waiting=Checking)
       }
-    // A report from an engine the panel is not about changes nothing here:
-    // its conversation is asked about when the panel opens on it. For the one
+    // A report from an engine the overview is not about changes nothing here:
+    // its conversation is asked about when the overview shows it. For the one
     // it is about, a question already out may have been answered before this
     // report, so it is superseded rather than awaited.
     Changed(conversation) => {

@@ -1,29 +1,51 @@
 ///|
-/// The connectors panel the run status of `conversation` opens: a heading
-/// with a refresh button, then what that conversation's engine last reported.
-pub fn panel(
+/// The one line the overview shows for `conversation`'s connectors while
+/// their card is folded: how many servers its engine reached, and how many
+/// it could not, or where the question stands.
+pub fn summary(
   locale~ : @i18n.Locale = English,
   conversation : @interop.ConversationKey,
   state : State,
-  emit : @cmd.Emit[Msg],
-) -> @html.Html {
-  let phase = state.phase_for(conversation)
-  let busy = phase is (Checking | Reloading(_))
-  let rows : Array[@html.Html] = [
-    @html.div(class="connectors-head", [
-      @html.span(class="connectors-title", text(locale, Connectors)),
-      @html.button(
-        class="connectors-refresh",
-        type_="button",
-        title=text(locale, Refresh),
-        disabled=busy,
-        attrs=@html.Attrs::build().aria_label(text(locale, Refresh)),
-        on_click=emit(Refresh(conversation)),
-        @icons.icon(@icons.icon_sync),
-      ),
-    ]),
-  ]
-  match phase {
+) -> String {
+  match state.phase_for(conversation) {
+    Unchecked | Checking => text(locale, Checking)
+    CheckFailed(_) => text(locale, CheckFailed)
+    Loaded(Stopped) | Reloading(Stopped) => text(locale, NotRunning)
+    Loaded(Connecting) | Reloading(Connecting) => text(locale, EngineConnecting)
+    Loaded(Running(status)) | Reloading(Running(status)) => {
+      let connected = status.servers
+        .filter(server => server.state is Connected(_))
+        .length()
+      let failed = status.servers
+        .filter(server => server.state is (Failed(_) | Lost(_)))
+        .length() +
+        status.configs.filter(config => config.state is Failed(_)).length()
+      if failed > 0 {
+        "\{text(locale, ConnectedCount(connected))} · \{text(locale, FailedCount(failed))}"
+      } else {
+        text(locale, ConnectedCount(connected))
+      }
+    }
+  }
+}
+
+///|
+/// Whether a question about `conversation` is out, so asking again would
+/// only repeat it.
+pub fn checking(conversation : @interop.ConversationKey, state : State) -> Bool {
+  state.phase_for(conversation) is (Checking | Reloading(_))
+}
+
+///|
+/// The rows the overview shows for `conversation`'s connectors when their
+/// card is unfolded: what that conversation's engine last reported.
+pub fn rows(
+  locale~ : @i18n.Locale = English,
+  conversation : @interop.ConversationKey,
+  state : State,
+) -> Array[@html.Html] {
+  let rows : Array[@html.Html] = []
+  match state.phase_for(conversation) {
     Unchecked | Checking => rows.push(note(text(locale, Checking)))
     CheckFailed(error) =>
       rows.push(
@@ -42,7 +64,7 @@ pub fn panel(
     Loaded(Running(status)) | Reloading(Running(status)) =>
       status_rows(locale, status, rows)
   }
-  @html.div(class="connectors-menu", rows)
+  rows
 }
 
 ///|

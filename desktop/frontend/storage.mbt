@@ -41,6 +41,9 @@ fn load_saved_settings(
       is Some(mode) {
       scheduler.add(dispatch(SidebarModeLoaded(mode)))
     }
+    if load_setting(OverviewStorageKey) is Some(stored) {
+      scheduler.add(dispatch(OverviewLoaded(stored == "true")))
+    }
   })
 }
 
@@ -196,6 +199,13 @@ fn load_setting(storage_key : String) -> String? {
 ///|
 fn save_setting(storage_key : String, value : String) -> Unit {
   @base_browser.local_storage_set(storage_key, value) |> ignore
+}
+
+///|
+/// Like the detailed-transcript preference, the overview's visibility is local
+/// to this browser profile.
+fn save_overview_open(open : Bool) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(OverviewStorageKey, open.to_string()))
 }
 
 ///|

@@ -1,0 +1,212 @@
+/* ---------- conversation overview ----------
+   One element, two presentations, chosen by the main pane's width alone:
+   with room for a 600px conversation beside it, a rail of cards to the right
+   of the transcript and the composer; otherwise a panel over the
+   transcript's right edge, from under the titlebar to above the composer.
+   Showing and hiding is the root's single preference either way. */
+
+main {
+  --conv-overview-width: 300px;
+}
+
+/* Narrow: a panel over the transcript row. It stays out of the composer's
+   row, so the composer remains usable while the overview is open. */
+.conv-overview {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+  align-self: stretch;
+  z-index: 20;
+  box-sizing: border-box;
+  width: var(--conv-overview-width);
+  max-width: calc(100% - 16px);
+  min-height: 0;
+  margin: 6px 8px;
+  padding: 2px 14px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.conv-overview-card {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.conv-overview-card:last-child {
+  border-bottom: 0;
+}
+
+/* Wide: the conversation's children give the rail its column, and the rail
+   spans the transcript, question, and composer rows as a stack of cards. */
+@container main-pane (min-width: 900px) {
+  main:has(> .conv-overview) > :not(.topbar, .conv-overview) {
+    margin-inline-end: var(--conv-overview-width);
+  }
+
+  .conv-overview {
+    grid-row: 2 / span 3;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: none;
+    margin: 0;
+    padding: 12px 14px 16px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .conv-overview-card,
+  .conv-overview-card:last-child {
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-surface);
+  }
+}
+
+.conv-overview-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+
+.conv-overview-card-title {
+  --icon-size: var(--icon-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.conv-overview-card-title > .icon {
+  color: var(--color-text-faint);
+  transform: rotate(-90deg);
+  transition: transform var(--drawer-duration) var(--drawer-easing);
+}
+.conv-overview-card-title.open > .icon {
+  transform: none;
+}
+
+.conv-overview-card-aside {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-inline-start: auto;
+  color: var(--color-text-muted);
+}
+
+.conv-overview-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-overview-mini {
+  --icon-size: var(--icon-sm);
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.conv-overview-mini:hover:not(:disabled) {
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
+}
+.conv-overview-mini:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.conv-overview-card-rows {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.conv-overview-row {
+  --icon-size: var(--icon-md);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+.conv-overview-row > .icon {
+  color: var(--color-text-muted);
+}
+
+.conv-overview-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-overview-row-sub {
+  color: var(--color-text-faint);
+}
+
+.conv-overview-tag {
+  flex: none;
+  padding: 0 7px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* The device's Remote Control setting, the same one Settings changes. */
+.conv-overview-switch {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-border);
+  cursor: pointer;
+  transition: background var(--drawer-duration) var(--drawer-easing);
+}
+.conv-overview-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-bg-surface);
+  transition: left var(--drawer-duration) var(--drawer-easing);
+}
+.conv-overview-switch.on {
+  background: var(--color-success);
+}
+.conv-overview-switch.on::after {
+  left: 14px;
+}
+.conv-overview-switch:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

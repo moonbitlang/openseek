@@ -158,6 +158,20 @@ the pipes) surfaces a notice asking to resubmit, so the text never vanishes
 silently. A turn that is being cancelled cannot be steered; the text stays in
 the composer.
 
+## Conversation overview
+
+The titlebar's overview control shows or hides a column of cards about the
+OpenSeek conversation on screen: its **Environment** — the device it runs
+on, its project, the checked-out branch and whether the conversation has a
+worktree of its own, and on the desktop the device's Remote Control setting,
+the same one Settings changes — and its **Connectors** (see MCP servers).
+Showing it is a window preference kept across conversations and launches.
+Where the main pane has room for a 600px conversation beside it, the
+overview is a rail to the right of the transcript and the composer; where it
+does not — a narrow window, a wide sidebar, an open file panel — the same
+overview is a panel over the transcript's right edge that stops above the
+composer. The stylesheet decides between the two from the main pane's width.
+
 ## Skills
 
 The sidebar's **Skills** button opens a browser over the
@@ -209,23 +223,25 @@ which costs one more engine start than was needed on the next prompt; only an
 edit that is also undone in that moment goes unnoticed until the file changes
 again.
 
-A conversation's run status in the top bar opens its **Connectors**: what
-that conversation's engine holds of its MCP servers, the host's own among
-them — each connected with its tool count, disconnected since it connected,
-no tools, failed with the reason, or skipped over the tool limit, after any
-configuration file the engine could not load; how a server is reached and
-its tools are on hover. The host holds no MCP connections of its own. Each
-engine reports what it holds once it has connected its servers, and again
-whenever that changes (`mcp_status` on the serve protocol); the host keeps a
-conversation's latest report and the panel shows it. Reading it starts
-nothing, so the panel reads each time it opens, again whenever its
+The conversation overview's **Connectors** card shows what that
+conversation's engine holds of its MCP servers, the host's own among them.
+Folded, it is one line — how many servers connected and how many failed;
+unfolded, each server is listed connected with its tool count, disconnected
+since it connected, no tools, failed with the reason, or skipped over the
+tool limit, after any configuration file the engine could not load; how a
+server is reached and its tools are on hover. The host holds no MCP
+connections of its own. Each engine reports what it holds once it has
+connected its servers, and again whenever that changes (`mcp_status` on the
+serve protocol); the host keeps a conversation's latest report and the card
+shows it. Reading it starts nothing, so the card reads each time the
+overview comes on screen for a conversation, again whenever its
 conversation's engine reports — a server that exits turns to disconnected
 without a refresh — and again when the host reconnects. A conversation whose
 engine is not running — before its first message, or after a restart — is
 shown as that; its servers connect when its next message starts one. One
 whose engine has started and not reported yet is shown as still connecting.
-An engine that exits while the panel is open reports nothing more; its
-refresh button shows it stopped.
+An engine that exits while the overview is shown reports nothing more; the
+card's refresh button shows it stopped.
 
 A configuration the engine cannot load, and a server that fails to start, to
 list its tools, or to fit under the tool limit, raise an error toast naming

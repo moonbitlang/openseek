@@ -10,7 +10,11 @@ import {
 }
 
 // Values
-pub fn panel(locale? : @i18n.Locale, @interop.ConversationKey, State, @cmd.Emit[Msg]) -> @html.Html
+pub fn checking(@interop.ConversationKey, State) -> Bool
+
+pub fn rows(locale? : @i18n.Locale, @interop.ConversationKey, State) -> Array[@html.Html]
+
+pub fn summary(locale? : @i18n.Locale, @interop.ConversationKey, State) -> String
 
 pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
 

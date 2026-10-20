@@ -1695,7 +1695,6 @@ fn desired_browser_view(model : Model) -> Int32? {
     !model.conversation_transfer_menu_open &&
     model.select_menu is None &&
     !git_details_open &&
-    !(model.screen is Chat && model.connectors_open) &&
     !covering_overlay(model) else {
     return None
   }
@@ -2011,19 +2010,6 @@ fn update(
   //
   // The second clause is the invariant rather than a list of paths: no chip,
   // no popover, however the branch came to be gone.
-  // The connectors panel describes the conversation on screen; one that is
-  // switched away from, or a screen without a run status, closes it.
-  let model = if model.connectors_open &&
-    (
-      model.active_session != previous.active_session ||
-      model.focused != previous.focused ||
-      !(model.screen is Chat) ||
-      model.active_conversation() is None
-    ) {
-    { ..model, connectors_open: false, }
-  } else {
-    model
-  }
   let model = if model.git_details_open &&
     (
       model.active_session != previous.active_session ||
@@ -2134,6 +2120,21 @@ fn update(
   } else {
     model
   }
+  // The overview's connectors card asks about its conversation whenever the
+  // overview comes on screen for one: shown, or another conversation arriving
+  // under it. What the engine holds changes on its own and asking starts
+  // nothing, so every arrival asks.
+  let (overview_cmd, model) = match model.overview_conversation() {
+    Some(conversation) if previous.overview_conversation() != Some(conversation) => {
+      let (cmd, mcp) = @mcp.update(
+        dispatch.map(msg => Mcp(msg)),
+        Opened(conversation),
+        model.mcp,
+      )
+      (cmd, { ..model, mcp, })
+    }
+    _ => (@cmd.none, model)
+  }
   // Terminal input changes are reconciled as part of the root transition.
   // Host transport installation is declared separately by the root
   // subscriptions, so terminal reconciliation owns only terminal state.
@@ -2185,6 +2186,7 @@ fn update(
       panel_cmd,
       terminal_cmd,
       jobs_cmd,
+      overview_cmd,
       github_cmd,
       browser_cmd,
       preview_cmd,
@@ -5857,22 +5859,21 @@ fn update_msg(
       )
     }
     CloseGitDetails => (@cmd.none, { ..model, git_details_open: false, })
-    ToggleConnectors => {
-      let opening = !model.connectors_open
-      let model = { ..model, connectors_open: opening, }
-      // Opening asks the host again: what the engine holds changes on its
-      // own, and asking starts nothing.
-      guard opening && model.connectors_conversation() is Some(conversation) else {
-        return (@cmd.none, model)
-      }
-      let (cmd, mcp) = @mcp.update(
-        dispatch.map(msg => Mcp(msg)),
-        Opened(conversation),
-        model.mcp,
-      )
-      (cmd, { ..model, mcp, })
+    // Showing the overview reads its conversation's connectors; the root
+    // transition notices the overview arriving and asks.
+    ToggleOverview => {
+      let overview_open = !model.overview_open
+      (save_overview_open(overview_open), { ..model, overview_open, })
     }
-    CloseConnectors => (@cmd.none, { ..model, connectors_open: false, })
+    OverviewLoaded(overview_open) => (@cmd.none, { ..model, overview_open, })
+    Overview(msg) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          overview: @conversation_overview.update(msg, model.overview),
+        },
+      )
     TranscriptLeft(slot~, scroll~) =>
       (
         @cmd.none,
