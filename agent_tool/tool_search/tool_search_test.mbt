@@ -281,3 +281,50 @@ test "fields of a map's values are searchable" {
   }
   assert_true(output.content.contains("## mcp__ci__dispatch"))
 }
+
+///|
+test "fields in tuple items and conditional branches are searchable" {
+  let tools = [
+    mcp_tool("mcp__t__pair", "A pair.", {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": { "repository": { "type": "string" } },
+        },
+      ],
+    }),
+    mcp_tool("mcp__t__legacy", "Old tuple.", {
+      "type": "array",
+      "items": [
+        { "type": "object", "properties": { "branch": { "type": "string" } } },
+      ],
+    }),
+    mcp_tool("mcp__t__cond", "Conditional.", {
+      "type": "object",
+      "if": { "properties": { "kind": { "const": "a" } } },
+      "then": { "properties": { "timezone": { "type": "string" } } },
+    }),
+    mcp_tool("mcp__t__plain", "Plain.", {
+      "type": "object",
+      "default": { "repository": "ignored" },
+    }),
+  ]
+  guard @tool_search.definition([Source(name="t", tools~)]).execute is Sync(run) else {
+    fail("tool_search should run synchronously")
+  }
+  for
+    pair in [
+      ("repository", "mcp__t__pair"),
+      ("branch", "mcp__t__legacy"),
+      ("timezone", "mcp__t__cond"),
+    ] {
+    let (query, name) = pair
+    guard run({ "query": query }) is Respond(output) else {
+      fail("tool_search should respond")
+    }
+    assert_true(output.content.contains("## \{name}"), msg=query)
+    // Instance values are not indexed.
+    assert_false(output.content.contains("## mcp__t__plain"), msg=query)
+  }
+}

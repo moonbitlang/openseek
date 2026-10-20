@@ -42,45 +42,65 @@ priv struct Entry {
 }
 
 ///|
+/// Keywords whose value is one subschema.
+let single_subschema_keywords : Array[String] = [
+  "items", "additionalProperties", "additionalItems", "contains", "not", "if", "then",
+  "else", "propertyNames", "unevaluatedItems", "unevaluatedProperties",
+]
+
+///|
+/// Keywords whose value is an array of subschemas (`items` in its tuple form).
+let array_subschema_keywords : Array[String] = [
+  "allOf", "anyOf", "oneOf", "prefixItems", "items",
+]
+
+///|
+/// Keywords whose value maps names to subschemas. The names of `properties`
+/// are arguments, and those of `$defs`/`definitions` name the definitions
+/// arguments refer to; pattern and dependency names are not searchable text.
+let named_subschema_keywords : Array[String] = [
+  "properties", "$defs", "definitions",
+]
+
+///|
+let keyed_subschema_keywords : Array[String] = [
+  "patternProperties", "dependentSchemas",
+]
+
+///|
 /// Property names and descriptions anywhere in `schema`, so a query naming an
-/// argument (`repository`, `timezone`) finds the tool that takes it.
+/// argument (`repository`, `timezone`) finds the tool that takes it. Every
+/// subschema container is walked; instance values (`default`, `examples`,
+/// `enum`) are not schemas and are left out.
 fn schema_text(schema : Json, parts : Array[String]) -> Unit {
   guard schema is Object(fields) else { return }
   if fields.get("description") is Some(String(description)) {
     parts.push(description)
   }
-  if fields.get("properties") is Some(Object(properties)) {
-    for name, property in properties {
-      parts.push(name)
-      schema_text(property, parts)
+  for key in single_subschema_keywords {
+    if fields.get(key) is Some(Object(_) as subschema) {
+      schema_text(subschema, parts)
     }
   }
-  if fields.get("items") is Some(items) {
-    schema_text(items, parts)
-  }
-  // A map's values are described here, so their fields are arguments too.
-  if fields.get("additionalProperties") is Some(Object(_) as values) {
-    schema_text(values, parts)
-  }
-  if fields.get("patternProperties") is Some(Object(patterns)) {
-    for _, values in patterns {
-      schema_text(values, parts)
-    }
-  }
-  for key in ["anyOf", "oneOf", "allOf"] {
-    if fields.get(key) is Some(Array(variants)) {
-      for variant in variants {
-        schema_text(variant, parts)
+  for key in array_subschema_keywords {
+    if fields.get(key) is Some(Array(subschemas)) {
+      for subschema in subschemas {
+        schema_text(subschema, parts)
       }
     }
   }
-  // Arguments defined once and referenced with `$ref` live here; indexing the
-  // definitions themselves covers them without resolving references.
-  for key in ["$defs", "definitions"] {
-    if fields.get(key) is Some(Object(definitions)) {
-      for name, definition in definitions {
+  for key in named_subschema_keywords {
+    if fields.get(key) is Some(Object(subschemas)) {
+      for name, subschema in subschemas {
         parts.push(name)
-        schema_text(definition, parts)
+        schema_text(subschema, parts)
+      }
+    }
+  }
+  for key in keyed_subschema_keywords {
+    if fields.get(key) is Some(Object(subschemas)) {
+      for _, subschema in subschemas {
+        schema_text(subschema, parts)
       }
     }
   }
