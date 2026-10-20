@@ -761,11 +761,24 @@ test "deleting a family from this page retires its shown descendant" {
     asked,
   )
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
+  // A catalog read can land after the host removed the records but before
+  // it announces them.
+  let dev = confirmed.dev()
+  let (_, refreshed) = update_dev(
+    dispatch,
+    SessionsLoaded(
+      [],
+      connection_generation=dev.connection_generation,
+      request_generation=dev.sessions_request_generation,
+    ),
+    confirmed,
+  )
+  assert_true(refreshed.dev().sessions.is_empty())
   // The host announces each descendant before the parent.
   let (_, child_gone) = update_dev(
     dispatch,
     SessionsChanged(change="deleted", key=child, fresh_session=Some("fresh")),
-    confirmed,
+    refreshed,
   )
   assert_true(child_gone.navigation.location is Some({ target: ChatNew, .. }))
   assert_eq(child_gone.deletes_in_flight.length(), 1)
