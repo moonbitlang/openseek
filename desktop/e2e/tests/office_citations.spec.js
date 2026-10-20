@@ -13,6 +13,10 @@ async function openAnswer(page, answer) {
     data_base64: readFileSync(new URL('../fixtures/office/quarter-sales.xlsx', import.meta.url)).toString('base64'),
     media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', sig: 'demo:sales',
   };
+  app.officeFiles['docs/large-workbook.xlsx'] = {
+    data_base64: readFileSync(new URL('../fixtures/office/large-workbook.xlsx', import.meta.url)).toString('base64'),
+    media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', sig: 'demo:large',
+  };
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture citations；核对这些文档中的来源。' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: answer } } },
@@ -117,42 +121,53 @@ test('Excel citation cards switch worksheets and highlight only the exact cited 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Excel citations prepare a lazy viewer range before querying cells and preserve its scroll position', async ({ page }) => {
-  const sheet = encodeURIComponent('季度汇总');
-  const app = await openAnswer(page, [
-    '初始位置。[^1] 延迟加载的范围。[^2]',
-    `[^1]: [销售演示](/workspace/docs/sales.xlsx#sheet=${sheet}&range=C5:C8)`,
-    `[^2]: [销售演示](/workspace/docs/sales.xlsx#sheet=${sheet}&range=A5000:C9000)`,
-  ].join('\n\n'));
-  await page.locator('.citation[data-citation="1"] button').click();
-  await expect(page.locator('td.office-citation-target')).toHaveCount(4);
-  // Exercise the optional viewer-provider contract independently of the
-  // installed viewer version. The real full-sheet provider has its own tests.
-  await page.evaluate(() => {
-    window.lazyCitationCalls = []; window.lazyCitationScrolls = 0;
-    const host = document.getElementById('openseek-office-surface');
-    host.__officeRevealExcelCell = (sheet, row, column) => {
-      const section = [...host.querySelectorAll('section[data-sheet]')].find(node => node.dataset.sheet === '季度汇总');
-      const table = section.querySelector('table');
-      table.classList.add('office-virtual-table');
-      window.lazyCitationCalls.push({sheet, row, column});
-      if (sheet !== '季度汇总' || row > 9000 || column > 3) return false;
-      const address = String.fromCharCode(64 + column) + row;
-      table.querySelector('tbody').innerHTML = `<tr><td data-cell="${address}" data-row="${row}" data-col="${column}">Lazy source</td></tr>`;
-      table.querySelector('td').scrollIntoView = () => { window.lazyCitationScrolls++; };
-      return true;
+test('Excel citations reveal a far virtual range without a native scroll and keep recycled cells highlighted', async ({ page }) => {
+  // The virtual viewer has already scrolled its target into view. A native
+  // scroll on a mounted cell would reinterpret the compressed canvas.
+  await page.addInitScript(() => {
+    window.virtualCellScrolls = 0;
+    const scroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (...args) {
+      if (this.closest('.office-virtual-table')) window.virtualCellScrolls++;
+      return scroll.apply(this, args);
     };
   });
-  await page.locator('.citation[data-citation="2"] button').click();
-  await expect(page.locator('td[data-cell="A5000"]')).toHaveClass(/office-citation-target/);
-  expect(await page.evaluate(() => window.lazyCitationCalls)).toEqual([
-    {sheet:'季度汇总', row:9000, column:3}, {sheet:'季度汇总', row:5000, column:1},
-  ]);
-  expect(await page.evaluate(() => window.lazyCitationScrolls)).toBe(0);
-  await page.evaluate(() => {
-    document.querySelector('table.office-virtual-table tbody').innerHTML = '<tr><td data-cell="A7000" data-row="7000" data-col="1">Recycled source</td></tr>';
-  });
-  await expect(page.locator('td[data-cell="A7000"]')).toHaveClass(/office-citation-target/);
+  const app = await openAnswer(page, [
+    '稀疏工作表的远端范围。[^1]',
+    '[^1]: [大型工作簿](/workspace/docs/large-workbook.xlsx#sheet=Sparse&range=A1200:B1201)',
+  ].join('\n\n'));
+  // Open the workbook before citing it: a cold open can reveal before the
+  // virtual sheet has a laid-out viewport, which this test does not cover.
+  app.directoryEntries['/workspace'] = [{ name: 'docs', is_dir: true }];
+  app.directoryEntries['/workspace/docs'] = [{ name: 'large-workbook.xlsx', is_dir: false }];
+  app.searchFiles = ['docs/large-workbook.xlsx'];
+  await app.openReview({ waitForHistory: false });
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await app.openQuickOpen();
+  await page.locator('#quick-open-input').fill('large-workbook.xlsx');
+  await page.getByRole('option', { name: /large-workbook\.xlsx/ }).click();
+  await expect(page.locator('td[data-cell="A1"]')).toHaveText('START');
+  await page.locator('.citation[data-citation="1"] button').click();
+  const sparse = page.locator('section[data-sheet="Sparse"]');
+  const viewport = sparse.locator('.office-sheet-viewport');
+  const target = sparse.locator('td[data-cell="A1200"]');
+  await expect(sparse.locator('table.office-virtual-table')).toBeVisible();
+  await expect(target).toHaveClass(/office-citation-target/);
+  await expect(target).toHaveText('BEYOND_1000');
+  await expect(target).toBeInViewport();
+  await expect(sparse.locator('td.office-citation-target')).toHaveCount(4);
+  expect(await page.evaluate(() => window.virtualCellScrolls)).toBe(0);
+  const scrollTop = await viewport.evaluate(node => node.scrollTop);
+  expect(scrollTop).toBeGreaterThan(0);
+  // Scrolling away unmounts the cited cells; scrolling back mounts new cell
+  // nodes, which must receive the marker again.
+  await viewport.evaluate(node => { node.scrollTop = 0; });
+  await expect(target).toHaveCount(0);
+  await expect(sparse.locator('td.office-citation-target')).toHaveCount(0);
+  await viewport.evaluate((node, top) => { node.scrollTop = top; }, scrollTop);
+  await expect(target).toHaveClass(/office-citation-target/);
+  await expect(sparse.locator('td.office-citation-target')).toHaveCount(4);
+  expect(await page.evaluate(() => window.virtualCellScrolls)).toBe(0);
   await expect(page.locator('.office-selection-preview')).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
