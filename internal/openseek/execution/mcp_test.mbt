@@ -151,16 +151,28 @@ async test "multiple MCP files merge before connecting and bad files do not hide
           api_url=base,
         )
         assert_eq(failed_tools.length(), 0)
-        let mut failures = 0
+        // The sink is process-global and async tests run concurrently, so
+        // match only events this call can have produced: failures by their
+        // path, and a registration by its zero servers, the only count failed
+        // inputs could report. Other tests register configured servers.
+        let failed_paths : Array[String] = []
         while @emit.poll_line() is Some(line) {
           let event = @json.parse(line)
-          assert_false(event is { "event": "mcp_tools_registered", .. })
+          assert_false(
+            event is { "event": "mcp_tools_registered", "servers": 0, .. },
+          )
           if event
-            is { "event": "mcp_config_invalid" | "mcp_config_unreadable", .. } {
-            failures += 1
+            is {
+              "event": "mcp_config_invalid"
+              | "mcp_config_unreadable",
+              "path": String(path),
+              ..
+            } &&
+            paths.contains(path) {
+            failed_paths.push(path)
           }
         }
-        assert_eq(failures, paths.length())
+        assert_eq(failed_paths, paths)
       }
     })
   })
