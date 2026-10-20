@@ -193,3 +193,33 @@ test "opening a background side chat changes only its parent's dock" {
     returned.dock_state().active == Some(SideChat(owner=side_chat_owner())),
   )
 }
+
+///|
+test "the side chat's file completions index its conversation's checkout" {
+  let model = side_chat_model()
+  assert_true(model.file_panel.index is IndexEmpty)
+  let (_, indexed) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.FileIndexEnsured(identity=side_chat_identity(model)),
+    ),
+    model,
+  )
+  assert_true(indexed.file_panel.index is IndexLoading(..))
+  assert_eq(indexed.active_session, "desktop-test")
+}
+
+///|
+test "the dock's composer stays with the side-chat tab while the dock is hidden" {
+  let model = side_chat_model()
+  let shown = model.dock_composer_input()
+  assert_true(shown.identity.owner == @interop.Host(side_chat_owner()))
+  // Hiding the dock keeps the composer on the side chat, so the component
+  // still holds what was typed when the dock comes back.
+  let hidden = { ..model, right_panel_open: false, }
+  assert_true(hidden.mounted_side_chat_owner() is None)
+  assert_true(
+    hidden.dock_composer_input().identity.owner ==
+    @interop.Host(side_chat_owner()),
+  )
+}

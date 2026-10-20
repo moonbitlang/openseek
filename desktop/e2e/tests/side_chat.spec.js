@@ -69,3 +69,17 @@ test('the side chat composer sends to the side chat', async ({ page }) => {
   await expect(page.locator('#task')).toHaveValue('');
   expect(app.pageErrors).toEqual([]);
 });
+
+test('a draft typed in the side chat survives hiding the dock', async ({ page }) => {
+  const app = await setup(page);
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  const tab = page.locator('.editor-tab', { hasText: 'Side chat 1' });
+  await tab.click();
+  const input = page.locator('#side-chat-task');
+  await input.fill('A draft in progress');
+  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+  await expect(input).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await expect(input).toHaveValue('A draft in progress');
+  expect(app.pageErrors).toEqual([]);
+});
