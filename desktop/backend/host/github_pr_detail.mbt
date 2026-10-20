@@ -10,8 +10,8 @@
 async fn github_pr_detail_op(
   payload : @protocol.GithubPrDetailPayload,
 ) -> @protocol.GithubPrDetailReply {
-  let identity = github_review_identity(payload.url) catch {
-    _ => return { pull_request: None, }
+  guard github_pr_detail_identity(payload.url) is Some(identity) else {
+    return { pull_request: None, }
   }
   guard resolve_gh() is Some(gh) else {
     raise HostError("Install GitHub CLI (gh) and sign in to load PR status.")
@@ -71,4 +71,17 @@ fn github_pr_detail_environment(
     }
   }
   env
+}
+
+///|
+/// The pull request a page under its address belongs to: a link copied from
+/// GitHub may carry a query, a fragment, or a tab such as `/files`.
+fn github_pr_detail_identity(url : String) -> GithubReviewIdentity? {
+  let path = url.split("#").collect()[0].split("?").collect()[0]
+  let parts = path.split("/").map(part => part.to_owned()).collect()
+  guard parts is ["https:", "", host, owner, repo, "pull", number, ..] else {
+    return None
+  }
+  let canonical = "https://\{host}/\{owner}/\{repo}/pull/\{number}"
+  Some(github_review_identity(canonical) catch { _ => return None })
 }

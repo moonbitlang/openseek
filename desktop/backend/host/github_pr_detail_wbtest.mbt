@@ -47,3 +47,27 @@ test "an enterprise token goes only to the host it was set for" {
   })
   assert_eq(windows.get("gh_enterprise_token"), Some("gh-token"))
 }
+
+///|
+test "a pull request page's address names its pull request" {
+  for
+    url in [
+      "https://github.com/o/r/pull/42", "https://github.com/o/r/pull/42?diff=split",
+      "https://github.com/o/r/pull/42#issuecomment-123", "https://github.com/o/r/pull/42/files",
+    ] {
+    guard github_pr_detail_identity(url) is Some(identity) else {
+      fail("\{url} names no pull request")
+    }
+    assert_eq(
+      (identity.host, identity.owner, identity.repo, identity.number),
+      ("github.com", "o", "r", 42),
+    )
+  }
+  for
+    url in [
+      "https://github.com/o/r/tree/topic", "https://github.com/o/r/pull/x", "https://github.com/o/r/pull/0",
+      "https://github.com/o/r?x=/pull/1",
+    ] {
+    assert_true(github_pr_detail_identity(url) is None)
+  }
+}
