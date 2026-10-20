@@ -416,7 +416,6 @@ test "deleting the shown conversation from this page returns to a draft" {
     )
     let (_, remote) = update_dev(dispatch, deleted, asked)
     assert_true(remote.navigation.location == Some(shown))
-    assert_true(remote.delete_pending is None)
     let (_, staged) = update_dev(
       dispatch,
       DeleteChecked(key~, checkout=None),
@@ -425,14 +424,14 @@ test "deleting the shown conversation from this page returns to a draft" {
     let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
     let (_, refused) = update_dev(
       dispatch,
-      DeleteFailed("busy", request=Some(Deleting(Local, key))),
+      DeleteFailed("busy", deleting=Some(key)),
       confirmed,
     )
-    assert_true(refused.delete_pending is None)
+    assert_true(refused.deletes_in_flight.is_empty())
     let (_, remote) = update_dev(dispatch, deleted, refused)
     assert_true(remote.navigation.location == Some(shown))
     let (_, own) = update_dev(dispatch, deleted, confirmed)
-    assert_true(own.delete_pending is None)
+    assert_true(own.deletes_in_flight.is_empty())
     assert_true(own.navigation.location is Some({ target: ChatNew, .. }))
     assert_true(own.navigation.phase is Active)
     assert_eq(own.active_session, "fresh")
@@ -489,72 +488,98 @@ test "deleting the shown archived conversation returns to a draft" {
 }
 
 ///|
-test "a refused delete request settles only itself" {
+test "a confirmed delete stays this page's own across later delete clicks" {
   let dispatch = test_dispatch()
   let key : ArchiveRecordKey = {
     session: "desktop-test",
     workspace: @interop.ChannelId::Local.test_project(),
   }
   let other : ArchiveRecordKey = { ..key, session: "desktop-other", }
-  let model = test_model().with_dev(dev => {
-    ..dev,
-    sessions: [
-      placed_archived_item("desktop-test"),
-      placed_archived_item("desktop-other"),
-    ],
-  })
-  let (_, first) = update(
-    dispatch,
-    DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
-    model,
+  let shown : @routes.Location = {
+    device: Some("local"),
+    target: Session("desktop-test"),
+  }
+  let base = {
+    ..test_model().with_dev(dev => {
+      ..dev,
+      sessions: [
+        placed_archived_item("desktop-test"),
+        placed_archived_item("desktop-other"),
+      ],
+    }),
+    navigation: {
+      ..AppNavigation::empty(),
+      location: Some(shown),
+      phase: Active,
+      history: @navigation.History::empty().visit(shown, replace=true),
+    },
+  }
+  let ask = (model, key) => {
+    let (_, asked) = update(
+      dispatch,
+      DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
+      model,
+    )
+    asked
+  }
+  let confirm = (model, key) => {
+    let (_, staged) = update_dev(
+      dispatch,
+      DeleteChecked(key~, checkout=None),
+      ask(model, key),
+    )
+    let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
+    confirmed
+  }
+  let deleted = SessionsChanged(
+    change="deleted",
+    key~,
+    fresh_session=Some("fresh"),
   )
-  let (_, second) = update(
+  // Asking about another chat before the shown one's deletion is announced
+  // keeps that deletion this page's own.
+  let (_, own) = update_dev(dispatch, deleted, ask(confirm(base, key), other))
+  assert_true(own.navigation.location is Some({ target: ChatNew, .. }))
+  // Deleting the same chat again while the first delete is out: the first
+  // one's refusal ends only itself.
+  let twice = confirm(confirm(base, key), key)
+  assert_eq(twice.deletes_in_flight.length(), 2)
+  let (_, refused) = update_dev(
     dispatch,
-    DeleteSession(@interop.ChannelId::Local, other, LiveRecord),
-    first,
+    DeleteFailed("busy", deleting=Some(key)),
+    twice,
   )
-  // The overtaken check's failure leaves the later click's question out, so
-  // its answer still opens the dialog.
+  let (_, own) = update_dev(dispatch, deleted, refused)
+  assert_true(own.navigation.location is Some({ target: ChatNew, .. }))
+  assert_true(own.deletes_in_flight.is_empty())
+  // A delete the host stops ends that request and asks again.
+  let (_, stopped) = update_dev(
+    dispatch,
+    DeleteStopped(key~, checkout={
+      worktree: "wt-1",
+      dirty_paths: [],
+      dirty_path_count: 0,
+    }),
+    confirm(base, key),
+  )
+  assert_true(stopped.deletes_in_flight.is_empty())
+  assert_true(
+    stopped.delete_confirm is Some(HostDelete({ key: k, .. })) && k == key,
+  )
+  // A refused check ends no delete and leaves the latest click's question
+  // out, so a repeated click on the same chat still opens its dialog.
+  let again = ask(ask(ask(base, key), other), key)
   let (_, late) = update_dev(
     dispatch,
-    DeleteFailed("busy", request=Some(Checking(Local, key))),
-    second,
+    DeleteFailed("busy", deleting=None),
+    again,
   )
-  assert_true(late.delete_pending == Some(Checking(Local, other)))
-  let (_, archived) = update_dev(
-    dispatch,
-    DeleteFailed("busy", request=None),
-    second,
-  )
-  assert_true(archived.delete_pending == Some(Checking(Local, other)))
   let (_, staged) = update_dev(
     dispatch,
-    DeleteChecked(key=other, checkout=None),
+    DeleteChecked(key~, checkout=None),
     late,
   )
   assert_true(
-    staged.delete_confirm is Some(HostDelete({ key: k, .. })) && k == other,
+    staged.delete_confirm is Some(HostDelete({ key: k, .. })) && k == key,
   )
-  let (_, settled) = update_dev(
-    dispatch,
-    DeleteFailed("busy", request=Some(Checking(Local, other))),
-    second,
-  )
-  assert_true(settled.delete_pending is None)
-  // Repeating the click while its request is out sends nothing new, also
-  // while the confirmed delete is in flight.
-  let (_, repeated) = update(
-    dispatch,
-    DeleteSession(@interop.ChannelId::Local, other, LiveRecord),
-    second,
-  )
-  assert_true(repeated.delete_pending == Some(Checking(Local, other)))
-  let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
-  assert_true(confirmed.delete_pending == Some(Deleting(Local, other)))
-  let (_, repeated) = update(
-    dispatch,
-    DeleteSession(@interop.ChannelId::Local, other, LiveRecord),
-    confirmed,
-  )
-  assert_true(repeated.delete_pending == Some(Deleting(Local, other)))
 }

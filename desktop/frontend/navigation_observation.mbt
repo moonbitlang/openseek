@@ -147,7 +147,7 @@ fn observe_navigation(
   let retired : Array[String] = match message {
     FromDevice(channel, SessionsChanged(change="deleted", key~, ..)) if channel ==
       previous.focused &&
-      previous.delete_pending == Some(Deleting(channel, key)) => [key.session]
+      previous.deletes_in_flight.contains((channel, key)) => [key.session]
     FromDevice(channel, ArchivedDeleted(sessions~, ..)) if channel ==
       previous.focused => sessions
     _ => []

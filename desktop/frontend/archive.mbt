@@ -38,25 +38,18 @@ priv enum DeleteTarget {
 } derive(Eq)
 
 ///|
-/// A live chat's delete request that is out with the host. `Checking` waits
-/// for what goes with the chat; `Deleting` for the delete the user confirmed.
-/// A failure ends the request and its notice reports the cause.
-priv enum HostDeletion {
-  Checking(@interop.ChannelId, ArchiveRecordKey)
-  Deleting(@interop.ChannelId, ArchiveRecordKey)
-} derive(Eq)
-
-///|
-/// Whether an answer from `channel` about `key` belongs to this request.
-fn HostDeletion::is_for(
-  self : HostDeletion,
+/// End one confirmed delete of `key`. Deleting the same chat again while an
+/// earlier delete is out adds a separate entry, so each settles only itself.
+fn Model::settle_delete(
+  self : Model,
   channel : @interop.ChannelId,
   key : ArchiveRecordKey,
-) -> Bool {
-  match self {
-    Checking(asked_channel, asked) | Deleting(asked_channel, asked) =>
-      asked_channel == channel && asked == key
+) -> Model {
+  let deletes = self.deletes_in_flight.copy()
+  if deletes.search((channel, key)) is Some(index) {
+    deletes.remove(index) |> ignore
   }
+  { ..self, deletes_in_flight: deletes, }
 }
 
 ///|
@@ -230,7 +223,7 @@ fn delete_archived_session(
         error => {
           scheduler.add(
             device_dispatch(
-              DeleteFailed(@interop.bridge_error_text(error), request=None),
+              DeleteFailed(@interop.bridge_error_text(error), deleting=None),
             ),
           )
           return
@@ -278,10 +271,7 @@ fn check_delete_session(
         error => {
           scheduler.add(
             device_dispatch(
-              DeleteFailed(
-                @interop.bridge_error_text(error),
-                request=Some(Checking(channel, key)),
-              ),
+              DeleteFailed(@interop.bridge_error_text(error), deleting=None),
             ),
           )
           return
@@ -339,7 +329,7 @@ fn delete_session(
             device_dispatch(
               DeleteFailed(
                 @interop.bridge_error_text(error),
-                request=Some(Deleting(channel, key)),
+                deleting=Some(key),
               ),
             ),
           )
@@ -347,9 +337,7 @@ fn delete_session(
         }
       }
       if reply is Unconfirmed(checkout) {
-        scheduler.add(
-          device_dispatch(DeleteChecked(key~, checkout=Some(checkout))),
-        )
+        scheduler.add(device_dispatch(DeleteStopped(key~, checkout~)))
       }
     })
     |> ignore

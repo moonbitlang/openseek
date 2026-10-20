@@ -1570,11 +1570,15 @@ priv struct Model {
   // Permanent chat deletion has its own explicit confirmation. It never
   // shares the worktree-discard dialog because the data at risk differs.
   delete_confirm : DeletePrompt?
-  // The live chat whose delete request is out with the host. Only the
+  // The live chat whose delete question is out with the host. Only the
   // answer about this chat may open the confirmation, and only once: an
   // answer overtaken by a later click must not put another chat's dialog
   // under the user's pointer.
-  delete_pending : HostDeletion?
+  delete_pending : (@interop.ChannelId, ArchiveRecordKey)?
+  // Confirmed live deletes still out with the host, one entry per request.
+  // They outlive later clicks, so a deletion the host announces for one of
+  // them is known to be this page's own.
+  deletes_in_flight : Array[(@interop.ChannelId, ArchiveRecordKey)]
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
   conversation_fork : ConversationFork?
@@ -2510,6 +2514,9 @@ priv enum DeviceMsg {
   // delete that stopped because more would go than its request agreed to.
   // Either way it stages the confirmation that states exactly that.
   DeleteChecked(key~ : ArchiveRecordKey, checkout~ : @protocol.CheckoutRemoval?)
+  // A confirmed delete the host stopped because more would go than it agreed
+  // to. That request is over; the checkout it names stages the next dialog.
+  DeleteStopped(key~ : ArchiveRecordKey, checkout~ : @protocol.CheckoutRemoval)
   // The archived conversations — the reply to `archived_sessions` and to a
   // successful `archive_session`/`unarchive_session` alike.
   ArchivedLoaded(
@@ -2535,9 +2542,9 @@ priv enum DeviceMsg {
     fresh_session~ : String
   )
   ArchiveFailed(String)
-  // A delete check, live delete, or archived delete that the host refused.
-  // A live request names itself so only it is settled.
-  DeleteFailed(String, request~ : HostDeletion?)
+  // A refused delete. `deleting` names the confirmed live delete it ends; a
+  // refused check or archived delete ends none.
+  DeleteFailed(String, deleting~ : ArchiveRecordKey?)
   // A rebuild of a missing worktree failed. The canonical rows still arrive
   // as `worktree.changed`, so this only reports the refusal.
   WorktreeFailed(String)
@@ -2884,6 +2891,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     archive_confirm: None,
     delete_confirm: None,
     delete_pending: None,
+    deletes_in_flight: [],
     conversation_rename: None,
     conversation_fork: None,
     fork_focus: None,
