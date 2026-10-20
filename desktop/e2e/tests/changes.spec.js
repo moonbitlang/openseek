@@ -243,5 +243,31 @@ test('a row menu closes when the overview scrolls its row away', async ({ page }
     element.scrollTop += 120;
   });
   await expect(remove).toHaveCount(0);
+
+  // Switching straight to another row's menu binds the dismissal to that row,
+  // even once the first row is gone.
+  await panel.evaluate(element => {
+    element.scrollTop = 0;
+  });
+  await rows.nth(1).getByRole('button', { name: 'More actions' }).click();
+  await expect(remove).toBeVisible();
+  await rows.nth(0).getByRole('button', { name: 'More actions' }).click();
+  await expect(page.getByRole('menu')).toHaveCount(1);
+  await expect(remove).toBeVisible();
+  // Another client replaces the second row's item; the list keeps its
+  // height, so nothing scrolls.
+  const [first, , ...rest] = app.sessionArtifacts['session-1'];
+  app.sessionArtifacts['session-1'] = [
+    first,
+    { type: 'pull_request', url: `${repo}/pull/99` },
+    ...rest,
+  ];
+  app.notify('session.artifacts_changed', { session: 'session-1' });
+  await expect(rows.nth(1).getByText('#99', { exact: true })).toBeVisible();
+  await expect(remove).toBeVisible();
+  await panel.evaluate(element => {
+    element.scrollTop += 120;
+  });
+  await expect(remove).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
