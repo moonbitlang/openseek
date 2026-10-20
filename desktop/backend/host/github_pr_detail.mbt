@@ -3,6 +3,10 @@
 /// that has only its address — an item an agent attached to a conversation,
 /// say. It needs no checkout: `gh` is pointed at the repository the address
 /// names. An address that is not a pull request's has nothing to say.
+///
+/// The address is model output and the lookup runs without the user asking,
+/// so it carries no credential meant for another host; see
+/// `github_pr_detail_environment`.
 async fn github_pr_detail_op(
   payload : @protocol.GithubPrDetailPayload,
 ) -> @protocol.GithubPrDetailReply {
@@ -12,16 +16,25 @@ async fn github_pr_detail_op(
   guard resolve_gh() is Some(gh) else {
     raise HostError("Install GitHub CLI (gh) and sign in to load PR status.")
   }
+  let env = github_pr_detail_environment(identity.host, git_environment())
   let result = @async.with_timeout_opt(GithubRequestTimeoutMs, () => {
-    github_panel_json(gh, @pathx.Path(".").resolve(), [
-      "pr",
-      "view",
-      identity.number.to_string(),
-      "--repo",
-      "https://\{identity.host}/\{identity.owner}/\{identity.repo}",
-      "--json",
-      PullRequestFields,
-    ])
+    let output = github_command(
+      gh,
+      @pathx.Path(".").resolve(),
+      [
+        "pr",
+        "view",
+        identity.number.to_string(),
+        "--repo",
+        "https://\{identity.host}/\{identity.owner}/\{identity.repo}",
+        "--json",
+        PullRequestFields,
+      ],
+      env~,
+    )
+    @json.parse(output) catch {
+      _ => raise HostError("GitHub CLI returned invalid JSON.")
+    }
   })
   guard result is Some(raw) else {
     raise HostError("PR status lookup timed out.")
@@ -30,4 +43,22 @@ async fn github_pr_detail_op(
     raise HostError("GitHub returned invalid PR status.")
   }
   { pull_request: Some(pull_request), }
+}
+
+///|
+/// `gh` sends `GH_ENTERPRISE_TOKEN` (or `GITHUB_ENTERPRISE_TOKEN`) to
+/// whichever GitHub Enterprise Server host a command targets, so a lookup of
+/// any other host than the `GH_HOST` that token was set for goes without it.
+/// Credentials `gh` stored itself are kept per host and never leave theirs,
+/// and `GH_TOKEN` goes only to github.com and its `ghe.com` tenants.
+fn github_pr_detail_environment(
+  host : String,
+  env : Map[String, String],
+) -> Map[String, String] {
+  let intended = env.get("GH_HOST").map(intended => intended.to_lower())
+  if intended != Some(host.to_lower()) {
+    env.remove("GH_ENTERPRISE_TOKEN")
+    env.remove("GITHUB_ENTERPRISE_TOKEN")
+  }
+  env
 }

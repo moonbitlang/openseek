@@ -5,12 +5,13 @@ async fn github_command(
   gh : @pathx.Absolute,
   dir : @pathx.Absolute,
   args : Array[String],
+  env? : Map[String, String],
 ) -> String {
   let (code, stdout, stderr) = @processx.collect_output_no_stdin(
     gh.0,
     args,
     cwd=dir.0,
-    extra_env=git_environment(),
+    extra_env=env.unwrap_or_else(git_environment),
     inherit_env=false,
   ) catch {
     error => raise HostError("Could not run GitHub CLI: \{error}")
