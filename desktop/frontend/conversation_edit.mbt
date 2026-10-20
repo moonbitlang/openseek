@@ -44,7 +44,7 @@ fn Model::message_edit_busy(self : Model, source : Conversation) -> Bool {
     while current != source.session_id {
       let parent = if @transcript.subrun_parent(current) is Some(parent) {
         parent
-      } else if @protocol.split_side_chat_id(current) is Some((parent, _)) {
+      } else if @protocol.split_side_chat_id(current) is Some(parent) {
         parent
       } else {
         return false
@@ -143,7 +143,7 @@ test "message editing is blocked by active work in its own conversation family" 
   }
   assert_true(model.replace_conversation(child).message_edit_busy(source))
   // A side chat goes with its conversation too, and so does its own sub-run.
-  for session_id in ["-sc-1", "-sc-1-sr-1"] {
+  for session_id in ["-sc-0a1b2c3d", "-sc-0a1b2c3d-sr-1"] {
     let side = { ..child, session_id: source.session_id + session_id, }
     assert_true(model.replace_conversation(side).message_edit_busy(source))
   }

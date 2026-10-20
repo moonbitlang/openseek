@@ -12,6 +12,8 @@ pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
 pub const HostProtocolRevision : Int32 = 1
 
+pub const SideChatTokenLength : Int32 = 8
+
 pub fn approval(String, allow~ : Bool) -> @openseek_protocol.Command
 
 pub fn cancel() -> @openseek_protocol.Command
@@ -24,9 +26,9 @@ pub fn goal_set(String, auto~ : Bool) -> @openseek_protocol.Command
 
 pub fn prompt(@openseek_protocol.Content, submission_id? : String) -> @openseek_protocol.Command
 
-pub fn side_chat_id(String, Int32) -> String
+pub fn side_chat_id(String, String) -> String
 
-pub fn split_side_chat_id(String) -> (String, Int32)?
+pub fn split_side_chat_id(String) -> String?
 
 pub fn ssh_connection_arguments(String) -> Array[String] raise
 

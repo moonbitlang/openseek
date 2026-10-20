@@ -17,9 +17,8 @@
 /// — also when the engine failed after writing it, and when the request was
 /// cancelled and has no reply to carry the news.
 ///
-/// A side-chat fork is the same copy under the id `side_chat_id` gives it —
-/// the source's first free side-chat ordinal — which makes it part of the
-/// source's family. It is an aside about the source's work, so it shares the
+/// A side-chat fork is the same copy under the id `side_chat_id` gives it,
+/// with a random token, which makes it part of the source's family. It is an aside about the source's work, so it shares the
 /// source's checkout rather than getting one of its own. A side chat has no
 /// side chats of its own.
 pub async fn fork_session(
@@ -82,16 +81,18 @@ async fn fork_session_in(
   }
   let root = @workspaces.store_root(workspace)
   let store = @store.SessionStore(root.to_string())
-  // Under the placement lock no other fork names a side chat of this source
-  // meanwhile; the engine's claim on the directory refuses a collision anyway.
+  // A side chat's token only has to differ from its siblings'; draw again on
+  // the rare collision. Under the placement lock no other fork claims one
+  // meanwhile, and the engine's claim on the directory refuses one anyway.
   let session = if side_chat {
-    let mut ordinal = 1
-    while store.exists(
-            SessionId(@protocol.side_chat_id(payload.session, ordinal)),
-          ) {
-      ordinal += 1
+    let mut candidate = @protocol.side_chat_id(
+      payload.session,
+      side_chat_token(),
+    )
+    while store.exists(SessionId(candidate)) {
+      candidate = @protocol.side_chat_id(payload.session, side_chat_token())
     }
-    @protocol.side_chat_id(payload.session, ordinal)
+    candidate
   } else {
     "desktop-" + @uuid.mint()
   }
@@ -352,4 +353,11 @@ async test "fork validates its request before spawning and releases its reader l
     error => raise error
   }
   assert_eq(invalid, Some("invalid session fork boundary"))
+}
+
+///|
+/// A fresh side-chat token: the leading hex digits of a random UUID, which
+/// are all drawn from the entropy source.
+fn side_chat_token() -> String raise {
+  @uuid.mint().view(end_offset=@protocol.SideChatTokenLength).to_owned()
 }

@@ -191,7 +191,7 @@ fn is_descendant(candidate : String, ancestor : String) -> Bool {
   for ;; {
     let parent = if @wire.split_child_session_id(current) is Some((parent, _)) {
       parent
-    } else if @desktop_protocol.split_side_chat_id(current) is Some((parent, _)) {
+    } else if @desktop_protocol.split_side_chat_id(current) is Some(parent) {
       parent
     } else {
       return false
@@ -241,11 +241,12 @@ test "sub-run descent follows the structural suffix, not a text prefix" {
 
 ///|
 test "a side chat and its sub-runs belong to the conversation beside them" {
-  assert_true(is_descendant("chat-sc-1", "chat"))
-  assert_true(is_descendant("chat-sc-1-sr-2", "chat"))
-  assert_true(is_descendant("chat-sr-1-sc-1", "chat"))
+  assert_true(is_descendant("chat-sc-0a1b2c3d", "chat"))
+  assert_true(is_descendant("chat-sc-0a1b2c3d-sr-2", "chat"))
+  assert_true(is_descendant("chat-sr-1-sc-0a1b2c3d", "chat"))
   assert_false(is_descendant("chat-sc-not-an-ordinal", "chat"))
-  assert_false(is_descendant("other-sc-1", "chat"))
+  assert_false(is_descendant("chat-sc-1", "chat"))
+  assert_false(is_descendant("other-sc-0a1b2c3d", "chat"))
 }
 
 ///|

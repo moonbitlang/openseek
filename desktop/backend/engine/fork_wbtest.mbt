@@ -404,13 +404,14 @@ async test "a side chat is a numbered member of its conversation's family" {
       )
     }
 
-    // Side chats are numbered in the order they are opened, and work in the
-    // conversation's checkout.
+    // Side chats are named beside their conversation, each its own, and
+    // work in the conversation's checkout.
     let first = side_chat_of("s-src")
     let second = side_chat_of("s-src")
-    assert_eq(first.session, "s-src-sc-1")
-    assert_eq(second.session, "s-src-sc-2")
-    assert_eq(created, ["s-src-sc-1", "s-src-sc-2"])
+    assert_eq(@protocol.split_side_chat_id(first.session), Some("s-src"))
+    assert_eq(@protocol.split_side_chat_id(second.session), Some("s-src"))
+    assert_true(first.session != second.session)
+    assert_eq(created, [first.session, second.session])
     assert_eq(store.title(SessionId(first.session)), Some("Original"))
     assert_eq(
       @worktree.run_dir(repo, second.session).to_string(),
@@ -425,8 +426,7 @@ async test "a side chat is a numbered member of its conversation's family" {
       error => raise error
     }
     assert_true(nested)
-    // Closing one keeps the checkout the conversation still works in, and a
-    // later side chat takes the freed number.
+    // Closing one keeps the checkout the conversation still works in.
     assert_true(
       delete_session(manager, first.session, repo.resource_path(), (_, _) => ())
       is Deleted,
@@ -435,8 +435,8 @@ async test "a side chat is a numbered member of its conversation's family" {
     guard @worktree.list(repo.to_string()).worktrees is [row] else {
       fail("the worktree row must survive a closed side chat")
     }
-    assert_eq(row.sessions, ["s-src", "s-src-sc-2"])
-    assert_eq(side_chat_of("s-src").session, "s-src-sc-1")
+    assert_eq(row.sessions, ["s-src", second.session])
+    let third = side_chat_of("s-src")
     // Its side chats leave with the conversation, so they do not keep the
     // checkout from the conversation's own delete or archive.
     assert_true(
@@ -446,8 +446,8 @@ async test "a side chat is a numbered member of its conversation's family" {
     // Archiving the conversation takes its side chats along, and with them
     // the last holders of the checkout.
     assert_true(archive_session(manager, "s-src", (_, _) => ()) is Archived(_))
-    assert_false(store.exists(SessionId("s-src-sc-1")))
-    assert_false(store.exists(SessionId("s-src-sc-2")))
+    assert_false(store.exists(SessionId(second.session)))
+    assert_false(store.exists(SessionId(third.session)))
     assert_false(@fsx.exists(checkout.to_path()))
   })
 }
