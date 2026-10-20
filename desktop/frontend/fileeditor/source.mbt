@@ -134,6 +134,7 @@ fn refresh_cloud_files(
   if ctx.panel_open &&
     ctx.active_file is Some(path) &&
     docs.get(path) is Some(doc) {
+    docs[path] = doc.prepare_read()
     commands.push(
       read_file(
         dispatch,

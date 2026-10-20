@@ -154,3 +154,38 @@ test "large preview clicks require the current Cloud size notice and retire on l
   )
   assert_true(ignored == host_state)
 }
+
+///|
+test "Cloud notice refreshes and stale activations show loading without changing successful previews" {
+  let ctx = cloud_ctx("account", "session", 1)
+  let path = ctx.resource(Relative("retry.txt")).unwrap()
+  let ctx = { ..ctx, open_files: [path], active_file: Some(path), }
+  let (state, _) = sync(test_emit(), State::empty(), ctx)
+  for previous in [TabBinary, TabOversized, TabReadFailed("failed")] {
+    let state = {
+      ..state,
+      docs: Map([
+        (
+          path,
+          { name: "retry.txt", state: previous, review: None, stale: false, },
+        ),
+      ]),
+    }
+    for
+      message in [
+        ExplorerModeSelected(ExplorerFiles),
+        RunSettled(owner=ctx.owner),
+      ] {
+      let (_, refreshing) = update(test_emit(), message, state, ctx)
+      assert_true(refreshing.docs.get(path) is Some({ state: TabLoading, .. }))
+    }
+    let doc = { ..state.docs.get(path).unwrap(), stale: true, }
+    let (_, activated) = activate(
+      test_emit(),
+      { ..state, docs: Map([(path, doc)]), },
+      ctx,
+      path,
+    )
+    assert_true(activated.docs.get(path) is Some({ state: TabLoading, .. }))
+  }
+}

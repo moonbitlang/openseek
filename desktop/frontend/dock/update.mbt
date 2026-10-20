@@ -188,3 +188,20 @@ pub fn open_jobs(state : State) -> State {
 pub fn open_github(state : State) -> State {
   open_tab(state, Github)
 }
+
+///|
+/// Deleting a Cloud session also retires its open file bookmarks.
+pub fn forget_cloud_session(
+  state : State,
+  account : String,
+  session : String,
+) -> State {
+  let owner = @interop.Cloud(account~, session~)
+  let remembered = state.remembered.copy()
+  remembered.remove(owner)
+  if state.owner == Some(owner) {
+    { owner: None, tabs: [], active: None, remembered, }
+  } else {
+    { ..state, remembered, }
+  }
+}

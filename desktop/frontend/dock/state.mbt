@@ -45,8 +45,8 @@ pub(all) enum DockTab {
 
 ///|
 /// A conversation's parked strip: identities and the active tab only,
-/// mirroring how fileeditor used to park its tab set. Restoring never brings
-/// content back by itself — the content subsystems reload on demand.
+/// mirroring how fileeditor used to park its tab set. Content stays in its
+/// owning subsystem, which restores cached documents or reloads on demand.
 pub(all) struct RememberedStrip {
   tabs : Array[DockTab]
   active : DockTab?

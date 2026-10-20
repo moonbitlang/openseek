@@ -184,10 +184,14 @@ fn show_editor_resource(
   // the file subsystem when its cached tree belongs to another conversation;
   // otherwise `sync_file_panel`'s post-dispatch pass would see a session
   // mismatch and wipe the freshly opened tab below. A re-rooted document
-  // table is seeded from the restored strip (identities only), exactly like
-  // `@fileeditor.sync`'s own re-root.
+  // table follows the restored strip, exactly like `@fileeditor.sync`'s own
+  // re-root, including settled Cloud documents retained in memory.
   let dock = @dock.sync(model.dock, owner)
-  let panel = model.file_panel.prepare_owner(owner, @dock.file_paths(dock))
+  let panel = model.file_panel.prepare_owner(
+    owner,
+    @dock.file_paths(dock),
+    cloud_epoch?=ctx.cloud_files.map(files => files.epoch),
+  )
   let had_active = @dock.active_file(dock) is Some(_)
   // An explicit open while the picker is the active tab fulfills it, the
   // same as a pick from its tree.

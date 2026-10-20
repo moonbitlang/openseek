@@ -203,13 +203,31 @@ fn update_cloud(
       session == id
     _ => false
   }
+  let mut file_panel = model.file_panel
+  let mut dock = model.dock
+  let file_commands : Array[@cmd.Cmd] = []
+  if before.epoch != cloud.epoch && before.user_id is Some(account) {
+    let (panel, clear) = @fileeditor.forget_cloud_files(file_panel, account)
+    file_panel = panel
+    file_commands.push(clear)
+    dock = @dock.forget_cloud_account(dock, account)
+  }
+  if before.user_id is Some(account) {
+    for session in removed {
+      let (panel, clear) = @fileeditor.forget_cloud_files(
+        file_panel,
+        account,
+        session~,
+      )
+      file_panel = panel
+      file_commands.push(clear)
+      dock = @dock.forget_cloud_session(dock, account, session)
+    }
+  }
   let next = {
     ..model,
-    dock: if before.epoch != cloud.epoch && before.user_id is Some(account) {
-      @dock.forget_cloud_account(model.dock, account)
-    } else {
-      model.dock
-    },
+    dock,
+    file_panel,
     screen: if message is @cloud.Create {
       Chat
     } else {
@@ -258,6 +276,28 @@ fn update_cloud(
       model.selected_conversation
     },
   }
+  // Streams may finish while another conversation is on screen. Retire that
+  // session's file cache at the same transition as a foreground completion.
+  let mut file_panel = next.file_panel
+  if before.user_id == next.cloud.user_id && before.user_id is Some(account) {
+    for session, conversation in before.conversations {
+      if conversation.generating &&
+        next.cloud.conversations
+        .get(session)
+        .map_or(false, conversation => !conversation.generating) {
+        let (refresh, panel) = @fileeditor.update(
+          dispatch.map(msg => FileEditor(msg)),
+          @fileeditor.RunSettled(owner=@interop.Cloud(account~, session~)),
+          file_panel,
+          file_ctx(next),
+        )
+        file_commands.push(refresh)
+        file_panel = panel
+      }
+    }
+  }
+  let next = { ..next, file_panel, }
+  let command = @cmd.batch([command, ..file_commands])
   if ((deleted && removed_selection) || archived_selection) &&
     model.screen is Chat {
     let next = {
@@ -294,22 +334,6 @@ fn update_cloud(
       _ => next.finish_conversation_rename(rename)
     }
     return (@cmd.batch([command, finish]), next)
-  }
-  if next.cloud_identity() is Some(owner) &&
-    before.user_id == next.cloud.user_id &&
-    before.conversations
-    .get(owner.session())
-    .map_or(false, conversation => conversation.generating) &&
-    next.cloud.conversations
-    .get(owner.session())
-    .map_or(false, conversation => !conversation.generating) {
-    let (refresh, panel) = @fileeditor.update(
-      dispatch.map(msg => FileEditor(msg)),
-      @fileeditor.RunSettled(owner~),
-      next.file_panel,
-      file_ctx(next),
-    )
-    return (@cmd.batch([command, refresh]), { ..next, file_panel: panel, })
   }
   (command, next)
 }

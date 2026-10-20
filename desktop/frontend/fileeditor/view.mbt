@@ -594,7 +594,8 @@ fn viewer_notice(
                 PdfFailed(message) => message
                 PdfReady | PdfPasswordRequired(_) => ""
               }
-            TabLoading | TabLoaded(..) | TabOffice(..) => ""
+            TabLoading => ui(locale, LoadingFile)
+            TabLoaded(..) | TabOffice(..) => ""
           }
         None => ""
       }

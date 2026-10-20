@@ -1633,15 +1633,24 @@ fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
 
 ///|
 /// Drop the viewer's current document so it falls back to the placeholder.
-/// Used when the active conversation changes (which also invalidates every
-/// parked scroll position — they belong to the previous workspace's tabs)
+/// Used when the active conversation changes. Cloud reading positions stay
+/// with their open documents; Host checkout positions keep their old lifecycle.
 /// and when the last tab closes: the viewer is imperative state outside the
 /// model, so it would otherwise keep showing the previous document. A no-op
 /// until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
   let clear = @cmd.custom_cmd(_scheduler => {
-    viewer_state.view_states.clear()
-    viewer_state.markdown_view_states.clear()
+    park_cloud_view_state()
+    for key in viewer_state.view_states.keys().to_array() {
+      if !key.has_prefix("openseek-cloud:") {
+        viewer_state.view_states.remove(key)
+      }
+    }
+    for key in viewer_state.markdown_view_states.keys().to_array() {
+      if !key.has_prefix("openseek-cloud:") {
+        viewer_state.markdown_view_states.remove(key)
+      }
+    }
     if viewer_state.viewer is Some(viewer) {
       if viewer_state.point_range_highlight is Some(highlight) {
         highlight.clear()
@@ -1682,6 +1691,7 @@ fn clear_viewer() -> @cmd.Cmd {
 /// stays bounded to one pair and `clear_viewer` retires it at an owner boundary.
 fn clear_document() -> @cmd.Cmd {
   let clear = @cmd.custom_cmd(_scheduler => {
+    park_cloud_view_state()
     if viewer_state.viewer is Some(viewer) {
       if viewer_state.point_range_highlight is Some(highlight) {
         highlight.clear()
@@ -1775,4 +1785,39 @@ fn language_id(name : String) -> String {
   } else {
     "plaintext"
   }
+}
+
+///|
+/// Save value-only reading positions before the mounted model is disposed.
+fn park_cloud_view_state() -> Unit {
+  guard viewer_state.document is Some(path) && path.scheme == "openseek-cloud" else {
+    return
+  }
+  if viewer_state.viewer is Some(viewer) &&
+    viewer.get_model() is Some(_) &&
+    viewer.save_view_state() is Some(position) {
+    viewer_state.view_states[path.to_string()] = position
+  }
+  if viewer_state.markdown_viewer is Some(viewer) &&
+    viewer.get_model() is Some(_) &&
+    viewer.save_view_state() is Some(position) {
+    viewer_state.markdown_view_states[path.to_string()] = position
+  }
+}
+
+///|
+fn forget_cloud_view_states(root : @common.Uri) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    let prefix = root.to_string()
+    for key in viewer_state.view_states.keys().to_array() {
+      if key.has_prefix(prefix) {
+        viewer_state.view_states.remove(key)
+      }
+    }
+    for key in viewer_state.markdown_view_states.keys().to_array() {
+      if key.has_prefix(prefix) {
+        viewer_state.markdown_view_states.remove(key)
+      }
+    }
+  })
 }

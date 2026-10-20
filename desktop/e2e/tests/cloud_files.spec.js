@@ -81,7 +81,14 @@ test('Cloud browses nested text files through the existing read-only Files pane'
   await page.screenshot({ path: testInfo.outputPath('cloud-files.png'), fullPage: true });
   await showTree(page);
   cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: '// Refreshed text', sig: 'new-sig', absolute: '/src/hello #.mbt' });
+  let finishRefresh;
+  cloud.holdRead = new Promise(resolve => { finishRefresh = resolve; });
+  const previousReads = cloud.fileRequests.filter(request => request.content).length;
   await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await expect.poll(() => cloud.fileRequests.filter(request => request.content).length).toBe(previousReads + 1);
+  await expect(source(page)).toContainText('Cloud text');
+  await expect(page.locator('.viewer-notice')).toBeHidden();
+  finishRefresh(); cloud.holdRead = null;
   await expect(source(page)).toContainText('Refreshed text');
   expect(fileHostRequests(cloud)).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);
@@ -247,4 +254,91 @@ test('Host oversized notices keep their existing behavior without the Cloud over
   await file(page, 'large.txt').click();
   await expect(page.locator('.viewer-notice')).toContainText('too large to preview');
   await expect(page.getByRole('button', { name: 'Preview anyway', exact: true })).toHaveCount(0);
+});
+
+
+test('Cloud file reads show loading instead of the unselected placeholder', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.set(`${sessionA}:`, [{ name: 'large.txt', is_dir: false }]);
+  cloud.contents.set(`${sessionA}:large.txt`, { kind: 'oversized' });
+  cloud.largePreviews.set(`${sessionA}:large.txt`, { kind: 'content', content: 'Large preview ready.', sig: 'large', absolute: '/large.txt' });
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  let release;
+  cloud.holdRead = new Promise(resolve => { release = resolve; });
+  await file(page, 'large.txt').click();
+  await expect(page.locator('.viewer-notice')).toHaveText('Loading file…');
+  await page.locator('.editor').screenshot({ path: testInfo.outputPath('cloud-file-loading.png') });
+  release(); cloud.holdRead = null;
+  const preview = page.getByRole('button', { name: 'Preview anyway', exact: true });
+  await expect(preview).toBeVisible();
+  cloud.holdRead = new Promise(resolve => { release = resolve; });
+  await showTree(page); await file(page, 'large.txt').click();
+  await expect(page.locator('.viewer-notice')).toHaveText('Loading file…');
+  release(); cloud.holdRead = null;
+  await expect(preview).toBeVisible();
+  cloud.holdRead = new Promise(resolve => { release = resolve; });
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await expect(page.locator('.viewer-notice')).toHaveText('Loading file…');
+  release(); cloud.holdRead = null;
+  await expect(preview).toBeVisible();
+  cloud.holdRead = new Promise(resolve => { release = resolve; });
+  await preview.click();
+  await expect(page.locator('.viewer-notice')).toHaveText('Loading file…');
+  await expect(preview).toHaveCount(0);
+  release(); cloud.holdRead = null;
+  await expect(source(page)).toContainText('Large preview ready.');
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud open text and explicitly allowed large previews survive session switches with reading position', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.set(`${sessionA}:`, [{ name: 'saved.txt', is_dir: false }, { name: 'large.txt', is_dir: false }]);
+  const text = Array.from({ length: 300 }, (_, i) => `Cloud cache line ${i}`).join('\n') + '\nCLOUD_CACHE_END';
+  cloud.contents.set(`${sessionA}:saved.txt`, { kind: 'content', content: text, sig: 'saved', absolute: '/saved.txt' });
+  cloud.contents.set(`${sessionA}:large.txt`, { kind: 'oversized' });
+  cloud.largePreviews.set(`${sessionA}:large.txt`, { kind: 'content', content: text, sig: 'large', absolute: '/large.txt' });
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  for (const name of ['saved.txt', 'large.txt']) {
+    await showTree(page);
+    await file(page, name).click();
+    if (name === 'large.txt') await page.getByRole('button', { name: 'Preview anyway', exact: true }).click();
+    await expect(source(page)).toContainText('Cloud cache line 0');
+    await source(page).getByRole('region').hover();
+    await page.mouse.wheel(0, 100000);
+    await expect(source(page).getByText('CLOUD_CACHE_END', { exact: true })).toBeVisible();
+    const reads = cloud.fileRequests.filter(request => request.content).length;
+    await cloud.open(sessionB); await cloud.open(sessionA);
+    await expect(source(page).getByText('CLOUD_CACHE_END', { exact: true })).toBeVisible();
+    expect(cloud.fileRequests.filter(request => request.content)).toHaveLength(reads);
+  }
+  await page.locator('.editor').screenshot({ path: testInfo.outputPath('cloud-cached-large-restored.png') });
+  await page.locator('.editor-tab.active').getByRole('button', { name: 'Close', exact: true }).click();
+  await showTree(page);
+  await file(page, 'large.txt').click();
+  await expect(page.getByRole('button', { name: 'Preview anyway', exact: true })).toBeVisible();
+  expect(cloud.fileRequests.filter(request => request.content).at(-1).allowLarge).toBeNull();
+  expect(fileHostRequests(cloud)).toEqual([]);
+});
+
+test('a Cloud generation finishing off screen invalidates only its parked file content', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  let finish;
+  cloud.pauseStream = new Promise(resolve => { finish = resolve; });
+  await page.locator('#task').fill('Update this file in the background');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('#transcript').getByText('Update this file in the background', { exact: true })).toBeVisible();
+  await cloud.open(sessionB);
+  cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: '// Background generation finished', sig: 'finished', absolute: '/src/hello #.mbt' });
+  const before = cloud.fileRequests.filter(request => request.content).length;
+  finish();
+  await expect.poll(() => cloud.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`).length).toBeGreaterThan(1);
+  expect(cloud.fileRequests.filter(request => request.content)).toHaveLength(before);
+  await cloud.open(sessionA);
+  await expect(source(page)).toContainText('Background generation finished');
+  expect(cloud.fileRequests.filter(request => request.content).at(-1).allowLarge).toBeNull();
 });

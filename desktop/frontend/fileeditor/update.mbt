@@ -360,7 +360,9 @@ fn show_activated_tab(
   doc : Doc,
   generation : Int32,
 ) -> (@cmd.Cmd, Doc, Int32) {
-  let doc = doc.prepare_pdf_runtime(state.pdf_generation + 1)
+  let doc = (if doc.stale { doc.prepare_read() } else { doc }).prepare_pdf_runtime(
+    state.pdf_generation + 1,
+  )
   guard doc.stale &&
     !(doc.state is TabLoading) &&
     doc.review is Some(review) &&
@@ -542,7 +544,7 @@ pub fn open_document(
       // classified as a non-file entry. Leave that sentinel before starting
       // the read so its reply is distinguishable from an older in-flight read.
       docs[path] = { name, state: TabLoading, review: None, stale: false, }
-    _ => ()
+    Some(doc) => docs[path] = doc.prepare_read()
   }
   // Direct file/symbol/mention opens arrive without a captured transcript
   // generation, but root already advanced the same navigation token before
@@ -1981,8 +1983,8 @@ fn sync_package_graph(
 ///|
 /// Reconcile the file subsystem with the active conversation after every
 /// message: rebuild the document table and drop the tree cache when the
-/// conversation changed (the dock parks/restores strip identities; this side
-/// re-seeds documents from the fresh `Ctx` projection), list the concrete
+/// conversation changed (restoring settled Cloud documents for its open tabs
+/// and seeding Host documents from the fresh `Ctx` projection), list the concrete
 /// root once its path is known, and keep the host's file watcher pointed at
 /// that root. The main update runs this post-dispatch — after the
 /// dock's own sync, so the projection is already the new conversation's.
@@ -2068,17 +2070,9 @@ pub fn sync(
     state.watch_generation
   }
   let reroot_watch_identity = ctx.watch_identity(reroot_watch_generation)
-  // When the active conversation changes, drop the cached tree *and* the
-  // viewer's open document — the viewer is imperative state outside the
-  // model, so it would otherwise keep showing the previous conversation's
-  // file. The dock has already parked the outgoing strip and restored this
-  // conversation's; the document table is rebuilt from the projection —
-  // identities only, every entry `TabLoading` until a read lands. This runs
-  // even while the panel is closed: `with_watch` follows `ctx.owner`
-  // whenever open files remain, so leaving the documents rooted in the
-  // previous conversation would have the next fs_changed stat their paths
-  // against the new conversation's root — marking hidden documents
-  // deleted/stale for files that never moved.
+  // Retire the mounted viewer and tree at an owner boundary. Cloud document
+  // data follows the dock's still-open bookmarks; Host documents keep their
+  // checkout lifecycle. Request epochs advance independently of either cache.
   let (state, reroot_cmd) = if same_owner && !placement_identity_changed {
     // The real owner remains stable across an unresolved/missing checkout so
     // its review selection survives. Clear the imperative Viewer exactly once
@@ -2086,14 +2080,13 @@ pub fn sync(
     // every host-backed action parked until placement is healthy again.
     (state, if parking_existing_owner { clear_viewer() } else { @cmd.none })
   } else {
-    let docs : Map[@common.Uri, Doc] = Map([])
-    for path in ctx.open_files {
-      docs[path] = {
-        name: @resource.label(path),
-        state: TabLoading,
-        review: None,
-        stale: false,
-      }
+    let (docs, cloud_documents) = if owner_changed {
+      state.switch_documents(ctx.owner, ctx.open_files)
+    } else {
+      // A credential/placement change retires content, even for the same URI.
+      let empty = { ..state, owner: None, cloud_documents: Map([]), }
+      let (docs, _) = empty.switch_documents(ctx.owner, ctx.open_files)
+      (docs, state.cloud_documents)
     }
     let cmds = [clear_viewer()]
     // A workspace or resolved root/worktree transition can leave an otherwise
@@ -2111,7 +2104,8 @@ pub fn sync(
     }
     // A hidden panel's restored active document is not worth a read yet; it
     // stays TabLoading and the panel-open toggle reads it on reopen.
-    if checkout_ready &&
+    if ctx.owner is @interop.Host(_) &&
+      checkout_ready &&
       ctx.panel_open &&
       ctx.active_file is Some(path) &&
       docs.contains(path) {
@@ -2133,6 +2127,7 @@ pub fn sync(
         github_review: state.github_review,
         owner: Some(ctx.owner),
         cloud_epoch,
+        cloud_documents,
         // A new incarnation must not inherit the identity it replaced, so this
         // reconciles from `PlacementUnknown` rather than the outgoing value.
         placement: PlacementUnknown.reconcile(ctx.placement),
@@ -2197,6 +2192,18 @@ pub fn sync(
       },
       @cmd.batch(cmds),
     )
+  }
+  // Cloud restores settled documents through the same activation path as a
+  // tab click; PDF bytes get a fresh runtime generation, never a parked loader.
+  let (state, reroot_cmd) = if (!same_owner || placement_identity_changed) &&
+    ctx.owner is @interop.Cloud(..) &&
+    checkout_ready &&
+    ctx.panel_open &&
+    ctx.active_file is Some(path) {
+    let (show, state) = activate(dispatch, state, ctx, path)
+    (state, @cmd.batch([reroot_cmd, show]))
+  } else {
+    (state, reroot_cmd)
   }
   // A checkout can disappear while a Git request is in flight. The parked
   // update path correctly refuses its late host reply; clear the in-flight
@@ -2549,6 +2556,11 @@ fn update_inner(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
+  // Cache invalidation is local state even when the visible Host checkout
+  // is unavailable or the shell is showing a different Cloud draft.
+  if msg is RunSettled(owner=@interop.Cloud(..) as owner) && owner != ctx.owner {
+    return (@cmd.none, state.invalidate_cloud_documents(owner))
+  }
   // `sync` parks the old owner while placement is unresolved or its checkout
   // is missing. Refuse file-editor actions until there is a concrete root to
   // put into their absolute filesystem or root-relative language addresses.
@@ -4220,12 +4232,8 @@ fn update_inner(
         (@cmd.none, state)
       }
     }
-    RunSettled(owner=@interop.Cloud(..) as owner) =>
-      if owner == ctx.owner {
-        refresh_cloud_files(dispatch, state, ctx)
-      } else {
-        (@cmd.none, state)
-      }
+    RunSettled(owner=@interop.Cloud(..)) =>
+      refresh_cloud_files(dispatch, state, ctx)
     RunSettled(owner=@interop.Host(owner)) =>
       if state.owner is Some(state_owner) && state_owner == @interop.Host(owner) {
         // A completed agent run can write files outside the pruned watcher.

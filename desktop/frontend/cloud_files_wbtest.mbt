@@ -64,12 +64,25 @@ test "account changes retire Cloud file strips and fence old reads after same-ac
   )
   let (_, model) = update(test_dispatch(), old_reply, model)
   assert_true(model.file_panel.docs.contains(path))
+  let model = {
+    ..model,
+    file_panel: {
+      ..model.file_panel,
+      cloud_documents: Map([
+        (
+          @interop.Cloud(account="fixture-user", session="parked"),
+          model.file_panel.docs,
+        ),
+      ]),
+    },
+  }
   let (_, signed_out) = update(
     test_dispatch(),
     AccountLoaded(model.account_epoch, Ok(None)),
     model,
   )
   assert_true(signed_out.file_panel.docs.is_empty())
+  assert_true(signed_out.file_panel.cloud_documents.is_empty())
   assert_true(signed_out.dock.tabs.is_empty())
   assert_false(signed_out.dock.remembered.contains(ctx.owner))
   for account in ["other-user", "fixture-user"] {
@@ -96,4 +109,73 @@ test "account changes retire Cloud file strips and fence old reads after same-ac
     assert_false(ignored.file_panel.docs.contains(path))
     assert_true(ignored.dock.tabs.is_empty())
   }
+}
+
+///|
+test "deleting an inactive Cloud session clears its documents and dock bookmarks" {
+  let model = integrated_cloud_model()
+  let owner = @interop.Cloud(account="fixture-user", session="cloud-b")
+  let path = @resource.join_relative(
+    @resource.cloud_root(@cloud.CloudOrigin, "fixture-user", "cloud-b").unwrap(),
+    Relative("private.txt"),
+  )
+  let tab = @dock.File(path~)
+  let model = {
+    ..model,
+    cloud: {
+      ..model.cloud,
+      sessions: [
+        ..model.cloud.sessions,
+        {
+          id: "cloud-b",
+          title: None,
+          updated_at: None,
+          generating: false,
+          archived: false,
+        },
+      ],
+    },
+    dock: {
+      ..model.dock,
+      remembered: Map([(owner, { tabs: [tab], active: Some(tab), })]),
+    },
+    file_panel: {
+      ..model.file_panel,
+      cloud_documents: Map([
+        (
+          owner,
+          Map([
+            (
+              path,
+              {
+                name: "private.txt",
+                state: @fileeditor.TabLoaded(content="private", sig="sig"),
+                review: None,
+                stale: false,
+              },
+            ),
+          ]),
+        ),
+      ]),
+    },
+  }
+  let (_, pending) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Delete("cloud-b")),
+    model,
+  )
+  let (_, deleted) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.Deleted(
+        pending.cloud.epoch,
+        "cloud-b",
+        pending.cloud.deletions["cloud-b"],
+      ),
+    ),
+    pending,
+  )
+  assert_false(deleted.file_panel.cloud_documents.contains(owner))
+  assert_false(deleted.dock.remembered.contains(owner))
+  assert_true(deleted.cloud_identity() == model.cloud_identity())
 }

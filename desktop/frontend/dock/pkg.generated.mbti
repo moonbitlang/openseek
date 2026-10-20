@@ -23,6 +23,8 @@ pub fn file_paths(State) -> Array[@common.Uri]
 
 pub fn forget_cloud_account(State, String) -> State
 
+pub fn forget_cloud_session(State, String, String) -> State
+
 pub fn history_diffs(State) -> Array[GitHistoryDiff]
 
 pub fn launcher_pane(locale? : @i18n.Locale, LauncherActions) -> @html.Html

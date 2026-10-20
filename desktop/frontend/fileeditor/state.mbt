@@ -182,6 +182,18 @@ pub(all) struct Doc {
 } derive(Eq)
 
 ///|
+/// Successful content stays visible during a refresh. Ordinary notices have
+/// no content to keep; reviews retain their independent baseline lifecycle.
+fn Doc::prepare_read(self : Doc) -> Doc {
+  if self.review is None &&
+    self.state is (TabBinary | TabOversized | TabReadFailed(_)) {
+    { ..self, state: TabLoading, stale: false, }
+  } else {
+    self
+  }
+}
+
+///|
 /// One file's decoded `fs.stat_files` result: its current mtime signature,
 /// or why the host has none — the file is missing, or it could not be
 /// inspected at all.
@@ -451,6 +463,9 @@ pub fn ReconciledPlacement::reconcile(
 pub(all) struct State {
   owner : @interop.ConversationIdentity?
   cloud_epoch : Int32?
+  // Settled documents for Cloud strips parked by conversation switches.
+  // Resource URIs bind origin/account/session/path; no credentials or renderers.
+  cloud_documents : Map[@interop.ConversationIdentity, Map[@common.Uri, Doc]]
   // The placement incarnation last reconciled for `owner`, including whether
   // it is currently parked. A conversation can move from its project root into
   // a newly-created worktree without changing owner; retaining the complete
@@ -666,6 +681,7 @@ pub fn State::empty() -> State {
   {
     owner: None,
     cloud_epoch: None,
+    cloud_documents: Map([]),
     placement: PlacementUnknown,
     tree_open: false,
     office_zoom: 100,
@@ -773,27 +789,22 @@ fn State::moon_mod_view_mode(
 
 ///|
 /// Prepare the file subsystem for a shell-driven open that must happen before
-/// the ordinary post-dispatch `sync` pass. Checkout-derived inventories and
-/// documents are reset here, inside their owner, while panel preferences and
-/// page-lifetime request fences survive an A -> B -> A conversation switch.
+/// the ordinary post-dispatch `sync` pass. Host documents and inventories
+/// reset here; settled Cloud documents follow the open bookmarks. Panel
+/// preferences and request fences survive an A -> B -> A conversation switch.
 pub fn State::prepare_owner(
   self : State,
   owner : @interop.ConversationIdentity,
   open_files : Array[@common.Uri],
+  cloud_epoch? : Int32,
 ) -> State {
   guard self.owner != Some(owner) else { return self }
-  let docs : Map[@common.Uri, Doc] = Map([])
-  for path in open_files {
-    docs[path] = {
-      name: @resource.label(path),
-      state: TabLoading,
-      review: None,
-      stale: false,
-    }
-  }
+  let (docs, cloud_documents) = self.switch_documents(owner, open_files)
   {
     ..State::empty(),
     owner: Some(owner),
+    cloud_epoch,
+    cloud_documents,
     tree_open: self.tree_open,
     office_zoom: self.office_zoom,
     office_zoom_preferences: self.office_zoom_preferences,
