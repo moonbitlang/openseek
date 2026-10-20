@@ -24,9 +24,10 @@ fn open_browser_tab(
 ) -> (@cmd.Cmd, Model) {
   let (preview, id) = @preview.open_page(model.preview, url?)
   // `owner` names the Host conversation for the native view; without one the
-  // tab joins the strip on screen, which may be a Cloud conversation's.
+  // tab joins the strip on screen, which may be a Cloud conversation's. A
+  // side chat's tab joins its conversation's strip.
   let target_owner = owner
-    .map(owner => @interop.Host(owner))
+    .map(owner => dock_home(@interop.Host(owner)))
     .unwrap_or(model.dock_owner())
   let dock = @dock.open_browser(model.dock_state_for(target_owner), id)
   let on_screen = target_owner == model.dock_owner()

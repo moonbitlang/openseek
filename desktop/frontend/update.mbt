@@ -3150,11 +3150,6 @@ fn update_msg(
               } else {
                 None
               },
-              destination?=if side_chat {
-                model.dock_owner().host()
-              } else {
-                None
-              },
             )
           }
           (
