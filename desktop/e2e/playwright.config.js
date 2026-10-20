@@ -19,7 +19,7 @@ export default defineConfig({
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
   // Run independent test files in parallel while preserving in-file ordering.
-  workers: 2,
+  workers: 4,
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
     // Safari's grid sizing can hide question cards even when Chromium passes.
