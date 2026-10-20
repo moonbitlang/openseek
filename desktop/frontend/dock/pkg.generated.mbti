@@ -117,7 +117,16 @@ pub(all) struct TabChip {
   label : String
   title : String
   missing : Bool
+  mark : TabMark
 }
+
+pub(all) enum TabMark {
+  Unmarked
+  Running
+  Unread
+} derive(Eq)
+pub fn TabMark::equal(Self, Self) -> Bool
+pub fn TabMark::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

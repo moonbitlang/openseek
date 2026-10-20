@@ -27,6 +27,7 @@ struct Input {
 pub(all) struct SideChatTab {
   owner : @interop.ConversationKey
   number : Int32
+  mark : @dock.TabMark
 } derive(Eq)
 
 ///|

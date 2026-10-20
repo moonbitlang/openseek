@@ -147,6 +147,14 @@ priv enum QuoteTarget {
 } derive(Eq)
 
 ///|
+/// Where text selected in a transcript goes: the column's composer, or the
+/// composer of the side chat in the dock.
+priv enum SelectionComposer {
+  ColumnComposer(QuoteTarget)
+  DockComposer(@composer.Identity)
+} derive(Eq)
+
+///|
 /// Which composer, if any, is shown with a transcript right now. A read-only
 /// conversation shows its transcript without one.
 fn Model::quote_screen(self : Model) -> QuoteScreen? {
@@ -698,12 +706,17 @@ fn main {
     // when its tab stops being the one on screen. The composer lives as long
     // as the page, like the column's: its drafts are kept per side chat in the
     // component, so hiding the dock or switching tabs loses no typing.
-    let (side_chat_composer, _) = @composer.component(
+    let (side_chat_composer, side_chat_quote) = @composer.component(
       state.map(model => model.locale),
       state.map(model => model.dock_composer_input()),
       emit.map(action => ComposerAction(action)),
       surface=Dock,
     )
+    let side_chat_quote_target = state.map(model => {
+      model
+      .mounted_side_chat_owner()
+      .bind(owner => model.side_chat_composer_input(owner).quote_target())
+    })
     let side_chat_transcript = state
       .map(model => model.mounted_side_chat_owner())
       .switch_by(
@@ -955,18 +968,36 @@ fn main {
       file_feedback,
       @action_menu.selection_component(
         state.map(model => model.locale),
-        quote_target,
+        quote_target.map2(side_chat_quote_target, (column, dock) => {
+          let targets : Array[@action_menu.SelectionTarget[SelectionComposer]] = []
+          if column is Some(target) {
+            targets.push({
+              source: @interop.ChatSurface::Column.quote_source(),
+              target: ColumnComposer(target),
+            })
+          }
+          if dock is Some(identity) {
+            targets.push({
+              source: @interop.ChatSurface::Dock.quote_source(),
+              target: DockComposer(identity),
+            })
+          }
+          targets
+        }),
         reply => {
+          let content = @composer.Text(
+            quote=Some(reply.quote),
+            comment=reply.comment,
+          )
           let (quote, identity) = match reply.target {
-            ChatComposer(identity) => (composer_quote, identity)
-            CodexComposer(identity) => (codex_composer_quote, identity)
+            ColumnComposer(ChatComposer(identity)) => (composer_quote, identity)
+            ColumnComposer(CodexComposer(identity)) =>
+              (codex_composer_quote, identity)
+            DockComposer(identity) => (side_chat_quote, identity)
           }
           quote({
             identity,
-            content: @composer.Text(
-              quote=Some(reply.quote),
-              comment=reply.comment,
-            ),
+            content,
             images: [],
             send: reply.send,
             accepted: reply.accepted,

@@ -172,3 +172,42 @@ test('a side chat first restored after its worktree registry reads relative imag
   await page.locator('.app').screenshot({ path: testInfo.outputPath('side-chat-restored-shared-checkout.png') });
   expect(app.pageErrors).toEqual([]);
 });
+
+async function selectIn(page, container, text) {
+  const paragraph = page.locator(`${container} .msg-content`).getByText(text, { exact: true }).first();
+  await paragraph.dblclick({ position: { x: 8, y: 8 } });
+}
+
+test('a reply to text selected in the side chat goes into its own composer', async ({ page }) => {
+  const app = await setup(page);
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('.editor-tab', { hasText: 'Side chat 1' }).click();
+  await expect(page.locator('#side-chat-transcript')).toContainText('Tokens are lexemes.');
+  await selectIn(page, '#side-chat-transcript', 'Tokens are lexemes.');
+  const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
+  await toolbar.getByRole('button', { name: 'Reply', exact: true }).click();
+  const reply = page.getByRole('dialog', { name: 'Reply to selection' });
+  await expect(reply.locator('blockquote')).toHaveText('Tokens');
+  await reply.getByRole('textbox', { name: 'Reply', exact: true }).fill('Quoted reply');
+  await reply.getByRole('checkbox', { name: 'Batch', exact: true }).check();
+  await reply.getByRole('button', { name: 'Add to message', exact: true }).click();
+  await expect(reply).toBeHidden();
+  await expect(page.locator('#side-chat-task')).toHaveValue('> Tokens\n\nQuoted reply\n\n');
+  // The column's draft is untouched.
+  await expect(page.locator('#task')).toHaveValue('');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('closing a side chat tab deletes the side chat', async ({ page }) => {
+  const app = await setup(page);
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  const tab = page.locator('.editor-tab', { hasText: 'Side chat 1' });
+  await tab.click();
+  await expect(page.locator('#side-chat-transcript')).toContainText('Tokens are lexemes.');
+  await tab.locator('.tab-close').click();
+  await expect.poll(() => app.requests.find(r => r.method === 'session.delete')?.params.session)
+    .toBe('session-1-sc-0a1b2c3d');
+  await expect(tab).toHaveCount(0);
+  await expect(page.locator('#side-chat-transcript')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});

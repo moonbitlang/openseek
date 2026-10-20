@@ -38,14 +38,24 @@ fn icon_restore_panel() -> @html.Html {
 ///|
 /// One strip entry as the root view presents it: the tab's identity plus the
 /// decorations only the owning subsystem knows — the label text, the hover
-/// title, and whether the tab's backing content is missing (a deleted file),
-/// which styles the tab.
+/// title, whether the tab's backing content is missing (a deleted file),
+/// which styles the tab, and the mark a side chat's tab carries.
 pub(all) struct TabChip {
   tab : DockTab
   label : String
   title : String
   missing : Bool
+  mark : TabMark
 }
+
+///|
+/// The dot a tab shows for the conversation behind it: a side chat whose turn
+/// is running, or one that finished while its tab was not on screen.
+pub(all) enum TabMark {
+  Unmarked
+  Running
+  Unread
+} derive(Eq)
 
 ///|
 /// What the launcher's rows can open, as root-owned commands — opening a
@@ -198,6 +208,11 @@ pub fn tabs_bar(
     if chip.missing {
       classes += " deleted"
     }
+    match chip.mark {
+      Unmarked => ()
+      Running => classes += " running"
+      Unread => classes += " unread"
+    }
     let tab = chip.tab
     let target = tab_menu_target(owner, tab)
     tabs[target] = @html.div(
@@ -217,6 +232,12 @@ pub fn tabs_bar(
         }),
       on_click=dispatch(TabActivated(tab)),
       [
+        // Always present, so a mark coming and going moves no sibling.
+        @html.span(
+          class="tab-mark",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          @html.nothing,
+        ),
         @html.span(class="tab-name", chip.label),
         @html.button(
           class="tab-close",
@@ -299,3 +320,6 @@ pub fn tabs_bar(
   }
   @html.div(class="editor-tabsbar", children)
 }
+
+///|
+pub extend TabMark with Eq::{equal, not_equal}

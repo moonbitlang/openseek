@@ -17,7 +17,7 @@ fn panel_view(
           Some(doc) => (doc.name, doc.state is TabDeleted)
           None => (@resource.label(path), false)
         }
-        { tab, label, title: path.path, missing, }
+        { tab, label, title: path.path, missing, mark: Unmarked, }
       }
       GitDiff(diff~) => {
         let short = if diff.commit.length() <= 8 {
@@ -30,6 +30,7 @@ fn panel_view(
           label: "\{@fileeditor.basename(diff.path)} (\{short})",
           title: "\{diff.path.0} at \{diff.commit}",
           missing: false,
+          mark: Unmarked,
         }
       }
       Browser(id~) => {
@@ -40,7 +41,7 @@ fn panel_view(
           }
           None => (ui(locale, NewTab), ui(locale, NewTab))
         }
-        { tab, label, title, missing: false, }
+        { tab, label, title, missing: false, mark: Unmarked, }
       }
       Github =>
         {
@@ -48,6 +49,7 @@ fn panel_view(
           label: "GitHub",
           title: "GitHub pull requests and issues",
           missing: false,
+          mark: Unmarked,
         }
       Jobs =>
         {
@@ -55,6 +57,7 @@ fn panel_view(
           label: ui(locale, JobsLabel),
           title: ui(locale, JobsHint),
           missing: false,
+          mark: Unmarked,
         }
       Workflows =>
         {
@@ -62,6 +65,7 @@ fn panel_view(
           label: ui(locale, WorkflowsLabel),
           title: ui(locale, WorkflowsHint),
           missing: false,
+          mark: Unmarked,
         }
       FilePicker => {
         let (label, title) = match input.file_panel.explorer_mode {
@@ -69,15 +73,16 @@ fn panel_view(
           ExplorerSearch => (ui(locale, SearchLabel), ui(locale, SearchHint))
           ExplorerFiles => (ui(locale, OpenFile), ui(locale, OpenFileHint))
         }
-        { tab, label, title, missing: false, }
+        { tab, label, title, missing: false, mark: Unmarked, }
       }
       SideChat(owner~) => {
-        let label = match
+        let (label, mark) = match
           input.side_chats.iter().find_first(chat => chat.owner == owner) {
-          Some(chat) => "\{ui(locale, SideChatLabel)} \{chat.number}"
-          None => ui(locale, SideChatLabel)
+          Some(chat) =>
+            ("\{ui(locale, SideChatLabel)} \{chat.number}", chat.mark)
+          None => (ui(locale, SideChatLabel), @dock.Unmarked)
         }
-        { tab, label, title: label, missing: false, }
+        { tab, label, title: label, missing: false, mark, }
       }
     }
   })

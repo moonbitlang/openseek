@@ -3743,3 +3743,17 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
    has, not the column's. */
 .side-chat-pane .transcript { padding: 16px 14px 12px; }
 .side-chat-pane .composer { padding: 6px 12px 12px; }
+
+/* A side chat's tab says when its turn is running, or finished unseen. */
+.editor-tab .tab-mark { display: none; }
+.editor-tab.running .tab-mark,
+.editor-tab.unread .tab-mark {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+.editor-tab.running .tab-mark { animation: lane-pulse 1.4s ease-in-out infinite; }

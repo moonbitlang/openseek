@@ -94,6 +94,7 @@ pub(all) enum ChatSurface {
 } derive(Eq, @debug.Debug)
 pub fn ChatSurface::equal(Self, Self) -> Bool
 pub fn ChatSurface::not_equal(Self, Self) -> Bool
+pub fn ChatSurface::quote_source(Self) -> String
 pub fn ChatSurface::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CheckoutPlacement {

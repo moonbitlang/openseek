@@ -61,7 +61,13 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
         }
       })
       .mapi((index, owner) => {
-        ({ owner, number: index + 1, } : @right_panel.SideChatTab)
+        let mark : @dock.TabMark = match
+          self.find_conversation(owner.channel, owner.session) {
+          Some(conv) if conv.is_running() => Running
+          Some(conv) if conv.unseen_finish => Unread
+          _ => Unmarked
+        }
+        ({ owner, number: index + 1, mark, } : @right_panel.SideChatTab)
       }),
   )
 }

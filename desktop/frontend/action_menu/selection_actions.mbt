@@ -1,8 +1,9 @@
 // Copy and reply actions beside a fresh text selection. "Reply" turns the bar into
 // a small composer that keeps the quote in view while a comment is typed; the
-// result is handed to the composer the selection's screen named, either to be
-// sent at once or batched into the message being written there. The reply
-// stays open until that composer takes it. Pointer-only by design.
+// result is handed to the composer of the transcript the text was selected
+// in, either to be sent at once or batched into the message being written
+// there. The reply stays open until that composer takes it. Pointer-only by
+// design.
 
 ///|
 /// A reply quoting the selected text, for the composer `target` names.
@@ -19,8 +20,26 @@ pub(all) struct QuoteReply[T] {
 }
 
 ///|
+/// The composer a reply to text selected in one quote source goes to.
+/// `source` is the source's `data-context-quote` value.
+pub(all) struct SelectionTarget[T] {
+  source : String
+  target : T
+} derive(Eq)
+
+///|
+fn[T] target_for(
+  targets : Array[SelectionTarget[T]],
+  source : String,
+) -> SelectionTarget[T]? {
+  targets.iter().find_first(candidate => candidate.source == source)
+}
+
+///|
 /// A quotable selection and where its surface sits.
 priv struct SelectionAnchor {
+  // The quote source the selection is in, as its `data-context-quote` names it.
+  source : String
   text : String
   // Viewport position of the surface's anchor edge: its bottom centre, or its
   // top centre when `below`.
@@ -42,8 +61,8 @@ priv enum SelectionStage {
 ///|
 priv struct SelectionOpen[T] {
   anchor : SelectionAnchor
-  // The composer on screen when the text was selected. The surface shows, and
-  // delivers, only while that is still the composer on screen.
+  // The composer of the source the text was selected in. The surface shows,
+  // and delivers, only while that is still that source's composer.
   target : T
   stage : SelectionStage
 } derive(Eq)
@@ -134,9 +153,10 @@ fn settled_anchor() -> SelectionAnchor? {
   let range = selection.range(0)
   guard !text.is_blank() &&
     range.container().to_option() is Some(container) &&
-    container.closest(QuoteSource) is Some(_) else {
+    container.closest(QuoteSource) is Some(quote_source) else {
     return None
   }
+  let source = quote_source.get_attribute("data-context-quote").unwrap_or("")
   let bounds = range.bounds()
   let width = viewport_width()
   let center = (bounds.get_left() + bounds.get_right()) / 2
@@ -153,7 +173,13 @@ fn settled_anchor() -> SelectionAnchor? {
   } else {
     bounds.get_top() - SelectionSurfaceGap
   }
-  Some({ text, x: @math.round(x).to_int(), y: @math.round(y).to_int(), below, })
+  Some({
+    source,
+    text,
+    x: @math.round(x).to_int(),
+    y: @math.round(y).to_int(),
+    below,
+  })
 }
 
 ///|
@@ -315,18 +341,29 @@ fn selection_subscription(
 ///|
 fn[T : Eq] SelectionState::update(
   self : SelectionState[T],
-  target : T?,
+  targets : Array[SelectionTarget[T]],
   msg : SelectionMsg,
   emit : @cmd.Emit[SelectionMsg],
   deliver : (QuoteReply[T]) -> @cmd.Cmd,
 ) -> (SelectionState[T], @cmd.Cmd) {
   let unpin = @cmd.custom_cmd(_ => clear_selection_highlight(QuoteHighlight))
+  // The composer the open surface's source names now. A surface whose source
+  // has another composer, or none, by now is stale.
+  let target = match self.open {
+    Some(open) =>
+      target_for(targets, open.anchor.source).map(found => found.target)
+    None => None
+  }
   match (msg, self.open) {
     (Settled(anchor), _) =>
       (
         {
           ..self,
-          open: target.map(target => { anchor, target, stage: Offered, }),
+          open: target_for(targets, anchor.source).map(found => {
+            anchor,
+            target: found.target,
+            stage: Offered,
+          }),
           generation: self.generation + 1,
         },
         unpin,
@@ -447,32 +484,34 @@ fn selection_surface_attrs(
 }
 
 ///|
-/// Own the floating reply for text selected inside a quote source. `target`
-/// names the composer a reply from the screen would go to, when there is one;
+/// Own the floating reply for text selected inside a quote source. `targets`
+/// names, per quote source on screen, the composer a reply from it goes to;
 /// `deliver` hands a finished reply to it.
 pub fn[T : Eq] selection_component(
   locale : @rabbita.Val[@i18n.Locale],
-  target : @rabbita.Val[T?],
+  targets : @rabbita.Val[Array[SelectionTarget[T]]],
   deliver : (QuoteReply[T]) -> @cmd.Cmd,
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
-    input=target,
+    input=targets,
     init=(_, _) => {
       (
         SelectionState::{ open: None, batched: false, generation: 0, },
         @cmd.none,
       )
     },
-    update=(state, target, msg, emit) => {
-      state.update(target, msg, emit, deliver)
+    update=(state, targets, msg, emit) => {
+      state.update(targets, msg, emit, deliver)
     },
     subscriptions=(state, _, emit) => {
       selection_subscription(emit, state.watch())
     },
   )
-  state.map3(target, locale, (state, target, locale) => {
+  state.map3(targets, locale, (state, targets, locale) => {
     // A surface opened over another conversation is not this one's to show.
-    guard state.open is Some(open) && target == Some(open.target) else {
+    guard state.open is Some(open) &&
+      target_for(targets, open.anchor.source) is Some(found) &&
+      found.target == open.target else {
       return @html.nothing
     }
     let placement = if open.anchor.below { " below" } else { "" }
@@ -622,3 +661,6 @@ pub fn[T : Eq] selection_component(
     }
   })
 }
+
+///|
+pub extend SelectionTarget with Eq::{equal, not_equal}

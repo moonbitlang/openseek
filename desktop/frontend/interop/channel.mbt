@@ -208,6 +208,16 @@ pub(all) enum ChatSurface {
 } derive(Debug, Eq)
 
 ///|
+/// How a transcript on this surface names itself as a quote source, so a
+/// selection made in it is offered to the composer on the same surface.
+pub fn ChatSurface::quote_source(self : ChatSurface) -> String {
+  match self {
+    Column => "column"
+    Dock => "dock"
+  }
+}
+
+///|
 pub extend ChatSurface with Eq::{equal, not_equal}
 
 ///|
