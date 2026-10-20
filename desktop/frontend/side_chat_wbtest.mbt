@@ -6,6 +6,67 @@
 const SideChatId : String = "desktop-test-sc-0a1b2c3d"
 
 ///|
+test "a side chat file mention opens in the visible parent dock" {
+  let model = { ..side_chat_model(), is_desktop: true, }
+  let parent = model.dock_owner().host().unwrap()
+  let target = model.test_file("src/main.mbt")
+  let action = ComposerAction(
+    @composer.MentionOpened(identity=side_chat_identity(model), mention={
+      ref_: File(path="src/main.mbt"),
+      range: None,
+    }),
+  )
+  let (_, pending) = update(test_dispatch(), action, model)
+  let (_, repeated) = update(test_dispatch(), action, model)
+  assert_eq(
+    pending.file_panel.file_link_generation,
+    repeated.file_panel.file_link_generation,
+  )
+  let context = FileOpenContext::new(
+    side_chat_owner(),
+    pending.file_panel.file_link_generation,
+    return_to=parent,
+    destination=parent,
+  )
+  let replies : Array[@protocol.OpenPathReply] = [
+    Editor({ path: target.path, line: None, column: None, }),
+    Directory({ path: "src", }),
+    Browser(target.path),
+  ]
+  for reply in replies {
+    let response = OpenPathResolved(context, reply)
+    let (_, opened) = update(test_dispatch(), response, pending)
+    let (_, replayed) = update(test_dispatch(), response, pending)
+    assert_true(opened.docks == replayed.docks)
+    assert_eq(opened.active_session, parent.session)
+    match reply {
+      Editor(_) =>
+        assert_eq(@dock.active_file(opened.dock_state()), Some(target))
+      Directory(_) => {
+        assert_true(opened.dock_state().active is Some(FilePicker))
+        assert_true(opened.file_panel.expanded.contains(Relative("src")))
+      }
+      Browser(_) => {
+        assert_true(@dock.active_browser(opened.dock_state()) is Some(_))
+        assert_eq(opened.preview.pages.length(), 1)
+        assert_eq(replayed.preview.pages.length(), 1)
+      }
+      _ => fail("the fixture must resolve to an in-app dock tab")
+    }
+    assert_true(
+      opened.dock_state().tabs.contains(SideChat(owner=side_chat_owner())),
+    )
+    assert_true(
+      opened.dock_state_for(@interop.Host(side_chat_owner())).tabs.is_empty(),
+    )
+  }
+  assert_true(
+    pending.dock_state().active == Some(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(model.dock_state() == pending.dock_state())
+}
+
+///|
 fn side_chat_owner() -> @interop.ConversationKey {
   { channel: @interop.ChannelId::Local, session: SideChatId, }
 }
@@ -222,4 +283,122 @@ test "the dock's composer stays with the side-chat tab while the dock is hidden"
     hidden.dock_composer_input().identity.owner ==
     @interop.Host(side_chat_owner()),
   )
+}
+
+///|
+test "a restored side chat uses an already loaded shared worktree" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_project()
+  let worktree = @interop.ChannelId::Local.test_resource(
+    "/work/shared-checkout",
+  )
+  for present in [true, false] {
+    let (_, registry_loaded) = update_dev(
+      dispatch,
+      WorktreesLoaded(
+        [
+          {
+            name: "shared",
+            sessions: ["desktop-test", SideChatId],
+            codex_thread: None,
+            path: if present {
+              Some(worktree)
+            } else {
+              None
+            },
+            present,
+          },
+        ],
+        workspace~,
+        connection_generation=0,
+        request_generation=1,
+      ),
+      test_model(),
+    )
+    assert_true(
+      registry_loaded.active().workspace is Worktree(name="shared", ..),
+    )
+    assert_true(registry_loaded.find_conversation(Local, SideChatId) is None)
+    let listed = {
+      ..registry_loaded.with_listed(["desktop-test", SideChatId]),
+      right_panel_open: true,
+    }
+    let (_, restored) = update(dispatch, CloseSelectMenu, listed)
+    let (_, again) = update(dispatch, CloseSelectMenu, listed)
+    guard restored.find_conversation(Local, SideChatId) is Some(side) &&
+      again.find_conversation(Local, SideChatId) is Some(repeated) else {
+      fail("the listed side chat was not restored")
+    }
+    assert_true(side.workspace == repeated.workspace)
+    assert_true(side.workspace is Worktree(name="shared", ..))
+    assert_true(listed.find_conversation(Local, SideChatId) is None)
+    assert_true(restored.dev().worktree_row(workspace, SideChatId) is Some(_))
+    let expected_root = if present { Some(worktree) } else { None }
+    assert_eq(restored.conversation_root(restored.active()), expected_root)
+    // The registry row already identifies the child's checkout. Restoring its
+    // transcript must not need another registry update to use that checkout.
+    assert_eq(restored.conversation_root(side), expected_root)
+    assert_eq(
+      restored.side_chat_composer_input(side_chat_owner()).root,
+      expected_root,
+    )
+    if !present {
+      assert_true(
+        restored.conversation_placement(side)
+        is Some(@interop.MissingWorktree(name="shared", ..)),
+      )
+    }
+  }
+}
+
+///|
+test "a restored side chat waits for its worktree registry" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_project()
+  let worktree = @interop.ChannelId::Local.test_resource(
+    "/work/shared-checkout",
+  )
+  let listed = {
+    ..test_model()
+    .with_listed(["desktop-test", SideChatId])
+    .with_dev(dev => { ..dev, worktrees: [], }),
+    right_panel_open: true,
+  }
+  let (_, waiting) = update(dispatch, CloseSelectMenu, listed)
+  let (_, repeated) = update(dispatch, CloseSelectMenu, listed)
+  guard waiting.find_conversation(Local, SideChatId) is Some(side) &&
+    repeated.find_conversation(Local, SideChatId) is Some(repeated_side) else {
+    fail("the listed side chat was not restored while placement was loading")
+  }
+  assert_true(side.workspace == repeated_side.workspace)
+  assert_true(listed.find_conversation(Local, SideChatId) is None)
+  assert_true(waiting.conversation_placement(side) is None)
+  assert_true(waiting.conversation_root(side) is None)
+  assert_true(waiting.side_chat_composer_input(side_chat_owner()).root is None)
+  let (_, loaded) = update(
+    dispatch,
+    on_home(
+      WorktreesLoaded(
+        [
+          {
+            name: "shared",
+            sessions: ["desktop-test", SideChatId],
+            codex_thread: None,
+            path: Some(worktree),
+            present: true,
+          },
+        ],
+        workspace~,
+        connection_generation=0,
+        request_generation=1,
+      ),
+    ),
+    waiting,
+  )
+  guard loaded.find_conversation(Local, SideChatId) is Some(placed) else {
+    fail("the restored side chat was lost when placement loaded")
+  }
+  assert_true(side.workspace is Project(_))
+  assert_true(placed.workspace is Worktree(name="shared", ..))
+  assert_eq(loaded.conversation_root(placed), Some(worktree))
 }

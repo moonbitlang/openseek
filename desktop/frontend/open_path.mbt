@@ -36,11 +36,12 @@ fn open_cloud_file(
 }
 
 ///|
-/// Navigation data stays in the frontend while the host classifies the file.
-/// A composer action may target a parked conversation; return_to records the
-/// conversation that must remain on screen when that reply arrives.
+/// The host resolves paths for `owner`; `destination` owns the resulting
+/// dock tab. `return_to` keeps the visible conversation through an ordinary
+/// background composer action.
 priv struct FileOpenContext {
   owner : @interop.ConversationKey
+  destination : @interop.ConversationKey
   generation : Int32
   range : @common.Range?
   annotation : String?
@@ -55,9 +56,18 @@ fn FileOpenContext::new(
   range? : @common.Range,
   annotation? : String,
   return_to? : @interop.ConversationKey,
+  destination? : @interop.ConversationKey,
   office_target? : @office_location.Target,
 ) -> FileOpenContext {
-  { owner, generation, range, annotation, return_to, office_target, }
+  {
+    owner,
+    destination: destination.unwrap_or(owner),
+    generation,
+    range,
+    annotation,
+    return_to,
+    office_target,
+  }
 }
 
 ///|
@@ -68,21 +78,25 @@ fn request_open_path(
   range : @common.Range?,
   annotation? : String,
   return_to? : @interop.ConversationKey,
+  source? : ActiveCheckout,
+  destination? : @interop.ConversationKey,
 ) -> (@cmd.Cmd, Model) {
-  guard model.active_checkout() is Some(active) &&
+  let source = if source is Some(_) { source } else { model.active_checkout() }
+  guard source is Some(active) &&
     active.placement is Some(placement) &&
     placement.is_ready() &&
     placement.checkout_root() is Some(cwd) else {
     return (@cmd.none, model)
   }
-  let model = if return_to is Some(owner) && owner != active.owner {
+  let destination = destination.unwrap_or(active.owner)
+  let model = if return_to is Some(owner) && owner != destination {
     model
   } else {
-    let dock = model.dock_state_for(@interop.Host(active.owner))
+    let dock = model.dock_state_for(@interop.Host(destination))
     {
       ..model,
       file_panel: model.file_panel.prepare_owner(
-        @interop.Host(active.owner),
+        @interop.Host(destination),
         @dock.file_paths(dock),
       ),
     }
@@ -95,6 +109,7 @@ fn request_open_path(
     range?,
     annotation?,
     return_to?,
+    destination~,
     office_target?=office.map(reference => reference.target),
   )
   (
@@ -121,25 +136,50 @@ fn finish_open_path(
     (context.owner == active.owner || context.return_to == Some(active.owner)) else {
     return (@cmd.none, model)
   }
-  let selected = if context.owner == active.owner {
+  let source = if context.owner == active.owner {
+    Some(active)
+  } else if model.screen is Chat {
+    model
+    .find_conversation(context.owner.channel, context.owner.session)
+    .map(conv => {
+      owner: context.owner,
+      placement: model.conversation_placement(conv),
+    })
+  } else {
+    None
+  }
+  guard source is Some(source) &&
+    source.placement is Some(source_placement) &&
+    source_placement.is_ready() else {
+    return (@cmd.none, model)
+  }
+  let selected = if context.destination == active.owner {
     model
   } else {
-    // A background composer action can only select an existing conversation.
-    guard model.screen is Chat &&
-      model.find_conversation(context.owner.channel, context.owner.session)
-      is Some(_) else {
+    // Ordinary background actions retain their own dock. A side-chat open
+    // instead targets the parent that is already on screen.
+    guard context.destination == context.owner && model.screen is Chat else {
       return (@cmd.none, model)
     }
     {
       ..model,
-      focused: context.owner.channel,
-      active_session: context.owner.session,
+      focused: context.destination.channel,
+      active_session: context.destination.session,
     }
   }
   guard selected.active_checkout() is Some(target) &&
-    target.owner == context.owner &&
+    target.owner == context.destination &&
     target.placement is Some(placement) &&
     placement.is_ready() else {
+    return (@cmd.none, model)
+  }
+  // A side chat shares its parent's checkout. A changed registry must not
+  // reinterpret a source-relative directory in a different destination.
+  guard context.destination == context.owner ||
+    (
+      target.owner.channel == source.owner.channel &&
+      placement.checkout_root() == source_placement.checkout_root()
+    ) else {
     return (@cmd.none, model)
   }
   let (cmd, opened) = match reply {

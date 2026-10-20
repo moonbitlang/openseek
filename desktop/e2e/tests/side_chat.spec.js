@@ -83,3 +83,92 @@ test('a draft typed in the side chat survives hiding the dock', async ({ page })
   await expect(input).toHaveValue('A draft in progress');
   expect(app.pageErrors).toEqual([]);
 });
+
+test('a file mention in a side chat opens in its parent dock without navigating', async ({ page }, testInfo) => {
+  const app = await setup(page);
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  const sideTab = page.locator('.editor-tab', { hasText: 'Side chat 1' });
+  await sideTab.click();
+  await expect(page.locator('#side-chat-transcript')).toContainText('Tokens are lexemes.');
+  const parentURL = page.url();
+  const input = page.locator('#side-chat-task');
+  await input.fill('@main');
+  await page.locator('.side-chat .completion-item').filter({ hasText: 'src/main.mbt' }).click();
+  const mention = page.locator('.side-chat .mention-chip').filter({ hasText: 'src/main.mbt' });
+  await expect(mention).toBeVisible();
+  await mention.locator('.mention-jump').click();
+
+  // The side chat remains the source of the host request; its parent's
+  // visible dock owns the file tab that receives the resolved path.
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'host.open_path' || request.method === 'host.open_path_preview')?.params)
+    .toMatchObject({ session: 'session-1-sc-0a1b2c3d', cwd: '/workspace', path: 'src/main.mbt' });
+  const fileTab = page.locator('.editor-tab.active', { hasText: 'main.mbt' });
+  await expect(fileTab).toBeVisible();
+  await expect(page.locator('#viewer-host')).toBeVisible();
+  await expect(page.locator('#viewer-host')).toContainText(/fn\s+main/);
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
+  await expect(page.locator('#task')).toHaveValue('');
+  await expect(page).toHaveURL(parentURL);
+  await page.locator('.app').screenshot({ path: testInfo.outputPath('side-chat-file-in-parent-dock.png') });
+
+  // Both tabs remain in the same strip, and the side chat keeps its draft.
+  await sideTab.click();
+  await expect(page.locator('#side-chat-task')).toBeVisible();
+  await expect(mention).toBeVisible();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a side chat first restored after its worktree registry reads relative images from the shared checkout', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  const sideSession = 'session-1-sc-0a1b2c3d';
+  const checkout = '/workspace/.worktrees/side-chat-shared';
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfoAAAAASUVORK5CYII=';
+  const events = [
+    ...mainHistory,
+    event(3, 'user', { content: 'Show the shared checkout diagram.' }),
+    event(4, 'terminal', { kind: 'finished', message: '![Shared checkout diagram](side-diagram.png)' }),
+  ];
+  app.sessionEvents = mainHistory;
+  app.binaryFiles['side-diagram.png'] = { data_base64: png, media_type: 'image/png' };
+  const original = app.replyFor.bind(app);
+  app.replyFor = request => {
+    if (request.method === 'worktree.list') {
+      return { worktrees: [{
+        name: 'side-chat-shared', sessions: ['session-1', sideSession],
+        path: checkout, present: true, branch: 'side-chat-shared', base: 'main', codex_thread: null,
+      }] };
+    }
+    if (request.method === 'session.load' && request.params.session === sideSession) {
+      return {
+        session: { version: 1, id: sideSession, events },
+        watermark: events.at(-1).sequence, prediction: null,
+      };
+    }
+    return original(request);
+  };
+  await app.install();
+  await app.goto();
+  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await expect(page.locator('#transcript')).toContainText('The parser reads tokens.');
+  // The tooltip is derived from the accepted registry. The side chat is not
+  // listed yet, so no earlier load can have supplied its checkout placement.
+  await expect(page.locator('.conversation-row.active')).toHaveAttribute('title', /side-chat-shared/);
+  expect(app.requests.some(request => request.method === 'session.load' && request.params.session === sideSession)).toBe(false);
+  app.liveSessions.push({ id: sideSession, title: 'Rabbita browser fixture', updated_at_ms: 2 });
+  app.notify('session.changed', { change: 'created', session: sideSession, workspace: '/workspace' });
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('.editor-tab', { hasText: 'Side chat 1' }).click();
+
+  const image = page.locator('#side-chat-transcript img[alt="Shared checkout diagram"]');
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'fs.read_file' && request.params?.path === 'side-diagram.png'))
+    .toMatchObject({ params: { root: checkout } });
+  await expect(image).toHaveAttribute('src', `data:image/png;base64,${png}`);
+  expect(app.requests.filter(request => request.method === 'fs.read_file' &&
+    request.params?.path === 'side-diagram.png').map(request => request.params.root)).toEqual([checkout]);
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
+  await page.locator('.app').screenshot({ path: testInfo.outputPath('side-chat-restored-shared-checkout.png') });
+  expect(app.pageErrors).toEqual([]);
+});
