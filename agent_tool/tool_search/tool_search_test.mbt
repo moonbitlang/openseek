@@ -341,3 +341,12 @@ test "fields in tuple items and conditional branches are searchable" {
     assert_false(output.content.contains("## mcp__t__plain"), msg=query)
   }
 }
+
+///|
+test "a long query is echoed short and leaves the page its room" {
+  let query = "calendar ".repeat(3500)
+  let output = search({ "query": query })
+  assert_true(output.content.length() < 2000)
+  assert_true(output.content.contains("## mcp__calendar__list_events"))
+  assert_true(output.content.contains("Call these from an mbtx script"))
+}

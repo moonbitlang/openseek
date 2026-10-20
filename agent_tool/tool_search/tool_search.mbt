@@ -201,13 +201,16 @@ fn select(
         pool.length(),
       )
       let scope = server.map(name => " in `\{name}`").unwrap_or("")
+      // Ranking reads the whole query; messages echo a bounded line of it, so
+      // a long query cannot crowd out the page it heads.
+      let shown = @agent_tool.brief_line(query, limit=80)
       if ranked.is_empty() {
         NoMatch(
-          "No MCP tools\{scope} match `\{query}`. Try other keywords, or list a server's tools with `server` (\{known}).",
+          "No MCP tools\{scope} match `\{shown}`. Try other keywords, or list a server's tools with `server` (\{known}).",
         )
       } else {
         Found(
-          heading="\{count_of(ranked.length(), "MCP tool")}\{scope} match `\{query}`, best first.",
+          heading="\{count_of(ranked.length(), "MCP tool")}\{scope} match `\{shown}`, best first.",
           matches=ranked.map(index => pool[index]),
         )
       }
