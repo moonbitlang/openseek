@@ -764,6 +764,14 @@ async fn AgentLoop::execute_tool_call(
         }
         None => []
       }
+      // Same rule as the `Respond` path: a route without image input never
+      // records images, or replaying the session would fail on that route.
+      let images = if images.is_empty() || self.client.supports_image_input() {
+        images
+      } else {
+        content += "\nerror: this model route does not support image tool results"
+        []
+      }
       self.record_tool_result(
         session,
         tool_call_id=native_call.id,

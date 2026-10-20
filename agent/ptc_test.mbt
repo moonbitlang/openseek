@@ -71,7 +71,14 @@ async test "agent PTC stores nested calls while only selected output reaches the
 }
 
 ///|
-async test "agent cancellation persists completed images and interrupted PTC metadata before terminal" {
+/// Run a PTC program that completes an image call and then blocks, cancel the
+/// turn, and return the durable items it appended. `picture` is an ordinary
+/// tool (like an MCP bridge), so it runs on any route.
+async fn cancel_after_picture(
+  model : @deepseek.Model,
+  image : @agent_session.Image,
+) -> Array[@agent_session.SessionItem] {
+  let items : Array[@agent_session.SessionItem] = []
   @async.with_task_group(group => {
     let bodies : Array[String] = []
     guard goal_check_test_server(group, bodies, [
@@ -101,7 +108,6 @@ async test "agent cancellation persists completed images and interrupted PTC met
         @agent_tool.respond("unexpected")
       }),
     )
-    let image = @agent_session.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
     let picture = @agent_tool.AgentToolDefinition(
       name="picture",
       description="picture",
@@ -112,14 +118,13 @@ async test "agent cancellation persists completed images and interrupted PTC met
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
     let tools = @agent.build_tools(runtime, scope, extra_tools=[tool, picture])
-    let items : Array[@agent_session.SessionItem] = []
     let operation = group.spawn(() => {
       @agent.run_turn_in_scope(
         runtime~,
         scope~,
         tools~,
         api_key="offline",
-        model=Deepseek(V4Flash),
+        model~,
         api_url=url,
         session=Session(SessionId("ptc-cancel"), system_prompt="system"),
         content=Content([Text("block")]),
@@ -136,23 +141,44 @@ async test "agent cancellation persists completed images and interrupted PTC met
       _ => ()
     }
     assert_true(stopped.val)
-    assert_true(
-      items.any(item => {
-        item is Tool(result) &&
-        result.content().0 is [Text(_), Image(saved)] &&
-        saved == image &&
-        result.data()
-        is Some(
-          {
-            "ptc_calls": [
-              { "status": "done", .. },
-              { "status": "interrupted", .. },
-            ],
-            ..
-          }
-        )
-      }),
-    )
     assert_true(items.last() is Some(Terminal(Interrupted(_))))
   })
+  items
+}
+
+///|
+async test "agent cancellation persists completed images and interrupted PTC metadata before terminal" {
+  let image = @agent_session.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
+  let items = cancel_after_picture(Deepseek(V4Flash), image)
+  assert_true(
+    items.any(item => {
+      item is Tool(result) &&
+      result.content().0 is [Text(_), Image(saved)] &&
+      saved == image &&
+      result.data()
+      is Some(
+        {
+          "ptc_calls": [
+            { "status": "done", .. },
+            { "status": "interrupted", .. },
+          ],
+          ..
+        }
+      )
+    }),
+  )
+}
+
+///|
+async test "agent cancellation on a text-only route records no PTC images" {
+  let image = @agent_session.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
+  let items = cancel_after_picture(Deepseek(V4Pro), image)
+  assert_true(
+    items.any(item => {
+      item is Tool(result) &&
+      result.content().0 is [Text(text)] &&
+      text.contains("this model route does not support image tool results") &&
+      result.data() is Some({ "ptc_calls": [_, _], .. })
+    }),
+  )
 }
