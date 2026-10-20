@@ -1,6 +1,7 @@
 import {
   "moonbitlang/openseek/mcp/wire",
   "moonbitlang/openseek/jsonrpc",
+  "moonbitlang/openseek_protocol" @protocol,
 }
 
 import {

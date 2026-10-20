@@ -342,7 +342,8 @@ fn bridge_tool(
 
 ///|
 /// Proxy a tool call to the MCP server and map the result into a tool action:
-/// the rendered text as content and any `structuredContent` as data.
+/// the rendered text as content, image content as image input (the same way
+/// `read_image` returns it), and any `structuredContent` as data.
 /// A JSON-RPC / transport failure becomes an error response (rather than
 /// aborting the loop); a tool-level failure is surfaced via `is_error`.
 async fn call_tool(
@@ -375,10 +376,8 @@ async fn call_tool(
   // structured result also rides along as `data` for scripts, but only whole
   // and beside the text: the text renders it too, so leaving it out loses
   // nothing a reader could not find.
-  let (content, truncated) = cap_serialized(
-    result.render_text(),
-    MaxToolOutputChars,
-  )
+  let rendered = result.render()
+  let (content, truncated) = cap_serialized(rendered.text, MaxToolOutputChars)
   let text = if truncated {
     "\{content}\n<system>truncated=true shown_chars=\{content.char_length()} max_output_chars=\{MaxToolOutputChars}</system>"
   } else {
@@ -390,6 +389,7 @@ async fn call_tool(
   })
   @agent_tool.respond(
     text,
+    images=rendered.images,
     is_error=result.is_error,
     brief=@agent_tool.brief_line(text),
     data?,

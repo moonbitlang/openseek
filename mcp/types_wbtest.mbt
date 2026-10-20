@@ -64,11 +64,13 @@ test "decode_content_block reads each block kind" {
       "data": "AAAA",
       "mimeType": "image/png",
     }),
-    Image(mime_type="image/png"),
+    Image(mime_type="image/png", data="AAAA"),
   )
+  // `data` and `mimeType` are required; without them the block is not an
+  // image the client can forward.
   assert_eq(
     decode_content_block({ "type": "image", "data": "AAAA" }),
-    Image(mime_type=""),
+    Other(kind="image"),
   )
   assert_eq(
     decode_content_block({
@@ -130,7 +132,7 @@ test "render_text joins text and placeholders" {
   let result : CallToolResult = {
     content: [
       Text("see"),
-      Image(mime_type="image/png"),
+      Image(mime_type="image/png", data="AAAA"),
       Resource(uri="file:///x", text=Some("body")),
       Resource(uri="file:///y", text=None),
       Other(kind="audio"),
@@ -140,7 +142,38 @@ test "render_text joins text and placeholders" {
   }
   assert_eq(
     result.render_text(),
-    "see\n[image: image/png]\n[resource file:///x]\nbody\n[resource: file:///y]\n[unsupported content: audio]",
+    "see\n[image image/png not attached: expected PNG, JPEG, GIF, or WebP image bytes]\n[resource file:///x]\nbody\n[resource: file:///y]\n[unsupported content: audio]",
+  )
+}
+
+///|
+test "render attaches readable images and notes rejected ones in place" {
+  // Canonical base64 of the eight-byte PNG signature and of `<svg/>`.
+  let png = "iVBORw0KGgo="
+  let svg = "PHN2Zy8+"
+  let result : CallToolResult = {
+    content: [
+      Image(mime_type="image/png", data=png),
+      Text("between"),
+      Image(mime_type="image/svg+xml", data=svg),
+      Image(mime_type="image/jpeg", data=png),
+      Image(mime_type="image/gif", data="R0lGODlh"),
+    ],
+    structured_content: None,
+    is_error: false,
+  }
+  let rendered = result.render()
+  assert_eq(rendered.images, [
+    @protocol.Image::from_base64(media_type="image/png", png),
+    @protocol.Image::from_bytes(b"GIF89a"),
+  ])
+  assert_eq(
+    rendered.text,
+    (
+      #|between
+      #|[image image/svg+xml not attached: expected PNG, JPEG, GIF, or WebP image bytes]
+      #|[image image/jpeg not attached: image declares image/jpeg but bytes identify image/png]
+    ),
   )
 }
 

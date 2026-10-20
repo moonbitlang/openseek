@@ -4,6 +4,7 @@ package "moonbitlang/openseek/mcp"
 import {
   "moonbitlang/core/debug",
   "moonbitlang/openseek/jsonrpc",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
@@ -19,11 +20,12 @@ pub struct CallToolResult {
   structured_content : Json?
   is_error : Bool
 } derive(Eq, @debug.Debug)
+pub fn CallToolResult::render(Self) -> RenderedResult
 pub fn CallToolResult::render_text(Self) -> String
 
 pub enum ContentBlock {
   Text(String)
-  Image(mime_type~ : String)
+  Image(mime_type~ : String, data~ : String)
   Resource(uri~ : String, text~ : String?)
   Other(kind~ : String)
 } derive(Eq, @debug.Debug)
@@ -51,6 +53,11 @@ pub struct McpTool {
   input_schema : Json
   output_schema : Json?
 } derive(Eq, @debug.Debug)
+
+pub struct RenderedResult {
+  text : String
+  images : Array[@openseek_protocol.Image]
+}
 
 // Type aliases
 

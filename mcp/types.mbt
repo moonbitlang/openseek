@@ -1,5 +1,5 @@
 // MCP protocol value types and their decoders, plus rendering a `tools/call`
-// result into the plain text openseek surfaces to the model.
+// result into the text and images openseek surfaces to the model.
 
 ///|
 /// An MCP-layer failure: the server sent a response that could not be read as
@@ -34,15 +34,14 @@ pub struct McpTool {
 } derive(Eq, Debug)
 
 ///|
-/// One block of a `tools/call` result's `content` array. openseek's model view
-/// is text, so non-text blocks are kept as compact descriptors — image/audio
+/// One block of a `tools/call` result's `content` array. Text and image blocks
+/// keep their payload; other blocks are kept as compact descriptors — audio
 /// bytes are noted, not forwarded.
 pub enum ContentBlock {
   /// A text block and its text.
   Text(String)
-  /// An image block; only its MIME type is surfaced (the base64 payload is not
-  /// sent to a text model).
-  Image(mime_type~ : String)
+  /// An image block: its declared MIME type and base64 `data`, as sent.
+  Image(mime_type~ : String, data~ : String)
   /// An embedded resource: its uri and, when the server inlines it, its text.
   Resource(uri~ : String, text~ : String?)
   /// Any other block type (audio, resource_link, unknown): its `type` tag.
@@ -144,10 +143,8 @@ fn decode_call_result(result : Json) -> CallToolResult raise {
 fn decode_content_block(block : Json) -> ContentBlock raise {
   match block {
     { "type": "text", "text": String(text), .. } => Text(text)
-    { "type": "image", .. } => {
-      let mime_type = optional_string(block, "mimeType").unwrap_or("")
-      Image(mime_type~)
-    }
+    { "type": "image", "data": String(data), "mimeType": String(mime_type), .. } =>
+      Image(mime_type~, data~)
     { "type": "resource", "resource": resource, .. } => {
       let uri = optional_string(resource, "uri").unwrap_or("")
       let text = optional_string(resource, "text")
@@ -159,30 +156,50 @@ fn decode_content_block(block : Json) -> ContentBlock raise {
 }
 
 ///|
-/// Render the result into a single string for the model: text blocks verbatim,
-/// non-text blocks as compact placeholders, joined by newlines, plus any
-/// `structuredContent` the content array does not already carry (so structured
-/// output is never lost). The caller applies any size budget and metadata
-/// footer. Empty content and no structured output yields "".
-pub fn CallToolResult::render_text(self : CallToolResult) -> String {
-  let text = self.content
-    .map(block => {
-      match block {
-        Text(text) => text
-        Image(mime_type~) => "[image: \{mime_type}]"
-        Resource(uri~, text~) =>
-          match text {
-            Some(text) => "[resource \{uri}]\n\{text}"
-            None => "[resource: \{uri}]"
+/// A `tools/call` result as the model receives it: its text and the images
+/// attached alongside it.
+pub struct RenderedResult {
+  text : String
+  images : Array[@protocol.Image]
+}
+
+///|
+/// Render the result for the model in content order: text blocks verbatim,
+/// images the shared validator accepts as attached images, and every other
+/// block (including a rejected image) as a compact placeholder in the text.
+/// Text parts are joined by newlines, plus any `structuredContent` the content
+/// array does not already carry (so structured output is never lost). The
+/// caller applies any size budget and metadata footer. Empty content and no
+/// structured output yields "" and no images.
+pub fn CallToolResult::render(self : CallToolResult) -> RenderedResult {
+  let parts = []
+  let images = []
+  for block in self.content {
+    match block {
+      Text(text) => parts.push(text)
+      Image(mime_type~, data~) =>
+        try @protocol.Image::from_base64(media_type=mime_type, data) catch {
+          error => {
+            // `ImageError` shows its reason only through `Error`.
+            let error : Error = error
+            parts.push("[image \{mime_type} not attached: \{error}]")
           }
-        Other(kind~) => "[unsupported content: \{kind}]"
-      }
-    })
-    .join("\n")
+        } noraise {
+          image => images.push(image)
+        }
+      Resource(uri~, text~) =>
+        match text {
+          Some(text) => parts.push("[resource \{uri}]\n\{text}")
+          None => parts.push("[resource: \{uri}]")
+        }
+      Other(kind~) => parts.push("[unsupported content: \{kind}]")
+    }
+  }
+  let text = parts.join("\n")
   // Preserve structured output. A conformant server mirrors it into a text
   // block (then `text` already contains it — don't duplicate); when it does not
   // (empty content, or a bare status) append the serialized structure.
-  match self.structured_content {
+  let text = match self.structured_content {
     Some(structured) => {
       let serialized = structured.stringify()
       if text == "" {
@@ -195,6 +212,13 @@ pub fn CallToolResult::render_text(self : CallToolResult) -> String {
     }
     None => text
   }
+  { text, images, }
+}
+
+///|
+/// The text part of `render`, for callers that read a result as text.
+pub fn CallToolResult::render_text(self : CallToolResult) -> String {
+  self.render().text
 }
 
 ///|

@@ -51,6 +51,13 @@ of becoming empty successful tool output. Automatic MRTR continuation is not
 implemented. Missing `resultType` is accepted as `complete`, as required for
 backward compatibility.
 
+Tool results reach the model as text plus images. Text content is passed
+through; PNG, JPEG, GIF, and WebP image content (at most 5 MiB, MIME type
+matching the bytes) is attached as image input, like `read_image` output. On a
+model route without image input, a result carrying images becomes a tool
+error, as for any image tool result. Other image formats, audio, and resource
+links are replaced by short text placeholders.
+
 The desktop host serves modern discovery and tools alongside legacy clients on
 the same endpoint. It validates metadata and mirrored headers independently on
 each request, accepts direct tool calls without prior discovery, and returns

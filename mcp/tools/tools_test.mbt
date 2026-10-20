@@ -91,17 +91,42 @@ fn server_reply(request : Json) -> Json? {
 }
 
 ///|
+/// `server_reply`, except that every `tools/call` answers with a caption, a PNG
+/// image, and an SVG image the model cannot receive.
+fn image_reply(request : Json) -> Json? {
+  match request {
+    { "method": "tools/call", .. } =>
+      Some(
+        ok(request, {
+          "content": [
+            { "type": "text", "text": "a screenshot" },
+            { "type": "image", "data": "iVBORw0KGgo=", "mimeType": "image/png" },
+            { "type": "image", "data": "PHN2Zy8+", "mimeType": "image/svg+xml" },
+          ],
+        }),
+      )
+    _ => server_reply(request)
+  }
+}
+
+///|
 fn[X] wire(
   group : @async.TaskGroup[X],
   transport : FakeTransport,
   rpc : @jsonrpc.Client,
+  reply? : (Json) -> Json?,
 ) -> Unit {
   group.spawn_bg(no_wait=true, allow_failure=true, () => rpc.run_message_pump())
   group.spawn_bg(no_wait=true, allow_failure=true, () => rpc.run_writer())
   group.spawn_bg(no_wait=true, allow_failure=true, () => {
     for ;; {
       let request = transport.outbound.get()
-      if server_reply(request) is Some(response) {
+      let response = if reply is Some(reply) {
+        reply(request)
+      } else {
+        server_reply(request)
+      }
+      if response is Some(response) {
         transport.inbound.put(response)
       }
     }
@@ -218,6 +243,29 @@ async test "a structured result over the reply budget stays text only" {
     assert_true(output.data is None)
     assert_true(output.content.contains("truncated=true"))
     assert_true(Json(output.content).stringify().length() < 65536)
+  })
+}
+
+///|
+async test "a bridged tool returns image content as image input" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let rpc = @jsonrpc.Client(transport)
+    wire(group, transport, rpc, reply=image_reply)
+    let client = @mcp.McpClient(rpc)
+    let tools = @tools.tools_for_client("srv", client)
+    guard tools[0].execute is Async(exec) else {
+      fail("expected an async executor")
+    }
+    guard exec({}) is Respond(output) else { fail("expected a respond action") }
+    assert_false(output.is_error)
+    assert_eq(
+      output.content,
+      "a screenshot\n[image image/svg+xml not attached: expected PNG, JPEG, GIF, or WebP image bytes]",
+    )
+    assert_eq(output.images.length(), 1)
+    assert_eq(output.images[0].media_type, "image/png")
+    assert_eq(output.images[0].bytes, b"\x89PNG\r\n\x1a\n")
   })
 }
 
