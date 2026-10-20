@@ -762,6 +762,7 @@ fn MinimalContent::render(
   self : MinimalContent,
   actions : Actions,
   active~ : Bool = false,
+  streaming_markdown~ : @markdown.StreamingMarkdown? = None,
 ) -> @html.Html {
   match self {
     Messages(parts, active_group~) => {
@@ -773,6 +774,7 @@ fn MinimalContent::render(
           locale~,
           actions,
           active=active_group is Some(identity) && identity == part.identity,
+          streaming_markdown~,
         )
       }
       @html.div(class="minimal-messages minimal-rows", children)
@@ -798,6 +800,7 @@ fn MinimalContent::render(
         show_actions=finished,
         fork?=fork.map(value => value.render(locale~, actions.fork)),
         streaming=live,
+        streaming_markdown~,
       )
     Note(text~, error~) =>
       @html.div(
@@ -852,7 +855,11 @@ fn MinimalContent::render(
       } else {
         let children : Map[String, @html.Html] = Map([])
         for part in parts {
-          children[part.identity] = part.content.render(locale~, actions)
+          children[part.identity] = part.content.render(
+            locale~,
+            actions,
+            streaming_markdown~,
+          )
         }
         @html.div(class="minimal-process-body minimal-rows", children)
       }

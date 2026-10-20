@@ -7,6 +7,7 @@ fn answer_citations(source : String) -> Array[Citation] {
     open_file: None,
     citations: [],
     in_sources: false,
+    streaming: None,
   }
   ignore(render.block_nodes(doc.block))
   render.citations

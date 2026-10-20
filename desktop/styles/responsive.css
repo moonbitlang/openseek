@@ -220,4 +220,8 @@
   .sidebar-run-status.running .icon {
     animation: none;
   }
+
+  .msg.assistant .stream-fragment {
+    transition: none;
+  }
 }

@@ -544,11 +544,12 @@ fn Block::render(
   changes? : @review_changes.Control,
   editor? : @html.Html,
   begin_edit~ : @cmd.Cmd,
+  streaming_markdown~ : @markdown.StreamingMarkdown? = None,
 ) -> @html.Html {
   let on_open = path => (actions.open)(path)
   match self.content {
     Empty(empty) => empty.render(locale~, actions)
-    Minimal(content) => content.render(locale~, actions)
+    Minimal(content) => content.render(locale~, actions, streaming_markdown~)
     Item(
       item~,
       anchor~,
@@ -587,6 +588,7 @@ fn Block::render(
         assistant_name~,
         live=true,
         reasoning_complete~,
+        streaming_markdown~,
       )
   }
 }

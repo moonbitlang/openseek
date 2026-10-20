@@ -25,14 +25,29 @@ pub fn markdown_nodes(
   source : String,
   open_file? : (String) -> @cmd.Cmd,
 ) -> Array[@html.Html] {
+  render_markdown(locale~, source, open_file?, streaming=None)
+}
+
+///|
+fn render_markdown(
+  locale~ : @i18n.Locale,
+  source : String,
+  open_file? : (String) -> @cmd.Cmd,
+  streaming~ : StreamingFragments?,
+) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
-    let doc = @cmark.Doc::from_string(source, strict=false)
+    let doc = @cmark.Doc::from_string(
+      source,
+      strict=false,
+      locs=streaming is Some(_),
+    )
     let render = MarkdownRender::{
       locale,
       defs: doc.defs,
       open_file,
       citations: [],
       in_sources: false,
+      streaming,
     }
     let nodes = render.block_nodes(doc.block)
     if !render.citations.is_empty() {
@@ -56,6 +71,7 @@ priv struct MarkdownRender {
   // source actions never depend on document-global fragment IDs.
   citations : Array[Citation]
   in_sources : Bool
+  streaming : StreamingFragments?
 }
 
 ///|
@@ -438,11 +454,17 @@ fn MarkdownRender::push_inline(
   match inline {
     Text(node) =>
       if linkify_urls {
-        for child in self.prose_nodes(node.v) {
+        for child in self.prose_nodes(node) {
           out.push(child)
         }
       } else {
-        out.push(@html.text(node.v))
+        out.append(
+          self.text_nodes(
+            node.v,
+            first?=self.text_offset(node),
+            fresh=self.fresh_text(node),
+          ),
+        )
       }
     Inlines(node) =>
       for child in node.v.iter() {
@@ -642,18 +664,28 @@ pub fn linkified_text_nodes(source : String) -> Array[@html.Html] {
 /// turns location-bearing path tokens into file buttons.
 fn MarkdownRender::prose_nodes(
   self : MarkdownRender,
-  source : String,
+  node : @cmark.Node[String],
 ) -> Array[@html.Html] {
-  guard self.open_file is Some(open) else {
-    return linkified_text_nodes(source)
+  let source = node.v
+  let pattern = if self.open_file is Some(_) {
+    bare_interactive_pattern
+  } else {
+    bare_web_url_pattern
+  }
+  let first = self.text_offset(node)
+  let fresh = self.fresh_text(node)
+  let text_nodes = (text, offset) => {
+    self.text_nodes(text, first?=first.map(first => first + offset), fresh~)
   }
   let out : Array[@html.Html] = []
   let mut rest = source.view()
-  while bare_interactive_pattern.execute(rest) is Some(matched) {
+  while pattern.execute(rest) is Some(matched) {
+    let offset = source.length() - rest.length()
     let before = matched.before()
     if !before.is_empty() {
-      out.push(@html.text(before.to_owned()))
+      out.append(text_nodes(before.to_owned(), offset))
     }
+    let candidate_offset = offset + before.length()
     let candidate = matched.content().to_owned()
     if candidate.view() =~ re"(?i:^https?://)" {
       let (url, suffix) = trim_bare_url(candidate)
@@ -661,14 +693,15 @@ fn MarkdownRender::prose_nodes(
       // HTTP(S) anchor when the destination has a non-empty authority. In
       // particular, a file-shaped custom scheme must stay inert text.
       if has_web_authority(url) {
-        out.push(link_node(url, [@html.text(url)]))
+        out.push(link_node(url, text_nodes(url, candidate_offset)))
       } else {
-        out.push(@html.text(url))
+        out.append(text_nodes(url, candidate_offset))
       }
       if !suffix.is_empty() {
-        out.push(@html.text(suffix))
+        out.append(text_nodes(suffix, candidate_offset + url.length()))
       }
-    } else if is_file_path(candidate) &&
+    } else if self.open_file is Some(open) &&
+      is_file_path(candidate) &&
       // The regex cannot use look-around, so validate both sides here. A
       // match after `%` may be the middle of `build%20/src/a.mbt:12`, while
       // whitespace and prose delimiters establish a fresh token.
@@ -680,17 +713,20 @@ fn MarkdownRender::prose_nodes(
         matched.after() =~ re"^\.(?:$|[[:space:]<>,;!?\"'(){}\[\]])"
       ) {
       out.push(
-        file_link_node(locale=self.locale, open, candidate, [
-          @html.text(candidate),
-        ]),
+        file_link_node(
+          locale=self.locale,
+          open,
+          candidate,
+          text_nodes(candidate, candidate_offset),
+        ),
       )
     } else {
-      out.push(@html.text(candidate))
+      out.append(text_nodes(candidate, candidate_offset))
     }
     rest = matched.after()
   }
   if !rest.is_empty() {
-    out.push(@html.text(rest.to_owned()))
+    out.append(text_nodes(rest.to_owned(), source.length() - rest.length()))
   }
   out
 }

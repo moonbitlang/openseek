@@ -25,6 +25,13 @@ pub fn DiagramRenderers::DiagramRenderers(() -> Unit) -> Self
 pub fn DiagramRenderers::dispose(Self) -> Unit
 pub fn DiagramRenderers::refresh(Self, @dom.Element, dark_mode~ : Bool) -> Unit
 
+pub struct StreamingMarkdown {
+  mut source : String
+  ends : Array[Int32]
+}
+pub fn StreamingMarkdown::new() -> Self
+pub fn StreamingMarkdown::nodes(Self, locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd) -> Array[@html.Html]
+
 // Type aliases
 
 // Traits

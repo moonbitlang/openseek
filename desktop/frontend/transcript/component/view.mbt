@@ -33,6 +33,7 @@ fn assistant_view(
   finished~ : Bool = false,
   live~ : Bool = false,
   reasoning_complete~ : Bool = true,
+  streaming_markdown~ : @markdown.StreamingMarkdown? = None,
   subrun? : SubrunLink,
   fork? : @html.Html,
 ) -> @html.Html {
@@ -129,6 +130,7 @@ fn assistant_view(
         show_actions=finished,
         fork?,
         streaming=live,
+        streaming_markdown~,
       ),
     )
     if work is Some(work) {
@@ -1173,6 +1175,7 @@ fn assistant_message_view(
   show_actions~ : Bool = false,
   fork? : @html.Html,
   streaming~ : Bool = false,
+  streaming_markdown~ : @markdown.StreamingMarkdown? = None,
 ) -> @html.Html {
   // Errors and abort notices are durable run status rather than assistant
   // prose. Keep their exact text and inline code readable in an unboxed status
@@ -1187,9 +1190,14 @@ fn assistant_message_view(
       ),
     ])
   } else {
+    let nodes = if streaming && streaming_markdown is Some(markdown) {
+      markdown.nodes(locale~, content, open_file=on_open)
+    } else {
+      @markdown.markdown_nodes(locale~, content, open_file=on_open)
+    }
     @html.div(
       class="msg-content markdown",
-      @markdown.markdown_nodes(locale~, content, open_file=on_open),
+      nodes,
     )
   }
   let children = [speaker_label(assistant_name), body]
@@ -1228,9 +1236,9 @@ fn assistant_message_view(
   let class = if is_danger {
     "msg transcript-error"
   } else if streaming {
-    "msg streaming"
+    "msg assistant streaming"
   } else {
-    "msg"
+    "msg assistant"
   }
   @html.div(class~, [@html.div(class="msg-body", children)])
 }

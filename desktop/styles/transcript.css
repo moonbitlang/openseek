@@ -465,6 +465,13 @@
   animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* Live prose and its durable replacement share one stationary presentation.
+   Only newly received text fades in; completing a message never replays a
+   whole-message entrance. */
+.msg.assistant {
+  animation: none;
+}
+
 /* Nothing labels the speaker: the user's turn is a bubble pushed to the
    right, the agent's prose and its work log are unbubbled and flush
    left, so either side reads as one voice however many messages it
@@ -1081,12 +1088,39 @@
   margin-bottom: 0;
 }
 
-/* live streaming bubble: a blinking caret after the latest text */
+/* Fragment boundaries belong to the renderer, while the browser owns the
+   transition. A reused span keeps its running transition when `fresh` is
+   removed. Old text remounted by a Markdown structure change starts clear. */
+.msg.assistant .stream-fragment {
+  opacity: 1;
+  transition: opacity 900ms ease-in-out;
+}
+
+@starting-style {
+  .msg.streaming .stream-fragment.fresh {
+    opacity: 0;
+  }
+}
+
+/* Keep quiet, continuous feedback between streamed fragments. */
 .msg.streaming .msg-content::after {
-  content: "▍";
-  margin-left: 2px;
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: currentColor;
   color: var(--color-text-secondary);
-  animation: caretBlink 1s steps(1) infinite;
+  opacity: 0.25;
+  animation: transcript-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes transcript-breathe {
+  50% {
+    opacity: 0.85;
+  }
 }
 
 @keyframes caretBlink {

@@ -356,6 +356,7 @@ pub fn component(
   let rendered = rows.assoc_by(
     (key, row) => {
       let renders = Ref(0)
+      let streaming_markdown = @markdown.StreamingMarkdown::new()
       let (changes, changes_emit) = message_changes_state(
         row.map(row => row.1),
         actions,
@@ -373,6 +374,7 @@ pub fn component(
               changes?=changes.control(block, changes_emit),
               editor?=editor.view(block, locale~, editor_emit),
               begin_edit=editor_emit(BeginEdit),
+              streaming_markdown=Some(streaming_markdown),
             )
           },
           by=_ => renders.val,
