@@ -1652,6 +1652,18 @@ fn load_active_side_chat(
       .remembered_model(owner.channel, owner.session)
       .unwrap_or(model.default_model),
   )
+  let conv = if model.device_state(owner.channel) is Some(dev) {
+    {
+      ..conv,
+      workspace: dev.conversation_workspace(
+        project,
+        owner.session,
+        conv.workspace,
+      ),
+    }
+  } else {
+    conv
+  }
   let (model, generation) = model
     .replace_conversation(conv)
     .begin_transcript_reload(conv)
@@ -3087,13 +3099,32 @@ fn update_msg(
             } else {
               target.range
             }
+            let owner : @interop.ConversationKey = {
+              channel: conv.device,
+              session: conv.session_id,
+            }
+            let side_chat = model.mounted_side_chat_owner() == Some(owner)
             request_open_path(
               dispatch,
-              selected,
+              if side_chat {
+                model
+              } else {
+                selected
+              },
               target.file,
               range,
               annotation?=target.annotation,
               return_to?=model.active_checkout().map(active => active.owner),
+              source?=if side_chat {
+                Some({ owner, placement: model.conversation_placement(conv), })
+              } else {
+                None
+              },
+              destination?=if side_chat {
+                model.dock_owner().host()
+              } else {
+                None
+              },
             )
           }
           (
