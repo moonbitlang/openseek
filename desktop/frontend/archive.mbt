@@ -38,6 +38,28 @@ priv enum DeleteTarget {
 } derive(Eq)
 
 ///|
+/// A live chat's delete request that is out with the host. `Checking` waits
+/// for what goes with the chat; `Deleting` for the delete the user confirmed.
+/// A failure ends the request and its notice reports the cause.
+priv enum HostDeletion {
+  Checking(@interop.ChannelId, ArchiveRecordKey)
+  Deleting(@interop.ChannelId, ArchiveRecordKey)
+} derive(Eq)
+
+///|
+/// Whether an answer from `channel` about `key` belongs to this request.
+fn HostDeletion::is_for(
+  self : HostDeletion,
+  channel : @interop.ChannelId,
+  key : ArchiveRecordKey,
+) -> Bool {
+  match self {
+    Checking(asked_channel, asked) | Deleting(asked_channel, asked) =>
+      asked_channel == channel && asked == key
+  }
+}
+
+///|
 fn fetch_archived(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -207,7 +229,9 @@ fn delete_archived_session(
       ) catch {
         error => {
           scheduler.add(
-            device_dispatch(DeleteFailed(@interop.bridge_error_text(error))),
+            device_dispatch(
+              DeleteFailed(@interop.bridge_error_text(error), request=None),
+            ),
           )
           return
         }
@@ -253,7 +277,12 @@ fn check_delete_session(
       ) catch {
         error => {
           scheduler.add(
-            device_dispatch(DeleteFailed(@interop.bridge_error_text(error))),
+            device_dispatch(
+              DeleteFailed(
+                @interop.bridge_error_text(error),
+                request=Some(Checking(channel, key)),
+              ),
+            ),
           )
           return
         }
@@ -307,7 +336,12 @@ fn delete_session(
       ) catch {
         error => {
           scheduler.add(
-            device_dispatch(DeleteFailed(@interop.bridge_error_text(error))),
+            device_dispatch(
+              DeleteFailed(
+                @interop.bridge_error_text(error),
+                request=Some(Deleting(channel, key)),
+              ),
+            ),
           )
           return
         }

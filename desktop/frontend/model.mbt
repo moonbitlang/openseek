@@ -1570,11 +1570,11 @@ priv struct Model {
   // Permanent chat deletion has its own explicit confirmation. It never
   // shares the worktree-discard dialog because the data at risk differs.
   delete_confirm : DeletePrompt?
-  // The live chat whose delete question is out with the host. Only the
+  // The live chat whose delete request is out with the host. Only the
   // answer about this chat may open the confirmation, and only once: an
   // answer overtaken by a later click must not put another chat's dialog
   // under the user's pointer.
-  delete_pending : (@interop.ChannelId, ArchiveRecordKey)?
+  delete_pending : HostDeletion?
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
   conversation_fork : ConversationFork?
@@ -2535,7 +2535,9 @@ priv enum DeviceMsg {
     fresh_session~ : String
   )
   ArchiveFailed(String)
-  DeleteFailed(String)
+  // A delete check, live delete, or archived delete that the host refused.
+  // A live request names itself so only it is settled.
+  DeleteFailed(String, request~ : HostDeletion?)
   // A rebuild of a missing worktree failed. The canonical rows still arrive
   // as `worktree.changed`, so this only reports the refusal.
   WorktreeFailed(String)

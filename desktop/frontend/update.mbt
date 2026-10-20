@@ -5234,7 +5234,7 @@ fn update_msg(
                   ..model,
                   delete_confirm: None,
                   // The delete can still come back to be confirmed again.
-                  delete_pending: Some((confirm.channel, confirm.key)),
+                  delete_pending: Some(Deleting(confirm.channel, confirm.key)),
                 },
               )
             ArchivedChat(sessions~) => sessions
@@ -5572,7 +5572,7 @@ fn update_msg(
         // knows; the dialog opens on its answer.
         return (
           check_delete_session(dispatch, channel, key),
-          { ..model, delete_pending: Some((channel, key)), },
+          { ..model, delete_pending: Some(Checking(channel, key)), },
         )
       }
       guard dev.archived.iter().find_first(item => key.matches(item))
@@ -8293,9 +8293,8 @@ fn update_device_msg(
     DeleteChecked(key~, checkout~) => {
       // Only the question still outstanding opens a dialog, and only for a
       // chat still listed, titled from the record as it is listed now.
-      guard model.delete_pending is Some((asked_channel, asked)) &&
-        asked_channel == channel &&
-        asked == key &&
+      guard model.delete_pending is Some(pending) &&
+        pending.is_for(channel, key) &&
         dev.sessions.iter().find_first(item => key.matches(item)) is Some(item) else {
         return (@cmd.none, model)
       }
@@ -8486,7 +8485,13 @@ fn update_device_msg(
       )
       (@cmd.batch([refresh, archived, toast]), model)
     }
-    DeleteFailed(message) => {
+    DeleteFailed(message, request~) => {
+      // The refused request is over. A later click's request stays pending.
+      let model = if request is Some(_) && model.delete_pending == request {
+        { ..model, delete_pending: None, }
+      } else {
+        model
+      }
       // Either list may be what this page had wrong: the delete targets a
       // live row as well as an archived one.
       let (sessions, model) = request_sessions_refresh(dispatch, channel, model)
@@ -8565,10 +8570,22 @@ fn update_device_msg(
             confirm.key == key => None
           other => other
         }
+        // The chat is gone, whoever deleted it: no answer about it is due.
+        let pending = changed.delete_pending.filter(pending => {
+          !pending.is_for(channel, key)
+        })
         let next = changed
           .replace_device({ ..dev, sessions, archived, })
           .with_archive_override(channel, key, ArchiveDeleted)
-        return (commands, { ..next, conversations, delete_confirm: confirm, })
+        return (
+          commands,
+          {
+            ..next,
+            conversations,
+            delete_confirm: confirm,
+            delete_pending: pending,
+          },
+        )
       }
       if change == "unarchived" {
         let mut restored : @transcript.SessionListItem? = None
