@@ -50,25 +50,37 @@ main:has(> .conv-overview) {
 }
 
 /* Wide: the conversation's children give the rail its column, and the rail
-   spans the transcript, question, and composer rows as a stack of cards. */
+   spans the transcript, question, and composer rows as a stack of cards.
+   The transcript keeps the pane's full width and gives the column from its
+   own padding instead, so its scrollbar stays at the pane's right edge,
+   outside the rail. */
 @container main-pane (min-width: 900px) {
-  main:has(> .conv-overview) > :not(.topbar, .conv-overview) {
+  main:has(> .conv-overview) > :not(.topbar, .transcript, .conv-overview) {
     margin-inline-end: var(--conv-overview-width);
+  }
+  main:has(> .conv-overview) > .transcript {
+    padding-inline-end: calc(24px + var(--conv-overview-width));
   }
 
   /* The rail runs from the transcript row to the pane's bottom edge (an
-     absolutely positioned item's `auto` end line). */
+     absolutely positioned item's `auto` end line), and stops short of the
+     transcript's scrollbar: past the lane it takes, or past the overlay bar
+     that takes none. Only the cards catch the pointer, so the wheel over the
+     rest of the rail still scrolls the transcript. */
   .conv-overview {
+    --conv-overview-edge: max(14px, calc(var(--scrollbar-lane) + 6px));
     grid-row: 2 / auto;
     top: 0;
-    right: 0;
+    right: var(--conv-overview-edge);
     bottom: 0;
+    width: calc(var(--conv-overview-width) - var(--conv-overview-edge));
     max-height: none;
     display: flex;
     flex-direction: column;
     gap: 10px;
     max-width: none;
-    padding: 12px 14px 16px 0;
+    padding: 12px 0 16px;
+    pointer-events: none;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -77,6 +89,7 @@ main:has(> .conv-overview) {
 
   .conv-overview-card,
   .conv-overview-card:last-child {
+    pointer-events: auto;
     padding: 10px 12px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);

@@ -221,12 +221,34 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
     return { transcript, composer };
   };
 
-  // With room for both, the transcript and the composer end where the rail
-  // begins: nothing of the conversation is under it.
+  // With room for both, the conversation's column and the composer end where
+  // the rail begins: nothing of the conversation is under it. The transcript
+  // scroller itself runs past the rail, so its scrollbar is outside it.
   const rail = await panel.boundingBox();
   const { transcript, composer } = await keepsItsRow();
-  expect(transcript.x + transcript.width).toBeLessThanOrEqual(rail.x + 1);
+  const stream = await page.locator('.transcript .stream').boundingBox();
+  expect(stream.x + stream.width).toBeLessThanOrEqual(rail.x + 1);
+  expect(transcript.x + transcript.width).toBeGreaterThan(rail.x + rail.width);
   expect(composer.x + composer.width).toBeLessThanOrEqual(rail.x + 1);
+  // The wheel over the rail's empty space below the cards scrolls the
+  // transcript. The fixture conversation fits on screen, so it is lengthened
+  // for this check.
+  const scroller = page.locator('.transcript');
+  await scroller.evaluate((el) => {
+    el.querySelector('.stream').style.paddingBottom = '2000px';
+    el.scrollTop = el.scrollHeight;
+  });
+  const bottom = await scroller.evaluate((el) => el.scrollTop);
+  expect(bottom).toBeGreaterThan(0);
+  const cards = await panel.locator('.conv-overview-card').last().boundingBox();
+  const below = transcript.y + transcript.height - 30;
+  expect(below).toBeGreaterThan(cards.y + cards.height);
+  await page.mouse.move(rail.x + rail.width / 2, below);
+  await page.mouse.wheel(0, -200);
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeLessThan(bottom);
+  await scroller.evaluate((el) => { el.scrollTop = 0; });
+  await page.screenshot({ path: testInfo.outputPath('overview-rail-scrollbar.png') });
+  await scroller.evaluate((el) => { el.querySelector('.stream').style.paddingBottom = ''; });
   await page.screenshot({ path: testInfo.outputPath('overview-rail.png') });
 
   // Without room, the same overview covers the transcript's right edge but
