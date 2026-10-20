@@ -78,13 +78,7 @@ test "a query ranks tools across servers with their schemas" {
   }
   assert_true(create < list)
   assert_false(output.content.contains("mcp__github__list_issues"))
-  // Required arguments are plain, and the example passes each of them.
-  assert_true(output.content.contains("Arguments: { \"title\": String }"))
-  assert_true(
-    output.content.contains(
-      "@openseek_tools.call(\"mcp__calendar__create_event\", { \"title\": \"\" })",
-    ),
-  )
+  assert_true(output.content.contains("\"required\":[\"title\"]"))
 }
 
 ///|
@@ -178,7 +172,7 @@ test "a page holds only whole entries within the size cap" {
   assert_false(output.content.contains("## mcp__big__tool_7"))
   assert_true(output.content.contains("of 8. Pass `offset: "))
   // Every shown schema is complete.
-  let shown = output.content.split("Arguments: ").to_array().length() - 1
+  let shown = output.content.split("Arguments schema: ").to_array().length() - 1
   assert_eq(output.content.split(padding).to_array().length() - 1, shown)
 }
 
@@ -234,68 +228,19 @@ test "a declared result schema is shown and searchable" {
   }
   assert_true(
     listing.content.contains(
-      "Result `data`: { \"backlog\"?: Number (integer) }",
+      "Result `data` schema: {\"type\":\"object\",\"properties\":{\"backlog\":{\"type\":\"integer\"}}}",
     ),
   )
   // Only the tool that declares one shows a result schema.
-  assert_eq(listing.content.split("Result `data`").to_array().length(), 2)
+  assert_eq(
+    listing.content.split("Result `data` schema").to_array().length(),
+    2,
+  )
   guard run({ "query": "backlog" }) is Respond(found) else {
     fail("tool_search should respond")
   }
   assert_true(found.content.contains("## mcp__tracker__count_open_issues"))
   assert_false(found.content.contains("## mcp__tracker__close_issue"))
-}
-
-///|
-test "only the best matches of a page carry an example" {
-  let tools = ["mcp__m__one", "mcp__m__two", "mcp__m__three"].map(name => {
-    mcp_tool(name, "A tool.", { "type": "object" })
-  })
-  guard @tool_search.definition([Source(name="m", tools~)]).execute is Sync(run) else {
-    fail("tool_search should run synchronously")
-  }
-  guard run({ "server": "m" }) is Respond(output) else {
-    fail("tool_search should respond")
-  }
-  assert_eq(output.content.split("Example:").to_array().length() - 1, 2)
-  assert_true(
-    output.content.contains("@openseek_tools.call(\"mcp__m__two\", {})"),
-  )
-  assert_false(
-    output.content.contains("@openseek_tools.call(\"mcp__m__three\""),
-  )
-}
-
-///|
-test "a first entry too large for the page drops its example and notes" {
-  // Long property names repeat in the notes and the example call, so the
-  // full entry outgrows the page while each schema stays under the bridge cap.
-  let properties : Map[String, Json] = Map([])
-  let required : Array[Json] = []
-  for index in 0..<45 {
-    let name = "p_\{index}_" + "x".repeat(300)
-    properties[name] = { "type": "string", "description": "d" }
-    required.push(Json(name))
-  }
-  let schema : Json = {
-    "type": "object",
-    "properties": Json::object(properties),
-    "required": Json::array(required),
-  }
-  let tools = [
-    mcp_tool("mcp__wide__call", "A wide tool.", schema, output=schema),
-  ]
-  guard @tool_search.definition([Source(name="wide", tools~)]).execute
-    is Sync(run) else {
-    fail("tool_search should run synchronously")
-  }
-  guard run({ "server": "wide" }) is Respond(output) else {
-    fail("tool_search should respond")
-  }
-  assert_true(output.content.length() < 60000)
-  assert_true(output.content.contains("## mcp__wide__call"))
-  assert_false(output.content.contains("Example:"))
-  assert_true(output.content.contains("Call these from an mbtx script"))
 }
 
 ///|
@@ -309,4 +254,30 @@ test "a known server without tools is an ordinary empty result" {
   }
   assert_false(output.is_error)
   assert_eq(output.content, "`empty` offers no tools.")
+}
+
+///|
+test "fields of a map's values are searchable" {
+  let tools = [
+    mcp_tool("mcp__ci__dispatch", "Start jobs.", {
+      "type": "object",
+      "properties": {
+        "jobs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": { "repository": { "type": "string" } },
+          },
+        },
+      },
+    }),
+  ]
+  guard @tool_search.definition([Source(name="ci", tools~)]).execute
+    is Sync(run) else {
+    fail("tool_search should run synchronously")
+  }
+  guard run({ "query": "repository" }) is Respond(output) else {
+    fail("tool_search should respond")
+  }
+  assert_true(output.content.contains("## mcp__ci__dispatch"))
 }

@@ -3,10 +3,6 @@
 const DefaultLimit : Int32 = 8
 
 ///|
-/// How many of a page's entries, best first, carry an example call.
-const ExampleCount : Int32 = 2
-
-///|
 /// Cap on one result's text, below the agent loop's per-result clamp so a page
 /// of large schemas is never cut inside an entry: a page holds only the whole
 /// entries that fit, and says where the next one starts.
@@ -61,6 +57,15 @@ fn schema_text(schema : Json, parts : Array[String]) -> Unit {
   }
   if fields.get("items") is Some(items) {
     schema_text(items, parts)
+  }
+  // A map's values are described here, so their fields are arguments too.
+  if fields.get("additionalProperties") is Some(Object(_) as values) {
+    schema_text(values, parts)
+  }
+  if fields.get("patternProperties") is Some(Object(patterns)) {
+    for _, values in patterns {
+      schema_text(values, parts)
+    }
   }
   for key in ["anyOf", "oneOf", "allOf"] {
     if fields.get(key) is Some(Array(variants)) {
@@ -198,28 +203,15 @@ fn select(
 }
 
 ///|
-/// One tool as a result shows it: name, description, its arguments and (when
-/// the server declares it) its result's `data`, both sketched as the `Json` a
-/// script builds and matches, and, `with_example`, an example to start from.
-/// Without `with_notes` the argument descriptions are left out too.
-fn render_entry(
-  entry : Entry,
-  with_example~ : Bool,
-  with_notes~ : Bool = true,
-) -> String {
+/// One tool as a result shows it: name, description, the JSON Schema of its
+/// arguments and, when the server declares it, of its result's `data`.
+fn render_entry(entry : Entry) -> String {
   let JsonSchema(schema) = entry.tool.schema
-  let output = entry.tool.output_schema.map(output => output.0)
-  let result = match output {
-    Some(output) => "\nResult `data`: \{sketch_line(output)}"
+  let result = match entry.tool.output_schema {
+    Some(JsonSchema(output)) => "\nResult `data` schema: \{output.stringify()}"
     None => ""
   }
-  let example = if with_example {
-    example(entry.tool.name, schema, output)
-  } else {
-    ""
-  }
-  let notes = if with_notes { argument_notes(schema) } else { "" }
-  "\n\n## \{entry.tool.name}\n\{entry.tool.description.trim()}\nArguments: \{sketch_line(schema)}\{notes}\{result}\{example}"
+  "\n\n## \{entry.tool.name}\n\{entry.tool.description.trim()}\nArguments schema: \{schema.stringify()}\{result}"
 }
 
 ///|
@@ -239,19 +231,8 @@ fn render(
   let mut shown = 0
   let mut used = heading.length()
   for entry in matches[offset:] {
-    if shown == limit {
-      break
-    }
-    // The best matches carry an example; the rest follow the same form. An
-    // entry too large for what is left drops its example and notes, and a
-    // page always shows at least one entry.
-    let full = render_entry(entry, with_example=shown < ExampleCount)
-    let text = if used + full.length() <= budget {
-      full
-    } else {
-      render_entry(entry, with_example=false, with_notes=false)
-    }
-    if shown > 0 && used + text.length() > budget {
+    let text = render_entry(entry)
+    if shown == limit || (shown > 0 && used + text.length() > budget) {
       break
     }
     out.write_string(text)
@@ -272,8 +253,8 @@ fn render(
 }
 
 ///|
-/// How results close: the call form and how the shapes read as patterns.
-const FooterNote : String = "\n\nCall these from an mbtx script with `@openseek_tools.call(name, arguments)`; they are not in your function list. Shapes name the MoonBit `Json` constructors that match them: `String(s)`, `Number(n, ..)` (integers too), `True` / `False`, `Null`, `Array(items)`, and objects as `{ \"key\": pattern, .. }`; `?` marks a field that may be absent. `result.data` is `Json?`, and `Json` has no fields or `stringify` on `Json?`: match it."
+/// How results close: the call form.
+const FooterNote : String = "\n\nCall these from an mbtx script with `@openseek_tools.call(name, arguments)`; they are not in your function list. `result.data` is `Json?`: match it."
 
 ///|
 /// A non-negative integer argument: absent or null is `default`, anything

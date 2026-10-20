@@ -68,20 +68,11 @@ only cue that a capability exists, so it is required. The listing is stable for
 the engine's life, so it never invalidates the cache mid-session.
 
 **Result.** For each match, the result gives the exact exposed name, the
-description, the arguments, and the server's `outputSchema` (MCP 2025-06-18)
-when declared, which describes the `data` a script reads. Both schemas are
-rendered as the MoonBit `Json` a script builds and matches, not as JSON
-Schema text: `{ "repo": String, "page"?: Number, "done"?: True | False }`
-names the constructors a pattern uses (`String(s)`, `Number(n, ..)`, `True`),
-`?` marks optional fields, validation keywords (`minimum`, `pattern`, …)
-follow their type in parentheses, local `$ref`s are followed, and a schema
-the sketch cannot show whole (`allOf`, alternatives beside an object's own
-fields, maps, recursive or unresolvable `$ref`s) or one longer than 2,000
-characters falls back to the schema itself. The two best matches
-of a page also carry a compilable example: the call with every required
-argument and a `guard` that binds the required result fields. The footer
-recalls the `@openseek_tools.call(name, arguments)` form and the `Json`
-constructors.
+description, the JSON Schema of the arguments, and the server's
+`outputSchema` (MCP 2025-06-18) when declared, which describes the `data` a
+script reads. The footer recalls the `@openseek_tools.call(name, arguments)`
+form. Rendering the schemas as the MoonBit `Json` a script matches, with
+examples, is a separate step (below).
 
 Results are paged with `limit` and `offset`, and a page holds only the whole
 entries that fit 40,000 characters, below the agent loop's per-result clamp,
@@ -132,7 +123,7 @@ call did not show.
 
 ## Delivery
 
-Three stacked PRs, each leaving `main` working:
+Stacked PRs, each leaving `main` working:
 
 1. **Structured MCP results for scripts.** Scripts already call MCP tools
    through PTC, so this stands alone.
@@ -145,9 +136,14 @@ Three stacked PRs, each leaving `main` working:
      (64K characters serialized) instead of turning into an error after the
      call already ran.
 2. **The search packages** (this plan): `internal/bm25` with the ranking and
-   `agent_tool/tool_search` with the description, the MoonBit-shaped
-   rendering, examples, and paging. Nothing uses them yet.
-3. **The switch.**
+   `agent_tool/tool_search` with the description, ranking, paging, and size
+   caps, showing schemas as JSON Schema text. Nothing uses them yet.
+3. **MoonBit-shaped schemas.** Show a schema as the `Json` a script builds and
+   matches (`{ "repo": String, "done"?: True | False }`), with a compilable
+   example on the best matches, for a whitelist of schema forms; anything
+   else stays JSON Schema text. Benchmarks put it at a modest gain (fewer
+   `Json` misuse errors in scripts), so it stands apart from the search.
+4. **The switch.**
    - A `program_only` flag on `AgentToolDefinition`, beside `program_callable`
      and `control`: `function_tools` leaves such tools out, a direct call gets
      the redirecting error, and `program_tools` offers them as ordinary
