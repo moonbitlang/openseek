@@ -667,9 +667,10 @@ fn MarkdownRender::prose_nodes(
   node : @cmark.Node[String],
 ) -> Array[@html.Html] {
   let source = node.v
-  let pattern = self.open_file.map_or(bare_web_url_pattern, _ => {
-    bare_interactive_pattern
-  })
+  let pattern = match self.open_file {
+    Some(_) => bare_interactive_pattern
+    None => bare_web_url_pattern
+  }
   let first = self.text_offset(node)
   let fresh = self.fresh_text(node)
   let text_nodes = (text, offset) => {
