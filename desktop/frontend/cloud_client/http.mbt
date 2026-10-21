@@ -1,5 +1,5 @@
 ///|
-pub const CloudOrigin = "https://cloud.moonbitlang.cn"
+pub const CloudOrigin : String = @protocol.CloudOrigin
 
 ///|
 pub fn check_status(status : Int32) -> Unit raise RequestError {

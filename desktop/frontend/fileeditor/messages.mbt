@@ -2,6 +2,8 @@
 
 ///|
 priv enum UiMessage {
+  DownloadToLocal
+  DownloadingFile
   ExcelCopyTable
   ExcelCopyTableHint
   ExcelCopyMarkdown
@@ -207,6 +209,16 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, DownloadToLocal) => "Download to local"
+    (SimplifiedChinese, DownloadToLocal) => "下载到本地"
+    (TraditionalChinese, DownloadToLocal) => "下載到本機"
+    (Japanese, DownloadToLocal) => "ローカルにダウンロード"
+    (Spanish, DownloadToLocal) => "Descargar al equipo"
+    (English, DownloadingFile) => "Downloading…"
+    (SimplifiedChinese, DownloadingFile) => "正在下载…"
+    (TraditionalChinese, DownloadingFile) => "正在下載…"
+    (Japanese, DownloadingFile) => "ダウンロード中…"
+    (Spanish, DownloadingFile) => "Descargando…"
     (English, LoadingFile) => "Loading file…"
     (SimplifiedChinese, LoadingFile) => "正在加载文件…"
     (TraditionalChinese, LoadingFile) => "正在載入檔案…"

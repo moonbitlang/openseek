@@ -79,6 +79,8 @@ pub let browser_set_theme : Command[@protocol.BrowserThemePayload, @protocol.Emp
 
 pub let browser_set_visible : Command[@protocol.BrowserVisiblePayload, @protocol.EmptyReply]
 
+pub let cloud_file_download : Command[@protocol.CloudFileDownloadPayload, @protocol.CloudFileDownloadReply]
+
 pub let codex_account_login_cancel : Command[@protocol.CodexAccountLoginCancelPayload, @protocol.CodexCommandReply[@protocol.EmptyReply]]
 
 pub let codex_account_login_start : Command[@protocol.CodexAccountLoginStartPayload, @protocol.CodexCommandReply[@protocol.CodexLoginStartReply]]

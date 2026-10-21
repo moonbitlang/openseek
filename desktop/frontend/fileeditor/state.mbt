@@ -660,6 +660,8 @@ pub(all) struct State {
   // mirrors the dock strip's file tabs (`Ctx.open_files`): the root update
   // adds an entry when it opens a tab and drops it when the tab closes.
   docs : Map[@common.Uri, Doc]
+  download : @common.Uri?
+  download_generation : Int32
   // Per-tab MBTI presentation. Absence is the normal default (`MbtiSource`),
   // so a closed and later reopened interface starts as source again. A
   // positioned open records `MbtiSource` over an explicit diagram selection.
@@ -767,6 +769,8 @@ pub fn State::empty() -> State {
     removed_directory_reads: Map([]),
     children: Map([]),
     directory_errors: Map([]),
+    download: None,
+    download_generation: 0,
     docs: Map([]),
     mbti_view_modes: Map([]),
     moon_mod_view_modes: Map([]),
@@ -968,6 +972,21 @@ fn Ctx::checkout_ready(self : Ctx) -> Bool {
 
 ///|
 pub(all) enum Msg {
+  DownloadFile(desktop~ : Bool)
+  FileDownloadReady(
+    owner~ : @interop.ConversationIdentity,
+    auth_epoch~ : Int32,
+    generation~ : Int32,
+    path~ : @common.Uri,
+    bytes~ : Bytes
+  )
+  FileDownloaded(
+    owner~ : @interop.ConversationIdentity,
+    auth_epoch~ : Int32,
+    generation~ : Int32,
+    path~ : @common.Uri,
+    result~ : Result[Unit, String]
+  )
   OfficeCitationLocated(OfficeCitationNavigation, Bool)
   OfficeCitationLaidOut(OfficeCitationNavigation)
   ReviewContextRevealFinished(

@@ -15,6 +15,9 @@ class CloudFilesHarness extends CloudHarness {
     this.fileStatus = 200;
     this.holdRead = null;
     this.holdHead = null;
+    this.downloads = new Map();
+    this.downloadStatus = 200;
+    this.holdDownload = null;
     for (const session of [sessionA, sessionB]) {
       this.indexes.set(session, ['src/hello #.mbt']);
       this.directories.set(`${session}:`, [{ name: 'src', is_dir: true }]);
@@ -28,7 +31,7 @@ class CloudFilesHarness extends CloudHarness {
 
   async cloudRequest(route) {
     const url = new URL(route.request().url());
-    const match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/files(\/content|\/index)?$/);
+    const match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/files(\/content|\/index|\/download)?$/);
     if (!match) return super.cloudRequest(route);
     const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, If-None-Match', 'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS', 'Access-Control-Expose-Headers': 'ETag', 'Cache-Control': 'no-store' };
     const method = route.request().method();
@@ -39,9 +42,15 @@ class CloudFilesHarness extends CloudHarness {
     const head = contentPath && method === 'HEAD';
     const content = contentPath && method === 'GET';
     const index = match[2] === '/index';
+    const download = match[2] === '/download';
     const allowLarge = url.searchParams.get('allow_large');
-    const request = { session, path, method, content, head, index, allowLarge, headers: await route.request().allHeaders() };
+    const request = { session, path, method, content, head, index, download, allowLarge, headers: await route.request().allHeaders() };
     this.fileRequests.push(request);
+    if (download) {
+      if (this.holdDownload) await this.holdDownload;
+      request.status = this.downloadStatus;
+      return route.fulfill({ status: this.downloadStatus, headers, contentType: 'application/octet-stream', body: this.downloads.get(`${session}:${path}`) || Buffer.from('raw original') });
+    }
     let body;
     if (index) {
       body = { files: this.indexes.get(session) || [] };
@@ -1019,4 +1028,205 @@ test('Cloud pattern repair uses server defaults and applies only a validated can
   expect(fileHostRequests(cloud)).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);
   expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
+});
+
+
+for (const unchanged of [true, false]) {
+  test(`Cloud download ${unchanged ? 'reuses unchanged original text bytes' : 'fetches changed original bytes'}`, async ({ page }) => {
+    const cloud = new CloudFilesHarness(page);
+    const original = '\uFEFFfirst\r\n月\r\n';
+    const raw = Buffer.from([0xff, 0, 0x80, 13, 10]);
+    const key = `${sessionA}:src/hello #.mbt`;
+    cloud.contents.set(key, { kind: 'content', content: original, sig: 'v1', absolute: '/src/hello #.mbt' });
+    cloud.downloads.set(key, raw);
+    await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+    await file(page, 'src').click(); await file(page, 'hello #.mbt').click();
+    await expect(source(page)).toContainText('first');
+    if (!unchanged) cloud.contents.set(key, { kind: 'content', content: 'changed', sig: 'v2', absolute: '/src/hello #.mbt' });
+    const before = cloud.fileRequests.length;
+    const transfer = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+    const download = await transfer;
+    expect(download.suggestedFilename()).toBe('hello #.mbt');
+    expect(readFileSync(await download.path())).toEqual(unchanged ? Buffer.from(original) : raw);
+    const requests = cloud.fileRequests.slice(before);
+    expect(requests.filter(r => r.head)).toHaveLength(1);
+    expect(requests.find(r => r.head).status).toBe(unchanged ? 304 : 200);
+    expect(requests.filter(r => r.download)).toHaveLength(unchanged ? 0 : 1);
+    expect(requests.filter(r => r.content)).toHaveLength(0);
+    expect(requests.every(r => r.headers.authorization === 'Bearer ts_fixture-123')).toBe(true);
+    await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
+    expect(fileHostRequests(cloud)).toEqual([]);
+  });
+}
+
+for (const preview of ['oversized', 'binary', 'office', 'pending']) {
+  test(`Cloud files download when the preview is ${preview} without saving the preview result`, async ({ page }) => {
+    const cloud = new CloudFilesHarness(page);
+    const name = preview === 'office' ? 'report.docx' : 'unsupported.bin';
+    const key = `${sessionA}:${name}`;
+    const raw = Buffer.from([0, 0xff, 0xfe, 13, 10, 0x80]);
+    cloud.directories.set(`${sessionA}:`, [{ name, is_dir: false }]);
+    cloud.contents.set(key, preview === 'office'
+      ? { kind: 'binary_content', ...cloud.device.officeFiles['docs/report.docx'] }
+      : { kind: preview === 'pending' ? 'content' : preview, content: 'preview source', sig: 'v1', absolute: `/${name}` });
+    cloud.downloads.set(key, raw);
+    let release;
+    if (preview === 'pending') cloud.holdRead = new Promise(resolve => { release = resolve; });
+    await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+    await file(page, name).click();
+    if (preview === 'office') await expect(page.locator('.word-page')).toBeVisible();
+    else await expect(page.locator('.viewer-notice')).toContainText(preview === 'pending' ? 'Loading file' : preview === 'oversized' ? 'too large' : 'binary file');
+    const before = cloud.fileRequests.length;
+    const transfer = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+    const download = await transfer;
+    expect(readFileSync(await download.path())).toEqual(raw);
+    expect(download.suggestedFilename()).toBe(name);
+    expect(cloud.fileRequests.slice(before).filter(r => r.head || r.content)).toEqual([]);
+    expect(cloud.fileRequests.slice(before).filter(r => r.download)).toHaveLength(1);
+    if (release) release();
+  });
+}
+
+test('Cloud download failure shows progress, reports the error and permits retry', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'oversized' });
+  cloud.downloadStatus = 503;
+  let release;
+  cloud.holdDownload = new Promise(resolve => { release = resolve; });
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+  await file(page, 'src').click(); await file(page, 'hello #.mbt').click();
+  await expect(page.locator('.viewer-notice')).toContainText('too large');
+  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Downloading…', exact: true })).toBeDisabled();
+  release();
+  await expect(page.locator('.notification')).toContainText('503');
+  await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath('cloud-download-failure.png'), animations: 'disabled' });
+  await page.locator('.notification').click();
+  cloud.downloadStatus = 200; cloud.holdDownload = null;
+  const transfer = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await transfer;
+  await expect(page.locator('.notification')).toHaveCount(0);
+});
+
+test('a retired Cloud account cannot hand its delayed download to the browser', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'oversized' });
+  let release;
+  cloud.holdDownload = new Promise(resolve => { release = resolve; });
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+  await file(page, 'src').click(); await file(page, 'hello #.mbt').click();
+  await expect(page.locator('.viewer-notice')).toContainText('too large');
+  const downloads = []; page.on('download', d => downloads.push(d));
+  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await expect.poll(() => cloud.fileRequests.filter(r => r.download).length).toBe(1);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const account = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
+  await account.getByRole('button', { name: 'Sign out', exact: true }).click();
+  const response = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/files/download'));
+  release(); await (await response).finished();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(account.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  expect(downloads).toEqual([]);
+});
+
+test('Desktop Cloud downloads use the window command with the original cache and report native failures', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page, { desktop: true });
+  const reply = cloud.device.replyFor.bind(cloud.device);
+  let failure = false;
+  cloud.device.replyFor = request => request.method === 'cloud.file_download'
+    ? failure ? { kind: 'failed', message: 'Downloads is not writable' } : { kind: 'saved', path: '/Downloads/hello #.mbt', revealed: true }
+    : reply(request);
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  const before = cloud.fileRequests.length;
+  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await expect.poll(() => cloud.hostRequests.filter(r => r.method === 'cloud.file_download').length).toBe(1);
+  const payload = cloud.hostRequests.find(r => r.method === 'cloud.file_download').params;
+  expect(payload).toMatchObject({ account: '123', session: sessionA, path: 'src/hello #.mbt' });
+  expect(Buffer.from(payload.cached.data_base64, 'base64').toString()).toContain('Cloud text');
+  expect(payload.cached.etag).toMatch(/^W\/"content-v1-/);
+  expect(cloud.fileRequests.slice(before)).toEqual([]);
+  await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
+  failure = true;
+  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await expect(page.locator('.notification')).toHaveText('Downloads is not writable');
+});
+
+
+for (const kind of ['image', 'pdf']) {
+  test(`Cloud download reuses unchanged ${kind} source bytes`, async ({ page }) => {
+    const cloud = new CloudFilesHarness(page);
+    const name = kind === 'image' ? 'picture.png' : 'report.pdf';
+    const original = kind === 'image'
+      ? readFileSync(new URL('../../../deepseek/client/testdata/two-colors.png', import.meta.url))
+      : Buffer.from(cloud.device.officeFiles['docs/report.pdf'].data_base64, 'base64');
+    cloud.directories.set(`${sessionA}:`, [{ name, is_dir: false }]);
+    cloud.contents.set(`${sessionA}:${name}`, { kind: 'binary_content', data_base64: original.toString('base64'), media_type: kind === 'image' ? 'image/png' : 'application/pdf', sig: 'v1' });
+    await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+    await file(page, name).click();
+    if (kind === 'image') await expect(page.locator('.file-image-preview img')).toBeVisible();
+    else await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
+    const before = cloud.fileRequests.length;
+    const transfer = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+    const download = await transfer;
+    expect(readFileSync(await download.path())).toEqual(original);
+    expect(cloud.fileRequests.slice(before).filter(r => r.head)).toHaveLength(1);
+    expect(cloud.fileRequests.slice(before).filter(r => r.download || r.content)).toEqual([]);
+  });
+}
+
+
+
+for (const status of [200, 503]) {
+  test(`a Cloud browser download ${status === 200 ? 'continues' : 'reports failure'} after navigating away from its file`, async ({ page }) => {
+    const cloud = new CloudFilesHarness(page);
+    cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'oversized' });
+    cloud.downloadStatus = status;
+    let release;
+    cloud.holdDownload = new Promise(resolve => { release = resolve; });
+    await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+    await file(page, 'src').click(); await file(page, 'hello #.mbt').click();
+    await expect(page.locator('.viewer-notice')).toContainText('too large');
+    await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+    await expect.poll(() => cloud.fileRequests.filter(r => r.download).length).toBe(1);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const transfer = status === 200 ? page.waitForEvent('download') : null;
+    release();
+    if (transfer) {
+      const download = await transfer;
+      expect(readFileSync(await download.path())).toEqual(Buffer.from('raw original'));
+    } else {
+      await expect(page.locator('.notification')).toContainText('503');
+    }
+  });
+}
+
+test('an older Cloud download cannot clear a newer download of the same file', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page, { desktop: true });
+  const reply = cloud.device.replyFor.bind(cloud.device);
+  let first, second, completed = 0, requested = 0;
+  const waits = [new Promise(resolve => { first = resolve; }), new Promise(resolve => { second = resolve; })];
+  cloud.device.replyFor = async request => {
+    if (request.method !== 'cloud.file_download') return reply(request);
+    await waits[requested++];
+    completed++;
+    return { kind: 'saved', path: '/Downloads/hello #.mbt', revealed: true };
+  };
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await expect.poll(() => requested).toBe(1);
+  await cloud.open(sessionB); await cloud.open(sessionA);
+  await expect(source(page)).toContainText('Cloud text');
+  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await expect.poll(() => requested).toBe(2);
+  first();
+  await expect.poll(() => completed).toBe(1);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(page.getByRole('button', { name: 'Downloading…', exact: true })).toBeDisabled();
+  second();
+  await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
 });

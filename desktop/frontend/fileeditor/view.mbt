@@ -2273,6 +2273,7 @@ fn office_viewer_toolbar(
 /// With no file open the whole breadcrumb hides; it stays in the DOM so the
 /// editor's child order, and thus the viewer host, is never re-keyed.
 pub fn breadcrumb_view(
+  desktop~ : Bool = false,
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -2381,7 +2382,9 @@ pub fn breadcrumb_view(
   if moon_mod_view_available(state, ctx) {
     path_row.push(moon_mod_view_toolbar(locale~, dispatch, state, ctx))
   }
-  if reveal is Some((label, command)) {
+  if ctx.owner is @interop.Cloud(..) && ctx.active_file is Some(_) {
+    path_row.push(download_button(locale~, dispatch, state, desktop~))
+  } else if reveal is Some((label, command)) {
     path_row.push(
       @html.button(
         type_="button",

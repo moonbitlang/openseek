@@ -388,6 +388,7 @@ pub fn openseek_capability(
   state : @api.ApiState,
   bridge : DesktopBridgeActor,
   views : BrowserViews,
+  downloads~ : () -> String raise,
 ) -> @proton_extension.RendererCapability {
   let endpoints = @api.endpoints(
     state,
@@ -398,6 +399,16 @@ pub fn openseek_capability(
     },
   )
   let window_only = [
+    WindowEndpoint(@commands.cloud_file_download, (_, payload) => {
+      let directory = downloads() catch {
+        error => return Failed(message="Could not locate Downloads: \{error}")
+      }
+      download_cloud_file(
+        payload,
+        () => state.auth_store().account(),
+        directory,
+      )
+    }),
     WindowEndpoint(@commands.host_open_path_preview, (_, payload) => {
       @host.open_path_preview(payload)
     }),

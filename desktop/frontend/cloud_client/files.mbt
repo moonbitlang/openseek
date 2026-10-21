@@ -151,3 +151,21 @@ pub async fn materialize_semantic_selection(
     _ => raise RequestError(Malformed)
   }
 }
+
+///|
+/// Download the original bytes, independently of preview support and size limits.
+pub async fn download_file(
+  token : String,
+  session : String,
+  path : String,
+) -> Bytes {
+  let (response, data) = @http.get(
+    CloudOrigin +
+    "/v1/sessions/\{@uri.encode_component(session)}/files/download?path=\{@uri.encode_component(path)}",
+    headers={ "Authorization": "Bearer " + token },
+  ) catch {
+    _ => raise RequestError(Unreachable)
+  }
+  check_status(response.code)
+  data.binary()
+}

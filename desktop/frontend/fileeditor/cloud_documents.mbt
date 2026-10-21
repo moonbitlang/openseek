@@ -88,6 +88,11 @@ pub fn forget_cloud_files(
   (
     {
       ..state,
+      download: if active {
+        None
+      } else {
+        state.download
+      },
       cloud_documents,
       docs: if active {
         Map([])

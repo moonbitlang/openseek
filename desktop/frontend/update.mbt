@@ -6082,6 +6082,38 @@ fn update_msg(
       update_msg(dispatch, Github(@github.UpdatePullRequest(review.url)), model)
     }
     FileEditor(msg) => {
+      // Download handoffs and errors belong to the account, even after
+      // navigation leaves the initiating file panel.
+      if msg
+        is (@fileeditor.FileDownloadReady(owner~, auth_epoch~, ..)
+        | @fileeditor.FileDownloaded(owner~, auth_epoch~, ..)) {
+        guard owner is @interop.Cloud(account~, ..) &&
+          model.cloud.epoch == auth_epoch &&
+          model.account is Some(credentials) &&
+          credentials.user.user_id == account else {
+          return (@cmd.none, model)
+        }
+      }
+      if msg
+        is @fileeditor.FileDownloadReady(
+          owner~,
+          auth_epoch~,
+          generation~,
+          path~,
+          bytes~
+        ) {
+        return (
+          @fileeditor.browser_download(
+            dispatch.map(next => FileEditor(next)),
+            owner,
+            auth_epoch,
+            generation,
+            path,
+            bytes,
+          ),
+          model,
+        )
+      }
       let preview = if msg
         is @fileeditor.StatsLoaded(owner~, epoch~, stats~, ..) &&
         model.file_panel.owner == Some(@interop.Host(owner)) &&
@@ -6101,6 +6133,12 @@ fn update_msg(
         model.file_panel,
         file_ctx(model),
       )
+      if msg is @fileeditor.FileDownloaded(result=Err(message), ..) {
+        let (notice, next) = { ..model, file_panel: panel, }.notify_error(
+          dispatch, message,
+        )
+        return (@cmd.batch([cmd, notice]), next)
+      }
       // The host can discover a closed/replaced PR while loading comments.
       // Feed that observation back through the one discovery owner. A retired
       // comment request must never invalidate a newer checkout's status.

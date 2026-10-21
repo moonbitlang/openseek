@@ -144,6 +144,7 @@ fn panel_view(
         toggle_expanded=actions.toggle_expanded,
       ),
       @fileeditor.breadcrumb_view(
+        desktop=input.is_desktop,
         locale~,
         actions.file_editor,
         input.file_panel,

@@ -11,6 +11,8 @@ pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
 pub fn check_status(Int32) -> Unit raise RequestError
 
+pub async fn download_file(String, String, String) -> Bytes
+
 pub async fn file_unchanged(String, String, String, String) -> Bool
 
 pub async fn import_attachment(String, String, @protocol.AttachmentSource) -> @protocol.ImportAttachmentReply

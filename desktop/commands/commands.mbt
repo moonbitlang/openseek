@@ -1035,3 +1035,10 @@ pub let session_artifacts_remove : Command[
   @protocol.SessionArtifactRemovePayload,
   @protocol.SessionArtifacts,
 ] = Command("session.artifacts_remove")
+
+///|
+/// Window-only: save a Cloud file to the system Downloads directory.
+pub let cloud_file_download : Command[
+  @protocol.CloudFileDownloadPayload,
+  @protocol.CloudFileDownloadReply,
+] = Command("cloud.file_download")

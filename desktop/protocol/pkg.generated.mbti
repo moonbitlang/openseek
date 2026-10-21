@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
+
 pub const HostProtocolRevision : Int32 = 1
 
 pub fn approval(String, allow~ : Bool) -> @openseek_protocol.Command
@@ -511,6 +513,44 @@ pub fn ClearFileSearchCachePayload::to_json(Self) -> Json
 pub fn ClearFileSearchCachePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ClearFileSearchCachePayload
 pub impl @json.FromJson for ClearFileSearchCachePayload
+
+pub(all) struct CloudFileCache {
+  etag : String
+  data_base64 : String
+} derive(Eq, @debug.Debug)
+pub fn CloudFileCache::equal(Self, Self) -> Bool
+pub fn CloudFileCache::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudFileCache::not_equal(Self, Self) -> Bool
+pub fn CloudFileCache::to_json(Self) -> Json
+pub fn CloudFileCache::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CloudFileCache
+pub impl @json.FromJson for CloudFileCache
+
+pub(all) struct CloudFileDownloadPayload {
+  account : String
+  session : String
+  path : String
+  cached : CloudFileCache?
+} derive(Eq, @debug.Debug)
+pub fn CloudFileDownloadPayload::equal(Self, Self) -> Bool
+pub fn CloudFileDownloadPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudFileDownloadPayload::not_equal(Self, Self) -> Bool
+pub fn CloudFileDownloadPayload::to_json(Self) -> Json
+pub fn CloudFileDownloadPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CloudFileDownloadPayload
+pub impl @json.FromJson for CloudFileDownloadPayload
+
+pub(all) enum CloudFileDownloadReply {
+  Saved(path~ : String, revealed~ : Bool)
+  Failed(message~ : String)
+} derive(Eq, @debug.Debug)
+pub fn CloudFileDownloadReply::equal(Self, Self) -> Bool
+pub fn CloudFileDownloadReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudFileDownloadReply::not_equal(Self, Self) -> Bool
+pub fn CloudFileDownloadReply::to_json(Self) -> Json
+pub fn CloudFileDownloadReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CloudFileDownloadReply
+pub impl @json.FromJson for CloudFileDownloadReply
 
 pub(all) struct CodexAccountLoginCancelPayload {
   login_id : String

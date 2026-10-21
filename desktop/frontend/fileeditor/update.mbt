@@ -2142,6 +2142,7 @@ pub fn sync(
         owner: Some(ctx.owner),
         cloud_epoch,
         cloud_surface_epoch: state.cloud_surface_epoch + 1,
+        download_generation: state.download_generation,
         cloud_documents,
         // A new incarnation must not inherit the identity it replaced, so this
         // reconciles from `PlacementUnknown` rather than the outgoing value.
@@ -2600,6 +2601,15 @@ fn update_inner(
     }
   }
   match msg {
+    DownloadFile(desktop~) => start_download(dispatch, state, ctx, desktop~)
+    // The application checks the current account before the browser handoff.
+    FileDownloadReady(..) => (@cmd.none, state)
+    FileDownloaded(owner~, auth_epoch~, generation~, path~, ..) => {
+      guard accepts_download(state, ctx, owner, auth_epoch, generation, path) else {
+        return (@cmd.none, state)
+      }
+      (@cmd.none, { ..state, download: None, })
+    }
     PreviewLargeFile(owner~, epoch~, path~) => {
       guard owner == ctx.owner &&
         epoch == state.request_epoch &&
