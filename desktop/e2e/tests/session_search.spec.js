@@ -23,12 +23,11 @@ function fixture(page) {
   return app;
 }
 
-// Rows in folded sections stay mounted behind `aria-hidden` while their
-// content box animates closed, so count only the rows in sections the reader
-// can see.
+// Folded sections, projects and sub-runs keep their rows mounted. Count only
+// titles exposed to the reader, including while the content box animates.
 const rows = page => page.locator(
   'aside .sidebar-group-content[aria-hidden="false"] .conversation-open',
-);
+).and(page.getByRole('button'));
 
 test('inline title search reuses project rows and keeps results when opening unloaded history', async ({ page }) => {
   const app = fixture(page);

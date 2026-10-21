@@ -46,18 +46,18 @@ fn test_conversations(
 ///|
 test "the project component state owns its compact preview" {
   let state : State = { fold: Open, preview_limit: PreviewLimit, }
-  assert_true(state.conversation_visible(4, false))
-  assert_false(state.conversation_visible(5, false))
-  assert_true(state.conversation_visible(5, true))
+  assert_true(state.conversation_visible(test_input(), 4, false))
+  assert_false(state.conversation_visible(test_input(), 5, false))
+  assert_true(state.conversation_visible(test_input(), 5, true))
   let input = { ..test_input(), conversations: test_conversations(20), }
   let shown_once = state.update(input, ShowMore)
   assert_eq(shown_once.preview_limit, 12)
-  assert_true(shown_once.conversation_visible(11, false))
-  assert_false(shown_once.conversation_visible(12, false))
+  assert_true(shown_once.conversation_visible(test_input(), 11, false))
+  assert_false(shown_once.conversation_visible(test_input(), 12, false))
   let shown_twice = shown_once.update(input, ShowMore)
   assert_eq(shown_twice.preview_limit, 19)
-  assert_true(shown_twice.conversation_visible(18, false))
-  assert_false(shown_twice.conversation_visible(19, false))
+  assert_true(shown_twice.conversation_visible(test_input(), 18, false))
+  assert_false(shown_twice.conversation_visible(test_input(), 19, false))
 }
 
 ///|
@@ -68,8 +68,12 @@ test "a conversation being renamed stays in the compact preview" {
     ..conversations[5],
     rename: Some({ draft: "Renamed", saving: false, }),
   }
-  assert_true(state.conversation_visible(5, stays_visible(conversations[5])))
-  assert_false(state.conversation_visible(5, stays_visible(conversations[4])))
+  assert_true(
+    state.conversation_visible(test_input(), 5, stays_visible(conversations[5])),
+  )
+  assert_false(
+    state.conversation_visible(test_input(), 5, stays_visible(conversations[4])),
+  )
   // It is on screen already, so nothing is left behind "Show more".
   let input = { ..test_input(), conversations, }
   assert_false(state.has_hidden_conversation(input))
@@ -82,7 +86,7 @@ test "show more skips an active chat that was already visible" {
     ..test_input(),
     conversations: test_conversations(20, active_index=7),
   }
-  assert_true(state.conversation_visible(7, true))
+  assert_true(state.conversation_visible(test_input(), 7, true))
   let shown_more = state.update(input, ShowMore)
   assert_eq(shown_more.preview_limit, 13)
 }
@@ -92,13 +96,20 @@ test "folding a project resets its compact preview" {
   let state : State = { fold: Open, preview_limit: PreviewLimit, }
   let input = { ..test_input(), conversations: test_conversations(20), }
   let shown_more = state.update(input, ShowMore)
-  assert_true(shown_more.conversation_visible(11, false))
+  assert_true(shown_more.conversation_visible(test_input(), 11, false))
   let folded = shown_more.update(input, ToggleDisclosure)
   assert_true(folded.folded(test_input()))
+  // The outgoing twelve-row preview stays intact while its box shrinks.
+  assert_true(folded.conversation_visible(input, 11, false))
+  assert_false(folded.conversation_visible(input, 12, false))
+  // A different activation reveals the compact preview without waiting for a timer.
+  let revealed = { ..input, activation: Some("another-chat"), }
+  assert_false(folded.folded(revealed))
+  assert_false(folded.conversation_visible(revealed, 5, false))
   let reopened = folded.update(input, ToggleDisclosure)
   assert_false(reopened.folded(test_input()))
-  assert_true(reopened.conversation_visible(4, false))
-  assert_false(reopened.conversation_visible(5, false))
+  assert_true(reopened.conversation_visible(test_input(), 4, false))
+  assert_false(reopened.conversation_visible(test_input(), 5, false))
 }
 
 ///|

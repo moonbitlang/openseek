@@ -171,7 +171,7 @@ test('a failed rename is reported even after its project is folded', async ({ pa
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
   app.rpcDelays.set('session.rename', 400);
   // Folding the project moves focus away, which starts the save; the row is
-  // gone by the time the host refuses it.
+  // hidden and inert by the time the host refuses it.
   const disclosure = page.locator('.workspace-row[title="/workspace"] .workspace-disclosure');
   await disclosure.click();
   await expect(disclosure).toHaveAttribute('aria-expanded', 'false');

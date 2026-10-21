@@ -66,9 +66,8 @@ pub fn Id::root(self : Id) -> String? {
 }
 
 ///|
-/// The DOM child key for this conversation's row. The whole sidebar renders
-/// into one keyed container, so cached component output is re-paired with its
-/// own element when neighbouring rows appear or leave — never positionally.
+/// The DOM child key for this conversation's branch. Each parent keys its
+/// children so insertion and reorder preserve their DOM and event slots.
 pub fn Id::key(self : Id) -> String {
   let root = self.root.unwrap_or("")
   "conversation:\{self.source.key()}:\{self.channel}:\{self.conversation}:\{root}"
@@ -477,8 +476,7 @@ fn Actions::child_component(
 ///|
 /// A real Rabbita component: it is constructed once for an `assoc_by` key,
 /// owns its sub-run disclosure state, consumes incremental input, and returns
-/// an incremental DOM value. Rows are (key, node) pairs for the sidebar's one
-/// keyed container.
+/// an incremental DOM value. Child branches stay mounted when folded.
 pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
@@ -554,10 +552,13 @@ pub fn component(
           class=if children_open { "row-twisty expanded" } else { "row-twisty" },
           type_="button",
           title=ui(locale, SubagentRuns(input.children.length())),
-          attrs=@html.Attrs::build().on_click(event => {
-            event.stop_propagation()
-            emit(ToggleChildren)
-          }),
+          attrs=@html.Attrs::build()
+            .aria_expanded(children_open.to_string())
+            .aria_controls(input.id.key() + ":children")
+            .on_click(event => {
+              event.stop_propagation()
+              emit(ToggleChildren)
+            }),
           @icons.icon(@icons.icon_chevron_down),
         ),
       )
@@ -785,15 +786,36 @@ pub fn component(
       attrs=row_attrs,
       children,
     )
-    let rows : Array[(String, @html.Html)] = [(input.id.key(), row)]
-    if children_open {
-      for group in child_rows {
-        for child in group {
-          rows.push(child)
-        }
+    let rows : Map[String, @html.Html] = Map([])
+    for group in child_rows {
+      for child in group {
+        rows[child.0] = child.1
       }
     }
-    rows
+    let collapsed = !children_open || input.children.is_empty()
+    [
+      (
+        input.id.key(),
+        @html.div(
+          class=if collapsed {
+            "sidebar-conversation sidebar-branch collapsed"
+          } else {
+            "sidebar-conversation sidebar-branch"
+          },
+          [
+            row,
+            @html.div(
+              id=input.id.key() + ":children",
+              class="conversation-children sidebar-branch-content",
+              attrs=@html.Attrs::build()
+                .aria_hidden(collapsed.to_string())
+                .inert(collapsed),
+              rows,
+            ),
+          ],
+        ),
+      ),
+    ]
   })
 }
 
