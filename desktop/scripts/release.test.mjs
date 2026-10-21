@@ -186,28 +186,22 @@ test("stamp aligns Desktop versions while taking SSH's CLI version from the root
   assert.equal(config.package.version, "0.2.0");
   assert.equal(await fs.readFile(join(release.desktop, "backend/ssh/version.mbt"), "utf8"), '///|\nconst CliRelease = "0.8.2"\n');
   assert.match(await fs.readFile(join(release.desktop, "../moon.mod"), "utf8"), /^version = "0\.8\.2"$/m);
-});
-
-test("stamp-cli works without Desktop release metadata and follows the next CLI version", async t => {
-  const release = await stampFixture(t);
-  await release.run("stamp-cli");
-  const source = join(release.desktop, "backend/ssh/version.mbt");
-  assert.equal(await fs.readFile(source, "utf8"), '///|\nconst CliRelease = "0.8.2"\n');
   await fs.writeFile(join(release.desktop, "../moon.mod"), 'version = "0.8.3"\n');
-  await release.run("stamp-cli");
-  assert.equal(await fs.readFile(source, "utf8"), '///|\nconst CliRelease = "0.8.3"\n');
+  await release.stamp("0.2.1");
+  assert.equal(await fs.readFile(join(release.desktop, "backend/ssh/version.mbt"), "utf8"), '///|\nconst CliRelease = "0.8.3"\n');
+  assert.equal(await release.moduleVersion(), "0.2.1");
 });
 
 for (const scenario of [
   { name: "missing CLI version", file: "../moon.mod", content: 'name = "moonbitlang/openseek"\n', error: /could not read CLI version/ },
   { name: "missing patch target", file: "backend/ssh/version.mbt", content: '///|\nconst Renamed = "0.7.1"\n', error: /expected one CliRelease constant/ },
 ]) {
-  test(`stamp-cli rejects ${scenario.name} instead of retaining a stale version`, async t => {
+  test(`stamp rejects ${scenario.name} instead of retaining a stale version`, async t => {
     const release = await stampFixture(t);
     await fs.writeFile(join(release.desktop, scenario.file), scenario.content);
     const source = join(release.desktop, "backend/ssh/version.mbt");
     const before = await fs.readFile(source, "utf8");
-    await assert.rejects(release.run("stamp-cli"), scenario.error);
+    await assert.rejects(release.stamp("0.2.0"), scenario.error);
     assert.equal(await fs.readFile(source, "utf8"), before);
   });
 }

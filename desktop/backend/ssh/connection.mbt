@@ -85,12 +85,7 @@ pub async fn Connection::run(
       }
       group.spawn_bg(() => self.serve_auth(auth_server, token, emit))
       let args = arguments(self.profile.command)
-      args.push(
-        remote_command(
-          self.profile.server,
-          model_environment=settings is Some(_),
-        ),
-      )
+      args.push(remote_command(model_environment=settings is Some(_)))
       let (input, lifetime) = @process.write_to_process()
       defer lifetime.close()
       let (reader, output) = @process.read_from_process()

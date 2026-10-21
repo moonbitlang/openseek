@@ -2,7 +2,6 @@
 pub(all) struct SshProfile {
   id : String
   command : String
-  server : String
   display_name : String?
 } derive(Eq)
 
@@ -12,7 +11,6 @@ pub impl FromJson for SshProfile with fn from_json(json, path) {
   {
     id: obj.required_string("id"),
     command: obj.required_string("command"),
-    server: obj.required_string("server"),
     display_name: obj.optional_string("display_name"),
   }
 }
@@ -22,7 +20,6 @@ pub impl ToJson for SshProfile with fn to_json(self) {
   let fields : Map[String, Json] = {
     "id": Json(self.id),
     "command": Json(self.command),
-    "server": Json(self.server),
   }
   if self.display_name is Some(name) {
     fields["display_name"] = Json(name)

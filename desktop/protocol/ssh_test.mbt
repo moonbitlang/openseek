@@ -12,7 +12,6 @@ test "SSH labels respect explicit names and never expose connection options" {
     let profile : @protocol.SshProfile = {
       id: "id",
       command,
-      server: "openseek-app-server",
       display_name: None,
     }
     assert_eq(profile.display_label(), label)
@@ -30,18 +29,20 @@ test "SSH profiles without display names still load and renamed profiles round t
   let old : @protocol.SshProfile = @json.from_json({
     "id": "legacy",
     "command": "ssh build",
-    "server": "openseek-app-server",
   })
   assert_eq(old.display_name, None)
   assert_eq(old.display_label(), "build")
   let null_name : @protocol.SshProfile = @json.from_json({
     "id": "legacy",
     "command": "ssh build",
-    "server": "openseek-app-server",
     "display_name": null,
   })
   assert_true(null_name == old)
   let renamed = { ..old, display_name: Some("Build server"), }
+  assert_true(
+    renamed.to_json() ==
+    { "id": "legacy", "command": "ssh build", "display_name": "Build server" },
+  )
   assert_true(@json.from_json(renamed.to_json()) == renamed)
   assert_true(@json.from_json(old.to_json()) == old)
 }

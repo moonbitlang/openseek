@@ -4,7 +4,6 @@ test "removing SSH retires only that host and ignores late connection and profil
   let profile : @protocol.SshProfile = {
     id: "ssh-remove-test",
     command: "ssh build",
-    server: "openseek-app-server",
     display_name: None,
   }
   let other = { ..profile, id: "ssh-remove-other", command: "ssh other", }
@@ -80,7 +79,6 @@ test "SSH removal cancellation and storage failure preserve the host for retry" 
   let profile : @protocol.SshProfile = {
     id: "ssh-remove-failed",
     command: "ssh build",
-    server: "openseek-app-server",
     display_name: None,
   }
   let base = { ..test_model(), is_desktop: true, }.register_ssh(profile)
@@ -114,7 +112,6 @@ test "SSH readiness updates the remote host without replacing local state" {
   let profile : @protocol.SshProfile = {
     id: "ssh-ready-test",
     command: "ssh build",
-    server: "openseek-app-server",
     display_name: None,
   }
   let model = { ..test_model(), is_desktop: true, }.register_ssh(profile)
@@ -167,7 +164,6 @@ test "SSH disconnect retains project identity and removes request readiness" {
   let profile : @protocol.SshProfile = {
     id: "ssh-offline-test",
     command: "ssh build",
-    server: "openseek-app-server",
     display_name: None,
   }
   let channel : @interop.ChannelId = Remote(profile.id)
@@ -226,7 +222,6 @@ test "SSH preparation progress can be cancelled and does not revive an offline h
   let profile : @protocol.SshProfile = {
     id: "ssh-prepare-test",
     command: "ssh build",
-    server: "openseek-app-server",
     display_name: None,
   }
   let model = { ..test_model(), is_desktop: true, }.register_ssh(profile)
@@ -254,7 +249,6 @@ test "SSH onboarding resumes on its host only and cancellation fences late readi
   let profile : @protocol.SshProfile = {
     id: "ssh-onboarding-test",
     command: "ssh build",
-    server: "openseek-app-server",
     display_name: Some("Build"),
   }
   let (_, opened) = update_ssh(dispatch, Open, {
@@ -289,7 +283,6 @@ test "renaming SSH preserves connected projects and host ordering" {
   let profile : @protocol.SshProfile = {
     id: "ssh-rename-test",
     command: "ssh -F '/tmp/config file' build",
-    server: "openseek-app-server",
     display_name: None,
   }
   let second = { ..profile, id: "ssh-second-test", command: "ssh second", }
@@ -361,7 +354,6 @@ fn auth_test_model(id : String) -> Model {
   { ..test_model(), is_desktop: true, }.register_ssh({
     id,
     command: "ssh demo",
-    server: "openseek-app-server",
     display_name: None,
   })
 }
@@ -619,7 +611,6 @@ test "SSH background challenges retain separate identities without replacing the
   let base = auth_test_model("front").register_ssh({
     id: "back",
     command: "ssh other",
-    server: "openseek-app-server",
     display_name: None,
   })
   let (_, model) = update_ssh(dispatch, Details("front"), base)

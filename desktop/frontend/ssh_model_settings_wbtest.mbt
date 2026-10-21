@@ -3,7 +3,6 @@ test "SSH API settings open the local host and wait for its authoritative settin
   let profile : @protocol.SshProfile = {
     id: "ssh-model-settings-test",
     command: "ssh example",
-    server: "openseek-app-server",
     display_name: None,
   }
   let remote = {

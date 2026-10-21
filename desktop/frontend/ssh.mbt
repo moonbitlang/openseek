@@ -950,11 +950,6 @@ fn ssh_draft(ui : SshUi) -> @protocol.SshProfile {
   {
     id: ui.editing.unwrap_or(""),
     command: ui.command,
-    server: ui.hosts
-    .iter()
-    .find_first(p => Some(p.id) == ui.editing)
-    .map(p => p.server)
-    .unwrap_or("openseek-app-server"),
     display_name: if ui.display_name.trim().is_empty() {
       None
     } else {

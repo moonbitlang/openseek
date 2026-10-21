@@ -21,7 +21,6 @@ pub async fn profiles() -> @protocol.SshProfiles {
 ///|
 pub async fn save(profile : @protocol.SshProfile) -> @protocol.SshProfile {
   ignore(arguments(profile.command))
-  ignore(remote_command(profile.server))
   let profile = {
     ..profile,
     id: if profile.id.is_empty() {

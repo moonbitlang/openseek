@@ -28,12 +28,7 @@ test "SSH command refuses remote commands and stdio ownership flags" {
 ///|
 async test "unconnected requests are unsent regardless of supplied epoch" {
   let connection = @ssh.Connection(
-    {
-      id: "ssh-test",
-      command: "ssh host",
-      server: "openseek-app-server",
-      display_name: None,
-    },
+    { id: "ssh-test", command: "ssh host", display_name: None, },
     7,
   )
   for epoch in [6, 7] {
@@ -59,18 +54,8 @@ async test "saved SSH profiles survive an existing directory and subsequent addi
     None => @env.unset_env_var("SEEKMOON_SSH_PROFILES")
   })
   @env.set_env_var("SEEKMOON_SSH_PROFILES", directory + "/profiles.json")
-  let first = @ssh.save({
-    id: "",
-    command: "ssh first",
-    server: "openseek-app-server",
-    display_name: None,
-  })
-  let second = @ssh.save({
-    id: "",
-    command: "ssh second",
-    server: "/opt/openseek-app-server",
-    display_name: None,
-  })
+  let first = @ssh.save({ id: "", command: "ssh first", display_name: None, })
+  let second = @ssh.save({ id: "", command: "ssh second", display_name: None, })
   let loaded = @ssh.profiles()
   assert_eq(loaded.hosts.length(), 2)
   assert_true(loaded.hosts.contains(first) && loaded.hosts.contains(second))

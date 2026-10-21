@@ -1,7 +1,6 @@
 // Stamp, upload, and publish Desktop releases.
 //
 //   node scripts/release.mjs stamp X.Y.Z       stamp the version every packager builds from
-//   node scripts/release.mjs stamp-cli         stamp SSH's CLI version from the root manifest
 //   node scripts/release.mjs upload [vX.Y.Z]   upload the checkout's artifacts to OSS and S3
 //   node scripts/release.mjs publish [vX.Y.Z]  make the uploaded version live
 //   node scripts/release.mjs verify [vX.Y.Z]   check the live release through its public URLs
@@ -60,7 +59,6 @@ const OssPrefixes = {
 
 const Usage = `usage:
   node scripts/release.mjs stamp X.Y.Z
-  node scripts/release.mjs stamp-cli
   node scripts/release.mjs upload [vX.Y.Z]
   node scripts/release.mjs publish [vX.Y.Z]
   node scripts/release.mjs verify [vX.Y.Z]
@@ -225,25 +223,21 @@ export class Release {
     return served;
   }
 
-  async stampCli() {
+  async stamp(version) {
+    if (!/^\d+\.\d+\.\d+$/.test(version)) {
+      throw new Error(`release version must be three dot-separated numbers: ${version}`);
+    }
+    // SSH downloads the CLI release, which has its own version in the root manifest.
     const manifest = await readFile(join(this.desktop, "..", "moon.mod"), "utf8");
-    const version = manifest.match(/^version = "([^"]+)"$/m)?.[1];
-    if (!version) throw new Error("could not read CLI version from root moon.mod");
+    const cliVersion = manifest.match(/^version = "([^"]+)"$/m)?.[1];
+    if (!cliVersion) throw new Error("could not read CLI version from root moon.mod");
     const path = join(this.desktop, "backend/ssh/version.mbt");
     const source = await readFile(path, "utf8");
     const declaration = /^const CliRelease = "[^"\r\n]*"$/gm;
     if ([...source.matchAll(declaration)].length !== 1) {
       throw new Error("expected one CliRelease constant in backend/ssh/version.mbt");
     }
-    await writeFile(path, source.replace(declaration, () => `const CliRelease = ${JSON.stringify(version)}`));
-    console.log(`stamped SSH CLI ${version}`);
-  }
-
-  async stamp(version) {
-    if (!/^\d+\.\d+\.\d+$/.test(version)) {
-      throw new Error(`release version must be three dot-separated numbers: ${version}`);
-    }
-    await this.stampCli();
+    await writeFile(path, source.replace(declaration, () => `const CliRelease = ${JSON.stringify(cliVersion)}`));
     // The Desktop modules are released together. Keep their versions and the
     // workspace dependency pins between them on the same value.
     for (const { path, pins } of StampedModules) {
@@ -485,7 +479,6 @@ export class Release {
     const version = async () => argument ?? `v${await this.moduleVersion()}`;
     switch (command) {
       case "stamp": return await this.stamp(argument ?? "");
-      case "stamp-cli": return await this.stampCli();
       case "upload": return await this.upload(await version());
       case "publish": return await this.publish(await version(), { fromCheckout: true });
       case "verify": return await this.verify(await version());

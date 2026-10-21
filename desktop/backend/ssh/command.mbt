@@ -17,26 +17,11 @@ pub fn arguments(command : String) -> Array[String] raise {
 }
 
 ///|
-fn remote_command(
-  server : String,
-  model_environment~ : Bool = false,
-) -> String raise {
-  guard !server.is_empty() && !server.contains("\n") else {
-    raise SshError("Missing remote app-server executable")
-  }
-  // The old default in saved profiles still selects automatic preparation.
-  let command = if server == "openseek-app-server" || server == "openseek" {
-    match @env.get_env_var("SEEKMOON_SSH_RELEASE_URL") {
-      Some(url) => prepare_command(url, "=https,http,file")
-      None =>
-        prepare_command(
-          "https://cli.moonbitlang.com/openseek/cli/releases/v" + CliRelease,
-          "=https",
-        )
-    }
-  } else {
-    "exec " + shell_quote(server)
-  }
+fn remote_command(model_environment~ : Bool = false) -> String {
+  let command = prepare_command(
+    "https://cli.moonbitlang.com/openseek/cli/releases/v" + CliRelease,
+    "=https",
+  )
   if model_environment {
     // Fixed names, literal single-line values over stdin, never evaluated as
     // shell code. An absent local key leaves the remote environment unchanged.

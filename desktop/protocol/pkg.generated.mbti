@@ -3834,7 +3834,6 @@ pub impl @json.FromJson for SshEvent
 pub(all) struct SshProfile {
   id : String
   command : String
-  server : String
   display_name : String?
 } derive(Eq)
 pub fn SshProfile::connection_label(Self) -> String

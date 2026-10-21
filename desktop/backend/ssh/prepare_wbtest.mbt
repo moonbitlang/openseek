@@ -1,13 +1,6 @@
 ///|
 test "default remote bootstrap selects this build's CLI release" {
-  let previous = @env.get_env_var("SEEKMOON_SSH_RELEASE_URL")
-  defer (match previous {
-    Some(value) => @env.set_env_var("SEEKMOON_SSH_RELEASE_URL", value)
-    None => @env.unset_env_var("SEEKMOON_SSH_RELEASE_URL")
-  })
-  @env.unset_env_var("SEEKMOON_SSH_RELEASE_URL")
-  let command = remote_command("openseek-app-server")
-  assert_eq(remote_command("openseek"), command)
+  let command = remote_command()
   assert_true(
     command.contains(
       "https://cli.moonbitlang.com/openseek/cli/releases/v" + CliRelease,

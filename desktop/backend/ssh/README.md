@@ -24,12 +24,10 @@ setup and connection progress and supports cancellation. Automatic preparation
 supports Linux x64/arm64 and macOS arm64 with SSH, a POSIX shell, curl, tar, and
 sha256sum or shasum. The matching CLI release must include `openseek-app-server`.
 
-Release CI stamps `CliRelease` in `version.mbt` from the root OpenSeek `moon.mod`,
-the same manifest used by the CLI release workflow. Desktop release stamping
-also performs this step; CLI releases use
-`node desktop/scripts/release.mjs stamp-cli`. Local builds keep the checked-in
-default unless it is explicitly stamped. This version is independent of the
-Desktop application's own version. The matching CLI release must be published
+Desktop release CI stamps `CliRelease` in `version.mbt` from the root OpenSeek
+`moon.mod`, the same manifest used by the CLI release workflow. Local builds
+keep the checked-in default unless it is explicitly stamped. This version is
+independent of the Desktop application's own version. The matching CLI release must be published
 before a fresh remote host can download it.
 
 The prepared distribution is cached under `~/.openseek/ssh/v<version>`; reconnect
@@ -37,14 +35,6 @@ reuses it without downloading or reinstalling. Setup installs missing MoonBit
 tools and the CLI distribution under `~/.moon` and `~/.openseek`. The SSH host
 runs the versioned executable and its companion together, even if the user's
 normal PATH contains an older working CLI. No shell startup files are changed.
-For a source build:
-
-```sh
-moon build . desktop/backend/server --target native --release
-# Install both executables together in a directory on PATH:
-# _build/native/release/build/moonbitlang/openseek/openseek.exe -> openseek
-# _build/native/release/build/openseek_desktop/backend/server/server.exe -> openseek-app-server
-```
 
 Use **Add project → Add SSH host**, or **Settings → SSH hosts → Add SSH host**. Enter
 `ssh user@host`, `ssh alias`, or a command with `-p`, `-i`, `-J`, `-l`, or `-F`.
@@ -53,17 +43,16 @@ shell command. Put additional connection settings in SSH config. Passwords,
 private-key passphrases, and keyboard-interactive challenges appear only when
 OpenSSH requests them. First-use host trust is a separate confirmation showing
 OpenSSH's fingerprint and prompt. Changed host keys fail normally; the app uses
-`StrictHostKeyChecking=ask`, never automatic trust. Profiles with an explicit `openseek-app-server` path
-use that path without automatic preparation; new profiles need only an SSH command.
+`StrictHostKeyChecking=ask`, never automatic trust. New profiles need only an SSH command.
 
 After connecting to add a project, the remote folder picker opens. Browse to a
 remote directory and add it. Cancelling host creation returns to the previous
 folder selection. Saved hosts can also connect through **Add project**.
 
 An optional display name overrides the SSH alias or hostname. Projects use a
-compact single-line row with the folder name and a separate host label. Click
-the host label for connection status, rename, disconnect or reconnect. The
-host details also offer **Remove host**, which forgets the profile on this
+compact single-line row with the folder name and a separate host label. Open
+**Connection details** from the project's menu for connection status, rename,
+disconnect or reconnect. The host details also offer **Remove host**, which forgets the profile on this
 computer and disconnects its running tasks after confirmation. Remote files,
 project registration, conversation history and installed tools remain on the
 host. A failed profile write keeps the host available so removal can be retried.
@@ -116,8 +105,6 @@ connection is `Unsent`, an explicit RPC error is `Refused`, and a lost reply is
 `Unknown`; there is no fallback to the local host.
 
 `SEEKMOON_SSH_PROFILES` isolates profile storage for QA.
-`SEEKMOON_SSH_RELEASE_URL` overrides the release directory for development/QA
-(including HTTP/file fixtures); normal preparation only downloads over HTTPS.
 `OPENSEEK_ENGINE` overrides the engine used by the server for source builds.
 By default the server uses the `openseek` executable beside it.
 
@@ -172,5 +159,4 @@ sooner. Process exit clears the input and exposes a fresh connection retry.
 The helper mode requires an OpenSSH client supporting `SSH_ASKPASS_REQUIRE`
 ([OpenSSH 8.4](https://www.openssh.org/txt/release-8.4) or later). The packaged macOS application is the acceptance host;
 Linux and Windows execution must be validated on those platforms before
-claiming equivalent interactive-authentication support. See the implementation
-plan for the acceptance matrix and recorded results.
+claiming equivalent interactive-authentication support.
