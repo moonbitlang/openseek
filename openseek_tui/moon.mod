@@ -1,10 +1,10 @@
 name = "moonbitlang/openseek_tui"
 
-version = "0.4.3"
+version = "0.7.2"
 
 import {
   "moonbitlang/jsonl@0.2.0",
-  "moonbitlang/openseek@0.7.0",
+  "moonbitlang/openseek@0.7.2",
   "moonbitlang/openseek_protocol@0.4.1",
   "moonbit-community/displaytext@0.1.6",
   "moonbit-community/tty@0.3.0",
@@ -15,7 +15,7 @@ import {
 
 readme = "README.md"
 
-repository = "https://github.com/moonbitlang/openseek_tui"
+repository = "https://github.com/moonbitlang/openseek"
 
 license = "Apache-2.0"
 

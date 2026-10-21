@@ -1,10 +1,9 @@
 name: publish-openseek-tui
 
-# Bump `version` in openseek_tui/moon.mod, then dispatch this workflow. The
-# staged package compiles against the moonbitlang/openseek and
-# openseek_protocol releases openseek_tui/moon.mod names, so publish those
-# first when the UI needs their newer APIs. Its default engine is that same
-# openseek release, run through `moonx`.
+# openseek_tui is versioned in lockstep with the root module: openseek_tui@X
+# imports and runs openseek@X (see openseek_tui/README.md). Dispatch this after
+# publish-openseek for the same release: the staged package compiles against
+# the registry's moonbitlang/openseek and openseek_protocol.
 on:
   workflow_dispatch:
 

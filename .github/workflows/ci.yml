@@ -158,6 +158,19 @@ jobs:
         if: matrix.target == 'wasm'
         run: moon test --target wasm
 
+      - name: openseek_tui versions in lockstep with openseek
+        # openseek_tui@X runs openseek@X as its default engine; its own test
+        # (openseek_tui/cmd/tui/engine_version_wbtest.mbt) ties the module
+        # version to that pin, and this ties both to the root version.
+        if: matrix.target == 'native'
+        run: |
+          root="$(sed -n 's/^version = "\(.*\)"$/\1/p' moon.mod)"
+          tui="$(sed -n 's/^version = "\(.*\)"$/\1/p' openseek_tui/moon.mod)"
+          if [ -z "$root" ] || [ "$root" != "$tui" ]; then
+            echo "moon.mod is $root but openseek_tui/moon.mod is $tui; release them together"
+            exit 1
+          fi
+
       - name: Cram (offline CLI docs)
         if: matrix.target == 'native'
         run: |

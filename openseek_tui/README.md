@@ -94,13 +94,17 @@ From the repository root, `just tui` builds both binaries and runs the UI with
 The module is published to mooncakes as `moonbitlang/openseek_tui` by the
 repository's `publish-openseek-tui` workflow
 (`.github/workflows/publish-openseek-tui.yml`, run manually via workflow
-dispatch) using the organization's mooncakes token. Bump `version` in
-`moon.mod` first. The workflow checks the staged package against the registry,
-so publish the `moonbitlang/openseek` and `moonbitlang/openseek_protocol`
-releases it imports before it. When bumping the `moonbitlang/openseek` import, bump
-`EngineModuleVersion` in `cmd/tui/main.mbt` with it (`moon test` fails until
-they match) and check that the release has a published linear-Wasm build, since
-that is what `moonx` downloads.
+dispatch) using the organization's mooncakes token.
+
+It is released in lockstep with the engine: `moonbitlang/openseek_tui@X`
+imports and runs `moonbitlang/openseek@X`. The release PR that bumps the root
+`moon.mod` to `X` also sets this module's `version`, its `moonbitlang/openseek`
+import, `EngineModuleVersion` in `cmd/tui/main.mbt`, and the cram fixtures to
+`X` (a test and a CI step fail until they agree). The workflow checks the
+staged package against the registry, so dispatch it after
+`publish-openseek-protocol` (when the protocol changed) and `publish-openseek`,
+and check that the engine release has a published linear-Wasm build, since that
+is what `moonx` downloads.
 
 ## History
 
