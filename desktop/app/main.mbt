@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.get_env_var("SEEKMOON_ASKPASS") == Some("1") {
+    @ssh.askpass_main()
+    return
+  }
   // A command line this host does not understand is a usage error like any
   // CLI's, and it ends the launch — Proton itself starts the binary with no
   // arguments, so only a person can get here.
@@ -128,7 +132,7 @@ async fn main {
     resources=@host.desktop_resources(resources),
     host_mcp~,
   )
-  let bridge = @extension.DesktopBridgeActor(state)
+  let bridge = @extension.DesktopBridgeActor(state, askpass=Some(executable))
   views.page_attached(payload => bridge.notify_browser_event(payload))
   let relay = @remote.RelayActor(state, announce=device => {
     @xlog.info() <? { "message": "relay registered", "device": device }

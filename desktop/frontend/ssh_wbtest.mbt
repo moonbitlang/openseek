@@ -13,6 +13,7 @@ test "SSH readiness updates the remote host without replacing local state" {
     test_dispatch(),
     Event({
       "host_id": profile.id,
+      "attempt": 1,
       "epoch": 3,
       "event": { "method": "agent.connected", "params": {} },
     }),
@@ -22,12 +23,20 @@ test "SSH readiness updates the remote host without replacing local state" {
     connected.device_state(Remote(profile.id))
     is Some({ bridge: Connected, .. }),
   )
+  let (_, duplicate) = update_ssh(
+    test_dispatch(),
+    Connect(profile.id),
+    connected,
+  )
+  assert_true(duplicate.ssh_ui == connected.ssh_ui)
+  assert_true(duplicate.ssh_online(profile.id))
   assert_eq(connected.focused, Local)
   assert_true(connected.device_state(Local) == local_device)
   let (_, stale) = update_ssh(
     test_dispatch(),
     Event({
       "host_id": profile.id,
+      "attempt": 1,
       "epoch": 2,
       "event": { "disconnected": "old transport" },
     }),
@@ -55,11 +64,16 @@ test "SSH disconnect retains project identity and removes request readiness" {
     bridge: Connected,
     projects: [root],
   })
+  let model = {
+    ..model,
+    ssh_ui: { ..model.ssh_ui, attempts: Map([(profile.id, 1)]), },
+  }
   @interop.set_ssh_epoch(channel, Some(4))
   let (_, offline) = update_ssh(
     test_dispatch(),
     Event({
       "host_id": profile.id,
+      "attempt": 1,
       "epoch": 4,
       "event": { "disconnected": "connection lost" },
     }),
@@ -105,6 +119,7 @@ test "SSH preparation progress can be cancelled and does not revive an offline h
   let (_, connecting) = update_ssh(dispatch, Connect(profile.id), model)
   let event = Event({
     "host_id": profile.id,
+    "attempt": 1,
     "epoch": 1,
     "event": { "stage": "installing" },
   })
@@ -135,6 +150,7 @@ test "SSH onboarding resumes on its host only and cancellation fences late readi
   let (_, saved) = update_ssh(dispatch, Saved(Ok(profile)), opened)
   let event = Event({
     "host_id": profile.id,
+    "attempt": 1,
     "epoch": 9,
     "event": { "method": "agent.connected", "params": {} },
   })
@@ -221,4 +237,248 @@ test "a browse reply arriving during SSH entry is retained for cancellation" {
   let (_, received) = update(dispatch, loaded, opened)
   let (_, closed) = update(dispatch, Ssh(Close), received)
   assert_true(closed.project_picker == expected.project_picker)
+}
+
+///|
+fn auth_test_model(id : String) -> Model {
+  { ..test_model(), is_desktop: true, }.register_ssh({
+    id,
+    command: "ssh demo",
+    server: "openseek-app-server",
+    display_name: None,
+  })
+}
+
+///|
+fn auth_test_event(id : String, attempt : Int32, request_id : Int32) -> SshMsg {
+  Event({
+    "host_id": id,
+    "attempt": attempt,
+    "epoch": attempt,
+    "event": {
+      "authentication": {
+        "request_id": request_id,
+        "kind": "password",
+        "prompt": "demo's password: ",
+        "target": "demo",
+        "retry": false,
+      },
+    },
+  })
+}
+
+///|
+test "SSH authentication deduplicates submit and events and fences a cancelled attempt" {
+  let dispatch = test_dispatch()
+  let (_, model) = update_ssh(
+    dispatch,
+    Details("auth"),
+    auth_test_model("auth"),
+  )
+  let (_, model) = update_ssh(dispatch, Connect("auth"), model)
+  let (_, duplicate) = update_ssh(dispatch, Connect("auth"), model)
+  assert_eq(duplicate.ssh_ui.next_attempt, 1)
+  let (_, model) = update_ssh(
+    dispatch,
+    auth_test_event("auth", 1, 1),
+    duplicate,
+  )
+  let (_, submitted) = update_ssh(dispatch, SubmitAuth, model)
+  assert_true(
+    submitted.ssh_ui.authentication.get("auth")
+    is Some({ submitting: true, .. }),
+  )
+  let (_, duplicate) = update_ssh(dispatch, SubmitAuth, submitted)
+  assert_true(duplicate.ssh_ui == submitted.ssh_ui)
+  let (_, duplicate) = update_ssh(
+    dispatch,
+    auth_test_event("auth", 1, 1),
+    duplicate,
+  )
+  assert_true(duplicate.ssh_ui == submitted.ssh_ui)
+  let (_, consumed) = update_ssh(
+    dispatch,
+    Event({
+      "host_id": "auth",
+      "attempt": 1,
+      "epoch": 1,
+      "event": { "authentication_submitted": 1 },
+    }),
+    duplicate,
+  )
+  let (_, late) = update_ssh(dispatch, auth_test_event("auth", 1, 1), consumed)
+  assert_false(late.ssh_ui.authentication.contains("auth"))
+  let (_, next) = update_ssh(dispatch, auth_test_event("auth", 1, 2), late)
+  assert_true(
+    next.ssh_ui.authentication.get("auth") is Some({ submitting: false, .. }),
+  )
+  let (_, cancelled) = update_ssh(dispatch, Close, next)
+  assert_eq(cancelled.ssh_ui.details, Some("auth"))
+  assert_false(cancelled.ssh_ui.authentication.contains("auth"))
+  let (_, retry) = update_ssh(dispatch, Connect("auth"), cancelled)
+  assert_eq(retry.ssh_ui.next_attempt, 2)
+  let mut current = retry
+  for
+    event in [
+      auth_test_event("auth", 1, 3),
+      Event({
+        "host_id": "auth",
+        "attempt": 1,
+        "epoch": 1,
+        "event": { "method": "agent.connected" },
+      }),
+      Event({
+        "host_id": "auth",
+        "attempt": 1,
+        "epoch": 1,
+        "event": { "disconnected": "old failure" },
+      }),
+      Failed("auth", 1, "old command"),
+    ] {
+    let (_, next) = update_ssh(dispatch, event, current)
+    assert_true(next.ssh_ui == retry.ssh_ui)
+    current = next
+  }
+}
+
+///|
+test "SSH foreground intents retain details or restore workspace on success and cancellation" {
+  let dispatch = test_dispatch()
+  for workspace in [false, true] {
+    let base = auth_test_model("intent")
+    let base = if workspace {
+      { ..base, focused: Remote("intent"), }
+    } else {
+      base
+    }
+    let base = if workspace {
+      base
+    } else {
+      update_ssh(dispatch, Details("intent"), base).1
+    }
+    let (_, connecting) = update_ssh(dispatch, Connect("intent"), base)
+    let (_, waiting) = update_ssh(
+      dispatch,
+      auth_test_event("intent", 1, 1),
+      connecting,
+    )
+    assert_eq(waiting.ssh_ui.details, Some("intent"))
+    let (_, cancelled) = update_ssh(dispatch, Close, waiting)
+    assert_eq(cancelled.focused, base.focused)
+    assert_eq(
+      cancelled.ssh_ui.details,
+      if workspace {
+        None
+      } else {
+        Some("intent")
+      },
+    )
+    assert_true(cancelled.project_picker is None)
+    let (_, ready) = update_ssh(
+      dispatch,
+      Event({
+        "host_id": "intent",
+        "attempt": 1,
+        "epoch": 1,
+        "event": { "method": "agent.connected" },
+      }),
+      waiting,
+    )
+    assert_true(ready.ssh_online("intent"))
+    assert_eq(ready.focused, base.focused)
+    assert_true(ready.project_picker is None)
+    assert_eq(
+      ready.ssh_ui.details,
+      if workspace {
+        None
+      } else {
+        Some("intent")
+      },
+    )
+    @interop.set_ssh_epoch(Remote("intent"), None)
+  }
+}
+
+///|
+test "SSH background challenges retain separate identities without replacing the selected input" {
+  let dispatch = test_dispatch()
+  let base = auth_test_model("front").register_ssh({
+    id: "back",
+    command: "ssh other",
+    server: "openseek-app-server",
+    display_name: None,
+  })
+  let (_, model) = update_ssh(dispatch, Details("front"), base)
+  let (_, model) = update_ssh(dispatch, Connect("front"), model)
+  let (_, model) = update_ssh(dispatch, auth_test_event("front", 1, 1), model)
+  let (_, model) = update_ssh(dispatch, RevealAuth, model)
+  let (_, model) = update_ssh(dispatch, Connect("back"), model)
+  let (_, model) = update_ssh(dispatch, auth_test_event("back", 2, 1), model)
+  assert_eq(model.ssh_ui.details, Some("front"))
+  assert_true(model.ssh_ui.revealed)
+  assert_eq(model.ssh_ui.authentication.length(), 2)
+  assert_true(model.ssh_ui.intents.get("back") is Some(Background))
+  let (_, selected) = update_ssh(dispatch, Details("back"), model)
+  assert_false(selected.ssh_ui.revealed)
+  assert_eq(selected.ssh_ui.details, Some("back"))
+  let (_, submitted) = update_ssh(dispatch, SubmitAuth, model)
+  assert_true(
+    submitted.ssh_ui.authentication.get("front")
+    is Some({ submitting: true, .. }),
+  )
+  assert_true(
+    submitted.ssh_ui.authentication.get("back")
+    is Some({ submitting: false, .. }),
+  )
+  let (_, failed) = update_ssh(
+    dispatch,
+    Event({
+      "host_id": "front",
+      "attempt": 1,
+      "epoch": 1,
+      "event": { "disconnected": "server exited" },
+    }),
+    submitted,
+  )
+  assert_false(failed.ssh_ui.authentication.contains("front"))
+  assert_false(failed.ssh_ui.connecting.contains("front"))
+  assert_true(failed.ssh_ui.authentication.contains("back"))
+}
+
+///|
+test "existing SSH add project restores its picker or details after cancellation and terminal failure" {
+  let dispatch = test_dispatch()
+  for from_picker in [true, false] {
+    let base = auth_test_model("existing")
+    let base = if from_picker {
+      update(dispatch, PickProject(Local), base).1
+    } else {
+      update_ssh(dispatch, Details("existing"), base).1
+    }
+    let (_, connecting) = update_ssh(dispatch, Select(Remote("existing")), base)
+    assert_true(connecting.project_picker is None)
+    let (_, waiting) = update_ssh(
+      dispatch,
+      auth_test_event("existing", 1, 1),
+      connecting,
+    )
+    let (_, cancelled) = update_ssh(dispatch, Close, waiting)
+    assert_true(cancelled.project_picker == base.project_picker)
+    assert_eq(cancelled.ssh_ui.details, base.ssh_ui.details)
+    assert_eq(cancelled.ssh_ui.pick_after_connect, None)
+    let (_, failed) = update_ssh(
+      dispatch,
+      Event({
+        "host_id": "existing",
+        "attempt": 1,
+        "epoch": 1,
+        "event": { "disconnected": "authentication exhausted" },
+      }),
+      waiting,
+    )
+    assert_true(failed.project_picker == base.project_picker)
+    assert_eq(failed.ssh_ui.details, base.ssh_ui.details)
+    assert_eq(failed.ssh_ui.pick_after_connect, None)
+    assert_false(failed.ssh_ui.authentication.contains("existing"))
+  }
 }

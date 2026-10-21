@@ -578,3 +578,13 @@ html.native-titlebar-overlay .app
 .terminal-host-label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--color-text-secondary); }
 
 .ssh-settings-error { padding: 0 20px 16px; }
+
+.ssh-auth { border-top: 1px solid var(--color-border); margin-top: 16px; padding-top: 8px; }
+.ssh-auth-heading { font-size: 12px; color: var(--color-text-secondary); }
+.ssh-auth-prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ssh-secret { display: flex; gap: 8px; align-items: center; }
+.ssh-secret input { min-width: 0; flex: 1; }
+.ssh-auth-keys { text-align: right; font-size: 11px; color: var(--color-text-secondary); margin: 8px 0 0; }
+.ssh-auth .ssh-field { margin: 12px 0 8px; }
+.ssh-auth .ssh-modal-actions { margin-top: 16px; }
+.ssh-auth .ssh-auth-heading { margin: 8px 0 12px; }

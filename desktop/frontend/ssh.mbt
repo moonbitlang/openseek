@@ -1,11 +1,33 @@
 ///|
+priv enum SshIntent {
+  AddProject
+  DetailsReconnect
+  WorkspaceReconnect
+  Background
+} derive(Eq)
+
+///|
+priv struct SshAuthentication {
+  request : @protocol.SshAuthRequest
+  epoch : Int32
+  submitting : Bool
+} derive(Eq)
+
+///|
 priv struct SshUi {
+  next_attempt : Int32
+  attempts : Map[String, Int32]
+  intents : Map[String, SshIntent]
+  authentication : Map[String, SshAuthentication]
+  last_auth : Map[String, Int32]
+  revealed : Bool
   hosts : Array[@protocol.SshProfile]
   command : String
   display_name : String
   editor_open : Bool
   editing : String?
   details : String?
+  return_details : String?
   return_picker : @project_picker.State?
   pick_after_connect : String?
   busy : Bool
@@ -17,12 +39,19 @@ priv struct SshUi {
 ///|
 fn SshUi::empty() -> SshUi {
   {
+    next_attempt: 0,
+    attempts: Map([]),
+    intents: Map([]),
+    authentication: Map([]),
+    last_auth: Map([]),
+    revealed: false,
     hosts: [],
     command: "",
     display_name: "",
     editor_open: false,
     editing: None,
     details: None,
+    return_details: None,
     return_picker: None,
     pick_after_connect: None,
     busy: false,
@@ -46,7 +75,11 @@ priv enum SshMsg {
   Connect(String)
   Disconnect(String)
   Select(@interop.ChannelId)
-  Failed(String, String)
+  Failed(String, Int32, String)
+  SubmitAuth
+  RevealAuth
+  Backdrop
+  AuthFailed(String, Int32, Int32, String)
   Event(Json)
 }
 
@@ -74,23 +107,32 @@ fn ssh_connect(
   dispatch : @cmd.Emit[Msg],
   id : String,
   disconnect~ : Bool = false,
+  attempt~ : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      ignore(
-        @interop.bridge_request(
-          Local,
-          if disconnect {
-            @commands.ssh_disconnect
-          } else {
-            @commands.ssh_connect
-          },
-          { id, },
-        ),
-      ) catch {
+      try {
+        if disconnect {
+          ignore(
+            @interop.bridge_request(Local, @commands.ssh_disconnect, {
+              id,
+              attempt,
+            }),
+          )
+        } else {
+          ignore(
+            @interop.bridge_request(Local, @commands.ssh_connect, {
+              id,
+              attempt,
+            }),
+          )
+        }
+      } catch {
         error =>
           scheduler.add(
-            dispatch(Ssh(Failed(id, @interop.bridge_error_text(error)))),
+            dispatch(
+              Ssh(Failed(id, attempt, @interop.bridge_error_text(error))),
+            ),
           )
       }
     })
@@ -142,9 +184,70 @@ fn update_ssh(
   guard model.is_desktop else { return (@cmd.none, model) }
   let ui = model.ssh_ui
   match msg {
+    Backdrop => {
+      if ssh_visible_host(ui) is Some(id) && ui.connecting.contains(id) {
+        return (
+          ssh_focus(
+            if ui.authentication.get(id) is Some(auth) {
+              if auth.submitting {
+                "ssh-modal-close"
+              } else if auth.request.kind == Confirm {
+                "ssh-auth-continue"
+              } else {
+                "ssh-auth-input"
+              }
+            } else {
+              "ssh-modal-close"
+            },
+          ),
+          model,
+        )
+      }
+      update_ssh(dispatch, Close, model)
+    }
+    RevealAuth =>
+      (@cmd.none, { ..model, ssh_ui: { ..ui, revealed: !ui.revealed, }, })
+    SubmitAuth => {
+      guard ssh_visible_host(ui) is Some(id) &&
+        ui.authentication.get(id) is Some(auth) &&
+        !auth.submitting &&
+        ui.attempts.get(id) is Some(attempt) else {
+        return (@cmd.none, model)
+      }
+      let authentication = ui.authentication.copy()
+      authentication[id] = { ..auth, submitting: true, }
+      let connecting = ui.connecting.copy()
+      connecting[id] = "Authenticating…"
+      (
+        ssh_submit_auth(dispatch, id, attempt, auth),
+        {
+          ..model,
+          ssh_ui: { ..ui, authentication, connecting, revealed: false, },
+        },
+      )
+    }
+    AuthFailed(id, attempt, request_id, message) => {
+      guard ui.attempts.get(id) == Some(attempt) &&
+        ui.authentication.get(id) is Some(auth) &&
+        auth.request.request_id == request_id else {
+        return (@cmd.none, model)
+      }
+      let (cmd, model) = update_ssh(dispatch, Disconnect(id), model)
+      (
+        cmd,
+        {
+          ..model,
+          ssh_ui: {
+            ..model.ssh_ui,
+            error: Some(message),
+            pick_after_connect: ui.pick_after_connect,
+          },
+        },
+      )
+    }
     Open =>
       (
-        ssh_focus("ssh-command"),
+        @cmd.batch([ssh_remember_focus(), ssh_focus("ssh-command")]),
         {
           ..model,
           project_picker: None,
@@ -156,6 +259,7 @@ fn update_ssh(
             command: "",
             display_name: "",
             return_picker: model.project_picker,
+            return_details: None,
             pick_after_connect: None,
             error: None,
           },
@@ -163,7 +267,13 @@ fn update_ssh(
       )
     Close => {
       guard !ui.busy else { return (@cmd.none, model) }
-      let pending = ui.pick_after_connect
+      let pending = ssh_visible_host(ui)
+      if pending is Some(id) &&
+        ui.connecting.contains(id) &&
+        ui.intents.get(id) == Some(DetailsReconnect) {
+        let (cmd, model) = update_ssh(dispatch, Disconnect(id), model)
+        return (@cmd.batch([cmd, ssh_focus("ssh-reconnect")]), model)
+      }
       let next = {
         ..model,
         project_picker: ui.return_picker,
@@ -171,24 +281,39 @@ fn update_ssh(
           ..ui,
           editor_open: false,
           editing: None,
-          details: None,
+          details: ui.return_details,
+          return_details: None,
           return_picker: None,
           pick_after_connect: None,
           error: None,
         },
       }
       match pending {
-        Some(id) if ui.connecting.contains(id) =>
-          update_ssh(dispatch, Disconnect(id), next)
-        _ => (@cmd.none, next)
+        Some(id) if ui.connecting.contains(id) => {
+          let (cmd, model) = update_ssh(dispatch, Disconnect(id), next)
+          (@cmd.batch([cmd, ssh_restore_focus()]), model)
+        }
+        _ => (ssh_restore_focus(), next)
       }
     }
     Details(id) =>
       (
-        ssh_focus("ssh-modal-close"),
+        @cmd.batch([
+          ssh_remember_focus(),
+          if ui.authentication.contains(id) {
+            ssh_reset_auth()
+          } else {
+            ssh_focus("ssh-modal-close")
+          },
+        ]),
         {
           ..model,
-          ssh_ui: { ..ui, details: Some(id), error: ui.host_errors.get(id), },
+          ssh_ui: {
+            ..ui,
+            details: Some(id),
+            error: ui.host_errors.get(id),
+            revealed: false,
+          },
         },
       )
     Rename(id) => {
@@ -215,7 +340,12 @@ fn update_ssh(
       (@cmd.none, { ..model, ssh_ui: { ..ui, command: value, error: None, }, })
     Name(value) =>
       (@cmd.none, { ..model, ssh_ui: { ..ui, display_name: value, }, })
-    Failed(id, message) => {
+    Failed(id, attempt, message) => {
+      guard ui.attempts.get(id) == Some(attempt) else {
+        return (@cmd.none, model)
+      }
+      let authentication = ui.authentication.copy()
+      authentication.remove(id)
       let connecting = ui.connecting.copy()
       connecting.remove(id)
       let host_errors = ui.host_errors.copy()
@@ -227,9 +357,14 @@ fn update_ssh(
           ssh_ui: {
             ..ui,
             busy: false,
-            error: Some(message),
+            error: if ssh_visible_host(ui) == Some(id) {
+              Some(message)
+            } else {
+              ui.error
+            },
             connecting,
             host_errors,
+            authentication,
           },
         },
       )
@@ -305,17 +440,56 @@ fn update_ssh(
       })
     }
     Connect(id) => {
+      guard !ui.connecting.contains(id) && !model.ssh_online(id) else {
+        return (@cmd.none, model)
+      }
+      let last_auth = ui.last_auth.copy()
+      last_auth.remove(id)
+      let attempt = ui.next_attempt + 1
+      let attempts = ui.attempts.copy()
+      attempts[id] = attempt
+      let intents = ui.intents.copy()
+      intents[id] = if ui.pick_after_connect == Some(id) {
+        AddProject
+      } else if ui.details == Some(id) {
+        DetailsReconnect
+      } else if model.focused == Remote(id) {
+        WorkspaceReconnect
+      } else {
+        Background
+      }
       let connecting = ui.connecting.copy()
       connecting[id] = "Connecting…"
       let host_errors = ui.host_errors.copy()
       host_errors.remove(id)
       @interop.set_ssh_epoch(Remote(id), None)
       (
-        ssh_connect(dispatch, id),
-        { ..model, ssh_ui: { ..ui, connecting, host_errors, error: None, }, },
+        @cmd.batch([ssh_remember_focus(), ssh_connect(dispatch, id, attempt~)]),
+        {
+          ..model,
+          ssh_ui: {
+            ..ui,
+            attempts,
+            intents,
+            last_auth,
+            next_attempt: attempt,
+            connecting,
+            host_errors,
+            error: None,
+          },
+        },
       )
     }
     Disconnect(id) => {
+      guard ui.attempts.get(id) is Some(attempt) else {
+        return (@cmd.none, model)
+      }
+      let intents = ui.intents.copy()
+      intents.remove(id)
+      let authentication = ui.authentication.copy()
+      authentication.remove(id)
+      let attempts = ui.attempts.copy()
+      attempts.remove(id)
       let connecting = ui.connecting.copy()
       connecting.remove(id)
       let model = {
@@ -323,6 +497,14 @@ fn update_ssh(
         ssh_ui: {
           ..ui,
           connecting,
+          authentication,
+          attempts,
+          intents,
+          details: if ui.intents.get(id) == Some(WorkspaceReconnect) {
+            None
+          } else {
+            ui.details
+          },
           pick_after_connect: if ui.pick_after_connect == Some(id) {
             None
           } else {
@@ -337,13 +519,23 @@ fn update_ssh(
         BridgeUnavailable("SSH disconnected"),
         model,
       )
-      (@cmd.batch([cmd, ssh_connect(dispatch, id, disconnect=true)]), model)
+      (
+        @cmd.batch([cmd, ssh_connect(dispatch, id, disconnect=true, attempt~)]),
+        model,
+      )
     }
     Select(channel) => {
       if channel is Remote(id) && !model.ssh_online(id) {
         return update_ssh(dispatch, Connect(id), {
           ..model,
-          ssh_ui: { ..ui, pick_after_connect: Some(id), },
+          project_picker: None,
+          ssh_ui: {
+            ..ui,
+            pick_after_connect: Some(id),
+            return_picker: model.project_picker,
+            return_details: ui.details,
+            details: Some(id),
+          },
         })
       }
       let model = {
@@ -352,6 +544,7 @@ fn update_ssh(
           ..ui,
           editor_open: false,
           details: None,
+          return_details: None,
           return_picker: None,
           pick_after_connect: None,
         },
@@ -361,18 +554,75 @@ fn update_ssh(
       (@cmd.batch([cmd, next]), model)
     }
     Event(value) => {
-      guard value
-        is {
-          "host_id": String(id),
-          "epoch": Number(epoch, ..),
-          "event": event,
-          ..
-        } else {
+      let envelope : @protocol.SshEvent = @json.from_json(value) catch {
+        _ => return (@cmd.none, model)
+      }
+      let { host_id: id, attempt, epoch, event, } = envelope
+      guard ui.attempts.get(id) == Some(attempt) else {
         return (@cmd.none, model)
       }
       let channel : @interop.ChannelId = Remote(id)
-      let epoch = epoch.to_int()
-      if event is { "stage": String(stage), .. } && ui.connecting.contains(id) {
+      if event is { "authentication": value, .. } && ui.connecting.contains(id) {
+        let request : @protocol.SshAuthRequest = @json.from_json(value) catch {
+          _ => return (@cmd.none, model)
+        }
+        if ui.last_auth.get(id) is Some(last) && last >= request.request_id {
+          return (@cmd.none, model)
+        }
+        let last_auth = ui.last_auth.copy()
+        last_auth[id] = request.request_id
+        let authentication = ui.authentication.copy()
+        authentication[id] = { request, epoch, submitting: false, }
+        let connecting = ui.connecting.copy()
+        connecting[id] = "Authentication required"
+        let visible = ssh_visible_host(ui) == Some(id)
+        let open = !ui.editor_open &&
+          ui.details is None &&
+          ui.intents.get(id) == Some(WorkspaceReconnect)
+        return (
+          if visible || open {
+            ssh_reset_auth()
+          } else {
+            @cmd.none
+          },
+          {
+            ..model,
+            ssh_ui: {
+              ..ui,
+              authentication,
+              last_auth,
+              connecting,
+              revealed: if visible || open {
+                false
+              } else {
+                ui.revealed
+              },
+              details: if open {
+                Some(id)
+              } else {
+                ui.details
+              },
+            },
+          },
+        )
+      }
+      if event is { "authentication_submitted": Number(request_id, ..), .. } {
+        guard ui.authentication.get(id) is Some(auth) &&
+          auth.request.request_id == request_id.to_int() else {
+          return (@cmd.none, model)
+        }
+        let authentication = ui.authentication.copy()
+        authentication.remove(id)
+        let connecting = ui.connecting.copy()
+        connecting[id] = "Connecting…"
+        return (
+          @cmd.none,
+          { ..model, ssh_ui: { ..ui, authentication, connecting, }, },
+        )
+      }
+      if event is { "stage": String(stage), .. } &&
+        ui.connecting.contains(id) &&
+        !ui.authentication.contains(id) {
         let connecting = ui.connecting.copy()
         connecting[id] = match stage {
           "downloading" => "Downloading OpenSeek…"
@@ -395,15 +645,39 @@ fn update_ssh(
         @interop.set_ssh_epoch(channel, Some(epoch))
         let connecting = ui.connecting.copy()
         connecting.remove(id)
+        let authentication = ui.authentication.copy()
+        authentication.remove(id)
+        let intents = ui.intents.copy()
+        intents.remove(id)
         let (ready, model) = update_device_msg(dispatch, channel, BridgeReady, {
           ..model,
-          ssh_ui: { ..ui, connecting, },
+          ssh_ui: {
+            ..ui,
+            connecting,
+            authentication,
+            intents,
+            details: if ui.intents.get(id) == Some(WorkspaceReconnect) {
+              None
+            } else {
+              ui.details
+            },
+          },
         })
         if ui.pick_after_connect == Some(id) {
           let (pick, model) = update_ssh(dispatch, Select(channel), model)
           return (@cmd.batch([ready, pick]), model)
         }
-        return (ready, model)
+        return (
+          @cmd.batch([
+            ready,
+            if ui.intents.get(id) == Some(WorkspaceReconnect) {
+              ssh_restore_focus()
+            } else {
+              @cmd.none
+            },
+          ]),
+          model,
+        )
       }
       if event is { "disconnected": String(message), .. } {
         if @interop.current_ssh_epoch(channel) is Some(current) &&
@@ -421,11 +695,60 @@ fn update_ssh(
         )
         let host_errors = ui.host_errors.copy()
         host_errors[id] = message
+        let authentication = ui.authentication.copy()
+        authentication.remove(id)
+        let return_to_entry = !ui.editor_open &&
+          ui.connecting.contains(id) &&
+          ui.intents.get(id) == Some(AddProject)
         return (
-          cmd,
+          @cmd.batch([
+            cmd,
+            if ui.intents.get(id) == Some(WorkspaceReconnect) {
+              ssh_restore_focus()
+            } else {
+              @cmd.none
+            },
+          ]),
           {
             ..model,
-            ssh_ui: { ..ui, connecting, host_errors, error: Some(message), },
+            project_picker: if return_to_entry {
+              ui.return_picker
+            } else {
+              model.project_picker
+            },
+            ssh_ui: {
+              ..ui,
+              connecting,
+              authentication,
+              host_errors,
+              pick_after_connect: if return_to_entry {
+                None
+              } else {
+                ui.pick_after_connect
+              },
+              return_picker: if return_to_entry {
+                None
+              } else {
+                ui.return_picker
+              },
+              return_details: if return_to_entry {
+                None
+              } else {
+                ui.return_details
+              },
+              error: if ssh_visible_host(ui) == Some(id) {
+                Some(message)
+              } else {
+                ui.error
+              },
+              details: if return_to_entry {
+                ui.return_details
+              } else if ui.intents.get(id) == Some(WorkspaceReconnect) {
+                None
+              } else {
+                ui.details
+              },
+            },
           },
         )
       }
@@ -499,11 +822,25 @@ fn ssh_connection_button(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   id : String,
+  in_modal~ : Bool = false,
 ) -> @html.Html {
   let connecting = model.ssh_ui.connecting.contains(id)
   let online = model.ssh_online(id)
+  if model.ssh_ui.authentication.contains(id) &&
+    ssh_visible_host(model.ssh_ui) != Some(id) {
+    return @html.button(
+      class="button primary",
+      on_click=dispatch(Ssh(Details(id))),
+      "Enter password",
+    )
+  }
   @html.button(
     class="button secondary",
+    attrs=if in_modal {
+      @html.Attrs::build().id("ssh-reconnect")
+    } else {
+      @html.Attrs::build()
+    },
     on_click=dispatch(
       Ssh(if online || connecting { Disconnect(id) } else { Connect(id) }),
     ),
@@ -534,12 +871,20 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           ssh_status(model, host.id),
         ]),
         @html.div(class="ssh-host-actions", [
-          @html.button(
-            class="button secondary",
-            disabled=model.ssh_ui.connecting.contains(host.id),
-            on_click=dispatch(Ssh(Select(Remote(host.id)))),
-            "Add project",
-          ),
+          if model.ssh_ui.authentication.contains(host.id) {
+            @html.button(
+              class="button primary",
+              on_click=dispatch(Ssh(Details(host.id))),
+              "Enter password",
+            )
+          } else {
+            @html.button(
+              class="button secondary",
+              disabled=model.ssh_ui.connecting.contains(host.id),
+              on_click=dispatch(Ssh(Select(Remote(host.id)))),
+              "Add project",
+            )
+          },
           @html.button(
             class="ssh-more",
             title="Connection details",
@@ -563,10 +908,12 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   rows.push(
     @html.div(class="ssh-settings-footer", [
-      @html.button(class="button secondary", on_click=dispatch(Ssh(Open)), [
-        @icons.icon(@icons.icon_add),
-        @html.span("Add SSH host"),
-      ]),
+      @html.button(
+        id="ssh-settings-add-host",
+        class="button secondary",
+        on_click=dispatch(Ssh(Open)),
+        [@icons.icon(@icons.icon_add), @html.span("Add SSH host")],
+      ),
       @html.span("Connections stay on this computer."),
     ]),
   )
@@ -603,6 +950,7 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         } else {
           "ssh-location"
         },
+        id="ssh-location-\{host.id}",
         title=host.connection_label(),
         disabled=model.ssh_ui.connecting.contains(host.id),
         on_click=dispatch(Ssh(Select(Remote(host.id)))),
@@ -621,10 +969,12 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   choices.push(
-    @html.button(class="ssh-location add", on_click=dispatch(Ssh(Open)), [
-      @icons.icon(@icons.icon_add),
-      @html.span("Add SSH host"),
-    ]),
+    @html.button(
+      id="ssh-add-host",
+      class="ssh-location add",
+      on_click=dispatch(Ssh(Open)),
+      [@icons.icon(@icons.icon_add), @html.span("Add SSH host")],
+    ),
   )
   if model.ssh_ui.error is Some(error) {
     choices.push(
@@ -725,11 +1075,11 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       content.push(
         @html.p(
           class="ssh-help",
-          "Uses your SSH keys or agent and trusted hosts. OpenSeek is prepared automatically on the remote host.",
+          "Uses your SSH configuration. You will be prompted if authentication is required.",
         ),
       )
     }
-    if pending is Some(id) {
+    if pending is Some(id) && !ui.authentication.contains(id) {
       content.push(ssh_status(model, id))
     }
     if ui.error is Some(error) {
@@ -741,43 +1091,47 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
       )
     }
-    content.push(
-      @html.div(class="ssh-modal-actions", [
-        @html.button(
-          class="button secondary",
-          disabled=ui.busy,
-          on_click=dispatch(Ssh(Close)),
-          if connecting {
-            "Cancel connection"
-          } else {
-            "Cancel"
-          },
-        ),
-        @html.button(
-          class="button primary",
-          disabled=ui.busy || connecting || ui.command.trim().is_empty(),
-          on_click=dispatch(
-            Ssh(
-              match pending {
-                Some(id) => Connect(id)
-                None => Save
-              },
-            ),
+    if pending is Some(id) && ui.authentication.get(id) is Some(auth) {
+      content.push(ssh_auth_region(dispatch, ui, auth))
+    } else {
+      content.push(
+        @html.div(class="ssh-modal-actions", [
+          @html.button(
+            class="button secondary",
+            disabled=ui.busy,
+            on_click=dispatch(Ssh(Close)),
+            if connecting {
+              "Cancel connection"
+            } else {
+              "Cancel"
+            },
           ),
-          if ui.busy {
-            "Saving…"
-          } else if connecting {
-            "Connecting…"
-          } else if pending is Some(_) {
-            "Retry connection"
-          } else if editing {
-            "Save name"
-          } else {
-            "Add and connect"
-          },
-        ),
-      ]),
-    )
+          @html.button(
+            class="button primary",
+            disabled=ui.busy || connecting || ui.command.trim().is_empty(),
+            on_click=dispatch(
+              Ssh(
+                match pending {
+                  Some(id) => Connect(id)
+                  None => Save
+                },
+              ),
+            ),
+            if ui.busy {
+              "Saving…"
+            } else if connecting {
+              "Connecting…"
+            } else if pending is Some(_) {
+              "Retry connection"
+            } else if editing {
+              "Save name"
+            } else {
+              "Add and connect"
+            },
+          ),
+        ]),
+      )
+    }
   } else if ui.details is Some(id) &&
     ui.hosts.iter().find_first(p => p.id == id) is Some(host) {
     title = host.display_label()
@@ -787,7 +1141,9 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.span(host.connection_label()),
       ]),
     )
-    content.push(ssh_status(model, id))
+    if !ui.authentication.contains(id) {
+      content.push(ssh_status(model, id))
+    }
     content.push(
       @html.details(class="ssh-command-details", [
         @html.summary("Connection details"),
@@ -804,26 +1160,36 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
       )
     }
-    content.push(
-      @html.div(class="ssh-modal-actions", [
-        @html.button(
-          class="button secondary",
-          on_click=dispatch(Ssh(Rename(id))),
-          "Rename",
-        ),
-        ssh_connection_button(dispatch, model, id),
-        @html.button(
-          class="button primary",
-          disabled=ui.connecting.contains(id),
-          on_click=dispatch(Ssh(Select(Remote(id)))),
-          "Add project",
-        ),
-      ]),
-    )
+    if ui.authentication.get(id) is Some(auth) {
+      content.push(ssh_auth_region(dispatch, ui, auth))
+    } else if ui.connecting.contains(id) {
+      content.push(
+        @html.div(class="ssh-modal-actions", [
+          ssh_connection_button(dispatch, model, id, in_modal=true),
+        ]),
+      )
+    } else {
+      content.push(
+        @html.div(class="ssh-modal-actions", [
+          @html.button(
+            class="button secondary",
+            on_click=dispatch(Ssh(Rename(id))),
+            "Rename",
+          ),
+          ssh_connection_button(dispatch, model, id, in_modal=true),
+          @html.button(
+            class="button primary",
+            disabled=ui.connecting.contains(id),
+            on_click=dispatch(Ssh(Select(Remote(id)))),
+            "Add project",
+          ),
+        ]),
+      )
+    }
   }
   @html.div(
     class="modal-backdrop ssh-backdrop",
-    on_click=dispatch(Ssh(Close)),
+    on_click=dispatch(Ssh(Backdrop)),
     [
       @html.div(
         class="modal ssh-modal",
@@ -841,6 +1207,13 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               event.prevent_default()
               event.stop_propagation()
               dispatch(Ssh(Close))
+            } else if event.key() == "Enter" &&
+              ssh_auth_enter_target() &&
+              ssh_visible_host(ui) is Some(id) &&
+              ui.authentication.contains(id) {
+              event.prevent_default()
+              event.stop_propagation()
+              dispatch(Ssh(SubmitAuth))
             } else {
               ssh_modal_tab(event)
               @cmd.none
@@ -923,3 +1296,220 @@ fn ssh_modal_tab(event : @dom.KeyboardEvent) -> Unit {
     el.focus()
   }
 }
+
+///|
+fn ssh_visible_host(ui : SshUi) -> String? {
+  if ui.editor_open {
+    ui.pick_after_connect
+  } else {
+    ui.details
+  }
+}
+
+///|
+/// Secret input lives only in the DOM and the single local command. It never
+/// enters the model, message history, profile store, or renderer snapshots.
+extern "js" fn ssh_take_secret() -> String =
+  #|() => { const input = document.getElementById('ssh-auth-input'); if (!input) return ''; const value = input.value; input.value = ''; return value; }
+
+///|
+extern "js" fn ssh_reset_secret() -> Unit =
+  #|() => { const input = document.getElementById('ssh-auth-input'); if (input) { input.value = ''; input.type = 'password'; input.focus(); } else { document.getElementById('ssh-auth-continue')?.focus(); } }
+
+///|
+fn ssh_reset_auth() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => ssh_reset_secret(), kind=@cmd.after_render)
+}
+
+///|
+fn ssh_submit_auth(
+  dispatch : @cmd.Emit[Msg],
+  id : String,
+  attempt : Int32,
+  auth : SshAuthentication,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    let answer : @protocol.SshAuthAnswer = if auth.request.kind == Confirm {
+      Accept
+    } else {
+      Value(ssh_take_secret())
+    }
+    @js.Promise::from_async(() => {
+      let response : @protocol.SshAuthResponse = {
+        host_id: id,
+        attempt,
+        epoch: auth.epoch,
+        request_id: auth.request.request_id,
+        answer,
+      }
+      let error = try {
+        match
+          @interop.bridge_request(Local, @commands.ssh_auth_respond, response) {
+          SshSuccess(_) => None
+          SshUnsent(message) | SshRefused(message) | SshUnknown(message) =>
+            Some(message)
+        }
+      } catch {
+        error => Some(@interop.bridge_error_text(error))
+      }
+      if error is Some(message) {
+        scheduler.add(
+          dispatch(
+            Ssh(AuthFailed(id, attempt, auth.request.request_id, message)),
+          ),
+        )
+      }
+    })
+    |> ignore
+  })
+}
+
+///|
+fn ssh_auth_region(
+  dispatch : @cmd.Emit[Msg],
+  ui : SshUi,
+  auth : SshAuthentication,
+) -> @html.Html {
+  let request = auth.request
+  let confirm = request.kind == Confirm
+  let label = match (request.kind, request.target) {
+    (Password, Some(target)) => "Password for " + target
+    (Passphrase, Some(target)) => "Passphrase for " + target
+    _ => request.prompt
+  }
+  @html.div(
+    class="ssh-auth",
+    [
+      @html.p(
+        class="ssh-auth-heading",
+        attrs=@html.Attrs::build().role("status"),
+        if auth.submitting {
+          "Authenticating…"
+        } else if confirm {
+          "Confirm host identity"
+        } else {
+          "Authentication required"
+        },
+      ),
+      ..if request.retry {
+        [
+          @html.p(
+            class="ssh-error",
+            attrs=@html.Attrs::build().role("alert"),
+            "Authentication failed. Enter your password again.",
+          ),
+        ]
+      } else {
+        []
+      },
+      ..if confirm {
+        [@html.p(class="ssh-auth-prompt", request.prompt)]
+      } else {
+        [
+          @html.node(
+            "label",
+            @html.Attrs::build().class("ssh-field").for_("ssh-auth-input"),
+            [
+              @html.span(class="ssh-auth-prompt", label),
+              @html.div(class="ssh-secret", [
+                @html.input(
+                  input_type=if ui.revealed { Text } else { Password },
+                  auto_complete=Off,
+                  attrs=@html.Attrs::build()
+                    .id("ssh-auth-input")
+                    .aria_label(label)
+                    .data_set("focus-owner", "")
+                    .disabled(auth.submitting),
+                ),
+                @html.button(
+                  class="button secondary",
+                  disabled=auth.submitting,
+                  attrs=@html.Attrs::build()
+                    .aria_label(
+                      if ui.revealed {
+                        "Hide password"
+                      } else {
+                        "Show password"
+                      },
+                    )
+                    .aria_pressed(if ui.revealed { "true" } else { "false" }),
+                  on_click=dispatch(Ssh(RevealAuth)),
+                  if ui.revealed {
+                    "Hide"
+                  } else {
+                    "Show"
+                  },
+                ),
+              ]),
+            ],
+          ),
+          @html.p(class="ssh-help", "Used for this connection only. Not saved."),
+        ]
+      },
+      @html.div(class="ssh-modal-actions", [
+        @html.button(
+          class="button secondary",
+          on_click=dispatch(Ssh(Close)),
+          "Cancel connection",
+        ),
+        @html.button(
+          class="button primary",
+          disabled=auth.submitting,
+          attrs=@html.Attrs::build().id("ssh-auth-continue"),
+          on_click=dispatch(Ssh(SubmitAuth)),
+          if auth.submitting {
+            "Authenticating…"
+          } else if confirm {
+            "Accept"
+          } else if request.retry {
+            "Try again"
+          } else {
+            "Continue"
+          },
+        ),
+      ]),
+      @html.p(class="ssh-auth-keys", "Enter to continue · Esc to cancel"),
+    ],
+  )
+}
+
+///|
+let ssh_focus_origin : Ref[@dom.HTMLElement?] = Ref(None)
+
+///|
+fn ssh_remember_focus() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    if @dom.document().get_active_element() is Some(element) &&
+      element.closest(".ssh-modal") is None {
+      ssh_focus_origin.val = element.to_html_element()
+    }
+  })
+}
+
+///|
+fn ssh_restore_focus() -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      if ssh_focus_origin.val is Some(element) && element.get_is_connected() {
+        element.focus()
+      } else if ssh_focus_origin.val is Some(previous) &&
+        previous.get_attribute("id") is Some(id) &&
+        @dom.document().get_element_by_id(id).to_option() is Some(element) &&
+        element.to_html_element() is Some(element) {
+        element.focus()
+      } else if @dom.document()
+        .query_selector(".ssh-context button, .picker-close, .sidebar button")
+        .to_option()
+        is Some(element) &&
+        element.to_html_element() is Some(element) {
+        element.focus()
+      }
+      ssh_focus_origin.val = None
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
+extern "js" fn ssh_auth_enter_target() -> Bool =
+  #|() => ['ssh-auth-input', 'ssh-auth-continue'].includes(document.activeElement?.id)

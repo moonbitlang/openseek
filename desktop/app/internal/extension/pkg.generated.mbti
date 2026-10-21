@@ -35,7 +35,7 @@ pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit
 pub async fn[T] BrowserViews::with_cdp(Self, Int32, async (@cdp.Connection) -> T) -> T
 
 type DesktopBridgeActor
-pub fn DesktopBridgeActor::DesktopBridgeActor(@api.ApiState) -> Self
+pub fn DesktopBridgeActor::DesktopBridgeActor(@api.ApiState, askpass? : String?) -> Self
 pub async fn DesktopBridgeActor::notify_browser_event(Self, Json) -> Unit
 pub async fn DesktopBridgeActor::notify_system_appearance_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::notify_window_chrome_changed(Self) -> Unit

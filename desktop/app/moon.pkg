@@ -1,5 +1,6 @@
 import {
   "moonbitlang/async",
+  "openseek_desktop/backend/ssh",
   "moonbit-community/proton",
   "moonbit-community/proton_ext/notification",
   "openseek_desktop/backend/api",

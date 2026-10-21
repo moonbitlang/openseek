@@ -233,8 +233,8 @@ priv enum BridgeControl {
   WindowClosed
   WindowChromeChanged
   SystemAppearanceChanged
-  SshConnect(@protocol.SshProfile)
-  SshDisconnect(String)
+  SshConnect(@protocol.SshConnect)
+  SshDisconnect(@protocol.SshConnect)
 }
 
 ///|
@@ -342,6 +342,7 @@ const BridgeInboxCapacity = 4096
 /// it messages and never retain resource-owning request tasks.
 struct DesktopBridgeActor {
   state : @api.ApiState
+  askpass : String?
   routes : Map[String, @ssh.Connection]
   // The desktop page owns one filesystem watcher independently of every
   // remote WebSocket connection.
@@ -354,9 +355,11 @@ struct DesktopBridgeActor {
 ///|
 pub fn DesktopBridgeActor::DesktopBridgeActor(
   state : @api.ApiState,
+  askpass~ : String? = None,
 ) -> DesktopBridgeActor {
   {
     state,
+    askpass,
     routes: Map([]),
     host_connection: HostConnection(),
     inbox: Queue(kind=Blocking(BridgeInboxCapacity)),
@@ -428,16 +431,17 @@ pub fn openseek_capability(
       }
     }),
     WindowEndpoint(@commands.ssh_connect, (_, target) => {
-      let profiles = @ssh.profiles()
-      guard profiles.hosts.iter().find_first(p => p.id == target.id)
-        is Some(profile) else {
-        raise @ssh.SshError("Unknown SSH host")
-      }
-      bridge.inbox.put(Control(SshConnect(profile)))
+      bridge.inbox.put(Control(SshConnect(target)))
       Acknowledged
     }),
+    WindowEndpoint(@commands.ssh_auth_respond, (_, response) => {
+      match bridge.routes.get(response.host_id) {
+        Some(route) => route.respond(response)
+        None => SshUnsent("SSH authentication request has expired")
+      }
+    }),
     WindowEndpoint(@commands.ssh_disconnect, (_, target) => {
-      bridge.inbox.put(Control(SshDisconnect(target.id)))
+      bridge.inbox.put(Control(SshDisconnect(target)))
       Acknowledged
     }),
     WindowEndpoint(@commands.host_open_path_preview, (_, payload) => {
@@ -569,15 +573,53 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
       match self.inbox.get() {
         Control(control) =>
           match control {
-            SshConnect(profile) => {
+            SshConnect(request) => {
+              let attempt = request.attempt
+              if self.routes.get(request.id) is Some(route) && route.active() {
+                continue
+              }
+              // Profile I/O belongs to the actor: cancellation must not overtake
+              // a connect command that is still reading its configuration.
+              epoch += 1
+              let profile = try {
+                let profiles = @ssh.profiles()
+                guard profiles.hosts.iter().find_first(p => p.id == request.id)
+                  is Some(profile) else {
+                  raise @ssh.SshError("Unknown SSH host")
+                }
+                profile
+              } catch {
+                error => {
+                  deliver_to_page(
+                    connected,
+                    target,
+                    pending,
+                    Ssh(
+                      @protocol.SshEvent::{
+                        host_id: request.id,
+                        epoch,
+                        attempt,
+                        event: {
+                          "disconnected": "SSH connection failed: \{error}",
+                        },
+                      }.to_json(),
+                    ),
+                  )
+                  continue
+                }
+              }
               if tasks.get(profile.id) is Some(task) {
                 task.cancel()
               }
               if self.routes.get(profile.id) is Some(route) {
                 route.close()
               }
-              epoch += 1
-              let route = @ssh.Connection(profile, epoch)
+              let route = @ssh.Connection(
+                profile,
+                epoch,
+                attempt~,
+                askpass=self.askpass,
+              )
               self.routes[profile.id] = route
               tasks[profile.id] = group.spawn(allow_failure=true, () => {
                 route.run(
@@ -587,11 +629,14 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
                   event => {
                     guard (self.inbox.try_put(
                       Deliver(
-                        Ssh({
-                          "host_id": profile.id,
-                          "epoch": route.epoch,
-                          "event": event,
-                        }),
+                        Ssh(
+                          @protocol.SshEvent::{
+                            host_id: profile.id,
+                            epoch: route.epoch,
+                            attempt: route.attempt,
+                            event,
+                          }.to_json(),
+                        ),
                       ),
                     ) catch {
                       _ => false
@@ -602,16 +647,7 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
                 )
               })
             }
-            SshDisconnect(id) => {
-              if self.routes.get(id) is Some(route) {
-                route.close()
-              }
-              if tasks.get(id) is Some(task) {
-                task.cancel()
-              }
-              self.routes.remove(id)
-              tasks.remove(id)
-            }
+            SshDisconnect(request) => self.disconnect_ssh(request, tasks)
             PageConnected(context, reply) => {
               for route in self.routes.values() {
                 route.close()

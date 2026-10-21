@@ -7,7 +7,8 @@ renderer -> native client -> local loopback TCP/WebSocket
          -> ssh -N -L -> remote loopback TCP/WebSocket -> openseek-app-server
 ```
 
-`ssh` authenticates using the user's key/agent and known-hosts configuration.
+`ssh` uses the user's SSH configuration and agent, and requests interactive
+authentication in the existing desktop dialog when needed.
 A separate bootstrap SSH command starts `openseek-app-server` and reads its
 loopback port and process instance ID. Bootstrap stdout is not an RPC transport.
 The WebSocket initialize response must name the discovered instance. The server
@@ -45,12 +46,14 @@ moon build . desktop/backend/server --target native --release
 Use **Add project → Add SSH host**, or **Settings → SSH hosts → Add SSH host**. Enter
 `ssh user@host`, `ssh alias`, or a command with `-p`, `-i`, `-J`, `-l`, or `-F`.
 The parser preserves quoted arguments and never evaluates the input as a local
-shell command. Put additional connection settings in SSH config. Password and
-host-key prompts must first be completed in a terminal; batch-mode failures are
-shown in the UI. Profiles with an explicit `openseek-app-server` path
+shell command. Put additional connection settings in SSH config. Passwords,
+private-key passphrases, and keyboard-interactive challenges appear only when
+OpenSSH requests them. First-use host trust is a separate confirmation showing
+OpenSSH's fingerprint and prompt. Changed host keys fail normally; the app uses
+`StrictHostKeyChecking=ask`, never automatic trust. Profiles with an explicit `openseek-app-server` path
 use that path without automatic preparation; new profiles need only an SSH command.
 
-After connecting, the remote folder picker opens automatically. Browse to a
+After connecting to add a project, the remote folder picker opens. Browse to a
 remote directory and add it. Cancelling host creation returns to the previous
 folder selection. Saved hosts can also connect through **Add project**.
 
@@ -119,3 +122,57 @@ with a same-filesystem test sshd it exercises the full `ssh -L` chain. It checks
 chat/history, file notifications, PTY output/exit, Git, MoonBit hover and process
 shutdown. The packaged desktop is the acceptance host for native profile,
 connection, picker and renderer routing.
+
+## Interactive authentication
+
+The host re-executes its **own signed executable** as `SSH_ASKPASS`, with
+`SSH_ASKPASS_REQUIRE=force`. The helper entry in `desktop/app/main.mbt` runs
+before CLI parsing, logging, login-shell probing, or Proton/window startup.
+There is no separate helper artifact or runtime interpreter dependency. The
+transport and helper implementation live in `backend/ssh/auth.mbt`, independent
+of Proton. The host supplies the executable path to `Connection`.
+
+Each connection owns a loopback IPC listener and a random capability token.
+Only its SSH children receive the address/token environment. The helper sends
+OpenSSH's actual prompt and waits for one tagged response; only its stdout
+returns the answer to OpenSSH. Bootstrap stdin/stdout remain exclusively owned
+by the existing lifetime/endpoint protocol. Both bootstrap and forwarding SSH
+use this channel; neither caches a password or reuses a verification code.
+
+`ssh.connect` carries a frontend attempt identity; native events add the native
+epoch. `ssh.auth.respond` is always a Local command and checks host, attempt,
+epoch, request identity and answer kind. Duplicate connects reuse an active
+native connection, duplicate submissions are rejected, and cancellation,
+window closure, reload and SSH exit retire pending helpers and waiters.
+Requests from different hosts are retained separately. Background challenges
+show **Authentication required / Enter password** without opening a dialog or
+stealing focus; this feature does not add a reconnect scheduler.
+
+Input is kept in the current DOM field rather than the frontend model or
+message history, cleared on submission, and discarded when the field closes.
+Its stable position in the shell preserves the input node during responsive
+layout and toast changes without copying the secret into a render snapshot.
+The only answer copies are in the transient command, IPC and OpenSSH handoff;
+there is no credential store and no promise of physical memory zeroization.
+No secret is put in argv, environment variables, profile files, or application
+logs. The UI permits empty input as distinct from Cancel. Only an explicit
+OpenSSH password-rejection message marks the next password challenge as a
+retry; another process, key or verification challenge is not called a failure.
+
+Cancel, Escape and the close button terminate an in-progress connection.
+Clicking the backdrop or changing application focus preserves it. A details
+reconnect stays in details on success/cancellation; a workspace reconnect
+returns to that workspace. Project and conversation identity are retained, but
+remote processes and PTYs still belong to the connection and are not resumed.
+
+Bootstrap and forwarding each have a 20-minute upper bound including user
+input, with an explicit timeout error. Forwarding additionally limits socket
+readiness to 15 seconds **outside** an active input request, followed by a
+15-second WebSocket handshake bound. SSH server timeouts can end an attempt
+sooner. Process exit clears the input and exposes a fresh connection retry.
+
+The helper mode requires an OpenSSH client supporting `SSH_ASKPASS_REQUIRE`
+([OpenSSH 8.4](https://www.openssh.org/txt/release-8.4) or later). The packaged macOS application is the acceptance host;
+Linux and Windows execution must be validated on those platforms before
+claiming equivalent interactive-authentication support. See the implementation
+plan for the acceptance matrix and recorded results.

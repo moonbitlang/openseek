@@ -9,17 +9,22 @@ pub let ssh_save : Command[@protocol.SshProfile, @protocol.SshReply] = Command(
 )
 
 ///|
-pub let ssh_connect : Command[@protocol.SshProfileTarget, @protocol.EmptyReply] = Command(
+pub let ssh_connect : Command[@protocol.SshConnect, @protocol.EmptyReply] = Command(
   "ssh.connect",
 )
 
 ///|
-pub let ssh_disconnect : Command[
-  @protocol.SshProfileTarget,
-  @protocol.EmptyReply,
-] = Command("ssh.disconnect")
+pub let ssh_disconnect : Command[@protocol.SshConnect, @protocol.EmptyReply] = Command(
+  "ssh.disconnect",
+)
 
 ///|
 pub let ssh_request : Command[@protocol.SshRequest, @protocol.SshReply] = Command(
   "ssh.request",
 )
+
+///|
+pub let ssh_auth_respond : Command[
+  @protocol.SshAuthResponse,
+  @protocol.SshReply,
+] = Command("ssh.auth.respond")

@@ -45,3 +45,101 @@ test "SSH profiles without display names still load and renamed profiles round t
   assert_true(@json.from_json(renamed.to_json()) == renamed)
   assert_true(@json.from_json(old.to_json()) == old)
 }
+
+///|
+test "SSH authentication codecs distinguish empty input confirmation cancellation and malformed payloads" {
+  let base : Json = {
+    "host_id": "host",
+    "attempt": 2,
+    "epoch": 3,
+    "request_id": 4,
+    "answer": { "action": "value", "value": "" },
+  }
+  let decoded : @protocol.SshAuthResponse = @json.from_json(base)
+  assert_true(decoded.answer is Value(""))
+  assert_true(decoded.to_json() == base)
+  for action in ["accept", "cancel"] {
+    let answer : @protocol.SshAuthAnswer = @json.from_json({
+      "action": action,
+      "extension": true,
+    })
+    assert_true(answer.to_json() == { "action": action })
+  }
+  let request : @protocol.SshAuthRequest = @json.from_json({
+    "request_id": 1,
+    "kind": "challenge",
+    "prompt": "OTP:",
+    "target": null,
+    "retry": false,
+    "extension": true,
+  })
+  assert_eq(request.target, None)
+  assert_true(
+    request.to_json() ==
+    { "request_id": 1, "kind": "challenge", "prompt": "OTP:", "retry": false },
+  )
+  for
+    invalid in (
+      [
+        { "action": "value" },
+        { "action": "value", "value": null },
+        { "action": "value", "value": 1 },
+        { "action": "unknown" },
+        {},
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.SshAuthAnswer = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+  for
+    invalid in (
+      [
+        { "request_id": 1, "kind": "unknown", "prompt": "p", "retry": false },
+        {
+          "request_id": 1,
+          "kind": "password",
+          "prompt": "p",
+          "retry": false,
+          "target": 1,
+        },
+        { "request_id": 1, "kind": "password", "prompt": "p" },
+        { "request_id": 1, "kind": "password", "prompt": null, "retry": false },
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.SshAuthRequest = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+  for
+    invalid in (
+      [
+        {
+          "host_id": "host",
+          "epoch": 3,
+          "request_id": 4,
+          "answer": { "action": "cancel" },
+        },
+        {
+          "host_id": "host",
+          "attempt": "2",
+          "epoch": 3,
+          "request_id": 4,
+          "answer": { "action": "cancel" },
+        },
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.SshAuthResponse = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+}

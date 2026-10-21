@@ -11,8 +11,8 @@ pub fn arguments(command : String) -> Array[String] raise {
   }
   [
     "-T", "-oControlMaster=no", "-oControlPath=none", "-oRemoteCommand=none", "-oRequestTTY=no",
-    "-oBatchMode=yes", "-oConnectTimeout=15", "-oServerAliveInterval=15", "-oServerAliveCountMax=2",
-    ..options,
+    "-oBatchMode=no", "-oStrictHostKeyChecking=ask", "-oConnectTimeout=15", "-oServerAliveInterval=15",
+    "-oServerAliveCountMax=2", ..options,
   ]
 }
 

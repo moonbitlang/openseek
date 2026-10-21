@@ -168,3 +168,219 @@ pub extend SshProfile with FromJson::{from_json}
 
 ///|
 pub extend SshProfile with ToJson::{to_json}
+
+///|
+pub(all) struct SshConnect {
+  id : String
+  attempt : Int32
+}
+
+///|
+pub impl FromJson for SshConnect with fn from_json(json, path) {
+  let o = JsonObject::decode(json, path, "SSH connection attempt")
+  { id: o.required_string("id"), attempt: o.required_int("attempt"), }
+}
+
+///|
+pub impl ToJson for SshConnect with fn to_json(self) {
+  { "id": self.id, "attempt": self.attempt }
+}
+
+///|
+pub(all) enum SshAuthKind {
+  Password
+  Passphrase
+  Challenge
+  Confirm
+} derive(Eq)
+
+///|
+pub impl ToJson for SshAuthKind with fn to_json(self) {
+  Json(
+    match self {
+      Password => "password"
+      Passphrase => "passphrase"
+      Challenge => "challenge"
+      Confirm => "confirm"
+    },
+  )
+}
+
+///|
+pub impl FromJson for SshAuthKind with fn from_json(json, path) {
+  match json {
+    "password" => Password
+    "passphrase" => Passphrase
+    "challenge" => Challenge
+    "confirm" => Confirm
+    _ => raise JsonDecodeError((path, "invalid SSH authentication kind"))
+  }
+}
+
+///|
+pub(all) struct SshAuthRequest {
+  request_id : Int32
+  kind : SshAuthKind
+  prompt : String
+  target : String?
+  retry : Bool
+} derive(Eq)
+
+///|
+pub impl FromJson for SshAuthRequest with fn from_json(json, path) {
+  let o = JsonObject::decode(json, path, "SSH authentication request")
+  {
+    request_id: o.required_int("request_id"),
+    kind: @json.from_json(o.required_json("kind"), path=path.add_key("kind")),
+    prompt: o.required_string("prompt"),
+    target: o.optional_string("target"),
+    retry: o.required_bool("retry"),
+  }
+}
+
+///|
+pub impl ToJson for SshAuthRequest with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "request_id": Json(self.request_id),
+    "kind": self.kind.to_json(),
+    "prompt": Json(self.prompt),
+    "retry": Json(self.retry),
+  }
+  if self.target is Some(target) {
+    fields["target"] = Json(target)
+  }
+  Json(fields)
+}
+
+///|
+pub(all) enum SshAuthAnswer {
+  Value(String)
+  Accept
+  Cancel
+}
+
+///|
+pub impl FromJson for SshAuthAnswer with fn from_json(json, path) {
+  let o = JsonObject::decode(json, path, "SSH authentication answer")
+  match o.required_string("action") {
+    "value" => Value(o.required_string("value"))
+    "accept" => Accept
+    "cancel" => Cancel
+    _ => raise JsonDecodeError((path, "invalid SSH authentication action"))
+  }
+}
+
+///|
+pub impl ToJson for SshAuthAnswer with fn to_json(self) {
+  match self {
+    Value(value) => { "action": "value", "value": value }
+    Accept => { "action": "accept" }
+    Cancel => { "action": "cancel" }
+  }
+}
+
+///|
+pub(all) struct SshAuthResponse {
+  host_id : String
+  attempt : Int32
+  epoch : Int32
+  request_id : Int32
+  answer : SshAuthAnswer
+}
+
+///|
+pub impl FromJson for SshAuthResponse with fn from_json(json, path) {
+  let o = JsonObject::decode(json, path, "SSH authentication response")
+  {
+    host_id: o.required_string("host_id"),
+    attempt: o.required_int("attempt"),
+    epoch: o.required_int("epoch"),
+    request_id: o.required_int("request_id"),
+    answer: @json.from_json(
+      o.required_json("answer"),
+      path=path.add_key("answer"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SshAuthResponse with fn to_json(self) {
+  {
+    "host_id": self.host_id,
+    "attempt": self.attempt,
+    "epoch": self.epoch,
+    "request_id": self.request_id,
+    "answer": self.answer.to_json(),
+  }
+}
+
+///|
+pub extend SshConnect with ToJson::{to_json}
+
+///|
+pub extend SshConnect with FromJson::{from_json}
+
+///|
+pub extend SshAuthKind with ToJson::{to_json}
+
+///|
+pub extend SshAuthKind with FromJson::{from_json}
+
+///|
+pub extend SshAuthRequest with ToJson::{to_json}
+
+///|
+pub extend SshAuthRequest with FromJson::{from_json}
+
+///|
+pub extend SshAuthAnswer with ToJson::{to_json}
+
+///|
+pub extend SshAuthAnswer with FromJson::{from_json}
+
+///|
+pub extend SshAuthResponse with ToJson::{to_json}
+
+///|
+pub extend SshAuthResponse with FromJson::{from_json}
+
+///|
+pub extend SshAuthKind with Eq::{equal, not_equal}
+
+///|
+pub extend SshAuthRequest with Eq::{equal, not_equal}
+
+///|
+pub(all) struct SshEvent {
+  host_id : String
+  attempt : Int32
+  epoch : Int32
+  event : Json
+}
+
+///|
+pub impl FromJson for SshEvent with fn from_json(json, path) {
+  let o = JsonObject::decode(json, path, "SSH event")
+  {
+    host_id: o.required_string("host_id"),
+    attempt: o.required_int("attempt"),
+    epoch: o.required_int("epoch"),
+    event: o.required_json("event"),
+  }
+}
+
+///|
+pub impl ToJson for SshEvent with fn to_json(self) {
+  {
+    "host_id": self.host_id,
+    "attempt": self.attempt,
+    "epoch": self.epoch,
+    "event": self.event,
+  }
+}
+
+///|
+pub extend SshEvent with FromJson::{from_json}
+
+///|
+pub extend SshEvent with ToJson::{to_json}

@@ -1426,7 +1426,7 @@ fn api_settings_rows(
   if @interop.is_native_ssh(model.focused) {
     return [
       @settings.row(
-        "API settings from this computer",
+        "API key fallback from this computer",
         [
           @html.button(
             class="button secondary",
@@ -1434,7 +1434,7 @@ fn api_settings_rows(
             "Open local API settings",
           ),
         ],
-        desc="SSH uses this computer's provider, API key and endpoint. Reconnect the host after changing them.",
+        desc="Remote API settings take priority. This computer supplies a fallback API key; the remote provider, endpoint and model stay unchanged. Reconnect after changing the local key.",
       ),
     ]
   }
@@ -2616,6 +2616,13 @@ fn view(
       locale=model.locale,
       dispatch.map(msg => ExportDialog(msg)),
     ),
+    // Authentication input is deliberately DOM-only. Keep this slot before
+    // conditional overlays so resize/toasts cannot replace its input node.
+    if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {
+      ssh_modal(dispatch, model)
+    } else {
+      @html.nothing
+    },
   ]
   // On the narrow layout the sidebar's stable backdrop fades with the drawer;
   // keeping it mounted lets the closing transition finish before it becomes
@@ -2669,9 +2676,6 @@ fn view(
         },
       ),
     )
-  }
-  if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {
-    children.push(ssh_modal(dispatch, model))
   }
   if model.archive_confirm is Some(confirm) {
     children.push(

@@ -3762,6 +3762,75 @@ pub fn SnapshotSavePayload::to_json(Self) -> Json
 pub impl ToJson for SnapshotSavePayload
 pub impl @json.FromJson for SnapshotSavePayload
 
+pub(all) enum SshAuthAnswer {
+  Value(String)
+  Accept
+  Cancel
+}
+pub fn SshAuthAnswer::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshAuthAnswer::to_json(Self) -> Json
+pub impl ToJson for SshAuthAnswer
+pub impl @json.FromJson for SshAuthAnswer
+
+pub(all) enum SshAuthKind {
+  Password
+  Passphrase
+  Challenge
+  Confirm
+} derive(Eq)
+pub fn SshAuthKind::equal(Self, Self) -> Bool
+pub fn SshAuthKind::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshAuthKind::not_equal(Self, Self) -> Bool
+pub fn SshAuthKind::to_json(Self) -> Json
+pub impl ToJson for SshAuthKind
+pub impl @json.FromJson for SshAuthKind
+
+pub(all) struct SshAuthRequest {
+  request_id : Int32
+  kind : SshAuthKind
+  prompt : String
+  target : String?
+  retry : Bool
+} derive(Eq)
+pub fn SshAuthRequest::equal(Self, Self) -> Bool
+pub fn SshAuthRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshAuthRequest::not_equal(Self, Self) -> Bool
+pub fn SshAuthRequest::to_json(Self) -> Json
+pub impl ToJson for SshAuthRequest
+pub impl @json.FromJson for SshAuthRequest
+
+pub(all) struct SshAuthResponse {
+  host_id : String
+  attempt : Int32
+  epoch : Int32
+  request_id : Int32
+  answer : SshAuthAnswer
+}
+pub fn SshAuthResponse::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshAuthResponse::to_json(Self) -> Json
+pub impl ToJson for SshAuthResponse
+pub impl @json.FromJson for SshAuthResponse
+
+pub(all) struct SshConnect {
+  id : String
+  attempt : Int32
+}
+pub fn SshConnect::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshConnect::to_json(Self) -> Json
+pub impl ToJson for SshConnect
+pub impl @json.FromJson for SshConnect
+
+pub(all) struct SshEvent {
+  host_id : String
+  attempt : Int32
+  epoch : Int32
+  event : Json
+}
+pub fn SshEvent::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshEvent::to_json(Self) -> Json
+pub impl ToJson for SshEvent
+pub impl @json.FromJson for SshEvent
+
 pub(all) struct SshProfile {
   id : String
   command : String
