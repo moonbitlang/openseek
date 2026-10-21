@@ -29,7 +29,8 @@ fn install_moonbit_markdown_comment_provider(
 
 ///|
 /// Returns anchored MoonBit documentation and item-separator blocks. Each
-/// block also covers the blank lines directly above its marker. Every
+/// block also covers the blank lines directly above its marker, and a bare
+/// marker with only blank lines before the next one folds into it. Every
 /// `///|` marker becomes a Markdown horizontal rule; text after the marker
 /// (the file-header form `///| Summary …`) is the first documentation line,
 /// and consecutive `///` lines follow as the documentation body. The source
@@ -67,13 +68,20 @@ fn moonbit_markdown_comments_in_snapshot(
         None => break
       }
     }
+    let mut block_start = moonbit_markdown_comment_leading_blank_start(
+      snapshot, start_line_number, previous_end,
+    )
+    // A bare marker directly above another marker (blank lines aside) is a
+    // leftover separator; fold it into this block so the item shows one
+    // divider instead of two.
+    if blocks is [.., previous] &&
+      previous.markdown == "---" &&
+      previous.line_range.end_line_number_exclusive == block_start {
+      block_start = previous.line_range.start_line_number
+      blocks.pop() |> ignore
+    }
     blocks.push({
-      line_range: LineRange(
-        moonbit_markdown_comment_leading_blank_start(
-          snapshot, start_line_number, previous_end,
-        ),
-        line_number,
-      ),
+      line_range: LineRange(block_start, line_number),
       markdown: if contents.is_empty() {
         "---"
       } else {

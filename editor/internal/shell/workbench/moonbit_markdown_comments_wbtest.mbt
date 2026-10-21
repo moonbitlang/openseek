@@ -223,7 +223,15 @@ test "MoonBit Markdown comments cover the blank lines above their marker" {
   )
   assert_eq(blocks, [
     { line_range: LineRange(2, 5), markdown: "---\n\nDoc.", },
-    { line_range: LineRange(6, 8), markdown: "---", },
-    { line_range: LineRange(8, 10), markdown: "---", },
+    // Two bare markers separated only by a blank line render as one divider.
+    { line_range: LineRange(6, 10), markdown: "---", },
   ])
+}
+
+///|
+test "MoonBit Markdown comments fold a bare marker into documentation below" {
+  let blocks = moonbit_markdown_comments_in_snapshot(
+    TextSnapshot("fn first {}\n\n///|\n\n///|\n/// Doc.\nfn second {}"),
+  )
+  assert_eq(blocks, [{ line_range: LineRange(2, 7), markdown: "---\n\nDoc.", }])
 }
