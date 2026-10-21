@@ -70,7 +70,7 @@ test('both agents share the first screen and Codex can choose its project in the
   await trigger.click();
   await picker.getByRole('button', { name: /^other —/ }).click();
   await expect(title).toHaveText('What should we build in other?');
-  await expect(page.locator('.workspace-row[title="/other"]')).toHaveClass(/\bactive\b/);
+  await expect(app.projectRow('/other')).toHaveClass(/\bactive\b/);
   await expect(transcript).toHaveAttribute('data-transcript-session', session);
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText('Codex test');
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/other');
@@ -268,7 +268,7 @@ for (const detachPrevious of [false, true]) {
         await back.click();
       }
       await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
-      await expect(page.locator('.workspace-row[title="/Users/test"]')).toHaveClass(/\bactive\b/);
+      await expect(app.projectRow('/Users/test')).toHaveClass(/\bactive\b/);
       expect(app.requests.filter(r => r.method === 'codex.draft.open').map(r => r.params.cwd)).toEqual(['/workspace', '/Users/test']);
       await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
       await expect(page.locator('#task')).toHaveValue('Send in the added project');
@@ -300,7 +300,7 @@ for (const detachPrevious of [false, true]) {
       const result = reply(app.requests.find(r => r.method === 'workspace.add'));
       if (broadcastFirst) {
         app.notify('workspace.changed', { workspaces: app.workspaces });
-        await expect(page.locator('.workspace-row[title="/Users/test"]')).toBeVisible();
+        await expect(app.projectRow('/Users/test')).toBeVisible();
         pending.resolve(result);
       } else {
         pending.resolve(result);
@@ -351,9 +351,9 @@ for (const agent of ['Codex', 'OpenSeek']) {
     const opens = app.requests.filter(r => r.method === 'codex.draft.open').length;
     pending.resolve(reply(app.requests.find(r => r.method === 'workspace.add')));
     app.notify('workspace.changed', { workspaces: app.workspaces });
-    await expect(page.locator('.workspace-row[title="/Users/test"]')).toBeVisible();
+    await expect(app.projectRow('/Users/test')).toBeVisible();
     await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
-    await expect(page.locator('.workspace-row[title="/workspace"]')).toHaveClass(/\bactive\b/);
+    await expect(app.projectRow('/workspace')).toHaveClass(/\bactive\b/);
     expect(app.requests.filter(r => r.method === 'codex.draft.open')).toHaveLength(opens);
     expect(app.pageErrors).toEqual([]);
   });

@@ -1071,6 +1071,12 @@ export class DesktopBrowserHarness {
     await this.page.getByRole('main').waitFor();
   }
 
+  projectRow(root, channel = 'remote.device-a') {
+    // Match project identity, including its host, independently of tooltip text.
+    const key = `project:openseek.projects:${channel}:${root}`;
+    return this.page.locator(`.workspace-row[data-action-menu-context=${JSON.stringify(key)}]`);
+  }
+
   async openSession() {
     await this.page.getByText('Rabbita browser fixture', { exact: true }).first().click();
     await this.page.locator('.transcript .msg-content', {

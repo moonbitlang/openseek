@@ -78,7 +78,7 @@ test('transcript renders editor diagram fences and retains them across updates a
   await expect.poll(() => originalD2.evaluate(svg => svg.isConnected)).toBe(true);
   await expect(transcript.locator('.moonbit-viewer-markdown-diagram-viewport')).toHaveCount(5);
 
-  const workspace = page.locator('.workspace-row[title="/workspace"]');
+  const workspace = app.projectRow('/workspace');
   await workspace.hover();
   await workspace.getByTitle('New conversation in this project').click();
   await expect(transcript.locator('.chat-mermaid')).toHaveCount(0);
@@ -124,7 +124,7 @@ test('transcript ignores a Mermaid result after its conversation is removed', as
   await app.openSession();
   await expect.poll(() => page.evaluate(() => typeof window.completeDiagram)).toBe('function');
   const oldTarget = await page.locator('#transcript .chat-mermaid').elementHandle();
-  const workspace = page.locator('.workspace-row[title="/workspace"]');
+  const workspace = app.projectRow('/workspace');
   await workspace.hover();
   await workspace.getByTitle('New conversation in this project').click();
   await expect(page.locator('#transcript .chat-mermaid')).toHaveCount(0);
