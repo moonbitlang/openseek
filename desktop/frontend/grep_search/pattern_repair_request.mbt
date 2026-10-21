@@ -7,8 +7,9 @@ const DefaultPatternRepairInstruction : String = "Repair this MoonBit pattern wi
 ///|
 priv suberror PatternRepairRequestSub {
   PatternRepairRequest(
-    @interop.ConversationKey,
+    @interop.ConversationIdentity,
     @protocol.PatternRepairPayload,
+    @cloud_client.Access?,
     Int32,
     @cmd.Emit[Msg]
   )
@@ -23,6 +24,7 @@ fn pattern_repair_request_loader(
     is PatternRepairRequestSub::PatternRepairRequest(
       owner,
       request,
+      access,
       delay_ms,
       emit
     ) else {
@@ -36,11 +38,32 @@ fn pattern_repair_request_loader(
       guard active else { return }
       @js.Promise::from_async(() => {
         let reply = Some(
-          @interop.bridge_request(
-            owner.channel,
-            @commands.pattern_repair,
-            request,
-          ),
+          match owner {
+            Host(owner) =>
+              @interop.bridge_request(
+                owner.channel,
+                @commands.pattern_repair,
+                request,
+              )
+            Cloud(..) => {
+              guard access is Some(access) else {
+                raise @cloud_client.RequestError(Unauthorized)
+              }
+              let json = @cloud_client.request(
+                @cloud_client.CloudOrigin,
+                "/v1/sessions/\{@uri.encode_component(owner.session())}/files/search/semantic/repair",
+                Post,
+                token=access.token,
+                body={
+                  "pattern": request.pattern,
+                  "generation": request.generation,
+                },
+              )
+              let fields : Map[String, Json] = @json.from_json(json)
+              fields["root"] = Json(request.root)
+              @json.from_json(Json(fields))
+            }
+          },
         ) catch {
           _ => None
         }
@@ -71,7 +94,7 @@ fn pattern_repair_request_loader(
     },
     update_tagger: payload => {
       guard payload
-        is PatternRepairRequestSub::PatternRepairRequest(_, _, _, next_emit) else {
+        is PatternRepairRequestSub::PatternRepairRequest(_, _, _, _, next_emit) else {
         return
       }
       emit = next_emit
@@ -84,8 +107,7 @@ fn Page::pattern_repair_request_payload(
   self : Page,
   input : Input,
 ) -> @protocol.PatternRepairPayload? {
-  guard input.owner is Host(_) &&
-    self.mode is Semantic &&
+  guard self.mode is Semantic &&
     self.pattern_repair_phase is PatternRepairRequested &&
     input.root is Some(root) else {
     return None
@@ -121,18 +143,24 @@ fn State::pattern_repair_subscription(
 ) -> @sub.Sub {
   let page = self.page
   guard page.pattern_repair_phase is PatternRepairRequested &&
-    input.owner is Host(owner) &&
     input.root is Some(root) &&
-    @resource.belongs_to(root, owner.channel) else {
+    input.owns_root(root) &&
+    (input.owner is Host(_) || input.cloud_access is Some(_)) else {
     return @sub.none
   }
   guard page.pattern_repair_request_payload(input) is Some(request) else {
     return @sub.none
   }
   @sub.custom_sub(
-    "grep-pattern-repair:\{owner.channel.uri_authority()}:\{owner.session}:\{request.root}:\{request.generation}",
+    "grep-pattern-repair:\{input.owner.key()}:\{input.cloud_access.map(access => access.epoch).unwrap_or(0)}:\{request.root}:\{request.generation}",
     Local,
-    PatternRepairRequestSub::PatternRepairRequest(owner, request, 0, emit),
+    PatternRepairRequestSub::PatternRepairRequest(
+      input.owner,
+      request,
+      input.cloud_access,
+      0,
+      emit,
+    ),
     @sub.SubLoader(pattern_repair_request_loader),
   )
 }

@@ -956,3 +956,38 @@ for (const count of [1, 101]) {
   });
 }
 
+test('Cloud pattern repair uses server defaults and applies only a validated candidate', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  const repairs = [];
+  let passed = false;
+  await cloud.install();
+  await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic`, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: semanticHeaders });
+    const body = route.request().postDataJSON();
+    const result = { generation: body.generation, matches: [], match_count: 0, file_count: 0, limit_hit: false, cancelled: false, partial: false, ...(body.patterns[0] === 'broken' ? { error_code: 'invalid_pattern', error_message: 'Invalid pattern' } : {}) };
+    return route.fulfill({ headers: semanticHeaders, contentType: 'text/event-stream', body: `event: result\ndata: ${JSON.stringify(result)}\n\n` });
+  });
+  await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic/repair`, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: semanticHeaders });
+    const body = route.request().postDataJSON();
+    repairs.push({ body, headers: await route.request().allHeaders() });
+    return route.fulfill({ headers: semanticHeaders, contentType: 'application/json', body: JSON.stringify({ generation: body.generation, validation_status: passed ? 'passed' : 'failed', candidate_pattern: 'inspect($_)', message: passed ? 'Validated candidate' : 'Candidate rejected by syntax validation', trace: ['Fixture repair trace'] }) });
+  });
+  const pattern = await openCloudCodeSearch(page, cloud, 'broken');
+  const fix = page.getByRole('button', { name: 'Fix Pattern', exact: true });
+  await fix.click();
+  await expect(page.locator('.search-pattern-repair-candidate-value')).toHaveText('inspect($_)');
+  await expect(pattern).toHaveValue('broken');
+  await expect(page.locator('.search-pattern-repair-trace')).toContainText('Fixture repair trace');
+  expect(Object.keys(repairs[0].body).sort()).toEqual(['generation', 'pattern']);
+  expect(repairs[0].headers.authorization).toBe('Bearer ts_fixture-123');
+  await page.getByText('Show repair details', { exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath('cloud-pattern-repair.png'), animations: 'disabled' });
+  passed = true;
+  await fix.click();
+  await expect(pattern).toHaveValue('inspect($_)');
+  await expect(page.locator('.search-pattern-repair-candidate-value')).toHaveCount(0);
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+  expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
+});
