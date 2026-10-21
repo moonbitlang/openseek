@@ -54,6 +54,17 @@ priv enum ShellMessage {
   SigningOut
   SignOutLabel
   LoadingConversation
+  StatusWaitingBridge
+  StatusReconnecting
+  StatusReady
+  StatusSetupRequired
+  StatusApiKeyRequired
+  StatusStarting
+  StatusRunning
+  StatusCancelling
+  StatusStep(Int32?)
+  StatusFailed
+  StatusErrored
   CannotLoadConversation
   RetryLabel
   ScheduleReadOnly
@@ -403,6 +414,86 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, SignOutLabel) => "退出登录"
     (TraditionalChinese, SignOutLabel) => "退出登入"
     (Japanese, SignOutLabel) => "ログアウト"
+    (English, StatusWaitingBridge) => "Waiting for bridge"
+    (Spanish, StatusWaitingBridge) => "Esperando conexión con el puente"
+    (SimplifiedChinese, StatusWaitingBridge) => "正在等待连接桥"
+    (TraditionalChinese, StatusWaitingBridge) => "正在等待連線橋"
+    (Japanese, StatusWaitingBridge) => "ブリッジ接続を待機中"
+    (English, StatusReconnecting) => "Reconnecting…"
+    (Spanish, StatusReconnecting) => "Reconectando"
+    (SimplifiedChinese, StatusReconnecting) => "正在重连"
+    (TraditionalChinese, StatusReconnecting) => "正在重新連線"
+    (Japanese, StatusReconnecting) => "再接続中"
+    (English, StatusReady) => "Ready"
+    (Spanish, StatusReady) => "Listo"
+    (SimplifiedChinese, StatusReady) => "就绪"
+    (TraditionalChinese, StatusReady) => "就緒"
+    (Japanese, StatusReady) => "準備完了"
+    (English, StatusSetupRequired) => "Setup required"
+    (Spanish, StatusSetupRequired) => "Se requiere configuración"
+    (SimplifiedChinese, StatusSetupRequired) => "需要设置"
+    (TraditionalChinese, StatusSetupRequired) => "需要設定"
+    (Japanese, StatusSetupRequired) => "設定が必要です"
+    (English, StatusApiKeyRequired) => "API key required"
+    (Spanish, StatusApiKeyRequired) => "Se requiere una clave de API"
+    (SimplifiedChinese, StatusApiKeyRequired) => "需要 API 密钥"
+    (TraditionalChinese, StatusApiKeyRequired) => "需要 API 金鑰"
+    (Japanese, StatusApiKeyRequired) => "API キーが必要です"
+    (English, StatusStarting) => "Starting"
+    (Spanish, StatusStarting) => "Iniciando"
+    (SimplifiedChinese, StatusStarting) => "正在启动"
+    (TraditionalChinese, StatusStarting) => "正在啟動"
+    (Japanese, StatusStarting) => "起動中"
+    (English, StatusRunning) => "Running"
+    (Spanish, StatusRunning) => "En ejecución"
+    (SimplifiedChinese, StatusRunning) => "运行中"
+    (TraditionalChinese, StatusRunning) => "執行中"
+    (Japanese, StatusRunning) => "実行中"
+    (English, StatusCancelling) => "Cancelling"
+    (Spanish, StatusCancelling) => "Cancelando"
+    (SimplifiedChinese, StatusCancelling) => "正在取消"
+    (TraditionalChinese, StatusCancelling) => "正在取消"
+    (Japanese, StatusCancelling) => "キャンセル中"
+    (English, StatusStep(step)) =>
+      if step is Some(step) {
+        "Step \{step}"
+      } else {
+        "Step"
+      }
+    (Spanish, StatusStep(step)) =>
+      if step is Some(step) {
+        "Paso \{step}"
+      } else {
+        "Paso"
+      }
+    (SimplifiedChinese, StatusStep(step)) =>
+      if step is Some(step) {
+        "第 \{step} 步"
+      } else {
+        "执行步骤"
+      }
+    (TraditionalChinese, StatusStep(step)) =>
+      if step is Some(step) {
+        "第 \{step} 步"
+      } else {
+        "執行步驟"
+      }
+    (Japanese, StatusStep(step)) =>
+      if step is Some(step) {
+        "ステップ \{step}"
+      } else {
+        "実行ステップ"
+      }
+    (English, StatusFailed) => "Failed"
+    (Spanish, StatusFailed) => "Falló"
+    (SimplifiedChinese, StatusFailed) => "失败"
+    (TraditionalChinese, StatusFailed) => "失敗"
+    (Japanese, StatusFailed) => "失敗"
+    (English, StatusErrored) => "Error"
+    (Spanish, StatusErrored) => "Error"
+    (SimplifiedChinese, StatusErrored) => "错误"
+    (TraditionalChinese, StatusErrored) => "錯誤"
+    (Japanese, StatusErrored) => "エラー"
     (English, LoadingConversation) => "Loading conversation…"
     (Spanish, LoadingConversation) => "Cargando conversación…"
     (SimplifiedChinese, LoadingConversation) => "正在加载对话…"

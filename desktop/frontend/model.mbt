@@ -4761,111 +4761,21 @@ priv enum Status {
 
 ///|
 fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
-  match locale {
-    SimplifiedChinese =>
-      return match self {
-        WaitingBridge => "正在等待连接桥"
-        Reconnecting => "正在重连"
-        Ready => "就绪"
-        Loading => shell_text(locale, LoadingConversation)
-        ReadOnly => shell_text(locale, ArchivedReadOnly)
-        SetupRequired => "需要设置"
-        ApiKeyRequired => "需要 API 密钥"
-        Starting => "正在启动"
-        Running => "运行中"
-        Cancelling => "正在取消"
-        Step(step) =>
-          if step is Some(step) {
-            "第 \{step} 步"
-          } else {
-            "执行步骤"
-          }
-        Failed => "失败"
-        Errored => "错误"
-        Finished(outcome) => outcome.label(locale~)
-        Unavailable(message) => message
-      }
-    TraditionalChinese =>
-      return match self {
-        WaitingBridge => "正在等待連線橋"
-        Reconnecting => "正在重新連線"
-        Ready => "就緒"
-        Loading => shell_text(locale, LoadingConversation)
-        ReadOnly => shell_text(locale, ArchivedReadOnly)
-        SetupRequired => "需要設定"
-        ApiKeyRequired => "需要 API 金鑰"
-        Starting => "正在啟動"
-        Running => "執行中"
-        Cancelling => "正在取消"
-        Step(step) =>
-          if step is Some(step) {
-            "第 \{step} 步"
-          } else {
-            "執行步驟"
-          }
-        Failed => "失敗"
-        Errored => "錯誤"
-        Finished(outcome) => outcome.label(locale~)
-        Unavailable(message) => message
-      }
-    Japanese =>
-      return match self {
-        WaitingBridge => "ブリッジ接続を待機中"
-        Reconnecting => "再接続中"
-        Ready => "準備完了"
-        Loading => shell_text(locale, LoadingConversation)
-        ReadOnly => shell_text(locale, ArchivedReadOnly)
-        SetupRequired => "設定が必要です"
-        ApiKeyRequired => "API キーが必要です"
-        Starting => "起動中"
-        Running => "実行中"
-        Cancelling => "キャンセル中"
-        Step(step) =>
-          if step is Some(step) {
-            "ステップ \{step}"
-          } else {
-            "実行ステップ"
-          }
-        Failed => "失敗"
-        Errored => "エラー"
-        Finished(outcome) => outcome.label(locale~)
-        Unavailable(message) => message
-      }
-    English => ()
-    Spanish =>
-      return match self {
-        WaitingBridge => "Esperando conexión con el puente"
-        Reconnecting => "Reconectando"
-        Ready => "Listo"
-        Loading => shell_text(locale, LoadingConversation)
-        ReadOnly => shell_text(locale, ArchivedReadOnly)
-        SetupRequired => "Se requiere configuración"
-        ApiKeyRequired => "Se requiere una clave de API"
-        Starting => "Iniciando"
-        Running => "En ejecución"
-        Cancelling => "Cancelando"
-        Step(step) => if step is Some(step) { "Paso \{step}" } else { "Paso" }
-        Failed => "Falló"
-        Errored => "Error"
-        Finished(outcome) => outcome.label(locale~)
-        Unavailable(message) => message
-      }
-  }
   match self {
-    WaitingBridge => "Waiting for bridge"
-    Reconnecting => "Reconnecting…"
-    Ready => "Ready"
+    WaitingBridge => shell_text(locale, StatusWaitingBridge)
+    Reconnecting => shell_text(locale, StatusReconnecting)
+    Ready => shell_text(locale, StatusReady)
     Loading => shell_text(locale, LoadingConversation)
     ReadOnly => shell_text(locale, ArchivedReadOnly)
-    SetupRequired => "Setup required"
-    ApiKeyRequired => "API key required"
-    Starting => "Starting"
-    Running => "Running"
-    Cancelling => "Cancelling"
-    Step(step) => if step is Some(step) { "Step \{step}" } else { "Step" }
-    Failed => "Failed"
-    Errored => "Error"
-    Finished(outcome) => outcome.label()
+    SetupRequired => shell_text(locale, StatusSetupRequired)
+    ApiKeyRequired => shell_text(locale, StatusApiKeyRequired)
+    Starting => shell_text(locale, StatusStarting)
+    Running => shell_text(locale, StatusRunning)
+    Cancelling => shell_text(locale, StatusCancelling)
+    Step(step) => shell_text(locale, StatusStep(step))
+    Failed => shell_text(locale, StatusFailed)
+    Errored => shell_text(locale, StatusErrored)
+    Finished(outcome) => outcome.label(locale~)
     Unavailable(message) => message
   }
 }
