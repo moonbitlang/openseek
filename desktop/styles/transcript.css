@@ -2143,14 +2143,11 @@
 :where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)::details-content {
   block-size: 0;
   overflow: clip;
-  opacity: 0;
   transition: block-size var(--disclosure-duration) ease,
-    opacity var(--disclosure-duration) ease,
     content-visibility var(--disclosure-duration) allow-discrete;
 }
 :where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)[open]::details-content {
   block-size: auto;
-  opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
   :where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)::details-content,

@@ -228,7 +228,7 @@ fn Actions::entry_component(
 ///|
 /// A Section is a keyed Rabbita component, not an array fragment rebuilt by
 /// the root view. Its disclosure state survives entry insertion and reorder.
-/// Rows are (key, node) pairs for the sidebar's one keyed container.
+/// Its keyed content stays mounted while the section animates closed.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
@@ -299,7 +299,9 @@ pub fn component(
         class="section-disclosure",
         type_="button",
         on_click=emit(Toggle),
-        attrs=@html.Attrs::build().aria_expanded((!collapsed).to_string()),
+        attrs=@html.Attrs::build()
+          .aria_expanded((!collapsed).to_string())
+          .aria_controls(input.id.key() + ":content"),
         [
           @html.span(class="sidebar-label", input.label),
           @html.span(
@@ -322,17 +324,35 @@ pub fn component(
         ),
       )
     }
-    let rows : Array[(String, @html.Html)] = [
-      (input.id.key(), @html.div(class~, heading)),
-    ]
-    if !collapsed {
-      for group in entry_rows {
-        for row in group {
-          rows.push(row)
-        }
+    let rows : Map[String, @html.Html] = Map([])
+    for group in entry_rows {
+      for row in group {
+        rows[row.0] = row.1
       }
     }
-    rows
+    [
+      (
+        input.id.key(),
+        @html.div(
+          class=if collapsed {
+            "sidebar-group collapsed"
+          } else {
+            "sidebar-group"
+          },
+          [
+            @html.div(class~, heading),
+            @html.div(
+              id=input.id.key() + ":content",
+              class="sidebar-group-content",
+              attrs=@html.Attrs::build()
+                .aria_hidden(collapsed.to_string())
+                .inert(collapsed),
+              rows,
+            ),
+          ],
+        ),
+      ),
+    ]
   })
 }
 

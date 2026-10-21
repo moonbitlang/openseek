@@ -118,7 +118,8 @@ html.is-resizing .sidebar-resize-handle {
 .sidebar-section {
   display: grid;
   /* Preserve the 1px gap at the default 14px type size, scaling with it. */
-  gap: calc(1em / 14);
+  --sidebar-row-gap: calc(1em / 14);
+  gap: var(--sidebar-row-gap);
   min-width: 0;
   /* The outer scroll lane owns the right inset — its gutter and padding add
      up to `--sidebar-inset` between them. Keep only the matching left inset
@@ -389,6 +390,27 @@ html.is-resizing .sidebar-resize-handle {
 
 /* Section disclosure and creation are sibling buttons so adding a project
    never toggles the list. Keep the compact action available when folded. */
+.sidebar-group {
+  display: grid;
+  gap: var(--sidebar-row-gap);
+  min-width: 0;
+  transition: row-gap var(--disclosure-duration) ease;
+}
+.sidebar-group.collapsed {
+  row-gap: 0;
+}
+.sidebar-group-content {
+  display: grid;
+  gap: var(--sidebar-row-gap);
+  min-width: 0;
+  interpolate-size: allow-keywords;
+  block-size: auto;
+  overflow: clip;
+  transition: block-size var(--disclosure-duration) ease;
+}
+.sidebar-group.collapsed > .sidebar-group-content {
+  block-size: 0;
+}
 .section-heading {
   display: flex;
   align-items: center;
@@ -401,7 +423,7 @@ html.is-resizing .sidebar-resize-handle {
   letter-spacing: normal;
   text-transform: none;
 }
-.section-heading:not(:first-child) {
+.sidebar-group:not(:first-child) > .section-heading {
   margin-top: 10px;
 }
 .section-disclosure {
@@ -424,6 +446,7 @@ html.is-resizing .sidebar-resize-handle {
   display: grid;
   place-items: center;
   flex: none;
+  transition: transform var(--disclosure-duration) ease;
 }
 .section-heading.collapsed .section-chevron {
   transform: rotate(-90deg);
@@ -457,6 +480,13 @@ html.is-resizing .sidebar-resize-handle {
 .section-primary-action:disabled {
   cursor: default;
   opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-group,
+  .sidebar-group-content,
+  .section-chevron {
+    transition: none;
+  }
 }
 
 /* An attached workspace: a folder row whose main disclosure button folds its

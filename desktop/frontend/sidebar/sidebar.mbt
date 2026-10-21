@@ -256,10 +256,8 @@ pub fn component(
     input.menu_definition(target, actions)
   })
   input.map3(section_rows, overlay, (input, section_rows, overlay) => {
-    // One keyed container holds every row. Child components cache their
-    // (key, node) output; keyed diffing re-pairs each cached node with its
-    // own element when neighbours appear or leave, so a row's event slots
-    // can never be re-bound to another row's element.
+    // Key each section in the outer container; sections key their own content
+    // rows so insertions and reordering keep each row's DOM and event slots.
     let rows : Map[String, @html.Html] = Map([])
     for index, notice in input.notices {
       rows["notice:\{index}"] = @html.div(

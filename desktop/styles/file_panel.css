@@ -3321,17 +3321,10 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   interpolate-size: allow-keywords;
   block-size: 0;
   overflow: clip;
-  opacity: 0;
-  visibility: hidden;
-  transition: block-size var(--disclosure-duration) ease,
-    opacity var(--disclosure-duration) ease,
-    visibility 0s linear var(--disclosure-duration);
+  transition: block-size var(--disclosure-duration) ease;
 }
 .jobs-history-content.open {
   block-size: auto;
-  opacity: 1;
-  visibility: visible;
-  transition-delay: 0s;
 }
 @media (prefers-reduced-motion: reduce) {
   .jobs-history-content,
