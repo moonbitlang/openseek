@@ -121,15 +121,6 @@ connection is `Unsent`, an explicit RPC error is `Refused`, and a lost reply is
 `OPENSEEK_ENGINE` overrides the engine used by the server for source builds.
 By default the server uses the `openseek` executable beside it.
 
-## Validation
-
-`tests/ssh/app_server.py SERVER ENGINE [SSH argv ...]` uses an offline model and
-private HOME/workspace. Without SSH arguments it exercises loopback WebSocket;
-with a same-filesystem test sshd it exercises the full `ssh -L` chain. It checks
-chat/history, file notifications, PTY output/exit, Git, MoonBit hover and process
-shutdown. The packaged desktop is the acceptance host for native profile,
-connection, picker and renderer routing.
-
 ## Interactive authentication
 
 The host re-executes its **own signed executable** as `SSH_ASKPASS`, with
