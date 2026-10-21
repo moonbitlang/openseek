@@ -82,16 +82,14 @@ fn LauncherActions::rows(
       ),
     )
   }
-  if self.host_tools {
-    entries.push(
-      (
-        ui(locale, SearchLabel),
-        ui(locale, SearchHint),
-        @icons.icon_search,
-        self.search,
-      ),
-    )
-  }
+  entries.push(
+    (
+      ui(locale, SearchLabel),
+      ui(locale, SearchHint),
+      @icons.icon_search,
+      self.search,
+    ),
+  )
   entries.push(
     (
       ui(locale, FilesLabel),

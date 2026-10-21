@@ -72,7 +72,7 @@ async function openFiles(page, cloud) {
   await cloud.open();
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   const launcher = page.locator('.dock-launcher');
-  await expect(launcher.getByRole('button')).toHaveCount(1);
+  await expect(launcher.getByRole('button')).toHaveText([/Search/, /Files/]);
   await launcher.getByRole('button', { name: /^Files / }).click();
   await expect(tree(page).getByRole('treeitem').first()).toBeVisible();
 }
@@ -108,6 +108,35 @@ async function expectFileValidation(page, session, path, action, status = 304) {
   const validator = response.request().headers()['if-none-match'];
   expect(validator).toMatch(/^W\/"content-v1-[a-f0-9]{64}"$/);
   if (status === 304) expect(response.headers().etag).toBe(validator);
+}
+
+for (const entry of ['empty panel', 'new-tab menu']) {
+  test(`Cloud Search opens from the ${entry} using the shared search action`, async ({ page }, testInfo) => {
+    const cloud = new CloudFilesHarness(page);
+    await cloud.install(); await cloud.goto();
+    let row;
+    if (entry === 'empty panel') {
+      await cloud.open();
+      await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+      row = page.locator('.dock-launcher').getByRole('button', { name: /^Search / });
+    } else {
+      await openFiles(page, cloud);
+      await page.getByRole('button', { name: 'New tab', exact: true }).click();
+      const menu = page.locator('.dock-menu');
+      await expect(menu.getByRole('menuitem')).toHaveText([/Search/, /Files/]);
+      row = menu.getByRole('menuitem', { name: 'Search', exact: true });
+    }
+    await expect(row).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`cloud-search-${entry.replaceAll(' ', '-')}.png`), animations: 'disabled' });
+    await row.click();
+    await expect(page.locator('.dock-menu')).toHaveCount(0);
+    await expect(page.locator('.dock-launcher')).toBeHidden();
+    await expect(page.locator('.editor-tab.active .tab-name')).toHaveText('Search');
+    await expect(page.getByRole('tab', { name: 'Search', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.workspace-search').getByRole('textbox', { name: 'Search', exact: true })).toBeVisible();
+    expect(fileHostRequests(cloud)).toEqual([]);
+    expect(cloud.device.pageErrors).toEqual([]);
+  });
 }
 
 test('Cloud raster files reuse the file panel and restore the cached image after a text tab', async ({ page }, testInfo) => {
