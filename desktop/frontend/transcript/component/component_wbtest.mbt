@@ -106,6 +106,20 @@ test "an overview click unpins and highlights inside the component" {
 }
 
 ///|
+test "a stale follow scroll does not unpin the reader" {
+  // Seeking the tail reports even when the reader was unpinned.
+  assert_true(reports_pin(true, false, false))
+  // Leaving the tail reports when the reader scrolled up.
+  assert_true(reports_pin(false, true, true))
+  // A content-animated follow can move down, or not at all, while its scroll
+  // event reads a taller scroller; that is not the reader leaving the tail.
+  assert_false(reports_pin(false, true, false))
+  // An unchanged reading never reports.
+  assert_false(reports_pin(true, true, true))
+  assert_false(reports_pin(false, false, false))
+}
+
+///|
 test "local pinned transitions are pure" {
   let input = base_input()
   let state = pinned_model(input)

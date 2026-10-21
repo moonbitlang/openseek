@@ -505,6 +505,16 @@ fn restore_scroll_after_render(top : Double) -> @cmd.Cmd {
 }
 
 ///|
+/// Whether a scroll event changes the Model's pin. Reaching the tail always
+/// counts. Leaving it only counts when the offset moved up: growth inside an
+/// animating disclosure can make a programmatic follow stale by the time its
+/// scroll event is dispatched, and the event then reads a taller scroller
+/// while the reader never left the tail.
+fn reports_pin(position_pinned : Bool, pinned : Bool, moved_up : Bool) -> Bool {
+  position_pinned != pinned && (position_pinned || moved_up)
+}
+
+///|
 /// The reader is pinned while the scroller sits within a few pixels of its
 /// bottom edge; anything else is a fixed offset worth restoring later.
 fn scroll_position(transcript : @dom.Element) -> ScrollPosition {
@@ -683,17 +693,30 @@ fn transcript_sub_loader(
       let mut departed = departed
       let mut pinned = pinned
       let mut active = active
+      // The last scroller offset this listener saw. Growth inside an animated
+      // disclosure makes a programmatic scroll to the tail stale before its
+      // scroll event is dispatched: the event sees the newer, taller content
+      // and would report the reader as unpinned. Only an offset that moved up
+      // can be the reader leaving the tail; a stale follow moved down or not
+      // at all.
+      let mut last_top : Double? = None
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
           element.get_property("id").to_option() is Some("transcript") else {
           return
         }
+        let top = element.get_scroll_top()
+        let moved_up = match last_top {
+          Some(previous) => top < previous
+          None => true
+        }
+        last_top = Some(top)
         // Report only what differs from the Model. Its next message brings
         // the same value back through `update_tagger`; assigning here just
         // keeps a burst of scroll events from repeating the report meanwhile.
         let position_pinned = scroll_position(element) is Pinned
-        if position_pinned != pinned {
+        if reports_pin(position_pinned, pinned, moved_up) {
           pinned = position_pinned
           scheduler.add(emit(Pinned(position_pinned)))
         }
@@ -766,6 +789,9 @@ priv struct TranscriptObservers {
 /// Rabbita Model and are disposed before replacement or subscription unload.
 priv struct TranscriptDomMount {
   mut element : @dom.Element?
+  // The content column inside `element` whose height grows as disclosures
+  // animate. Keys can replace it while the scroller element stays mounted.
+  mut content : @dom.Element?
   mut diagrams : @diagram_viewport.DiagramViewports?
   renderers : @markdown.DiagramRenderers
   images : @dom.IntersectionObserver
@@ -779,6 +805,7 @@ fn TranscriptDomMount::TranscriptDomMount(
 ) -> Self {
   {
     element: None,
+    content: None,
     diagrams: None,
     renderers: @markdown.DiagramRenderers(on_size_changed),
     images: transcript_image_observer(on_image),
@@ -806,6 +833,8 @@ fn TranscriptDomMount::is_same_element(
 fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
   self.images.disconnect()
   self.renderers.dispose()
+  // The caller disconnects the resize observer before a transcript swap.
+  self.content = None
   if self.diagrams is Some(diagrams) {
     diagrams.dispose()
   }
@@ -864,8 +893,25 @@ fn TranscriptDomMount::observe_resize(
   self : Self,
   observer : @dom.ResizeObserver,
 ) -> Unit {
-  if self.element is Some(element) {
-    observer.observe(element)
+  guard self.element is Some(element) else { return }
+  observer.observe(element)
+  // The transcript viewport keeps the height its grid row gives it while a
+  // disclosure's content box animates open or closed inside. Observe the
+  // content column as well, or a pinned reader follows only the start of the
+  // animation and lands short of the final tail.
+  let next = element.query_selector("#stream")
+  let same = match (self.content, next) {
+    (None, None) => true
+    (Some(previous), Some(content)) => previous.is_same_node(content.as_node())
+    _ => false
+  }
+  guard !same else { return }
+  if self.content is Some(previous) {
+    observer.unobserve(previous)
+  }
+  self.content = next
+  if next is Some(content) {
+    observer.observe(content)
   }
 }
 
@@ -888,6 +934,9 @@ fn TranscriptObservers::install(
     observer.disconnect()
     mount.refresh_content()
     mount.observe_content(observer)
+    // Replacing the keyed content column does not replace the scroller, so
+    // refresh the layout observation without waiting for another mount.
+    mount.observe_resize(resize)
     on_change()
   })
   let attach = () => {
