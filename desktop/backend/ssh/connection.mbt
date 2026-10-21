@@ -50,8 +50,9 @@ pub fn Connection::close(self : Connection) -> Unit {
 }
 
 ///|
-/// Own the bootstrap SSH process, TCP forwarder, and local WebSocket as one
-/// connection. No RPC travels over SSH stdin/stdout, and requests never replay.
+/// Bootstrap owns startup; after initialize, the WebSocket owns the remote
+/// server and only the TCP forwarder remains. No RPC travels over SSH
+/// stdin/stdout, and requests never replay.
 pub async fn Connection::run(
   self : Connection,
   emit : (Json) -> Unit,
@@ -120,9 +121,12 @@ pub async fn Connection::run(
         cancel_handler=@process.graceful_cancel(timeout=1000),
       )
       group.spawn_bg(() => if settings is Some(line) { lifetime.write(line) })
+      let mut released = false
       group.spawn_bg(() => {
         let code = bootstrap.wait()
-        raise SshError("SSH bootstrap exited \{code}")
+        if !released || code != 0 {
+          raise SshError("SSH bootstrap exited \{code}")
+        }
       })
       let (port, instance) = @async.with_timeout(
         1_200_000,
@@ -242,6 +246,14 @@ pub async fn Connection::run(
       guard reply is { "protocol": 1, "instance": String(actual), .. } &&
         actual == instance else {
         raise SshError("Remote app-server identity changed during forwarding")
+      }
+      // The server has claimed this socket before acknowledging initialize.
+      // EOF now ends the bootstrap shell without cancelling the remote service.
+      released = true
+      lifetime.close()
+      let bootstrap_code = @async.with_timeout(10_000, () => bootstrap.wait())
+      guard bootstrap_code == 0 else {
+        raise SshError("SSH bootstrap exited \{bootstrap_code}")
       }
       let connected = @async.with_timeout(
         10_000,

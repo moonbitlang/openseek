@@ -107,6 +107,9 @@ async fn main {
           request(ws, 1, "initialize", { "instance": instance, "protocol": 1 }),
           { "instance": instance, "protocol": 1 },
         )
+        // The initialized WebSocket now owns the real service. EOF must not
+        // cancel it, and business RPC must still work afterwards.
+        writer.close()
         ignore(request(ws, 2, "workspace.add", { "path": root + "/workspace" }))
         ignore(
           request(ws, 3, "settings.set", {
@@ -133,13 +136,12 @@ async fn main {
           root + "/workspace",
         )
         ws.close()
-        writer.close()
         assert_eq(child.wait(), 0)
         @fs.remove(root + "/engine-cwd")
       })
     })
   }
   println(
-    "app-server launch: direct relative/PATH startup, sibling engine cwd, and EOF cleanup passed",
+    "app-server launch: direct relative/PATH startup, sibling engine cwd, and WebSocket lifetime takeover passed",
   )
 }

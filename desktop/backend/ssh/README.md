@@ -9,8 +9,11 @@ renderer -> native client -> local loopback TCP/WebSocket
 
 `ssh` uses the user's SSH configuration and agent, and requests interactive
 authentication in the existing desktop dialog when needed.
-A separate bootstrap SSH command starts `openseek-app-server` and reads its
-loopback port and process instance ID. Bootstrap stdout is not an RPC transport.
+A temporary bootstrap SSH command starts `openseek-app-server` with `nohup`
+in the background and reads its loopback port and process instance ID through
+an owner-only temporary file. Bootstrap stdout is not an RPC transport. Server
+stderr goes to `~/.openseek/ssh/app-server.log` so neither output holds the SSH
+channel open. The temporary endpoint file is removed when bootstrap exits.
 The WebSocket initialize response must name the discovered instance. The server
 rejects browser Origins and binds only `127.0.0.1`; forwarding also binds only
 `127.0.0.1` and refuses a port collision. No application bearer token is added.
@@ -90,11 +93,19 @@ Change the fallback key in the local API settings and reconnect each SSH host
 to apply it. The remote API section links to those local settings. No new
 environment variable or remote settings receiver is required.
 
-This version is connection-owned, without a detached daemon, upgrade journal,
-or crash-recovery subsystem. Closing/reloading the
-window or disconnecting terminates its bootstrap, tunnel, remote server, running
-turns and PTYs. Conversation history and project registration remain on the
-remote disk. Reconnect re-reads that state; it never replays an unanswered write.
+The service belongs to one connection, with no reusable daemon, upgrade journal,
+or crash-recovery subsystem. Before a valid initialize, bootstrap stdin EOF or
+a 20-minute startup deadline stops the service. The first valid WebSocket claims
+ownership before its initialize reply; failed or additional handshakes cannot
+claim or stop that owner. After the reply, Desktop closes bootstrap stdin and
+waits for the first SSH process to exit normally. Only the forwarding SSH remains.
+The owner WebSocket ending stops the service, running turns and PTYs. The server
+uses native WebSocket Ping/Pong every 30 seconds, with a 30-second deadline for
+writes and matching Pong replies. An unresponsive connection is reclaimed within
+60 seconds without adding an application-level heartbeat protocol.
+Closing/reloading the window or disconnecting closes the WebSocket and its tunnel.
+Conversation history and project registration remain on the remote disk.
+Reconnect re-reads that state; it never replays an unanswered write.
 Remote profiles persist locally in `~/.openseek/ssh-profiles.json` and start
 offline when the app reopens. Local-only export, system file opening, document
 preview and browser tooling retain their existing limits.
@@ -121,7 +132,7 @@ Each connection owns a loopback IPC listener and a random capability token.
 Only its SSH children receive the address/token environment. The helper sends
 OpenSSH's actual prompt and waits for one tagged response; only its stdout
 returns the answer to OpenSSH. Bootstrap stdin/stdout remain exclusively owned
-by the existing lifetime/endpoint protocol. Both bootstrap and forwarding SSH
+by the startup lifetime/endpoint protocol. Both bootstrap and forwarding SSH
 use this channel; neither caches a password or reuses a verification code.
 
 `ssh.connect` carries a frontend attempt identity; native events add the native

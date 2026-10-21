@@ -17,7 +17,7 @@ async test "SSH bootstrap passes a provider key literally and preserves other re
   let server = prepared + "/bin/openseek-app-server"
   @fs.write_file(
     server,
-    "#!/bin/sh\n[ \"$#\" -eq 0 ] || exit 23\nprintf '%s\\n' \"$DEEPSEEK\" \"$KIMI\" \"$GLM\"\ncat >/dev/null\nprintf 'closed\\n'\n",
+    "#!/bin/sh\n[ \"$#\" -eq 0 ] || exit 23\nprintf '%s\\n' \"$DEEPSEEK\" \"$KIMI\" \"$GLM\" > \"$HOME/captured\"\nprintf '%s\\n' '{\"port\":1234}'\ncat >/dev/null\ntouch \"$HOME/closed\"\n",
     permission=0o755,
   )
   let values : Map[String, String] = {
@@ -50,14 +50,14 @@ async test "SSH bootstrap passes a provider key literally and preserves other re
       )
       writer.write(line)
       assert_eq(reader.read_until("\n"), Some("{\"stage\":\"connecting\"}"))
-      assert_eq(
-        @utf8.decode(reader.read_exactly(@utf8.encode(expected).length())),
-        expected,
-      )
+      assert_eq(reader.read_until("\n"), Some("{\"port\":1234}"))
+      assert_eq(@fs.read_file(home + "/captured").text(), expected)
       assert_true(child.try_wait() is None)
       writer.close()
-      assert_eq(reader.read_exactly(7), b"closed\n")
       assert_eq(child.wait(), 0)
+      while !@fs.exists(home + "/closed") {
+        @async.sleep(10)
+      }
     })
   })
   assert_false(@fs.exists(directory + "/executed"))

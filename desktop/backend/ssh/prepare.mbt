@@ -19,7 +19,8 @@ fn prepare_command(release_url : String, protocols : String) -> String {
     #|base="$HOME/.openseek/ssh"
     #|mkdir -p "$base"
     #|stage=
-    #|trap 'if [ -n "$stage" ]; then rm -rf "$stage"; fi' EXIT
+    #|endpoint=
+    #|trap 'if [ -n "$stage" ]; then rm -rf "$stage"; fi; if [ -n "$endpoint" ]; then rm -f "$endpoint"; fi' EXIT
     #|trap 'exit 1' HUP INT TERM
     #|if [ ! -f "$root/.prepared" ] || [ ! -x "$root/bin/openseek" ] || [ ! -x "$root/bin/openseek-app-server" ]; then
     #|  printf '%s\n' '{"stage":"downloading"}'
@@ -54,7 +55,24 @@ fn prepare_command(release_url : String, protocols : String) -> String {
     #|fi
     #|printf '%s\n' '{"stage":"connecting"}'
     #|export OPENSEEK_ENGINE="$root/bin/openseek"
-    #|exec "$root/bin/openseek-app-server"
+    #|umask 077
+    #|endpoint=$(mktemp "$base/.endpoint.XXXXXX")
+    #|# Explicit stdin keeps the startup lifetime pipe; outputs must not keep
+    #|# the SSH channel open after the foreground script exits.
+    #|nohup "$root/bin/openseek-app-server" <&0 >"$endpoint" 2>>"$base/app-server.log" &
+    #|server=$!
+    #|while ! IFS= read -r announcement <"$endpoint"; do
+    #|  if ! kill -0 "$server" 2>/dev/null; then
+    #|    wait "$server" || exit "$?"
+    #|    echo 'App-server exited before announcing its endpoint.' >&2; exit 1
+    #|  fi
+    #|  sleep 0.05
+    #|done
+    #|printf '%s\n' "$announcement"
+    #|# Only EOF follows credential forwarding. Both this script and the server
+    #|# may observe it: before initialize it cancels startup; afterwards only
+    #|# this script exits, leaving ownership with the WebSocket.
+    #|cat >/dev/null
   let prelude = "url=" +
     shell_quote(release_url) +
     "\nprotocols=" +
