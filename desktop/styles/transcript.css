@@ -2221,12 +2221,10 @@
 }
 .edit-copy.icon-button {
   --icon-size: var(--icon-lg);
+  --icon-button-size: calc(var(--font-size-base) * 26 / 14);
   display: grid;
   place-items: center;
   flex: none;
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
   padding: 0;
   line-height: 1;
   opacity: 0;

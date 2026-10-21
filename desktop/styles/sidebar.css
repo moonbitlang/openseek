@@ -47,7 +47,9 @@ html.is-resizing .sidebar-resize-handle {
    Its leading edge stays clear for them and the native controls; the
    Chat/Work switch takes the trailing edge. */
 .sidebar-header {
-  --sidebar-mode-size: calc(var(--titlebar-control-size) + 4px);
+  --sidebar-mode-size: calc(
+    var(--titlebar-control-size) + 2 * var(--sidebar-mode-padding)
+  );
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
@@ -66,7 +68,7 @@ html.is-resizing .sidebar-resize-handle {
     0px,
     calc((var(--topbar-height) - var(--sidebar-mode-size)) / 2)
   );
-  padding: 2px;
+  padding: var(--sidebar-mode-padding);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
 }
@@ -1319,7 +1321,7 @@ button.row-twisty:hover {
 }
 
 .sidebar-search {
-  --icon-size: 14px;
+  --icon-size: var(--icon-md);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1351,6 +1353,6 @@ button.row-twisty:hover {
   font: inherit;
 }
 .sidebar-search input::placeholder { color: var(--color-text-muted); }
-.sidebar-search-clear { --icon-size: 12px; width: 18px; height: 18px; }
+.sidebar-search-clear { --icon-size: var(--icon-sm); width: 18px; height: 18px; }
 .conversation-row.search-selected { background: var(--color-bg-subtle); }
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }

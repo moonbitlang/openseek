@@ -99,7 +99,7 @@ main {
   --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(var(--font-size-base) * 5 / 14);
   min-width: 0;
   max-width: 28%;
   white-space: nowrap;

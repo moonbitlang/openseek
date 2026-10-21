@@ -342,10 +342,12 @@ html {
      Component styles consume the dimension that matches their seam. */
   --resize-handle-width: 6px;
   --resize-handle-height: 6px;
+  --sidebar-mode-padding: calc(var(--titlebar-control-gap) / 2);
   /* Native controls, navigation and the mode switch must all fit. The
      trailing 13px includes the sidebar inset and its border. */
   --sidebar-mode-width: calc(
-    2 * var(--titlebar-control-size) + var(--titlebar-control-gap) + 4px
+    2 * var(--titlebar-control-size) + var(--titlebar-control-gap) +
+      2 * var(--sidebar-mode-padding)
   );
   --sidebar-min-width: max(
     220px,
@@ -357,19 +359,22 @@ html {
   --sidebar-drawer-width: min(320px, 86vw);
   /* Follow the app type scale while preserving the 14px default geometry.
      Native window insets below remain independent platform measurements. */
-  --titlebar-icon-size: var(--font-size-base);
+  --titlebar-icon-size: var(--icon-md);
   --titlebar-control-size: calc(var(--titlebar-icon-size) * 24 / 14);
   --titlebar-control-gap: calc(var(--titlebar-icon-size) * 4 / 14);
-  --topbar-inline-padding: 18px;
-  --panel-toggle-inline-inset: max(18px, var(--native-titlebar-right, 0px));
+  --topbar-inline-padding: calc(var(--font-size-base) * 18 / 14);
+  --panel-toggle-inline-inset: max(
+    var(--topbar-inline-padding),
+    var(--native-titlebar-right, 0px)
+  );
   --panel-toggle-reserved-width: calc(
     var(--panel-toggle-inline-inset) + var(--titlebar-control-size) +
       var(--titlebar-control-gap)
   );
-  --app-header-height: 46px;
+  --app-header-height: calc(var(--font-size-base) * 46 / 14);
   --topbar-height: max(var(--app-header-height), var(--native-titlebar-height, 0px));
   --sidebar-toggle-inline-inset: max(
-    calc(var(--topbar-inline-padding) - 4px),
+    calc(var(--topbar-inline-padding) - var(--titlebar-control-gap)),
     var(--native-titlebar-left, 0px)
   );
   --navigation-inline-inset: calc(
@@ -379,7 +384,7 @@ html {
   --navigation-width: calc(
     2 * var(--titlebar-control-size) + var(--titlebar-control-gap)
   );
-  --sidebar-toggle-trailing-gap: 12px;
+  --sidebar-toggle-trailing-gap: calc(var(--titlebar-control-gap) * 3);
   --sidebar-toggle-reserved-width: calc(
     var(--navigation-inline-inset) + var(--navigation-width) +
       var(--sidebar-toggle-trailing-gap)

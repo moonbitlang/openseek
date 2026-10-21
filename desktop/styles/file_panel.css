@@ -16,10 +16,11 @@
 
 /* Shared icon button styling for panel controls. */
 .panel-toggle {
+  --panel-toggle-size: calc(var(--font-size-base) * 2);
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: var(--panel-toggle-size);
+  height: var(--panel-toggle-size);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -95,7 +96,7 @@ button.panel-toggle:not(:disabled):hover {
   gap: 10px;
   flex: 0 0 auto;
   height: var(--topbar-height);
-  padding: 0 var(--panel-toggle-reserved-width) 0 12px;
+  padding: 0 var(--panel-toggle-reserved-width) 0 calc(var(--font-size-base) * 12 / 14);
   border-bottom: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
 }
@@ -481,11 +482,12 @@ html:is(
   position: relative;
 }
 .tab-action {
+  --tab-action-size: calc(var(--font-size-base) * 26 / 14);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: var(--tab-action-size);
+  height: var(--tab-action-size);
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);

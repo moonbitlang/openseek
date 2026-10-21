@@ -666,7 +666,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Size the icon span, not the SVG inside it: `.icon` is a fixed 16px flex box
+/* Size the icon span, not the SVG inside it: `.icon` is a sized flex box
    whose SVG fills it, so shrinking only the SVG leaves it parked at the box's
    top edge instead of on the text's centre line. */
 .composer-git-glyph {
@@ -868,11 +868,12 @@
 }
 
 .icon-button {
+  --icon-button-size: calc(var(--font-size-base) * 30 / 14);
   display: grid;
   place-items: center;
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
+  width: var(--icon-button-size);
+  min-width: var(--icon-button-size);
+  height: var(--icon-button-size);
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
@@ -887,9 +888,7 @@
 }
 
 .icon-button.icon-button-compact {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
+  --icon-button-size: calc(var(--font-size-base) * 24 / 14);
   border-radius: var(--radius-sm);
 }
 

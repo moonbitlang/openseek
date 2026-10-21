@@ -79,12 +79,22 @@ for all readable app text, including Jobs, Codex conversations, and dock UI:
 Do not hardcode text sizes in pixels. Markdown may size headings relative to
 its surrounding text; larger page headings may derive from the base. Use
 unitless line heights so text grows without clipping. Icon glyphs use the
-icon scale and do not acquire text-sizing rules merely to size an SVG.
+icon scale and do not acquire text-sizing rules merely to size an SVG. The
+`--icon-xs/sm/md/lg` roles scale with `--font-size-base`, preserving their
+10/12/14/16px sizes at the default 14px setting. Use those roles instead of
+local fixed sizes for control glyphs.
 
 The shared titlebar controls follow `--font-size-base`: their glyph size,
 button size, and inter-button gap scale together from the default 14px, 24px,
 and 4px geometry. This includes sidebar mode, navigation, conversation, and
-panel controls. Keep native window-control insets in platform pixels.
+panel controls. The header height, horizontal insets, and sidebar mode-switch
+padding follow the same scale. Keep native window-control insets in platform
+pixels and let them set a lower bound on the header's height and insets.
+
+Generic icon buttons, their compact and edit-copy variants, panel toggles,
+and tab actions scale their hit areas from the same base. Keep these dimensions
+owned by their component classes; changing an icon's font size alone does not
+resize its button.
 
 Ordinary text inherits `--font-family-sans` and `--font-weight-regular` from
 the app (400), with antialiased font smoothing on macOS. Markdown emphasis
