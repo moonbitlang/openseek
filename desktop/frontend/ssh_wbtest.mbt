@@ -363,15 +363,37 @@ test "SSH rejects incompatible readiness and retires the attempt before resync" 
   let dispatch = test_dispatch()
   let id = "ssh-incompatible"
   let channel : @interop.ChannelId = Remote(id)
-  let payloads : Array[Json] = [
-    { "protocol": @protocol.HostProtocolRevision + 1 },
-    {},
-    { "protocol": Json::null() },
-    { "protocol": "invalid" },
+  let payloads : Array[(Json, String, String)] = [
+    (
+      { "protocol": @protocol.HostProtocolRevision + 1 },
+      (@protocol.HostProtocolRevision + 1).to_string(),
+      "请将本机 SeekMoon 更新",
+    ),
+    ({ "protocol": 0 }, "0", "请将远端 openseek-app-server 更新"),
+    (
+      {},
+      "未提供有效协议版本",
+      "请将远端 openseek-app-server 更新",
+    ),
+    (
+      { "protocol": Json::null() },
+      "未提供有效协议版本",
+      "请将远端 openseek-app-server 更新",
+    ),
+    (
+      { "protocol": "invalid" },
+      "未提供有效协议版本",
+      "请将远端 openseek-app-server 更新",
+    ),
   ]
-  for params in payloads {
+  for (params, reported, action) in payloads {
     for previously_ready in [false, true] {
       let base = auth_test_model(id)
+      let base = {
+        ..base,
+        locale: SimplifiedChinese,
+        ssh_ui: { ..base.ssh_ui, details: Some(id), },
+      }
       let (_, base) = update_ssh(dispatch, Connect(id), base)
       let base = if previously_ready {
         update_ssh(
@@ -406,7 +428,19 @@ test "SSH rejects incompatible readiness and retires the attempt before resync" 
       assert_eq(@interop.current_ssh_epoch(channel), None)
       assert_false(rejected.ssh_ui.attempts.contains(id))
       assert_false(rejected.ssh_ui.connecting.contains(id))
-      assert_true(rejected.ssh_ui.host_errors.contains(id))
+      let error = rejected.ssh_ui.host_errors.get(id).unwrap()
+      assert_true(error.contains("无法连接 SSH 主机“demo”"))
+      assert_true(
+        error.contains(
+          "本机需要协议版本：\{@protocol.HostProtocolRevision}",
+        ),
+      )
+      assert_true(error.contains("远端报告：\{reported}"))
+      assert_true(error.contains(action))
+      assert_eq(rejected.ssh_ui.error, Some(error))
+      assert_true(
+        rejected.display_status() is Unavailable(message) && message == error,
+      )
       assert_eq(
         rejected.device_state(channel).unwrap().connection_generation,
         base.device_state(channel).unwrap().connection_generation,
@@ -426,6 +460,8 @@ test "SSH rejects incompatible readiness and retires the attempt before resync" 
           rejected,
         )
         assert_true(late.host_incompatible())
+        assert_eq(late.ssh_ui.host_errors.get(id), Some(error))
+        assert_eq(late.ssh_ui.error, Some(error))
         assert_eq(@interop.current_ssh_epoch(channel), None)
       }
       let (_, retry) = update_ssh(dispatch, Connect(id), rejected)

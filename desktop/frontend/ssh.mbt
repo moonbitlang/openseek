@@ -790,7 +790,12 @@ fn update_ssh(
           // Retire the attempt before closing its native connection, so queued
           // readiness/disconnect events cannot revive it or hide the mismatch.
           let (close, model) = update_ssh(dispatch, Disconnect(id), model)
-          let message = shell_text(model.locale, HostIncompatibleNotice)
+          let host = ui.hosts.iter().find_first(host => host.id == id)
+          let message = ssh_protocol_mismatch(
+            model.locale,
+            host.map(host => host.display_label()).unwrap_or(id),
+            payload.protocol,
+          )
           let host_errors = model.ssh_ui.host_errors.copy()
           host_errors[id] = message
           let (gate, model) = update_device_msg(

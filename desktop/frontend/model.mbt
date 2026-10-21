@@ -3280,8 +3280,17 @@ fn Model::display_status(self : Model) -> Status {
   match self.bridge_state() {
     Connecting => WaitingBridge
     BridgeLost(message) => Unavailable(message)
-    HostIncompatible =>
-      Unavailable(shell_text(self.locale, HostIncompatibleNotice))
+    HostIncompatible => {
+      let message = match self.focused {
+        Remote(id) => self.ssh_ui.host_errors.get(id)
+        Local => None
+      }
+      Unavailable(
+        message.unwrap_or_else(() => {
+          shell_text(self.locale, HostIncompatibleNotice)
+        }),
+      )
+    }
     // Onboarding has no conversation and therefore no run of its own; the
     // settings-derived readiness is the whole of what can be reported.
     Connected =>
