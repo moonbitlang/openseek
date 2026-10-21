@@ -83,11 +83,11 @@ line (help banner, argument errors, the engine preflight). It runs offline and
 needs no API key.
 
 **Running the checkout's engine.** The workspace only changes what the UI
-compiles against. To also *run* this checkout's engine, build it at the
-repository root (`moon build --release .`) and pass its binary with
-`--engine <path>`; otherwise the UI still spawns the pinned release through
-`moonx`, which may speak an older protocol than the one the UI was built
-against.
+compiles against; on its own the UI still spawns the pinned release through
+`moonx`, which may speak an older protocol than the one it was built against.
+From the repository root, `just tui` builds both binaries and runs the UI with
+`--engine` pointing at this checkout's `openseek` (flags pass through, e.g.
+`just tui --continue`).
 
 ## Publishing
 
