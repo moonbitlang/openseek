@@ -2,7 +2,7 @@
 package "moonbitlang/openseek/internal/bm25"
 
 // Values
-pub fn rank(String, Array[String], Int32) -> Array[Int32]
+pub fn rank(query~ : String, documents~ : Array[String], limit~ : Int32) -> Array[Int32]
 
 // Errors
 

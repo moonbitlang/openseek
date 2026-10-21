@@ -105,9 +105,9 @@ fn tokenize(text : String) -> Array[String] {
 /// non-alphanumerics and camelCase boundaries, without common English stop
 /// words, with simple plurals folded (`issues` matches `issue`).
 pub fn rank(
-  query : String,
-  documents : Array[String],
-  limit : Int32,
+  query~ : String,
+  documents~ : Array[String],
+  limit~ : Int32,
 ) -> Array[Int32] {
   let query_terms : Array[String] = []
   for term in tokenize(query) {
@@ -122,6 +122,9 @@ pub fn rank(
   let b = 0.75
   let counts : Array[Map[String, Int32]] = []
   let lengths : Array[Double] = []
+  // TODO(perf): every call tokenizes and counts every document again. That is
+  // cheap next to a model turn at a few hundred tools; build an index once if
+  // callers rank thousands of documents or rank on a hot path.
   for document in documents {
     let terms = tokenize(document)
     let count : Map[String, Int32] = Map([])

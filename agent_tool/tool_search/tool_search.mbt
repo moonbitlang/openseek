@@ -196,9 +196,9 @@ fn select(
   match (query, server) {
     (Some(query), _) => {
       let ranked = @bm25.rank(
-        query,
-        pool.map(entry => entry.text),
-        pool.length(),
+        query~,
+        documents=pool.map(entry => entry.text),
+        limit=pool.length(),
       )
       let scope = server.map(name => " in `\{name}`").unwrap_or("")
       // Ranking reads the whole query; messages echo a bounded line of it, so
