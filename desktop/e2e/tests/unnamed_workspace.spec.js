@@ -35,11 +35,16 @@ for (const legacy of [false, true]) {
     await expect(localFolder).toHaveAttribute('aria-expanded', 'true');
     if (legacy) {
       const local = page.locator('.conversation-row[title="legacy-chat"]');
+      const folded = selector => page.locator(
+        '.sidebar-group-content[aria-hidden="true"]',
+      ).filter({ has: page.locator(selector) });
       await cloudFolder.click();
-      await expect(hint).toHaveCount(0);
+      await expect(cloudFolder).toHaveAttribute('aria-expanded', 'false');
+      await expect(folded('.cloud-sign-in')).toHaveCount(1);
       await expect(local).toBeVisible();
       await localFolder.click();
-      await expect(local).toHaveCount(0);
+      await expect(localFolder).toHaveAttribute('aria-expanded', 'false');
+      await expect(folded('.conversation-row[title="legacy-chat"]')).toHaveCount(1);
       await expect(cloudFolder).toHaveAttribute('aria-expanded', 'false');
       await localFolder.click();
       await cloudFolder.click();

@@ -23,7 +23,12 @@ function fixture(page) {
   return app;
 }
 
-const rows = page => page.locator('aside .conversation-open');
+// Rows in folded sections stay mounted behind `aria-hidden` while their
+// content box animates closed, so count only the rows in sections the reader
+// can see.
+const rows = page => page.locator(
+  'aside .sidebar-group-content[aria-hidden="false"] .conversation-open',
+);
 
 test('inline title search reuses project rows and keeps results when opening unloaded history', async ({ page }) => {
   const app = fixture(page);
