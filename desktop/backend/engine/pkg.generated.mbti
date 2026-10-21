@@ -80,6 +80,8 @@ pub async fn session_artifacts_update(EngineManager, String, (@protocol.SessionA
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
+pub async fn ssh_model_credentials(EngineManager) -> Map[String, String]
+
 pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @protocol.StartReply
 
 pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply

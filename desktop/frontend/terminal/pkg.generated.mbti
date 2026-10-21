@@ -28,13 +28,14 @@ pub(all) enum CommandStart {
 }
 
 pub struct Ctx {
+  host_name : String?
   channel : @interop.ChannelId
   session : String
   placement : @interop.CheckoutPlacement?
   dark_mode : Bool
   connected : Bool
 } derive(Eq)
-pub fn Ctx::Ctx(channel~ : @interop.ChannelId, session~ : String, placement~ : @interop.CheckoutPlacement?, dark_mode~ : Bool, connected~ : Bool) -> Self
+pub fn Ctx::Ctx(host_name? : String, channel~ : @interop.ChannelId, session~ : String, placement~ : @interop.CheckoutPlacement?, dark_mode~ : Bool, connected~ : Bool) -> Self
 pub fn Ctx::equal(Self, Self) -> Bool
 pub fn Ctx::not_equal(Self, Self) -> Bool
 

@@ -181,6 +181,7 @@ test "connection loss recovers with fresh input only in either callback order" {
     fail("invalid fixture")
   }
   let ctx : Ctx = {
+    host_name: None,
     channel: remote,
     session: "input",
     placement: Some(@interop.WorkspaceRoot(root~)),

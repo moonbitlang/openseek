@@ -117,6 +117,10 @@ fn LocalBridgeSub::wire(
   extension_events : @js.Value,
   application_events : @js.Value,
 ) -> Unit {
+  self.subscribe(extension_events, "openseek.ssh.event", event => {
+    guard event_payload(event) is Some(payload) else { return }
+    scheduler.add((self.dispatch)(Ssh(Json(payload))))
+  })
   // Proton needs one listener per notification kind, so the listeners derive
   // directly from the shared catalog.
   for kind_ in @protocol.NotificationKind::all() {

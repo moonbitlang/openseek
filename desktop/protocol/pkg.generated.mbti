@@ -24,9 +24,14 @@ pub fn goal_set(String, auto~ : Bool) -> @openseek_protocol.Command
 
 pub fn prompt(@openseek_protocol.Content, submission_id? : String) -> @openseek_protocol.Command
 
+pub fn ssh_connection_arguments(String) -> Array[String] raise
+
 pub fn steer(@openseek_protocol.Content, submission_id? : String) -> @openseek_protocol.Command
 
 // Errors
+pub(all) suberror SshCommandError {
+  SshCommandError(String)
+}
 
 // Types and methods
 pub(all) struct AccountSession {
@@ -3756,6 +3761,59 @@ pub fn SnapshotSavePayload::not_equal(Self, Self) -> Bool
 pub fn SnapshotSavePayload::to_json(Self) -> Json
 pub impl ToJson for SnapshotSavePayload
 pub impl @json.FromJson for SnapshotSavePayload
+
+pub(all) struct SshProfile {
+  id : String
+  command : String
+  server : String
+  display_name : String?
+} derive(Eq)
+pub fn SshProfile::connection_label(Self) -> String
+pub fn SshProfile::display_label(Self) -> String
+pub fn SshProfile::equal(Self, Self) -> Bool
+pub fn SshProfile::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProfile::not_equal(Self, Self) -> Bool
+pub fn SshProfile::to_json(Self) -> Json
+pub impl ToJson for SshProfile
+pub impl @json.FromJson for SshProfile
+
+pub(all) struct SshProfileTarget {
+  id : String
+}
+pub fn SshProfileTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProfileTarget::to_json(Self) -> Json
+pub impl ToJson for SshProfileTarget
+pub impl @json.FromJson for SshProfileTarget
+
+pub(all) struct SshProfiles {
+  hosts : Array[SshProfile]
+}
+pub fn SshProfiles::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProfiles::to_json(Self) -> Json
+pub impl ToJson for SshProfiles
+pub impl @json.FromJson for SshProfiles
+
+pub(all) enum SshReply {
+  SshSuccess(Json)
+  SshUnsent(String)
+  SshRefused(String)
+  SshUnknown(String)
+}
+pub fn SshReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshReply::to_json(Self) -> Json
+pub impl ToJson for SshReply
+pub impl @json.FromJson for SshReply
+
+pub(all) struct SshRequest {
+  host_id : String
+  epoch : Int32
+  method_ : String
+  params : Json
+}
+pub fn SshRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshRequest::to_json(Self) -> Json
+pub impl ToJson for SshRequest
+pub impl @json.FromJson for SshRequest
 
 pub(all) struct StageAttachmentsPayload {
   session : String

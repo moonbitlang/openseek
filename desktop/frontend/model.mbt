@@ -1413,7 +1413,7 @@ priv enum ChatSelection {
 priv struct Model {
   cloud : @cloud.State
   chat_navigation_generation : Int32
-
+  ssh_ui : SshUi
   // Connected device channels in stable order: the desktop window's one
   // Local host, or a browser console's roster devices — empty there until
   // the roster loads (`apply_roster`).
@@ -1937,6 +1937,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
+  OpenLocalApiSettings
   Navigation(NavigationMsg)
   // The API-setup modal's "Not now" button and its backdrop click.
   DismissApiSetup
@@ -2073,6 +2074,7 @@ priv enum Msg {
   ExternalLinkClicked(String)
   // Open the in-app folder picker against one device's host (browsing starts
   // at that host's home directory), selecting its channel first if needed.
+  Ssh(SshMsg)
   PickProject(@interop.ChannelId)
   // The Cmd/Ctrl+O chord: open the folder picker for the focused device. A
   // no-op while the picker is already open, so a repeat chord cannot yank
@@ -2833,6 +2835,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     } else {
       []
     },
+    ssh_ui: SshUi::empty(),
     websocket_epoch: 0,
     focused: @interop.ChannelId::Local,
     default_model: DsFlash,

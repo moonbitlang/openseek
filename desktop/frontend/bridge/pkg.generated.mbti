@@ -17,6 +17,7 @@ pub fn remote_connection(device_id~ : String, websocket_epoch~ : Int32, reconnec
 
 // Types and methods
 pub enum Event {
+  Ssh(Json)
   Notification(channel~ : @interop.ChannelId, notification~ : @protocol.Notification)
   Unavailable(channel~ : @interop.ChannelId, message~ : String)
   ChannelDown(channel~ : @interop.ChannelId, websocket_epoch~ : Int32)

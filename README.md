@@ -11,6 +11,13 @@ data model, and the life of one agent turn — see
 
 ## Running without a checkout
 
+`openseek-app-server` serves the working-host API at `ws://127.0.0.1:<port>/host`, intended for SSH forwarding.
+Stdout announces the port, instance ID and protocol version as one JSON line;
+stdin EOF ends the service. The server uses the `openseek` executable beside it;
+`OPENSEEK_ENGINE` can select an engine for source builds. Clients initialize
+with that instance ID and protocol version before calling the host API. Browser-origin requests are
+rejected. Keep the listener and SSH forward bound to loopback.
+
 The root CLI package builds on both native and wasm, and mooncakes.io hosts a
 prebuilt wasm binary for every published version. `moonx` fetches and caches it,
 so the engine runs with no clone and no build:

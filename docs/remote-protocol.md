@@ -1018,3 +1018,12 @@ selection. The final send submits all answers together. The close button skips
 the entire request. Requests live for the host process, surviving frontend
 reconnects but not host shutdown. A
 failed delayed delivery emits a session error and is not automatically retried.
+
+## Native SSH working hosts
+
+Desktop SSH uses the same command catalog over WebSocket on a local loopback
+port forwarded with `ssh -L` to `openseek-app-server` on remote loopback TCP.
+The native bridge forwards host-qualified requests and notifications; the
+renderer never connects a remote resource to its local host by fallback.
+See [SSH working hosts](../desktop/backend/ssh/README.md) for bootstrap,
+initialization, process lifetime, installation and validation details.

@@ -6,6 +6,7 @@
 /// One event observed from a local Proton host or remote relay device. The
 /// parent frontend pattern-matches this value to apply application policy.
 pub enum Event {
+  Ssh(Json)
   Notification(
     channel~ : @interop.ChannelId,
     notification~ : @protocol.Notification

@@ -12,7 +12,7 @@ import {
 // Values
 pub fn subscriptions(State?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn view(locale? : @i18n.Locale, @cmd.Emit[Msg], State) -> @html.Html
+pub fn view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, location? : @html.Html) -> @html.Html
 
 // Errors
 

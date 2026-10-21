@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 for (const deviceScaleFactor of [1, 2]) {
   test.describe(`terminal at ${deviceScaleFactor}x`, () => {
@@ -69,3 +70,24 @@ for (const deviceScaleFactor of [1, 2]) {
     });
   });
 }
+
+
+test('the terminal uses the panel width on first open and after resizing', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await page.getByTitle('Show terminal (Ctrl+`)').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'terminal.open').length).toBe(1);
+  for (const width of [null, 1120, 900]) {
+    if (width !== null) await page.setViewportSize({ width, height: 760 });
+    await expect.poll(() => page.locator('.terminal-panel').evaluate(panel => {
+      const host = panel.querySelector('#terminal-host').getBoundingClientRect();
+      const screen = panel.querySelector('.xterm-screen')?.getBoundingClientRect();
+      // Only padding and the final partial character cell may be unused.
+      return Math.abs(host.width - panel.clientWidth) <= 2 &&
+        screen && screen.width >= host.width - 64;
+    }), { message: 'the host label must not constrain the emulator container' }).toBe(true);
+  }
+  expect(app.pageErrors).toEqual([]);
+});

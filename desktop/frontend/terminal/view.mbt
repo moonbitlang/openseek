@@ -60,6 +60,10 @@ fn panel_view(
   )
   let items : Array[@html.Html] = [
     @html.span(class="terminal-title", ui(locale, TerminalLabel)),
+    ..match ctx.host_name {
+      Some(name) => [@html.span(class="terminal-host-label", title=name, name)]
+      None => []
+    },
   ]
   let visible = state.visible_tabs(ctx)
   let active = state.active_tab(ctx)

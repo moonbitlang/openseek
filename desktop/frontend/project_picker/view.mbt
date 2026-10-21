@@ -43,6 +43,7 @@ pub fn view(
   locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   picker : State,
+  location? : @html.Html,
 ) -> @html.Html {
   let visible_entries = picker.visible_entries()
   let filter_active = !picker.path_filter().is_empty()
@@ -146,6 +147,10 @@ pub fn view(
             @icons.icon(@icons.icon_close),
           ),
         ]),
+        ..match location {
+          Some(control) => [control]
+          None => []
+        },
         @html.div(class="picker-location-bar", [
           match picker.path_draft {
             Some(value) =>

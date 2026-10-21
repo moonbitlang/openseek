@@ -436,6 +436,12 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     new_conversation: id => self.project_new(id),
     open_settings: id => self.project_settings(id),
     detach: id => self.project_detach(id),
+    host_details: id => {
+      match @interop.ChannelId::from_uri_authority(id.channel()) {
+        Some(Remote(host)) => self.emit(Ssh(Details(host)))
+        _ => @cmd.none
+      }
+    },
     conversation,
   }
   let section : @section.Actions = {

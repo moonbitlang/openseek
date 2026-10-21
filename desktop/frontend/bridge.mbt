@@ -317,21 +317,9 @@ fn session_changed_msg(
 /// decoded into root messages here alongside connection and window events.
 fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
   match event {
+    @bridge.Event::Ssh(value) => dispatch(Ssh(Event(value)))
     @bridge.Event::Notification(channel~, notification~) =>
-      match notification {
-        TerminalOutput(payload) =>
-          @terminal.output(channel, payload.id, payload.sequence, payload.data)
-        TerminalExit(payload) =>
-          @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
-          |> Terminal
-          |> dispatch
-        _ =>
-          if notification_msg(channel, notification) is Some(msg) {
-            dispatch(msg)
-          } else {
-            @cmd.none
-          }
-      }
+      bridge_notification(dispatch, channel, notification)
     @bridge.Event::Unavailable(channel~, message~) =>
       dispatch(FromDevice(channel, BridgeUnavailable(message)))
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
@@ -393,7 +381,9 @@ fn Model::bridge_subscriptions(
   dispatch : @cmd.Emit[Msg],
 ) -> @sub.Sub {
   @sub.batch(
-    self.devices.map(dev => dev.bridge_subscription(dispatch, self.account)),
+    self.devices
+    .filter(dev => !@interop.is_native_ssh(dev.channel))
+    .map(dev => dev.bridge_subscription(dispatch, self.account)),
   )
 }
 
@@ -1875,4 +1865,26 @@ fn recover_approvals(
       answered: item.answered,
     },
   })
+}
+
+///|
+fn bridge_notification(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  notification : @protocol.Notification,
+) -> @cmd.Cmd {
+  match notification {
+    TerminalOutput(payload) =>
+      @terminal.output(channel, payload.id, payload.sequence, payload.data)
+    TerminalExit(payload) =>
+      @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
+      |> Terminal
+      |> dispatch
+    _ =>
+      if notification_msg(channel, notification) is Some(msg) {
+        dispatch(msg)
+      } else {
+        @cmd.none
+      }
+  }
 }

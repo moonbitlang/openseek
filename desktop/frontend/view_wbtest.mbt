@@ -26,6 +26,7 @@ test "a fresh chat selects its project and materializes on first send" {
   })
   let fresh_project = sidebar_project_for_test(fresh)
   assert_eq(fresh_project.activation, Some("desktop-test"))
+  assert_true(fresh_project.host is None)
   assert_true(fresh_project.conversations.is_empty())
 
   // Typing still belongs to the new-chat page; it does not manufacture a

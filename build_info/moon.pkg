@@ -1,0 +1,10 @@
+rule(
+  name: "openseek_version",
+  command: "moonx scripts/build_version.mbtx $input $output",
+)
+
+dev_build(
+  rule: "openseek_version",
+  input: "../moon.mod",
+  output: "generated_version.mbt",
+)
