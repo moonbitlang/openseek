@@ -28,4 +28,5 @@ import {
   "moonbit-community/rabbita@0.16.4",
   "moonbitlang/x@0.5.5",
   "moonbit-community/uml@0.4.3",
+  "moonbitlang/lexer@0.4.4",
 }
