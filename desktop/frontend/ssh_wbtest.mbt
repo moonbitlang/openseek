@@ -1,4 +1,112 @@
 ///|
+test "removing SSH retires only that host and ignores late connection and profile replies" {
+  let dispatch = test_dispatch()
+  let profile : @protocol.SshProfile = {
+    id: "ssh-remove-test",
+    command: "ssh build",
+    server: "openseek-app-server",
+    display_name: None,
+  }
+  let other = { ..profile, id: "ssh-remove-other", command: "ssh other", }
+  let channel : @interop.ChannelId = Remote(profile.id)
+  for focused in [channel, @interop.Local, @interop.Remote(other.id)] {
+    let base = { ..test_model(), is_desktop: true, }
+      .register_ssh(profile)
+      .register_ssh(other)
+    let local_conversations = base.conversations
+    let (_, base) = update_ssh(dispatch, Connect(profile.id), base)
+    let base = base.replace_device({
+      ..empty_device_state(channel),
+      bridge: Connected,
+      projects: [channel.test_project()],
+    })
+    let base = {
+      ..base,
+      focused,
+      conversations: local_conversations +
+      [empty_conversation(channel, "remote", channel.test_project())],
+    }
+    @interop.set_ssh_epoch(channel, Some(7))
+    let (_, details) = update_ssh(dispatch, Details(profile.id), base)
+    let (_, confirm) = update_ssh(dispatch, Remove(profile.id), details)
+    let (_, pending) = update_ssh(dispatch, ConfirmRemove(profile.id), confirm)
+    let (_, removed) = update(
+      dispatch,
+      Ssh(Removed(profile.id, Ok(()))),
+      pending,
+    )
+    assert_true(removed.ssh_ui.hosts == [other])
+    assert_true(removed.device_state(channel) is None)
+    assert_true(removed.device_state(Local) == base.device_state(Local))
+    assert_true(
+      removed.device_state(Remote(other.id)) ==
+      base.device_state(Remote(other.id)),
+    )
+    assert_true(removed.conversations == local_conversations)
+    assert_false(removed.console.roster.any(host => host.id == profile.id))
+    assert_eq(removed.focused, if focused == channel { Local } else { focused })
+    assert_eq(@interop.current_ssh_epoch(channel), None)
+    assert_true(@interop.is_native_ssh(channel))
+    assert_true(removed.ssh_ui.details is None)
+    let (_, late) = update_ssh(
+      dispatch,
+      Event({
+        "host_id": profile.id,
+        "attempt": 1,
+        "epoch": 7,
+        "event": { "method": "agent.connected", "params": {} },
+      }),
+      removed,
+    )
+    let (_, late) = update_ssh(
+      dispatch,
+      Loaded(Ok({ hosts: [profile, other], })),
+      late,
+    )
+    let (_, late) = update_ssh(dispatch, Saved(Ok(profile)), late)
+    let (_, late) = update_ssh(dispatch, Connect(profile.id), late)
+    assert_true(late.device_state(channel) is None)
+    assert_true(late.ssh_ui.hosts == [other])
+    assert_false(late.ssh_ui.connecting.contains(profile.id))
+  }
+}
+
+///|
+test "SSH removal cancellation and storage failure preserve the host for retry" {
+  let dispatch = test_dispatch()
+  let profile : @protocol.SshProfile = {
+    id: "ssh-remove-failed",
+    command: "ssh build",
+    server: "openseek-app-server",
+    display_name: None,
+  }
+  let base = { ..test_model(), is_desktop: true, }.register_ssh(profile)
+  let (_, base) = update_ssh(dispatch, Details(profile.id), base)
+  let (_, confirm) = update_ssh(dispatch, Remove(profile.id), base)
+  let (_, cancelled) = update_ssh(dispatch, Close, confirm)
+  assert_true(cancelled.ssh_ui.remove_confirm is None)
+  assert_eq(cancelled.ssh_ui.details, Some(profile.id))
+  assert_true(cancelled.ssh_ui.hosts == [profile])
+  let (_, pending) = update_ssh(dispatch, ConfirmRemove(profile.id), confirm)
+  let (_, repeated) = update_ssh(dispatch, ConfirmRemove(profile.id), pending)
+  assert_true(repeated.ssh_ui == pending.ssh_ui)
+  let (_, failed) = update_ssh(
+    dispatch,
+    Removed(profile.id, Err("disk unavailable")),
+    pending,
+  )
+  assert_true(
+    failed.device_state(Remote(profile.id)) ==
+    base.device_state(Remote(profile.id)),
+  )
+  assert_true(failed.ssh_ui.hosts == [profile])
+  assert_false(failed.ssh_ui.busy)
+  assert_eq(failed.ssh_ui.error, Some("disk unavailable"))
+  let (_, retry) = update_ssh(dispatch, ConfirmRemove(profile.id), failed)
+  assert_true(retry.ssh_ui.busy)
+}
+
+///|
 test "SSH readiness updates the remote host without replacing local state" {
   let profile : @protocol.SshProfile = {
     id: "ssh-ready-test",

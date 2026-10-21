@@ -51,6 +51,7 @@ pub enum Outcome {
 }
 
 type State derive(Eq)
+pub fn State::channel(Self) -> @interop.ChannelId
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self?, Outcome?)
 pub fn State::not_equal(Self, Self) -> Bool

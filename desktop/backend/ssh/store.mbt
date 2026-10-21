@@ -41,10 +41,24 @@ pub async fn save(profile : @protocol.SshProfile) -> @protocol.SshProfile {
   if !current.hosts.any(host => host.id == profile.id) {
     hosts.push(profile)
   }
+  save_profiles(hosts)
+  profile
+}
+
+///|
+/// Forget only the local connection profile; remote data is untouched.
+pub async fn remove(id : String) -> Unit {
+  let current = profiles()
+  if current.hosts.any(host => host.id == id) {
+    save_profiles(current.hosts.filter(host => host.id != id))
+  }
+}
+
+///|
+async fn save_profiles(hosts : Array[@protocol.SshProfile]) -> Unit {
   let path = @pathx.Path(profile_path())
   @fs.mkdir(path.dirname().to_string(), recursive=true, allow_exist=true)
   let next = path.to_string() + "." + @uuid.mint() + ".tmp"
   @fs.write_file(next, @protocol.SshProfiles::{ hosts, }.to_json().stringify())
   @fs.rename(next, path.to_string())
-  profile
 }

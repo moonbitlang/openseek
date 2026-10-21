@@ -60,7 +60,11 @@ folder selection. Saved hosts can also connect through **Add project**.
 An optional display name overrides the SSH alias or hostname. Projects use a
 compact single-line row with the folder name and a separate host label. Click
 the host label for connection status, rename, disconnect or reconnect. The
-original command is available under **Connection details**. Renaming preserves
+host details also offer **Remove host**, which forgets the profile on this
+computer and disconnects its running tasks after confirmation. Remote files,
+project registration, conversation history and installed tools remain on the
+host. A failed profile write keeps the host available so removal can be retried.
+The original command is available under **Connection details**. Renaming preserves
 the host ID, connection, project positions and execution command. Older profile
 files without a display name continue to load. The sidebar combines local and remote projects, with host-qualified
 identities. Chat, history, approvals, attachments, worktrees, file browsing,

@@ -315,6 +315,8 @@ pub let ssh_disconnect : Command[@protocol.SshConnect, @protocol.EmptyReply]
 
 pub let ssh_profiles : Command[@protocol.EmptyPayload, @protocol.SshProfiles]
 
+pub let ssh_remove : Command[@protocol.SshProfileTarget, @protocol.SshReply]
+
 pub let ssh_request : Command[@protocol.SshRequest, @protocol.SshReply]
 
 pub let ssh_save : Command[@protocol.SshProfile, @protocol.SshReply]

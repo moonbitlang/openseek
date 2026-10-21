@@ -31,6 +31,8 @@ priv struct SshUi {
   return_picker : @project_picker.State?
   pick_after_connect : String?
   busy : Bool
+  remove_confirm : String?
+  removed_hosts : Array[String]
   error : String?
   connecting : Map[String, String]
   host_errors : Map[String, String]
@@ -55,6 +57,8 @@ fn SshUi::empty() -> SshUi {
     return_picker: None,
     pick_after_connect: None,
     busy: false,
+    remove_confirm: None,
+    removed_hosts: [],
     error: None,
     connecting: Map([]),
     host_errors: Map([]),
@@ -74,6 +78,10 @@ priv enum SshMsg {
   Saved(Result[@protocol.SshProfile, String])
   Connect(String)
   Disconnect(String)
+  Remove(String)
+  CancelRemove
+  ConfirmRemove(String)
+  Removed(String, Result[Unit, String])
   Select(@interop.ChannelId)
   Failed(String, Int32, String)
   SubmitAuth
@@ -142,6 +150,8 @@ fn ssh_connect(
 
 ///|
 fn Model::register_ssh(self : Model, profile : @protocol.SshProfile) -> Model {
+  // A profile-list reply issued before removal must not restore the host.
+  guard !self.ssh_ui.removed_hosts.contains(profile.id) else { return self }
   @interop.register_ssh_profile(profile)
   let channel : @interop.ChannelId = Remote(profile.id)
   let devices = if self.device_state(channel) is Some(_) {
@@ -176,6 +186,74 @@ fn Model::register_ssh(self : Model, profile : @protocol.SshProfile) -> Model {
 }
 
 ///|
+/// Drop this computer's view of a removed host after the native owner has
+/// committed removal and closed its connection. Remote data is never deleted.
+fn forget_ssh(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  id : String,
+) -> (@cmd.Cmd, Model) {
+  let channel : @interop.ChannelId = Remote(id)
+  // Keep its SSH transport classification: a delayed command must fail as
+  // unsent, never try the relay transport after its native route disappears.
+  @interop.set_ssh_epoch(channel, None)
+  let ui = model.ssh_ui
+  let attempts = ui.attempts.copy()
+  attempts.remove(id)
+  let intents = ui.intents.copy()
+  intents.remove(id)
+  let authentication = ui.authentication.copy()
+  authentication.remove(id)
+  let last_auth = ui.last_auth.copy()
+  last_auth.remove(id)
+  let connecting = ui.connecting.copy()
+  connecting.remove(id)
+  let host_errors = ui.host_errors.copy()
+  host_errors.remove(id)
+  let next = {
+    ..model,
+    devices: model.devices.filter(dev => dev.channel != channel),
+    conversations: model.conversations.filter(conv => conv.device != channel),
+    project_picker: model.project_picker.filter(picker => {
+      picker.channel() != channel
+    }),
+    pending_project_adoption: model.pending_project_adoption.filter(pending => {
+      pending.channel != channel
+    }),
+    console: {
+      ..model.console,
+      roster: model.console.roster.filter(host => host.id != id),
+    },
+    ssh_ui: {
+      ..ui,
+      hosts: ui.hosts.filter(host => host.id != id),
+      attempts,
+      intents,
+      authentication,
+      last_auth,
+      connecting,
+      host_errors,
+      busy: false,
+      error: None,
+      remove_confirm: None,
+      removed_hosts: ui.removed_hosts + [id],
+      details: None,
+      return_details: ui.return_details.filter(host => host != id),
+      return_picker: ui.return_picker.filter(picker => {
+        picker.channel() != channel
+      }),
+      pick_after_connect: ui.pick_after_connect.filter(host => host != id),
+    },
+  }
+  let (focus, next) = if model.focused == channel {
+    focus_channel(dispatch, next, Local)
+  } else {
+    (@cmd.none, next)
+  }
+  (@cmd.batch([focus, ssh_restore_focus()]), next)
+}
+
+///|
 fn update_ssh(
   dispatch : @cmd.Emit[Msg],
   msg : SshMsg,
@@ -184,6 +262,57 @@ fn update_ssh(
   guard model.is_desktop else { return (@cmd.none, model) }
   let ui = model.ssh_ui
   match msg {
+    Remove(id) => {
+      guard !ui.busy && ui.hosts.any(host => host.id == id) else {
+        return (@cmd.none, model)
+      }
+      (
+        ssh_focus("ssh-remove-cancel"),
+        { ..model, ssh_ui: { ..ui, remove_confirm: Some(id), error: None, }, },
+      )
+    }
+    CancelRemove => {
+      guard !ui.busy else { return (@cmd.none, model) }
+      (
+        ssh_focus("ssh-remove"),
+        { ..model, ssh_ui: { ..ui, remove_confirm: None, error: None, }, },
+      )
+    }
+    ConfirmRemove(id) => {
+      guard !ui.busy && ui.remove_confirm == Some(id) else {
+        return (@cmd.none, model)
+      }
+      let command = @cmd.custom_cmd(scheduler => {
+        @js.Promise::from_async(() => {
+          let result : Result[Unit, String] = try {
+            match
+              @interop.bridge_request(Local, @commands.ssh_remove, { id, }) {
+              SshSuccess(_) => Ok(())
+              SshUnsent(message) | SshRefused(message) | SshUnknown(message) =>
+                Err(message)
+            }
+          } catch {
+            error => Err(@interop.bridge_error_text(error))
+          }
+          scheduler.add(dispatch(Ssh(Removed(id, result))))
+        })
+        |> ignore
+      })
+      (command, { ..model, ssh_ui: { ..ui, busy: true, error: None, }, })
+    }
+    Removed(id, result) => {
+      guard ui.remove_confirm == Some(id) && ui.busy else {
+        return (@cmd.none, model)
+      }
+      match result {
+        Err(message) =>
+          (
+            @cmd.none,
+            { ..model, ssh_ui: { ..ui, busy: false, error: Some(message), }, },
+          )
+        Ok(_) => forget_ssh(dispatch, model, id)
+      }
+    }
     Backdrop => {
       if ssh_visible_host(ui) is Some(id) && ui.connecting.contains(id) {
         return (
@@ -267,6 +396,9 @@ fn update_ssh(
       )
     Close => {
       guard !ui.busy else { return (@cmd.none, model) }
+      if ui.remove_confirm is Some(_) {
+        return update_ssh(dispatch, CancelRemove, model)
+      }
       let pending = ssh_visible_host(ui)
       if pending is Some(id) &&
         ui.connecting.contains(id) &&
@@ -414,6 +546,9 @@ fn update_ssh(
       (command, { ..model, ssh_ui: { ..ui, busy: true, error: None, }, })
     }
     Saved(Ok(profile)) => {
+      guard !ui.removed_hosts.contains(profile.id) else {
+        return (@cmd.none, model)
+      }
       let model = model.register_ssh(profile)
       if ui.editing is Some(_) {
         return (
@@ -440,7 +575,9 @@ fn update_ssh(
       })
     }
     Connect(id) => {
-      guard !ui.connecting.contains(id) && !model.ssh_online(id) else {
+      guard ui.hosts.any(host => host.id == id) &&
+        !ui.connecting.contains(id) &&
+        !model.ssh_online(id) else {
         return (@cmd.none, model)
       }
       let last_auth = ui.last_auth.copy()
@@ -1160,7 +1297,36 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
       )
     }
-    if ui.authentication.get(id) is Some(auth) {
+    if ui.remove_confirm == Some(id) {
+      title = "Remove SSH host?"
+      content.push(
+        @html.p(
+          class="ssh-help",
+          "Remove this host from this computer. Its connection and running tasks will stop. Remote files, projects and conversation history will remain on the host.",
+        ),
+      )
+      content.push(
+        @html.div(class="ssh-modal-actions", [
+          @html.button(
+            class="button secondary",
+            attrs=@html.Attrs::build().id("ssh-remove-cancel"),
+            disabled=ui.busy,
+            on_click=dispatch(Ssh(CancelRemove)),
+            "Cancel",
+          ),
+          @html.button(
+            class="button danger",
+            disabled=ui.busy,
+            on_click=dispatch(Ssh(ConfirmRemove(id))),
+            if ui.busy {
+              "Removing…"
+            } else {
+              "Remove host"
+            },
+          ),
+        ]),
+      )
+    } else if ui.authentication.get(id) is Some(auth) {
       content.push(ssh_auth_region(dispatch, ui, auth))
     } else if ui.connecting.contains(id) {
       content.push(
@@ -1175,6 +1341,12 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             class="button secondary",
             on_click=dispatch(Ssh(Rename(id))),
             "Rename",
+          ),
+          @html.button(
+            class="button danger",
+            attrs=@html.Attrs::build().id("ssh-remove"),
+            on_click=dispatch(Ssh(Remove(id))),
+            "Remove host",
           ),
           ssh_connection_button(dispatch, model, id, in_modal=true),
           @html.button(

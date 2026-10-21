@@ -80,4 +80,10 @@ async test "saved SSH profiles survive an existing directory and subsequent addi
   assert_true(reloaded.hosts == [renamed, second])
   assert_eq(renamed.id, first.id)
   assert_eq(renamed.command, first.command)
+  // Keep profile mutations in one fixture: the storage override is process-wide.
+  @ssh.remove(first.id)
+  @ssh.remove(first.id)
+  assert_true(@ssh.profiles().hosts == [second])
+  @ssh.remove(second.id)
+  assert_true(@ssh.profiles().hosts.is_empty())
 }

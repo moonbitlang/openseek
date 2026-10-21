@@ -235,6 +235,7 @@ priv enum BridgeControl {
   SystemAppearanceChanged
   SshConnect(@protocol.SshConnect)
   SshDisconnect(@protocol.SshConnect)
+  SshRemove(String, @async.Queue[@protocol.SshReply])
 }
 
 ///|
@@ -444,6 +445,11 @@ pub fn openseek_capability(
       bridge.inbox.put(Control(SshDisconnect(target)))
       Acknowledged
     }),
+    WindowEndpoint(@commands.ssh_remove, (_, target) => {
+      let reply = @async.Queue(kind=Blocking(1))
+      bridge.inbox.put(Control(SshRemove(target.id, reply)))
+      reply.get()
+    }),
     WindowEndpoint(@commands.host_open_path_preview, (_, payload) => {
       @host.open_path_preview(payload)
     }),
@@ -648,6 +654,7 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
               })
             }
             SshDisconnect(request) => self.disconnect_ssh(request, tasks)
+            SshRemove(id, reply) => reply.put(self.remove_ssh(id, tasks))
             PageConnected(context, reply) => {
               for route in self.routes.values() {
                 route.close()

@@ -19,6 +19,11 @@ pub let ssh_disconnect : Command[@protocol.SshConnect, @protocol.EmptyReply] = C
 )
 
 ///|
+pub let ssh_remove : Command[@protocol.SshProfileTarget, @protocol.SshReply] = Command(
+  "ssh.remove",
+)
+
+///|
 pub let ssh_request : Command[@protocol.SshRequest, @protocol.SshReply] = Command(
   "ssh.request",
 )
