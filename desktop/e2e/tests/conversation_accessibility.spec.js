@@ -50,10 +50,13 @@ test('conversation titles support keyboard activation and independent row action
   await page.keyboard.press('ArrowUp');
   await expect(menu.getByRole('menuitem', { name: 'Archive' })).toBeFocused();
   await page.keyboard.press('Enter');
-  // The archived section keeps its rows mounted while folded, hidden from
-  // assistive technology behind the section's inert content.
-  await expect(page.locator('.sidebar-group-content[aria-hidden="true"]')
-    .filter({ has: first })).toHaveCount(1);
+  // The archived row stays mounted, but the folded section clips it and
+  // excludes its controls from keyboard focus.
+  await expect(first).not.toBeInViewport();
+  expect(await first.locator('.conversation-open').evaluate(button => {
+    button.focus();
+    return document.activeElement === button;
+  })).toBe(false);
   await expect(second).toHaveClass(/active/);
   expect(app.requests.filter(r => r.method === 'session.archive')).toHaveLength(1);
   expect(app.requests.filter(r => r.method === 'session.load' && r.params?.session === 'session-1')).toHaveLength(1);

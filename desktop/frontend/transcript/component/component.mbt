@@ -699,7 +699,7 @@ fn transcript_sub_loader(
       // and would report the reader as unpinned. Only an offset that moved up
       // can be the reader leaving the tail; a stale follow moved down or not
       // at all.
-      let mut last_top : Double? = None
+      let mut last_top = 0.0
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
@@ -707,11 +707,8 @@ fn transcript_sub_loader(
           return
         }
         let top = element.get_scroll_top()
-        let moved_up = match last_top {
-          Some(previous) => top < previous
-          None => true
-        }
-        last_top = Some(top)
+        let moved_up = top < last_top
+        last_top = top
         // Report only what differs from the Model. Its next message brings
         // the same value back through `update_tagger`; assigning here just
         // keeps a burst of scroll events from repeating the report meanwhile.
@@ -730,6 +727,9 @@ fn transcript_sub_loader(
       let observers = TranscriptObservers::install(
         () => scheduler.add(emit(ContentRendered)),
         path => scheduler.add(emit(ImageRequested(path))),
+        // Establish the baseline before the mounted scroller's first event,
+        // including when a conversation restores a nonzero reading position.
+        element => last_top = element.get_scroll_top(),
       )
       Some({
         unload: scheduler => {
@@ -924,6 +924,7 @@ fn TranscriptDomMount::dispose(self : Self) -> Unit {
 fn TranscriptObservers::install(
   on_change : () -> Unit,
   on_image : (String) -> Unit,
+  on_mount : (@dom.Element) -> Unit,
 ) -> Self {
   let mount = TranscriptDomMount(on_change, on_image)
   let resize = @dom.ResizeObserver::new((_, _) => on_change())
@@ -947,7 +948,8 @@ fn TranscriptObservers::install(
     mount.replace(next)
     mount.observe_content(content)
     mount.observe_resize(resize)
-    if next is Some(_) {
+    if next is Some(element) {
+      on_mount(element)
       on_change()
     }
   }

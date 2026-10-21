@@ -277,24 +277,33 @@ test('minimal transcript groups live tools and folds completed work around user 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal transcript clears jump to latest when folded content fits the viewport', async ({ page }) => {
+for (const replayed of [false, true]) test(`minimal transcript clears jump to latest when folded content fits the viewport${replayed ? ' on first history expansion' : ''}`, async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   app.sessionEvents[5].item.payload.content = Array.from(
     { length: 60 }, (_, index) => `Progress paragraph ${index}.`,
   ).join('\n\n');
+  const terminal = { kind: 'finished', message: 'Finished checking.' };
+  if (replayed) {
+    app.sessionEvents.push({
+      sequence: app.sessionEvents.at(-1).sequence + 1,
+      item: { kind: 'terminal', payload: terminal },
+    });
+  }
   await app.install();
   await app.goto();
   await app.enableMinimal();
   const transcript = page.locator('#transcript');
   const jump = page.getByTitle('Jump to latest', { exact: true });
-  await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight))
-    .toBeGreaterThan(1000);
-  await transcript.evaluate(node => { node.scrollTop = 0; });
-  await expect(jump).toBeVisible();
+  if (!replayed) {
+    await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight))
+      .toBeGreaterThan(1000);
+    await transcript.evaluate(node => { node.scrollTop = 0; });
+    await expect(jump).toBeVisible();
 
-  // Collapsing from scrollTop=0 changes the available range without a scroll
-  // event. The old unpinned state must not leave a button over the summary.
-  app.append('terminal', { kind: 'finished', message: 'Finished checking.' });
+    // Collapsing from scrollTop=0 changes the available range without a scroll
+    // event. The old unpinned state must not leave a button over the summary.
+    app.append('terminal', terminal);
+  }
   await expect(page.locator('.minimal-process')).toHaveCount(1);
   await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight)).toBe(0);
   await expect(jump).toBeHidden();
