@@ -12,7 +12,7 @@ struct Model {
 ///|
 priv enum Source {
   Host(@interop.ChannelId, @protocol.SessionExportPayload)
-  Cloud(session~ : String, title~ : String)
+  Cloud(session~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -235,17 +235,13 @@ pub fn Model::is_open(self : Model) -> Bool {
 }
 
 ///|
-pub fn Model::open_cloud(
-  self : Model,
-  session~ : String,
-  title~ : String,
-) -> (@cmd.Cmd, Model) {
+pub fn Model::open_cloud(self : Model, session~ : String) -> (@cmd.Cmd, Model) {
   (
     @dialog.show(DialogId),
     {
       generation: self.generation + 1,
       content: Some({
-        source: Cloud(session~, title~),
+        source: Cloud(session~),
         operation: Ready,
         publication: None,
       }),

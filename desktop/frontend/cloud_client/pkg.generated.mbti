@@ -46,6 +46,7 @@ pub(all) enum Failure {
   Http(Int32)
   Unreachable
   Malformed
+  ExportUnavailable
   ServiceNotConfigured
   CredentialServiceUnavailable
   SignInFailed(String)

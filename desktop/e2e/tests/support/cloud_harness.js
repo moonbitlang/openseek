@@ -27,6 +27,9 @@ export class CloudHarness {
     this.createStatus = 201;
     this.sendStatus = 200;
     this.shareStatus = 200;
+    this.exportStatus = 200;
+    this.exportSnapshots = new Map();
+    this.exportOffline = false;
     this.deleteStatus = 204;
     this.patchStatus = 204;
     this.patchOffline = false;
@@ -259,6 +262,11 @@ export class CloudHarness {
       this.sessionIds = this.sessionIds.filter(id => id !== session);
       this.histories.delete(session);
       return route.fulfill({ status: this.deleteStatus, headers });
+    }
+    if (/^\/v1\/sessions\/[^/]+\/export$/.test(path)) {
+      if (this.exportOffline) return route.abort('failed');
+      const session = decodeURIComponent(path.split('/')[3]);
+      return json(this.exportSnapshots.get(session), this.exportStatus);
     }
     if (/^\/v1\/sessions\/[^/]+\/share$/.test(path)) {
       const body = request.postDataJSON();

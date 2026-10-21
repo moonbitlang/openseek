@@ -18,7 +18,7 @@ pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
 pub fn discard_legacy_credential() -> Unit
 
-pub async fn export_record(String, String) -> String
+pub async fn export_snapshot(String, String) -> @protocol.SessionSnapshot
 
 pub async fn file_unchanged(String, String, String, String) -> Bool
 

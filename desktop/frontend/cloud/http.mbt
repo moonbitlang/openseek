@@ -111,54 +111,28 @@ async fn send_message(
 }
 
 ///|
-/// Export the same committed visible history served to the conversation UI.
-/// Sequence numbers describe this exported projection, not engine checkpoints.
-pub async fn export_record(token : String, session : String) -> String {
-  history_record(load_history(token, session))
-}
-
-///|
-fn history_record(history : History) -> String {
-  let text = StringBuilder()
-  for index, record in history.messages {
-    let item : Json = normalized_item(record.kind, record.data).unwrap_or_else(() => {
-      if record.kind == "task_finished" {
-        let completed = record.data is { "status": "completed", .. }
-        {
-          "kind": "terminal",
-          "payload": {
-            "kind": if completed {
-              "finished"
-            } else {
-              "failed"
-            },
-            "message": if completed {
-              ""
-            } else {
-              record.data.stringify()
-            },
-          },
-        }
-      } else {
-        {
-          "kind": "runtime_notice",
-          "payload": { "content": record.kind + ": " + record.data.stringify() },
-        }
-      }
-    })
-    let line : Json = {
-      "sequence": index + 1,
-      "ts": record.created_at,
-      "item": item,
-    }
-    text.write_string(line.stringify())
-    text.write_char('\n')
+/// Capture the server's standalone export from the original engine records.
+pub async fn export_snapshot(
+  token : String,
+  session : String,
+) -> @protocol.SessionSnapshot {
+  let snapshot = request(
+    CloudOrigin,
+    "/v1/sessions/\{@uri.encode_component(session)}/export",
+    Get,
+    token~,
+  ) catch {
+    @cloud_client.RequestError(Busy) =>
+      raise @cloud_client.RequestError(ExportUnavailable)
+    error => raise error
   }
-  text.to_string()
+  @json.from_json(snapshot) catch {
+    _ => raise @cloud_client.RequestError(Malformed)
+  }
 }
 
 ///|
-/// Publish server-captured visible history; never download it for an upload.
+/// Publish server-captured engine records; never download them for an upload.
 pub async fn share(
   token : String,
   session : String,
@@ -170,7 +144,11 @@ pub async fn share(
     Post,
     token~,
     body={ "idempotency_key": idempotency_key },
-  )
+  ) catch {
+    @cloud_client.RequestError(Busy) =>
+      raise @cloud_client.RequestError(ExportUnavailable)
+    error => raise error
+  }
   guard response is { "url": String(url), .. } && !url.is_empty() else {
     raise @cloud_client.RequestError(Malformed)
   }

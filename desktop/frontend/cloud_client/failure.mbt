@@ -5,6 +5,7 @@ pub(all) enum Failure {
   Http(Int32)
   Unreachable
   Malformed
+  ExportUnavailable
   ServiceNotConfigured
   CredentialServiceUnavailable
   SignInFailed(String)
@@ -19,6 +20,8 @@ pub fn Failure::label(self : Failure) -> String {
     Http(status) => "Cloud answered HTTP \{status}. Try again."
     Unreachable => "Cloud is unreachable. Check your connection and try again."
     Malformed => "Cloud returned an invalid response. Try again."
+    ExportUnavailable =>
+      "This conversation has no complete original log to export."
     ServiceNotConfigured =>
       "Cloud model credentials are not configured. Contact the service administrator."
     SignInFailed(message) => message

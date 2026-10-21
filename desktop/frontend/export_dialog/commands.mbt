@@ -14,7 +14,7 @@ impl Show for ExportError with fn output(self, logger) {
 
 ///|
 /// The caller captures its account and source once. Hosts publish Work files;
-/// Cloud owns its visible-history export. The client never uploads snapshots.
+/// Cloud captures its engine records. The client never uploads snapshots.
 fn Model::share(
   self : Model,
   emit : @cmd.Emit[Msg],
@@ -50,7 +50,7 @@ fn Model::share(
               authorization,
             })
           }
-          Cloud(session~, ..) => {
+          Cloud(session~) => {
             scheduler.add(
               emit(Progress({ generation, progress: Waiting(attempt=1), })),
             )
@@ -122,22 +122,6 @@ async fn upload_grant(
 }
 
 ///|
-async fn asset(path : String) -> String {
-  let base : String = @js.Value::cast_from(@dom.document()).get_with_string(
-    "baseURI",
-  )
-  let url = match @base_browser.resolve_url(path, base~) {
-    Ok((url, _)) => url
-    Err(message) => raise ExportError(message)
-  }
-  let (response, body) = @http.get(url)
-  guard response.code == 200 else {
-    raise ExportError("Export assets answered HTTP \{response.code}")
-  }
-  body.text()
-}
-
-///|
 async fn capture(
   source : Source,
   account : @protocol.AccountSession?,
@@ -145,34 +129,17 @@ async fn capture(
   match source {
     Host(channel, payload) =>
       @interop.bridge_request(channel, @commands.session_snapshot, payload)
-    Cloud(session~, title~) => {
+    Cloud(session~) => {
       guard account is Some(account) else {
         raise ExportError("Sign in to export Cloud history.")
       }
-      let events = @cloud.export_record(account.token, session) catch {
+      @cloud.export_snapshot(account.token, session) catch {
         @cloud.RequestError::RequestError(@cloud.Failure::Unauthorized) =>
           raise AccountUnauthorized
         @cloud.RequestError::RequestError(error) =>
           raise ExportError(error.label())
         _ => raise ExportError(@cloud.Failure::Unreachable.label())
       }
-      let exporter = @viz_export.StandaloneExport(
-        asset("/assets/viz/index.html"),
-        asset("/assets/viz/viz_app.js"),
-      )
-      let json = exporter.json([
-        @viz_export.Session(
-          key="session-0",
-          id=session,
-          root="cloud://sessions/" + session,
-          root_label="Cloud",
-          is_marker=true,
-          last_active=None,
-          first_prompt=title,
-          events~,
-        ),
-      ])
-      { html: exporter.render_json(json), json, }
     }
   }
 }
@@ -197,7 +164,7 @@ fn Model::download(
             @interop.bridge_request(Local, @commands.session_snapshot_save, {
               session: match source {
                 Host(_, payload) => payload.session
-                Cloud(session~, ..) => session
+                Cloud(session~) => session
               },
               html: files.html,
             })

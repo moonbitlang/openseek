@@ -6778,7 +6778,6 @@ fn update_msg(
       }
       let (command, export_dialog) = model.export_dialog.open_cloud(
         session=identity.session(),
-        title=model.cloud_title(),
       )
       (command, { ..model, export_dialog, })
     }

@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek/viz_export",
   "openseek_desktop/frontend/cloud",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/async/http",

@@ -20,7 +20,3 @@ supported_targets = "js"
 import {
   "moonbitlang/async",
 } for "test"
-
-import {
-  "moonbitlang/openseek/agent_session/log" @session_log,
-} for "wbtest"
