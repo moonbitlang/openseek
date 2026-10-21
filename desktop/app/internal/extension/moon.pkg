@@ -16,6 +16,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/socket",
   "moonbitlang/core/env",
+  "moonbitlang/core/debug",
   "openseek_desktop/backend/uuid",
   "moonbitlang/async/fs",
   "moonbitlang/core/json",

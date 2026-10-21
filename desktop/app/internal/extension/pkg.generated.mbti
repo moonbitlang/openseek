@@ -14,13 +14,15 @@ pub fn browser_tools(BrowserViews) -> Array[@mcp.Tool]
 
 pub fn browser_view_id(String) -> Int32?
 
+pub fn external_link_policy() -> @proton.WebContentsPolicy
+
 pub fn localized_menu(String) -> @proton.MenuBar
 
 pub async fn open_external(@protocol.ExternalLinkPayload, allow_file? : Bool) -> @protocol.OpenExternalReply
 
 pub fn openseek_capability(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
 
-pub fn view_event_json(Int32, @proton.ViewEvent) -> Json?
+pub fn view_event_json(Int32, @proton.WebContentsEvent) -> Json?
 
 // Errors
 

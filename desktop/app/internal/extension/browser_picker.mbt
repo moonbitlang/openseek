@@ -71,6 +71,7 @@ async fn BrowserViews::inspect_element(
   let listener_json = Json(binding + "_listener").stringify()
   defer (self
     .view(pick.id)
+    .web_contents()
     .eval(
       "globalThis[\{listener_json}]?.abort(); delete globalThis[\{listener_json}]; delete globalThis[\{binding_json}];",
     ) catch {
@@ -118,7 +119,7 @@ async fn BrowserViews::inspect_element(
     })
     let element : @protocol.BrowserElement = result.decode_value()
     connection.release_object(object_id)
-    self.attached_window().browser().focus()
+    self.attached_window().web_contents().focus()
     return Selected(element)
   }
 }

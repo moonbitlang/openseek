@@ -45,7 +45,20 @@ async fn main {
   }
   let frontend_entry = @host.frontend_entry_path(resources)
   let engine = @engine.engine_command(resources)
-  let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
+  let app = @proton.App(
+    WindowConfig(
+      "SeekMoon",
+      Asset(frontend_entry),
+      width=1120,
+      height=760,
+      // Let the page palette paint the native titlebar area, including when
+      // the in-app palette differs from the system appearance.
+      titlebar_style=Overlay,
+      // Keep the traffic lights aligned with the 46px application header.
+      traffic_light_position={ x: 16, y: 16, },
+      web_contents_policy=@extension.external_link_policy(),
+    ),
+  )..config(@proton.load_config())
   let app_version = app.version() catch { _ => "development" }
   @xlog.info() <? { "message": "host process start" }
   @xlog.info() <? { "message": "frontend entry", "path": frontend_entry }
@@ -56,7 +69,6 @@ async fn main {
   // to the shipped one: `package/build.mjs` generates a project config
   // carrying its own, and `proton dev` hands that config on to the host
   // through PROTON_PROJECT_CONFIG, so this call picks it up either way.
-  let app = app.load_config()
   let development = is_development(app)
   let runtime_dir = @host.prepared_runtime_dir(executable)
   let codex_home = match runtime_dir {
@@ -130,38 +142,8 @@ async fn main {
   // process already holding that identity's lock, and that process brings its
   // window to the front. Off by default for now; see `single_instance_wanted`.
   let single_instance = single_instance_wanted(matches, development~)
-  let app = if single_instance { app.single_instance() } else { app }
-  let app = app
-    // Let the page palette paint the native titlebar area. The default macOS
-    // titlebar follows the system appearance, so an explicit in-app dark theme
-    // otherwise leaves a bright strip above the dark application shell.
-    .titlebar_style(Overlay)
-    // Give the macOS buttons a 16pt left inset and center their 14pt height in
-    // the 46px app header (base.css). Proton reports the reserved titlebar area
-    // so the sidebar toggle follows their position, including after zoom.
-    .traffic_light_position(x=16, y=16)
-    .debug_level(1)
-    // Rabbita consumes ordinary left-click navigation for the dock Browser,
-    // but deliberately leaves Ctrl/Cmd-click and middle-click to Chromium.
-    // Proton 0.2.6 reports those new-window requests here without their target
-    // disposition, so `user_gesture` is temporarily the closest available
-    // signal. This also includes a page calling `window.open` during a click;
-    // deny the embedded window in every case, and send user-initiated URLs to
-    // the system opener until Proton exposes the disposition.
-    .on_new_window_request((_, request) => {
-      if request.user_gesture {
-        ignore(@extension.open_external({ url: request.url, })) catch {
-          error =>
-            @xlog.error() <?
-              {
-                "event": "external_link_open_failed",
-                "url": request.url,
-                "error": @debug.render(Repr(error)),
-              }
-        }
-      }
-      Deny
-    })
+  let app = if single_instance { app..single_instance() } else { app }
+  let app = app..debug_level(1)
   // Proton auto-fills only the Application menu; Edit and Window must be
   // declared or macOS loses their key equivalents (Cmd+A/C/V/X/Z, Cmd+W/M),
   // which is what dispatches editing shortcuts to every text field. The
@@ -170,7 +152,7 @@ async fn main {
   let app = if @async.platform is Windows {
     app
   } else {
-    app.menu(
+    app..menu(
       MenuBar(menus=[
         @proton.Menu::role(Edit),
         Menu("Developer", items=[
@@ -199,26 +181,22 @@ async fn main {
     // Both command extensions are deliberately granted to the configured
     // entry page; registering backend handlers alone does not grant renderer
     // access.
-    .capability(@extension.openseek_capability(state, bridge, views))
+    ..capability(@extension.openseek_capability(state, bridge, views))
     // System notifications are an ordinary generated extension now: the
     // frontend posts them and receives `notification.click` with the run id.
-    .capability(@notification.capability())
-    // The connect request proves the page can issue commands; this paired
-    // lifecycle supplies the window-owned event destination that remains
-    // valid after that request returns — and the window handle the browser
-    // views hang off.
-    .window_lifecycle(
-      on_ready=context => {
-        views.window_ready(context.handle())
-        bridge.window_ready(context.events())
-      },
-      on_close=_ => {
+    ..capability(@notification.capability())
+    // The window owns its event destination independently of connect requests.
+    // Register teardown before bridge attachment so partial setup is cleaned up.
+    ..setup_window(context => {
+      views.window_ready(context.handle())
+      context.add_cleanup(() => {
         views.window_closed()
         bridge.window_closed()
-      },
-    )
+      })
+      bridge.window_ready(context.events())
+    })
     // The OS preference is independent of CEF and the explicit window theme.
-    .on_system_appearance_change(async fn(_) noraise {
+    ..on_system_appearance_change(async fn(_) noraise {
       bridge.notify_system_appearance_changed() catch {
         // Cancellation during shutdown leaves no page to notify.
         _ => ()
@@ -226,7 +204,7 @@ async fn main {
     })
     // Geometry can change without a DOM fullscreen event (native fullscreen,
     // display scaling, or page zoom). Only this window's page is notified.
-    .on_window_event((_, event) => {
+    ..on_window_event((_, event) => {
       if event is StateChanged(_) {
         bridge.notify_window_chrome_changed() catch {
           // Cancellation during shutdown leaves no page to notify.
@@ -236,17 +214,15 @@ async fn main {
     })
     // Browser view events reach the page as `browser.event` notifications;
     // views that are not browser tabs are not the frontend's business.
-    .on_view_event((view, event) => {
-      match @extension.browser_view_id(view.id()) {
-        Some(id) =>
-          if @extension.view_event_json(id, event) is Some(payload) {
-            bridge.notify_browser_event(payload) catch {
-              // Only cancellation can interrupt the queue put — the app is
-              // shutting down, so the event has nowhere to go anyway.
-              _ => ()
-            }
+    ..on_web_contents_event((contents, event) => {
+      if contents.view_id() is Some(view) &&
+        @extension.browser_view_id(view) is Some(id) {
+        if @extension.view_event_json(id, event) is Some(payload) {
+          bridge.notify_browser_event(payload) catch {
+            // Shutdown leaves no page to notify.
+            _ => ()
           }
-        None => ()
+        }
       }
     })
   // Set by the application lifecycle hook, which only the process that kept
@@ -254,80 +230,73 @@ async fn main {
   // `app.run()` having done nothing, and must not go on to act on state
   // that belongs to the host still running.
   let mut is_primary = false
-  @async.with_task_group(group => {
-    // Everything that acts on state belonging to whoever owns the runtime
-    // directory starts here and nowhere earlier: the hook runs only in the
-    // process that kept the launch, and before its window opens. A launch
-    // handed to another host returns from `app.run()` without ever reaching
-    // it, so it neither spawns a Codex app-server or engine of its own, nor
-    // registers with the relay under the running host's device identity.
-    //
-    // The actors run for the app's lifetime on this group — they feed every
-    // page/client rather than borrowing a `host.connect` request task as
-    // their owner — and stop when the run loop returns.
-    let app = app.app_lifecycle(
-      on_start=_ => {
-        is_primary = true
-        // Before the bridge: it prepares the workspace registry first, and
-        // no page may attach to a host that has not.
-        state.start_services(group)
-        group.spawn_bg(allow_failure=true, () => bridge.run())
-        // The relay actor registers this host only when remote access (or the
-        // environment override) is enabled, and idles otherwise.
-        group.spawn_bg(allow_failure=true, () => relay.run())
-        if console is Some(console) {
-          // The same directory and document the window loads.
-          let entry = @pathx.Path(frontend_entry)
-          @xlog.info() <?
-            {
-              "event": "desktop_console_serving",
-              "origin": console.origin(),
-              "root": entry.dirname().to_string(),
-            }
-          group.spawn_bg(allow_failure=true, () => {
-            console.run(
-              state,
-              root=entry.dirname().to_string(),
-              entry=entry.basename().to_owned(),
-            )
-          })
-        }
-      },
-      on_shutdown=_ => (),
-    )
-    @xlog.info() <?
-      { "event": "desktop_app_run_start", "single_instance": single_instance }
-    try {
-      app.run()
-      if !is_primary {
-        // Nothing else tells a `moon run` user what happened: Proton notes
-        // the forwarding in its own log, the running instance's window comes
-        // to the front, and this process ends.
-        println(
-          "SeekMoon is already running; its window was brought to the front. Quit it first, or start this one without --single-instance.",
-        )
-      }
+  // Everything that acts on state belonging to whoever owns the runtime
+  // directory starts here and nowhere earlier: the hook runs only in the
+  // process that kept the launch, and before its window opens. A launch
+  // handed to another host returns from `app.run()` without ever reaching
+  // it, so it neither spawns a Codex app-server or engine of its own, nor
+  // registers with the relay under the running host's device identity.
+  //
+  // The actors run in Proton's application task group — they feed every
+  // page/client rather than borrowing a `host.connect` request task as
+  // their owner — and stop before Proton releases the runtime.
+  app.setup(context => {
+    let group = context.task_group()
+    is_primary = true
+    // Before the bridge: it prepares the workspace registry first, and
+    // no page may attach to a host that has not.
+    state.start_services(group)
+    group.spawn_bg(allow_failure=true, () => bridge.run())
+    // The relay actor registers this host only when remote access (or the
+    // environment override) is enabled, and idles otherwise.
+    group.spawn_bg(allow_failure=true, () => relay.run())
+    if console is Some(console) {
+      // The same directory and document the window loads.
+      let entry = @pathx.Path(frontend_entry)
       @xlog.info() <?
         {
-          "event": "desktop_app_run_return",
-          "result": "ok",
-          "primary": is_primary,
-          "message": "host process exit ok",
+          "event": "desktop_console_serving",
+          "origin": console.origin(),
+          "root": entry.dirname().to_string(),
         }
-    } catch {
-      error =>
-        @xlog.error() <?
-          {
-            "event": "desktop_app_run_return",
-            "result": "error",
-            "message": "host process error",
-            "error": @debug.render(Repr(error)),
-          }
+      group.spawn_bg(allow_failure=true, () => {
+        console.run(
+          state,
+          root=entry.dirname().to_string(),
+          entry=entry.basename().to_owned(),
+        )
+      })
     }
-    // The window is closed: tear the pumps (and with them every serve
-    // engine) down rather than wait on their tasks forever.
-    group.return_immediately(())
   })
+  @xlog.info() <?
+    { "event": "desktop_app_run_start", "single_instance": single_instance }
+  try {
+    app.run()
+    if !is_primary {
+      // Nothing else tells a `moon run` user what happened: Proton notes
+      // the forwarding in its own log, the running instance's window comes
+      // to the front, and this process ends.
+      println(
+        "SeekMoon is already running; its window was brought to the front. Quit it first, or start this one without --single-instance.",
+      )
+    }
+    @xlog.info() <?
+      {
+        "event": "desktop_app_run_return",
+        "result": "ok",
+        "primary": is_primary,
+        "message": "host process exit ok",
+      }
+  } catch {
+    error =>
+      @xlog.error() <?
+        {
+          "event": "desktop_app_run_return",
+          "result": "error",
+          "message": "host process error",
+          "error": @debug.render(Repr(error)),
+        }
+  }
   // A successful `update.apply` swapped the bundle on disk and left a
   // relaunch marker: reopen the new version now that the run loop is done.
   // `open -n` hands the launch to LaunchServices, so the new instance is

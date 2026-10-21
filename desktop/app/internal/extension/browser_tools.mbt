@@ -139,7 +139,7 @@ fn tab_json(id : Int32, view : @proton.ViewHandle) -> Json raise {
   let tab : Map[String, Json] = { "id": Json(id) }
   // A view that has not committed its first navigation has no entry yet:
   // the tab exists, with no page to name.
-  if view.navigation_history().active_entry() is Some(entry) {
+  if view.web_contents().navigation_history().active_entry() is Some(entry) {
     tab["url"] = Json(entry.url)
     tab["title"] = Json(entry.title)
   }
@@ -449,20 +449,20 @@ async fn BrowserViews::navigate_tab(
   }
   self.after(id, view, Change, () => {
     match destination {
-      To(url) => view.load_url(url)
+      To(url) => view.web_contents().load_url(url)
       Back => {
-        guard view.can_go_back() else {
+        guard view.web_contents().can_go_back() else {
           raise @mcp.ToolError("Tab \{id} has no earlier page to go back to.")
         }
-        view.back()
+        view.web_contents().back()
       }
       Forward => {
-        guard view.can_go_forward() else {
+        guard view.web_contents().can_go_forward() else {
           raise @mcp.ToolError("Tab \{id} has no later page to go forward to.")
         }
-        view.forward()
+        view.web_contents().forward()
       }
-      Reload => view.reload(ignore_cache=true)
+      Reload => view.web_contents().reload(ignore_cache=true)
     }
   })
 }

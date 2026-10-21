@@ -1,6 +1,6 @@
 # Small Proton examples
 
-These examples use Proton 0.3.4 APIs. Start with a generated **minimal**
+These examples use Proton 0.5.1 APIs. Start with a generated **minimal**
 project (`proton_cli new my-app --template minimal --yes`) and work from its
 directory. Keep its `proton.project.json`, including the application identity.
 In an existing project, preserve its entry and imports rather than replacing
@@ -22,13 +22,13 @@ async fn main {
     height=600,
     debug=true,
   )
-  .load_config()
+  ..config(@proton.load_config())
   .run_or_abort()
 }
 ```
 
 Run `moon check --target native`, then `proton_cli dev`. A window should show
-the heading. The builder configures the window; `load_config()` reads the
+the heading. The builder configures the window; `..config(@proton.load_config())` reads and applies the
 project configuration, and `run_or_abort()` runs the application.
 
 Use `@proton.url` for a web URL, `@proton.file` for a local HTML file, or
@@ -42,12 +42,12 @@ and copies the returned greeting through the clipboard extension. Plain
 JavaScript keeps the frontend/native boundary visible; the default template
 shows the equivalent typed MoonBit/Rabbita organization.
 
-For a project using Proton 0.3.4, add these entries to the existing `import`
+For a project using Proton 0.5.1, add these entries to the existing `import`
 block in `moon.mod`, preserving its other dependencies:
 
 ```text
-"moonbit-community/proton_contract@0.3.4",
-"moonbit-community/proton_ext@0.3.4",
+"moonbit-community/proton_contract@0.5.1",
+"moonbit-community/proton_ext@0.5.1",
 ```
 
 Use these imports and executable settings in `app/moon.pkg`:
@@ -120,9 +120,9 @@ async fn main {
     #|</script>
     #|</html>
   @proton.html("Greeting and clipboard", html, debug=true)
-  .load_config()
-  .capability(@clipboard.capability())
-  .commands(fn(registrar) raise {
+  ..config(@proton.load_config())
+  ..capability(@clipboard.capability())
+  ..commands(fn(registrar) raise {
     registrar.bind(greet, (context, request) => {
       let message = "Hello, " + request.name + "!"
       context.emit_to_caller(greeted, message)
@@ -144,8 +144,8 @@ the system clipboard. If copying fails, the page displays the error.
   requesting work and unsubscribe when the page or owning component leaves.
   The event and command response are separate deliveries; do not depend on
   their arrival order. Background notifications use window event emitters;
-  follow the generated Todo project's ready/close lifecycle for that pattern.
-- **Extension:** `.capability(@clipboard.capability())` installs and grants the
+  follow the generated Todo project's `setup_window` and `add_cleanup` pattern.
+- **Extension:** `..capability(@clipboard.capability())` installs and grants the
   clipboard operations. This example calls the extension route directly;
   application commands use the separate `bridge.app` interface.
 

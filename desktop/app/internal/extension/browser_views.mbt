@@ -122,9 +122,14 @@ pub fn browser_view_id(name : String) -> Int32? {
 ///|
 /// A view event as the `browser.event` notification payload the frontend
 /// decodes. Lifecycle notifications without a frontend consumer are omitted.
-pub fn view_event_json(id : Int32, event : @proton.ViewEvent) -> Json? {
+pub fn view_event_json(id : Int32, event : @proton.WebContentsEvent) -> Json? {
   let payload : Json = match event {
-    DidStartLoading | DidFinishLoad => return None
+    DidStartLoading
+    | DidFinishLoad
+    | BridgeFailed(_)
+    | ResourceResponse(..)
+    | ResourceCompleted(..)
+    | ResourceRequested(..) => return None
     Navigated(url~) => { "id": Json(id), "kind": "navigated", "url": Json(url) }
     LoadingChanged(is_loading~) =>
       { "id": Json(id), "kind": "loading", "loading": Json(is_loading) }
@@ -258,7 +263,7 @@ fn browser_theme_script(dark : Bool) -> String {
 /// transient evaluation failure must never turn a successful navigation into
 /// a failed browser command.
 fn apply_browser_theme(view : @proton.ViewHandle, dark : Bool) -> Unit {
-  view.eval(browser_theme_script(dark)) catch {
+  view.web_contents().eval(browser_theme_script(dark)) catch {
     _ => ()
   }
 }
@@ -306,14 +311,15 @@ fn BrowserViews::open(
   }
   let view = match window.view(view_name(payload.id)) {
     Some(view) => {
-      view.load_url(payload.url)
+      view.web_contents().load_url(payload.url)
       view
     }
     None =>
       window.add_view(
         view_name(payload.id),
-        @proton.view(
-          payload.url,
+        ViewConfig(
+          initial_url=payload.url,
+          web_contents_policy=external_link_policy(),
           width=800,
           height=600,
           visible=false,
@@ -334,7 +340,7 @@ fn BrowserViews::back(
   if self.pick is Some(pick) && pick.id == payload.id {
     self.cancel_pick()
   }
-  self.view(payload.id).back()
+  self.view(payload.id).web_contents().back()
   Acknowledged
 }
 
@@ -346,7 +352,7 @@ fn BrowserViews::forward(
   if self.pick is Some(pick) && pick.id == payload.id {
     self.cancel_pick()
   }
-  self.view(payload.id).forward()
+  self.view(payload.id).web_contents().forward()
   Acknowledged
 }
 
@@ -358,7 +364,7 @@ fn BrowserViews::reload(
   if self.pick is Some(pick) && pick.id == payload.id {
     self.cancel_pick()
   }
-  self.view(payload.id).reload(ignore_cache=true)
+  self.view(payload.id).web_contents().reload(ignore_cache=true)
   Acknowledged
 }
 
@@ -376,7 +382,7 @@ fn BrowserViews::set_theme(
 fn BrowserViews::open_app_devtools(
   self : BrowserViews,
 ) -> @protocol.EmptyReply raise {
-  self.attached_window().browser().open_devtools()
+  self.attached_window().web_contents().open_devtools()
   Acknowledged
 }
 
@@ -457,9 +463,9 @@ fn BrowserViews::close(
   // page reload's `close_all`.
   guard self.window is Some(window) else { return Acknowledged }
   if window.view(view_name(payload.id)) is Some(view) {
-    let focused = view.is_focused()
+    let focused = view.web_contents().is_focused()
     if focused {
-      window.browser().focus()
+      window.web_contents().focus()
     }
     window.remove_view(view_name(payload.id))
   }
@@ -471,7 +477,8 @@ fn BrowserViews::focused_browser(
   self : BrowserViews,
 ) -> @protocol.AppFocusedBrowserReply raise {
   for view in self.attached_window().views() {
-    if browser_view_id(view.id()) is Some(id) && view.is_focused() {
+    if browser_view_id(view.id()) is Some(id) &&
+      view.web_contents().is_focused() {
       return { id: Some(id), }
     }
   }
@@ -633,4 +640,23 @@ test "browser page urls support web and local files" {
   assert_false(allowed_page_url("file://"))
   assert_false(allowed_page_url("javascript:alert(1)"))
   assert_false(allowed_page_url("about:blank"))
+}
+
+///|
+/// Keep popup handling identical for the application page and browser tabs.
+pub fn external_link_policy() -> @proton.WebContentsPolicy {
+  WebContentsPolicy(new_window_handler=async fn(_, request) noraise {
+    if request.user_gesture {
+      ignore(open_external({ url: request.url, })) catch {
+        error =>
+          @xlog.error() <?
+            {
+              "event": "external_link_open_failed",
+              "url": request.url,
+              "error": @debug.render(Repr(error)),
+            }
+      }
+    }
+    Deny
+  })
 }
