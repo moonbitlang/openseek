@@ -4743,6 +4743,8 @@ priv enum Status {
   WaitingBridge
   Reconnecting
   Ready
+  Loading
+  ReadOnly
   SetupRequired
   ApiKeyRequired
   Starting
@@ -4765,6 +4767,8 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
         WaitingBridge => "正在等待连接桥"
         Reconnecting => "正在重连"
         Ready => "就绪"
+        Loading => shell_text(locale, LoadingConversation)
+        ReadOnly => shell_text(locale, ArchivedReadOnly)
         SetupRequired => "需要设置"
         ApiKeyRequired => "需要 API 密钥"
         Starting => "正在启动"
@@ -4786,6 +4790,8 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
         WaitingBridge => "正在等待連線橋"
         Reconnecting => "正在重新連線"
         Ready => "就緒"
+        Loading => shell_text(locale, LoadingConversation)
+        ReadOnly => shell_text(locale, ArchivedReadOnly)
         SetupRequired => "需要設定"
         ApiKeyRequired => "需要 API 金鑰"
         Starting => "正在啟動"
@@ -4807,6 +4813,8 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
         WaitingBridge => "ブリッジ接続を待機中"
         Reconnecting => "再接続中"
         Ready => "準備完了"
+        Loading => shell_text(locale, LoadingConversation)
+        ReadOnly => shell_text(locale, ArchivedReadOnly)
         SetupRequired => "設定が必要です"
         ApiKeyRequired => "API キーが必要です"
         Starting => "起動中"
@@ -4829,6 +4837,8 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
         WaitingBridge => "Esperando conexión con el puente"
         Reconnecting => "Reconectando"
         Ready => "Listo"
+        Loading => shell_text(locale, LoadingConversation)
+        ReadOnly => shell_text(locale, ArchivedReadOnly)
         SetupRequired => "Se requiere configuración"
         ApiKeyRequired => "Se requiere una clave de API"
         Starting => "Iniciando"
@@ -4845,6 +4855,8 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
     WaitingBridge => "Waiting for bridge"
     Reconnecting => "Reconnecting…"
     Ready => "Ready"
+    Loading => shell_text(locale, LoadingConversation)
+    ReadOnly => shell_text(locale, ArchivedReadOnly)
     SetupRequired => "Setup required"
     ApiKeyRequired => "API key required"
     Starting => "Starting"
@@ -4861,7 +4873,7 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
 ///|
 fn Status::kind(self : Status) -> StatusKind {
   match self {
-    WaitingBridge | Reconnecting => Neutral
+    WaitingBridge | Reconnecting | Loading | ReadOnly => Neutral
     Ready => Ok
     SetupRequired
     | ApiKeyRequired

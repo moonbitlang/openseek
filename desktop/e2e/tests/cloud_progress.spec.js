@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness } from './support/cloud_harness.js';
+import { CloudHarness, sessionA } from './support/cloud_harness.js';
 
 test('Cloud reuses live reasoning, actual usage, stages and compaction UI before committing history', async ({ page }) => {
   const cloud = new CloudHarness(page);
@@ -24,13 +24,18 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     await cloud.install();
     await cloud.goto();
     await cloud.open();
+    const status = page.locator('main .run-status');
+    await expect(status).toHaveText('Ready');
     await page.locator('#task').fill('Explain the input');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     const heartbeat = page.locator('.composer-running-text');
     const reasoning = page.locator('#transcript .activity-thinking');
     await expect(heartbeat).toHaveText('Thinking…');
+    await expect(status).toHaveText('Running');
+    await expect(status.locator('.run-dot')).toHaveClass(/pulse/);
     resume[0]();
     await expect(heartbeat).toContainText('Retrying');
+    await expect(status).toHaveText('Step 3');
     resume[1]();
     await expect(heartbeat).toHaveText('Working · step 3');
     await expect(page.locator('#transcript .activity-thinking-live')).toHaveText('Partial reasoning');
@@ -48,6 +53,8 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     await expect(page.locator('.composer-context')).not.toContainText('Compacting');
     resume[6]();
     await expect(heartbeat).toHaveCount(0);
+    await expect(status).toHaveText('Finished');
+    await expect(status.locator('.run-dot')).toHaveClass('run-dot ok');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
     await expect(reasoning).toHaveCount(1);
     await expect(reasoning).toHaveText('Complete reasoning');
@@ -56,5 +63,66 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
   } finally {
     resume.forEach(resolve => resolve());
+  }
+});
+
+test('Cloud title status uses recorded outcomes and marks archived history read-only', async ({ page }, testInfo) => {
+  const cloud = new CloudHarness(page);
+  cloud.histories.set(sessionA, { messages: [{
+    task_id: 'context-task', kind: 'task_finished', created_at: 100,
+    data: { status: 'incomplete', result: { status: 'context_yield', reason: 'context limit' } },
+  }], generating: false });
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  const status = page.locator('main .run-status');
+  await expect(status).toHaveText('Context limit reached');
+  await expect(status.locator('.run-dot')).toHaveClass('run-dot warn');
+  await page.reload(); await cloud.open();
+  await expect(status).toHaveText('Context limit reached');
+  await page.screenshot({ path: testInfo.outputPath('cloud-title-context-limit.png'), fullPage: true });
+  cloud.archived.add(sessionA);
+  await page.reload();
+  const archived = page.getByRole('button', { name: /^Archived chats \(/ });
+  if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
+  await cloud.row(sessionA).click();
+  await expect(status).toHaveText('Archived conversation · Read only');
+  await expect(status.locator('.run-dot')).not.toHaveClass(/pulse|ok|danger/);
+  await expect(page.locator('#task')).toHaveCount(0);
+  expect(cloud.postCount).toBe(0);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud title status covers loading, service failure and first-send startup without local API configuration', async ({ page }, testInfo) => {
+  const cloud = new CloudHarness(page);
+  cloud.device.hostSettings.has_deepseek_key = false;
+  let loaded, created;
+  cloud.pauseHistory = new Promise(resolve => { loaded = resolve; });
+  cloud.pauseCreate = new Promise(resolve => { created = resolve; });
+  try {
+    await cloud.install(); await cloud.goto();
+    await cloud.row(sessionA).click();
+    const status = page.locator('main .run-status');
+    await expect(status).toHaveText('Loading conversation…');
+    loaded();
+    await expect(status).toHaveText('Ready');
+    cloud.sendStatus = 503;
+    cloud.sendErrorBody = 'server model credentials are not configured';
+    await page.locator('#task').fill('Check the service');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(status).toHaveText('Error');
+    await expect(status.locator('.run-dot')).toHaveClass('run-dot danger');
+    await cloud.create();
+    await expect(status).toHaveText('Ready');
+    expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
+    await page.screenshot({ path: testInfo.outputPath('cloud-title-ready.png'), fullPage: true });
+    cloud.sendStatus = 200;
+    await page.locator('#task').fill('First message');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(status).toHaveText('Starting');
+    await expect(status.locator('.run-dot')).toHaveClass(/pulse/);
+    created();
+    await expect(status).toHaveText('Finished');
+    expect(cloud.device.pageErrors).toEqual([]);
+  } finally {
+    loaded(); created();
   }
 });

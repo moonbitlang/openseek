@@ -1703,10 +1703,13 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-fn run_indicator(model : Model, conv : Conversation) -> @html.Html {
-  let status = model.display_status()
-  let label = status.label(locale=model.locale)
-  if conv.is_running() {
+fn run_indicator(
+  status : Status,
+  running : Bool,
+  locale~ : @i18n.Locale,
+) -> @html.Html {
+  let label = status.label(locale~)
+  if running {
     @html.div(class="run-status accent", [
       @html.span(class="run-dot accent pulse", ""),
       @html.span(class="run-text", label),
@@ -1883,7 +1886,13 @@ fn conversation_header(
     session_tooltip(model, conv),
     Some(workspace),
   )
-  items.push(run_indicator(model, conv))
+  items.push(
+    run_indicator(
+      model.display_status(),
+      conv.is_running(),
+      locale=model.locale,
+    ),
+  )
   if conv.turn.usage_tokens > 0 {
     items.push(
       @html.span(
@@ -2214,6 +2223,16 @@ fn view(
               model.cloud_title()
             },
           ),
+          if model.cloud_selected() &&
+            model.cloud_display_status() is Some(status) {
+            run_indicator(
+              status,
+              status is (Starting | Running | Step(_)),
+              locale=model.locale,
+            )
+          } else {
+            @html.nothing
+          },
           if model.cloud_identity() is Some(_) {
             @html.button(
               class="panel-toggle",
