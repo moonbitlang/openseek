@@ -115,8 +115,16 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   });
   await expect.poll(async () => {
     const box = await toggle.boundingBox();
-    const headerHeight = await toggle.evaluate(button =>
-      parseFloat(getComputedStyle(button.closest('.app')).getPropertyValue('--app-header-height')));
+    // `--app-header-height` is a calc() over the app font size, and a custom
+    // property's computed value stays unresolved text; resolve it as a length.
+    const headerHeight = await toggle.evaluate(button => {
+      const probe = document.createElement('div');
+      probe.style.height = 'var(--app-header-height)';
+      button.closest('.app').append(probe);
+      const height = probe.getBoundingClientRect().height;
+      probe.remove();
+      return height;
+    });
     return box.y + box.height / 2 - headerHeight / 2;
   }).toBe(0);
   // A real click must reach the fixed control above the narrow drawer.
