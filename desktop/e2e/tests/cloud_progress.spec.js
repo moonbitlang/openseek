@@ -1,6 +1,46 @@
 import { test, expect } from '@playwright/test';
 import { CloudHarness, sessionA } from './support/cloud_harness.js';
 
+test('Cloud detail toggle updates the transcript and preserves the preference across narrow layouts and reloads', async ({ page }, testInfo) => {
+  const cloud = new CloudHarness(page);
+  cloud.histories.set(sessionA, {
+    messages: [{ task_id: 'fixture-task', kind: 'assistant_message', created_at: 1000,
+      data: { content: 'Cloud answer', reasoning_content: 'Cloud reasoning details' } }],
+    generating: false,
+  });
+  await cloud.install();
+  await cloud.goto();
+  const toggle = page.getByRole('button', { name: 'Detailed mode', exact: true });
+  await cloud.create();
+  await expect(toggle).toHaveCount(0);
+  await cloud.open();
+  await expect(page.locator('#transcript')).toContainText('Cloud answer');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#transcript')).not.toContainText('Cloud reasoning details');
+  await page.screenshot({ path: testInfo.outputPath('cloud-minimal.png'), animations: 'disabled' });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(toggle).toHaveClass(/active/);
+  await expect(page.locator('#transcript .activity-thinking')).toHaveText('Cloud reasoning details');
+  await page.screenshot({ path: testInfo.outputPath('cloud-detailed.png'), animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(toggle).toHaveCount(0);
+  await expect(page.locator('#transcript')).not.toContainText('Cloud reasoning details');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#transcript .activity-thinking')).toHaveText('Cloud reasoning details');
+  await page.reload();
+  await cloud.open();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#transcript .activity-thinking')).toHaveText('Cloud reasoning details');
+  await toggle.focus();
+  await page.keyboard.press('Space');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#transcript')).not.toContainText('Cloud reasoning details');
+  expect(cloud.device.pageErrors).toEqual([]);
+  expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
+});
+
 test('Cloud reuses live reasoning, actual usage, stages and compaction UI before committing history', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.streamEvents = [

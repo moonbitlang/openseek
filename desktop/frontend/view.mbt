@@ -2243,6 +2243,11 @@ fn view(
           } else {
             @html.nothing
           },
+          if model.cloud_identity() is Some(_) && !model.narrow {
+            model.detail_toggle(dispatch)
+          } else {
+            @html.nothing
+          },
         ]
       } else {
         match model.chat_column() {
