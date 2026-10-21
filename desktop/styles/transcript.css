@@ -1279,9 +1279,11 @@
 }
 .activity-text::before {
   content: "▸ ";
+  display: inline-block;
+  transition: transform var(--disclosure-duration) ease;
 }
 .activity[open] > .activity-summary .activity-text::before {
-  content: "▾ ";
+  transform: rotate(90deg);
 }
 
 /* The model-step ordinal stays in the transcript's neutral hierarchy so step
@@ -1506,10 +1508,12 @@
 .tool-call-summary::after,
 .tool-result-summary::after {
   content: "▸";
+  display: inline-block;
+  transition: transform var(--disclosure-duration) ease;
 }
 .tool-call[open] > .tool-call-summary::after,
 .tool-result[open] > .tool-result-summary::after {
-  content: "▾";
+  transform: rotate(90deg);
 }
 .tool-call-label.error,
 .tool-call.error > .tool-call-summary,
@@ -2002,13 +2006,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
+  flex: 0 0 var(--icon-size, var(--icon-md));
+  width: var(--icon-size, var(--icon-md));
+  height: var(--icon-size, var(--icon-md));
 }
 .minimal-tool-icon > svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-size, var(--icon-md));
+  height: var(--icon-size, var(--icon-md));
+}
+:is(.minimal-tools, .minimal-process, .minimal-image-call) > .minimal-activity-summary {
+  --icon-size: var(--icon-lg);
 }
 .minimal-call,
 .minimal-note {
@@ -2115,6 +2122,9 @@
   height: 14px;
   transform: rotate(-90deg);
 }
+:is(.minimal-tools, .minimal-process, .minimal-image-call) > .minimal-activity-summary > .minimal-chevron {
+  transition: transform var(--disclosure-duration) ease;
+}
 .minimal-chevron svg {
   width: 14px;
   height: 14px;
@@ -2124,6 +2134,32 @@
 .minimal-image-call[open] > .minimal-activity-summary > .minimal-chevron,
 .minimal-context-summary[open] > .minimal-activity-summary > .minimal-chevron {
   transform: rotate(0deg);
+}
+
+/* The browser owns each disclosure's state; only its content box animates. */
+:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call) {
+  interpolate-size: allow-keywords;
+}
+:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)::details-content {
+  block-size: 0;
+  overflow: clip;
+  opacity: 0;
+  transition: block-size var(--disclosure-duration) ease,
+    opacity var(--disclosure-duration) ease,
+    content-visibility var(--disclosure-duration) allow-discrete;
+}
+:where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)[open]::details-content {
+  block-size: auto;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.activity, .tool-call, .tool-result, .minimal-tools, .minimal-process, .minimal-image-call)::details-content,
+  .activity-text::before,
+  .tool-call-summary::after,
+  .tool-result-summary::after,
+  .minimal-chevron {
+    transition: none;
+  }
 }
 
 /* User attachments retain their aspect ratio without widening the transcript. */

@@ -273,36 +273,36 @@ pub fn panel(
         )
       }
       rows.push(
-        if terminal {
-          @rui.collapsible_root(
-            open=state.history_expanded,
-            class="jobs-group",
-            attrs=@html.Attrs::build().role("group").aria_label(title),
+        @html.div(
+          class="jobs-group",
+          attrs=@html.Attrs::build().role("group").aria_label(title),
+          if terminal {
             [
-              @rui.collapsible_trigger(
-                open=state.history_expanded,
-                id="jobs-history-toggle",
-                class="jobs-history-toggle",
-                controls="jobs-history-content",
-                on_open_change=_ => emit(ToggleHistory),
-                "\{title} · \{group.length()}",
+              @html.button(
+                class="jobs-group-title jobs-history-toggle",
+                attrs=@html.Attrs::build()
+                  .aria_expanded(state.history_expanded.to_string())
+                  .aria_controls("jobs-history-content"),
+                on_click=emit(ToggleHistory),
+                label,
               ),
-              @rui.collapsible_content(
-                open=state.history_expanded,
+              @html.div(
                 id="jobs-history-content",
-                class="jobs-history-content",
-                labelledby="jobs-history-toggle",
+                class=if state.history_expanded {
+                  "jobs-history-content open"
+                } else {
+                  "jobs-history-content"
+                },
+                attrs=@html.Attrs::build()
+                  .aria_hidden((!state.history_expanded).to_string())
+                  .inert(!state.history_expanded),
                 content,
               ),
-            ],
-          )
-        } else {
-          @html.div(
-            class="jobs-group",
-            attrs=@html.Attrs::build().role("group").aria_label(title),
-            [@html.h4(class="jobs-group-title", label), ..content],
-          )
-        },
+            ]
+          } else {
+            [@html.h4(class="jobs-group-title", label), ..content]
+          },
+        ),
       )
     }
     body.push(
