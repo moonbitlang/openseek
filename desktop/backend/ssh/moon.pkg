@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek/build_info",
   "moonbitlang/async/socket",
   "moonbitlang/async/stdio",
   "moonbitlang/async/http",

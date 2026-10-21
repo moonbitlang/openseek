@@ -17,15 +17,18 @@ rejects browser Origins and binds only `127.0.0.1`; forwarding also binds only
 
 ## Usage
 
-Adding a host downloads the native CLI archive matching this build's OpenSeek
+Adding a host downloads the native CLI archive for the configured release
 version from `https://cli.moonbitlang.com/openseek/cli/releases/v<version>/`, verifies it against
 `SHA256SUMS`, and runs `openseek setup` on the remote host. The UI shows download,
 setup and connection progress and supports cancellation. Automatic preparation
 supports Linux x64/arm64 and macOS arm64 with SSH, a POSIX shell, curl, tar, and
 sha256sum or shasum. The matching CLI release must include `openseek-app-server`.
 
-The version is generated at build time from the root OpenSeek `moon.mod`, the
-same manifest used by the CLI release workflow. It is independent of the
+Release CI stamps `CliRelease` in `version.mbt` from the root OpenSeek `moon.mod`,
+the same manifest used by the CLI release workflow. Desktop release stamping
+also performs this step; CLI releases use
+`node desktop/scripts/release.mjs stamp-cli`. Local builds keep the checked-in
+default unless it is explicitly stamped. This version is independent of the
 Desktop application's own version. The matching CLI release must be published
 before a fresh remote host can download it.
 

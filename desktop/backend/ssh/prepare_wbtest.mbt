@@ -10,8 +10,7 @@ test "default remote bootstrap selects this build's CLI release" {
   assert_eq(remote_command("openseek"), command)
   assert_true(
     command.contains(
-      "https://cli.moonbitlang.com/openseek/cli/releases/v" +
-      @build_info.Version,
+      "https://cli.moonbitlang.com/openseek/cli/releases/v" + CliRelease,
     ),
   )
 }
@@ -88,9 +87,7 @@ async test "remote preparation downloads verifies installs and reuses the cached
     out.contains("\"port\":1234"),
   )
   assert_eq(@fs.read_file(home + "/actions").text(), "setup\nserver\n")
-  assert_true(
-    @fs.exists(home + "/.openseek/ssh/v" + @build_info.Version + "/.prepared"),
-  )
+  assert_true(@fs.exists(home + "/.openseek/ssh/v" + CliRelease + "/.prepared"))
   @fs.rmdir(release, recursive=true)
   let (again, output, error) = run_preparation(home, release)
   assert_eq(again, 0, msg=error)

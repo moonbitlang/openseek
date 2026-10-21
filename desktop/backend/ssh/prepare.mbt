@@ -60,7 +60,7 @@ fn prepare_command(release_url : String, protocols : String) -> String {
     "\nprotocols=" +
     shell_quote(protocols) +
     "\nroot=\"$HOME/.openseek/ssh/v" +
-    @build_info.Version +
+    CliRelease +
     "\"\n"
   "exec sh -c " + shell_quote(prelude + script)
 }

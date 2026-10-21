@@ -55,6 +55,7 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Build and package the native CLI
         run: |
+          node desktop/scripts/release.mjs stamp-cli
           moon update
           moon test installation --target native
           moon build . desktop/backend/server --target native --release

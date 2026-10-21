@@ -30,8 +30,7 @@ fn remote_command(
       Some(url) => prepare_command(url, "=https,http,file")
       None =>
         prepare_command(
-          "https://cli.moonbitlang.com/openseek/cli/releases/v" +
-          @build_info.Version,
+          "https://cli.moonbitlang.com/openseek/cli/releases/v" + CliRelease,
           "=https",
         )
     }
