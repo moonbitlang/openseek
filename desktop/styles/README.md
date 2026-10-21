@@ -81,6 +81,11 @@ its surrounding text; larger page headings may derive from the base. Use
 unitless line heights so text grows without clipping. Icon glyphs use the
 icon scale and do not acquire text-sizing rules merely to size an SVG.
 
+The shared titlebar controls follow `--font-size-base`: their glyph size,
+button size, and inter-button gap scale together from the default 14px, 24px,
+and 4px geometry. This includes sidebar mode, navigation, conversation, and
+panel controls. Keep native window-control insets in platform pixels.
+
 Ordinary text inherits `--font-family-sans` and `--font-weight-regular` from
 the app (400), with antialiased font smoothing on macOS. Markdown emphasis
 uses 600 rather than the browser's default bold weight. Chat prose and

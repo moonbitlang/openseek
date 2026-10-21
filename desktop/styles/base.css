@@ -355,9 +355,11 @@ html {
     clamp(var(--sidebar-min-width), var(--sidebar-width, 264px), 480px) * var(--sidebar-open-progress)
   );
   --sidebar-drawer-width: min(320px, 86vw);
-  --titlebar-control-size: 24px;
-  --titlebar-icon-size: var(--icon-md);
-  --titlebar-control-gap: 4px;
+  /* Follow the app type scale while preserving the 14px default geometry.
+     Native window insets below remain independent platform measurements. */
+  --titlebar-icon-size: var(--font-size-base);
+  --titlebar-control-size: calc(var(--titlebar-icon-size) * 24 / 14);
+  --titlebar-control-gap: calc(var(--titlebar-icon-size) * 4 / 14);
   --topbar-inline-padding: 18px;
   --panel-toggle-inline-inset: max(18px, var(--native-titlebar-right, 0px));
   --panel-toggle-reserved-width: calc(
