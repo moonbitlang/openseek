@@ -360,9 +360,16 @@
 }
 
 .moonbit-viewer-markdown-comment-content :not(pre) > code {
-  /* Monospace and the full foreground set identifiers apart from the muted
-   * prose without a chip that disturbs the baseline. */
-  color: var(--vscode-editor-foreground);
+  /* Monospace and a step above the muted prose set identifiers apart without
+   * a chip that disturbs the baseline. Halfway to the full foreground, and a
+   * notch smaller (monospace runs larger than sans at the same size), keeps
+   * them below the signature they describe. */
+  color: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 50%,
+    var(--vscode-descriptionForeground, var(--vscode-editor-foreground))
+  );
+  font-size: 0.92em;
 }
 
 .moonbit-viewer-markdown-comment-content pre,
