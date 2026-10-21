@@ -278,6 +278,17 @@ test('blends documentation into the editor across themes and folding states', as
   const singleText = single.locator('.moonbit-viewer-markdown-comment-full > p');
   await expect(preview).toBeVisible();
   await expect(singleText).toBeVisible();
+  // A foldable block reserves extra trailing space for its toggle; its item
+  // divider still ends where every other divider does.
+  const dividerRight = async (block) => {
+    const box = await block
+      .locator('.moonbit-viewer-markdown-comment-body:visible > hr:first-child')
+      .boundingBox();
+    expect(box).not.toBeNull();
+    return box.x + box.width;
+  };
+  expect(Math.abs((await dividerRight(multiline)) - (await dividerRight(single))))
+    .toBeLessThanOrEqual(1);
   for (const theme of ['dark', 'light']) {
     if (theme === 'light') {
       await page.getByRole('button', { name: 'Toggle color theme' }).click();

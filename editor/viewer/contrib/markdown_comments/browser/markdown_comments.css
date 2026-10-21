@@ -26,9 +26,15 @@
   box-sizing: border-box;
   /* The pinned outer already ends at the vertical scrollbar rail. */
   width: 100%;
+  /* The trailing reserve varies with the block's controls; the item divider
+   * always ends at the base reserve so every divider has the same length. */
+  --moonbit-markdown-comment-base-reserve: 40px;
+  --moonbit-markdown-comment-trailing-reserve: var(
+    --moonbit-markdown-comment-base-reserve
+  );
   /* The leading separator's air lives in padding, not margins, so the
    * measured offsetHeight carries it. */
-  padding: 6px 40px 4px 0;
+  padding: 6px var(--moonbit-markdown-comment-trailing-reserve) 4px 0;
   overflow-wrap: anywhere;
   user-select: text;
   -webkit-user-select: text;
@@ -51,7 +57,7 @@
   .moonbit-viewer-markdown-comment-content {
   /* Keep the ellipsized preview clear of the hover/focus-revealed accessible
    * toggle pinned to the top-right corner. */
-  padding-right: 68px;
+  --moonbit-markdown-comment-trailing-reserve: 68px;
 }
 
 .moonbit-viewer-markdown-comment[data-documentation-foldable="true"][data-documentation-expanded="false"]
@@ -93,7 +99,9 @@
 
 .moonbit-viewer-markdown-comment[data-source-visible="true"]
   .moonbit-viewer-markdown-comment-content {
-  padding-right: 40px;
+  --moonbit-markdown-comment-trailing-reserve: var(
+    --moonbit-markdown-comment-base-reserve
+  );
 }
 
 /* Source mode temporarily suppresses documentation folding controls while
@@ -325,6 +333,12 @@
  * `///|` marker and the blank lines above it, so it draws a fainter stroke
  * than interior rules and keeps only a compact gap before the prose. */
 .moonbit-viewer-markdown-comment-body > hr:first-child {
+  /* Extend through any extra control reserve so a foldable block's divider
+   * is as long as every other item's. */
+  margin-right: calc(
+    var(--moonbit-markdown-comment-base-reserve) -
+      var(--moonbit-markdown-comment-trailing-reserve)
+  );
   margin-bottom: 6px;
   background: color-mix(in srgb, var(--vscode-editor-foreground) 7%, transparent);
 }
