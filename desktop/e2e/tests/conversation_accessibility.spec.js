@@ -183,3 +183,81 @@ test('a failed rename is reported even after its project is folded', async ({ pa
   await expect(input).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+// Inspect the actual height transition at its midpoint without sampling
+// rendered frames or depending on the disclosure's duration.
+async function expectRetainedFold(disclosure) {
+  const result = await disclosure.evaluate(async button => {
+    const content = document.getElementById(button.getAttribute('aria-controls'));
+    await Promise.all(content.getAnimations().map(animation => animation.finished));
+    const nodes = [...content.querySelectorAll('.conversation-row')];
+    const height = content.getBoundingClientRect().height;
+    const committed = new Promise(resolve => {
+      const observer = new MutationObserver(() => { observer.disconnect(); resolve(); });
+      observer.observe(content, { attributes: true, attributeFilter: ['aria-hidden'] });
+    });
+    button.click();
+    await committed;
+    const animation = content.getAnimations().find(animation => animation.transitionProperty === 'height');
+    if (!animation) throw new Error('Folding must animate the content height');
+    animation.pause();
+    animation.currentTime = animation.effect.getTiming().duration / 2;
+    const midpoint = content.getBoundingClientRect().height;
+    animation.finish();
+    const title = content.querySelector('.conversation-open');
+    title.focus();
+    return {
+      height, midpoint, foldedHeight: content.getBoundingClientRect().height,
+      retained: nodes.every(node => content.contains(node)),
+      hidden: content.getAttribute('aria-hidden'), inert: content.inert,
+      focusable: document.activeElement === title,
+    };
+  });
+  expect(result.midpoint).toBeGreaterThan(0);
+  expect(result.midpoint).toBeLessThan(result.height);
+  expect(result).toMatchObject({ foldedHeight: 0, retained: true, hidden: 'true', inert: true, focusable: false });
+}
+
+test('folding a project retains its expanded preview and reopens with five chats', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.liveSessions = Array.from({ length: 12 }, (_, i) => ({
+    id: `session-${i + 1}`, title: `Conversation ${i + 1}`, updated_at_ms: 12 - i,
+  }));
+  await app.install();
+  await app.goto();
+  const project = page.locator('.sidebar-project').first();
+  const disclosure = project.locator('.workspace-disclosure');
+  const rows = project.locator('.conversation-row');
+  await project.getByRole('button', { name: 'Show more', exact: true }).click();
+  await expect(rows).toHaveCount(12);
+  const first = await rows.first().elementHandle();
+  await expectRetainedFold(disclosure);
+  await expect(rows).toHaveCount(12);
+  await disclosure.click();
+  await expect(rows).toHaveCount(5);
+  await expect(rows.first().getByRole('button', { name: 'Conversation 1', exact: true })).toBeVisible();
+  expect(await first.evaluate(node => node === document.querySelector('.project-conversations .conversation-row'))).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('sub-runs retain their DOM across their own and project folds', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.liveSessions.push({ id: 'session-1-sr-1', title: 'Inspect animation', updated_at_ms: 2 });
+  await app.install();
+  await app.goto();
+  const disclosure = page.locator('button.row-twisty');
+  const child = page.locator('.conversation-row.subrun');
+  await expect(child).toHaveCount(1);
+  const node = await child.elementHandle();
+  await disclosure.click();
+  await expect(child.getByRole('button', { name: /Inspect animation/ })).toBeVisible();
+  await expectRetainedFold(disclosure);
+  await disclosure.click();
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  const projectDisclosure = page.locator('.workspace-disclosure').first();
+  await expectRetainedFold(projectDisclosure);
+  await projectDisclosure.click();
+  await expect(child.getByRole('button', { name: /Inspect animation/ })).toBeVisible();
+  expect(await node.evaluate(node => node === document.querySelector('.conversation-row.subrun'))).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
