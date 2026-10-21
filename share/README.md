@@ -9,6 +9,8 @@ an environment override or a working-directory fallback. The prompt's
 - `doc/moonbit.commit`: the exact upstream build commit used for the snapshot.
 - `desktop-proton/`: OpenSeek-maintained reference for the Proton CLI workflow,
   moved out of the system prompt and read on demand.
+- `diagrams/`: syntax and examples for diagrams rendered inline in SeekMoon
+  replies, read on demand.
 - `examples/`: verified `.mbtx` examples inlined into the system prompt by
   `md_to_mbt_string`; CI type-checks and runs them.
 - `frontend-rabbita/`: OpenSeek-maintained reference for MoonBit browser UIs

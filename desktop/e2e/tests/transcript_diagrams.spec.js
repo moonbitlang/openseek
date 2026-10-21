@@ -1,5 +1,32 @@
+import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
+
+test('bundled diagram examples render as SVG in the transcript', async ({ page }) => {
+  const examples = ['../../../prompt/default_prompt.mbt.md', '../../../share/diagrams/README.md']
+    .flatMap(path => {
+      const markdown = readFileSync(new URL(path, import.meta.url), 'utf8');
+      const blocks = [...markdown.matchAll(/^```diago\n[\s\S]*?^```$/gm)].map(match => match[0]);
+      expect(blocks.length, path).toBeGreaterThan(0);
+      return blocks;
+    });
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture diagrams from the bundled reference' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: examples.join('\n\n') } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const diagrams = page.locator('#transcript .chat-diago');
+  await expect(diagrams).toHaveCount(examples.length);
+  for (const diagram of await diagrams.all()) {
+    await expect(diagram.locator('svg:not(svg svg)')).toBeVisible();
+    await expect(diagram.locator('pre')).toHaveCount(0);
+  }
+  expect(app.pageErrors).toEqual([]);
+});
 
 test('transcript renders editor diagram fences and retains them across updates and themes', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);

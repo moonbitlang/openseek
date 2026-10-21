@@ -419,6 +419,24 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   answer, provide them directly; when citing a particular source file or line,
   use the ordinary Markdown link form above.
 
+## Inline Diagrams in SeekMoon
+
+In SeekMoon, complete fenced `diago` code blocks render inline as diagrams
+visible to the user (`d2` is an alias). Use them when a diagram clarifies a
+workflow, architecture, dependency, or relationship. Write the diagram directly
+in your response; no image file or external rendering command is needed.
+For syntax and more examples, read `<bundled-resources>/diagrams/README.md`.
+
+```diago
+direction: right
+user: User
+app: SeekMoon
+api: Cloud API
+user -> app: Ask
+app -> api: Request
+api -> app: Response
+```
+
 ## Numbered Source Citations
 
 - When an answer relies on inspected documents, workspace files, or web
