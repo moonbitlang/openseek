@@ -779,6 +779,39 @@ fn update_ssh(
           current > epoch {
           return (@cmd.none, model)
         }
+        let params = match event {
+          { "params": params, .. } => params
+          _ => Json::null()
+        }
+        let payload : @protocol.ConnectedPayload = @json.from_json(params) catch {
+          _ => { protocol: None, }
+        }
+        if device_msg(channel, AgentConnected(payload)) is Some(HostMismatched) {
+          // Retire the attempt before closing its native connection, so queued
+          // readiness/disconnect events cannot revive it or hide the mismatch.
+          let (close, model) = update_ssh(dispatch, Disconnect(id), model)
+          let message = shell_text(model.locale, HostIncompatibleNotice)
+          let host_errors = model.ssh_ui.host_errors.copy()
+          host_errors[id] = message
+          let (gate, model) = update_device_msg(
+            dispatch,
+            channel,
+            HostMismatched,
+            {
+              ..model,
+              ssh_ui: {
+                ..model.ssh_ui,
+                host_errors,
+                error: if ssh_visible_host(ui) == Some(id) {
+                  Some(message)
+                } else {
+                  model.ssh_ui.error
+                },
+              },
+            },
+          )
+          return (@cmd.batch([close, gate]), model)
+        }
         @interop.set_ssh_epoch(channel, Some(epoch))
         let connecting = ui.connecting.copy()
         connecting.remove(id)

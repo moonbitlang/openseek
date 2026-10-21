@@ -54,7 +54,10 @@ test "removing SSH retires only that host and ignores late connection and profil
         "host_id": profile.id,
         "attempt": 1,
         "epoch": 7,
-        "event": { "method": "agent.connected", "params": {} },
+        "event": {
+          "method": "agent.connected",
+          "params": { "protocol": @protocol.HostProtocolRevision },
+        },
       }),
       removed,
     )
@@ -123,7 +126,10 @@ test "SSH readiness updates the remote host without replacing local state" {
       "host_id": profile.id,
       "attempt": 1,
       "epoch": 3,
-      "event": { "method": "agent.connected", "params": {} },
+      "event": {
+        "method": "agent.connected",
+        "params": { "protocol": @protocol.HostProtocolRevision },
+      },
     }),
     model,
   )
@@ -260,7 +266,10 @@ test "SSH onboarding resumes on its host only and cancellation fences late readi
     "host_id": profile.id,
     "attempt": 1,
     "epoch": 9,
-    "event": { "method": "agent.connected", "params": {} },
+    "event": {
+      "method": "agent.connected",
+      "params": { "protocol": @protocol.HostProtocolRevision },
+    },
   })
   let (_, ready) = update_ssh(dispatch, event, saved)
   assert_eq(ready.focused, @interop.Remote(profile.id))
@@ -358,6 +367,97 @@ fn auth_test_model(id : String) -> Model {
 }
 
 ///|
+test "SSH rejects incompatible readiness and retires the attempt before resync" {
+  let dispatch = test_dispatch()
+  let id = "ssh-incompatible"
+  let channel : @interop.ChannelId = Remote(id)
+  let payloads : Array[Json] = [
+    { "protocol": @protocol.HostProtocolRevision + 1 },
+    {},
+    { "protocol": Json::null() },
+    { "protocol": "invalid" },
+  ]
+  for params in payloads {
+    for previously_ready in [false, true] {
+      let base = auth_test_model(id)
+      let (_, base) = update_ssh(dispatch, Connect(id), base)
+      let base = if previously_ready {
+        update_ssh(
+          dispatch,
+          Event({
+            "host_id": id,
+            "attempt": 1,
+            "epoch": 7,
+            "event": {
+              "method": "agent.connected",
+              "params": { "protocol": @protocol.HostProtocolRevision },
+            },
+          }),
+          base,
+        ).1
+      } else {
+        base
+      }
+      let base = { ..base, focused: channel, }
+      let (_, rejected) = update_ssh(
+        dispatch,
+        Event({
+          "host_id": id,
+          "attempt": 1,
+          "epoch": 7,
+          "event": { "method": "agent.connected", "params": params },
+        }),
+        base,
+      )
+      assert_true(rejected.host_incompatible())
+      assert_true(rejected.display_status() is Unavailable(_))
+      assert_eq(@interop.current_ssh_epoch(channel), None)
+      assert_false(rejected.ssh_ui.attempts.contains(id))
+      assert_false(rejected.ssh_ui.connecting.contains(id))
+      assert_true(rejected.ssh_ui.host_errors.contains(id))
+      assert_eq(
+        rejected.device_state(channel).unwrap().connection_generation,
+        base.device_state(channel).unwrap().connection_generation,
+      )
+      assert_true(rejected.device_state(Local) == base.device_state(Local))
+      let late_events : Array[Json] = [
+        {
+          "method": "agent.connected",
+          "params": { "protocol": @protocol.HostProtocolRevision },
+        },
+        { "disconnected": "connection closed" },
+      ]
+      for event in late_events {
+        let (_, late) = update_ssh(
+          dispatch,
+          Event({ "host_id": id, "attempt": 1, "epoch": 7, "event": event }),
+          rejected,
+        )
+        assert_true(late.host_incompatible())
+        assert_eq(@interop.current_ssh_epoch(channel), None)
+      }
+      let (_, retry) = update_ssh(dispatch, Connect(id), rejected)
+      let (_, ready) = update_ssh(
+        dispatch,
+        Event({
+          "host_id": id,
+          "attempt": 2,
+          "epoch": 8,
+          "event": {
+            "method": "agent.connected",
+            "params": { "protocol": @protocol.HostProtocolRevision },
+          },
+        }),
+        retry,
+      )
+      assert_true(ready.ssh_online(id))
+      assert_false(ready.host_incompatible())
+      @interop.set_ssh_epoch(channel, None)
+    }
+  }
+}
+
+///|
 fn auth_test_event(id : String, attempt : Int32, request_id : Int32) -> SshMsg {
   Event({
     "host_id": id,
@@ -433,7 +533,10 @@ test "SSH authentication deduplicates submit and events and fences a cancelled a
         "host_id": "auth",
         "attempt": 1,
         "epoch": 1,
-        "event": { "method": "agent.connected" },
+        "event": {
+          "method": "agent.connected",
+          "params": { "protocol": @protocol.HostProtocolRevision },
+        },
       }),
       Event({
         "host_id": "auth",
@@ -488,7 +591,10 @@ test "SSH foreground intents retain details or restore workspace on success and 
         "host_id": "intent",
         "attempt": 1,
         "epoch": 1,
-        "event": { "method": "agent.connected" },
+        "event": {
+          "method": "agent.connected",
+          "params": { "protocol": @protocol.HostProtocolRevision },
+        },
       }),
       waiting,
     )

@@ -75,6 +75,11 @@ jobs:
       - name: Update MoonBit dependencies
         run: moon update
 
+      - name: Test Windows SSH profile persistence
+        env:
+          CL: /bigobj
+        run: moon test desktop/backend/ssh/command_test.mbt --target native
+
       - name: Cache Proton runtime
         uses: actions/cache@v4
         with:

@@ -7470,9 +7470,10 @@ fn update_device_msg(
     }
     BridgeUnavailable(message) =>
       (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message), }))
-    // The desktop window and its host ship as one build and are never gated.
+    // Only the desktop window's local host ships with its frontend. SSH hosts
+    // can use an explicitly selected executable from a different build.
     HostMismatched =>
-      if model.is_desktop {
+      if model.is_desktop && channel is Local {
         update_device_msg(dispatch, channel, BridgeReady, model)
       } else {
         (@cmd.none, model.replace_device({ ..dev, bridge: HostIncompatible, }))

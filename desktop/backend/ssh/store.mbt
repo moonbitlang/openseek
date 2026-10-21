@@ -60,5 +60,5 @@ async fn save_profiles(hosts : Array[@protocol.SshProfile]) -> Unit {
   @fs.mkdir(path.dirname().to_string(), recursive=true, allow_exist=true)
   let next = path.to_string() + "." + @uuid.mint() + ".tmp"
   @fs.write_file(next, @protocol.SshProfiles::{ hosts, }.to_json().stringify())
-  @fs.rename(next, path.to_string())
+  @fs.rename(next, path.to_string(), replace=true)
 }

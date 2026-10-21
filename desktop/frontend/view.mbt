@@ -776,6 +776,9 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   if self.cloud.notice is Some(notice) {
     notices.push(notice)
   }
+  if self.focused_device() is Some({ chat_root: Some(Err(message)), .. }) {
+    notices.push(dynamic_text(self.locale, DStorageUnavailable(message)))
+  }
   let sections = if self.is_desktop && !self.devices.is_empty() {
     let combined : Array[@section.Input] = []
     for dev in self.devices {
@@ -800,14 +803,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     combined
   } else {
     match self.focused_device() {
-      Some(dev) => {
-        if dev.chat_root is Some(Err(message)) {
-          notices.push(
-            dynamic_text(self.locale, DStorageUnavailable(message.to_string())),
-          )
-        }
-        self.sidebar_component_sections(dev)
-      }
+      Some(dev) => self.sidebar_component_sections(dev)
       None => {
         if self.console.page_device is Some(_) {
           match self.console.roster_sync {

@@ -129,7 +129,7 @@ pub async fn Connection::run(
         let code = bootstrap.wait()
         raise SshError("SSH bootstrap exited \{code}")
       })
-      let endpoint = @async.with_timeout(
+      let (port, instance) = @async.with_timeout(
         1_200_000,
         error=SshError(
           "SSH startup timed out after 20 minutes, including authentication",
@@ -147,36 +147,19 @@ pub async fn Connection::run(
               }
               line.write_bytes(byte)
             }
-            let value = @json.parse(@utf8.decode(line.to_bytes()))
-            if value is { "stage": String(stage), .. } {
-              emit({ "stage": stage })
-            } else {
-              break value
+            match bootstrap_record(@utf8.decode_lossy(line.to_bytes())) {
+              Some(Progress(stage)) => emit({ "stage": stage })
+              Some(Endpoint(port~, instance~)) => break (port, instance)
+              None => continue
             }
           }
         },
       )
-      guard endpoint
-        is {
-          "port": Number(port, ..),
-          "instance": String(instance),
-          "protocol": 1,
-          ..
-        } &&
-        port >= 1 &&
-        port <= 65535 else {
-        raise SshError(
-          "Expected an app-server loopback endpoint; install the matching CLI",
-        )
-      }
       let reservation = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
       let address = reservation.addr
       reservation.close()
       let forward = arguments(self.profile.command)
-      forward.insert(
-        0,
-        "127.0.0.1:\{address.port()}:127.0.0.1:\{port.to_int()}",
-      )
+      forward.insert(0, "127.0.0.1:\{address.port()}:127.0.0.1:\{port}")
       forward.insert(0, "-L")
       forward.insert(0, "-N")
       forward.insert(0, "-oExitOnForwardFailure=yes")
@@ -241,9 +224,16 @@ pub async fn Connection::run(
         },
       })
       defer rpc.close()
+      let readiness : @async.Queue[Json] = Queue(kind=Blocking(1))
       rpc.set_notification_handler((method_, params) => {
         if self.rpc is Some(_) {
           emit({ "method": method_, "params": params })
+        } else if method_ == "agent.connected" {
+          // Initialization and notifications share a reader. Retain the real
+          // host revision even when readiness arrives before request() resumes.
+          ignore(readiness.try_put(params)) catch {
+            _ => ()
+          }
         }
       })
       group.spawn_bg(() => rpc.run_message_pump())
@@ -258,8 +248,13 @@ pub async fn Connection::run(
         actual == instance else {
         raise SshError("Remote app-server identity changed during forwarding")
       }
+      let connected = @async.with_timeout(
+        10_000,
+        error=SshError("Remote app-server did not announce its host protocol"),
+        () => readiness.get(),
+      )
       self.rpc = Some(rpc)
-      emit({ "method": "agent.connected", "params": { "stage": "accepted" } })
+      emit({ "method": "agent.connected", "params": connected })
       stopped.get()
       group.return_immediately(())
     })
