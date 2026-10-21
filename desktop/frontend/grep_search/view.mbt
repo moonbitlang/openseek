@@ -991,14 +991,7 @@ pub fn State::explorer_view(
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
   match input.root {
-    Some(_) =>
-      page_view(
-        locale~,
-        self.page,
-        semantic_enabled=input.owner is Host(_),
-        emit,
-        open_match,
-      )
+    Some(_) => page_view(locale~, self.page, emit, open_match)
     None =>
       @html.div(class="workspace-search search-no-workspace", [
         @html.div(class="search-empty-title", ui(locale, NoCheckout)),

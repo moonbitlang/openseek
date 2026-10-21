@@ -73,7 +73,7 @@ fn Input::semantic_session_key(self : Input) -> String {
   match self.owner {
     Host(owner) =>
       "semantic-search:\{owner.channel.uri_authority()}:\{owner.session}:\{self.root_text()}"
-    Cloud(..) => ""
+    Cloud(..) => "semantic-search:\{self.owner.key()}:\{self.root_text()}"
   }
 }
 
@@ -157,7 +157,6 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         input,
         immediate=false,
       )
-    ModeChanged(Semantic) if input.owner is Cloud(..) => self
     ModeChanged(mode) =>
       self.schedule(
         {
@@ -679,7 +678,7 @@ fn Page::semantic_request_payload(
   self : Page,
   input : Input,
 ) -> @protocol.SearchSemanticPayload? {
-  guard self.mode is Semantic && input.owner is Host(_) else { return None }
+  guard self.mode is Semantic else { return None }
   guard input.root is Some(root) else { return None }
   let patterns = self.semantic.patterns.filter(pattern => {
     !pattern.trim().is_empty()

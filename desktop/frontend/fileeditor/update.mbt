@@ -2159,9 +2159,7 @@ pub fn sync(
         } else {
           state.explorer_mode
         },
-        search: state.search.reset_checkout(
-          text_only=ctx.owner is @interop.Cloud(..),
-        ),
+        search: state.search.reset_checkout(),
         review_diff_layout: state.review_diff_layout,
         review_diff_mode: state.review_diff_mode,
         review_diff_ignore_comments: state.review_diff_ignore_comments,

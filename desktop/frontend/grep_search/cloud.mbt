@@ -34,3 +34,72 @@ fn Input::owns_root(self : Input, root : @common.Uri) -> Bool {
       expected == root
   }
 }
+
+///|
+fn cloud_semantic_body(payload : @protocol.SearchSemanticPayload) -> Json {
+  {
+    "patterns": payload.patterns,
+    "include_glob": payload.include_glob,
+    "exclude_glob": payload.exclude_glob,
+    "generation": payload.generation,
+    "max_results": payload.max_results,
+  }
+}
+
+///|
+/// Each subscription owns one HTTP stream. Closing it cancels only that
+/// request; owner identity and generation fence progress in the shared reducer.
+async fn cloud_semantic_search(
+  token : String,
+  session : String,
+  payload : @protocol.SearchSemanticPayload,
+  opened : (() -> Unit) -> Unit,
+  active : () -> Bool,
+  progress : (@protocol.SemanticSearchProgressPayload) -> Unit,
+) -> @protocol.SearchSemanticReply {
+  @async.with_task_group(group => {
+    let task = group.spawn(
+      () => {
+        let client = @http.Client(@cloud_client.CloudOrigin, headers={
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+        }) catch {
+          _ => raise @cloud_client.RequestError(Unreachable)
+        }
+        defer client.close()
+        let response = client.post(
+          "/v1/sessions/\{@uri.encode_component(session)}/files/search/semantic",
+          cloud_semantic_body(payload).stringify(),
+        ) catch {
+          _ => raise @cloud_client.RequestError(Unreachable)
+        }
+        @cloud_client.check_status(response.code)
+        let parser = @cloud_client.SseParser::new()
+        while active() {
+          let line = client.read_until("\n") catch {
+            _ => raise @cloud_client.RequestError(Unreachable)
+          }
+          guard active() && line is Some(line) else { break }
+          if parser.line(line) is Some((event, data)) {
+            if event != "progress" && event != "result" {
+              continue
+            }
+            let fields : Map[String, Json] = @json.from_json(@json.parse(data))
+            fields["root"] = Json(payload.root)
+            if event == "result" {
+              return @json.from_json(Json(fields))
+            }
+            fields["session_key"] = Json(payload.session_key)
+            progress(@json.from_json(Json(fields)))
+          }
+        }
+        // EOF before a final result must not report an incomplete scan as success.
+        raise @cloud_client.RequestError(Malformed)
+      },
+      allow_failure=true,
+    )
+    opened(() => task.cancel())
+    task.wait()
+  })
+}

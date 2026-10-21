@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/async",
+  "moonbitlang/async/http",
   "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",

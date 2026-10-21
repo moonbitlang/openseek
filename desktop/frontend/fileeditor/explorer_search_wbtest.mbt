@@ -74,7 +74,7 @@ test "Explorer tab keyboard navigation wraps and honors Home and End" {
 }
 
 ///|
-test "Cloud search actions reach the shared reducer without enabling semantic selection" {
+test "Cloud search actions reach the shared reducer" {
   let ctx = cloud_ctx("account", "session", 4)
   let (base, _) = sync(test_emit(), State::empty(), ctx)
   let (_, selected) = update(

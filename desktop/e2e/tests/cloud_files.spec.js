@@ -687,7 +687,7 @@ test('Cloud text search reuses options, results, keyboard tabs and positioned fi
   await expect(searchTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(0);
   const search = page.locator('.workspace-search');
-  await expect(search.getByRole('button', { name: 'Code search', exact: true })).toHaveCount(0);
+  await expect(search.getByRole('button', { name: 'Code search', exact: true })).toHaveCount(1);
   await search.getByTitle('Match Case', { exact: true }).click();
   await search.getByTitle('Match Whole Word', { exact: true }).click();
   await search.getByTitle('Use Regular Expression', { exact: true }).click();
@@ -784,3 +784,116 @@ test('Cloud validation handles bodyless browser HEAD responses for changed and u
   expect(cloud.device.pageErrors).toEqual([]);
   expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
 });
+
+
+test('Cloud code search streams shared results, navigates ranges, and cancels an obsolete query', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: 'fn hello {\n  inspect(1)\n}', sig: 'semantic', absolute: '/src/hello #.mbt' });
+  const requests = [];
+  let resume;
+  cloud.eventPauses = new Map([[0, new Promise(resolve => { resume = resolve; })]]);
+  await cloud.install();
+  await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic`, async route => {
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Expose-Headers': 'x-fixture-event-boundaries' };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    const request = route.request();
+    const body = request.postDataJSON();
+    requests.push({ body, headers: await request.allHeaders() });
+    const hit = { path: 'src/hello #.mbt', rule_id: body.patterns[0], start_line: 2, start_column: 3, end_line: 2, end_column: 13, matched_source: body.patterns[0] === 'inspect($_)' ? 'inspect(1)' : 'inspect(2)', source_context: [] };
+    const progress = `event: progress\ndata: ${JSON.stringify({ generation: body.generation, matches: [hit], match_count: 1, file_count: 1 })}\n\n`;
+    const result = `event: result\ndata: ${JSON.stringify({ generation: body.generation, matches: [hit], match_count: 1, file_count: 1, limit_hit: false, cancelled: false, partial: false })}\n\n`;
+    return route.fulfill({ headers: { ...headers, 'x-fixture-event-boundaries': JSON.stringify([Buffer.byteLength(progress)]) }, contentType: 'text/event-stream', body: progress + result });
+  });
+  try {
+    await cloud.goto(); await openFiles(page, cloud);
+    await page.getByRole('tab', { name: 'Search', exact: true }).click();
+    const search = page.locator('.workspace-search');
+    await search.getByRole('button', { name: 'Code search', exact: true }).click();
+    const pattern = search.getByRole('textbox', { name: 'pattern', exact: true });
+    await pattern.fill('inspect($_)'); await pattern.press('Enter');
+    await expect(search.locator('.search-result-row')).toContainText('inspect(1)');
+    await expect(search.locator('.search-summary')).toHaveText('1 match in 1 file so far…');
+    expect(requests.at(-1).headers.authorization).toBe('Bearer ts_fixture-123');
+    expect(Object.keys(requests.at(-1).body).sort()).toEqual(['patterns', 'include_glob', 'exclude_glob', 'generation', 'max_results'].sort());
+    const cancelled = cloud.streamCancellations;
+    await pattern.fill('inspect(2)'); await pattern.press('Enter');
+    await expect.poll(() => cloud.streamCancellations).toBeGreaterThan(cancelled);
+    await expect(search.locator('.search-result-row')).toContainText('inspect(2)');
+    resume();
+    await expect(search.locator('.search-result-row')).not.toContainText('inspect(1)');
+    await expect(search.locator('.search-summary')).toHaveText('1 match in 1 file');
+    await page.screenshot({ path: testInfo.outputPath('cloud-code-search.png'), animations: 'disabled' });
+    await search.locator('.search-result-row').getByRole('button').click();
+    await expect(source(page)).toContainText('inspect(1)');
+    expect(fileHostRequests(cloud)).toEqual([]);
+    expect(cloud.device.pageErrors).toEqual([]);
+    expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
+  } finally { resume(); }
+});
+
+const semanticHeaders = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+const semanticHit = (index = 0, pattern = 'inspect($_)') => ({
+  path: 'src/hello #.mbt', rule_id: pattern, start_line: index + 1, start_column: 1,
+  end_line: index + 1, end_column: 11, matched_source: 'inspect(1)', source_context: [],
+});
+
+async function openCloudCodeSearch(page, cloud, pattern = 'inspect($_)') {
+  await cloud.goto(); await openFiles(page, cloud);
+  await page.getByRole('tab', { name: 'Search', exact: true }).click();
+  await page.getByRole('button', { name: 'Code search', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'pattern', exact: true });
+  await input.fill(pattern); await input.press('Enter');
+  return input;
+}
+
+test('Cloud cancels a search waiting for response headers without cancelling its replacement', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const searches = [];
+  const failed = [];
+  page.on('requestfailed', request => { if (request.url().endsWith('/files/search/semantic')) failed.push(request); });
+  await cloud.install();
+  await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic`, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: semanticHeaders });
+    const body = route.request().postDataJSON();
+    searches.push(body);
+    if (body.patterns[0] === 'held') await held;
+    const reply = { generation: body.generation, matches: [semanticHit(0, body.patterns[0])], match_count: 1, file_count: 1, limit_hit: false, cancelled: false, partial: false };
+    return route.fulfill({ headers: semanticHeaders, contentType: 'text/event-stream', body: `event: result\ndata: ${JSON.stringify(reply)}\n\n` });
+  });
+  try {
+    const pattern = await openCloudCodeSearch(page, cloud, 'held');
+    await expect.poll(() => searches.length).toBeGreaterThan(0);
+    await pattern.fill('replacement'); await pattern.press('Enter');
+    await expect.poll(() => failed.length).toBeGreaterThan(0);
+    await expect(page.locator('.search-semantic-pattern')).toHaveText('replacement');
+    release();
+    await expect(page.locator('.search-summary')).toHaveText('1 match in 1 file');
+    expect(cloud.device.pageErrors).toEqual([]);
+    expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
+  } finally { release(); }
+});
+
+test('Cloud preserves partial semantic results and reports an unfinished stream as a failure', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  await cloud.install();
+  await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic`, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: semanticHeaders });
+    const body = route.request().postDataJSON();
+    const data = { generation: body.generation, matches: [semanticHit()], match_count: 1, file_count: 1 };
+    const result = { ...data, limit_hit: true, cancelled: false, partial: true, error_code: 'tool_failed', error_message: 'Fixture scan stopped early' };
+    return route.fulfill({ headers: semanticHeaders, contentType: 'text/event-stream', body: body.patterns[0] === 'unfinished'
+      ? `event: progress\ndata: ${JSON.stringify(data)}\n\n`
+      : `event: result\ndata: ${JSON.stringify(result)}\n\n` });
+  });
+  const pattern = await openCloudCodeSearch(page, cloud, 'partial');
+  await expect(page.getByRole('alert')).toContainText('Fixture scan stopped early');
+  await expect(page.locator('.search-result-row')).toContainText('inspect(1)');
+  await expect(page.locator('.search-truncated')).toHaveCount(2);
+  await pattern.fill('unfinished'); await pattern.press('Enter');
+  await expect(page.getByRole('alert')).toContainText('Cloud returned an invalid response. Try again.');
+  await expect(page.locator('.search-result-row')).toHaveCount(0);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+

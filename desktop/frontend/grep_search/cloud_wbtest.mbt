@@ -133,13 +133,13 @@ test "Cloud search preserves service errors and rejects malformed match ranges" 
 }
 
 ///|
-test "Cloud search only accepts its own workspace and has no semantic requests" {
+test "Cloud semantic search keeps workspace ownership and shares request limits" {
   let input = cloud_input()
   assert_true(input.owns_root(input.root.unwrap()))
   assert_false(input.owns_root(cloud_input(session="other").root.unwrap()))
   assert_false(input.owns_root(@common.Uri::parse("file:///work")))
   let state = State::empty().handle(ModeChanged(Semantic), input)
-  assert_true(state.page.mode is Text)
+  assert_true(state.page.mode is Semantic)
   let host = Input(
     model="model",
     thinking=None,
@@ -151,5 +151,14 @@ test "Cloud search only accepts its own workspace and has no semantic requests" 
   let cloud = semantic.reset_checkout(text_only=true)
   assert_true(cloud.page.mode is Text)
   assert_eq(cloud.page.generation, semantic.page.generation + 1)
-  assert_eq(semantic.page.semantic_request_payload(input), None)
+  let requested = state.handle(PatternChanged(0, "inspect($_)"), input)
+  let payload = requested.page.semantic_request_payload(input).unwrap()
+  assert_eq(payload.root, "/")
+  assert_eq(payload.session_key, input.semantic_session_key())
+  assert_eq(payload.max_results, MaxSearchResults)
+  let body : Map[String, Json] = @json.from_json(cloud_semantic_body(payload))
+  assert_eq(body.length(), 5)
+  assert_eq(body.get("root"), None)
+  assert_eq(body.get("session_key"), None)
+  assert_eq(body.get("patterns"), Some(Json(["inspect($_)"])))
 }

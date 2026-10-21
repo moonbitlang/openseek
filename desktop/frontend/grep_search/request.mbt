@@ -17,6 +17,7 @@ priv enum SearchRequest {
   Text(@protocol.SearchTextPayload)
   CloudText(@cloud_client.Access, @protocol.SearchTextPayload)
   Semantic(@protocol.SearchSemanticPayload)
+  CloudSemantic(@cloud_client.Access, @protocol.SearchSemanticPayload)
 }
 
 ///|
@@ -31,7 +32,7 @@ fn SearchRequest::identity(self : SearchRequest) -> SearchRequestIdentity {
   match self {
     Text(payload) | CloudText(_, payload) =>
       { root: payload.root, generation: payload.generation, kind: "text", }
-    Semantic(payload) =>
+    Semantic(payload) | CloudSemantic(_, payload) =>
       { root: payload.root, generation: payload.generation, kind: "semantic", }
   }
 }
@@ -69,7 +70,7 @@ fn SearchRequest::cancel(
         ) catch {
           _ => ()
         }
-      CloudText(_, _) => ()
+      CloudText(_, _) | CloudSemantic(_, _) => ()
       Semantic(payload) =>
         ignore(
           @interop.bridge_request(
@@ -100,6 +101,7 @@ fn search_request_loader(
   let mut emit = emit
   let mut active = true
   let mut settled = false
+  let mut cancel_cloud : (() -> Unit)? = None
   let identity = request.identity()
   let request_root = identity.root
   let request_generation = request.generation()
@@ -138,6 +140,34 @@ fn search_request_loader(
                   body=cloud_search_body(payload),
                 ),
                 payload.root,
+              ),
+            ) catch {
+              @cloud_client.RequestError(failure) =>
+                RequestFailed(failure.label())
+              _ => RequestFailed(@cloud_client.Failure::Malformed.label())
+            }
+          CloudSemantic(access, payload) =>
+            SemanticLoaded(
+              cloud_semantic_search(
+                access.token,
+                owner.session(),
+                payload,
+                cancel => cancel_cloud = Some(cancel),
+                () => active,
+                progress => {
+                  scheduler.add(
+                    emit(
+                      SemanticProgress(
+                        root=progress.root,
+                        session_key=progress.session_key,
+                        generation=progress.generation,
+                        matches=progress.matches,
+                        match_count=progress.match_count,
+                        file_count=progress.file_count,
+                      ),
+                    ),
+                  )
+                },
               ),
             ) catch {
               @cloud_client.RequestError(failure) =>
@@ -203,6 +233,9 @@ fn search_request_loader(
     unload: _ => {
       active = false
       @dom.window().clear_timeout(timer)
+      if cancel_cloud is Some(cancel) {
+        cancel()
+      }
       if !settled {
         request.cancel(owner)
       }
@@ -249,7 +282,15 @@ fn State::search_subscription(
     Semantic =>
       page
       .semantic_request_payload(input)
-      .map(payload => SearchRequest::Semantic(payload))
+      .bind(payload => {
+        match input.owner {
+          Host(_) => Some(SearchRequest::Semantic(payload))
+          Cloud(..) =>
+            input.cloud_access.map(access => {
+              SearchRequest::CloudSemantic(access, payload)
+            })
+        }
+      })
   }
   guard request is Some(request) else { return @sub.none }
   let identity = request.identity()
