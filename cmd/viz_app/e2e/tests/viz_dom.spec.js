@@ -273,6 +273,42 @@ test('a tool pairing link brings its distant result into view', async ({ page })
   expect(viewer.pageErrors).toEqual([]);
 });
 
+test('a write body is highlighted by its path extension', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  const writeCall = (id, path, content) => ({ id, name: 'write', arguments: JSON.stringify({ path, content }) });
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [
+            writeCall('write-mbtx', 'git.mbtx', 'async fn main {\n  println("hi")\n}'),
+            writeCall('write-txt', 'notes.txt', 'fn is not code here'),
+          ],
+        },
+      },
+    },
+  ]);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  const bodies = page.locator('.arg-field').filter({ hasText: 'content' }).locator('pre.moonbit-source');
+  await expect(bodies).toHaveCount(2);
+  const mbtx = bodies.first();
+  await expect(mbtx.locator('.mtk3').first()).toHaveText('async');
+  await expect(mbtx.locator('.mtk5').first()).toContainText('"hi"');
+  await expect(mbtx.locator('.moonbit-line')).toHaveCount(3);
+  // An extension without a tokenizer keeps plain, numbered text.
+  const plain = bodies.last();
+  await expect(plain).toContainText('fn is not code here');
+  await expect(plain.locator('[class^="mtk"]')).toHaveCount(0);
+  expect(viewer.pageErrors).toEqual([]);
+});
+
 test('keyboard shortcut unfolds the nearest card', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 900 });
   const viewer = new VizBrowserHarness(page);

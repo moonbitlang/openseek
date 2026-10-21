@@ -1160,8 +1160,13 @@ fn render_args_friendly(tool_name : String, raw : String) -> @html.Html {
   let json = augment_with_diffs(tool_name, json)
   match json {
     Object(fields) if !fields.is_empty() => {
+      let path = if fields.get("path") is Some(String(path)) {
+        Some(path)
+      } else {
+        None
+      }
       let rows : Array[@html.Html] = [
-        for key, value in fields => arg_field(tool_name, key, value)
+        for key, value in fields => arg_field(tool_name, key, value, path?)
       ]
       @html.div(class="tool-call-args-rendered") <| rows
     }
@@ -1176,8 +1181,14 @@ fn render_args_friendly(tool_name : String, raw : String) -> @html.Html {
 /// One `key: value` row of the friendly arguments view. String values render
 /// verbatim — a multi-line value (e.g. a file body) as a preformatted block, a
 /// single-line value inline. Non-string scalars render inline; nested arrays and
-/// objects keep their JSON form, which is rare for tool arguments.
-fn arg_field(tool_name : String, key : String, value : Json) -> @html.Html {
+/// objects keep their JSON form, which is rare for tool arguments. `path` is the
+/// call's own `path` argument, which picks the highlighter for a `write` body.
+fn arg_field(
+  tool_name : String,
+  key : String,
+  value : Json,
+  path? : String,
+) -> @html.Html {
   // A synthesized `generated_diff` string renders as a colored diff block; every
   // other field uses the generic recursive rendering.
   let value_html = match value {
@@ -1187,6 +1198,12 @@ fn arg_field(tool_name : String, key : String, value : Json) -> @html.Html {
     String(source) if tool_name == "mbtx" && key == "source" =>
       @html.pre(class="arg-value moonbit-source", [
         @syntax_html.moonbit_numbered_source(source),
+      ])
+    // A file body, highlighted by its path's extension and numbered like the
+    // `mbtx` source; an unrecognized extension keeps plain numbered lines.
+    String(content) if tool_name == "write" && key == "content" =>
+      @html.pre(class="arg-value moonbit-source", [
+        @syntax_html.numbered_source(content, tokenizer?=path_tokenizer(path)),
       ])
     _ => render_value(value)
   }

@@ -9,6 +9,11 @@ import {
   "moonbit-community/rabbita/svg",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
+  "moonbitlang/editor/syntax",
+  "moonbitlang/editor/syntax/lang_javascript",
+  "moonbitlang/editor/syntax/lang_json",
+  "moonbitlang/editor/syntax/lang_moon_config",
+  "moonbitlang/editor/syntax/lang_moonbit",
   "moonbitlang/editor/viewer/html" @syntax_html,
   "moonbitlang/openseek/workspace_file_ref",
 }
