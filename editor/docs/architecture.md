@@ -271,7 +271,7 @@ js-only. Concrete browser runtime packages live below the module-private
 - `internal/viewer/markdown` is the multi-target safe-cmark boundary. It owns
   plaintext fallback, a cmark-independent code-block value, conversion facts,
   the shared editor-token HTML override, and the private synchronous adapter
-  that renders exact lowercase `diago` fences through `Milky2018/diago` while
+  that renders exact lowercase `diago` fences through `moonbit-community/diago` while
   returning failures and every other code block to the existing fallback;
   `internal/viewer/browser/markdown` adds MoonBit-owned DOM retention,
   URI/media policy, activation listeners, size notification, and per-target

@@ -1,5 +1,5 @@
 import {
-  "Milky2018/diago",
+  "moonbit-community/diago",
   "moonbit-community/uml/api" @uml,
   "moonbit-community/uml/style" @uml_style,
   "moonbit-community/cmark/cmark_base",
