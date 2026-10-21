@@ -974,7 +974,7 @@ test('Cloud pattern repair uses server defaults and applies only a validated can
     return route.fulfill({ headers: semanticHeaders, contentType: 'application/json', body: JSON.stringify({ generation: body.generation, validation_status: passed ? 'passed' : 'failed', candidate_pattern: 'inspect($_)', message: passed ? 'Validated candidate' : 'Candidate rejected by syntax validation', trace: ['Fixture repair trace'] }) });
   });
   const pattern = await openCloudCodeSearch(page, cloud, 'broken');
-  const fix = page.getByRole('button', { name: 'Fix Pattern', exact: true });
+  const fix = page.locator('.pattern-repair-button');
   await fix.click();
   await expect(page.locator('.search-pattern-repair-candidate-value')).toHaveText('inspect($_)');
   await expect(pattern).toHaveValue('broken');
