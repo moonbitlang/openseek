@@ -72,5 +72,28 @@ async fn prepare_submission(
     cached.push({ source, path: reply.path, })
     stored(source, reply.path)
   }
-  draft
+  // Reuse the same inline limits and immutable artifact envelope as Local.
+  // Materialization belongs to this submitted snapshot, not the live selection.
+  let mentions : Array[@composer.Mention] = []
+  for mention in draft.mentions {
+    if mention.ref_ is @mention_context.SemanticSearch(reference) &&
+      !reference.is_inlineable() {
+      let reply = @cloud_client.materialize_semantic_selection(
+        token,
+        session,
+        reference.materialize_payload(root=reference.root),
+      )
+      mentions.push({
+        ..mention,
+        ref_: @mention_context.SemanticSearchArtifact({
+          path: reply.path,
+          pattern_count: reference.patterns.length(),
+          match_count: reply.match_count,
+        }),
+      })
+    } else {
+      mentions.push(mention)
+    }
+  }
+  { ..draft, mentions, }
 }

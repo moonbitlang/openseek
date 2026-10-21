@@ -15,6 +15,8 @@ pub async fn file_unchanged(String, String, String, String) -> Bool
 
 pub async fn import_attachment(String, String, @protocol.AttachmentSource) -> @protocol.ImportAttachmentReply
 
+pub async fn materialize_semantic_selection(String, String, @protocol.MaterializeSemanticSelectionPayload) -> @protocol.MaterializeSemanticSelectionReply
+
 pub async fn prepare_attachment(String, String, @protocol.AttachmentSource) -> @protocol.PrepareAttachmentReply
 
 pub async fn read_directory(String, String, String) -> @protocol.ReadDirReply

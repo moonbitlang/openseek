@@ -814,7 +814,11 @@ fn State::submit(
     state.can_send(id) &&
     (!draft.is_blank() || !attachments.is_empty()) &&
     draft.mentions.all(mention => {
-      mention.ref_ is (File(..) | OfficeSelection(..))
+      mention.ref_
+      is (File(..)
+      | OfficeSelection(..)
+      | SemanticSearch(_)
+      | SemanticSearchArtifact(_))
     }) else {
     return (state, @cmd.none, None)
   }

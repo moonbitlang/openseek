@@ -370,7 +370,16 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     identity: { ..input.identity, owner, },
     draft: conversation
     .bind(value => value.initial_submission)
-    .unwrap_or(input.draft),
+    .unwrap_or(input.draft)
+    .with_semantic_selection(
+      if self.file_panel.owner == Some(owner) {
+        // Model references are workspace-relative; the panel's slash root is
+        // only a virtual URI path, never a machine filesystem root.
+        self.file_panel.search.selected_semantic_reference(".")
+      } else {
+        None
+      },
+    ),
     run: if conversation is Some(value) && (value.sending || value.generating) {
       Some(
         conversation

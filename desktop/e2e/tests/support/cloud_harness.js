@@ -65,7 +65,7 @@ export class CloudHarness {
     await this.page.exposeFunction('cloudWaitForEvent', index => this.eventPauses?.get(index));
     await this.page.exposeFunction('cloudStreamCancelled', () => this.streamCancellations++);
     await this.page.exposeFunction('cloudFileStreamCancelled', () => this.fileStreamCancellations++);
-    await this.page.addInitScript(({ cached, authOrigin, cloudOrigin, rejectStreamCancel }) => {
+    await this.page.addInitScript(({ cached, authOrigin, cloudOrigin, rejectStreamCancel, streamChunkSize }) => {
       window.cloudUnhandledRejections = [];
       window.addEventListener('unhandledrejection', event => window.cloudUnhandledRejections.push(String(event.reason)));
       const key = 'seekmoon.cloud.token.v1';
@@ -107,16 +107,21 @@ export class CloudHarness {
           const bytes = new TextEncoder().encode(await response.text());
           let cancelled = false;
           return new Response(new ReadableStream({ async start(controller) {
-            // Every byte is a separate chunk, splitting UTF-8 and SSE fields.
+            // Default to byte-sized chunks to split UTF-8 and SSE fields.
+            // Large fixtures can use normal network-sized chunks.
             const boundary = response.headers.get('x-fixture-admission-bytes');
             const boundaries = JSON.parse(response.headers.get('x-fixture-event-boundaries') || '[]');
             const disconnectAfter = response.headers.get('x-fixture-disconnect-after');
             let eventIndex = 0;
-            for (let i = 0; i < bytes.length; i++) {
+            for (let i = 0; i < bytes.length;) {
               if (cancelled) return;
-              controller.enqueue(new Uint8Array([bytes[i]]));
-              if (i + 1 === Number(boundary)) await window.cloudWaitForStream();
-              if (i + 1 === boundaries[eventIndex]) {
+              const end = [Number(boundary), boundaries[eventIndex]]
+                .filter(value => value > i)
+                .reduce((end, value) => Math.min(end, value), Math.min(bytes.length, i + streamChunkSize));
+              controller.enqueue(bytes.slice(i, end));
+              i = end;
+              if (i === Number(boundary)) await window.cloudWaitForStream();
+              if (i === boundaries[eventIndex]) {
                 await window.cloudWaitForEvent(eventIndex);
                 if (disconnectAfter !== null && eventIndex === Number(disconnectAfter)) {
                   controller.error(new Error('Fixture stream disconnected'));
@@ -134,7 +139,7 @@ export class CloudHarness {
         }
         return response;
       };
-    }, { cached: this.cached, authOrigin, cloudOrigin, rejectStreamCancel: this.rejectStreamCancel });
+    }, { cached: this.cached, authOrigin, cloudOrigin, rejectStreamCancel: this.rejectStreamCancel, streamChunkSize: this.streamChunkSize ?? 1 });
     await this.page.route(`${authOrigin}/console/**`, async route => {
       const path = new URL(route.request().url()).pathname.replace(/^\/console\/(?:releases\/v[^/]+\/)?/, '') || 'index.html';
       const contentType = path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : path.endsWith('.html') ? 'text/html' : 'application/octet-stream';

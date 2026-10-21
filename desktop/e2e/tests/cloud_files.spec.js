@@ -897,3 +897,62 @@ test('Cloud preserves partial semantic results and reports an unfinished stream 
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
+for (const count of [1, 101]) {
+  test(`Cloud sends a ${count}-match selection through the shared composer and materializes only large selections`, async ({ page }) => {
+    const cloud = new CloudFilesHarness(page);
+    const materializations = [];
+    cloud.streamChunkSize = 512;
+    let fail = count > 100;
+    await cloud.install();
+    await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic`, async route => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: semanticHeaders });
+      const body = route.request().postDataJSON();
+      const result = { generation: body.generation, matches: Array.from({ length: count }, (_, index) => semanticHit(index)), match_count: count, file_count: 1, limit_hit: false, cancelled: false, partial: false };
+      return route.fulfill({ headers: semanticHeaders, contentType: 'text/event-stream', body: `event: result\ndata: ${JSON.stringify(result)}\n\n` });
+    });
+    await page.route(`${cloudOrigin}/v1/sessions/*/files/search/semantic/selection`, async route => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: semanticHeaders });
+      materializations.push({ body: route.request().postDataJSON(), headers: await route.request().allHeaders() });
+      return route.fulfill({ status: fail ? 500 : 200, headers: semanticHeaders, contentType: 'application/json', body: JSON.stringify({ path: '.openseek/agent-context/semantic-search/selection.jsonl', match_count: count, file_count: 1 }) });
+    });
+    await openCloudCodeSearch(page, cloud);
+    await page.getByLabel('Select pattern', { exact: true }).click();
+    const chip = page.locator('.composer .mention-chip');
+    await expect(chip).toContainText(`${count} matches`);
+    expect(materializations).toHaveLength(0);
+    await chip.getByTitle(`Open semantic search with ${count} matches`, { exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible();
+    await page.locator('#task').fill('Explain these matches');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    if (fail) {
+      await expect(page.getByText('Cloud answered HTTP 500. Try again.', { exact: true })).toBeVisible();
+      await expect(page.locator('#task')).toHaveValue('Explain these matches');
+      expect(cloud.postCount).toBe(0);
+      fail = false;
+      await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+    }
+    await expect.poll(() => cloud.postCount).toBe(1);
+    const sent = JSON.parse(cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages')).body).content;
+    expect(sent).toContain('Explain these matches');
+    if (count > 100) {
+      expect(materializations).toHaveLength(2);
+      expect(materializations[1].body).toEqual(materializations[0].body);
+      expect(materializations[0].headers.authorization).toBe('Bearer ts_fixture-123');
+      expect(Object.keys(materializations[0].body).sort()).toEqual(['artifact_id', 'patterns', 'include_glob', 'exclude_glob', 'matches'].sort());
+      expect(materializations[0].body.matches).toHaveLength(count);
+      expect(sent).toContain('<semantic_search_file path=".openseek/agent-context/semantic-search/selection.jsonl"');
+      expect(sent).not.toContain('matched_source');
+    } else {
+      expect(materializations).toHaveLength(0);
+      expect(sent).toContain('<semantic_search');
+      expect(sent).toContain('root="."');
+      expect(sent).not.toContain('root="/"');
+      expect(sent).toContain('inspect(1)');
+    }
+    expect(fileHostRequests(cloud)).toEqual([]);
+    expect(cloud.device.pageErrors).toEqual([]);
+    expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
+  });
+}
+

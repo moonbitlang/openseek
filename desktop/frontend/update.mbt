@@ -2564,6 +2564,10 @@ fn update_msg(
               model,
             )
           @composer.MentionOpened(identity~, mention~) => {
+            if mention.ref_ is @mention_context.SemanticSearch(_) &&
+              model.cloud_identity() == Some(identity.owner) {
+              return open_semantic_selection(dispatch, model)
+            }
             guard mention.ref_ is File(path~) else { return (@cmd.none, model) }
             return open_cloud_file(
               dispatch,

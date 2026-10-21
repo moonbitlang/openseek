@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/cloud_client",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/js",

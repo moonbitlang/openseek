@@ -122,3 +122,32 @@ pub async fn file_unchanged(
   check_status(response.code)
   false
 }
+
+///|
+/// The session owns the workspace; only relative selection data crosses HTTP.
+pub async fn materialize_semantic_selection(
+  token : String,
+  session : String,
+  payload : @protocol.MaterializeSemanticSelectionPayload,
+) -> @protocol.MaterializeSemanticSelectionReply {
+  let body : Json = {
+    "artifact_id": payload.artifact_id,
+    "patterns": payload.patterns,
+    "include_glob": payload.include_glob,
+    "exclude_glob": payload.exclude_glob,
+    "matches": payload.matches,
+  }
+  let json = request(
+    CloudOrigin,
+    "/v1/sessions/\{@uri.encode_component(session)}/files/search/semantic/selection",
+    Post,
+    token~,
+    body~,
+  ) catch {
+    RequestError(Busy) => raise RequestError(Http(409))
+    error => raise error
+  }
+  @json.from_json(json) catch {
+    _ => raise RequestError(Malformed)
+  }
+}
