@@ -95,7 +95,9 @@
     transparent
   );
   --vscode-editorLink-activeForeground: var(--color-accent-strong);
-  --vscode-editorCodeLens-foreground: var(--color-text-muted);
+  /* One step below the documentation prose (`--color-text-secondary`), so a
+     lens reads as a footnote rather than part of the doc above it. */
+  --vscode-editorCodeLens-foreground: var(--color-text-faint);
   --vscode-editorWarning-foreground: var(--color-warning);
   --vscode-editorError-foreground: var(--color-danger);
   --vscode-editorInfo-foreground: var(--color-accent);

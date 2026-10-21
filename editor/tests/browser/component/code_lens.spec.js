@@ -112,6 +112,7 @@ test('CodeLens rows sit above and align with source', async ({
         overflow: style.overflow,
         textOverflow: style.textOverflow,
         fontSize: style.fontSize,
+        fontFamily: style.fontFamily,
         display: style.display,
       };
     });
@@ -130,6 +131,13 @@ test('CodeLens rows sit above and align with source', async ({
       // Absolutely positioned content widgets blockify inline-flex to flex.
       display: 'flex',
     });
+    // VS Code parity: an unset CodeLens family uses the UI font, not the code
+    // font of the line below it.
+    const codeFamily = await page
+      .locator(mainHost + ' .view-lines')
+      .evaluate((node) => getComputedStyle(node).fontFamily);
+    expect(geometry.fontFamily).not.toBe(codeFamily);
+    expect(geometry.fontFamily.toLowerCase()).not.toContain('monospace');
 
     await expect(row.locator(':scope > a')).toHaveCount(2);
     await expect(row.locator('.codelens-separator')).toHaveCount(1);

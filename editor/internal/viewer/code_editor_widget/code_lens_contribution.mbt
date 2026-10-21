@@ -408,6 +408,16 @@ fn CodeEditorWidget::render_code_lens_row(
 }
 
 ///|
+/// The CodeLens family when `code_lens_font_family` is unset. VS Code leaves
+/// `--vscode-editorCodeLens-fontFamily` unset there, so the lens inherits the
+/// workbench UI font from `.monaco-editor` rather than the code font. The
+/// Viewer has no workbench root font, so it names the host's UI font token,
+/// falling back to VS Code's workbench stack.
+const CODE_LENS_DEFAULT_FONT_FAMILY : String = "var(--ui-font-family, -apple-system, BlinkMacSystemFont, \"Segoe WPC\", \"Segoe UI\", system-ui, \"Ubuntu\", \"Droid Sans\", sans-serif)"
+
+///|
+/// `_getLayoutInfo` (`codelensController.ts`): the default size is 90% of the
+/// editor font truncated to whole pixels (`* .9 | 0`).
 fn CodeEditorWidget::code_lens_layout(
   self : CodeEditorWidget,
 ) -> (Double, Double) {
@@ -415,7 +425,7 @@ fn CodeEditorWidget::code_lens_layout(
   let font_info = snapshot.font_info
   let font_size = match snapshot.options.code_lens_font_size {
     Some(value) => value.max(1.0)
-    None => (font_info.font_size * 0.9).max(1.0)
+    None => (font_info.font_size * 0.9).to_int().max(1).to_double()
   }
   let line_height_factor = (font_info.line_height.to_double() /
   font_info.font_size.max(1.0)).max(1.3)
@@ -453,7 +463,7 @@ fn CodeEditorWidget::apply_code_lens_style_and_height(
         mounted.container,
         "--vscode-editorCodeLens-fontFamily",
         snapshot.options.code_lens_font_family.unwrap_or(
-          snapshot.font_info.font_family,
+          CODE_LENS_DEFAULT_FONT_FAMILY,
         ),
       )
     }
