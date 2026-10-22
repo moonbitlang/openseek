@@ -21,6 +21,11 @@ Promises. This is a bounded subset, not a complete generated CDP SDK.
 
 `accessibility_tree` returns the main frame's accessibility tree as `AxNode`s,
 keeping only each `AXValue`'s own value; frames' documents are not included.
+`input.mbt` locates an element (`scroll_into_view`, and `content_quads` and
+`viewport_size` in CSS pixels of the viewport) and gives the page trusted
+input:
+`dispatch_mouse_event` for the primary button, `dispatch_key_event` for the
+keys the browser tools press, and `insert_text`.
 
 The owner serializes commands and event reads and closes the connection.
 Overlapping reads are rejected. Events received before a command reply are
@@ -37,4 +42,5 @@ snapshots belong to the host integration, added separately in PR #1910.
 Protocol references: [Runtime](https://chromedevtools.github.io/devtools-protocol/tot/Runtime/),
 [DOM](https://chromedevtools.github.io/devtools-protocol/tot/DOM/),
 [Accessibility](https://chromedevtools.github.io/devtools-protocol/tot/Accessibility/),
+[Input](https://chromedevtools.github.io/devtools-protocol/tot/Input/),
 and [Overlay](https://chromedevtools.github.io/devtools-protocol/tot/Overlay/).

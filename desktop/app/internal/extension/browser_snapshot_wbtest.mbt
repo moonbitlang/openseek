@@ -176,6 +176,22 @@ async test "a snapshot shows what a person perceives, with refs on what they can
 }
 
 ///|
+async test "a page whose navigation away is pending is still loading" {
+  let nodes = tree_of([ax("1", "RootWebArea", name="Example")])
+  let document : Document = {
+    origin: 1,
+    entry: None,
+    complete: true,
+    url: "https://example.com/",
+    title: "Example",
+  }
+  assert_true(snapshot_text(document, nodes).contains("loading: false"))
+  assert_true(
+    snapshot_text(document, nodes, pending=true).contains("loading: true"),
+  )
+}
+
+///|
 async test "an unnamed wrapper that can be acted on is kept" {
   let nodes = tree_of([
     ax("1", "RootWebArea", children=["2"]),
@@ -208,6 +224,7 @@ async test "browser_snapshot refuses a call that names no tab of its conversatio
 
 ///|
 async test "a snapshot is read again when the page changes documents under it" {
+  let views = BrowserViews()
   let tree : Json = {
     "result": {
       "nodes": [
@@ -230,8 +247,10 @@ async test "a snapshot is read again when the page changes documents under it" {
       tree,
       document_reply(2, true),
     ],
-    connection => text = snapshot(connection, 4),
+    connection => text = views.snapshot(connection, 4),
   )
   assert_eq(sent.length(), 6)
   assert_true(text.contains("loading: false"))
+  // The refs it gave belong to the document it was read from in full.
+  assert_eq(views.snapshotted.get(4), Some(2))
 }

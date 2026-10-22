@@ -150,12 +150,17 @@ fn render_tree(nodes : Array[@cdp.AxNode]) -> String {
 
 ///|
 /// What `browser_snapshot` answers: the page's address, title, and whether
-/// it is still loading, then its tree.
-fn snapshot_text(document : Document, nodes : Array[@cdp.AxNode]) -> String {
+/// it is still loading — its document, or a navigation away from it that
+/// is `pending` — then its tree.
+fn snapshot_text(
+  document : Document,
+  nodes : Array[@cdp.AxNode],
+  pending~ : Bool = false,
+) -> String {
   let header = StringBuilder()
   header.write_string("url: \{document.url}\n")
   header.write_string("title: \{Json(document.title).stringify()}\n")
-  header.write_string("loading: \{!document.complete}\n\n")
+  header.write_string("loading: \{!document.complete || pending}\n\n")
   header.to_string() + render_tree(nodes)
 }
 
@@ -165,11 +170,17 @@ fn snapshot_text(document : Document, nodes : Array[@cdp.AxNode]) -> String {
 const SnapshotAttempts : Int32 = 3
 
 ///|
-/// What tab `id`'s page shows, as `browser_snapshot` answers it.
-async fn snapshot(connection : @cdp.Connection, id : Int32) -> String {
+/// What tab `id`'s page shows, as `browser_snapshot` answers it. The
+/// document it reads is the one its refs belong to from here on.
+async fn BrowserViews::snapshot(
+  self : BrowserViews,
+  connection : @cdp.Connection,
+  id : Int32,
+  pending~ : Bool = false,
+) -> String {
   // The tree and the page's account of its document are asked one after
-  // the other; a navigation between them would give one document's content
-  // under another's address. Only a tree read within one document is
+  // the other; a navigation between them would give refs of one document
+  // under the name of another. Only a tree read within one document is
   // answered.
   for _ in 0..<SnapshotAttempts {
     guard document(connection) is Some(before) else {
@@ -177,7 +188,8 @@ async fn snapshot(connection : @cdp.Connection, id : Int32) -> String {
     }
     let nodes = connection.accessibility_tree()
     if document(connection) is Some(after) && after.origin == before.origin {
-      return snapshot_text(after, nodes)
+      self.snapshotted[id] = after.origin
+      return snapshot_text(after, nodes, pending~)
     }
   }
   raise @mcp.ToolError(
@@ -192,9 +204,9 @@ async fn BrowserViews::snapshot_tab(
   session : String,
   arguments : Json,
 ) -> String {
-  let id = tab_argument(
-    arguments, "browser_snapshot needs `tab`, the id of the tab to read.",
+  let id = integer_argument(
+    arguments, "tab", "browser_snapshot needs `tab`, the id of the tab to read.",
   )
   ignore(self.tab_view(session, id))
-  self.with_page(id, connection => snapshot(connection, id))
+  self.with_page(id, connection => self.snapshot(connection, id))
 }
