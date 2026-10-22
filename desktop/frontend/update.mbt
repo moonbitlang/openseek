@@ -5856,9 +5856,8 @@ fn update_msg(
     // ordinary durable session, and `OpenSession` is how one is opened.
     OpenSessionHere(session_id) =>
       update_msg(dispatch, OpenSession(model.focused, session_id), model)
-    // A side chat is read in its conversation's dock: opening one — from a
-    // notification, a link — opens that conversation with the side chat's
-    // tab on screen.
+    // Selecting a side chat — from a notification, a link — selects its
+    // conversation instead; see `reveal_side_chat`.
     OpenSession(channel, session_id) if @protocol.split_side_chat_id(session_id)
       is Some(parent) => {
       let (cmd, model) = update_msg(
@@ -5866,19 +5865,7 @@ fn update_msg(
         OpenSession(channel, parent),
         model,
       )
-      let owner = @interop.Host({ channel, session: parent, })
-      let dock = @dock.open_side_chat(model.dock_state_for(owner), {
-        channel,
-        session: session_id,
-      })
-      (
-        cmd,
-        {
-          ..model.with_dock_state_for(owner, dock),
-          right_panel_open: true,
-          right_panel_menu_open: false,
-        },
-      )
+      (cmd, model.reveal_side_chat({ channel, session: session_id, }))
     }
     OpenSession(channel, session_id) =>
       // Selecting a conversation always returns to the chat — including
@@ -7480,19 +7467,22 @@ fn update_device_msg(
       // one re-reads when opened (`OpenSession` always reloads, and so does a
       // side chat coming back on screen). An in-flight user load keeps right
       // of way.
-      let on_screen : Array[Conversation] = []
+      // The foreground load is the column's alone: it defers only the
+      // column's re-read, never the side chat's beside it.
+      let on_screen : Array[(Conversation, Bool)] = []
       if model.find_conversation(channel, model.active_session) is Some(conv) {
-        on_screen.push(conv)
+        on_screen.push((conv, true))
       }
       if model.mounted_side_chat() is Some(conv) && conv.device == channel {
-        on_screen.push(conv)
+        on_screen.push((conv, false))
       }
       let model = if channel == model.focused {
-        on_screen.fold(init=model, (model, conv) => {
+        on_screen.fold(init=model, (model, entry) => {
+          let (conv, column) = entry
           guard (
               model.can_reload_transcript(conv) || conv.sync is Reloading(..)
             ) &&
-            model.loading_conversation is None else {
+            (!column || model.loading_conversation is None) else {
             return model
           }
           // A real engine pump can restart while the transport remains

@@ -117,6 +117,21 @@ fn activate_navigation(
     dev.bridge is Connected else {
     return (@cmd.none, model)
   }
+  // A side chat has no route of its own: its address is rewritten in place
+  // to its conversation's, so history never returns to it, and the side
+  // chat comes up in that conversation's dock. See `reveal_side_chat`.
+  if location.target is Session(id) &&
+    @protocol.split_side_chat_id(id) is Some(parent) {
+    let (command, next) = replace_with_new_navigation(
+      dispatch,
+      model,
+      Session(parent),
+    )
+    return (
+      command,
+      next.reveal_side_chat({ channel: model.focused, session: id, }),
+    )
+  }
   let (command, next, phase) = match location.target {
     Cloud | CloudSession(..) | CloudDraft(..) | Settings =>
       (@cmd.none, model, Active)
