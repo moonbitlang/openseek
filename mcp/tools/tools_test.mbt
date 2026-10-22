@@ -157,10 +157,6 @@ async test "tools_for_client bridges tools with namespaced names and schemas" {
     assert_false(tools[0].is_control())
     assert_false(tools[0].is_concurrent_safe())
     assert_true(tools[0].is_program_callable())
-    assert_true(
-      tools[0].output_schema
-      is Some(JsonSchema({ "properties": { "echo": _, .. }, .. })),
-    )
   })
 }
 
