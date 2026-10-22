@@ -99,6 +99,9 @@ fn Model::reopen_side_chat(
     return self
   }
   let owner = dock_home(@interop.Host(chat))
+  // Closing it may have hidden the panel, as its strip's last tab; while its
+  // conversation is still the one on screen, the panel shows it again.
+  let on_screen = owner == self.dock_owner()
   {
     ..self.with_dock_state_for(
       owner,
@@ -107,6 +110,7 @@ fn Model::reopen_side_chat(
     closing_side_chats: self.closing_side_chats.filter(closing => {
       closing.chat != chat
     }),
+    right_panel_open: self.right_panel_open || on_screen,
   }
 }
 

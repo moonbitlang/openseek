@@ -1025,3 +1025,29 @@ test "a side chat another client started before the fork reply keeps its run" {
   }
   assert_true(side.engine_model == DsPro)
 }
+
+///|
+test "a failed close of the strip's last tab shows the side chat again" {
+  let model = side_chat_model()
+  let idle = model.replace_conversation({
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      SideChatId,
+      @interop.ChannelId::Local.test_project(),
+    ),
+  })
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    idle,
+  )
+  // Its strip's last tab, closing it hid the panel.
+  assert_false(closed.right_panel_open)
+  let (_, failed) = update(
+    test_dispatch(),
+    SideChatCloseFailed(chat=side_chat_owner(), message="kept"),
+    closed,
+  )
+  assert_true(failed.right_panel_open)
+  assert_true(failed.mounted_side_chat_owner() == Some(side_chat_owner()))
+}
