@@ -29,6 +29,7 @@ fn load_saved_settings(
           fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == Some("true"),
           model=load_setting(ModelStorageKey),
           conversation_models=load_setting(ConversationModelsStorageKey),
+          conversation_approvals=load_setting(ConversationApprovalsStorageKey),
           agent=load_setting(AgentStorageKey),
           codex_model=load_setting(CodexModelStorageKey),
           codex_effort=load_setting(CodexReasoningEffortStorageKey),
@@ -149,6 +150,40 @@ fn save_conversation_model(key : String, model : EngineModel) -> @cmd.Cmd {
     })
     save_setting(ConversationModelsStorageKey, Json(rows).stringify())
   })
+}
+
+///|
+/// Persist one conversation's approval choice, folded into the stored list
+/// for the same reason `save_conversation_model` folds: another tab's rows
+/// survive.
+fn save_conversation_approval(
+  key : String,
+  approval : @protocol.OpenSeekApproval,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    let stored = load_setting(ConversationApprovalsStorageKey)
+      .map(parse_conversation_approvals)
+      .unwrap_or([])
+    let rows = approvals_with(stored, key, approval)
+    save_setting(ConversationApprovalsStorageKey, Json(rows).stringify())
+  })
+}
+
+///|
+/// Read the reviewed list back; anything that will not parse degrades to
+/// remembering nothing, which is every conversation asking.
+fn parse_conversation_approvals(text : String) -> Array[String] {
+  let keys : Array[String] = []
+  guard !text.is_blank() else { return keys }
+  let json = @json.parse(text) catch { _ => return keys }
+  guard json is Array(rows) else { return keys }
+  for row in rows {
+    guard keys.length() < ConversationModelsLimit else { break }
+    if row is String(key) && !key.is_empty() && !keys.contains(key) {
+      keys.push(key)
+    }
+  }
+  keys
 }
 
 ///|

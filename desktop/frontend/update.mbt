@@ -1036,6 +1036,7 @@ fn run_slash_command(
             reasoning=model.reasoning_for(conv.engine_model),
             max_steps=model.max_steps,
             workspace=conv.project(),
+            approval=model.approval_for(conv.device, conv.session_id),
           ),
           {
             ..model.replace_conversation({
@@ -1095,6 +1096,7 @@ fn send_goal(
       model.max_steps,
       command,
       text,
+      approval=model.approval_for(conv.device, conv.session_id),
     )
   }
   goal_openseek(
@@ -1105,6 +1107,7 @@ fn send_goal(
     reasoning=model.reasoning_for(conv.engine_model),
     max_steps=model.max_steps,
     workspace=conv.project(),
+    approval=model.approval_for(conv.device, conv.session_id),
     command,
     text,
   )
@@ -2385,6 +2388,7 @@ fn update_msg(
       minimal_transcript~,
       model=stored,
       conversation_models=remembered,
+      conversation_approvals~,
       agent~,
       codex_model~,
       codex_effort~,
@@ -2458,6 +2462,9 @@ fn update_msg(
         default_agent,
         conversation_models: remembered
         .map(parse_conversation_models)
+        .unwrap_or([]),
+        reviewed_conversations: conversation_approvals
+        .map(parse_conversation_approvals)
         .unwrap_or([]),
         openseek_reasoning,
         glm_reasoning,
@@ -2639,6 +2646,7 @@ fn update_msg(
         | @composer.PermissionSelected(..)
         | @composer.GitDetailsToggled(..)
         | @composer.WorktreeModeToggled(..)
+        | @composer.ApprovalModeToggled(..)
         | @composer.ApiSetupRequested(..)
         | @composer.QueuedInputEditRequested(..)
         | @composer.QueuedInputSteerRequested(..)
@@ -2778,6 +2786,29 @@ fn update_msg(
                 ArchiveSession(conv.device, conv.session_id),
                 model,
               )
+            @composer.ApprovalModeToggled(..) => {
+              // A running turn keeps the policy its engine started with; the
+              // switch is locked meanwhile, so a late click changes nothing.
+              guard !conv.is_running() else { return (@cmd.none, model) }
+              // The next start, compaction, or goal carries the choice, and
+              // the host gives the conversation a new engine when it differs.
+              let approval : @protocol.OpenSeekApproval = if model.approval_for(
+                  conv.device,
+                  conv.session_id,
+                )
+                is ApprovalReview {
+                ApprovalAsk
+              } else {
+                ApprovalReview
+              }
+              (
+                save_conversation_approval(
+                  conversation_model_key(conv.device, conv.session_id),
+                  approval,
+                ),
+                model.with_approval(conv.device, conv.session_id, approval),
+              )
+            }
             @composer.PermissionMenuToggled(..)
             | @composer.PermissionMenuDismissed(..)
             | @composer.PermissionSelected(..)
@@ -4895,6 +4926,7 @@ fn update_msg(
             model.max_steps,
             conv.session_id,
             workspace,
+            approval=model.approval_for(conv.device, conv.session_id),
             images=conv.images.map(image => image.url),
           )
         } else {
@@ -4908,6 +4940,7 @@ fn update_msg(
             model.max_steps,
             conv.session_id,
             workspace=conv.project(),
+            approval=model.approval_for(conv.device, conv.session_id),
             images=conv.images.map(image => image.url),
           )
         }
@@ -10536,6 +10569,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
     conv.session_id,
     "test-submission",
     workspace=conv.project(),
+    approval=ApprovalAsk,
   )
   let json = payload.to_json()
   guard json is Object(fields) else { return None }
@@ -15391,6 +15425,7 @@ test "loaded UI preferences parse their wire names" {
       conversation_models=Some(
         "[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
       ),
+      conversation_approvals=Some("[\"local/desktop-test\", 7]"),
       agent=Some("codex"),
       codex_model=Some("gpt-5.4-codex"),
       codex_effort=Some("xhigh"),
@@ -15408,6 +15443,14 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.glm_reasoning is ReasoningMax)
   // The stored conversation outranks the stored default for its own chat.
   assert_true(restored.active().engine_model is DsPro)
+  // Its stored approval choice comes back too; a malformed row is skipped.
+  assert_true(
+    restored.approval_for(@interop.ChannelId::Local, "desktop-test")
+    is ApprovalReview,
+  )
+  assert_true(
+    restored.approval_for(@interop.ChannelId::Local, "other") is ApprovalAsk,
+  )
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
     dispatch,
@@ -15420,6 +15463,7 @@ test "loaded UI preferences parse their wire names" {
       minimal_transcript=false,
       model=None,
       conversation_models=Some("not json"),
+      conversation_approvals=None,
       agent=Some("broken"),
       codex_model=None,
       codex_effort=None,
@@ -16352,6 +16396,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
       minimal_transcript=false,
       model=Some("deepseek-v4-pro"),
       conversation_models=None,
+      conversation_approvals=None,
       agent=None,
       codex_model=None,
       codex_effort=None,

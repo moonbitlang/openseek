@@ -94,6 +94,8 @@ pub fn icon_layout_sidebar_left() -> @html.Html
 
 pub fn icon_layout_sidebar_right() -> @html.Html
 
+pub fn icon_lightbulb() -> @html.Html
+
 pub fn icon_link_external() -> @html.Html
 
 pub fn icon_loading() -> @html.Html
@@ -131,6 +133,8 @@ pub fn icon_send() -> @html.Html
 pub fn icon_server() -> @html.Html
 
 pub fn icon_settings_gear() -> @html.Html
+
+pub fn icon_shield() -> @html.Html
 
 pub fn icon_sparkle() -> @html.Html
 

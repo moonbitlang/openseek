@@ -97,6 +97,7 @@ fn Model::edit_user_message(
     images: draft.images.map(image => image.url),
     attachment_paths: paths,
     thinking: conv.engine_model.thinking(self.reasoning_for(conv.engine_model)),
+    approval: Some(self.approval_for(conv.device, conv.session_id)),
     max_steps: parsed_max_steps(self.max_steps),
   }
   let pending : ConversationFork = {
@@ -105,6 +106,7 @@ fn Model::edit_user_message(
     source_sequence: payload.source_sequence,
     kind: EditedMessage(payload),
     engine_model: conv.engine_model,
+    approval: self.approval_for(conv.device, conv.session_id),
     connection_generation: self.focused_connection_generation(),
   }
   (

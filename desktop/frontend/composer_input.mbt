@@ -75,6 +75,12 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   if self.openseek_reasoning_chip(conv) is Some(control) {
     status.push(@composer.ReasoningStatus(control))
   }
+  status.push(
+    @composer.ApprovalStatus({
+      on: self.approval_for(conv.device, conv.session_id) is ApprovalReview,
+      enabled: !conv.is_running(),
+    }),
+  )
   if conv.git_presentation() is Some(presentation) {
     status.push(
       @composer.GitStatus({ presentation, open: self.git_details_open, }),

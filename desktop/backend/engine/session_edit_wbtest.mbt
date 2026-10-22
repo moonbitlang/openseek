@@ -200,6 +200,7 @@ async test "single edit waits for the submitted message before deleting its sour
     images: [],
     attachment_paths: [],
     thinking: None,
+    approval: None,
     max_steps: None,
   }
   let created : Array[String] = []

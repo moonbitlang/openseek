@@ -69,6 +69,7 @@ pub(all) enum Action {
   PermissionSelected(identity~ : Identity, mode~ : @protocol.CodexPermissionMode)
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
+  ApprovalModeToggled(identity~ : Identity)
   ApiSetupRequested(identity~ : Identity)
   QueuedInputEditRequested(identity~ : Identity, id~ : String)
   QueuedInputSteerRequested(identity~ : Identity, id~ : String)
@@ -85,6 +86,11 @@ pub(all) struct ApprovalNotice {
   target_label : String?
   body : String?
   answered : Bool
+} derive(Eq)
+
+pub(all) struct ApprovalToggle {
+  on : Bool
+  enabled : Bool
 } derive(Eq)
 
 pub(all) struct CodexRequestInput {
@@ -395,6 +401,7 @@ pub(all) enum StatusComponent {
   PermissionStatus(PermissionControl)
   GitStatus(GitControl)
   WorktreeStatus(WorktreeControl)
+  ApprovalStatus(ApprovalToggle)
 } derive(Eq)
 
 type Trigger derive(Eq)

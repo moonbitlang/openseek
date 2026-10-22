@@ -70,6 +70,10 @@ priv enum UiMessage {
   PermissionHint
   PermissionLocked
   PermissionQuestion
+  AutoReviewLabel
+  AutoReviewOnHint
+  AutoReviewOffHint
+  AutoReviewLocked
   KeepWorking
   DiscardAndArchive
   RemoveLabel
@@ -546,6 +550,41 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, PermissionQuestion) => "Codex 應如何批准操作？"
     (Japanese, PermissionQuestion) =>
       "Codex の操作をどのように承認しますか？"
+    (English, AutoReviewLabel) => "Auto-review"
+    (Spanish, AutoReviewLabel) => "Revisión automática"
+    (SimplifiedChinese, AutoReviewLabel) => "自动审批"
+    (TraditionalChinese, AutoReviewLabel) => "自動審批"
+    (Japanese, AutoReviewLabel) => "自動レビュー"
+    (English, AutoReviewOnHint) =>
+      "Approve for me is on: a reviewer handles approval requests and asks you only when unsure. Click to answer them yourself."
+    (Spanish, AutoReviewOnHint) =>
+      "Aprobar por mí está activado: un revisor atiende las solicitudes de aprobación y solo te pregunta si duda. Haz clic para responderlas tú."
+    (SimplifiedChinese, AutoReviewOnHint) =>
+      "代我审批已开启：审查器处理审批请求，拿不准时才询问你。点击改为由你自己回答。"
+    (TraditionalChinese, AutoReviewOnHint) =>
+      "代我審批已開啟：審查器處理審批請求，拿不準時才詢問你。點擊改為由你自己回答。"
+    (Japanese, AutoReviewOnHint) =>
+      "代理で承認がオン：レビュアーが承認要求を処理し、判断できない場合のみ確認します。クリックで自分で回答に戻します。"
+    (English, AutoReviewOffHint) =>
+      "Approve for me: let a reviewer handle approval requests and ask you only when unsure"
+    (Spanish, AutoReviewOffHint) =>
+      "Aprobar por mí: deja que un revisor atienda las solicitudes de aprobación y solo te pregunte si duda"
+    (SimplifiedChinese, AutoReviewOffHint) =>
+      "代我审批：让审查器处理审批请求，拿不准时才询问你"
+    (TraditionalChinese, AutoReviewOffHint) =>
+      "代我審批：讓審查器處理審批請求，拿不準時才詢問你"
+    (Japanese, AutoReviewOffHint) =>
+      "代理で承認：レビュアーに承認要求を任せ、判断できない場合のみ確認"
+    (English, AutoReviewLocked) =>
+      "Approve for me cannot change while a turn is running"
+    (Spanish, AutoReviewLocked) =>
+      "Aprobar por mí no se puede cambiar mientras se ejecuta un turno"
+    (SimplifiedChinese, AutoReviewLocked) =>
+      "回合运行期间无法更改代我审批"
+    (TraditionalChinese, AutoReviewLocked) =>
+      "回合執行期間無法更改代我審批"
+    (Japanese, AutoReviewLocked) =>
+      "ターンの実行中は代理で承認を変更できません"
     (English, KeepWorking) => "Keep working"
     (Spanish, KeepWorking) => "Seguir trabajando"
     (SimplifiedChinese, KeepWorking) => "继续工作"

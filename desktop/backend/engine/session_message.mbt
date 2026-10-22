@@ -135,6 +135,7 @@ pub async fn submit_session_message(
     workspace: None,
     model: None,
     thinking: None,
+    approval: None,
     max_steps: None,
   })
   guard manager.serving().get(session) is Some(slot) &&

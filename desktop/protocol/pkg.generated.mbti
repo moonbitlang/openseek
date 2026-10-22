@@ -954,6 +954,7 @@ pub(all) struct CompactPayload {
   session : String
   model : String?
   thinking : OpenSeekThinking?
+  approval : OpenSeekApproval?
   max_steps : Int32?
   workspace : String?
 } derive(Eq, @debug.Debug)
@@ -1849,6 +1850,7 @@ pub(all) struct GoalPayload {
   auto : Bool?
   model : String?
   thinking : OpenSeekThinking?
+  approval : OpenSeekApproval?
   max_steps : Int32?
   workspace : String?
 } derive(Eq, @debug.Debug)
@@ -2519,6 +2521,20 @@ pub fn OpenPathReply::to_json(Self) -> Json
 pub fn OpenPathReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for OpenPathReply
 pub impl @json.FromJson for OpenPathReply
+
+pub(all) enum OpenSeekApproval {
+  ApprovalAsk
+  ApprovalReview
+} derive(Eq, @debug.Debug)
+pub fn OpenSeekApproval::equal(Self, Self) -> Bool
+pub fn OpenSeekApproval::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn OpenSeekApproval::not_equal(Self, Self) -> Bool
+pub fn OpenSeekApproval::parse(String) -> Self?
+pub fn OpenSeekApproval::to_json(Self) -> Json
+pub fn OpenSeekApproval::to_repr(Self) -> @debug.Repr
+pub fn OpenSeekApproval::wire(Self) -> String
+pub impl ToJson for OpenSeekApproval
+pub impl @json.FromJson for OpenSeekApproval
 
 pub(all) enum OpenSeekThinking {
   ThinkingOff
@@ -3279,6 +3295,7 @@ pub(all) struct SessionEditPayload {
   images : Array[String]
   attachment_paths : Array[String]
   thinking : OpenSeekThinking?
+  approval : OpenSeekApproval?
   max_steps : Int32?
 } derive(Eq, @debug.Debug)
 pub fn SessionEditPayload::equal(Self, Self) -> Bool
@@ -3913,6 +3930,7 @@ pub(all) struct StartPayload {
   submission_id : String?
   model : String?
   thinking : OpenSeekThinking?
+  approval : OpenSeekApproval?
   max_steps : Int32?
   session : String
   workspace : String?

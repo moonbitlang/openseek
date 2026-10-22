@@ -10,6 +10,8 @@ priv struct ConversationFork {
   source_title : String
   kind : ConversationForkKind
   engine_model : EngineModel
+  // The source's approval choice, which the fork keeps like its tier.
+  approval : @protocol.OpenSeekApproval
   connection_generation : Int32
   source_sequence : Int32
 } derive(Eq)
@@ -45,6 +47,7 @@ fn Model::request_fork(
     source_sequence: conv.durable_frontier(),
     kind: AfterAnswer(through~),
     engine_model: conv.engine_model,
+    approval: self.approval_for(conv.device, conv.session_id),
     connection_generation: self.focused_connection_generation(),
   }
   (
@@ -102,6 +105,7 @@ fn Model::finish_fork(
           reply.session,
           pending.engine_model,
         )
+        .with_approval(pending.source.channel, reply.session, pending.approval)
       if pending.is_edit() {
         let conv = model
           .find_conversation(pending.source.channel, reply.session)
@@ -134,10 +138,11 @@ fn Model::finish_fork(
           }),
         }
       }
-      let save = save_conversation_model(
-        conversation_model_key(pending.source.channel, reply.session),
-        pending.engine_model,
-      )
+      let key = conversation_model_key(pending.source.channel, reply.session)
+      let save = @cmd.batch([
+        save_conversation_model(key, pending.engine_model),
+        save_conversation_approval(key, pending.approval),
+      ])
       // A completed background request must not take the reader away from
       // another conversation or screen they chose while it was pending.
       guard should_open else { return (save, model) }

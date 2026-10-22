@@ -88,7 +88,7 @@ fn ModelSelect::render(
     change: action_emit.map(value => ModelSelected(identity~, value~, draft~)),
     title: self.title,
     aria_label: ui(locale, ModelLabel),
-    presentation: Composer(@html.text("✦"), false),
+    presentation: Composer(@icons.icon(@icons.icon_sparkle), false),
   }.render()
 }
 
@@ -132,7 +132,7 @@ fn ReasoningSelect::render(
     change: action_emit.map(value => ReasoningSelected(identity~, value~)),
     title: self.title,
     aria_label: ui(locale, ReasoningEffort),
-    presentation: Composer(@html.text("◐"), true),
+    presentation: Composer(@icons.icon(@icons.icon_lightbulb), true),
   }.render()
 }
 
@@ -205,6 +205,50 @@ fn WorktreeControl::render(
   } else {
     @html.span(class=class_name, title~, body)
   }
+}
+
+///|
+/// The Approve for me switch: "Request approval" while the person answers,
+/// "Auto-review", highlighted, while the reviewer does. A change applies
+/// from the conversation's next start.
+fn ApprovalToggle::render(
+  locale~ : @i18n.Locale = English,
+  self : ApprovalToggle,
+  identity : Identity,
+  action_emit : @cmd.Emit[Action],
+) -> @html.Html {
+  let label = if self.on {
+    ui(locale, AutoReviewLabel)
+  } else {
+    ui(locale, RequestApproval)
+  }
+  let body = [
+    @icons.icon(@icons.icon_shield),
+    @html.span(class="composer-auto-review-label", label),
+  ]
+  @html.button(
+    class=if self.on {
+      "composer-auto-review on"
+    } else {
+      "composer-auto-review"
+    },
+    type_="button",
+    title=if !self.enabled {
+      ui(locale, AutoReviewLocked)
+    } else if self.on {
+      ui(locale, AutoReviewOnHint)
+    } else {
+      ui(locale, AutoReviewOffHint)
+    },
+    // The attribute form, which the diff can remove again (see rabbita's
+    // `Attrs::disabled`); the property form would stick once set.
+    attrs=@html.Attrs::build()
+      .aria_label(ui(locale, ApproveForMe))
+      .aria_pressed(self.on.to_string())
+      .disabled(!self.enabled),
+    on_click=action_emit(ApprovalModeToggled(identity~)),
+    body,
+  )
 }
 
 ///|
@@ -754,6 +798,7 @@ fn StatusComponent::render(
         toggle=action_emit(GitDetailsToggled(identity~)),
       )
     WorktreeStatus(control) => control.render(locale~, identity, action_emit)
+    ApprovalStatus(toggle) => toggle.render(locale~, identity, action_emit)
   }
 }
 

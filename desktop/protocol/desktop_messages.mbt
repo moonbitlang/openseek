@@ -40,6 +40,37 @@ pub fn OpenSeekThinking::parse(value : String) -> OpenSeekThinking? {
 }
 
 ///|
+/// Who answers an OpenSeek engine's permission questions (sandbox escalation,
+/// deletion, writes outside the allowed scope). The host passes it to the
+/// engine as `--approval`; an absent request field means `ApprovalAsk`, the
+/// behavior every host had before the field existed.
+pub(all) enum OpenSeekApproval {
+  /// The person at the composer answers each question.
+  ApprovalAsk
+  /// A reviewer subagent answers against the user's own messages; what it
+  /// cannot settle comes to the person as an ordinary question.
+  ApprovalReview
+} derive(Debug, Eq)
+
+///|
+/// The wire spelling, which is also the engine's `--approval` value.
+pub fn OpenSeekApproval::wire(self : OpenSeekApproval) -> String {
+  match self {
+    ApprovalAsk => "ask"
+    ApprovalReview => "review"
+  }
+}
+
+///|
+pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
+  match value {
+    "ask" => Some(ApprovalAsk)
+    "review" => Some(ApprovalReview)
+    _ => None
+  }
+}
+
+///|
 pub(all) struct StartPayload {
   // Original images as data URLs. The engine persists the bytes before upload.
   images : Array[String]
@@ -51,6 +82,8 @@ pub(all) struct StartPayload {
   // Optional keeps older clients compatible; a present value is decoded into
   // the closed protocol type before the command reaches the host operation.
   thinking : OpenSeekThinking?
+  // Who answers the engine's permission questions; absent means ask.
+  approval : OpenSeekApproval?
   max_steps : Int32?
   // Every desktop run belongs to a durable conversation. The engine rejects
   // a blank id before it acquires that conversation's record lease.
@@ -124,6 +157,8 @@ pub(all) struct CompactPayload {
   // A resumed conversation may need a new engine process with these settings.
   model : String?
   thinking : OpenSeekThinking?
+  // Who answers the engine's permission questions; absent means ask.
+  approval : OpenSeekApproval?
   max_steps : Int32?
   workspace : String?
 } derive(Debug, Eq)
@@ -143,6 +178,8 @@ pub(all) struct GoalPayload {
   // A resumed conversation may need a new engine process with these settings.
   model : String?
   thinking : OpenSeekThinking?
+  // Who answers the engine's permission questions; absent means ask.
+  approval : OpenSeekApproval?
   max_steps : Int32?
   workspace : String?
 } derive(Debug, Eq)
@@ -2049,6 +2086,18 @@ pub extend MoonIdeCodeLensPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend MoonIdeCodeLensPayload with ToJson::{to_json}
+
+///|
+pub extend OpenSeekApproval with Debug::{to_repr}
+
+///|
+pub extend OpenSeekApproval with FromJson::{from_json}
+
+///|
+pub extend OpenSeekApproval with Eq::{equal, not_equal}
+
+///|
+pub extend OpenSeekApproval with ToJson::{to_json}
 
 ///|
 pub extend OpenSeekThinking with Debug::{to_repr}

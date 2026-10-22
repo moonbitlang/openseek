@@ -26,6 +26,8 @@ priv struct RunConfig {
   api_url : String?
   model : String
   thinking : @protocol.OpenSeekThinking
+  // Who answers the engine's permission questions: its `--approval`.
+  approval : @protocol.OpenSeekApproval
   max_steps : Int32
   engine : String
   cwd : @pathx.Path?
@@ -169,6 +171,7 @@ async fn run_config(
     manager,
     model?=payload.model,
     thinking?=payload.thinking,
+    approval?=payload.approval,
     max_steps?=payload.max_steps,
     session~,
     workspace?=payload.workspace,
@@ -196,6 +199,7 @@ async fn compact_config(
     payload.session,
     model?=payload.model,
     thinking?=payload.thinking,
+    approval?=payload.approval,
     max_steps?=payload.max_steps,
     workspace?=payload.workspace,
     mcp_config?,
@@ -216,6 +220,7 @@ async fn goal_config(
     payload.session,
     model?=payload.model,
     thinking?=payload.thinking,
+    approval?=payload.approval,
     max_steps?=payload.max_steps,
     workspace?=payload.workspace,
     mcp_config?,
@@ -228,6 +233,7 @@ async fn session_command_config(
   session : String,
   model? : String,
   thinking? : @protocol.OpenSeekThinking,
+  approval? : @protocol.OpenSeekApproval,
   max_steps? : Int32,
   workspace? : String,
   mcp_config? : McpConfig,
@@ -241,6 +247,7 @@ async fn session_command_config(
     manager,
     model?,
     thinking?,
+    approval?,
     max_steps?,
     session~,
     workspace?,
@@ -262,6 +269,7 @@ async fn serve_config(
   manager : EngineManager,
   model? : String,
   thinking? : @protocol.OpenSeekThinking,
+  approval? : @protocol.OpenSeekApproval,
   max_steps? : Int32,
   session~ : String,
   workspace? : String,
@@ -314,6 +322,8 @@ async fn serve_config(
     api_url: endpoint.api_url,
     model,
     thinking: RunConfig::configured_thinking(thinking),
+    // Absent is ask: what every request meant before the field existed.
+    approval: approval.unwrap_or(ApprovalAsk),
     max_steps: configured_max_steps(max_steps),
     engine,
     // A run happens in the workspace directory itself, unless the session is
@@ -342,6 +352,8 @@ fn engine_fingerprint(config : RunConfig) -> String {
     config.api_url.unwrap_or(""),
     config.model,
     config.thinking.wire(),
+    // `--approval` is fixed for the process's lifetime.
+    config.approval.wire(),
     config.max_steps.to_string(),
     config.cwd.map(cwd => cwd.to_string()).unwrap_or(""),
     config.session,
@@ -361,6 +373,7 @@ test "a different endpoint cannot reuse a live engine process" {
     api_url: None,
     model: "deepseek-v4-pro",
     thinking: ThinkingMax,
+    approval: ApprovalAsk,
     max_steps: 1000,
     engine: "openseek",
     cwd: None,
@@ -376,6 +389,12 @@ test "a different endpoint cannot reuse a live engine process" {
   assert_true(
     engine_fingerprint(base) !=
     engine_fingerprint({ ..base, thinking: ThinkingHigh, }),
+  )
+  // `--approval` is fixed when the process starts, so switching a
+  // conversation to the reviewer takes a new one.
+  assert_true(
+    engine_fingerprint(base) !=
+    engine_fingerprint({ ..base, approval: ApprovalReview, }),
   )
   // An edited MCP configuration needs a new process, and so does one that
   // appears, disappears, or stops being readable.
@@ -486,12 +505,27 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     submission_id: None,
     model: None,
     thinking: None,
+    approval: None,
     max_steps: None,
     session: "s-default",
     workspace: Some(workspace),
   })
   assert_true(config.api_url is None)
   assert_eq(config.api_key, "sk-official")
+  // A request without an approval choice keeps the person answering.
+  assert_true(config.approval is ApprovalAsk)
+  let reviewed = run_config(manager, {
+    images: [],
+    task: "hello",
+    submission_id: None,
+    model: None,
+    thinking: None,
+    approval: Some(ApprovalReview),
+    max_steps: None,
+    session: "s-default",
+    workspace: Some(workspace),
+  })
+  assert_true(reviewed.approval is ApprovalReview)
 }
 
 ///|
@@ -506,6 +540,7 @@ async test "run config rejects a blank session" {
           submission_id: None,
           model: None,
           thinking: None,
+          approval: None,
           max_steps: None,
           session,
           workspace: None,
@@ -563,6 +598,7 @@ async test "host chooses durable placement from workspace state" {
     submission_id: None,
     model: None,
     thinking: None,
+    approval: None,
     max_steps: None,
     session: "s-workspace",
     workspace: None,
@@ -583,6 +619,7 @@ async test "host chooses durable placement from workspace state" {
         submission_id: None,
         model: None,
         thinking: None,
+        approval: None,
         max_steps: None,
         session: "s-unclaimed",
         workspace: None,
@@ -600,6 +637,7 @@ async test "host chooses durable placement from workspace state" {
     submission_id: None,
     model: None,
     thinking: None,
+    approval: None,
     max_steps: None,
     session: "s-attached",
     workspace: Some(workspace_resource),

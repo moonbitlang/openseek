@@ -172,6 +172,16 @@ pub(all) struct PermissionControl {
 } derive(Eq)
 
 ///|
+/// OpenSeek's Approve for me switch: whether a reviewer answers this
+/// conversation's permission questions before they reach the person.
+pub(all) struct ApprovalToggle {
+  on : Bool
+  // Off while a turn runs: its engine keeps the policy it started with, so a
+  // switch flipped then would show a mode that is not in effect.
+  enabled : Bool
+} derive(Eq)
+
+///|
 /// One typed component in the toolbar's status row. No caller-rendered HTML,
 /// command, or emit callback crosses the shared component boundary.
 pub(all) enum StatusComponent {
@@ -180,6 +190,7 @@ pub(all) enum StatusComponent {
   PermissionStatus(PermissionControl)
   GitStatus(GitControl)
   WorktreeStatus(WorktreeControl)
+  ApprovalStatus(ApprovalToggle)
 } derive(Eq)
 
 ///|
@@ -340,6 +351,7 @@ pub(all) enum Action {
   )
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
+  ApprovalModeToggled(identity~ : Identity)
   ApiSetupRequested(identity~ : Identity)
   QueuedInputEditRequested(identity~ : Identity, id~ : String)
   QueuedInputSteerRequested(identity~ : Identity, id~ : String)
@@ -386,6 +398,7 @@ pub fn Action::identity(self : Action) -> Identity {
     | PermissionSelected(identity~, ..)
     | GitDetailsToggled(identity~)
     | WorktreeModeToggled(identity~)
+    | ApprovalModeToggled(identity~)
     | ApiSetupRequested(identity~)
     | QueuedInputEditRequested(identity~, ..)
     | QueuedInputSteerRequested(identity~, ..)
@@ -465,6 +478,11 @@ pub extend Mention with Eq::{equal, not_equal}
 #deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
 #doc(hidden)
 pub extend PermissionControl with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend ApprovalToggle with Eq::{equal, not_equal}
 
 ///|
 pub extend Presentation with Eq::{equal, not_equal}

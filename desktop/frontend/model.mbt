@@ -317,6 +317,15 @@ const SidebarModeStorageKey : String = "openseek.sidebar_mode"
 const ConversationModelsStorageKey : String = "openseek.conversation_models"
 
 ///|
+/// Every conversation switched to Approve for me, so reopening one keeps its
+/// reviewer. Only that choice is stored: a conversation missing here asks,
+/// which is also what a new conversation does — the reviewer is opted into
+/// per conversation, never inherited from an unrelated one. Rows are keys
+/// (`conversation_model_key`), newest first, capped at
+/// `ConversationModelsLimit`.
+const ConversationApprovalsStorageKey : String = "openseek.conversation_approvals"
+
+///|
 /// How many conversations remember their tier. Conversations are unbounded
 /// and this is one localStorage value, so the list is capped; past the cap
 /// the least recently chosen conversation forgets and opens on the default,
@@ -1443,6 +1452,9 @@ priv struct Model {
   // default an unrelated chat has moved to since. Reopening recovers from
   // here; `default_model` is only for conversations this list has never held.
   conversation_models : Array[StoredConversationModel]
+  // The conversations whose permission questions a reviewer answers (see
+  // `ConversationApprovalsStorageKey`); every other conversation asks.
+  reviewed_conversations : Array[String]
   // The DeepSeek (and non-GLM custom-model) reasoning choice sent on the next
   // OpenSeek operation. GLM keeps a separate preference below because its
   // forced-thinking low mode is the useful default for ordinary tasks.
@@ -1823,6 +1835,7 @@ priv enum Msg {
     minimal_transcript~ : Bool,
     model~ : String?,
     conversation_models~ : String?,
+    conversation_approvals~ : String?,
     agent~ : String?,
     codex_model~ : String?,
     codex_effort~ : String?,
@@ -2841,6 +2854,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     default_model: DsFlash,
     default_agent: OpenSeekAgent,
     conversation_models: [],
+    reviewed_conversations: [],
     openseek_reasoning: ReasoningHigh,
     glm_reasoning: ReasoningOff,
     max_steps: DefaultMaxSteps,
@@ -3604,6 +3618,61 @@ fn Model::remember_model(
       model,
     ),
   }
+}
+
+///|
+/// Who answers this conversation's permission questions.
+fn Model::approval_for(
+  self : Model,
+  channel : @interop.ChannelId,
+  session : String,
+) -> @protocol.OpenSeekApproval {
+  let key = conversation_model_key(channel, session)
+  if self.reviewed_conversations.contains(key) {
+    ApprovalReview
+  } else {
+    ApprovalAsk
+  }
+}
+
+///|
+/// Record who answers this conversation's permission questions.
+fn Model::with_approval(
+  self : Model,
+  channel : @interop.ChannelId,
+  session : String,
+  approval : @protocol.OpenSeekApproval,
+) -> Model {
+  {
+    ..self,
+    reviewed_conversations: approvals_with(
+      self.reviewed_conversations,
+      conversation_model_key(channel, session),
+      approval,
+    ),
+  }
+}
+
+///|
+/// Fold one conversation's approval choice into the reviewed list: a review
+/// moves the key to the front (dropping the oldest past the cap), an ask
+/// removes it. Free-standing for the same reason as `remembered_with`.
+fn approvals_with(
+  keys : Array[String],
+  key : String,
+  approval : @protocol.OpenSeekApproval,
+) -> Array[String] {
+  let merged : Array[String] = if approval is ApprovalReview {
+    [key]
+  } else {
+    []
+  }
+  for existing in keys {
+    if existing != key && merged.length() < ConversationModelsLimit {
+      merged.push(existing)
+    }
+  }
+  merged
 }
 
 ///|
