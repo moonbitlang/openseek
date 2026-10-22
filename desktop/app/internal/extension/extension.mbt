@@ -420,6 +420,10 @@ pub fn openseek_capability(
       )
     }),
     WindowEndpoint(@commands.ssh_profiles, (_, _) => @ssh.profiles()),
+    WindowEndpoint(@commands.ssh_projects_save, (_, snapshot) => {
+      @ssh.remember_projects(snapshot)
+      Acknowledged
+    }),
     WindowEndpoint(@commands.ssh_save, (_, profile) => {
       SshSuccess(@ssh.save(profile).to_json()) catch {
         error => SshRefused("\{error}")

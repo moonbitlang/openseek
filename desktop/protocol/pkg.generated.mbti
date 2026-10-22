@@ -3835,6 +3835,7 @@ pub(all) struct SshProfile {
   id : String
   command : String
   display_name : String?
+  projects : Array[String]?
 } derive(Eq)
 pub fn SshProfile::connection_label(Self) -> String
 pub fn SshProfile::display_label(Self) -> String
@@ -3860,6 +3861,15 @@ pub fn SshProfiles::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDeco
 pub fn SshProfiles::to_json(Self) -> Json
 pub impl ToJson for SshProfiles
 pub impl @json.FromJson for SshProfiles
+
+pub(all) struct SshProjects {
+  id : String
+  projects : Array[String]
+}
+pub fn SshProjects::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProjects::to_json(Self) -> Json
+pub impl ToJson for SshProjects
+pub impl @json.FromJson for SshProjects
 
 pub(all) enum SshReply {
   SshSuccess(Json)

@@ -4,6 +4,7 @@ test "removing SSH retires only that host and ignores late connection and profil
   let profile : @protocol.SshProfile = {
     id: "ssh-remove-test",
     command: "ssh build",
+    projects: None,
     display_name: None,
   }
   let other = { ..profile, id: "ssh-remove-other", command: "ssh other", }
@@ -79,6 +80,7 @@ test "SSH removal cancellation and storage failure preserve the host for retry" 
   let profile : @protocol.SshProfile = {
     id: "ssh-remove-failed",
     command: "ssh build",
+    projects: None,
     display_name: None,
   }
   let base = { ..test_model(), is_desktop: true, }.register_ssh(profile)
@@ -112,6 +114,7 @@ test "SSH readiness updates the remote host without replacing local state" {
   let profile : @protocol.SshProfile = {
     id: "ssh-ready-test",
     command: "ssh build",
+    projects: None,
     display_name: None,
   }
   let model = { ..test_model(), is_desktop: true, }.register_ssh(profile)
@@ -164,6 +167,7 @@ test "SSH disconnect retains project identity and removes request readiness" {
   let profile : @protocol.SshProfile = {
     id: "ssh-offline-test",
     command: "ssh build",
+    projects: None,
     display_name: None,
   }
   let channel : @interop.ChannelId = Remote(profile.id)
@@ -222,6 +226,7 @@ test "SSH preparation progress can be cancelled and does not revive an offline h
   let profile : @protocol.SshProfile = {
     id: "ssh-prepare-test",
     command: "ssh build",
+    projects: None,
     display_name: None,
   }
   let model = { ..test_model(), is_desktop: true, }.register_ssh(profile)
@@ -249,6 +254,7 @@ test "SSH onboarding resumes on its host only and cancellation fences late readi
   let profile : @protocol.SshProfile = {
     id: "ssh-onboarding-test",
     command: "ssh build",
+    projects: None,
     display_name: Some("Build"),
   }
   let (_, opened) = update_ssh(dispatch, Open, {
@@ -283,6 +289,7 @@ test "renaming SSH preserves connected projects and host ordering" {
   let profile : @protocol.SshProfile = {
     id: "ssh-rename-test",
     command: "ssh -F '/tmp/config file' build",
+    projects: None,
     display_name: None,
   }
   let second = { ..profile, id: "ssh-second-test", command: "ssh second", }
@@ -354,6 +361,7 @@ fn auth_test_model(id : String) -> Model {
   { ..test_model(), is_desktop: true, }.register_ssh({
     id,
     command: "ssh demo",
+    projects: None,
     display_name: None,
   })
 }
@@ -647,6 +655,7 @@ test "SSH background challenges retain separate identities without replacing the
   let base = auth_test_model("front").register_ssh({
     id: "back",
     command: "ssh other",
+    projects: None,
     display_name: None,
   })
   let (_, model) = update_ssh(dispatch, Details("front"), base)
@@ -721,5 +730,256 @@ test "existing SSH add project restores its picker or details after cancellation
     assert_eq(failed.ssh_ui.details, base.ssh_ui.details)
     assert_eq(failed.ssh_ui.pick_after_connect, None)
     assert_false(failed.ssh_ui.authentication.contains("existing"))
+  }
+}
+
+///|
+fn ssh_lifecycle_event(id : String, attempt : Int32, event : Json) -> Msg {
+  Ssh(
+    Event({
+      "host_id": id,
+      "attempt": attempt,
+      "epoch": attempt,
+      "event": event,
+    }),
+  )
+}
+
+///|
+fn ssh_ready_event(id : String, attempt : Int32) -> Msg {
+  ssh_lifecycle_event(id, attempt, {
+    "method": "agent.connected",
+    "params": { "protocol": @protocol.HostProtocolRevision },
+  })
+}
+
+///|
+test "opening an offline SSH project connects once and opens it after readiness" {
+  let dispatch = test_dispatch()
+  let id = "open-project"
+  let channel : @interop.ChannelId = Remote(id)
+  let project = channel.test_project()
+  // A fresh client restores only sidebar identities, without opening SSH.
+  let profiles : @protocol.SshProfiles = {
+    hosts: [
+      {
+        id,
+        command: "ssh build",
+        display_name: None,
+        projects: Some([project.to_string()]),
+      },
+    ],
+  }
+  let (_, base) = update_ssh(dispatch, Loaded(Ok(profiles)), {
+    ..test_model(),
+    is_desktop: true,
+  })
+  assert_eq(base.device_state(channel).unwrap().projects, [project])
+  assert_false(base.ssh_online(id))
+  assert_true(base.ssh_ui.attempts.is_empty())
+  assert_true(sidebar_project_for_test({ ..base, focused: channel, }).can_start)
+  let (_, connecting) = update(
+    dispatch,
+    NewChatIn(channel, Some(project)),
+    base,
+  )
+  assert_eq(connecting.focused, channel)
+  assert_true(connecting.ssh_ui.connecting.contains(id))
+  assert_true(connecting.ssh_ui.pending_open is Some(_))
+  let (_, repeated) = update(
+    dispatch,
+    NewChatIn(channel, Some(project)),
+    connecting,
+  )
+  assert_eq(repeated.ssh_ui.next_attempt, 1)
+  let (_, ready) = update(dispatch, ssh_ready_event(id, 1), repeated)
+  assert_true(ready.ssh_online(id))
+  assert_true(ready.ssh_ui.pending_open is None)
+  assert_eq(ready.focused_device().unwrap().active_project, Some(project))
+  @interop.set_ssh_epoch(channel, None)
+}
+
+///|
+test "SSH project cache cannot restore removed hosts or replace a live registry" {
+  let dispatch = test_dispatch()
+  let id = "cached-projects"
+  let channel : @interop.ChannelId = Remote(id)
+  let cached : @protocol.SshProfiles = {
+    hosts: [
+      {
+        id,
+        command: "ssh build",
+        display_name: None,
+        projects: Some([channel.test_project().to_string()]),
+      },
+    ],
+  }
+  let base = auth_test_model(id)
+  let (_, connecting) = update_ssh(dispatch, Connect(id), base)
+  let (_, ready) = update(dispatch, ssh_ready_event(id, 1), connecting)
+  let (_, late) = update_ssh(dispatch, Loaded(Ok(cached)), ready)
+  assert_eq(late.device_state(channel).unwrap().projects, [])
+  let (_, removed) = forget_ssh(dispatch, late, id)
+  let (_, late) = update_ssh(dispatch, Loaded(Ok(cached)), removed)
+  assert_true(late.device_state(channel) is None)
+  assert_eq(parse_ssh_projects(["not a URI"]), [])
+  assert_eq(parse_ssh_projects([]), [])
+  @interop.set_ssh_epoch(channel, None)
+}
+
+///|
+test "opening an offline SSH conversation defers its read and never steals later navigation" {
+  let dispatch = test_dispatch()
+  for leave in [false, true] {
+    let id = if leave { "open-session-leave" } else { "open-session" }
+    let channel : @interop.ChannelId = Remote(id)
+    let project = channel.test_project()
+    let base = auth_test_model(id)
+    let base = {
+      ..base,
+      conversations: base.conversations +
+      [
+        {
+          ..empty_conversation(channel, "saved", project),
+          sync: ReloadFailed(generation=1, buffered=[]),
+        },
+      ],
+    }
+    let (_, connecting) = update(dispatch, OpenSession(channel, "saved"), base)
+    assert_true(connecting.loading_conversation is None)
+    assert_true(connecting.ssh_ui.connecting.contains(id))
+    let waiting = if leave {
+      update(dispatch, OpenSetup, connecting).1
+    } else {
+      connecting
+    }
+    let (_, ready) = update(dispatch, ssh_ready_event(id, 1), waiting)
+    assert_true(ready.ssh_online(id))
+    assert_true(ready.ssh_ui.pending_open is None)
+    if leave {
+      assert_true(ready.screen is Settings)
+      assert_true(ready.loading_conversation is None)
+    } else {
+      assert_eq(ready.active_session, "saved")
+      assert_true(
+        ready.loading_conversation
+        is Some({ channel: owner, session: "saved", }) &&
+        owner == channel,
+      )
+    }
+    @interop.set_ssh_epoch(channel, None)
+  }
+}
+
+///|
+test "SSH unexpected loss retries once then waits for explicit retry and fences stale events" {
+  let dispatch = test_dispatch()
+  let id = "auto-retry"
+  let channel : @interop.ChannelId = Remote(id)
+  let (_, connecting) = update_ssh(dispatch, Connect(id), auth_test_model(id))
+  let (_, ready) = update(dispatch, ssh_ready_event(id, 1), connecting)
+  let lost = ssh_lifecycle_event(id, 1, { "disconnected": "network lost" })
+  let (_, retrying) = update(dispatch, lost, ready)
+  assert_eq(retrying.ssh_ui.next_attempt, 2)
+  assert_true(retrying.ssh_ui.connecting.contains(id))
+  assert_false(retrying.ssh_ui.host_errors.contains(id))
+  let (_, stale) = update(dispatch, lost, retrying)
+  assert_true(stale.ssh_ui == retrying.ssh_ui)
+  let (_, failed) = update(
+    dispatch,
+    ssh_lifecycle_event(id, 2, { "disconnected": "host unavailable" }),
+    stale,
+  )
+  assert_false(failed.ssh_ui.connecting.contains(id))
+  assert_eq(failed.ssh_ui.host_errors.get(id), Some("host unavailable"))
+  assert_eq(failed.ssh_ui.next_attempt, 2)
+  let (_, late) = update(dispatch, ssh_ready_event(id, 2), failed)
+  assert_false(late.ssh_online(id))
+  let (_, retry) = update_ssh(dispatch, Connect(id), late)
+  assert_eq(retry.ssh_ui.next_attempt, 3)
+  let (_, restored) = update(dispatch, ssh_ready_event(id, 3), retry)
+  assert_true(restored.ssh_online(id))
+  let (_, again) = update(
+    dispatch,
+    ssh_lifecycle_event(id, 3, { "disconnected": "another outage" }),
+    restored,
+  )
+  assert_eq(again.ssh_ui.next_attempt, 4)
+  assert_true(again.ssh_ui.connecting.contains(id))
+  @interop.set_ssh_epoch(channel, None)
+}
+
+///|
+test "explicit SSH disconnect and cancellation stay offline until the next project open" {
+  let dispatch = test_dispatch()
+  for established in [false, true] {
+    let id = if established { "manual-disconnect" } else { "manual-cancel" }
+    let channel : @interop.ChannelId = Remote(id)
+    let project = channel.test_project()
+    let (_, connecting) = update(
+      dispatch,
+      NewChatIn(channel, Some(project)),
+      auth_test_model(id),
+    )
+    let connected = if established {
+      update(dispatch, ssh_ready_event(id, 1), connecting).1
+    } else {
+      connecting
+    }
+    let (_, offline) = update_ssh(dispatch, Disconnect(id), connected)
+    let (_, late) = update(
+      dispatch,
+      ssh_lifecycle_event(id, 1, { "disconnected": "closed" }),
+      offline,
+    )
+    assert_eq(late.ssh_ui.next_attempt, 1)
+    assert_false(late.ssh_ui.connecting.contains(id))
+    assert_false(late.ssh_ui.host_errors.contains(id))
+    assert_true(late.ssh_ui.pending_open is None)
+    let (_, opened) = update(dispatch, NewChatIn(channel, Some(project)), late)
+    assert_eq(opened.ssh_ui.next_attempt, 2)
+    assert_true(opened.ssh_ui.connecting.contains(id))
+    @interop.set_ssh_epoch(channel, None)
+  }
+}
+
+///|
+test "failed SSH project open retries its destination unless add project replaces it" {
+  let dispatch = test_dispatch()
+  for add_project in [false, true] {
+    let id = if add_project { "replace-open" } else { "retry-open" }
+    let channel : @interop.ChannelId = Remote(id)
+    let project = channel.test_project()
+    let (_, connecting) = update(
+      dispatch,
+      NewChatIn(channel, Some(project)),
+      auth_test_model(id),
+    )
+    let (_, failed) = update(
+      dispatch,
+      Ssh(Failed(id, 1, "connection refused")),
+      connecting,
+    )
+    assert_true(failed.ssh_ui.pending_open is Some(_))
+    assert_false(failed.ssh_ui.connecting.contains(id))
+    let (_, retry) = update_ssh(
+      dispatch,
+      if add_project {
+        Select(channel)
+      } else {
+        Connect(id)
+      },
+      failed,
+    )
+    let (_, ready) = update(dispatch, ssh_ready_event(id, 2), retry)
+    assert_true(ready.ssh_ui.pending_open is None)
+    if add_project {
+      assert_true(
+        ready.project_picker is Some(picker) && picker.channel() == channel,
+      )
+    } else {
+      assert_eq(ready.focused_device().unwrap().active_project, Some(project))
+    }
+    @interop.set_ssh_epoch(channel, None)
   }
 }

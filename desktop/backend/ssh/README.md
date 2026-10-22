@@ -55,8 +55,13 @@ folder selection. Saved hosts can also connect through **Add project**.
 An optional display name overrides the SSH alias or hostname. Projects use a
 compact single-line row with the folder name and a separate host label. Open
 **Connection details** from the project's menu for connection status, rename,
-disconnect or reconnect. The host details also offer **Remove host**, which forgets the profile on this
-computer and disconnects its running tasks after confirmation. Remote files,
+or retry a failed connection. Opening a saved remote project or
+conversation connects its host automatically. An established connection that
+drops unexpectedly gets one automatic connection attempt; if that fails,
+**Retry connection** is offered. Cancelled connections stay offline
+until the user opens a remote project or conversation again. There are no regular
+Connect/Disconnect controls. The host details also offer **Remove host**, which
+forgets the profile on this computer and disconnects its running tasks after confirmation. Remote files,
 project registration, conversation history and installed tools remain on the
 host. A failed profile write keeps the host available so removal can be retried.
 The original command is available under **Connection details**. Renaming preserves
@@ -107,7 +112,11 @@ Closing/reloading the window or disconnecting closes the WebSocket and its tunne
 Conversation history and project registration remain on the remote disk.
 Reconnect re-reads that state; it never replays an unanswered write.
 Remote profiles persist locally in `~/.openseek/ssh-profiles.json` and start
-offline when the app reopens. Local-only export, system file opening, document
+offline when the app reopens. The client remembers each host's last project
+list for the sidebar, so an existing project can be opened without adding it
+again. Opening it connects on demand; the remote registry then replaces the
+cached list. Removing a host clears its local project cache too.
+Local-only export, system file opening, document
 preview and browser tooling retain their existing limits.
 
 Each native connection has a monotonically increasing epoch. Native delivery

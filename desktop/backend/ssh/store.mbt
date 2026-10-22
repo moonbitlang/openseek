@@ -19,7 +19,12 @@ pub async fn profiles() -> @protocol.SshProfiles {
 }
 
 ///|
+let profile_write_lock : @semaphore.Semaphore = Semaphore(1, initial_value=1)
+
+///|
 pub async fn save(profile : @protocol.SshProfile) -> @protocol.SshProfile {
+  profile_write_lock.acquire()
+  defer profile_write_lock.release()
   ignore(arguments(profile.command))
   let profile = {
     ..profile,
@@ -30,6 +35,15 @@ pub async fn save(profile : @protocol.SshProfile) -> @protocol.SshProfile {
     },
   }
   let current = profiles()
+  // Renaming a profile must not overwrite a newer project snapshot with the
+  // frontend's old copy. Only remember_projects writes this cache.
+  let profile = {
+    ..profile,
+    projects: current.hosts
+    .iter()
+    .find_first(host => host.id == profile.id)
+    .bind(host => host.projects),
+  }
   let hosts = current.hosts.map(host => {
     if host.id == profile.id {
       profile
@@ -47,10 +61,30 @@ pub async fn save(profile : @protocol.SshProfile) -> @protocol.SshProfile {
 ///|
 /// Forget only the local connection profile; remote data is untouched.
 pub async fn remove(id : String) -> Unit {
+  profile_write_lock.acquire()
+  defer profile_write_lock.release()
   let current = profiles()
   if current.hosts.any(host => host.id == id) {
     save_profiles(current.hosts.filter(host => host.id != id))
   }
+}
+
+///|
+pub async fn remember_projects(snapshot : @protocol.SshProjects) -> Unit {
+  profile_write_lock.acquire()
+  defer profile_write_lock.release()
+  let current = profiles()
+  // A late registry response cannot recreate a profile removed meanwhile.
+  guard current.hosts.any(host => host.id == snapshot.id) else { return }
+  save_profiles(
+    current.hosts.map(host => {
+      if host.id == snapshot.id {
+        { ..host, projects: Some(snapshot.projects), }
+      } else {
+        host
+      }
+    }),
+  )
 }
 
 ///|

@@ -13,6 +13,8 @@ pub async fn askpass_main() -> Unit
 
 pub async fn profiles() -> @protocol.SshProfiles
 
+pub async fn remember_projects(@protocol.SshProjects) -> Unit
+
 pub async fn remove(String) -> Unit
 
 pub async fn save(@protocol.SshProfile) -> @protocol.SshProfile

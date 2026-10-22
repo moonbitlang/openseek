@@ -12,6 +12,7 @@ test "SSH labels respect explicit names and never expose connection options" {
     let profile : @protocol.SshProfile = {
       id: "id",
       command,
+      projects: None,
       display_name: None,
     }
     assert_eq(profile.display_label(), label)
@@ -31,11 +32,13 @@ test "SSH profiles without display names still load and renamed profiles round t
     "command": "ssh build",
   })
   assert_eq(old.display_name, None)
+  assert_eq(old.projects, None)
   assert_eq(old.display_label(), "build")
   let null_name : @protocol.SshProfile = @json.from_json({
     "id": "legacy",
     "command": "ssh build",
     "display_name": null,
+    "projects": null,
   })
   assert_true(null_name == old)
   let renamed = { ..old, display_name: Some("Build server"), }
@@ -45,6 +48,27 @@ test "SSH profiles without display names still load and renamed profiles round t
   )
   assert_true(@json.from_json(renamed.to_json()) == renamed)
   assert_true(@json.from_json(old.to_json()) == old)
+  let cached = {
+    ..renamed,
+    projects: Some(["openseek://remote.legacy/tmp/project"]),
+  }
+  assert_true(@json.from_json(cached.to_json()) == cached)
+  let empty = { ..renamed, projects: Some([]), }
+  assert_true(@json.from_json(empty.to_json()) == empty)
+  for projects in [Json("not a list"), Json([1])] {
+    assert_true(
+      try {
+        let _ : @protocol.SshProfile = @json.from_json({
+          "id": "legacy",
+          "command": "ssh build",
+          "projects": projects,
+        })
+        false
+      } catch {
+        _ => true
+      },
+    )
+  }
 }
 
 ///|

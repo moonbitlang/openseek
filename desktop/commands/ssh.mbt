@@ -9,6 +9,11 @@ pub let ssh_save : Command[@protocol.SshProfile, @protocol.SshReply] = Command(
 )
 
 ///|
+pub let ssh_projects_save : Command[@protocol.SshProjects, @protocol.EmptyReply] = Command(
+  "ssh.projects.save",
+)
+
+///|
 pub let ssh_connect : Command[@protocol.SshConnect, @protocol.EmptyReply] = Command(
   "ssh.connect",
 )

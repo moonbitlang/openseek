@@ -4,6 +4,7 @@ async test "a delayed SSH cancel cannot close a replacement connection" {
   let profile : @protocol.SshProfile = {
     id: "host",
     command: "ssh demo",
+    projects: None,
     display_name: None,
   }
   let current = @ssh.Connection(profile, 7, attempt=2)
@@ -29,7 +30,12 @@ async test "SSH removal closes the route only after profile persistence succeeds
     None => @env.unset_env_var("SEEKMOON_SSH_PROFILES")
   })
   @env.set_env_var("SEEKMOON_SSH_PROFILES", path)
-  let profile = @ssh.save({ id: "", command: "ssh demo", display_name: None, })
+  let profile = @ssh.save({
+    id: "",
+    command: "ssh demo",
+    projects: None,
+    display_name: None,
+  })
   let bridge = DesktopBridgeActor(ApiState(engine="unused"))
   let route = @ssh.Connection(profile, 7, attempt=2)
   bridge.routes[profile.id] = route

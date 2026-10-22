@@ -1,10 +1,58 @@
 ///|
 priv enum SshIntent {
   AddProject
-  DetailsReconnect
-  WorkspaceReconnect
+  DetailsConnect
+  WorkspaceConnect
   Background
 } derive(Eq)
+
+///|
+priv enum SshOpenTarget {
+  Project(@common.Uri?)
+  Session(String)
+  Archived(String, @common.Uri)
+  CodexThread(String)
+} derive(Eq)
+
+///|
+priv struct SshPendingOpen {
+  host : String
+  target : SshOpenTarget
+  generation : Int32
+} derive(Eq)
+
+///|
+fn SshPendingOpen::message(self : SshPendingOpen) -> Msg {
+  let channel : @interop.ChannelId = Remote(self.host)
+  match self.target {
+    Project(workspace) => NewChatIn(channel, workspace)
+    Session(id) => OpenSession(channel, id)
+    Archived(id, workspace) =>
+      OpenArchivedSession(channel, session=id, workspace~)
+    CodexThread(id) => CodexOpenThread(id)
+  }
+}
+
+///|
+/// Opening a saved remote project or conversation owns connection startup.
+/// Delay its reads/writes until readiness, and let a later navigation supersede it.
+fn ssh_open_target(msg : Msg, model : Model) -> SshPendingOpen? {
+  guard model.is_desktop else { return None }
+  let (channel, target) : (@interop.ChannelId, SshOpenTarget) = match msg {
+    NewChatIn(channel, workspace) => (channel, Project(workspace))
+    OpenSession(channel, id) => (channel, Session(id))
+    OpenArchivedSession(channel, session~, workspace~) =>
+      (channel, Archived(session, workspace))
+    CodexOpenThread(id) => (model.focused, CodexThread(id))
+    _ => return None
+  }
+  guard channel is Remote(id) &&
+    model.ssh_ui.hosts.any(host => host.id == id) &&
+    !model.ssh_online(id) else {
+    return None
+  }
+  Some({ host: id, target, generation: model.chat_navigation_generation, })
+}
 
 ///|
 priv struct SshAuthentication {
@@ -15,6 +63,7 @@ priv struct SshAuthentication {
 
 ///|
 priv struct SshUi {
+  pending_open : SshPendingOpen?
   next_attempt : Int32
   attempts : Map[String, Int32]
   intents : Map[String, SshIntent]
@@ -41,6 +90,7 @@ priv struct SshUi {
 ///|
 fn SshUi::empty() -> SshUi {
   {
+    pending_open: None,
     next_attempt: 0,
     attempts: Map([]),
     intents: Map([]),
@@ -75,6 +125,7 @@ priv enum SshMsg {
   Command(String)
   Save
   Loaded(Result[@protocol.SshProfiles, String])
+  ProjectCacheFailed(String)
   Saved(Result[@protocol.SshProfile, String])
   Connect(String)
   Disconnect(String)
@@ -105,6 +156,40 @@ fn ssh_load(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         error => Err(@interop.bridge_error_text(error))
       }
       scheduler.add(dispatch(Ssh(Loaded(result))))
+    })
+    |> ignore
+  })
+}
+
+///|
+fn parse_ssh_projects(values : Array[String]) -> Array[@common.Uri] {
+  values.map(value => @common.Uri::parse(value, strict=true)) catch {
+    _ => []
+  }
+}
+
+///|
+/// The native profile file survives even when the window uses a temporary
+/// browser session. Preserve snapshot order as remote registry events arrive.
+fn save_ssh_projects(
+  dispatch : @cmd.Emit[Msg],
+  id : String,
+  paths : Array[@common.Uri],
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let _ = @interop.bridge_request_in_order(
+        Local,
+        @commands.ssh_projects_save,
+        { id, projects: paths.map(path => path.to_string()), },
+      ) catch {
+        error => {
+          scheduler.add(
+            dispatch(Ssh(ProjectCacheFailed(@interop.bridge_error_text(error)))),
+          )
+          return
+        }
+      }
     })
     |> ignore
   })
@@ -157,7 +242,13 @@ fn Model::register_ssh(self : Model, profile : @protocol.SshProfile) -> Model {
   let devices = if self.device_state(channel) is Some(_) {
     self.devices
   } else {
-    self.devices + [empty_device_state(channel)]
+    self.devices +
+    [
+      {
+        ..empty_device_state(channel),
+        projects: profile.projects.map(parse_ssh_projects).unwrap_or([]),
+      },
+    ]
   }
   {
     ..self,
@@ -227,6 +318,7 @@ fn forget_ssh(
     ssh_ui: {
       ..ui,
       hosts: ui.hosts.filter(host => host.id != id),
+      pending_open: ui.pending_open.filter(pending => pending.host != id),
       attempts,
       intents,
       authentication,
@@ -262,6 +354,7 @@ fn update_ssh(
   guard model.is_desktop else { return (@cmd.none, model) }
   let ui = model.ssh_ui
   match msg {
+    ProjectCacheFailed(message) => model.notify_error(dispatch, message)
     Remove(id) => {
       guard !ui.busy && ui.hosts.any(host => host.id == id) else {
         return (@cmd.none, model)
@@ -362,6 +455,8 @@ fn update_ssh(
         return (@cmd.none, model)
       }
       let (cmd, model) = update_ssh(dispatch, Disconnect(id), model)
+      let host_errors = model.ssh_ui.host_errors.copy()
+      host_errors[id] = message
       (
         cmd,
         {
@@ -369,6 +464,8 @@ fn update_ssh(
           ssh_ui: {
             ..model.ssh_ui,
             error: Some(message),
+            host_errors,
+            pending_open: ui.pending_open,
             pick_after_connect: ui.pick_after_connect,
           },
         },
@@ -402,9 +499,9 @@ fn update_ssh(
       let pending = ssh_visible_host(ui)
       if pending is Some(id) &&
         ui.connecting.contains(id) &&
-        ui.intents.get(id) == Some(DetailsReconnect) {
+        ui.intents.get(id) == Some(DetailsConnect) {
         let (cmd, model) = update_ssh(dispatch, Disconnect(id), model)
-        return (@cmd.batch([cmd, ssh_focus("ssh-reconnect")]), model)
+        return (@cmd.batch([cmd, ssh_focus("ssh-modal-close")]), model)
       }
       let next = {
         ..model,
@@ -482,6 +579,8 @@ fn update_ssh(
       connecting.remove(id)
       let host_errors = ui.host_errors.copy()
       host_errors[id] = message
+      let attempts = ui.attempts.copy()
+      attempts.remove(id)
       (
         @cmd.none,
         {
@@ -489,6 +588,7 @@ fn update_ssh(
           ssh_ui: {
             ..ui,
             busy: false,
+            attempts,
             error: if ssh_visible_host(ui) == Some(id) {
               Some(message)
             } else {
@@ -589,9 +689,9 @@ fn update_ssh(
       intents[id] = if ui.pick_after_connect == Some(id) {
         AddProject
       } else if ui.details == Some(id) {
-        DetailsReconnect
+        DetailsConnect
       } else if model.focused == Remote(id) {
-        WorkspaceReconnect
+        WorkspaceConnect
       } else {
         Background
       }
@@ -629,15 +729,20 @@ fn update_ssh(
       attempts.remove(id)
       let connecting = ui.connecting.copy()
       connecting.remove(id)
+      let host_errors = ui.host_errors.copy()
+      host_errors.remove(id)
       let model = {
         ..model,
         ssh_ui: {
           ..ui,
           connecting,
+          host_errors,
+          error: None,
+          pending_open: ui.pending_open.filter(pending => pending.host != id),
           authentication,
           attempts,
           intents,
-          details: if ui.intents.get(id) == Some(WorkspaceReconnect) {
+          details: if ui.intents.get(id) == Some(WorkspaceConnect) {
             None
           } else {
             ui.details
@@ -669,6 +774,7 @@ fn update_ssh(
           ssh_ui: {
             ..ui,
             pick_after_connect: Some(id),
+            pending_open: None,
             return_picker: model.project_picker,
             return_details: ui.details,
             details: Some(id),
@@ -715,7 +821,7 @@ fn update_ssh(
         let visible = ssh_visible_host(ui) == Some(id)
         let open = !ui.editor_open &&
           ui.details is None &&
-          ui.intents.get(id) == Some(WorkspaceReconnect)
+          ui.intents.get(id) == Some(WorkspaceConnect)
         return (
           if visible || open {
             ssh_reset_auth()
@@ -831,13 +937,25 @@ fn update_ssh(
             connecting,
             authentication,
             intents,
-            details: if ui.intents.get(id) == Some(WorkspaceReconnect) {
+            details: if ui.intents.get(id) == Some(WorkspaceConnect) {
               None
             } else {
               ui.details
             },
           },
         })
+        if ui.pending_open is Some(pending) && pending.host == id {
+          let model = {
+            ..model,
+            ssh_ui: { ..model.ssh_ui, pending_open: None, },
+          }
+          if pending.generation == model.chat_navigation_generation &&
+            model.focused == channel {
+            let (open, model) = update(dispatch, pending.message(), model)
+            return (@cmd.batch([ready, open]), model)
+          }
+          return (ready, model)
+        }
         if ui.pick_after_connect == Some(id) {
           let (pick, model) = update_ssh(dispatch, Select(channel), model)
           return (@cmd.batch([ready, pick]), model)
@@ -845,7 +963,7 @@ fn update_ssh(
         return (
           @cmd.batch([
             ready,
-            if ui.intents.get(id) == Some(WorkspaceReconnect) {
+            if ui.intents.get(id) == Some(WorkspaceConnect) {
               ssh_restore_focus()
             } else {
               @cmd.none
@@ -859,6 +977,7 @@ fn update_ssh(
           current != epoch {
           return (@cmd.none, model)
         }
+        let was_online = model.ssh_online(id)
         @interop.set_ssh_epoch(channel, None)
         let connecting = ui.connecting.copy()
         connecting.remove(id)
@@ -872,13 +991,15 @@ fn update_ssh(
         host_errors[id] = message
         let authentication = ui.authentication.copy()
         authentication.remove(id)
+        let attempts = ui.attempts.copy()
+        attempts.remove(id)
         let return_to_entry = !ui.editor_open &&
           ui.connecting.contains(id) &&
           ui.intents.get(id) == Some(AddProject)
-        return (
+        let (cmd, model) = (
           @cmd.batch([
             cmd,
-            if ui.intents.get(id) == Some(WorkspaceReconnect) {
+            if ui.intents.get(id) == Some(WorkspaceConnect) {
               ssh_restore_focus()
             } else {
               @cmd.none
@@ -894,6 +1015,7 @@ fn update_ssh(
             ssh_ui: {
               ..ui,
               connecting,
+              attempts,
               authentication,
               host_errors,
               pick_after_connect: if return_to_entry {
@@ -918,7 +1040,7 @@ fn update_ssh(
               },
               details: if return_to_entry {
                 ui.return_details
-              } else if ui.intents.get(id) == Some(WorkspaceReconnect) {
+              } else if ui.intents.get(id) == Some(WorkspaceConnect) {
                 None
               } else {
                 ui.details
@@ -926,6 +1048,11 @@ fn update_ssh(
             },
           },
         )
+        if was_online {
+          let (connect, model) = update_ssh(dispatch, Connect(id), model)
+          return (@cmd.batch([cmd, connect]), model)
+        }
+        return (cmd, model)
       }
       guard @interop.current_ssh_epoch(channel) == Some(epoch) &&
         event is { "method": String(method_), "params": params, .. } &&
@@ -955,6 +1082,7 @@ fn ssh_draft(ui : SshUi) -> @protocol.SshProfile {
   {
     id: ui.editing.unwrap_or(""),
     command: ui.command,
+    projects: None,
     display_name: if ui.display_name.trim().is_empty() {
       None
     } else {
@@ -981,7 +1109,15 @@ fn ssh_status(model : Model, id : String) -> @html.Html {
         "",
       ),
       @html.span(
-        progress.unwrap_or(if online { "Connected" } else { "Disconnected" }),
+        progress.unwrap_or(
+          if online {
+            "Connected"
+          } else if model.ssh_ui.host_errors.contains(id) {
+            "Connection failed"
+          } else {
+            "Disconnected"
+          },
+        ),
       ),
     ],
   )
@@ -1004,22 +1140,23 @@ fn ssh_connection_button(
       "Enter password",
     )
   }
+  if online || (!connecting && !model.ssh_ui.host_errors.contains(id)) {
+    return @html.span("")
+  }
   @html.button(
     class="button secondary",
     attrs=if in_modal {
-      @html.Attrs::build().id("ssh-reconnect")
+      @html.Attrs::build().id("ssh-connection-action")
     } else {
       @html.Attrs::build()
     },
     on_click=dispatch(
-      Ssh(if online || connecting { Disconnect(id) } else { Connect(id) }),
+      Ssh(if connecting { Disconnect(id) } else { Connect(id) }),
     ),
     if connecting {
       "Cancel connection"
-    } else if online {
-      "Disconnect"
     } else {
-      "Reconnect"
+      "Retry connection"
     },
   )
 }

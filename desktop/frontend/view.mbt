@@ -511,7 +511,11 @@ fn Model::sidebar_component_sections(
         } else {
           codex_activation
         },
-        can_start: dev.bridge is Connected,
+        can_start: dev.bridge is Connected ||
+        (
+          self.is_desktop &&
+          self.ssh_ui.hosts.any(host => dev.channel == Remote(host.id))
+        ),
         managed: true,
         conversations,
       }),

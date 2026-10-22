@@ -122,7 +122,11 @@ fn focus_channel(
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, Model) {
   guard channel != model.focused else { return (@cmd.none, model) }
-  let focus_cmd = if model.device_state(channel) is Some(dev) {
+  let focus_cmd = if channel is Remote(id) &&
+    model.ssh_ui.hosts.any(host => host.id == id) &&
+    !model.ssh_online(id) {
+    @cmd.none
+  } else if model.device_state(channel) is Some(dev) {
     @cmd.batch([
       fetch_host_settings(dispatch, channel, dev.connection_generation),
       fetch_installed_skills(dispatch, channel),
@@ -504,6 +508,11 @@ fn adopt_projects(
   let workspace_settings_request_generation = dev.workspace_settings_request_generation +
     1
   let commands : Array[@cmd.Cmd] = []
+  if model.is_desktop &&
+    channel is Remote(id) &&
+    model.ssh_ui.hosts.any(host => host.id == id) {
+    commands.push(save_ssh_projects(dispatch, id, paths))
+  }
   for path in paths {
     commands.push(
       fetch_worktrees(
@@ -2241,6 +2250,15 @@ fn update_msg(
   msg : Msg,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
+  if ssh_open_target(msg, model) is Some(pending) {
+    let (focus, model) = focus_channel(dispatch, model, Remote(pending.host))
+    let (connect, model) = update_ssh(dispatch, Connect(pending.host), {
+      ..model,
+      screen: Chat,
+      ssh_ui: { ..model.ssh_ui, pending_open: Some(pending), },
+    })
+    return (@cmd.batch([focus, connect]), model)
+  }
   match msg {
     Init => {
       // Both pages boot the same console; they differ only in where its

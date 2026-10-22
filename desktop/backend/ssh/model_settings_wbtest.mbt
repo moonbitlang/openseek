@@ -1,5 +1,5 @@
 ///|
-async test "SSH bootstrap passes a provider key literally and preserves other remote credentials" {
+async test "SSH bootstrap preserves its startup pipe and passes provider credentials literally" {
   if @async.platform is Windows {
     return
   }
@@ -17,7 +17,7 @@ async test "SSH bootstrap passes a provider key literally and preserves other re
   let server = prepared + "/bin/openseek-app-server"
   @fs.write_file(
     server,
-    "#!/bin/sh\n[ \"$#\" -eq 0 ] || exit 23\nprintf '%s\\n' \"$DEEPSEEK\" \"$KIMI\" \"$GLM\" > \"$HOME/captured\"\nprintf '%s\\n' '{\"port\":1234}'\ncat >/dev/null\ntouch \"$HOME/closed\"\n",
+    "#!/bin/sh\n[ \"$#\" -eq 0 ] || exit 23\n[ -p /dev/fd/0 ] || exit 24\nprintf '%s\\n' \"$DEEPSEEK\" \"$KIMI\" \"$GLM\" > \"$HOME/captured\"\nprintf '%s\\n' '{\"port\":1234}'\ncat >/dev/null\ntouch \"$HOME/closed\"\n",
     permission=0o755,
   )
   let values : Map[String, String] = {

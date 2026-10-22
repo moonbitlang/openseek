@@ -1,7 +1,7 @@
 ///|
 async test "SSH unavailable helper reports its actionable cause and retires the connection" {
   let connection = Connection(
-    { id: "one", command: "ssh host", display_name: None, },
+    { id: "one", command: "ssh host", display_name: None, projects: None, },
     1,
   )
   let events : Array[Json] = []
@@ -49,7 +49,7 @@ test "SSH prompts preserve actual targets and only explicit password rejection i
 ///|
 async test "SSH waiter rejects cross host stale and duplicate answers and cancellation retires it" {
   let connection = Connection(
-    { id: "one", command: "ssh host", display_name: None, },
+    { id: "one", command: "ssh host", display_name: None, projects: None, },
     9,
     attempt=2,
   )
@@ -107,7 +107,7 @@ async test "SSH IPC rejects unrelated peers and serializes challenge delivery th
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let connection = Connection(
-        { id: "ipc", command: "ssh demo", display_name: None, },
+        { id: "ipc", command: "ssh demo", display_name: None, projects: None, },
         1,
         attempt=1,
       )

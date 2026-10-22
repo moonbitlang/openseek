@@ -57,10 +57,12 @@ fn prepare_command(release_url : String, protocols : String) -> String {
     #|export OPENSEEK_ENGINE="$root/bin/openseek"
     #|umask 077
     #|endpoint=$(mktemp "$base/.endpoint.XXXXXX")
-    #|# Explicit stdin keeps the startup lifetime pipe; outputs must not keep
-    #|# the SSH channel open after the foreground script exits.
-    #|nohup "$root/bin/openseek-app-server" <&0 >"$endpoint" 2>>"$base/app-server.log" &
+    #|# Non-interactive shells replace background stdin with /dev/null before
+    #|# applying redirections. Preserve the startup pipe on a separate fd.
+    #|exec 3<&0
+    #|nohup "$root/bin/openseek-app-server" <&3 3<&- >"$endpoint" 2>>"$base/app-server.log" &
     #|server=$!
+    #|exec 3<&-
     #|while ! IFS= read -r announcement <"$endpoint"; do
     #|  if ! kill -0 "$server" 2>/dev/null; then
     #|    wait "$server" || exit "$?"

@@ -3,6 +3,7 @@ pub(all) struct SshProfile {
   id : String
   command : String
   display_name : String?
+  projects : Array[String]?
 } derive(Eq)
 
 ///|
@@ -12,6 +13,9 @@ pub impl FromJson for SshProfile with fn from_json(json, path) {
     id: obj.required_string("id"),
     command: obj.required_string("command"),
     display_name: obj.optional_string("display_name"),
+    projects: obj
+    .optional_json("projects")
+    .map(value => @json.from_json(value, path=path.add_key("projects"))),
   }
 }
 
@@ -24,11 +28,34 @@ pub impl ToJson for SshProfile with fn to_json(self) {
   if self.display_name is Some(name) {
     fields["display_name"] = Json(name)
   }
+  if self.projects is Some(projects) {
+    fields["projects"] = Json(projects)
+  }
   Json(fields)
 }
 
 ///|
 pub extend SshProfile with Eq::{equal, not_equal}
+
+///|
+pub(all) struct SshProjects {
+  id : String
+  projects : Array[String]
+}
+
+///|
+pub impl FromJson for SshProjects with fn from_json(json, path) {
+  let obj = JsonObject::decode(json, path, "SSH projects")
+  {
+    id: obj.required_string("id"),
+    projects: obj.required_array_of("projects"),
+  }
+}
+
+///|
+pub impl ToJson for SshProjects with fn to_json(self) {
+  { "id": self.id, "projects": Json(self.projects) }
+}
 
 ///|
 pub(all) struct SshProfileTarget {
@@ -381,3 +408,9 @@ pub extend SshEvent with FromJson::{from_json}
 
 ///|
 pub extend SshEvent with ToJson::{to_json}
+
+///|
+pub extend SshProjects with FromJson::{from_json}
+
+///|
+pub extend SshProjects with ToJson::{to_json}
