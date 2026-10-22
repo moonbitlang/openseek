@@ -1733,8 +1733,10 @@ fn description(
     #|use args=["PR", "--repo", "OWNER/REPO", "--once"] for one snapshot.
     #|Agent workflows (they start subagents): @builtin/review.mbtx (independent
     #|worktree audit against the criteria in args), @builtin/change-review.mbtx
-    #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
-    #|(architecture, validation, extension points).
+    #|(working-tree review from three perspectives), @builtin/repo-map.mbtx
+    #|(architecture, validation, extension points) or @builtin/simplify.mbtx
+    #|(sweeps MoonBit packages for safe simplifications and opens one pull
+    #|request per package; --no-pr keeps them on local branches).
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
     #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.

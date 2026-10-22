@@ -80,6 +80,8 @@ other colons. Paths with spaces are single args without shell quoting.
   is the working tree against HEAD, not committed branch history.
 - `repo-map.mbtx` surveys architecture and data flow, validation commands, and
   extension points for a new contributor.
+- `simplify.mbtx` sweeps the repository's MoonBit packages for safe, obvious
+  simplifications and opens one pull request per changed package (see below).
 
 Run these in a session that can start subagents; they start them through the
 host with `@tools.call("subagent", ...)`:
@@ -94,6 +96,10 @@ host with `@tools.call("subagent", ...)`:
 
 ```json
 {"description":"Map repository architecture","filename":"@builtin/repo-map.mbtx","cwd":"/path/to/repository"}
+```
+
+```json
+{"description":"Simplify the project","filename":"@builtin/simplify.mbtx","args":["--max-prs","2","--","pattern matching"]}
 ```
 
 `review.mbtx` launches one `review` child (100-step ceiling). With no
@@ -137,6 +143,28 @@ Repo-map runs two scouts, allowing 12 steps each, and displays the root
 `justfile` recipes directly in MoonBit without asking a model to summarize
 commands. Recipes are marked as not executed; a missing `justfile` is reported
 explicitly. Long recipe files are visibly truncated.
+
+`simplify.mbtx` runs from the repository root with no uncommitted changes to
+tracked files. Unless `--no-pr` is given, HEAD must be an ancestor of
+`origin/HEAD` and `gh` must be signed in; all of this is checked before any
+child starts. The packages are the directories of tracked `moon.pkg` files
+(`--path DIR`, repeatable, narrows them), each with its own non-generated
+`.mbt` files. `--scouts N` read-only `explore` children (default 4, at most
+8, 80 steps each) split the packages among them and cite candidates. The
+packages with the most candidates, at most `--max-prs N` (default 4, at most
+8), each get one `worker` in its own worktree, allowed to change only that
+package's source files, at most 4 at once. A change goes on to review only
+when it is committed on the pinned HEAD by a worker that reported `done`.
+Then a fresh `explore` child (60 steps) reads it as git objects and answers
+`VERDICT: ACCEPT` or `VERDICT: REJECT` on the first line. Each accepted change
+is pushed to `simplify/<name>` on `origin` and opened as a pull request
+against the default branch; nothing is merged. Scouts and workers carry
+built-in MoonBit guidance: what to simplify, and what not to. The script prints
+a line per scout and per chosen package, then
+`packages=N chosen=K prs=P accepted=A rejected=R skipped=S tokens=T`. It fails
+when any start was refused, any child ended without a report, or a push or
+pull request failed. The design is in
+[docs/plans/simplify-swarm.md](../../docs/plans/simplify-swarm.md).
 
 For MoonBit, scouts start with the selected package’s `moon.pkg` and
 `pkg.generated.mbti`, then use its dependencies and public API to choose
