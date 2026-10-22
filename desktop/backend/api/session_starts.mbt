@@ -256,6 +256,13 @@ async fn ApiState::session_starts_decide(
         if ["started", "here", "dismissed"].contains(proposal.status) {
           return snapshot
         }
+        if decision.action == "dismiss" {
+          return self.save_session_start(
+            decision.session,
+            { ..proposal, status: "dismissed", error: None, },
+            workspace?,
+          )
+        }
         let receipt = self.session_start_receipt(
           decision.session,
           proposal,
@@ -264,21 +271,9 @@ async fn ApiState::session_starts_decide(
           error =>
             return self.save_session_start(
               decision.session,
-              {
-                ..proposal,
-                status: if decision.action == "dismiss" {
-                  "dismissed"
-                } else {
-                  "failed"
-                },
-                error: if decision.action == "dismiss" {
-                  None
-                } else {
-                  Some(error.to_string())
-                },
-              },
+              { ..proposal, status: "failed", error: Some(error.to_string()), },
               workspace?,
-              result=decision.action != "dismiss",
+              result=true,
             )
         }
         if receipt is Committed(archived~) {
@@ -286,13 +281,6 @@ async fn ApiState::session_starts_decide(
             decision.session,
             proposal,
             archived~,
-            workspace?,
-          )
-        }
-        if decision.action == "dismiss" {
-          return self.save_session_start(
-            decision.session,
-            { ..proposal, status: "dismissed", error: None, },
             workspace?,
           )
         }

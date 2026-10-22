@@ -822,6 +822,11 @@ async test "session start recovery preserves user titles and isolates archived o
   seed_start_record(workspace, "first-target", "session-start-first")
   seed_start_record(workspace, "good-target", "session-start-good")
   seed_start_record(workspace, "bad-target", "session-start-bad")
+  seed_start_record(workspace, "bad-title-target", "session-start-bad-title")
+  let bad_title_path = workspace.join(
+    ".openseek/sessions/bad-title-target/session-title",
+  )
+  @fs.mkdir(bad_title_path.to_string())
   @fs.write_file(
     workspace
     .join(".openseek/sessions/bad-target/openseek_session-bad-target.jsonl")
@@ -835,6 +840,9 @@ async test "session start recovery preserves user titles and isolates archived o
     workspace_uri, "good", "good", "good-target",
   )
   let bad = recovery_start_proposal(workspace_uri, "bad", "bad", "bad-target")
+  let bad_title = recovery_start_proposal(
+    workspace_uri, "bad-title", "bad-title", "bad-title-target",
+  )
   let state = @api.ApiState(engine="unused-engine")
   let notifications : @async.Queue[@protocol.Notification] = Queue(
     kind=Blocking(64),
@@ -871,7 +879,7 @@ async test "session start recovery preserves user titles and isolates archived o
     })
     ignore(
       @engine.with_session_starts(state.manager(), "source", _ => (), store => {
-        store.save([first, bad, good])
+        store.save([first, bad, good, bad_title])
       }),
     )
     let recovered = invoke_start_endpoint(state, "session.starts_list", {
@@ -879,9 +887,10 @@ async test "session start recovery preserves user titles and isolates archived o
       "workspace": workspace_uri,
     })
     assert_eq(recovered.proposals.map(proposal => proposal.status), [
-      "started", "failed", "started",
+      "started", "failed", "started", "failed",
     ])
     assert_true(recovered.proposals[1].error is Some(_))
+    assert_true(recovered.proposals[3].error is Some(_))
     assert_eq(
       @fs.read_file(title_file.to_string()).text(),
       "User renamed title",
@@ -921,6 +930,21 @@ async test "session start recovery preserves user titles and isolates archived o
       "action": "dismiss",
     })
     assert_eq(dismissed.proposals[1].status, "dismissed")
+    // A committed task remains dismissible even when invalid title metadata
+    // prevents recovery from completing. Hiding it never needs target access.
+    let dismissed_bad_title = invoke_start_endpoint(
+      state,
+      "session.starts_decide",
+      {
+        "session": "source",
+        "workspace": workspace_uri,
+        "request_id": "bad-title",
+        "action": "dismiss",
+      },
+    )
+    assert_eq(dismissed_bad_title.proposals[3].status, "dismissed")
+    assert_eq(dismissed_bad_title.proposals[3].error, None)
+    assert_true(@fs.exists(bad_title_path.to_string()))
     ignore(
       @engine.archive_session(state.manager(), "first-target", (_, _) => ()),
     )
