@@ -89,7 +89,7 @@ pub fn Conversation::control_primary_action(
     } else {
       default_submit
     },
-    queue_available=false,
+    queue_available=!stopping && !pending,
   )
 }
 

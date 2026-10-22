@@ -2597,7 +2597,10 @@ fn update_msg(
         }
         match action {
           @composer.StopRequested(identity~)
-          | @composer.FollowupSubmitted(identity~, ..) =>
+          | @composer.FollowupSubmitted(identity~, ..)
+          | @composer.QueuedInputEditRequested(identity~, ..)
+          | @composer.QueuedInputSteerRequested(identity~, ..)
+          | @composer.QueuedInputDeleteRequested(identity~, ..) =>
             return update_cloud(
               dispatch,
               @cloud.ControlAction(identity.owner, action),

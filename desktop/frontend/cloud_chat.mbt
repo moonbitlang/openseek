@@ -415,7 +415,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       images_enabled: true,
       context: {
         let context = conversation.map_or(input.presentation.context, value => {
-          value.control_context().filter(component => component is @composer.PendingSteerPanel(items=_))
+          value.control_context()
         })
         if conversation is Some({ compacting: true, .. }) {
           context.push(@composer.CompactionNotice(queued=false))
@@ -442,7 +442,13 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       (!creating && !self.cloud.can_compose(owner.session())),
       primary_action: if conversation is Some(value) &&
         (value.generating || value.sending) {
-        value.control_primary_action(@composer.Steer)
+        value.control_primary_action(
+          if self.followup_behavior is FollowupQueue {
+            @composer.Queue
+          } else {
+            @composer.Steer
+          },
+        )
       } else {
         @composer.Send(
           available=self.account is Some(_) &&

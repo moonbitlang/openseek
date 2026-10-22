@@ -181,3 +181,40 @@ test "Cloud subscription closure is not a server Stop and old callbacks cannot r
     changed,
   )
 }
+
+///|
+test "Cloud observer failure retains the confirmed queue as read-only" {
+  let (state, stream) = watch_fixture(controls_fixture())
+  let control : ControlState = {
+    active_task_id: Some("task"),
+    status: Running,
+    paused: false,
+    queue: [{ id: "queued", content: Content([Text("Keep this input")]), }],
+    steers: [],
+  }
+  let state = watch_snapshot(state, stream, Some("task"), 2, control)
+  let disconnected = metadata_update(
+    state,
+    WatchEnded(1, "session", stream, Some(Unreachable)),
+  )
+  let conversation = disconnected.conversations["session"]
+  assert_true(conversation.control == Some(control))
+  assert_true(
+    conversation.control_context()
+    is [@composer.QueuedInputPanel(enabled=false, ..)],
+  )
+  let recovered = metadata_update(
+    disconnected,
+    Loaded(1, "session", conversation.request, {
+      messages: [],
+      generating: true,
+    }),
+  )
+  assert_eq(
+    recovered.conversations["session"].notice,
+    Some(Failure::Unreachable.label()),
+  )
+  assert_true(
+    recovered.conversations["session"].control.unwrap().queue == control.queue,
+  )
+}

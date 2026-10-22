@@ -689,7 +689,8 @@ pub fn update(
           conversation.uploads
         },
         // A successful read does not mean the failed send was admitted.
-        notice: if conversation.pending is Some(_) && !accepted {
+        notice: if (conversation.pending is Some(_) && !accepted) ||
+          (!observed && conversation.control is Some(_)) {
           conversation.notice
         } else {
           None
