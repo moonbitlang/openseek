@@ -573,12 +573,30 @@ priv enum Verdict {
 ///|
 /// The verifier's verdict on `claim`. Anything but a well-formed confirmation
 /// or refutation leaves the claim unverified.
+///
+/// The summary must begin with an exact verdict token, not followed by a
+/// letter. What separates it from the evidence is not checked: a live
+/// verifier wrote a literal `\n` there rather than a newline.
 fn verdict(report : Json, claim : Claim) -> Verdict {
-  let summary = text_field(report, "summary")
-  let (head, evidence) = match summary.split("\n").to_array() {
-    [] => ("", "")
-    [head, .. rest] =>
-      (head.trim().to_owned(), rest.join(" ").trim().to_owned())
+  let summary = text_field(report, "summary").trim()
+  let mut head = ""
+  let mut evidence = ""
+  for word in ["CONFIRMED", "REFUTED", "INCONCLUSIVE"] {
+    guard summary.strip_prefix("VERDICT: " + word) is Some(after) else {
+      continue
+    }
+    guard !(after.iter().next() is Some('A'..='Z' | 'a'..='z')) else {
+      continue
+    }
+    head = "VERDICT: " + word
+    evidence = after
+      .to_owned()
+      .replace_all(old="\\n", new=" ")
+      .replace_all(old="\n", new=" ")
+      .trim_start(chars=" .:-")
+      .trim()
+      .to_owned()
+    break
   }
   let findings = match report {
     { "findings": Array(findings), .. } => findings

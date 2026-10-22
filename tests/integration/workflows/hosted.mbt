@@ -619,6 +619,17 @@ fn lens_reply(mode : String, lens : String) -> Result[Json, String] {
         ),
       )
     ("swarm-none", _) => Err("failed: step limit")
+    ("swarm-verdict-format", _) =>
+      Ok(
+        swarm_report(
+          [
+            swarm_finding(a, Some(1), "high", "Literal newline claim"),
+            swarm_finding(a, Some(3), "high", "Period claim"),
+            swarm_finding(a, Some(5), "high", "Glued claim"),
+          ],
+          "correctness summary",
+        ),
+      )
     ("swarm-verify-off" | "swarm-budget" | "swarm-under-budget", "correctness") =>
       Ok(
         swarm_report(
@@ -654,6 +665,18 @@ fn verifier_reply(goal : String) -> Result[Json, String] {
           "VERDICT: CONFIRMED\nreproduced it",
         ),
       )
+    // What a live verifier wrote: a literal backslash-n after the token.
+    "Literal newline claim" =>
+      Ok(
+        swarm_report(
+          [swarm_finding("src/a.mbt", Some(1), "high", title)],
+          "VERDICT: CONFIRMED\\n\\nreproduced it",
+        ),
+      )
+    "Period claim" =>
+      Ok(swarm_report([], "VERDICT: REFUTED. the code checks it"))
+    // A token run into a word is not a verdict.
+    "Glued claim" => Ok(swarm_report([], "VERDICT: REFUTEDLY not"))
     "Inconclusive claim" =>
       Ok(swarm_report([], "VERDICT: INCONCLUSIVE\nno way to run it"))
     "Claim without verdict" => Ok(swarm_report([], "looked around, unsure"))
@@ -684,8 +707,8 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
     mode in [
       "swarm-merge", "swarm-refute-blocker", "swarm-unverified", "swarm-incomplete",
       "swarm-verify-off", "swarm-verify-cap", "swarm-budget", "swarm-under-budget",
-      "swarm-lens-text", "swarm-verifier-refused", "swarm-none", "swarm-unknown-lens",
-      "swarm-verify-alone", "swarm-bad-number", "swarm-duplicate-lens",
+      "swarm-lens-text", "swarm-verifier-refused", "swarm-none", "swarm-verdict-format",
+      "swarm-unknown-lens", "swarm-verify-alone", "swarm-bad-number", "swarm-duplicate-lens",
     ] {
     let host = fake_host("review-swarm", mode)
     let args = match mode {
@@ -700,7 +723,7 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
       "swarm-under-budget" => ["--swarm", "--max-tokens", "1000", criteria]
       "swarm-lens-text" =>
         ["--lens", "compatibility", "--lens", "security", criteria]
-      "swarm-verifier-refused" | "swarm-none" =>
+      "swarm-verifier-refused" | "swarm-none" | "swarm-verdict-format" =>
         ["--lens", "correctness", criteria]
       "swarm-bad-number" => ["--swarm", "--verify", "9", criteria]
       "swarm-duplicate-lens" => ["--lens", "tests", "--lens", "tests", criteria]
@@ -819,6 +842,18 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
           ["review:correctness"],
           [
             "lens correctness: no report: failed: step limit", "no lens reported: the review did not run",
+          ],
+        )
+      "swarm-verdict-format" =>
+        (
+          true,
+          [
+            "review:correctness", "review:verify-1", "review:verify-2", "review:verify-3",
+          ],
+          [
+            "findings=2 blockers=0 tokens=48 lenses=1/1 verified=1 refuted=1 unverified=1",
+            "[verified] detail of Literal newline claim", "Refuted: Period claim (src/a.mbt:3): the code checks it",
+            "[unverified: no verdict line]",
           ],
         )
       "swarm-bad-number" => (false, [], ["--verify takes a number from 0 to 8"])
