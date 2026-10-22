@@ -3,8 +3,7 @@
 // the side chat has no turn running.
 
 ///|
-/// One side chat whose tab was closed. While it is here its record is not
-/// shown as a tab, even though the listing still has it.
+/// One side chat whose tab was closed, on its way to being deleted.
 priv struct ClosingSideChat {
   chat : @interop.ConversationKey
   stage : ClosingStage
@@ -88,15 +87,23 @@ fn Model::advance_side_chat_closing(
 }
 
 ///|
-/// Stopping a closing side chat failed, so its turn may still be running: its
-/// tab comes back, where its turn can be stopped again or its question
-/// answered.
-fn Model::reopen_side_chat_after_cancel_failure(
+/// Closing side chat `chat` failed — its turn could not be stopped, or its
+/// record not deleted — so it is still there: its tab comes back beside the
+/// one on screen, where it can be closed again, or its turn stopped or its
+/// question answered.
+fn Model::reopen_side_chat(
   self : Model,
   chat : @interop.ConversationKey,
 ) -> Model {
+  guard self.closing_side_chats.any(closing => closing.chat == chat) else {
+    return self
+  }
+  let owner = dock_home(@interop.Host(chat))
   {
-    ..self,
+    ..self.with_dock_state_for(
+      owner,
+      @dock.add_side_chat(self.dock_state_for(owner), chat),
+    ),
     closing_side_chats: self.closing_side_chats.filter(closing => {
       closing.chat != chat
     }),

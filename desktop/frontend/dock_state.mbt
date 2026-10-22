@@ -34,11 +34,16 @@ fn dock_home(
 /// column can select — like a file, it is read in its conversation's dock —
 /// so the two ways a session is chosen, selecting it (`OpenSession`) and
 /// navigating to its address, select its conversation and then call this to
-/// put the side chat's tab on screen there.
+/// put the side chat's tab on screen there. A side chat lives only in the
+/// page that opened it; one this page does not hold, left from before a
+/// restart, gets no tab, and its conversation alone is what opens.
 fn Model::reveal_side_chat(
   self : Model,
   chat : @interop.ConversationKey,
 ) -> Model {
+  guard self.find_conversation(chat.channel, chat.session) is Some(_) else {
+    return self
+  }
   let owner = dock_home(@interop.Host(chat))
   {
     ..self.with_dock_state_for(

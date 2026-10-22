@@ -72,9 +72,9 @@ fn side_chat_owner() -> @interop.ConversationKey {
 }
 
 ///|
-/// The fixture conversation in the column, its side chat listed and running
-/// with a question waiting, and the dock open. One message through `update`
-/// lets the post-dispatch sync give the strip its tab.
+/// The fixture conversation in the column, its side chat listed, held, and
+/// running with a question waiting, and on screen in the open dock. One
+/// message through `update` lets the post-dispatch sync settle.
 fn side_chat_model() -> Model raise {
   let side = fold_engine(
     {
@@ -97,6 +97,9 @@ fn side_chat_model() -> Model raise {
     right_panel_open: true,
     window_focused: true,
   }.replace_conversation(side)
+  let model = model.with_dock_state(
+    @dock.open_side_chat(model.dock_state(), side_chat_owner()),
+  )
   let (_, synced) = update(test_dispatch(), CloseSelectMenu, model)
   synced
 }
@@ -110,7 +113,7 @@ fn side_chat_identity(model : Model) -> @composer.Identity {
 }
 
 ///|
-test "a listed side chat is a tab in its conversation's dock" {
+test "a side chat is a tab in its conversation's dock while its record lasts" {
   let model = side_chat_model()
   assert_true(model.dock_state().tabs == [SideChat(owner=side_chat_owner())])
   assert_true(model.mounted_side_chat_owner() == Some(side_chat_owner()))
@@ -283,136 +286,6 @@ test "the dock's composer stays with the side-chat tab while the dock is hidden"
     hidden.dock_composer_input().identity.owner ==
     @interop.Host(side_chat_owner()),
   )
-}
-
-///|
-test "a restored side chat uses an already loaded shared worktree" {
-  let dispatch = test_dispatch()
-  let workspace = @interop.ChannelId::Local.test_project()
-  let worktree = @interop.ChannelId::Local.test_resource(
-    "/work/shared-checkout",
-  )
-  for present in [true, false] {
-    let (_, registry_loaded) = update_dev(
-      dispatch,
-      WorktreesLoaded(
-        [
-          {
-            name: "shared",
-            sessions: ["desktop-test", SideChatId],
-            codex_thread: None,
-            path: if present {
-              Some(worktree)
-            } else {
-              None
-            },
-            present,
-          },
-        ],
-        workspace~,
-        connection_generation=0,
-        request_generation=1,
-      ),
-      test_model(),
-    )
-    assert_true(
-      registry_loaded.active().workspace is Worktree(name="shared", ..),
-    )
-    assert_true(registry_loaded.find_conversation(Local, SideChatId) is None)
-    let listed = {
-      ..registry_loaded.with_listed(["desktop-test", SideChatId]),
-      right_panel_open: true,
-    }
-    let (_, restored) = update(dispatch, CloseSelectMenu, listed)
-    let (_, again) = update(dispatch, CloseSelectMenu, listed)
-    guard restored.find_conversation(Local, SideChatId) is Some(side) &&
-      again.find_conversation(Local, SideChatId) is Some(repeated) else {
-      fail("the listed side chat was not restored")
-    }
-    assert_true(side.workspace == repeated.workspace)
-    assert_true(side.workspace is Worktree(name="shared", ..))
-    assert_true(listed.find_conversation(Local, SideChatId) is None)
-    assert_true(restored.dev().worktree_row(workspace, SideChatId) is Some(_))
-    let expected_root = if present { Some(worktree) } else { None }
-    assert_eq(restored.conversation_root(restored.active()), expected_root)
-    // The registry row already identifies the child's checkout. Restoring its
-    // transcript must not need another registry update to use that checkout.
-    assert_eq(restored.conversation_root(side), expected_root)
-    assert_eq(
-      restored.side_chat_composer_input(side_chat_owner()).root,
-      expected_root,
-    )
-    if !present {
-      assert_true(
-        restored.conversation_placement(side)
-        is Some(@interop.MissingWorktree(name="shared", ..)),
-      )
-    }
-  }
-}
-
-///|
-test "a restored side chat waits for its worktree registry" {
-  let dispatch = test_dispatch()
-  let workspace = @interop.ChannelId::Local.test_project()
-  let worktree = @interop.ChannelId::Local.test_resource(
-    "/work/shared-checkout",
-  )
-  let listed = {
-    ..test_model()
-    .with_listed(["desktop-test", SideChatId])
-    .with_dev(dev => { ..dev, worktrees: [], }),
-    right_panel_open: true,
-  }
-  let (_, waiting) = update(dispatch, CloseSelectMenu, listed)
-  let (_, repeated) = update(dispatch, CloseSelectMenu, listed)
-  guard waiting.find_conversation(Local, SideChatId) is Some(side) &&
-    repeated.find_conversation(Local, SideChatId) is Some(repeated_side) else {
-    fail("the listed side chat was not restored while placement was loading")
-  }
-  assert_true(side.workspace == repeated_side.workspace)
-  assert_true(listed.find_conversation(Local, SideChatId) is None)
-  assert_true(waiting.conversation_placement(side) is None)
-  assert_true(waiting.conversation_root(side) is None)
-  assert_true(waiting.side_chat_composer_input(side_chat_owner()).root is None)
-  // The column offers the retry; the dock, which could not act on it, does
-  // not repeat the notice.
-  assert_true(
-    waiting.composer_input_for(side, surface=Column).presentation.context.contains(
-      @composer.WorktreePlacementNotice,
-    ),
-  )
-  assert_false(
-    waiting.side_chat_composer_input(side_chat_owner()).presentation.context.contains(
-      @composer.WorktreePlacementNotice,
-    ),
-  )
-  let (_, loaded) = update(
-    dispatch,
-    on_home(
-      WorktreesLoaded(
-        [
-          {
-            name: "shared",
-            sessions: ["desktop-test", SideChatId],
-            codex_thread: None,
-            path: Some(worktree),
-            present: true,
-          },
-        ],
-        workspace~,
-        connection_generation=0,
-        request_generation=1,
-      ),
-    ),
-    waiting,
-  )
-  guard loaded.find_conversation(Local, SideChatId) is Some(placed) else {
-    fail("the restored side chat was lost when placement loaded")
-  }
-  assert_true(side.workspace is Project(_))
-  assert_true(placed.workspace is Worktree(name="shared", ..))
-  assert_eq(loaded.conversation_root(placed), Some(worktree))
 }
 
 ///|
@@ -1007,92 +880,6 @@ test "a page the side chat's agent opened stays the side chat's in its conversat
     blank.browser_page_owner(own) ==
     Some({ channel: @interop.ChannelId::Local, session: "desktop-test", }),
   )
-}
-
-///|
-test "a side chat restored without a remembered model takes its conversation's" {
-  let model = test_model()
-  let model = {
-    ..model.replace_conversation({ ..model.active(), engine_model: DsPro, }),
-    default_model: DsFlash,
-    right_panel_open: true,
-  }.with_listed(["desktop-test", SideChatId])
-  let (_, restored) = update(test_dispatch(), CloseSelectMenu, model)
-  guard restored.find_conversation(@interop.ChannelId::Local, SideChatId)
-    is Some(side) else {
-    fail("the listed side chat must be restored")
-  }
-  assert_true(side.engine_model == DsPro)
-}
-
-///|
-/// A page that restarted with a side chat's tab in its strip and its record
-/// listed, its first runs reply still out.
-fn side_chat_restart_model() -> Model raise {
-  {
-    ..test_model().with_listed(["desktop-test", SideChatId]),
-    right_panel_open: true,
-  }.with_dev(dev => { ..dev, runs_in_flight: 1, })
-}
-
-///|
-test "a side chat restored before the runs reply is made by that reply with its run" {
-  let (_, waiting) = update(
-    test_dispatch(),
-    CloseSelectMenu,
-    side_chat_restart_model(),
-  )
-  // The tab is back, but the side chat waits for the reply.
-  assert_true(waiting.dock_state().tabs == [SideChat(owner=side_chat_owner())])
-  assert_true(waiting.find_conversation(Local, SideChatId) is None)
-  let (_, recovered) = update_dev(
-    test_dispatch(),
-    RunsLoaded(
-      approval_generation=0,
-      runs=[
-        {
-          run_id: "r-side",
-          session: SideChatId,
-          model: DsPro,
-          max_steps: 1000,
-          session_root: None,
-          submission_id: None,
-        },
-      ],
-      settled=[],
-      approvals=[],
-      live=["r-side"],
-      frontier=waiting.run_snapshot_frontier(Local),
-      connection_generation=waiting.dev().connection_generation,
-    ),
-    waiting,
-  )
-  guard recovered.find_conversation(Local, SideChatId) is Some(side) else {
-    fail("the reply must make the running side chat")
-  }
-  assert_true(side.run is Open(run_id="r-side", ..))
-  assert_eq(recovered.dev().runs_in_flight, 0)
-  assert_true(recovered.mounted_side_chat_owner() == Some(side_chat_owner()))
-}
-
-///|
-test "a side chat restored before a runs request fails is made once it does" {
-  let (_, waiting) = update(
-    test_dispatch(),
-    CloseSelectMenu,
-    side_chat_restart_model(),
-  )
-  assert_true(waiting.find_conversation(Local, SideChatId) is None)
-  let (_, failed) = update_dev(
-    test_dispatch(),
-    RunsFailed(connection_generation=waiting.dev().connection_generation),
-    waiting,
-  )
-  assert_eq(failed.dev().runs_in_flight, 0)
-  guard failed.find_conversation(Local, SideChatId) is Some(side) else {
-    fail("the side chat must be made once nothing is awaited")
-  }
-  assert_true(side.run is NoRun(..))
 }
 
 ///|

@@ -21,6 +21,8 @@ pub fn active_history_diff(DockState) -> GitHistoryDiff?
 
 pub fn add_side_chat(DockState, @interop.ConversationKey) -> DockState
 
+pub fn close_gone_side_chats(DockState, Array[@interop.ConversationKey]) -> DockState
+
 pub fn file_paths(DockState) -> Array[@common.Uri]
 
 pub fn history_diffs(DockState) -> Array[GitHistoryDiff]
@@ -42,8 +44,6 @@ pub fn open_picker(DockState) -> DockState
 pub fn open_side_chat(DockState, @interop.ConversationKey) -> DockState
 
 pub fn open_workflows(DockState) -> DockState
-
-pub fn reconcile_side_chats(DockState, Array[@interop.ConversationKey]) -> DockState
 
 pub fn resolve_pick(DockState, DockTab) -> DockState
 

@@ -1516,7 +1516,7 @@ fn sync_file_panel(
     .map(owner => model.side_chats_of(dock_home_key(owner)))
     .unwrap_or([])
   let before = model.dock_state()
-  let dock = @dock.reconcile_side_chats(before, chats)
+  let dock = @dock.close_gone_side_chats(before, chats)
   let model = if dock == before { model } else { model.with_dock_state(dock) }
   // A side chat deleted elsewhere hands the screen to a neighbour, which is
   // shown as a chosen tab would be.
@@ -1537,11 +1537,9 @@ fn sync_file_panel(
       }).map(mention => mention.ref_),
     ),
   )
-  let (model, side_chat_cmd) = load_active_side_chat(dispatch, {
-    ..model,
-    file_panel: panel,
-  })
-  let (model, closing_cmd) = model.advance_side_chat_closing(dispatch)
+  let (model, closing_cmd) = { ..model, file_panel: panel, }.advance_side_chat_closing(
+    dispatch,
+  )
   let shown = model.mounted_side_chat_owner()
   let (shown_cmd, model) = match shown {
     Some(owner) if model.shown_side_chat != shown =>
@@ -1550,75 +1548,7 @@ fn sync_file_panel(
   }
   (
     { ..model, shown_side_chat: shown, },
-    @cmd.batch([shown_tab_cmd, cmd, side_chat_cmd, closing_cmd, shown_cmd]),
-  )
-}
-
-///|
-/// Give the active side-chat tab its conversation the first time it is
-/// shown. A tab restored from the listing after a restart has a record but
-/// nothing in this page yet; reading it once is enough, since its commits
-/// then keep it current like any conversation the page holds.
-fn load_active_side_chat(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-) -> (Model, @cmd.Cmd) {
-  // While a runs reply is awaited the side chat is left for it: if it is
-  // running, that reply makes it, with its run.
-  guard model.dock_state().active is Some(SideChat(owner~)) &&
-    model.find_conversation(owner.channel, owner.session) is None &&
-    model.device_state(owner.channel) is Some({ runs_in_flight: 0, .. }) &&
-    model.session_project(owner.channel, owner.session) is Some(project) else {
-    return (model, @cmd.none)
-  }
-  // The model it was forked with is remembered where it was made. Elsewhere
-  // — another device, a cleared store — its conversation's model is the
-  // nearest to it, and the dock has no selector to correct a default.
-  let parent = dock_home_key(owner)
-  let forked_model = match
-    model.remembered_model(owner.channel, owner.session) {
-    Some(remembered) => remembered
-    None =>
-      match model.find_conversation(parent.channel, parent.session) {
-        Some(conv) => conv.engine_model
-        None =>
-          model
-          .remembered_model(parent.channel, parent.session)
-          .unwrap_or(model.default_model)
-      }
-  }
-  let conv = empty_conversation(
-    owner.channel,
-    owner.session,
-    project,
-    model=forked_model,
-  )
-  let conv = if model.device_state(owner.channel) is Some(dev) {
-    {
-      ..conv,
-      workspace: dev.conversation_workspace(
-        project,
-        owner.session,
-        conv.workspace,
-      ),
-    }
-  } else {
-    conv
-  }
-  let (model, generation) = model
-    .replace_conversation(conv)
-    .begin_transcript_reload(conv)
-  guard generation is Some(generation) else { return (model, @cmd.none) }
-  (
-    model,
-    session_snapshot_command(
-      dispatch,
-      owner.channel,
-      model,
-      owner.session,
-      generation,
-      false,
-    ),
+    @cmd.batch([shown_tab_cmd, cmd, closing_cmd, shown_cmd]),
   )
 }
 
@@ -5862,12 +5792,7 @@ fn update_msg(
     SideChatRequested(owner~, quote~) =>
       model.request_side_chat(dispatch, owner, quote)
     SideChatCloseFailed(chat~, message~) =>
-      {
-        ..model,
-        closing_side_chats: model.closing_side_chats.filter(closing => {
-          closing.chat != chat
-        }),
-      }.notify_error(dispatch, message)
+      model.reopen_side_chat(chat).notify_error(dispatch, message)
     ForkCompleted(pending, result, fresh_session~) =>
       model.finish_fork(dispatch, pending, result, fresh_session~)
     // A transcript link naming a session on the device already focused. It
@@ -7451,8 +7376,6 @@ fn update_device_msg(
         bridge: Connected,
         reconnect_failures: 0,
         connection_generation,
-        // The resync above is this connection's only request so far.
-        runs_in_flight: 1,
         approval_snapshot: None,
         questions: dev.questions.reconnecting(),
         sessions_request_generation,
@@ -7930,13 +7853,20 @@ fn update_device_msg(
       } else {
         closed
       }
-      model
-      .replace_conversation({
+      let updated = model.replace_conversation({
         ..closed,
         run: NoRun(ended=None),
         last_run_id: Some(run_id),
       })
-      .request_runs(dispatch, channel)
+      (
+        fetch_runs(
+          dispatch,
+          channel,
+          updated.run_snapshot_frontier(channel),
+          dev.connection_generation,
+        ),
+        updated,
+      )
     }
     CancelFailed(run_id~, message~) => {
       guard model.conversation_by_run(channel, run_id) is Some(conv) &&
@@ -7952,13 +7882,20 @@ fn update_device_msg(
           ..conv,
           run: Open(run_id~, stage=AtStep(None)),
         })
-        .reopen_side_chat_after_cancel_failure({
-          channel: conv.device,
-          session: conv.session_id,
-        })
+        .reopen_side_chat({ channel: conv.device, session: conv.session_id, })
       let (notice, notified) = retryable.notify_error(dispatch, message)
-      let (runs, notified) = notified.request_runs(dispatch, channel)
-      (@cmd.batch([notice, runs]), notified)
+      (
+        @cmd.batch([
+          notice,
+          fetch_runs(
+            dispatch,
+            channel,
+            notified.run_snapshot_frontier(channel),
+            dev.connection_generation,
+          ),
+        ]),
+        notified,
+      )
     }
     SessionsLoaded(items, connection_generation~, request_generation~) => {
       guard connection_generation == dev.connection_generation &&
@@ -9440,12 +9377,6 @@ fn update_device_msg(
         (@cmd.batch(commands), updated)
       }
     }
-    RunsFailed(connection_generation~) =>
-      if connection_generation == dev.connection_generation {
-        (@cmd.none, model.settle_runs_request(dev))
-      } else {
-        (@cmd.none, model)
-      }
     RunsLoaded(
       approval_generation~,
       runs~,
@@ -9462,7 +9393,7 @@ fn update_device_msg(
       // Started row is rendered, and a later BridgeReady invalidates both its
       // positive rows and its negative frontier together.
       let commands : Array[@cmd.Cmd] = []
-      let mut next = model.settle_runs_request(dev)
+      let mut next = model
       let accepted_settlements : Array[RecoveredSettlement] = []
       let settled_sessions : Array[String] = []
       for settlement in settled {
@@ -9920,8 +9851,15 @@ fn update_device_msg(
         let (sessions, model) = request_sessions_refresh(
           dispatch, channel, model,
         )
-        let (runs, model) = model.request_runs(dispatch, channel)
-        let commands = [sessions, runs]
+        let commands = [
+          sessions,
+          fetch_runs(
+            dispatch,
+            channel,
+            model.run_snapshot_frontier(channel),
+            dev.connection_generation,
+          ),
+        ]
         if generation is Some(generation) {
           commands.push(
             session_snapshot_command(
@@ -9955,8 +9893,15 @@ fn update_device_msg(
           let (sessions, updated) = request_sessions_refresh(
             dispatch, channel, updated,
           )
-          let (runs, updated) = updated.request_runs(dispatch, channel)
-          let commands = [sessions, runs]
+          let commands = [
+            sessions,
+            fetch_runs(
+              dispatch,
+              channel,
+              updated.run_snapshot_frontier(channel),
+              dev.connection_generation,
+            ),
+          ]
           if changed {
             commands.push(@cmd.none)
           }

@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// A side chat is the record `<conversation>-sc-N`: shown in its
-// conversation's dock with its own transcript and composer, never as a
-// sidebar row, and never reaching into the column beside it.
+// A side chat is the record `<conversation>-sc-<token>`, opened from text
+// selected in its conversation: shown in that conversation's dock with its
+// own transcript and composer, never as a sidebar row, and never reaching
+// into the column beside it. It lives only in the page that opened it.
 
 const event = (sequence, kind, payload) => ({ sequence, item: { kind, payload } });
 const mainHistory = [
@@ -16,12 +17,19 @@ const sideHistory = [
   event(4, 'terminal', { kind: 'finished', message: 'Tokens are lexemes.' }),
 ];
 
-async function setup(page, { questions = [] } = {}) {
+async function selectIn(page, container, text) {
+  const paragraph = page.locator(`${container} .msg-content`).getByText(text, { exact: true }).first();
+  await paragraph.dblclick({ position: { x: 8, y: 8 } });
+}
+
+// The conversation in the column, its host forking a side chat of it on
+// request. Unless `open` is false, a side chat is opened the way a reader
+// opens one, from text selected in the column's transcript.
+async function setup(page, { questions = [], open = true } = {}) {
   const app = new DesktopBrowserHarness(page);
   let questionGeneration = 1;
   let questionRequests = questions;
   const questionSnapshot = () => ({ generation: questionGeneration, requests: questionRequests });
-  app.liveSessions.push({ id: 'session-1-sc-0a1b2c3d', title: 'Rabbita browser fixture', updated_at_ms: 2 });
   app.sessionEvents = mainHistory;
   const original = app.replyFor.bind(app);
   app.replyFor = request => {
@@ -31,6 +39,10 @@ async function setup(page, { questions = [] } = {}) {
       questionGeneration++;
       app.notify('user_questions.changed', questionSnapshot());
       return questionSnapshot();
+    }
+    if (request.method === 'session.fork' && request.params.side_chat === true) {
+      app.liveSessions.push({ id: 'session-1-sc-0a1b2c3d', title: request.params.source_title, updated_at_ms: 3 });
+      return { session: 'session-1-sc-0a1b2c3d', title: request.params.source_title };
     }
     if (request.method === 'session.load' && request.params.session === 'session-1-sc-0a1b2c3d') {
       return {
@@ -45,13 +57,18 @@ async function setup(page, { questions = [] } = {}) {
   await app.goto();
   await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
   await expect(page.locator('#transcript')).toContainText('The parser reads tokens.');
+  if (open) {
+    await selectIn(page, '#transcript', 'The parser reads tokens.');
+    await page.getByRole('toolbar', { name: 'Selection actions' })
+      .getByRole('button', { name: 'Side chat', exact: true }).click();
+    await expect(page.locator('#side-chat-transcript')).toContainText('Tokens are lexemes.');
+  }
   return app;
 }
 
-test('a listed side chat is a dock tab beside its conversation, not a sidebar row', async ({ page }) => {
+test('an opened side chat is a dock tab beside its conversation, not a sidebar row', async ({ page }) => {
   const app = await setup(page);
   await expect(page.locator('.conversation-row')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   const tab = page.locator('.editor-tab', { hasText: 'Side chat 1' });
   await expect(tab).toBeVisible();
   await tab.click();
@@ -67,7 +84,6 @@ test('a listed side chat is a dock tab beside its conversation, not a sidebar ro
 
 test('the side chat composer sends to the side chat', async ({ page }) => {
   const app = await setup(page);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.locator('.editor-tab', { hasText: 'Side chat 1' }).click();
   await expect(page.locator('#side-chat-transcript')).toContainText('Tokens are lexemes.');
   const input = page.locator('#side-chat-task');
@@ -82,7 +98,6 @@ test('the side chat composer sends to the side chat', async ({ page }) => {
 
 test('a draft typed in the side chat survives hiding the dock', async ({ page }) => {
   const app = await setup(page);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   const tab = page.locator('.editor-tab', { hasText: 'Side chat 1' });
   await tab.click();
   const input = page.locator('#side-chat-task');
@@ -96,7 +111,6 @@ test('a draft typed in the side chat survives hiding the dock', async ({ page })
 
 test('a file mention in a side chat opens in its parent dock without navigating', async ({ page }, testInfo) => {
   const app = await setup(page);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   const sideTab = page.locator('.editor-tab', { hasText: 'Side chat 1' });
   await sideTab.click();
   await expect(page.locator('#side-chat-transcript')).toContainText('Tokens are lexemes.');
@@ -130,69 +144,12 @@ test('a file mention in a side chat opens in its parent dock without navigating'
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a side chat first restored after its worktree registry reads relative images from the shared checkout', async ({ page }, testInfo) => {
-  const app = new DesktopBrowserHarness(page);
-  const sideSession = 'session-1-sc-0a1b2c3d';
-  const checkout = '/workspace/.worktrees/side-chat-shared';
-  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfoAAAAASUVORK5CYII=';
-  const events = [
-    ...mainHistory,
-    event(3, 'user', { content: 'Show the shared checkout diagram.' }),
-    event(4, 'terminal', { kind: 'finished', message: '![Shared checkout diagram](side-diagram.png)' }),
-  ];
-  app.sessionEvents = mainHistory;
-  app.binaryFiles['side-diagram.png'] = { data_base64: png, media_type: 'image/png' };
-  const original = app.replyFor.bind(app);
-  app.replyFor = request => {
-    if (request.method === 'worktree.list') {
-      return { worktrees: [{
-        name: 'side-chat-shared', sessions: ['session-1', sideSession],
-        path: checkout, present: true, branch: 'side-chat-shared', base: 'main', codex_thread: null,
-      }] };
-    }
-    if (request.method === 'session.load' && request.params.session === sideSession) {
-      return {
-        session: { version: 1, id: sideSession, events },
-        watermark: events.at(-1).sequence, prediction: null,
-      };
-    }
-    return original(request);
-  };
-  await app.install();
-  await app.goto();
-  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
-  await expect(page.locator('#transcript')).toContainText('The parser reads tokens.');
-  // The tooltip is derived from the accepted registry. The side chat is not
-  // listed yet, so no earlier load can have supplied its checkout placement.
-  await expect(page.locator('.conversation-row.active')).toHaveAttribute('title', /side-chat-shared/);
-  expect(app.requests.some(request => request.method === 'session.load' && request.params.session === sideSession)).toBe(false);
-  app.liveSessions.push({ id: sideSession, title: 'Rabbita browser fixture', updated_at_ms: 2 });
-  app.notify('session.changed', { change: 'created', session: sideSession, workspace: '/workspace' });
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.editor-tab', { hasText: 'Side chat 1' }).click();
-
-  const image = page.locator('#side-chat-transcript img[alt="Shared checkout diagram"]');
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'fs.read_file' && request.params?.path === 'side-diagram.png'))
-    .toMatchObject({ params: { root: checkout } });
-  await expect(image).toHaveAttribute('src', `data:image/png;base64,${png}`);
-  expect(app.requests.filter(request => request.method === 'fs.read_file' &&
-    request.params?.path === 'side-diagram.png').map(request => request.params.root)).toEqual([checkout]);
-  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
-  await page.locator('.app').screenshot({ path: testInfo.outputPath('side-chat-restored-shared-checkout.png') });
-  expect(app.pageErrors).toEqual([]);
-});
-
-async function selectIn(page, container, text) {
-  const paragraph = page.locator(`${container} .msg-content`).getByText(text, { exact: true }).first();
-  await paragraph.dblclick({ position: { x: 8, y: 8 } });
-}
-
 test('a reply to text selected in the side chat goes into its own composer', async ({ page }) => {
   const app = await setup(page);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.locator('.editor-tab', { hasText: 'Side chat 1' }).click();
   await expect(page.locator('#side-chat-transcript')).toContainText('Tokens are lexemes.');
+  // Start from an empty draft rather than the quote it opened with.
+  await page.locator('#side-chat-task').fill('');
   await selectIn(page, '#side-chat-transcript', 'Tokens are lexemes.');
   const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
   await toolbar.getByRole('button', { name: 'Reply', exact: true }).click();
@@ -210,7 +167,6 @@ test('a reply to text selected in the side chat goes into its own composer', asy
 
 test('closing a side chat tab deletes the side chat', async ({ page }) => {
   const app = await setup(page);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   const tab = page.locator('.editor-tab', { hasText: 'Side chat 1' });
   await tab.click();
   await expect(page.locator('#side-chat-transcript')).toContainText('Tokens are lexemes.');
@@ -232,7 +188,6 @@ test('a question asked in the side chat is answered in its pane', async ({ page 
   });
   // The column's conversation asked nothing.
   await expect(page.locator('#transcript ~ .user-question-region .user-question-card')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.locator('.editor-tab', { hasText: 'Side chat 1' }).click();
   const card = page.locator('.side-chat .user-question-card');
   await expect(card).toContainText('Which scope?');
@@ -244,32 +199,8 @@ test('a question asked in the side chat is answered in its pane', async ({ page 
   expect(app.pageErrors).toEqual([]);
 });
 
-// Opening one from a selection: the host forks the conversation as a side
-// chat, and the page opens it in the dock with the selection quoted.
-async function setupFork(page) {
-  const app = new DesktopBrowserHarness(page);
-  app.sessionEvents = mainHistory;
-  const original = app.replyFor.bind(app);
-  app.replyFor = request => {
-    if (request.method === 'session.fork' && request.params.side_chat === true) {
-      app.liveSessions.push({ id: 'session-1-sc-0a1b2c3d', title: request.params.source_title, updated_at_ms: 3 });
-      return { session: 'session-1-sc-0a1b2c3d', title: request.params.source_title };
-    }
-    if (request.method === 'session.load' && request.params.session === 'session-1-sc-0a1b2c3d') {
-      const events = mainHistory.filter(e => e.sequence <= 2);
-      return { session: { version: 1, id: 'session-1-sc-0a1b2c3d', events }, watermark: 2, prediction: null };
-    }
-    return original(request);
-  };
-  await app.install();
-  await app.goto();
-  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
-  await expect(page.locator('#transcript')).toContainText('The parser reads tokens.');
-  return app;
-}
-
 test('a selection opens a side chat beside the conversation with the selection quoted', async ({ page }) => {
-  const app = await setupFork(page);
+  const app = await setup(page, { open: false });
   await selectIn(page, '#transcript', 'The parser reads tokens.');
   const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
   await expect(toolbar.getByRole('button')).toHaveText(['Copy', 'Reply', 'Side chat']);
@@ -295,5 +226,23 @@ test('a selection opens a side chat beside the conversation with the selection q
     .toBe('session-1-sc-0a1b2c3d');
   await expect(tab).toHaveCount(0);
   await expect(page.locator('#side-chat-transcript')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a side chat lives only in the page that opened it', async ({ page }) => {
+  const app = await setup(page);
+  await expect(page.locator('.editor-tab', { hasText: 'Side chat 1' })).toBeVisible();
+  // Its record is still listed after a reload, but nothing brings it back.
+  await page.reload();
+  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await expect(page.locator('#transcript')).toContainText('The parser reads tokens.');
+  await expect(page.locator('.conversation-row')).toHaveCount(1);
+  // Look in the dock itself, not just a hidden one.
+  const show = page.getByRole('button', { name: 'Show panel', exact: true });
+  if (await show.count() > 0) await show.click();
+  await expect(page.getByRole('button', { name: 'Hide panel', exact: true })).toBeVisible();
+  await expect(page.locator('.editor-tab', { hasText: 'Side chat' })).toHaveCount(0);
+  expect(app.requests.filter(r => r.method === 'session.load' &&
+    r.params.session === 'session-1-sc-0a1b2c3d')).toHaveLength(1);
   expect(app.pageErrors).toEqual([]);
 });
