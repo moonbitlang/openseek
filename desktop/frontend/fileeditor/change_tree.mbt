@@ -72,7 +72,7 @@ fn change_tree_nodes(
     let path = child_path(parent, name)
     let children = change_tree_nodes(changes, path)
     if children is [child] && child.item is ChangeDirectory(_) {
-      nodes.push({ ..child, label: name + "/" + child.label, })
+      nodes.push({ ..child, label: "\{name}/\{child.label}", })
     } else {
       nodes.push({
         item: ChangeDirectory(path),

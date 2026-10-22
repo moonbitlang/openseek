@@ -16,7 +16,7 @@ fn cloud_files_subscription(ctx : Ctx, emit : @cmd.Emit[Msg]) -> @sub.Sub {
     return @sub.none
   }
   @sub.custom_sub(
-    "cloud-files:" + ctx.owner.key() + ":" + files.epoch.to_string(),
+    "cloud-files:\{ctx.owner.key()}:\{files.epoch}",
     Local,
     CloudFilesSubscription(ctx.owner, files, emit),
     (payload, scheduler) => {

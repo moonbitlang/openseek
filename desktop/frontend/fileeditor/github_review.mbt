@@ -127,7 +127,7 @@ fn github_review_local_line(
 
 ///|
 fn github_review_block_id(surface : String, key : String) -> String {
-  "github-review-block:" + surface + ":" + key
+  "github-review-block:\{surface}:\{key}"
 }
 
 ///|

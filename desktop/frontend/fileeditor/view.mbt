@@ -1209,9 +1209,7 @@ fn git_graph_placeholder(
     } else {
       ""
     }
-    let path_class = "git-graph-edge " +
-      graph_color_class(column.color) +
-      highlight_class
+    let path_class = "git-graph-edge \{graph_color_class(column.color)}\{highlight_class}"
     paths.push(
       @svg.path(
         class=path_class,
@@ -2761,11 +2759,11 @@ fn review_diff_mode_button(
       "review-mode-button"
     },
     title=match locale {
-      SimplifiedChinese => "使用" + mode.label(locale~) + "差异"
-      TraditionalChinese => "使用" + mode.label(locale~) + "差異"
-      Japanese => "使用" + mode.label(locale~) + "差分"
-      English => "Use " + mode.label(locale~) + " diff"
-      Spanish => "Usar diferencias de " + mode.label(locale~)
+      SimplifiedChinese => "使用\{mode.label(locale~)}差异"
+      TraditionalChinese => "使用\{mode.label(locale~)}差異"
+      Japanese => "使用\{mode.label(locale~)}差分"
+      English => "Use \{mode.label(locale~)} diff"
+      Spanish => "Usar diferencias de \{mode.label(locale~)}"
     },
     disabled=!enabled,
     on_click~,

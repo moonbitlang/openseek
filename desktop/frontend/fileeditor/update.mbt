@@ -1583,7 +1583,7 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
 /// The opaque token echoed by host watcher notifications. The namespace keeps
 /// the counter unique across frontend reloads.
 fn Ctx::watch_identity(self : Ctx, generation : Int32) -> String {
-  self.watch_namespace + ":" + generation.to_string()
+  "\{self.watch_namespace}:\{generation}"
 }
 
 ///|
