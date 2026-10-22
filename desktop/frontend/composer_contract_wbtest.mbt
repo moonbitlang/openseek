@@ -176,7 +176,7 @@ test "composer follow-up overrides route the message without changing the defaul
       (@composer.SteerNow, FollowupQueue),
     ] {
     let (choice, default) = pair
-    let model = running_model().with_endpoint(endpoint => {
+    let model = running_model().with_host_endpoint(endpoint => {
       ..endpoint,
       followup_behavior: default,
     })
