@@ -124,14 +124,36 @@ async fn AgentLoop::checkpoint_at_ceiling(
   let covered = session
   let session = self.apply_steer_inputs(session, steers)
   @emit.emit(AutoCompactionStarted(from_sequence=1, to_sequence~))
-  let summary = @compact.generate_compaction_summary(
-    client=self.summary_client,
-    covered,
-  ) catch {
-    error => {
+  let call = self.reserve_usage_call()
+  defer @async.protect_from_cancel(() => self.flush_usage_records())
+  let generated = try
+    @compact.generate_compaction_summary(client=self.summary_client, covered, on_attempt=attempt => {
+      self.queue_usage_record(
+        UsageRecord(
+          session,
+          call~,
+          attempt=attempt.attempt,
+          purpose="auto_compaction",
+          model=self.summary_client.model.to_string(),
+          response_id?=attempt.response_id,
+          outcome=attempt.outcome.name(),
+          report=attempt.report,
+        ),
+      )
+    })
+  catch {
+    error => Err(error)
+  } noraise {
+    summary => Ok(summary)
+  }
+  self.flush_usage_records()
+  let session = self.last_session
+  let summary = match generated {
+    Err(error) => {
       @emit.emit(AutoCompactionFailed(error="\{error}"))
       return (session, false)
     }
+    Ok(summary) => summary
   }
   let item = session.summary_item(
     content=summary,

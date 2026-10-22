@@ -160,6 +160,10 @@ pub async fn run_child(
   retry_attempts? : Int32,
   retry_backoff_ms? : Int32,
   session_id~ : String = "worker",
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session = (
+    session,
+    record,
+  ) => session.append_usage(record),
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> Result[WorkerReport?, String] {
   let input = match WorkerInput::parse(input) {
@@ -187,6 +191,7 @@ pub async fn run_child(
   let report = @agent_kind.execute_kind(
     session_id~,
     append_item?,
+    append_usage~,
     system_prompt=worker_system_prompt(),
     task=worker_task(input),
     tools=captured => {

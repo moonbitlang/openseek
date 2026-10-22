@@ -29,6 +29,10 @@ priv struct AgentLoop {
   /// first non-replay `Assistant` item — so every `usage` event lands in the
   /// log exactly once, whichever path records the response.
   mut unrecorded_usage : @deepseek.Usage?
+  mut unrecorded_record : @agent_session.UsageRecord?
+  mut next_usage_call : Int32
+  append_usage : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session
+  pending_attempts : Array[@agent_session.UsageRecord]
 }
 
 ///|
@@ -39,6 +43,7 @@ fn AgentLoop::AgentLoop(
   tools~ : @agent_tool.Tools,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   session~ : @agent_session.Session,
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> AgentLoop {
   {
@@ -65,6 +70,10 @@ fn AgentLoop::AgentLoop(
     ),
     last_session: session,
     unrecorded_usage: None,
+    unrecorded_record: None,
+    next_usage_call: session.next_usage_call(),
+    append_usage,
+    pending_attempts: [],
   }
 }
 
@@ -147,8 +156,9 @@ async fn AgentLoop::run(
   errdefer @async.protect_from_cancel(() => self.seal_unwinding_turn(failure))
   let outcome = try {
     for step in 0..<max_steps; session = session {
-      let session = self.prepare_step(session)
+      self.last_session = self.prepare_step(session)
       let response = self.chat(step)
+      let session = self.last_session
       // Usage only exists per response, so ceiling pressure is detected at
       // each exit point below by consulting this response's usage — no
       // pressure state exists anywhere, not even across lines: a pressured
@@ -310,6 +320,15 @@ async fn AgentLoop::run(
 /// bypasses catch, so the enclosing errdefer owns this protected cleanup.
 /// Every append is best effort: cleanup must not replace the original exit.
 async fn AgentLoop::seal_unwinding_turn(self : Self, failure : Error?) -> Unit {
+  // A model response may have arrived before a later operation failed.
+  // Preserve its accounting even when no Assistant could be committed.
+  if self.unrecorded_record is Some(record) {
+    self.queue_usage_record(record)
+    self.unrecorded_record = None
+  }
+  self.flush_usage_records() catch {
+    _ => ()
+  }
   let terminal : @agent_session.SessionItem = match failure {
     Some(error) => Terminal(Failed("agent failed: \{error}"))
     None => Terminal(Interrupted("cancelled"))
@@ -330,13 +349,22 @@ async fn AgentLoop::append(
 ) -> @agent_session.Session {
   let item : @agent_session.SessionItem = match (item, self.unrecorded_usage) {
     (Assistant(message), Some(usage)) if !message.is_replay() => {
-      self.unrecorded_usage = None
-      Assistant(message.with_usage(usage))
+      let message = message.with_usage(usage)
+      Assistant(
+        match self.unrecorded_record {
+          Some(record) => message.with_usage_record(record)
+          None => message
+        },
+      )
     }
     _ => item
   }
   let next = (self.append_item)(session, item)
   self.last_session = next
+  if item is Assistant(message) && message.usage_record() is Some(_) {
+    self.unrecorded_usage = None
+    self.unrecorded_record = None
+  }
   next
 }
 
@@ -502,8 +530,28 @@ async fn AgentLoop::prepare_step(
 ///|
 async fn AgentLoop::chat(self : Self, step : Int32) -> @deepseek.ChatResponse {
   @emit.emit(AgentStep(step=step + 1))
+  let session = self.last_session
+  let call = self.reserve_usage_call()
+  defer @async.protect_from_cancel(() => self.flush_usage_records())
   let response = self.client.chat(
     self.messages,
+    on_attempt=attempt => {
+      let record = @agent_session.UsageRecord(
+        session,
+        call~,
+        attempt=attempt.attempt,
+        purpose="agent",
+        model=self.client.model.to_string(),
+        response_id?=attempt.response_id,
+        outcome=attempt.outcome.name(),
+        report=attempt.report,
+      )
+      if attempt.outcome is Completed {
+        self.unrecorded_record = Some(record)
+      } else {
+        self.queue_usage_record(record)
+      }
+    },
     tools=self.tools.function_tools(),
     stream=StreamHandler(
       on_content_delta=delta => {
@@ -525,12 +573,15 @@ async fn AgentLoop::chat(self : Self, step : Int32) -> @deepseek.ChatResponse {
     ),
   )
   self.unrecorded_usage = Some(response.usage)
-  response.log_and_reasoning_content()
+  self.flush_usage_records()
+  let record = self.unrecorded_record.unwrap()
+  response.log_and_reasoning_content(record)
 }
 
 ///|
 fn @deepseek.ChatResponse::log_and_reasoning_content(
   response : Self,
+  record : @agent_session.UsageRecord,
 ) -> @deepseek.ChatResponse {
   // Reasoning first, so a consumer appending events in order shows the
   // thinking above the answer it led to.
@@ -540,7 +591,7 @@ fn @deepseek.ChatResponse::log_and_reasoning_content(
   if response.content != "" {
     @emit.emit(AssistantMessage(content=response.content))
   }
-  @emit.emit(Usage(usage=wire_usage(response.usage)))
+  @emit.emit_usage(Json(record), usage=wire_usage(response.usage))
   response
 }
 

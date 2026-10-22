@@ -8,6 +8,7 @@ async fn run_task_turn(
   matches : @argparse.Matches,
   session : @agent_session.Session,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session,
   api_key~ : String,
   model~ : @deepseek.Model,
   task~ : String,
@@ -99,6 +100,11 @@ async fn run_task_turn(
       content=Content([Text(task)]),
       append_item=(current, item) => {
         let next = append_item(current, item)
+        latest_session = next
+        next
+      },
+      append_usage=(current, record) => {
+        let next = append_usage(current, record)
         latest_session = next
         next
       },

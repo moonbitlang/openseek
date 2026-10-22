@@ -104,7 +104,10 @@ fn PlanCadence::record_plan_success(
 /// callback receives the current session snapshot and the next `SessionItem`;
 /// it must return the new session snapshot after appending that item. The agent
 /// uses the returned value as the current session for all later work, so the
-/// callback is the single source of truth for sequencing.
+/// callback is the single source of truth for sequencing. `append_usage` can
+/// persist attempts without a conversation item immediately; its default queues
+/// them in the session for the next append-item snapshot. Store-backed callers
+/// can wire `SessionStore::append_usage` alongside `SessionStore::append`.
 ///
 /// `append_item` is called for the initial user task, every assistant/tool/
 /// runtime/steer event that is committed, and the terminal event. If the
@@ -129,6 +132,10 @@ pub async fn run_turn_with_append(
   session~ : @agent_session.Session,
   task~ : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session = (
+    session,
+    record,
+  ) => session.append_usage(record),
   max_steps~ : Int32 = unbounded_max_steps,
   thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
@@ -146,6 +153,7 @@ pub async fn run_turn_with_append(
       session~,
       content=Content([Text(task)]),
       append_item~,
+      append_usage~,
       max_steps~,
       thinking~,
       api_url?,
@@ -254,6 +262,10 @@ pub async fn[X] run_turn_in_scope(
   content~ : @agent_session.Content,
   submission_id? : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session = (
+    session,
+    record,
+  ) => session.append_usage(record),
   max_steps~ : Int32 = unbounded_max_steps,
   thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
@@ -299,6 +311,7 @@ pub async fn[X] run_turn_in_scope(
     summary_client~,
     tools~,
     append_item~,
+    append_usage~,
     session~,
     on_goal_met?,
   ).run(session, max_steps)

@@ -76,7 +76,11 @@ interruption without delivering extra text callbacks or changing retry policy.
 Deduplicate by **`(session_id, call, attempt)`** across the event stream,
 assistant records, and standalone lines. Count each key once. A successful
 response whose assistant append later fails can appear first as a usage event
-and later as a supplemental record with that same key.
+and later as a supplemental record with that same key. Session identity is
+caller-owned: ephemeral convenience paths can reuse placeholder IDs such as
+`one-shot` or a kind name. Keep the enclosing invocation/request scope when
+combining those streams, or supply distinct session IDs to the session-based
+APIs. This change does not introduce a global ID service.
 
 Each subagent records calls in its own session. Existing child launch metadata
 links that session to its parent. `SubagentUsage`, `SubrunFinished` and run-result

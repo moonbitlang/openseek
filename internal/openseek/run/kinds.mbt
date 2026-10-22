@@ -125,6 +125,7 @@ priv struct KindLaunch {
   requested_max_steps : Int32?
   session_id : String
   append_item : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
+  append_usage : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session
   /// What arrived in this run's inbox since the last call, as steering
   /// input, when the kind takes instructions and the run has a session to
   /// keep an inbox in.
@@ -185,6 +186,7 @@ async fn Kind::run(
         workspace_root~,
         session_id=launch.session_id,
         append_item=launch.append_item,
+        append_usage=launch.append_usage,
         scratch_dir~,
         instructions?=launch.instructions,
       )
@@ -217,6 +219,7 @@ async fn Kind::run(
             workspace_root~,
             session_id=launch.session_id,
             append_item=launch.append_item,
+            append_usage=launch.append_usage,
             scratch_dir~,
           )
         Base(base) =>
@@ -236,6 +239,7 @@ async fn Kind::run(
             workspace_root~,
             session_id=launch.session_id,
             append_item=launch.append_item,
+            append_usage=launch.append_usage,
             scratch_dir~,
           )
       }
@@ -263,6 +267,7 @@ async fn Kind::run(
           retry_backoff_ms?,
           session_id=launch.session_id,
           append_item=launch.append_item,
+          append_usage=launch.append_usage,
         ) {
         Ok(report) => Ran(report=report.map(report => Json(report)))
         Err(reason) => Rejected(reason)
@@ -298,6 +303,7 @@ async fn Kind::run(
         workspace_root~,
         session_id=launch.session_id,
         append_item=launch.append_item,
+        append_usage=launch.append_usage,
       )
       Ran(report=report.map(report => Json(report)))
     }

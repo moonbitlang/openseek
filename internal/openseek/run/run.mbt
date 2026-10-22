@@ -241,6 +241,9 @@ async fn run_general(
         matches,
         session,
         append_item=(session, item) => turn.record(session.append(item)),
+        append_usage=(session, record) => {
+          turn.record(session.append_usage(record))
+        },
         session_scratch_dir~,
         api_key~,
         model~,
@@ -297,6 +300,9 @@ async fn run_general(
         matches,
         session,
         append_item=(session, item) => turn.record(store.append(session, item)),
+        append_usage=(session, record) => {
+          turn.record(store.append_usage(session, record))
+        },
         job_log_dir=store.job_logs_dir(id),
         session_scratch_dir=store.scratch_dir(id),
         api_key~,
@@ -335,16 +341,22 @@ async fn run_preset(
   workspace_root~ : String,
 ) -> KindOutcome {
   let (model, thinking, api_url) = @options.agent_settings(matches)
-  let (session_id, append_item, instructions) : (
+  let (session_id, append_item, append_usage, instructions) : (
     String,
     async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+    async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session,
     (async () -> Array[@agent_runtime.SteerInput])?,
   ) = match @setup.resolved_session_id(matches) {
     None => {
       if claim_token(matches) is Some(_) {
         fail("--claim names a claimed session, so it needs --session")
       }
-      (name, (session, item) => turn.record(session.append(item)), None)
+      (
+        name,
+        (session, item) => turn.record(session.append(item)),
+        (session, record) => turn.record(session.append_usage(record)),
+        None,
+      )
     }
     Some(id) => {
       let session_root = @setup.session_root(matches, workspace_root~)
@@ -396,6 +408,7 @@ async fn run_preset(
           }
           turn.record(next)
         },
+        (session, record) => turn.record(store.append_usage(session, record)),
         inbox.map(path => {
           let reader = @inbox.Reader(path)
           let launcher = launcher_of(id.value())
@@ -413,6 +426,7 @@ async fn run_preset(
     requested_max_steps,
     session_id,
     append_item,
+    append_usage,
     instructions,
   })
 }

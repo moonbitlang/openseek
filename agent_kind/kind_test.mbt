@@ -272,6 +272,13 @@ async test "a store-backed append_item persists the child transcript" {
     assert_eq(loaded.system_prompt(), "You are a test subagent.")
     // The durable transcript holds the whole turn, not just a header.
     assert_true(loaded.events().length() >= 3)
+    let records = loaded.usage_records()
+    assert_eq(records.length(), 1)
+    assert_eq(records[0].session_id, "parent-sr-1")
+    assert_eq(records[0].call, 1)
+    assert_eq(records[0].attempt, 1)
+    assert_eq(records[0].purpose, "agent")
+    assert_eq(records[0].report.total_tokens, Some(100_000))
   }
 }
 

@@ -24,6 +24,10 @@ pub async fn run_child(
   retry_backoff_ms? : Int32,
   workspace_root~ : String = ".",
   session_id~ : String = "explore",
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session = (
+    session,
+    record,
+  ) => session.append_usage(record),
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   scratch_dir? : String,
   instructions? : async () -> Array[@agent_runtime.SteerInput],
@@ -38,6 +42,7 @@ pub async fn run_child(
   @agent_kind.execute_kind(
     session_id~,
     append_item?,
+    append_usage~,
     instructions?,
     system_prompt=explore_system_prompt(),
     task=explore_task(query, hints, scratch_dir),

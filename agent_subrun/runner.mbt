@@ -23,8 +23,10 @@ pub enum SubrunTerminal {
 
 ///|
 /// The outcome of one sub-run: the parsed report when there is one, plus the
-/// cost the child actually spent — read from the child's own result file
-/// (`usage`, `steps`), so it is exact for the requests the child made.
+/// legacy successful-response counts read from the child's result file
+/// (`usage`, `steps`). Missing reporting fields, compaction and failed attempts
+/// require the child's session usage records; this summary is not a second
+/// source to add to those records.
 struct SubrunResult[T] {
   value : T?
   terminal : SubrunTerminal

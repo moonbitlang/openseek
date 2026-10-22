@@ -1,5 +1,6 @@
 import {
   "moonbitlang/core/env",
+  "moonbitlang/async",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/deepseek",
@@ -9,10 +10,9 @@ import {
 
 import {
   "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/fs",
 } for "test"
-
-import {
-  "moonbitlang/async",
-} for "wbtest"
 
 supported_targets = "+wasm+native"

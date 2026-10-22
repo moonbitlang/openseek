@@ -74,7 +74,9 @@ pub(all) enum SubagentUsage {
 ///|
 /// Where a subagent's usage counts came from.
 pub(all) enum SubagentUsageSource {
-  /// The child's own result file: exact for the requests it made.
+  /// The child's legacy result-file aggregate of successful agent responses.
+  /// It excludes compaction/failed attempts and cannot establish missing-field
+  /// reporting. Do not add it to the child's detailed session usage records.
   Result
   /// Summed from the child's transcript because it left no result: a lower
   /// bound when `unaccounted` says so.

@@ -57,12 +57,17 @@ pub async fn run(
   retry_backoff_ms? : Int32,
   workspace_root~ : String = ".",
   session_id~ : String = "pattern-repair",
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session = (
+    session,
+    record,
+  ) => session.append_usage(record),
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> PatternRepairReport? {
   let validated_pattern : Ref[String?] = { val: None, }
   @agent_kind.execute_kind(
     session_id~,
     append_item?,
+    append_usage~,
     system_prompt=pattern_repair_system_prompt(),
     task=pattern_repair_task(pattern, instruction),
     tools=captured => {

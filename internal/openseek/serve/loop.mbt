@@ -302,9 +302,14 @@ async fn run_serve(
     async fn compact_and_report(
       current : @agent_session.Session,
     ) -> @agent_session.Session noraise {
+      let mut latest = current
       @compact.compact_session(
         store?,
         current,
+        on_record=next => {
+          latest = next
+          session = next
+        },
         api_key~,
         model~,
         api_url?,
@@ -313,7 +318,7 @@ async fn run_serve(
       ) catch {
         error => {
           @emit.emit(CompactionFailed(error="\{error}"))
-          current
+          latest
         }
       }
     }
@@ -468,6 +473,14 @@ async fn run_serve(
           content~,
           submission_id?,
           on_goal_met?,
+          append_usage=(current, record) => {
+            let next = match store {
+              Some(store) => store.append_usage(current, record)
+              None => current.append_usage(record)
+            }
+            session = next
+            next
+          },
           append_item=(current, item) => {
             let next = match store {
               Some(store) => store.append(current, item)

@@ -47,9 +47,10 @@ fn compaction_messages(
 pub async fn generate_compaction_summary(
   client~ : @client.Client,
   session : @agent_session.Session,
+  on_attempt? : (@client.ChatAttempt) -> Unit,
 ) -> String {
   let messages = compaction_messages(session)
-  let response = client.chat(messages)
+  let response = client.chat(messages, on_attempt?)
   let summary = response.content.trim().to_owned()
   if summary.is_empty() {
     fail("compaction summary was empty")
@@ -83,6 +84,7 @@ async fn append_compaction_summary(
 pub async fn compact_session(
   store? : @store.SessionStore,
   session : @agent_session.Session,
+  on_record? : (@agent_session.Session) -> Unit,
   api_key~ : String,
   model~ : @deepseek.Model,
   api_url? : String,
@@ -103,10 +105,42 @@ pub async fn compact_session(
     retry_attempts?,
     retry_backoff_ms?,
   )
-  let summary = generate_compaction_summary(client~, session)
+  let mut current = session
+  let call = session.next_usage_call()
+  let attempts : Array[@agent_session.UsageRecord] = []
+  async fn flush() -> Unit {
+    while !attempts.is_empty() {
+      let record = attempts[0]
+      current = if store is Some(store) {
+        store.append_usage(current, record)
+      } else {
+        current.append_usage(record)
+      }
+      if on_record is Some(on_record) {
+        on_record(current)
+      }
+      attempts.remove(0) |> ignore
+    }
+  }
+  defer @async.protect_from_cancel(flush)
+  let summary = generate_compaction_summary(client~, session, on_attempt=attempt => {
+    let record = @agent_session.UsageRecord(
+      current,
+      call~,
+      attempt=attempt.attempt,
+      purpose="manual_compaction",
+      model=model.to_string(),
+      response_id?=attempt.response_id,
+      outcome=attempt.outcome.name(),
+      report=attempt.report,
+    )
+    attempts.push(record)
+    @emit.emit_usage(Json(record))
+  })
+  flush()
   let next = append_compaction_summary(
     store?,
-    session,
+    current,
     summary~,
     from_sequence~,
     to_sequence~,

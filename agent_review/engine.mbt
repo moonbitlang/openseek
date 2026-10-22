@@ -29,12 +29,17 @@ pub async fn run_review(
   retry_backoff_ms? : Int32,
   workspace_root~ : String = ".",
   session_id~ : String = "review",
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session = (
+    session,
+    record,
+  ) => session.append_usage(record),
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   scratch_dir? : String,
 ) -> ReviewReport? {
   @agent_kind.execute_kind(
     session_id~,
     append_item?,
+    append_usage~,
     system_prompt=review_system_prompt(),
     task=review_task(base, scratch_dir),
     tools=captured => {

@@ -36,6 +36,10 @@ pub async fn[T] execute_kind(
   retry_attempts? : Int32,
   retry_backoff_ms? : Int32,
   workspace_root~ : String = ".",
+  append_usage~ : async (@agent_session.Session, @agent_session.UsageRecord) -> @agent_session.Session = (
+    session,
+    record,
+  ) => session.append_usage(record),
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   instructions? : async () -> Array[@agent_runtime.SteerInput],
 ) -> T? {
@@ -70,6 +74,7 @@ pub async fn[T] execute_kind(
       session~,
       content=Content([Text(task)]),
       append_item=append,
+      append_usage~,
       max_steps~,
       thinking~,
       api_url?,
