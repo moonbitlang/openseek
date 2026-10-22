@@ -7,6 +7,12 @@ dev_build(
   input: "default_prompt.mbt.md",
   output: "generated_default_prompt.mbt",
 )
+
+dev_build(
+  rule: "md_to_mbt_string",
+  input: "moonbit_syntax_and_api.mbt.md",
+  output: "generated_moonbit_syntax_and_api.mbt",
+)
 // -missing_doc: the flagged symbols live in the system prompt's example code
 // blocks; doc comments there would change the prompt text the model sees,
 // which is an eval'd prompt change, not a documentation change.
