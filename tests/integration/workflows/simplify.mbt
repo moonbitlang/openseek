@@ -26,6 +26,14 @@ fn FakeHost::simplify_child(
       }
       // Every scout cites everything; the script keeps a citation only from
       // the scout whose packages own its file.
+      if self.mode == "simplify-queue" {
+        return Ok({
+          "answer": "one candidate per queued package",
+          "citations": [
+            for index in 1..<=9 => cite("queue/p\{index}/q.mbt", 1, "slice")
+          ],
+        })
+      }
       Ok({
         "answer": "candidates by package",
         "citations": [
@@ -67,7 +75,7 @@ fn FakeHost::simplify_child(
             "answer": if self.mode == "simplify-limit" {
               "VERDICT: ACCEPT probably\nlooks fine"
             } else {
-              "VERDICT: ACCEPT.\nbehavior unchanged"
+              "VERDICT: ACCEPT.\nbehavior unchanged\nboth rewrites keep the order"
             },
             "citations": [],
           })
@@ -126,6 +134,7 @@ fn FakeHost::simplify_child(
             head,
           )
         "delta" => ({ "kind": "no_changes" }, head)
+        _ if dir.has_prefix("queue/") => ({ "kind": "no_changes" }, head)
         // HEAD moved under this worker: its base is another commit.
         "gamma" =>
           (
@@ -230,6 +239,12 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
   write(repo + "/gamma/moon.pkg.json", "{}\n")
   write(repo + "/gamma/g.mbt", "fn g() -> Int {\n  7\n}\n")
   write(repo + "/empty/moon.pkg", "")
+  // More packages than the engine runs workers at once, for the queue.
+  for index in 1..<=9 {
+    @fs.mkdir(repo + "/queue/p\{index}", recursive=true)
+    write(repo + "/queue/p\{index}/moon.pkg", "")
+    write(repo + "/queue/p\{index}/q.mbt", "fn q() -> Int {\n  \{index}\n}\n")
+  }
   ignore(git(repo, ["init", "-q", "-b", "main"]))
   ignore(git(repo, ["add", "-A"]))
   ignore(git(repo, ["commit", "-q", "-m", "fixture"]))
@@ -269,8 +284,8 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
   for
     mode in [
       "simplify-publish", "simplify-limit", "simplify-incomplete", "simplify-unmergeable",
-      "simplify-refused", "simplify-review-missing", "simplify-pr-fails", "simplify-bad-number",
-      "simplify-subdir", "simplify-dirty", "simplify-ahead",
+      "simplify-refused", "simplify-review-missing", "simplify-pr-fails", "simplify-queue",
+      "simplify-bad-number", "simplify-subdir", "simplify-dirty", "simplify-ahead",
     ] {
     let host = fake_host("simplify", mode)
     host.fixture["head"] = head
@@ -297,7 +312,8 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
       "simplify-unmergeable" => ["--no-pr", "--path", "delta"]
       "simplify-refused" | "simplify-review-missing" =>
         ["--no-pr", "--path", "alpha"]
-      "simplify-bad-number" => ["--max-prs", "9"]
+      "simplify-queue" => ["--no-pr", "--max-prs", "16", "--path", "queue"]
+      "simplify-bad-number" => ["--max-prs", "17"]
       _ => []
     }
     let cwd = if mode == "simplify-subdir" { repo + "/alpha" } else { repo }
@@ -323,9 +339,10 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
     let gh_calls = read_calls(calls + "/gh.jsonl")
     let (succeeds, expected) : (Bool, Array[String]) = match mode {
       "simplify-publish" => {
+        // Eight worker slots: every worker starts before the first review.
         assert_eq(labels, [
           "simplify:scout-1", "simplify:scout-2", "simplify:alpha", "simplify:alpha/nested",
-          "simplify:beta", "simplify:delta", "simplify:review-1", "simplify:gamma",
+          "simplify:beta", "simplify:delta", "simplify:gamma", "simplify:review-1",
           "simplify:review-3",
         ])
         guard host.starts.filter_map(start => {
@@ -350,6 +367,16 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
           commits["alpha"],
         )
         assert_eq(gh_calls.length(), 3, msg=output)
+        // The body lists candidates with their lines and keeps the
+        // reviewer's line breaks.
+        guard gh_calls[2] is [.., "--body", String(body)] else {
+          fail("no PR body")
+        }
+        assert_true(body.contains("- `alpha/a.mbt:1`: pattern"), msg=body)
+        assert_true(
+          body.contains("behavior unchanged\nboth rewrites keep the order"),
+          msg=body,
+        )
         // The published change's local worker branch is gone; the rejected
         // one's stays for inspection.
         assert_eq(git(repo, ["branch", "--list", "work-0"]).trim(), "")
@@ -387,7 +414,7 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
             "kept locally: work-2 (git branch -D work-2)",
             "delta: candidates=1 worker=nothing changed",
             "gamma: candidates=1 worker=started from",
-            "packages=5 chosen=5 prs=1 accepted=1 rejected=1 skipped=3 tokens=108",
+            "packages=14 chosen=5 prs=1 accepted=1 rejected=1 skipped=3 tokens=108",
           ],
         )
       }
@@ -400,7 +427,7 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
         (
           true,
           [
-            "review=unreviewed: no verdict line", "packages=5 chosen=2 prs=0 accepted=0 rejected=0 skipped=1",
+            "review=unreviewed: no verdict line", "packages=14 chosen=2 prs=0 accepted=0 rejected=0 skipped=1",
           ],
         )
       }
@@ -442,11 +469,23 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
           // The report is still printed, and the failure ends the run.
           false,
           [
-            "but gh pr create failed", "packages=5 chosen=5 prs=0 accepted=1 rejected=1",
+            "but gh pr create failed", "packages=14 chosen=5 prs=0 accepted=1 rejected=1",
             "the sweep is incomplete: alpha: pushed to simplify/",
           ],
         )
-      "simplify-bad-number" => (false, ["--max-prs takes a number from 1 to 8"])
+      "simplify-queue" => {
+        // Nine workers, each started; the ninth waited for a slot instead of
+        // being refused by the fake host's cap of eight.
+        assert_eq(
+          labels.filter(label => label.has_prefix("simplify:queue/")),
+          [
+            for index in 1..<=9 => "simplify:queue/p\{index}"
+          ],
+        )
+        (true, ["packages=9 chosen=9 prs=0 accepted=0 rejected=0 skipped=9"])
+      }
+      "simplify-bad-number" =>
+        (false, ["--max-prs takes a number from 1 to 16"])
       "simplify-subdir" =>
         (false, ["run this from the repository root, not alpha/"])
       "simplify-dirty" =>

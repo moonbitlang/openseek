@@ -27,7 +27,7 @@ pub fn definition(
       #|Separate repositories or modules need no worktree. You get a notice when it ends;
       #|job_wait waits for it, job_output reads its outcome and report (for a worker:
       #|where its change is, and the git that takes it), job_stop stops it. Up to 16
-      #|run at once, 4 of them workers. Give each a complete brief: it does not see
+      #|run at once, 8 of them workers. Give each a complete brief: it does not see
       #|this conversation.
     ),
     schema=JsonSchema({

@@ -410,8 +410,9 @@ old generations from model tools.
   registry's in-process mutex; one engine per repository is still assumed.
 - PR 7: `worker` is a kind of `subagent` that takes a `worktree` argument
   (`{name, allowed_paths}`); a kind says whether it changes code, and only
-  such a kind takes one. At most 4 workers are live at once, within the
-  session's subagent cap: each builds and tests in its own worktree.
+  such a kind takes one. At most 4 workers were live at once (8 since the
+  simplify sweep), within the session's subagent cap: each builds and tests
+  in its own worktree.
   A first version also gave the model a `worktree` tool to integrate,
   continue, abort or discard after the job ended. It was replaced, after
   two live runs and an owner review ("too tied to git"), by a hand-off:

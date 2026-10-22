@@ -16,8 +16,9 @@ const MaxLive : Int32 = 16
 ///|
 /// How many of them may be workers: each builds and tests in a worktree or a
 /// directory of its own, which costs the machine, where a read-only child
-/// mostly waits on the model.
-const MaxWorkers : Int32 = 4
+/// mostly waits on the model. Eight keeps a simplify sweep's workers and
+/// their reviewers inside `MaxLive`.
+const MaxWorkers : Int32 = 8
 
 ///|
 /// How many subagents one script may start in all.

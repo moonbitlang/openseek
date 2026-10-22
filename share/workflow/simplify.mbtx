@@ -29,25 +29,25 @@ const Usage : String =
   #|start subagents.
   #|
   #|--path DIR (repeatable) sweeps only packages under DIR. --scouts N runs N
-  #|scouts (default 4, at most 8). --max-prs N changes at most N packages
-  #|(default 4, at most 8). --no-pr keeps accepted changes on their local
+  #|scouts (default 8, at most 16). --max-prs N changes at most N packages
+  #|(default 8, at most 16), at most 8 at once. --no-pr keeps accepted changes on their local
   #|branches. FOCUS, joined with spaces, is an emphasis for scouts and workers.
 
 ///|
-const DefaultScouts : Int = 4
+const DefaultScouts : Int = 8
 
 ///|
-const MaxScouts : Int = 8
+const MaxScouts : Int = 16
 
 ///|
-const DefaultPrs : Int = 4
+const DefaultPrs : Int = 8
 
 ///|
-const MaxPrs : Int = 8
+const MaxPrs : Int = 16
 
 ///|
-/// Workers the engine runs at once; a fifth start is refused, not queued.
-const LiveWorkers : Int = 4
+/// Workers the engine runs at once; a ninth start is refused, not queued.
+const LiveWorkers : Int = 8
 
 ///|
 const ScoutSteps : Int = 80

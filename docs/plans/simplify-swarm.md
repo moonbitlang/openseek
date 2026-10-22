@@ -36,8 +36,9 @@ reviewing it. The host already provides everything the script needs:
   `unmergeable {defects}` or `capture_failed {reasons}`, plus the worker's own
   report (`status` `done`, `partial` or `failed`, `summary`,
   `verification`). See [subagents](subagents.md), "As built", PR 7.
-- At most 16 children run at once per session, 4 of them workers, and a script
-  may start at most 64. A start past a limit is refused with a reason, never
+- At most 16 children run at once per session, 8 of them workers (raised from
+  4 by this change, so a sweep's workers and their reviewers fit together),
+  and a script may start at most 64. A start past a limit is refused with a reason, never
   queued.
 - The mbtx policy admits every command the script runs: `git rev-parse`,
   `git status`, `git ls-files`, `git merge-base`, `git push`, `gh repo view`,
@@ -52,9 +53,9 @@ reviewing it. The host already provides everything the script needs:
 
 - `--path DIR` (repeatable): sweep only packages under these directories.
   Default: the whole repository.
-- `--scouts N`: how many scouts run in parallel (default 4, at most 8).
+- `--scouts N`: how many scouts run in parallel (default 8, at most 16).
 - `--max-prs N`: at most this many packages are changed, one PR each (default
-  4, at most 8).
+  8, at most 16).
 - `--no-pr`: stop after review; accepted changes stay on their local branches
   and are listed. Nothing is pushed.
 - `FOCUS`: free text joined with spaces, e.g. `pattern matching in parsers`.
@@ -158,7 +159,7 @@ default step budget), with:
   - Report `done` only when every required check passed, and name each
     command and its result in `verification`.
 
-At most 4 workers run at once. The script starts up to 4, then starts the next
+At most 8 workers run at once. The script starts up to 8, then starts the next
 whenever one ends (`job_wait` returns when any ends). A refused start is
 recorded for that package, and the queue continues.
 
@@ -295,9 +296,10 @@ and `moon info` with its path, and confirm the `.mbti` is unchanged.
 
 ## Budget
 
-- **Children:** at most 8 scouts, 8 workers and 8 reviewers, so 24 starts,
-  inside the 64-start quota. Live at once: at most 8 scouts, then at most 4
-  workers plus their reviewers.
+- **Children:** at most 16 scouts, 16 workers and 16 reviewers, so 48 starts,
+  inside the 64-start quota. Live at once: at most 16 scouts (the whole
+  session's allowance, so the default is 8), then at most 8 workers plus their
+  reviewers, which also fits in 16.
 - **Steps:** scouts 80, workers the kind's default (300), reviewers 60.
 - **Tokens:** each child's usage is summed and printed. There is no token
   budget flag in the first version; `--max-prs` and `--scouts` are the cost
@@ -343,8 +345,9 @@ repository as `origin` and a stub `gh` (the same executable trick the
 - Citations map to packages; citations naming other files, and duplicates,
   are dropped; the top `--max-prs` packages are chosen in rank order.
 - Workers get valid, distinct names and disjoint file lists, and never more
-  than 4 run at once (the fake host refuses a fifth, as the real one does). A
-  refused worker is reported, and the rest continue.
+  than 8 run at once: nine packages queue past the cap, and the fake host
+  refuses a ninth live worker, as the real one does. A refused worker is
+  reported, and the rest continue.
 - Only a `committed` capture on the pinned base with a `done` report reaches
   review. `partial`, `no_changes`, `unmergeable`, a moved base and a worker
   without a report do not.

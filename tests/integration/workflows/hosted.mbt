@@ -73,11 +73,11 @@ fn FakeHost::answer(
         label.has_prefix("simplify:review-") {
         return reply("error: 16 subagents are already running", is_error=true)
       }
-      // The engine runs at most 4 workers at once and refuses a fifth.
+      // The engine runs at most 8 workers at once and refuses a ninth.
       if self.name == "simplify" &&
         arguments is { "kind": "worker", .. } &&
-        self.workers.filter(id => self.running.contains(id)).length() >= 4 {
-        return reply("error: 4 workers are already running", is_error=true)
+        self.workers.filter(id => self.running.contains(id)).length() >= 8 {
+        return reply("error: 8 workers are already running", is_error=true)
       }
       self.starts.push(arguments)
       let job = "job-\{self.starts.length()}"

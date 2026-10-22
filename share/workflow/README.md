@@ -149,11 +149,11 @@ tracked files. Unless `--no-pr` is given, HEAD must be an ancestor of
 `origin/HEAD` and `gh` must be signed in; all of this is checked before any
 child starts. The packages are the directories of tracked `moon.pkg` files
 (`--path DIR`, repeatable, narrows them), each with its own non-generated
-`.mbt` files. `--scouts N` read-only `explore` children (default 4, at most
-8, 80 steps each) split the packages among them and cite candidates. The
-packages with the most candidates, at most `--max-prs N` (default 4, at most
-8), each get one `worker` in its own worktree, allowed to change only that
-package's source files, at most 4 at once. A change goes on to review only
+`.mbt` files. `--scouts N` read-only `explore` children (default 8, at most
+16, 80 steps each) split the packages among them and cite candidates. The
+packages with the most candidates, at most `--max-prs N` (default 8, at most
+16), each get one `worker` in its own worktree, allowed to change only that
+package's source files, at most 8 at once. A change goes on to review only
 when it is committed on the pinned HEAD by a worker that reported `done`.
 Then a fresh `explore` child (60 steps) reads it as git objects and answers
 `VERDICT: ACCEPT` or `VERDICT: REJECT` on the first line. Each accepted change
