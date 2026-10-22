@@ -289,22 +289,21 @@ pub impl ToJson for ApprovalReply with fn to_json(self) {
 /// with nothing in flight sends.
 pub impl FromJson for RunsReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.runs reply")
-  let runs : Array[StartedPayload] = []
-  for index, raw in object.required_array("runs") {
-    runs.push(@json.from_json(raw, path=path.add_key("runs").add_index(index)))
-  }
-  let settled : Array[RunSettlementPayload] = []
-  for index, raw in object.required_array("settled") {
-    settled.push(
-      @json.from_json(raw, path=path.add_key("settled").add_index(index)),
-    )
-  }
-  let approvals : Array[PendingApprovalPayload] = []
-  for index, raw in object.required_array("approvals") {
-    approvals.push(
-      @json.from_json(raw, path=path.add_key("approvals").add_index(index)),
-    )
-  }
+  let runs : Array[StartedPayload] = [
+    for index, raw in object.required_array("runs") => {
+      @json.from_json(raw, path=path.add_key("runs").add_index(index))
+    }
+  ]
+  let settled : Array[RunSettlementPayload] = [
+    for index, raw in object.required_array("settled") => {
+      @json.from_json(raw, path=path.add_key("settled").add_index(index))
+    }
+  ]
+  let approvals : Array[PendingApprovalPayload] = [
+    for index, raw in object.required_array("approvals") => {
+      @json.from_json(raw, path=path.add_key("approvals").add_index(index))
+    }
+  ]
   let approval_generation = object.required_int("approval_generation")
   guard approval_generation >= 0 else {
     raise JsonDecodeError((path, "negative approval generation"))

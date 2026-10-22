@@ -13,7 +13,7 @@ fn normalize_pr_url(
     !rest.is_empty() &&
     rest.any(part => !part.is_empty()) &&
     !url.contains("\\") &&
-    !url.iter().any(c => c <= ' ' || c == '\u007f') else {
+    !url.any(c => c <= ' ' || c == '\u007f') else {
     raise JsonDecodeError(
       (path.add_key("url"), "expected an HTTPS pull request or branch URL"),
     )
