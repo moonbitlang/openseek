@@ -5056,6 +5056,16 @@ fn update_msg(
     }
     TranscriptLinkOpened(slot~, path~) => {
       guard model.transcript_on_screen(slot) else { return (@cmd.none, model) }
+      if model.side_chat_slot_source(slot) is Some(source) {
+        return request_open_path(
+          dispatch,
+          model,
+          path,
+          None,
+          return_to?=model.active_checkout().map(active => active.owner),
+          source~,
+        )
+      }
       update_msg(dispatch, OpenFile(path), model)
     }
     TranscriptLocationOpened(slot~, target) => {
@@ -5070,6 +5080,17 @@ fn update_msg(
           owner,
           target.file,
           target.range,
+        )
+      }
+      if model.side_chat_slot_source(slot) is Some(source) {
+        return request_open_path(
+          dispatch,
+          model,
+          target.file,
+          target.range,
+          annotation?=target.annotation,
+          return_to?=model.active_checkout().map(active => active.owner),
+          source~,
         )
       }
       update_msg(

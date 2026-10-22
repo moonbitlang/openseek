@@ -430,6 +430,22 @@ fn Model::side_chat_transcript_input(
 }
 
 ///|
+/// The side chat whose dock transcript `slot` names, as the checkout a file
+/// opened from it resolves in. Its tab lands in the dock on screen, its
+/// conversation's, while the side chat stays what opened it.
+fn Model::side_chat_slot_source(self : Model, slot : String) -> ActiveCheckout? {
+  guard self.mounted_side_chat() is Some(conv) &&
+    side_chat_slot_key({ channel: conv.device, session: conv.session_id, }) ==
+    slot else {
+    return None
+  }
+  Some({
+    owner: { channel: conv.device, session: conv.session_id, },
+    placement: self.conversation_placement(conv),
+  })
+}
+
+///|
 /// Whether the transcript keyed `slot` is on screen: the column's, or the
 /// side chat's in the dock. An action from a transcript that has left is
 /// dropped, as its conversation is no longer the one the reader acts on.

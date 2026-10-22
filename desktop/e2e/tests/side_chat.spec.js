@@ -335,3 +335,21 @@ test('a copied message keeps its own changes popup in the side chat', async ({ p
   await expect(popup.locator('.changes-preview')).toContainText('let saved_value = 2');
   expect(app.pageErrors).toEqual([]);
 });
+
+test('a file link in the side chat transcript opens as the side chat, in its parent dock', async ({ page }) => {
+  const side = [
+    ...mainHistory,
+    event(3, 'user', { content: 'Where is the entry point?' }),
+    event(4, 'terminal', { kind: 'finished', message: 'Tokens are lexemes. See [the entry](src/main.mbt).' }),
+  ];
+  const app = await setup(page, { side });
+  await page.locator('#side-chat-transcript').getByRole('button', { name: 'the entry', exact: true }).click();
+  // The host resolves the path for the side chat, whose tools then reach
+  // what opens; the tab shows in the conversation's dock beside it.
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'host.open_path' || request.method === 'host.open_path_preview')?.params)
+    .toMatchObject({ session: 'session-1-sc-0a1b2c3d', path: 'src/main.mbt' });
+  await expect(page.locator('.editor-tab.active', { hasText: 'main.mbt' })).toBeVisible();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
+  expect(app.pageErrors).toEqual([]);
+});
