@@ -49,6 +49,11 @@ fn FakeHost::answer(
         (self.mode == "busy-last" && self.starts.length() + 1 == last) {
         return reply("error: 4 subagents are already running", is_error=true)
       }
+      // A swarm whose session fills up just as one lens starts.
+      if self.mode == "swarm-incomplete" &&
+        arguments is { "label": "review:architecture", .. } {
+        return reply("error: 16 subagents are already running", is_error=true)
+      }
       self.starts.push(arguments)
       let job = "job-\{self.starts.length()}"
       self.reports[job] = child_report(self.name, self.mode, job, arguments)
@@ -122,6 +127,9 @@ fn child_report(
 ) -> Result[Json, String] raise {
   if name == "review" {
     return Ok(review_report(mode, arguments))
+  }
+  if name == "review-swarm" {
+    return swarm_child(mode, arguments)
   }
   let steps = if name == "repo-map" { 12 } else { 16 }
   assert_true(arguments is { "kind": "explore", .. })
@@ -376,6 +384,347 @@ async fn verify_review(root : String, temp : String) -> Unit {
       mode == "blockers",
       msg=output,
     )
+    println("review: \{mode} passed")
+  }
+  verify_review_swarm(repo, artifact)
+}
+
+///|
+/// A finding in the review contract's shape.
+fn swarm_finding(
+  file : String,
+  line : Int32?,
+  severity : String,
+  title : String,
+) -> Json {
+  {
+    "file": file,
+    "line": match line {
+      Some(line) => Json::number(line.to_double())
+      None => Json::null()
+    },
+    "severity": severity,
+    "category": "correctness",
+    "title": title,
+    "detail": "detail of " + title,
+    "suggestion": null,
+  }
+}
+
+///|
+/// A report in the review contract's shape.
+fn swarm_report(
+  findings : Array[Json],
+  summary : String,
+  build~ : String = "skipped",
+  tests~ : String = "skipped",
+  files~ : Array[String] = [],
+) -> Json {
+  {
+    "schema_version": 1,
+    "scope": {
+      "base": "abc",
+      "head": "WORKTREE",
+      "files": Json::array(files.map(Json::string)),
+    },
+    "findings": Json::array(findings),
+    "summary": summary,
+    "stats": {
+      "files_reviewed": Json::number(files.length().to_double()),
+      "findings": Json::number(findings.length().to_double()),
+      "build": build,
+      "tests": tests,
+    },
+  }
+}
+
+///|
+/// One swarm child: a lens reviewer (`review:<lens>`, 100 steps) answered
+/// with that lens's scripted findings, or a verifier (`review:verify-N`, 40
+/// steps) answered according to the allegation its brief names. Checks first
+/// that the script framed each child as the design says.
+fn swarm_child(mode : String, arguments : Json) -> Result[Json, String] raise {
+  guard arguments
+    is {
+      "kind": "review",
+      "label": String(label),
+      "max_steps": Number(steps, ..),
+      "input": { "goal": String(goal), .. } as input,
+      ..
+    } else {
+    fail("unexpected swarm start: \{arguments.stringify()}")
+  }
+  // The baseline reaches every child, lens and verifier alike.
+  if mode == "swarm-merge" {
+    assert_true(
+      input is { "sha": "abc", "dirty": true, .. },
+      msg=input.stringify(),
+    )
+  } else {
+    assert_false(input is { "sha": _, .. }, msg=input.stringify())
+  }
+  match label.strip_prefix("review:verify-") {
+    Some(_) => {
+      assert_eq(steps, 40.0)
+      // The original criteria and the allegation, kept apart.
+      assert_true(
+        goal.contains(
+          "## The criteria the work is held to (verbatim)\nCheck the cache",
+        ),
+        msg=goal,
+      )
+      assert_true(goal.contains("## The allegation"))
+      verifier_reply(goal)
+    }
+    None => {
+      assert_eq(steps, 100.0)
+      let lens = label.strip_prefix("review:").unwrap().to_owned()
+      assert_true(goal.has_prefix("Check the cache"), msg=goal)
+      assert_true(goal.contains("Review lens: \{lens}"), msg=goal)
+      lens_reply(mode, lens)
+    }
+  }
+}
+
+///|
+/// What each lens reports in each scenario.
+fn lens_reply(mode : String, lens : String) -> Result[Json, String] {
+  let a = "src/a.mbt"
+  match (mode, lens) {
+    ("swarm-merge", "correctness") =>
+      Ok(
+        swarm_report(
+          [
+            swarm_finding(a, Some(10), "high", "Off by one in range end"),
+            swarm_finding(
+              a,
+              Some(11),
+              "medium",
+              "Missing error propagation on close",
+            ),
+          ],
+          "correctness summary",
+          files=[a],
+        ),
+      )
+    ("swarm-merge", "architecture") =>
+      Ok(
+        swarm_report(
+          [
+            // The same claim as correctness's, two lines away: merged.
+            swarm_finding("./" + a, Some(12), "blocker", "Range end off by one"),
+            // Another claim at the same place: kept apart.
+            swarm_finding(a, Some(10), "high", "Unbounded cache growth"),
+          ],
+          "architecture summary",
+          files=["src/b.mbt"],
+        ),
+      )
+    ("swarm-merge", "tests") =>
+      Ok(swarm_report([], "tests summary", build="pass", tests="fail"))
+    ("swarm-refute-blocker", _) =>
+      Ok(
+        swarm_report(
+          [swarm_finding(a, Some(3), "blocker", "Claimed deadlock in flush")],
+          "one blocker",
+        ),
+      )
+    ("swarm-unverified", "correctness") =>
+      Ok(
+        swarm_report(
+          [
+            swarm_finding(a, Some(1), "high", "Inconclusive claim"),
+            swarm_finding(a, Some(40), "high", "Claim without verdict"),
+          ],
+          "correctness summary",
+        ),
+      )
+    ("swarm-unverified", "tests") =>
+      Ok(
+        swarm_report(
+          [
+            swarm_finding(
+              "src/b.mbt",
+              None,
+              "blocker",
+              "Elsewhere confirmed claim",
+            ),
+            swarm_finding(
+              "src/c.mbt",
+              Some(5),
+              "high",
+              "Doubly confirmed claim",
+            ),
+          ],
+          "tests summary",
+        ),
+      )
+    ("swarm-incomplete", "correctness") =>
+      Ok(
+        swarm_report(
+          [swarm_finding(a, Some(2), "medium", "A medium finding")],
+          "correctness summary",
+        ),
+      )
+    ("swarm-incomplete", "tests") => Err("failed: step limit")
+    ("swarm-verify-off" | "swarm-budget", "correctness") =>
+      Ok(
+        swarm_report(
+          [swarm_finding(a, Some(2), "high", "A high finding")],
+          "correctness summary",
+        ),
+      )
+    _ => Ok(swarm_report([], "\{lens} found nothing"))
+  }
+}
+
+///|
+/// A verifier's answer, chosen by the allegation's title.
+fn verifier_reply(goal : String) -> Result[Json, String] {
+  let title = match
+    goal.split("\n").find_first(line => line.has_prefix("Title: ")) {
+    Some(line) => line.strip_prefix("Title: ").unwrap().to_owned()
+    None => return Err("the verifier brief names no title: \{goal}")
+  }
+  let restated = swarm_finding("src/a.mbt", Some(10), "low", title)
+  match title {
+    // A verifier may not re-grade: "low" here must not demote the blocker.
+    "Off by one in range end" | "Range end off by one" =>
+      Ok(swarm_report([restated], "VERDICT: CONFIRMED\nreproduced it"))
+    "Unbounded cache growth" | "Claimed deadlock in flush" =>
+      Ok(
+        swarm_report([], "VERDICT: REFUTED\nthe cache is bounded by its caller"),
+      )
+    "Inconclusive claim" =>
+      Ok(swarm_report([], "VERDICT: INCONCLUSIVE\nno way to run it"))
+    "Claim without verdict" => Ok(swarm_report([], "looked around, unsure"))
+    "Elsewhere confirmed claim" =>
+      // Confirmed, but about a different file than the allegation's.
+      Ok(swarm_report([restated], "VERDICT: CONFIRMED\nyes"))
+    "Doubly confirmed claim" =>
+      Ok(
+        swarm_report(
+          [
+            swarm_finding("src/c.mbt", Some(5), "high", title),
+            swarm_finding("src/c.mbt", Some(6), "high", "and another"),
+          ],
+          "VERDICT: CONFIRMED\nyes",
+        ),
+      )
+    _ => Err("unexpected allegation: \{title}")
+  }
+}
+
+///|
+/// Swarm mode against the fake host: who starts, what merges, how each
+/// verdict is read, and when the run fails.
+async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
+  let criteria = "Check the cache"
+  for
+    mode in [
+      "swarm-merge", "swarm-refute-blocker", "swarm-unverified", "swarm-incomplete",
+      "swarm-verify-off", "swarm-budget", "swarm-unknown-lens", "swarm-verify-alone",
+    ] {
+    let host = fake_host("review-swarm", mode)
+    let args = match mode {
+      "swarm-merge" => ["--sha", "abc", "--dirty", "--swarm", "--", criteria]
+      "swarm-refute-blocker" => ["--lens", "correctness", criteria]
+      "swarm-unverified" =>
+        ["--lens", "correctness", "--lens", "tests", criteria]
+      "swarm-incomplete" => ["--swarm", criteria]
+      "swarm-verify-off" => ["--swarm", "--verify", "0", criteria]
+      "swarm-budget" => ["--swarm", "--max-tokens", "30", criteria]
+      "swarm-unknown-lens" => ["--lens", "style", criteria]
+      _ => ["--verify", "2", criteria]
+    }
+    let (code, output) = run_against(Some(host), artifact, args, cwd=repo)
+    let labels = host.starts.map(start => {
+      match start {
+        { "label": String(label), .. } => label
+        _ => ""
+      }
+    })
+    let (succeeds, started, expected) : (Bool, Array[String], Array[String]) = match
+      mode {
+      "swarm-merge" =>
+        (
+          false,
+          [
+            "review:correctness", "review:architecture", "review:tests", "review:verify-1",
+            "review:verify-2",
+          ],
+          [
+            // The merged claim keeps the blocker; the verifier's "low" is ignored.
+            "findings=2 blockers=1 tokens=60 lenses=3/3 verified=1 refuted=1 unverified=1",
+            "[found by: correctness, architecture]", "Refuted: Unbounded cache growth (src/a.mbt:10): the cache is bounded by its caller",
+            "\"files\":[\"src/a.mbt\",\"src/b.mbt\"]", "\"build\":\"pass\"", "\"tests\":\"fail\"",
+            "lens tests: reported, findings=0, files=0, tokens=12", "1 blocker finding(s)",
+          ],
+        )
+      "swarm-refute-blocker" =>
+        (
+          true,
+          ["review:correctness", "review:verify-1"],
+          ["findings=0 blockers=0 tokens=24 lenses=1/1 verified=0 refuted=1"],
+        )
+      "swarm-unverified" =>
+        (
+          false,
+          [
+            "review:correctness", "review:tests", "review:verify-1", "review:verify-2",
+            "review:verify-3", "review:verify-4",
+          ],
+          [
+            "findings=4 blockers=1 tokens=72 lenses=2/2 verified=0 refuted=0 unverified=4",
+            "[unverified: inconclusive]", "[unverified: no verdict line]", "[unverified: the verdict did not match its findings]",
+          ],
+        )
+      "swarm-incomplete" =>
+        (
+          false,
+          ["review:correctness", "review:tests"],
+          [
+            "lens architecture: not started: error: 16 subagents are already running",
+            "lens tests: no report: failed: step limit", "A medium finding", "2 lens(es) did not report: the review is incomplete",
+          ],
+        )
+      "swarm-verify-off" =>
+        (
+          true,
+          ["review:correctness", "review:architecture", "review:tests"],
+          ["verified=0 refuted=0 unverified=1"],
+        )
+      "swarm-budget" =>
+        (
+          true,
+          ["review:correctness", "review:architecture", "review:tests"],
+          [
+            "verify: skipped, the lenses spent 36 tokens of --max-tokens 30", "unverified=1",
+          ],
+        )
+      "swarm-unknown-lens" =>
+        (
+          false,
+          [],
+          [
+            "unknown lens style: the lenses are correctness, architecture, tests, compatibility, security",
+          ],
+        )
+      _ =>
+        (
+          false,
+          [],
+          ["--verify and --max-tokens apply only with --swarm or --lens"],
+        )
+    }
+    assert_eq(code == 0, succeeds, msg=output)
+    assert_eq(labels, started, msg=output)
+    for part in expected {
+      assert_true(
+        output.contains(part),
+        msg="\{mode}: missing \{part}\n\{output}",
+      )
+    }
     println("review: \{mode} passed")
   }
 }

@@ -1,6 +1,7 @@
 # Review swarm
 
-Status: design, revised after a Codex (high) design review.
+Status: implemented in `share/workflow/review.mbtx`; revised after a Codex
+(high) design review.
 
 `@builtin/review.mbtx` starts one `review` child to audit the worktree against
 some criteria. This plan adds a swarm mode: several review children, each
@@ -43,6 +44,8 @@ exactly what ran. The host already provides everything the script needs:
 - `--verify N`: verify at most N findings (default 6, 0 turns verification
   off).
 - `--max-tokens N`: a soft budget, checked between phases (see Budget).
+- `--verify` or `--max-tokens` without swarm mode is an error rather than
+  being ignored.
 
 Criteria resolution (`audit_context`, `--sha`, `--dirty`, the joined
 arguments) is shared with single mode and unchanged.
@@ -135,8 +138,8 @@ Each finding of severity `blocker` or `high` (most severe first, at most
     or unknown verdict line, a verdict whose findings don't fit it (for
     example `CONFIRMED` with an unrelated file or with two findings), and a
     verifier that was refused or ended without a report. The finding stays,
-    with `[unverified]` in its detail. A blocker nobody could check still
-    blocks.
+    with `[unverified: <reason>]` in its detail. A blocker nobody could check
+    still blocks.
 - **Severity never changes.** Verification only confirms or removes a
   claim. A verifier doesn't own the criteria's notion of `blocker` ("the goal
   is not met"), so letting it re-grade would let a confirmed blocker turn
@@ -180,9 +183,13 @@ The script prints, in order:
    - `summary`: each lens's one-line summary, prefixed with its name.
 2. One line per lens: `lens <name>: reported, findings=N, files=F, tokens=T`,
    or why it has no report.
+   When the token budget skipped verification, a
+   `verify: skipped, the lenses spent T tokens of --max-tokens N` line
+   follows.
 3. `Refuted:` lines, one per dropped finding, when there are any.
 4. A verdict line extending today's:
-   `findings=N blockers=M tokens=T lenses=L verified=V refuted=R unverified=U`.
+   `findings=N blockers=M tokens=T lenses=R/L verified=V refuted=X unverified=U`,
+   where `R` of the `L` lenses reported.
 
 The script fails (nonzero exit, so the caller can't read past it) when:
 

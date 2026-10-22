@@ -107,6 +107,30 @@ blocker so the caller cannot read past it. `--sha COMMIT` (with `--dirty`
 when the worktree was already dirty at that commit) overrides the engine's
 baseline; `--help` prints usage.
 
+Swarm mode runs several reviewers in parallel instead of one, each from its
+own angle (a *lens*). `--swarm` picks `correctness`, `architecture` and
+`tests`; `--lens NAME`, repeatable, picks lenses instead (`compatibility`
+and `security` are also available). Each lens reviewer gets the same
+criteria and baseline, narrowed to its lens, and 100 steps. Their findings
+are merged: two findings are one claim only when they come from different
+lenses, sit in the same file within 3 lines, and share at least half their
+title words. Then each blocker or high finding, at most `--verify N` of them
+(default 6, at most 8, `0` for none), goes to a fresh reviewer (40 steps)
+that is given the original criteria and the allegation and tries to refute
+it. Its summary must open with `VERDICT: CONFIRMED`, `REFUTED` or
+`INCONCLUSIVE`; a refuted finding is dropped and printed on a `Refuted:`
+line, and anything that isn't a clean confirmation or refutation leaves the
+finding `[unverified]`. Verification never changes a severity, so an
+unverified blocker still fails the run. `--max-tokens N` skips verification
+once the lenses have spent N tokens.
+
+Swarm mode prints the merged report in the same JSON shape, one line per
+lens, the refuted findings, and
+`findings=N blockers=M tokens=T lenses=R/L verified=V refuted=X unverified=U`.
+It fails on a remaining blocker, and when any lens was refused or did not
+report: an incomplete swarm is never a clean result. The design is in
+[docs/plans/review-swarm.md](../../docs/plans/review-swarm.md).
+
 The other two start read-only `explore` children together, wait for all of
 them, and read each report. Change review runs three scouts, allowing 16 steps each.
 Repo-map runs two scouts, allowing 12 steps each, and displays the root
