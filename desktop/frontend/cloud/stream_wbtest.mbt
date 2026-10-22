@@ -218,3 +218,53 @@ test "Cloud observer failure retains the confirmed queue as read-only" {
     recovered.conversations["session"].control.unwrap().queue == control.queue,
   )
 }
+
+///|
+test "Cloud current terminal settles after the idle control snapshot" {
+  for
+    terminal in [
+      ({ "status": "completed", "result": { "status": "ok" } } : Json),
+      (
+        {
+          "status": "failed",
+          "result": { "status": "aborted", "reason": "interrupted" },
+        } : Json),
+    ] {
+    let (state, stream) = watch_fixture(controls_fixture())
+    let control = controls_fixture().conversations["session"].control.unwrap()
+    let state = watch_snapshot(state, stream, Some("task"), 2, control)
+    let partial = watch_event(state, stream, "task", 3, "assistant_delta", {
+      "content": "unfinished",
+    })
+    let idle = watch_snapshot(partial, stream, Some("task"), 4, {
+      ..control,
+      active_task_id: None,
+      status: Idle,
+    })
+    let before = idle.conversations["session"]
+    assert_false(before.generating)
+    let finished = watch_event(
+      idle, stream, "task", 5, "task_finished", terminal,
+    )
+    let after = finished.conversations["session"]
+    assert_true(after.streaming_response is None)
+    assert_true(after.heartbeat is None)
+    assert_true(
+      after.events.any(event => {
+        event.kind == "task_finished" && event.data == terminal
+      }),
+    )
+    assert_true(after.request > before.request)
+    assert_eq(after.last_seq, Some(5))
+    assert_true(
+      watch_event(finished, stream, "task", 5, "task_finished", terminal) ==
+      finished,
+    )
+    let next = watch_event(finished, stream, "next", 1, "task_started", {
+      "previous_task_id": "task",
+    })
+    assert_true(
+      watch_event(next, stream, "task", 6, "task_finished", terminal) == next,
+    )
+  }
+}

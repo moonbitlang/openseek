@@ -428,7 +428,7 @@ export class CloudHarness {
         this.generating.delete(session);
         state.active_task_id = null;
         state.status = 'idle';
-        state.paused = data.status !== 'completed' || old.data.status === 'stopping';
+        state.paused = old.data.paused || data.status !== 'completed' || old.data.status === 'stopping';
       }
       if (kind === 'steer_applied' || kind === 'steer_dropped') {
         state.steers = state.steers.filter(item => item.submission_id !== data.submission_id);
@@ -475,7 +475,12 @@ export class CloudHarness {
   }
 
   async finishTask(session = sessionA, status = 'completed') {
-    const task = this.controlState(session).task_id;
+    const snapshot = this.controlState(session);
+    const task = snapshot.task_id;
+    await this.publishControl(session, {
+      active_task_id: null, status: 'idle',
+      paused: status !== 'completed' || snapshot.data.status === 'stopping',
+    });
     const result = { version: 1, request_id: task, session, status: status === 'completed' ? 'ok' : 'aborted', reason: status === 'completed' ? undefined : 'interrupted', usage: {}, steps: 1 };
     const data = { status, result };
     await this.emitSessionEvent(session, 'task_finished', data);

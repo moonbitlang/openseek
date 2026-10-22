@@ -799,6 +799,7 @@ pub fn update(
         )
       }
       guard event.kind == "task_started" ||
+        (same_task && event.kind == "task_finished") ||
         conversation.generating ||
         conversation.task is None else {
         return (

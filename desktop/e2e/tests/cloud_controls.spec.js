@@ -222,3 +222,18 @@ test('Cloud keeps a pending send and later draft while switching away and back',
   await app.open(sessionB);
   await expect(page.locator('#task')).toHaveValue('Separate B draft');
 });
+
+for (const status of ['completed', 'failed']) {
+  test(`Cloud ${status} terminal still refreshes history after an idle queue snapshot`, async ({ page }) => {
+    const app = await running(page);
+    const reads = () => app.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`).length;
+    const before = reads();
+    const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
+    await app.finishTask(sessionA, status);
+    await (await refreshed).finished();
+    await expect.poll(reads).toBeGreaterThan(before);
+    await expect(page.locator('#stop')).toHaveCount(0);
+    if (status === 'failed') await expect(page.locator('#transcript')).toContainText('interrupted');
+    expect(app.device.pageErrors).toEqual([]);
+  });
+}
