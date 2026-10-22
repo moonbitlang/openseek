@@ -582,8 +582,13 @@ fn Model::sidebar_component_sections(
   // A parent and its archived sub-run records are one conversation: restore
   // or delete the root row and the host moves the complete family together.
   // An old orphan child still owns a row and can therefore be restored.
+  // Side chats are archived with their conversation and come back with it,
+  // so they are not rows here either.
   let archived_entries : Array[@section.Entry] = []
-  for tree in @transcript.session_tree(dev.archived) {
+  let archived_rows = dev.archived.filter(item => {
+    @protocol.side_chat_parent(item.id) is None
+  })
+  for tree in @transcript.session_tree(archived_rows) {
     let item = tree.item
     let active = self.focused == dev.channel &&
       self.active_session == item.id &&
