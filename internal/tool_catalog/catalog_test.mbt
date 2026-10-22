@@ -73,7 +73,13 @@ test "a query ranks tools across servers with their schemas" {
     fail("expected both calendar tools: \{page.text}")
   }
   assert_true(create < list)
-  assert_true(page.text.contains("\"required\":[\"title\"]"))
+  // Required arguments are plain, and the example passes each of them.
+  assert_true(page.text.contains("Arguments: { \"title\": String }"))
+  assert_true(
+    page.text.contains(
+      "@mcp.call(\"calendar\", \"create_event\", { \"title\": \"\" })",
+    ),
+  )
   assert_true(page.text.contains("@mcp.call(server, tool, arguments)"))
   // Only a search that names a server shows its instructions.
   assert_false(page.text.contains("Manage the user's calendar"))
@@ -308,12 +314,10 @@ test "a declared result schema is shown and searchable" {
   ])
   let listing = catalog.search(server="tracker")
   assert_true(
-    listing.text.contains(
-      "Result `data` schema: {\"type\":\"object\",\"properties\":{\"backlog\":{\"type\":\"integer\"}}}",
-    ),
+    listing.text.contains("Result `data`: { \"backlog\"?: Number (integer) }"),
   )
-  // Only the tool that declares one shows a result schema.
-  assert_eq(listing.text.split("Result `data` schema").to_array().length(), 2)
+  // Only the tool that declares one shows a result shape.
+  assert_eq(listing.text.split("Result `data`").to_array().length(), 2)
   assert_eq(listed(search_one(catalog, "backlog")), [
     "tracker/count_open_issues",
   ])
@@ -451,4 +455,17 @@ test "server-supplied parts are bounded" {
   assert_eq(d.char_length(), 1025)
   assert_false(big is { "output_schema": _, .. })
   assert_true(odd is { "input_schema": input, .. } && input == open)
+}
+
+///|
+test "only the best matches of a page carry an example" {
+  let tools = ["one", "two", "three"].map(name => {
+    tool(name, "A tool.", { "type": "object" })
+  })
+  let page = @tool_catalog.Catalog([Source(name="m", tools~)]).search(
+    server="m",
+  )
+  assert_eq(page.text.split("Example:").to_array().length() - 1, 2)
+  assert_true(page.text.contains("@mcp.call(\"m\", \"two\", {})"))
+  assert_false(page.text.contains("@mcp.call(\"m\", \"three\""))
 }

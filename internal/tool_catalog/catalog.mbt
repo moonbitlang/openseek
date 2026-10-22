@@ -3,6 +3,10 @@
 const DefaultLimit : Int32 = 8
 
 ///|
+/// How many of a page's entries, best first, carry an example call.
+const ExampleCount : Int32 = 2
+
+///|
 /// Cap on a page's text, below the agent loop's per-result clamp so a page of
 /// large schemas is never cut inside an entry: a page holds only the whole
 /// entries that fit, and says where the next one starts.
@@ -366,14 +370,29 @@ fn instructions_of(source : Source) -> String? {
 }
 
 ///|
-/// One tool as a page shows it: server and name, description, the JSON Schema
-/// of its arguments and, when the server declares it, of its result's `data`.
-fn render_entry(entry : Entry) -> String {
-  let result = match entry.tool.output_schema {
-    Some(output) => "\nResult `data` schema: \{output.stringify()}"
+/// One tool as a page shows it: server and name, description, its arguments
+/// and (when the server declares it) its result's `data`, both sketched as the
+/// `Json` a script builds and matches, and, `with_example`, an example to
+/// start from. Without `with_notes` the argument descriptions are left out
+/// too.
+fn render_entry(
+  entry : Entry,
+  with_example~ : Bool,
+  with_notes~ : Bool = true,
+) -> String {
+  let input = entry.tool.input_schema
+  let output = entry.tool.output_schema
+  let result = match output {
+    Some(output) => "\nResult `data`: \{sketch_line(output)}"
     None => ""
   }
-  "\n\n## \{entry.server} / \{entry.tool.name}\n\{entry.tool.description.trim()}\nArguments schema: \{entry.tool.input_schema.stringify()}\{result}"
+  let example = if with_example {
+    example(entry.server, entry.tool.name, input, output)
+  } else {
+    ""
+  }
+  let notes = if with_notes { argument_notes(input) } else { "" }
+  "\n\n## \{entry.server} / \{entry.tool.name}\n\{entry.tool.description.trim()}\nArguments: \{sketch_line(input)}\{notes}\{result}\{example}"
 }
 
 ///|
@@ -384,9 +403,14 @@ fn brief_entry(entry : Entry) -> String {
 }
 
 ///|
-/// The ways a page can show one tool, the fullest first.
-fn renderings(entry : Entry) -> Array[String] {
-  [render_entry(entry), brief_entry(entry)]
+/// The ways a page can show one tool, the fullest first: with its notes and,
+/// `with_example`, an example; then the shapes alone; then no shapes.
+fn renderings(entry : Entry, with_example~ : Bool) -> Array[String] {
+  [
+    render_entry(entry, with_example~),
+    render_entry(entry, with_example=false, with_notes=false),
+    brief_entry(entry),
+  ]
 }
 
 ///|
@@ -413,8 +437,9 @@ fn encoded(text : String) -> Int32 {
 }
 
 ///|
-/// How a page with tools closes: the call form.
-const FooterNote : String = "\n\nCall one from the same script with `@mcp.call(server, tool, arguments)`, where `arguments` matches its arguments schema. `result.data` is `Json?`: match it."
+/// How a page with tools closes: the call form and how the shapes read as
+/// patterns.
+const FooterNote : String = "\n\nCall one from the same script with `@mcp.call(server, tool, arguments)`. Shapes name the MoonBit `Json` constructors that match them: `String(s)`, `Number(n, ..)` (integers too), `True` / `False`, `Null`, `Array(items)`, and objects as `{ \"key\": pattern, .. }`; `?` marks a field that may be absent. `result.data` is `Json?`, and `Json` has no fields or `stringify` on `Json?`: match it."
 
 ///|
 /// The page of `matches` starting at `offset`: at most `limit` whole entries
@@ -449,7 +474,8 @@ fn render(
     }
     let data = entry_data(entry)
     let data_cost = data.stringify().length() + 1
-    let options = renderings(entry)
+    // The best matches carry an example; the rest follow the same form.
+    let options = renderings(entry, with_example=listed.length() < ExampleCount)
     let fitting = options
       .iter()
       .find_first(text => {
