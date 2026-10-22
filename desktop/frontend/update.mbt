@@ -170,11 +170,7 @@ fn focus_channel(
   // committed prompt default refills the Settings editor the same way.
   (
     @cmd.batch([focus_cmd, unwatch_cmd]),
-    if next.host_settings_loaded() {
-      next.receive_default_prompt().align_fresh_conversation_with_provider()
-    } else {
-      next
-    },
+    next.receive_default_prompt().align_new_chats_with_provider(channel),
   )
 }
 
@@ -2357,11 +2353,7 @@ fn update_msg(
       // The localStorage read and the host settings request start together.
       // If the host won that race, reconcile the just-loaded model preference
       // now; otherwise `HostSettingsLoaded` performs the same fold later.
-      let next = if next.host_settings_loaded() {
-        next.align_fresh_conversation_with_provider()
-      } else {
-        next
-      }
+      let next = next.align_new_chats_with_provider(next.focused)
       (
         @cmd.batch([
           theme.apply(model.system_dark, model.is_desktop, dispatch),
@@ -4047,7 +4039,7 @@ fn update_msg(
         }),
         setup_api_key: "",
         select_menu: None,
-      }.align_fresh_conversation_with_provider()
+      }.align_new_chats_with_provider(model.focused)
       // The switch can move the endpoint between usable and not. Inside the
       // setup modal the form simply re-renders for the new provider; a
       // switch that breaks a usable endpoint away from the Settings page
@@ -16963,6 +16955,46 @@ test "focusing a host with cached settings aligns the default model first" {
   })
   let (_, pending) = focus_channel(dispatch, loading, remote)
   assert_true(pending.default_model is Deepseek(V4Pro))
+}
+
+///|
+test "a background host's provider change aligns its retained draft" {
+  let dispatch = test_dispatch()
+  let home = test_model()
+  let remote : @interop.ChannelId = Remote("d_b")
+  // The fresh Local chat stays retained while the user works on `d_b`.
+  assert_true(home.composing_new_chat())
+  let model = {
+    ..home,
+    devices: [
+      home.devices[0],
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="deepseek", has_deepseek_key=true),
+        ),
+      },
+    ],
+    focused: remote,
+  }
+  let (_, changed) = update(
+    dispatch,
+    FromDevice(
+      Local,
+      HostSettingsLoaded(
+        host_settings(provider="glm", revision=1, has_glm_key=true),
+        connection_generation=None,
+      ),
+    ),
+    model,
+  )
+  guard changed.find_conversation(Local, "desktop-test") is Some(draft) else {
+    fail("the retained draft stays")
+  }
+  assert_true(draft.engine_model is Glm(G53))
+  // The default model follows the focused host, not the background one.
+  assert_true(changed.default_model == model.default_model)
 }
 
 ///|
