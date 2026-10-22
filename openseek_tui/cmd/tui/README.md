@@ -55,8 +55,11 @@ It may exit after answering a prompt: once its turn's terminal event has
 arrived, an engine exit is not an error, and the next prompt starts a fresh
 one on the same session.
 
-Because the UI takes over the terminal, launching it without a TTY (a pipe, CI
-log, or cron) is refused with a pointer to `openseek run` / `openseek serve`.
+The UI opens the controlling terminal directly through `Tty::open()`. Its
+input and drawing are independent of stdin/stdout, so redirecting those
+streams still allows interaction when a controlling terminal is available.
+If the terminal cannot be opened, the command reports the failure on stderr
+and exits nonzero. Use `openseek run` / `openseek serve` for headless work.
 
 From the source tree, `moon run cmd/openseek_tui` uses the same `moonx`
 default, so it needs no engine build of its own; pass `--engine <path>` to try a

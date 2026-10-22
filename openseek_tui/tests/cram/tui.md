@@ -8,9 +8,11 @@ free-form positional). The engine it spawns is, by default, the pinned
 `moonbitlang/openseek` release run through `moonx`; these examples stand in a
 stub for it and never launch a real engine.
 
-These commands are offline: they exercise only the argument parser and the
-engine-usability preflight, which run before the terminal UI starts, so the
-suite needs no API key, no TTY, and makes no network calls.
+These commands are offline: they exercise the argument parser, engine-usability
+preflight, and terminal-open failures before the terminal UI starts. A sidecar
+stub makes the terminal failure deterministic even when the test runner has a
+controlling terminal, so the suite needs no API key, no TTY, and makes no
+network calls.
 
 ## Help Banner
 
@@ -97,19 +99,30 @@ Pass --engine <path> to a working openseek binary, or omit --engine to run the p
 With no `--engine`, `openseek_tui` runs `moonx moonbitlang/openseek@<version>`,
 the release this module is compiled against, so the engine always speaks the
 protocol the UI expects. A stub `moonx` on `PATH` records its arguments: the
-preflight passes the pinned coordinate plus `--help`, then the launch reaches
-the non-TTY guard, proving the handoff.
+preflight passes the pinned coordinate plus `--help`, then the launch tries to
+open the controlling terminal, proving the handoff. A stub tty sidecar reports
+an open failure so this example never takes over the test runner's terminal.
+Its reply is a sidecar error frame: tag `0x83`, a 23-byte payload length, and
+the message `no controlling terminal`.
 
 ```mooncram
 $ sh <<'EOF'
 > bin=$(mktemp -d)
 > printf '#!/bin/sh\necho "$@" >> "%s/args"\nexit 0\n' "$bin" > "$bin/moonx"
-> chmod +x "$bin/moonx"
-> PATH="$bin:$PATH" env DEEPSEEK=test-key openseek_tui.exe 2>&1
+> cat > "$bin/tty-sidecar" <<'SIDECAR'
+> #!/bin/sh
+> printf '\203\027\000\000\000no controlling terminal'
+> SIDECAR
+> chmod +x "$bin/moonx" "$bin/tty-sidecar"
+> if PATH="$bin:$PATH" env DEEPSEEK=test-key TTY_SIDECAR="$bin/tty-sidecar" openseek_tui.exe > "$bin/stdout" 2> "$bin/stderr"; then echo exit-zero; else echo exit-non-zero; fi
+> cat "$bin/stderr"
+> if test -s "$bin/stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
 > cat "$bin/args"
 > rm -rf "$bin"
 > EOF
-error: the interactive UI needs a terminal; run a headless task with `openseek run "…"` (or `openseek serve` for the JSONL protocol).
+exit-non-zero
+error: moonbit-community/tty/internal/sidecar.SidecarError.SidecarError
+stdout-empty
 moonbitlang/openseek@0.7.3 --help
 ```
 

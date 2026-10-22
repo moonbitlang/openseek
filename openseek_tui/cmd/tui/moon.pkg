@@ -12,7 +12,6 @@ import {
   "moonbitlang/openseek_tui/tui/doc",
   "moonbitlang/openseek_tui/tui/style",
   "moonbit-community/displaytext",
-  "moonbit-community/tty",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",

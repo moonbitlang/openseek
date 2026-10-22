@@ -30,6 +30,11 @@ export DEEPSEEK=sk-...
 openseek_tui
 ```
 
+The UI opens the controlling terminal directly through `tty`, independently of
+stdin and stdout. Redirecting either stream still allows interaction when a
+controlling terminal is available; UI input and drawing use that terminal.
+If the terminal cannot be opened, startup reports the error and exits.
+
 **The engine.** With no `--engine`, the UI spawns
 `moonx moonbitlang/openseek@<version> serve …`, where `<version>` is the
 `moonbitlang/openseek` release imported in `moon.mod` (a test keeps the two
