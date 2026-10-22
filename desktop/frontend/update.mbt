@@ -802,15 +802,13 @@ fn apply_session_snapshot(
   let conv = conv.with_prediction(prediction)
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
-  if conv.record is LiveRecord {
-    commands.push(
-      @session_start.fetch(
-        channel,
-        session,
-        model.session_starts_emit(dispatch, channel),
-      ),
-    )
-  }
+  commands.push(
+    model.fetch_session_starts(
+      channel,
+      session,
+      model.session_starts_emit(dispatch, channel),
+    ),
+  )
   let owner : @interop.ConversationKey = { channel, session, }
   if activate_on_success &&
     model.loading_conversation is Some(loading_owner) &&
@@ -4939,10 +4937,18 @@ fn update_msg(
         model.device_state(conv.device) is Some(dev) else {
         return (@cmd.none, model)
       }
-      if msg is Interact(session~, request~, Open) {
-        guard session == conv.session_id &&
+      let action_source = match msg {
+        Interact(_, source~, ..) => Some(source)
+        Retry(source) => Some(source)
+        _ => None
+      }
+      if action_source is Some(source) && source != conv.session_start_source() {
+        return (@cmd.none, model)
+      }
+      if msg is Interact(source~, request~, Open) {
+        guard source == conv.session_start_source() &&
           dev.session_starts
-          .cards(session)
+          .cards(source)
           .iter()
           .find_first(card => card.request_id() == request)
           is Some(card) &&
@@ -4979,15 +4985,15 @@ fn update_msg(
         device.connection_generation == connection_generation else {
         return (@cmd.none, model)
       }
-      let here_options = if msg is Interact(session~, Decide("here"), ..) {
-        model
-        .find_conversation(channel, session)
-        .map(conv => @protocol.SessionStartHereOptions::{
+      let here_options = if msg is Interact(source~, Decide("here"), ..) &&
+        model.find_conversation(channel, source.session) is Some(conv) &&
+        conv.session_start_source() == source {
+        Some(@protocol.SessionStartHereOptions::{
           model: Some(conv.engine_model.wire()),
           thinking: conv.engine_model.thinking(
             model.reasoning_for(conv.engine_model),
           ),
-          approval: Some(model.approval_for(channel, session)),
+          approval: Some(model.approval_for(channel, source.session)),
           max_steps: parsed_max_steps(model.max_steps),
           followup_behavior: model.followup_behavior.wire(),
         })
@@ -7387,7 +7393,7 @@ fn update_device_msg(
       // its reply then wins over both stale positive rows and stale absence.
       let run_frontier = model.run_snapshot_frontier(channel)
       let commands = [
-        @session_start.fetch(
+        model.fetch_session_starts(
           channel,
           model.active_session,
           @cmd.Emit(msg => {

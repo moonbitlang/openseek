@@ -70,6 +70,27 @@ fn ServeEngine::drop_unpromoted_host_inputs(self : ServeEngine) -> Unit {
 }
 
 ///|
+/// Admit an initial task with the same engine-owned receipt lifetime used by
+/// cross-session input. Closing the host closes the receipt even when the
+/// cancelled consumer cannot publish a Finished event.
+pub async fn submit_session_start(
+  manager : EngineManager,
+  sink : EventSink,
+  payload : @protocol.StartPayload,
+  notify : (MessageReceipt) -> Unit,
+) -> MessageSubmission {
+  guard normalize_submission_id(payload.submission_id) is Some(id) else {
+    raise EngineError("a valid submission id is required")
+  }
+  let reply = start_run(sink, manager, payload)
+  guard manager.serving().get(payload.session) is Some(slot) &&
+    slot.live() is Some(live) else {
+    raise EngineError("conversation stopped before startup could be observed")
+  }
+  live.watch_message(reply.run_id, id, steering=false, notify)
+}
+
+///|
 /// Submit host-owned input to an existing conversation. A live process keeps
 /// its model/configuration; a reclaimed process is resumed with host defaults.
 /// Work here supplies the source composer's options: idle input goes through
@@ -86,6 +107,7 @@ pub async fn submit_session_message(
   submission_id : String,
   notify : (MessageReceipt) -> Unit,
   here_options? : @protocol.SessionStartHereOptions,
+  workspace? : String,
 ) -> MessageSubmission {
   guard !text.is_blank() &&
     normalize_submission_id(Some(submission_id)) is Some(_) else {
@@ -97,6 +119,14 @@ pub async fn submit_session_message(
       raise EngineError("conversation is changing; message was not submitted")
     }
     if slot.live() is Some(live) {
+      if workspace is Some(workspace) {
+        let selected = @session_store.ArchivedStore::for_workspace(workspace)
+        guard live.session_root == Some(selected.root) else {
+          raise EngineError(
+            "the running conversation belongs to another workspace",
+          )
+        }
+      }
       match live.phase {
         Compacting(..) =>
           raise EngineError(
@@ -179,7 +209,7 @@ pub async fn submit_session_message(
     images: [],
     submission_id: Some(submission_id),
     session,
-    workspace: None,
+    workspace,
     model: here_options.bind(options => options.model),
     thinking: here_options.bind(options => options.thinking),
     approval: here_options.bind(options => options.approval),

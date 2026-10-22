@@ -16,6 +16,8 @@ test "session start suggestions preserve task and explicit startup options" {
   let pending = request.proposal("proposal-id")
   let snapshot : @protocol.SessionStartsSnapshot = {
     session: "source",
+    workspace: Some("/source-project"),
+    archived: Some(false),
     generation: 2,
     proposals: [
       { ..pending, status: "started", target_session: Some("target"), },
@@ -51,6 +53,112 @@ test "session start suggestions preserve task and explicit startup options" {
     "workspace": "/project",
     "workspace_mode": "local",
   })
+}
+
+///|
+test "session suggestion snapshots carry source identity and decode legacy sidecars" {
+  let legacy : @protocol.SessionStartsSnapshot = @json.from_json({
+    "session": "source",
+    "generation": 2,
+    "proposals": [],
+  })
+  assert_true(legacy.workspace is None)
+  assert_true(legacy.archived is None)
+  json_inspect(legacy.to_json(), content={
+    "session": "source",
+    "generation": 2,
+    "proposals": [],
+  })
+  let absent : @protocol.SessionStartsSnapshot = @json.from_json({
+    "session": "source",
+    "workspace": null,
+    "archived": null,
+    "generation": 2,
+    "proposals": [],
+  })
+  assert_eq(absent, legacy)
+  let archived : @protocol.SessionStartsSnapshot = {
+    ..legacy,
+    workspace: Some("/source-project"),
+    archived: Some(true),
+  }
+  assert_eq(
+    (@json.from_json(archived.to_json()) : @protocol.SessionStartsSnapshot),
+    archived,
+  )
+  let event = @protocol.Notification::SessionStartsChanged(archived)
+  assert_eq(
+    @protocol.Notification::from_wire(event.wire_name(), event.params()),
+    Some(event),
+  )
+  let selector : @protocol.SessionStartsListPayload = @json.from_json({
+    "session": "source",
+    "workspace": "/source-project",
+    "archived": true,
+  })
+  assert_eq(selector.workspace, Some("/source-project"))
+  assert_eq(selector.archived, Some(true))
+  assert_eq(
+    (@json.from_json(selector.to_json()) : @protocol.SessionStartsListPayload),
+    selector,
+  )
+  let decision : @protocol.SessionStartDecision = @json.from_json({
+    "session": "source",
+    "workspace": "/source-project",
+    "request_id": "r",
+    "action": "start",
+    "workspace_mode": "worktree",
+    "model": "target-model",
+  })
+  assert_eq(decision.workspace, Some("/source-project"))
+  assert_eq(decision.model, Some(Some("target-model")))
+  assert_eq(
+    (@json.from_json(decision.to_json()) : @protocol.SessionStartDecision),
+    decision,
+  )
+  let malformed : Array[Json] = [
+    {
+      "session": "source",
+      "workspace": false,
+      "generation": 2,
+      "proposals": [],
+    },
+    { "session": "source", "workspace": " ", "generation": 2, "proposals": [] },
+    {
+      "session": "source",
+      "archived": "true",
+      "generation": 2,
+      "proposals": [],
+    },
+  ]
+  for invalid in malformed {
+    let parsed : @protocol.SessionStartsSnapshot? = Some(
+      @json.from_json(invalid),
+    ) catch {
+      _ => None
+    }
+    assert_true(parsed is None)
+  }
+  let invalid_workspaces : Array[Json] = ["", " ", false]
+  for workspace in invalid_workspaces {
+    let selector : @protocol.SessionStartsListPayload? = Some(
+      @json.from_json({ "session": "source", "workspace": workspace }),
+    ) catch {
+      _ => None
+    }
+    let decision : @protocol.SessionStartDecision? = Some(
+      @json.from_json({
+        "session": "source",
+        "workspace": workspace,
+        "request_id": "r",
+        "action": "start",
+      }),
+    ) catch {
+      _ => None
+    }
+    assert_true(selector is None)
+    assert_true(decision is None)
+  }
 }
 
 ///|

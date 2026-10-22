@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub fn fetch(@interop.ChannelId, String, @cmd.Emit[Msg]) -> @cmd.Cmd
+pub fn fetch(@interop.ChannelId, Source, @cmd.Emit[Msg]) -> @cmd.Cmd
 
 // Errors
 
@@ -32,7 +32,7 @@ pub fn Action::not_equal(Self, Self) -> Bool
 pub fn Action::to_repr(Self) -> @debug.Repr
 
 pub struct Card {
-  session : String
+  source : Source
   proposal : @protocol.SessionStartProposal
   // private fields
 } derive(Eq, @debug.Debug)
@@ -46,11 +46,11 @@ pub fn Card::to_repr(Self) -> @debug.Repr
 
 type Model derive(Eq, @debug.Debug)
 pub fn Model::Model() -> Self
-pub fn Model::cards(Self, String) -> Array[Card]
+pub fn Model::cards(Self, Source) -> Array[Card]
 pub fn Model::close_menus(Self) -> Self
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::has_open_menu(Self) -> Bool
-pub fn Model::load_error(Self, String) -> String?
+pub fn Model::load_error(Self, Source) -> String?
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::reconnecting(Self) -> Self
 pub fn Model::to_repr(Self) -> @debug.Repr
@@ -58,15 +58,24 @@ pub fn Model::update(Self, Msg, @interop.ChannelId, @cmd.Emit[Msg], here_options
 
 pub(all) enum Msg {
   Snapshot(@protocol.SessionStartsSnapshot)
-  LoadFailed(session~ : String, error~ : String)
-  Retry(String)
+  LoadFailed(source~ : Source, error~ : String)
+  Retry(Source)
   CloseMenus
-  Interact(session~ : String, request~ : String, Action)
-  Failed(session~ : String, request~ : String, attempt~ : Int32, error~ : String)
+  Interact(source~ : Source, request~ : String, Action)
+  Failed(source~ : Source, request~ : String, attempt~ : Int32, error~ : String)
 } derive(Eq, @debug.Debug)
 pub fn Msg::equal(Self, Self) -> Bool
 pub fn Msg::not_equal(Self, Self) -> Bool
 pub fn Msg::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Source {
+  session : String
+  workspace : String?
+  archived : Bool
+} derive(Eq, @debug.Debug)
+pub fn Source::equal(Self, Self) -> Bool
+pub fn Source::not_equal(Self, Self) -> Bool
+pub fn Source::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

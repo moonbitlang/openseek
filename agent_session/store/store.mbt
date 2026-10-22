@@ -679,6 +679,34 @@ pub async fn SessionStore::set_title(
 }
 
 ///|
+/// Initialize a session's display title only while it has no explicit title.
+/// The check and write share the same exclusive session lock as `set_title`,
+/// so recovery cannot overwrite a concurrent user rename. An existing title
+/// returns false; malformed or unreadable metadata remains an error.
+pub async fn SessionStore::initialize_title(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+  title : String,
+) -> Bool {
+  let title = title.trim().to_owned()
+  guard !title.is_empty() else { fail("session title must not be blank") }
+  guard @fs.exists(self.session_file_path(id)) else {
+    fail("session \{id.value()} does not exist")
+  }
+  with_session_lock(self, id, Exclusive, () => {
+    if self.title(id) is Some(_) {
+      return false
+    }
+    write_text_atomic(
+      self.title_path(id),
+      title,
+      dirs=self.session_dir_chain(id),
+    )
+    true
+  })
+}
+
+///|
 /// Lines scanned from the front of a session file while looking for the first
 /// user prompt, not counting the header line. The agent appends the user turn
 /// as a session's first event, so this is normally one line; the cap keeps a

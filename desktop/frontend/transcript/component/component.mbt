@@ -69,6 +69,7 @@ pub(all) enum ScrollPosition {
 struct Input {
   locale : @i18n.Locale
   session_starts : Array[@session_start.Card]
+  session_start_source : @session_start.Source?
   session_start_models : Array[@select_control.ViewOption]
   session_start_connected : Bool
   session_start_here_available : Bool
@@ -121,6 +122,7 @@ struct Input {
 pub fn Input::Input(
   locale~ : @i18n.Locale = English,
   session_starts~ : Array[@session_start.Card] = [],
+  session_start_source~ : @session_start.Source? = None,
   session_start_models~ : Array[@select_control.ViewOption] = [],
   session_start_connected~ : Bool = false,
   session_start_here_available~ : Bool = true,
@@ -153,6 +155,7 @@ pub fn Input::Input(
   {
     locale,
     session_starts,
+    session_start_source,
     session_start_models,
     session_start_connected,
     session_start_here_available,

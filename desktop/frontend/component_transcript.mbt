@@ -281,19 +281,31 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   } else {
     None
   }
+  let session_start_source = conversation.map(conv => {
+    conv.session_start_source()
+  })
   @transcript_component.Input(
     locale=self.locale,
     dark_mode=self.theme.is_dark(self.system_dark),
     minimal=self.minimal_transcript_effective(),
+    session_start_source~,
     session_start_here_available=conversation
       .map(conv => self.session_start_here_available(conv))
       .unwrap_or(false),
     session_start_error=self
       .focused_device()
-      .bind(dev => dev.session_starts.load_error(content.session)),
+      .bind(dev => {
+        session_start_source.bind(source => {
+          dev.session_starts.load_error(source)
+        })
+      }),
     session_starts=self
       .focused_device()
-      .map(dev => dev.session_starts.cards(content.session))
+      .map(dev => {
+        session_start_source
+        .map(source => dev.session_starts.cards(source))
+        .unwrap_or([])
+      })
       .unwrap_or([]),
     session_start_models=self.session_start_models(),
     session_start_connected=conversation

@@ -3591,6 +3591,7 @@ pub impl @json.FromJson for SessionSnapshot
 
 pub(all) struct SessionStartDecision {
   session : String
+  workspace : String?
   request_id : String
   action : String
   model : String??
@@ -3664,6 +3665,8 @@ pub impl @json.FromJson for SessionStartRequest
 
 pub(all) struct SessionStartsListPayload {
   session : String
+  workspace : String?
+  archived : Bool?
 } derive(Eq, @debug.Debug)
 pub fn SessionStartsListPayload::equal(Self, Self) -> Bool
 pub fn SessionStartsListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3675,6 +3678,8 @@ pub impl @json.FromJson for SessionStartsListPayload
 
 pub(all) struct SessionStartsSnapshot {
   session : String
+  workspace : String?
+  archived : Bool?
   generation : Int32
   proposals : Array[SessionStartProposal]
 } derive(Eq, @debug.Debug)

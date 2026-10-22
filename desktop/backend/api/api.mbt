@@ -619,7 +619,11 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.session_starts_list, payload => {
-      state.session_starts_list(payload.session)
+      state.session_starts_list(
+        payload.session,
+        workspace?=payload.workspace,
+        archived=payload.archived is Some(true),
+      )
     }),
     Endpoint(@commands.session_starts_decide, payload => {
       state.session_starts_decide(payload)

@@ -12,6 +12,20 @@ fn Model::session_starts_emit(
 }
 
 ///|
+fn Model::fetch_session_starts(
+  self : Model,
+  channel : @interop.ChannelId,
+  session : String,
+  emit : @cmd.Emit[@session_start.Msg],
+) -> @cmd.Cmd {
+  let source = self
+    .find_conversation(channel, session)
+    .map(conv => conv.session_start_source())
+    .unwrap_or({ session, workspace: None, archived: false, })
+  @session_start.fetch(channel, source, emit)
+}
+
+///|
 fn Model::session_start_here_available(
   self : Model,
   conv : Conversation,
@@ -66,4 +80,15 @@ fn open_session_start_target(
   })
   commands.push(activate)
   (@cmd.batch(commands), next)
+}
+
+///|
+fn Conversation::session_start_source(
+  self : Conversation,
+) -> @session_start.Source {
+  {
+    session: self.session_id,
+    workspace: Some(self.project().path),
+    archived: self.record is ArchivedRecord,
+  }
 }

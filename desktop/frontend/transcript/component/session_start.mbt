@@ -2,7 +2,7 @@
 priv enum SessionStartContent {
   Ready(SessionStartReady)
   Unavailable(
-    session~ : String,
+    source~ : @session_start.Source,
     request~ : String,
     title~ : String,
     error~ : String
@@ -24,6 +24,7 @@ fn Input::session_start_card(
   call : @transcript.ToolCall,
 ) -> @session_start.Card? {
   guard self.source is OpenSeek &&
+    self.session_start_source is Some(source) &&
     (
       call.name == "session" ||
       (call.name.has_prefix("mcp__") && call.name.has_suffix("__session"))
@@ -44,7 +45,7 @@ fn Input::session_start_card(
   self.session_starts
   .iter()
   .find_first(card => {
-    card.session == self.active_session &&
+    card.source == source &&
     card.request_id() == request &&
     card.proposal.id == id
   })
@@ -67,6 +68,7 @@ fn Input::session_start_content(
     )
   }
   guard self.source is OpenSeek &&
+    self.session_start_source is Some(source) &&
     self.session_start_error is Some(error) &&
     (
       call.name == "session" ||
@@ -80,7 +82,7 @@ fn Input::session_start_content(
     fields.get("title") is Some(String(title)) else {
     return None
   }
-  Some(Unavailable(session=self.active_session, request~, title~, error~))
+  Some(Unavailable(source~, request~, title~, error~))
 }
 
 ///|
@@ -118,7 +120,7 @@ fn SessionStartContent::render(
   actions : Actions,
 ) -> @html.Html {
   guard self is Ready(self) else {
-    if self is Unavailable(session~, title~, error~, ..) {
+    if self is Unavailable(source~, title~, error~, ..) {
       return @html.div(class="session-start-card", [
         @html.div(class="session-start-body", [
           @html.strong(title),
@@ -126,7 +128,7 @@ fn SessionStartContent::render(
         ]),
         @html.button(
           class="session-start-retry",
-          on_click=(actions.session_start)(Retry(session)),
+          on_click=(actions.session_start)(Retry(source)),
           match locale {
             SimplifiedChinese => "重试"
             TraditionalChinese => "重試"

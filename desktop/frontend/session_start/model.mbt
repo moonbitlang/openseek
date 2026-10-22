@@ -11,18 +11,20 @@ pub(all) enum Action {
 } derive(Eq, Debug)
 
 ///|
+pub(all) struct Source {
+  session : String
+  workspace : String?
+  archived : Bool
+} derive(Eq, Debug)
+
+///|
 pub(all) enum Msg {
   Snapshot(@protocol.SessionStartsSnapshot)
-  LoadFailed(session~ : String, error~ : String)
-  Retry(String)
+  LoadFailed(source~ : Source, error~ : String)
+  Retry(Source)
   CloseMenus
-  Interact(session~ : String, request~ : String, Action)
-  Failed(
-    session~ : String,
-    request~ : String,
-    attempt~ : Int32,
-    error~ : String
-  )
+  Interact(source~ : Source, request~ : String, Action)
+  Failed(source~ : Source, request~ : String, attempt~ : Int32, error~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -42,7 +44,7 @@ priv enum Delivery {
 
 ///|
 pub struct Card {
-  session : String
+  source : Source
   proposal : @protocol.SessionStartProposal
   priv editor : Editor
   priv delivery : Delivery
@@ -52,8 +54,8 @@ pub struct Card {
 } derive(Eq, Debug)
 
 ///|
-priv struct Source {
-  session : String
+priv struct SourceState {
+  source : Source
   generation : Int32
   cards : Array[Card]
   load_error : String?
@@ -61,7 +63,7 @@ priv struct Source {
 
 ///|
 struct Model {
-  sources : Array[Source]
+  sources : Array[SourceState]
 } derive(Eq, Debug)
 
 ///|
@@ -70,10 +72,10 @@ pub fn Model::Model() -> Model {
 }
 
 ///|
-pub fn Model::cards(self : Model, session : String) -> Array[Card] {
+pub fn Model::cards(self : Model, source : Source) -> Array[Card] {
   self.sources
   .iter()
-  .find_first(source => source.session == session)
+  .find_first(entry => entry.source == source)
   .map(source => source.cards)
   .unwrap_or([])
 }
@@ -93,9 +95,12 @@ fn Model::snapshot(
   self : Model,
   snapshot : @protocol.SessionStartsSnapshot,
 ) -> Model {
-  let previous = self.sources
-    .iter()
-    .find_first(source => source.session == snapshot.session)
+  let source : Source = {
+    session: snapshot.session,
+    workspace: snapshot.workspace,
+    archived: snapshot.archived.unwrap_or(false),
+  }
+  let previous = self.sources.iter().find_first(entry => entry.source == source)
   if previous is Some(source) && source.generation > snapshot.generation {
     return self
   }
@@ -111,7 +116,7 @@ fn Model::snapshot(
       card
     } else {
       {
-        session: snapshot.session,
+        source,
         proposal,
         editor: Closed,
         delivery: Idle,
@@ -121,14 +126,14 @@ fn Model::snapshot(
       }
     }
   })
-  let source : Source = {
-    session: snapshot.session,
+  let entry : SourceState = {
+    source,
     generation: snapshot.generation,
     cards,
     load_error: None,
   }
-  let sources = self.sources.filter(value => value.session != snapshot.session)
-  { sources: [..sources, source], }
+  let sources = self.sources.filter(value => value.source != source)
+  { sources: [..sources, entry], }
 }
 
 ///|
@@ -142,28 +147,25 @@ pub fn Model::update(
   if msg is Snapshot(snapshot) {
     return (@cmd.none, self.snapshot(snapshot))
   }
-  if msg is Retry(session) {
-    return (fetch(channel, session, emit), self)
+  if msg is Retry(source) {
+    return (fetch(channel, source, emit), self)
   }
   if msg is CloseMenus {
     return (@cmd.none, self.close_menus())
   }
-  if msg is LoadFailed(session~, error~) {
+  if msg is LoadFailed(source~, error~) {
     let previous = self.sources
       .iter()
-      .find_first(source => source.session == session)
-    let source : Source = if previous is Some(source) {
-      { ..source, load_error: Some(error), }
+      .find_first(entry => entry.source == source)
+    let entry : SourceState = if previous is Some(entry) {
+      { ..entry, load_error: Some(error), }
     } else {
-      { session, generation: -1, cards: [], load_error: Some(error), }
+      { source, generation: -1, cards: [], load_error: Some(error), }
     }
     return (
       @cmd.none,
       {
-        sources: [
-          ..self.sources.filter(value => value.session != session),
-          source,
-        ],
+        sources: [..self.sources.filter(value => value.source != source), entry],
       },
     )
   }
@@ -171,7 +173,7 @@ pub fn Model::update(
   let sources = self.sources.map(source => {
     let cards = source.cards.map(card => {
       match msg {
-        Interact(session~, request~, action) if session == card.session &&
+        Interact(source~, request~, action) if source == card.source &&
           request == card.proposal.request_id => {
           guard !(card.delivery is Sending(_, ..)) &&
             (
@@ -239,13 +241,15 @@ pub fn Model::update(
               }
               if card.proposal.target_session is Some(target) &&
                 action != "dismiss" &&
-                (action == "here") != (target == card.session) {
+                (action == "here") != (target == card.source.session) {
                 return card
               }
+              guard !card.source.archived else { return card }
               commands.push(
                 decide(
                   channel,
                   card.decision(action, here_options?),
+                  card.source,
                   emit,
                   attempt=card.attempts + 1,
                 ),
@@ -260,7 +264,7 @@ pub fn Model::update(
             Open => card
           }
         }
-        Failed(session~, request~, attempt~, error~) if session == card.session &&
+        Failed(source~, request~, attempt~, error~) if source == card.source &&
           request == card.proposal.request_id &&
           card.delivery is Sending(_, attempt=current) &&
           current == attempt &&
@@ -302,10 +306,10 @@ pub extend Model with Debug::{to_repr}
 pub extend Card with Debug::{to_repr}
 
 ///|
-pub fn Model::load_error(self : Model, session : String) -> String? {
+pub fn Model::load_error(self : Model, source : Source) -> String? {
   self.sources
   .iter()
-  .find_first(source => source.session == session)
+  .find_first(entry => entry.source == source)
   .bind(source => source.load_error)
 }
 
@@ -360,7 +364,8 @@ fn Card::decision(
   here_options? : @protocol.SessionStartHereOptions,
 ) -> @protocol.SessionStartDecision {
   {
-    session: self.session,
+    session: self.source.session,
+    workspace: self.source.workspace,
     request_id: self.proposal.request_id,
     action,
     // An explicit null clears an agent-suggested model back to the project's
@@ -382,3 +387,9 @@ fn Card::decision(
     },
   }
 }
+
+///|
+pub extend Source with Eq::{equal, not_equal}
+
+///|
+pub extend Source with Debug::{to_repr}

@@ -46,7 +46,7 @@ async function setup(page, { minimal = true, live = false, readError, model, fol
   let published = !live;
   const sessions = new Map([[source, app.sessionEvents]]);
   const snapshot = session => ({
-    session, generation, proposals: session === source && published ? [{ ...proposal }] : [],
+    session, workspace: '/workspace', archived: app.archivedSessions.some(row => row.id === session), generation, proposals: session === source && published ? [{ ...proposal }] : [],
   });
   const original = app.replyFor.bind(app);
   app.replyFor = request => {
@@ -57,7 +57,14 @@ async function setup(page, { minimal = true, live = false, readError, model, fol
         watermark: events.at(-1)?.sequence ?? 0, prediction: null,
       };
     }
-    if (request.method === 'session.starts_list') return snapshot(request.params.session);
+    if (request.method === 'session.starts_list') {
+      if (app.archivedSessions.some(row => row.id === request.params.session) &&
+          (!request.params.archived || request.params.workspace !== '/workspace')) {
+        // A live-store read cannot recover an archived source's sidecar.
+        return { session: request.params.session, workspace: '/workspace', archived: false, generation: 0, proposals: [] };
+      }
+      return snapshot(request.params.session);
+    }
     if (request.method === 'session.starts_decide') {
       expect(request.params.session).toBe(source);
       expect(request.params.request_id).toBe(requestId);
@@ -117,7 +124,14 @@ async function setup(page, { minimal = true, live = false, readError, model, fol
     else sessions.delete(target);
     app.notify('session.changed', { change, session: target, workspace: '/workspace' });
   };
-  return { app, publish, transitionTarget };
+  const archiveSourceWhileAway = () => {
+    const removed = app.liveSessions.filter(row => row.id === source);
+    app.liveSessions = app.liveSessions.filter(row => row.id !== source);
+    app.archivedSessions.push(...removed);
+    // The client misses the host transition. Reload must reconstruct both
+    // the archived transcript and its proposal from authoritative reads.
+  };
+  return { app, publish, transitionTarget, archiveSourceWhileAway };
 }
 
 test('a live host proposal appears once when its tool call is committed and can start', async ({ page }) => {
@@ -159,7 +173,7 @@ for (const minimal of [false, true]) {
     await expect(page).toHaveURL(sourceRoute);
     await expect(card).toHaveCount(0);
     expect(app.requests.filter(request => request.method === 'session.starts_decide').map(request => request.params)).toEqual([
-      { session: source, request_id: requestId, action: 'start', model: null, workspace_mode: 'worktree' },
+      { session: source, workspace: '/workspace', request_id: requestId, action: 'start', model: null, workspace_mode: 'worktree' },
     ]);
     if (minimal) {
       const screenshot = testInfo.outputPath('session-start-folded.png');
@@ -196,7 +210,7 @@ test('session proposal options apply to the new session without changing the sug
   await card.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(foldedFor(page)).toContainText(title);
   expect(app.requests.find(request => request.method === 'session.starts_decide').params).toEqual({
-    session: source, request_id: requestId, action: 'start', model: 'deepseek-flash', workspace_mode: 'local',
+    session: source, workspace: '/workspace', request_id: requestId, action: 'start', model: 'deepseek-flash', workspace_mode: 'local',
   });
   expect(app.pageErrors).toEqual([]);
 });
@@ -212,7 +226,7 @@ test('Project default clears the model originally suggested by the agent', async
   await card.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(foldedFor(page)).toContainText(title);
   expect(app.requests.find(request => request.method === 'session.starts_decide').params).toEqual({
-    session: source, request_id: requestId, action: 'start', model: null, workspace_mode: 'worktree',
+    session: source, workspace: '/workspace', request_id: requestId, action: 'start', model: null, workspace_mode: 'worktree',
   });
   expect(app.pageErrors).toEqual([]);
 });
@@ -226,7 +240,7 @@ test('Do it here submits to the current conversation and consumes the card acros
   await expect(page.locator('#transcript .msg.user').last()).toContainText(task);
   expect(app.liveSessions.map(row => row.id)).toEqual([source]);
   expect(app.requests.find(request => request.method === 'session.starts_decide').params).toEqual({
-    session: source, request_id: requestId, action: 'here',
+    session: source, workspace: '/workspace', request_id: requestId, action: 'here',
     here: { model: 'deepseek-flash', thinking: 'high', approval: 'ask', max_steps: 1000, followup_behavior: 'steer' },
   });
   await page.reload();
@@ -249,7 +263,7 @@ test('Do it here carries current source settings and keeps the unsent composer d
   await expect(cardFor(page)).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Keep my unsent draft');
   expect(app.requests.find(request => request.method === 'session.starts_decide').params).toEqual({
-    session: source, request_id: requestId, action: 'here',
+    session: source, workspace: '/workspace', request_id: requestId, action: 'here',
     here: { model: 'deepseek-v4-pro', thinking: 'max', approval: 'review', max_steps: 1000, followup_behavior: 'queue' },
   });
   expect(app.liveSessions.map(row => row.id)).toEqual([source]);
@@ -270,6 +284,139 @@ test('cached suggestions have disabled actions in an archived source transcript'
   await expect(card.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
   await expect(card.getByRole('button', { name: 'Do it here', exact: true })).toBeDisabled();
   await expect(card.getByRole('button', { name: 'Dismiss suggestion', exact: true })).toBeDisabled();
+  expect(app.requests.filter(request => request.method === 'session.starts_decide')).toEqual([]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a cold archived source retains its started title and existing navigation', async ({ page }) => {
+  const { app, archiveSourceWhileAway } = await setup(page);
+  await cardFor(page).getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(foldedFor(page)).toContainText(title);
+  archiveSourceWhileAway();
+  await page.reload();
+  await expect(page.getByText('Archived conversation · Read only', { exact: true })).toBeVisible();
+  const folded = foldedFor(page);
+  await expect(folded).toContainText(title);
+  expect(app.requests.filter(request => request.method === 'session.starts_list' && request.params.session === source).at(-1).params).toEqual({
+    session: source, workspace: '/workspace', archived: true,
+  });
+  await folded.click();
+  await expect(page).toHaveURL(targetRoute);
+  await expect(page.locator('#transcript .msg.user')).toContainText(task);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page).toHaveURL(sourceRoute);
+  await expect(page.getByText('Archived conversation · Read only', { exact: true })).toBeVisible();
+  await expect(folded).toContainText(title);
+  expect(app.requests.filter(request => request.method === 'session.starts_decide')).toHaveLength(1);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a cold archived source retains a pending suggestion with disabled mutation actions', async ({ page }) => {
+  const { app, archiveSourceWhileAway } = await setup(page);
+  archiveSourceWhileAway();
+  await page.reload();
+  await expect(page.getByText('Archived conversation · Read only', { exact: true })).toBeVisible();
+  const card = cardFor(page);
+  await expect(card).toContainText(title);
+  await expect(card.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
+  await expect(card.getByRole('button', { name: 'Do it here', exact: true })).toBeDisabled();
+  await expect(card.getByRole('button', { name: 'Dismiss suggestion', exact: true })).toBeDisabled();
+  expect(app.requests.filter(request => request.method === 'session.starts_decide')).toEqual([]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('retrying a cold archived suggestion read retains the archived store identity', async ({ page }) => {
+  const { app, archiveSourceWhileAway } = await setup(page);
+  archiveSourceWhileAway();
+  app.rpcErrors.set('session.starts_list', 'Could not read the archived suggestion.');
+  await page.reload();
+  await expect(page.getByText('Archived conversation · Read only', { exact: true })).toBeVisible();
+  const card = cardFor(page);
+  await expect(card).toContainText('Could not read the archived suggestion.');
+  app.rpcErrors.delete('session.starts_list');
+  await card.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
+  await expect(card.getByRole('button', { name: 'Do it here', exact: true })).toBeDisabled();
+  expect(app.requests.filter(request => request.method === 'session.starts_list' && request.params.session === source).at(-1).params).toEqual({
+    session: source, workspace: '/workspace', archived: true,
+  });
+  expect(app.requests.filter(request => request.method === 'session.starts_decide')).toEqual([]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('same-ID archived sources keep independent generations when an older store reply arrives late', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const shared = 'same-archived-source';
+  const roots = ['/workspace', '/other-workspace'];
+  const labels = ['Archived source A', 'Archived source B'];
+  const suggestions = roots.map((workspace, index) => ({
+    id: `proposal-${index}`, request_id: 'same-request',
+    title: `Started task ${index === 0 ? 'A' : 'B'}`, task: `Task from store ${index}`,
+    workspace, workspace_mode: 'local', status: 'started', target_session: `target-${index}`,
+  }));
+  const groups = archived => ({ groups: roots.map((workspace, index) => ({
+    workspace, name: `Project ${index}`, session_root: `${workspace}/.openseek`,
+    sessions: archived ? [{ id: shared, title: labels[index], updated_at_ms: index + 1 }] : [], error: '',
+  })) });
+  const history = index => [
+    event(1, 'user', { content: `Source task ${index}` }),
+    event(2, 'assistant', { content: '', tool_calls: [{
+      id: `call-${index}`, name: 'mcp__seekmoon__session',
+      arguments: JSON.stringify({ action: 'start', request_id: 'same-request', title: suggestions[index].title }),
+    }] }),
+    event(3, 'tool_result', {
+      tool_call_id: `call-${index}`, tool_name: 'mcp__seekmoon__session',
+      content: JSON.stringify(suggestions[index]), is_error: false,
+    }),
+    event(4, 'terminal', { kind: 'finished', message: `Source task ${index} finished` }),
+  ];
+  const snapshot = (index, generation, proposal = suggestions[index]) => ({
+    session: shared, workspace: roots[index], archived: true, generation, proposals: [proposal],
+  });
+  app.workspaces = roots;
+  app.liveSessions = [];
+  let blockNextA = false;
+  let delayedA;
+  const original = app.replyFor.bind(app);
+  app.replyFor = request => {
+    if (request.method === 'session.list') return groups(false);
+    if (request.method === 'session.list_archived') return groups(true);
+    if (request.method === 'session.load_archived' && request.params.session === shared) {
+      const index = roots.indexOf(request.params.workspace);
+      expect(index).toBeGreaterThanOrEqual(0);
+      return { session: { version: 1, id: shared, events: history(index) }, watermark: 4, prediction: null };
+    }
+    if (request.method === 'session.starts_list' && request.params.session === shared) {
+      const index = roots.indexOf(request.params.workspace);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(request.params.archived).toBe(true);
+      if (index === 0 && blockNextA) {
+        blockNextA = false;
+        delayedA = request;
+        return new Promise(() => {});
+      }
+      return snapshot(index, index === 0 ? 5 : 2);
+    }
+    return original(request);
+  };
+  await app.install();
+  await app.goto();
+  await page.locator('.section-heading', { hasText: 'Archived chats (2)' }).click();
+  const rows = labels.map(label => page.locator('.conversation-row').filter({ hasText: label }));
+  await rows[0].click();
+  await expect(foldedFor(page).locator('.session-start-folded-title')).toHaveText(suggestions[0].title);
+  blockNextA = true;
+  await rows[0].click();
+  await expect.poll(() => delayedA?.id).toBeDefined();
+  await rows[1].click();
+  await expect(foldedFor(page).locator('.session-start-folded-title')).toHaveText(suggestions[1].title);
+  const updatedB = { ...suggestions[1], title: 'Started task B after refresh' };
+  app.socket.send(JSON.stringify({ jsonrpc: '2.0', id: delayedA.id, result: snapshot(0, 6) }));
+  // WebSocket order proves the older A reply was received before this B
+  // notification, whose independent revision is lower than A's revision.
+  app.notify('session.starts_changed', snapshot(1, 3, updatedB));
+  await expect(foldedFor(page).locator('.session-start-folded-title')).toHaveText(updatedB.title);
+  await expect(page.getByText('Archived conversation · Read only', { exact: true })).toBeVisible();
   expect(app.requests.filter(request => request.method === 'session.starts_decide')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
@@ -359,7 +506,7 @@ test('closing a suggestion dismisses it durably without starting a session', asy
   await expect(page.locator('#transcript')).toContainText('I suggest starting the following session.');
   await expect(cardFor(page)).toHaveCount(0);
   expect(app.requests.filter(request => request.method === 'session.starts_decide').map(request => request.params)).toEqual([
-    { session: source, request_id: requestId, action: 'dismiss' },
+    { session: source, workspace: '/workspace', request_id: requestId, action: 'dismiss' },
   ]);
   expect(app.liveSessions.map(row => row.id)).toEqual([source]);
   expect(app.pageErrors).toEqual([]);

@@ -31,6 +31,10 @@ pub(all) struct SessionStartProposal {
 ///|
 pub(all) struct SessionStartsSnapshot {
   session : String
+  // Legacy sidecars omit these fields. Host reads and notifications fill the
+  // canonical source identity; generations belong to that exact record.
+  workspace : String?
+  archived : Bool?
   generation : Int32
   proposals : Array[SessionStartProposal]
 } derive(Debug, Eq)
@@ -38,6 +42,8 @@ pub(all) struct SessionStartsSnapshot {
 ///|
 pub(all) struct SessionStartsListPayload {
   session : String
+  workspace : String?
+  archived : Bool?
 } derive(Debug, Eq)
 
 ///|
@@ -52,6 +58,8 @@ pub(all) struct SessionStartHereOptions {
 ///|
 pub(all) struct SessionStartDecision {
   session : String
+  // Identifies the source record; the proposal's workspace selects the target.
+  workspace : String?
   request_id : String
   action : String
   // Missing keeps the suggested model; null explicitly selects project defaults.
@@ -238,6 +246,11 @@ pub impl FromJson for SessionStartsSnapshot with fn from_json(json, path) {
   let seen : Set[String] = Set([])
   let seen_ids : Set[String] = Set([])
   let session = start_nonblank(object, "session")
+  let workspace = object.optional_string("workspace")
+  guard !workspace.map_or(false, value => value.is_blank()) else {
+    raise JsonDecodeError((path.add_key("workspace"), "must not be blank"))
+  }
+  let archived = object.optional_bool("archived")
   for proposal in proposals {
     guard !seen.contains(proposal.request_id) else {
       raise JsonDecodeError((path, "duplicate proposal request id"))
@@ -257,32 +270,58 @@ pub impl FromJson for SessionStartsSnapshot with fn from_json(json, path) {
       )
     }
   }
-  { session, generation, proposals, }
+  { session, workspace, archived, generation, proposals, }
 }
 
 ///|
 pub impl ToJson for SessionStartsSnapshot with fn to_json(self) {
-  {
-    "session": self.session,
-    "generation": self.generation,
+  let fields : Map[String, Json] = {
+    "session": Json(self.session),
+    "generation": Json(self.generation),
     "proposals": Json(self.proposals),
   }
+  if self.workspace is Some(workspace) {
+    fields["workspace"] = Json(workspace)
+  }
+  if self.archived is Some(archived) {
+    fields["archived"] = Json(archived)
+  }
+  Json(fields)
 }
 
 ///|
 pub impl FromJson for SessionStartsListPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "session starts list payload")
-  { session: start_nonblank(object, "session"), }
+  let workspace = object.optional_string("workspace")
+  guard !workspace.map_or(false, value => value.is_blank()) else {
+    raise JsonDecodeError((path.add_key("workspace"), "must not be blank"))
+  }
+  {
+    session: start_nonblank(object, "session"),
+    workspace,
+    archived: object.optional_bool("archived"),
+  }
 }
 
 ///|
 pub impl ToJson for SessionStartsListPayload with fn to_json(self) {
-  { "session": self.session }
+  let fields : Map[String, Json] = { "session": Json(self.session) }
+  if self.workspace is Some(value) {
+    fields["workspace"] = Json(value)
+  }
+  if self.archived is Some(value) {
+    fields["archived"] = Json(value)
+  }
+  Json(fields)
 }
 
 ///|
 pub impl FromJson for SessionStartDecision with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "session start decision")
+  let workspace = object.optional_string("workspace")
+  guard !workspace.map_or(false, value => value.is_blank()) else {
+    raise JsonDecodeError((path.add_key("workspace"), "must not be blank"))
+  }
   let action = object.required_string("action")
   guard ["start", "here", "dismiss"].contains(action) else {
     raise JsonDecodeError(
@@ -307,6 +346,7 @@ pub impl FromJson for SessionStartDecision with fn from_json(json, path) {
   }
   {
     session: start_nonblank(object, "session"),
+    workspace,
     request_id: start_nonblank(object, "request_id"),
     action,
     model,
@@ -323,6 +363,9 @@ pub impl ToJson for SessionStartDecision with fn to_json(self) {
     "session": Json(self.session),
     "request_id": Json(self.request_id),
     "action": Json(self.action),
+  }
+  if self.workspace is Some(workspace) {
+    fields["workspace"] = Json(workspace)
   }
   if self.model is Some(value) {
     fields["model"] = value.map_or(null, value => Json(value))

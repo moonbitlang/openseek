@@ -32,7 +32,7 @@ pub fn Card::render(
   here_available~ : Bool = true,
 ) -> @html.Html {
   let action = emit.map(action => {
-    Interact(session=self.session, request=self.proposal.request_id, action)
+    Interact(source=self.source, request=self.proposal.request_id, action)
   })
   if !self.is_visible() {
     return @html.nothing
@@ -55,12 +55,15 @@ pub fn Card::render(
   }
   let busy = self.delivery is Sending(_, ..) ||
     self.proposal.status == "starting"
-  let disabled = busy || !connected
+  let disabled = busy || !connected || self.source.archived
   let start_disabled = disabled ||
-    self.proposal.target_session == Some(self.session)
+    self.proposal.target_session == Some(self.source.session)
   let here_disabled = disabled ||
     !here_available ||
-    (self.proposal.target_session is Some(target) && target != self.session)
+    (
+      self.proposal.target_session is Some(target) &&
+      target != self.source.session
+    )
   let title = label(
     locale, "New session", "新建会话", "新增會話", "新しいセッション",
     "Nueva sesión",
@@ -71,7 +74,7 @@ pub fn Card::render(
   let start = if self.delivery is Sending("start", ..) ||
     (
       self.proposal.status == "starting" &&
-      self.proposal.target_session != Some(self.session)
+      self.proposal.target_session != Some(self.source.session)
     ) {
     label(
       locale, "Starting…", "正在创建…", "正在建立…", "作成中…",
@@ -117,7 +120,7 @@ pub fn Card::render(
             if self.delivery is Sending("here", ..) ||
               (
                 self.proposal.status == "starting" &&
-                self.proposal.target_session == Some(self.session)
+                self.proposal.target_session == Some(self.source.session)
               ) {
               label(
                 locale, "Submitting…", "正在提交…", "正在提交…", "送信中…",
@@ -160,7 +163,10 @@ pub fn Card::render(
     if !choices.any(option => option.value == selected) {
       choices.push({ value: selected, label: selected, })
     }
-    let id = "session-start-" + self.session + "-" + self.proposal.request_id
+    let id = "session-start-" +
+      self.source.session +
+      "-" +
+      self.proposal.request_id
     let model_control : @select_control.Control = {
       id: id + "-model",
       groups: [{ label: model_label, options: choices, }],

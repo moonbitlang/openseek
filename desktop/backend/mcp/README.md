@@ -204,8 +204,14 @@ The user chooses one of three actions in the transcript:
   their existing resume behavior.
 - **Dismiss** hides the suggestion without submitting a task.
 
-`session.starts_list({session})` returns `{session, generation, proposals}`.
-`session.starts_decide({session, request_id, action, model?, workspace_mode?})`
+`session.starts_list({session, workspace?, archived?})` returns
+`{session, workspace, archived, generation, proposals}`. `workspace` selects the
+source's registered project, and `archived: true` reads that project's archived
+source record without launching work or changing its saved decisions. Each host
+reply and notification carries the canonical source project and archive state;
+older sidecars without those fields are normalized on read. Clients keep state
+and compare generations within that full source identity.
+`session.starts_decide({session, workspace?, request_id, action, model?, workspace_mode?})`
 accepts `start`, `here`, or `dismiss` and returns the same snapshot shape.
 An omitted `model` keeps the suggested selection, `null` selects project defaults,
 and a string explicitly selects that model.
@@ -214,7 +220,7 @@ For Work here, `here` optionally carries the source composer's `model`,
 settings are separate from new-session options. An omitted `here` uses host
 defaults and the host's saved follow-up preference.
 `session.starts_changed` broadcasts a new snapshot after each durable save;
-clients keep the newest `generation` for that source. Proposal `status` is
+clients keep the newest `generation` for that source identity. Proposal `status` is
 `pending`, `starting`, `started`, `here`, `dismissed`, or `failed`. `id` is the
 host-minted durable submission identity; `request_id` associates the proposal
 with the tool call. `target_session` is present after a destination has been
@@ -226,10 +232,16 @@ submission id before marking it started. Transport disconnects do not cancel
 an admitted choice. A failed attempt retains the card and the reserved target
 for retry; a retry first checks for an already committed task. On restart,
 reading an interrupted start reconciles that same receipt and either recovers
-the completed link or makes the card retryable. A list request skips actively
+the completed link or makes the card retryable. Recovery preserves an existing
+user-authored title and can confirm a task in its archived target record. An
+unreadable or detached target becomes that card's retryable failure while other
+cards remain available; Dismiss can still remove the failed suggestion. A list request skips actively
 owned operations and promptly returns their current `starting` state.
-Repeated clicks cannot create
-a sibling session or submit a confirmed task twice.
+An admitted operation whose source is archived before completion saves its
+result into that same source's archived record; new choices on archived sources
+remain disabled. Engine reset and receipt closure on full service shutdown
+release unconfirmed starts as retryable failures.
+Repeated clicks cannot create a sibling session or submit a confirmed task twice.
 
 ## Session artifacts
 

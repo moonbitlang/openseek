@@ -46,6 +46,8 @@ pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalRep
 
 pub async fn import_session(EngineManager, @protocol.SessionImportPayload, on_created~ : (String) -> Unit, on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> String
 
+pub async fn initialize_session_title(EngineManager, @protocol.SessionRenamePayload) -> Unit
+
 pub async fn list_jobs(EngineManager, @protocol.JobsListPayload) -> @protocol.JobsListReply
 
 pub async fn list_sessions() -> @protocol.SessionsReply
@@ -78,7 +80,9 @@ pub async fn session_artifacts_list(EngineManager, String) -> @protocol.SessionA
 
 pub async fn session_artifacts_update(EngineManager, String, (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts, () -> Unit) -> @protocol.SessionArtifacts
 
-pub async fn session_starts_list(EngineManager, String) -> @protocol.SessionStartsSnapshot
+pub async fn session_start_target_archived(String, String) -> Bool
+
+pub async fn session_starts_list(EngineManager, String, workspace? : String, archived? : Bool) -> @protocol.SessionStartsSnapshot
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
@@ -90,17 +94,19 @@ pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
 
 pub async fn stop_job(EngineManager, @protocol.JobTarget) -> @protocol.JobStopReply
 
-pub async fn submit_session_message(EngineManager, EventSink, String, String, String, (MessageReceipt) -> Unit, here_options? : @protocol.SessionStartHereOptions) -> MessageSubmission
+pub async fn submit_session_message(EngineManager, EventSink, String, String, String, (MessageReceipt) -> Unit, here_options? : @protocol.SessionStartHereOptions, workspace? : String) -> MessageSubmission
 
-pub async fn[T] try_with_session_start_decision(String, String, async () -> T) -> T?
+pub async fn submit_session_start(EngineManager, EventSink, @protocol.StartPayload, (MessageReceipt) -> Unit) -> MessageSubmission
+
+pub async fn[T] try_with_session_start_decision(String, String, async () -> T, workspace? : String) -> T?
 
 pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
 
 pub async fn update_settings(EngineManager, SettingsPatch, followup_behavior? : String, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
 
-pub async fn[T] with_session_start_decision(String, String, async () -> T) -> T
+pub async fn[T] with_session_start_decision(String, String, async () -> T, workspace? : String) -> T
 
-pub async fn[T] with_session_starts(EngineManager, String, (@protocol.SessionStartsSnapshot) -> Unit, async (SessionStartsStore) -> T) -> T
+pub async fn[T] with_session_starts(EngineManager, String, (@protocol.SessionStartsSnapshot) -> Unit, async (SessionStartsStore) -> T, workspace? : String, allow_archived? : Bool) -> T
 
 // Errors
 pub(all) suberror EngineError {

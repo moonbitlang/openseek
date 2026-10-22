@@ -81,6 +81,8 @@ async test "session start MCP proposes without creating and user decisions submi
     #|    elif command['command'] == 'cancel':
     #|        print(json.dumps({'event':'agent_aborted','reason':'stopped'}), flush=True)
     #|    elif command['command'] in ('prompt', 'steer'):
+    #|        if command['content'] == 'pause-before-write':
+    #|            continue
     #|        if command['content'] == 'retry-once' and not (store / 'failed-once').exists():
     #|            (store / 'failed-once').write_text('failed before user commit')
     #|            print(json.dumps({'event':'agent_finished','answer':'fixture failure'}), flush=True)
@@ -118,9 +120,11 @@ async test "session start MCP proposes without creating and user decisions submi
   defer subscription.close()
   @async.with_task_group(group => {
     state.start_services(group)
-    @async.with_timeout(5000, () => {
-      while !(notifications.get() is AgentConnected(_)) {
-        ()
+    let connected = @async.with_timeout(5000, () => {
+      for ;; {
+        if notifications.get() is AgentConnected(payload) {
+          break payload
+        }
       }
     })
     let grant = server.grant(source)
@@ -562,6 +566,535 @@ async test "session start MCP proposes without creating and user decisions submi
     assert_eq(retried.status, "started")
     assert_eq(retried.target_session, failed.target_session)
     assert_eq(retried.id, retry.id)
+    // The engine supervisor can replace a generation without delivering the
+    // old consumer's Finished event. Its public reset notice settles startup.
+    let reset_result = client.call_tool(name="session", arguments={
+      "action": "start",
+      "request_id": "pump-reset",
+      "title": "Reset task",
+      "task": "pause-before-write",
+      "workspace": workspace_uri,
+    })
+    assert_false(reset_result.is_error)
+    let reset_proposal : @protocol.SessionStartProposal = @json.from_json(
+      @json.parse(reset_result.render_text()),
+    )
+    let reset_target = "s" + reset_proposal.id
+    let reset = group.spawn(() => {
+      invoke_start_endpoint(state, "session.starts_decide", {
+        "session": source,
+        "workspace": workspace_uri,
+        "request_id": "pump-reset",
+        "action": "start",
+      })
+    })
+    let reset_started = @async.with_timeout(5000, () => {
+      for ;; {
+        if notifications.get() is AgentStarted(payload) &&
+          payload.session == reset_target {
+          break payload
+        }
+      }
+    })
+    state.publish(AgentConnected(connected))
+    let reset_snapshot = @async.with_timeout(5000, () => reset.wait())
+    guard reset_snapshot.proposals
+      .iter()
+      .find_first(value => value.id == reset_proposal.id)
+      is Some(reset_failed) else {
+      fail("missing reset result")
+    }
+    assert_eq(reset_failed.status, "failed")
+    assert_true(reset_failed.error is Some(_))
+    assert_eq(
+      @engine.try_with_session_start_decision(
+        source,
+        reset_proposal.id,
+        () => true,
+        workspace=workspace_uri,
+      ),
+      Some(true),
+    )
+    ignore(
+      @engine.cancel_run(state.manager(), {
+        run_id: Some(reset_started.run_id),
+      }),
+    )
+    // Full service shutdown sends no replacement Connected event. Receipt
+    // closure must still release the shielded request and its operation lock.
+    let shutdown_result = client.call_tool(name="session", arguments={
+      "action": "start",
+      "request_id": "service-shutdown",
+      "title": "Shutdown task",
+      "task": "pause-before-write",
+      "workspace": workspace_uri,
+    })
+    assert_false(shutdown_result.is_error)
+    let shutdown_proposal : @protocol.SessionStartProposal = @json.from_json(
+      @json.parse(shutdown_result.render_text()),
+    )
+    let quiet = @api.ApiState(engine=script, runtime_dir=root.to_path())
+    let quiet_events : @async.Queue[@protocol.Notification] = Queue(
+      kind=Blocking(64),
+    )
+    let quiet_subscription = quiet.subscribe(
+      quiet_events,
+      map=value => Some(value),
+      on_lag=sub => sub.close(),
+    )
+    defer quiet_subscription.close()
+    @async.with_timeout(5000, () => {
+      @async.with_task_group(owner => {
+        quiet.start_services(owner)
+        while !(quiet_events.get() is AgentConnected(_)) {
+          ()
+        }
+        ignore(
+          owner.spawn(() => {
+            ignore(
+              invoke_start_endpoint(quiet, "session.starts_decide", {
+                "session": source,
+                "workspace": workspace_uri,
+                "request_id": "service-shutdown",
+                "action": "start",
+              }),
+            )
+          }),
+        )
+        while !(quiet_events.get() is AgentStarted(payload) &&
+              payload.session == "s" + shutdown_proposal.id) {
+          ()
+        }
+        owner.return_immediately(())
+      })
+    })
+    let after_shutdown = @engine.session_starts_list(
+      state.manager(),
+      source,
+      workspace=workspace_uri,
+    )
+    guard after_shutdown.proposals
+      .iter()
+      .find_first(value => value.id == shutdown_proposal.id)
+      is Some(shutdown_failed) else {
+      fail("missing shutdown result")
+    }
+    assert_eq(shutdown_failed.status, "failed")
+    assert_eq(
+      @engine.try_with_session_start_decision(
+        source,
+        shutdown_proposal.id,
+        () => true,
+        workspace=workspace_uri,
+      ),
+      Some(true),
+    )
+    // Archive can move the source while an already accepted target is waiting
+    // for its first user commit. The result follows that same source record.
+    let archive_result = client.call_tool(name="session", arguments={
+      "action": "start",
+      "request_id": "archive-source",
+      "title": "Archived source task",
+      "task": "pause-before-write",
+      "workspace": workspace_uri,
+    })
+    assert_false(archive_result.is_error)
+    let archive_proposal : @protocol.SessionStartProposal = @json.from_json(
+      @json.parse(archive_result.render_text()),
+    )
+    let archive_target = "s" + archive_proposal.id
+    let archival = group.spawn(() => {
+      invoke_start_endpoint(state, "session.starts_decide", {
+        "session": source,
+        "workspace": workspace_uri,
+        "request_id": "archive-source",
+        "action": "start",
+      })
+    })
+    @async.with_timeout(5000, () => {
+      while !(notifications.get() is AgentStarted(payload) &&
+            payload.session == archive_target) {
+        ()
+      }
+    })
+    ignore(@engine.archive_session(state.manager(), source, (_, _) => ()))
+    seed_start_record(
+      workspace,
+      archive_target,
+      "session-start-" + archive_proposal.id,
+    )
+    let archived_completion = @async.with_timeout(5000, () => archival.wait())
+    assert_eq(archived_completion.workspace, Some(workspace_uri))
+    assert_eq(archived_completion.archived, Some(true))
+    assert_true(
+      archived_completion.proposals.any(value => {
+        value.id == archive_proposal.id && value.status == "started"
+      }),
+    )
+    assert_false(
+      @fs.exists(workspace.join(".openseek/sessions/source").to_string()),
+    )
+    assert_eq(
+      invoke_start_endpoint(reopened, "session.starts_list", {
+        "session": source,
+        "workspace": workspace_uri,
+        "archived": true,
+      }),
+      archived_completion,
+    )
+    group.return_immediately(())
+  })
+}
+
+///|
+async fn seed_start_record(
+  workspace : @pathx.Absolute,
+  session : String,
+  submission_id : String,
+) -> Unit {
+  let directory = workspace.join(".openseek/sessions").join(session)
+  @fs.mkdir(directory.to_string(), recursive=true)
+  let header : Json = { "version": 1, "id": session, "system_prompt": "" }
+  let user : Json = {
+    "sequence": 1,
+    "item": {
+      "kind": "user",
+      "payload": { "content": "Fixture task", "submission_id": submission_id },
+    },
+  }
+  let terminal : Json = {
+    "sequence": 2,
+    "item": {
+      "kind": "terminal",
+      "payload": { "kind": "finished", "message": "done" },
+    },
+  }
+  @fs.write_file(
+    directory.join("openseek_session-" + session + ".jsonl").to_string(),
+    header.stringify() +
+    "\n" +
+    user.stringify() +
+    "\n" +
+    terminal.stringify() +
+    "\n",
+  )
+}
+
+///|
+fn recovery_start_proposal(
+  workspace : String,
+  request_id : String,
+  id : String,
+  target : String,
+) -> @protocol.SessionStartProposal raise {
+  let request : @protocol.SessionStartRequest = @json.from_json({
+    "request_id": request_id,
+    "title": "Suggestion " + request_id,
+    "task": "Recover this task",
+    "workspace": workspace,
+  })
+  { ..request.proposal(id), status: "starting", target_session: Some(target), }
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "session start recovery preserves user titles and isolates archived or unreadable targets" {
+  session_mcp_env_test_lock.acquire()
+  defer session_mcp_env_test_lock.release()
+  let root = @pathx.Path(
+    @fs.realpath(@fs.tmpdir(prefix="seekmoon-start-recovery-")),
+  ).resolve()
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  let previous = @sys.get_env_var("HOME")
+  @sys.set_env_var("HOME", root.to_string())
+  defer (if previous is Some(value) {
+    @sys.set_env_var("HOME", value)
+  } else {
+    @sys.unset_env_var("HOME")
+  })
+  let workspace = root.join("project")
+  @fs.mkdir(workspace.to_string())
+  ignore(@workspaces.add(workspace.to_string(), _ => ()))
+  guard workspace.to_uri_path() is Some(workspace_uri) else {
+    fail("unsupported fixture workspace")
+  }
+  seed_start_record(workspace, "source", "source-input")
+  seed_start_record(workspace, "first-target", "session-start-first")
+  seed_start_record(workspace, "good-target", "session-start-good")
+  seed_start_record(workspace, "bad-target", "session-start-bad")
+  @fs.write_file(
+    workspace
+    .join(".openseek/sessions/bad-target/openseek_session-bad-target.jsonl")
+    .to_string(),
+    "invalid record\n",
+  )
+  let first = recovery_start_proposal(
+    workspace_uri, "first", "first", "first-target",
+  )
+  let good = recovery_start_proposal(
+    workspace_uri, "good", "good", "good-target",
+  )
+  let bad = recovery_start_proposal(workspace_uri, "bad", "bad", "bad-target")
+  let state = @api.ApiState(engine="unused-engine")
+  let notifications : @async.Queue[@protocol.Notification] = Queue(
+    kind=Blocking(64),
+  )
+  let subscription = state.subscribe(notifications, map=value => Some(value), on_lag=sub => {
+    sub.close()
+  })
+  defer subscription.close()
+  @async.with_task_group(group => {
+    state.start_services(group)
+    @async.with_timeout(5000, () => {
+      while !(notifications.get() is AgentConnected(_)) {
+        ()
+      }
+    })
+    ignore(
+      @engine.with_session_starts(state.manager(), "source", _ => (), store => {
+        store.save([first])
+      }),
+    )
+    let initial = invoke_start_endpoint(state, "session.starts_list", {
+      "session": "source",
+      "workspace": workspace_uri,
+    })
+    assert_eq(initial.proposals[0].status, "started")
+    let title_file = workspace.join(
+      ".openseek/sessions/first-target/session-title",
+    )
+    assert_eq(@fs.read_file(title_file.to_string()).text(), "Suggestion first")
+    @engine.rename_session(state.manager(), {
+      session: "first-target",
+      workspace: workspace_uri,
+      title: "User renamed title",
+    })
+    ignore(
+      @engine.with_session_starts(state.manager(), "source", _ => (), store => {
+        store.save([first, bad, good])
+      }),
+    )
+    let recovered = invoke_start_endpoint(state, "session.starts_list", {
+      "session": "source",
+      "workspace": workspace_uri,
+    })
+    assert_eq(recovered.proposals.map(proposal => proposal.status), [
+      "started", "failed", "started",
+    ])
+    assert_true(recovered.proposals[1].error is Some(_))
+    assert_eq(
+      @fs.read_file(title_file.to_string()).text(),
+      "User renamed title",
+    )
+    ignore(
+      @engine.with_session_starts(state.manager(), "source", _ => (), store => {
+        store.save(
+          store.snapshot().proposals.map(proposal => {
+            if proposal.id == first.id {
+              first
+            } else {
+              proposal
+            }
+          }),
+        )
+      }),
+    )
+    let retried = invoke_start_endpoint(state, "session.starts_decide", {
+      "session": "source",
+      "request_id": "first",
+      "action": "start",
+    })
+    assert_eq(retried.proposals[0].status, "started")
+    assert_eq(
+      @fs.read_file(title_file.to_string()).text(),
+      "User renamed title",
+    )
+    let bad_retry = invoke_start_endpoint(state, "session.starts_decide", {
+      "session": "source",
+      "request_id": "bad",
+      "action": "start",
+    })
+    assert_eq(bad_retry.proposals[1].status, "failed")
+    let dismissed = invoke_start_endpoint(state, "session.starts_decide", {
+      "session": "source",
+      "request_id": "bad",
+      "action": "dismiss",
+    })
+    assert_eq(dismissed.proposals[1].status, "dismissed")
+    ignore(
+      @engine.archive_session(state.manager(), "first-target", (_, _) => ()),
+    )
+    ignore(
+      @engine.with_session_starts(state.manager(), "source", _ => (), store => {
+        store.save(
+          store.snapshot().proposals.map(proposal => {
+            if proposal.id == first.id {
+              first
+            } else {
+              proposal
+            }
+          }),
+        )
+      }),
+    )
+    let archived_target = invoke_start_endpoint(state, "session.starts_list", {
+      "session": "source",
+      "workspace": workspace_uri,
+    })
+    assert_eq(archived_target.proposals[0].status, "started")
+    assert_false(
+      @fs.exists(workspace.join(".openseek/sessions/first-target").to_string()),
+    )
+    assert_eq(
+      @fs.read_file(
+        workspace
+        .join(".openseek/archived/sessions/first-target/session-title")
+        .to_string(),
+      ).text(),
+      "User renamed title",
+    )
+    // A cold archived source returns exactly its saved sidecar, including an
+    // interrupted state, and performs no launch or recovery mutation.
+    let before_archive = @engine.with_session_starts(
+      state.manager(),
+      "source",
+      _ => (),
+      store => {
+        store.save(
+          store.snapshot().proposals.map(proposal => {
+            if proposal.id == first.id {
+              first
+            } else {
+              proposal
+            }
+          }),
+        )
+      },
+    )
+    ignore(@engine.archive_session(state.manager(), "source", (_, _) => ()))
+    let archived_file = workspace.join(
+      ".openseek/archived/sessions/source/session-starts.json",
+    )
+    let untouched = @fs.read_file(archived_file.to_string()).text()
+    let cold = @api.ApiState(engine="unused-engine")
+    let archived_source = invoke_start_endpoint(cold, "session.starts_list", {
+      "session": "source",
+      "workspace": workspace_uri,
+      "archived": true,
+    })
+    assert_eq(archived_source, { ..before_archive, archived: Some(true), })
+    assert_eq(@fs.read_file(archived_file.to_string()).text(), untouched)
+    let rejected = try {
+      ignore(
+        invoke_start_endpoint(cold, "session.starts_decide", {
+          "session": "source",
+          "request_id": "first",
+          "action": "start",
+        }),
+      )
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+    let other = root.join("other-project")
+    @fs.mkdir(other.to_string())
+    ignore(@workspaces.add(other.to_string(), _ => ()))
+    guard other.to_uri_path() is Some(other_uri) else {
+      fail("unsupported second workspace")
+    }
+    @fs.mkdir(
+      other.join(".openseek/archived/sessions/source").to_string(),
+      recursive=true,
+    )
+    let other_snapshot : @protocol.SessionStartsSnapshot = {
+      session: "source",
+      workspace: Some(other_uri),
+      archived: Some(true),
+      generation: 99,
+      proposals: [],
+    }
+    // Legacy files have no scope fields; the selected record supplies them.
+    @fs.write_file(
+      other
+      .join(".openseek/archived/sessions/source/session-starts.json")
+      .to_string(),
+      ({ "session": "source", "generation": 99, "proposals": [] } : Json).stringify(),
+    )
+    assert_eq(
+      invoke_start_endpoint(cold, "session.starts_list", {
+        "session": "source",
+        "workspace": other_uri,
+        "archived": true,
+      }),
+      other_snapshot,
+    )
+    assert_eq(
+      invoke_start_endpoint(cold, "session.starts_list", {
+        "session": "source",
+        "workspace": workspace_uri,
+        "archived": true,
+      }),
+      { ..before_archive, archived: Some(true), },
+    )
+    // Same-id live sources also retain their selected store through a user
+    // decision and its notification; one client's Dismiss cannot touch another.
+    seed_start_record(workspace, "shared-source", "source-a")
+    seed_start_record(other, "shared-source", "source-b")
+    let from_a = recovery_start_proposal(
+      workspace_uri, "shared", "proposal-a", "unused-a",
+    )
+    let from_b = recovery_start_proposal(
+      other_uri, "shared", "proposal-b", "unused-b",
+    )
+    let pending_a : @protocol.SessionStartProposal = {
+      ..from_a,
+      status: "pending",
+      target_session: None,
+    }
+    let pending_b : @protocol.SessionStartProposal = {
+      ..from_b,
+      status: "pending",
+      target_session: None,
+    }
+    let snapshot_a = @engine.with_session_starts(
+      state.manager(),
+      "shared-source",
+      _ => (),
+      store => store.save([pending_a]),
+      workspace=workspace_uri,
+    )
+    let snapshot_b = @engine.with_session_starts(
+      state.manager(),
+      "shared-source",
+      _ => (),
+      store => store.save([pending_b]),
+      workspace=other_uri,
+    )
+    assert_eq(snapshot_a.workspace, Some(workspace_uri))
+    assert_eq(snapshot_b.workspace, Some(other_uri))
+    assert_eq(snapshot_b.archived, Some(false))
+    let dismissed_b = invoke_start_endpoint(state, "session.starts_decide", {
+      "session": "shared-source",
+      "workspace": other_uri,
+      "request_id": "shared",
+      "action": "dismiss",
+    })
+    assert_eq(dismissed_b.workspace, Some(other_uri))
+    assert_eq(dismissed_b.proposals[0].status, "dismissed")
+    assert_eq(
+      invoke_start_endpoint(state, "session.starts_list", {
+        "session": "shared-source",
+        "workspace": workspace_uri,
+      }),
+      snapshot_a,
+    )
+    @async.with_timeout(5000, () => {
+      while !(notifications.get() is SessionStartsChanged(changed) &&
+            changed == dismissed_b) {
+        ()
+      }
+    })
     group.return_immediately(())
   })
 }
