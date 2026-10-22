@@ -603,7 +603,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         conversation.sending ||
         conversation.queue_edit is Some(_) {
         conversation.control_primary_action(
-          if self.followup_behavior is FollowupQueue {
+          if self.followup_behavior() is FollowupQueue {
             @composer.Queue
           } else {
             @composer.Steer
