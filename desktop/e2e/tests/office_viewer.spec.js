@@ -12,6 +12,42 @@ async function annotateSelection(preview) {
   await preview.locator('textarea').press('Enter');
 }
 
+test('saved citations show full feedback and keep the separate prompt', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  const comment = 'Revise this explanation. '.repeat(5) + '\nKeep <script> as plain text. 修改这里。';
+  const selection = (comment) => `<office_selection>\n${JSON.stringify({
+    schema: 'office.selection.materialized.v1',
+    selection: { text: 'Selected passage', pages: [2] },
+    source: { file: '/workspace/docs/report.docx' },
+    ...(comment === undefined ? {} : { comment }),
+  })}\n</office_selection>`;
+  app.sessionEvents = [{ sequence: 1, item: { kind: 'user', payload: { content: [
+    'Show the browser fixture and explain the changes.',
+    '', '<user_mentions>',
+    selection(comment),
+    '<annotation file="src/main.mbt" lines="2-3">',
+    '<quote>', 'let count = 0', '</quote>',
+    '<user_comment>', 'Handle the empty case.\nRetain the existing behavior.', '</user_comment>',
+    '</annotation>',
+    selection(),
+    '<file path="README.md"/>',
+    '</user_mentions>',
+  ].join('\n') } } }];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const sent = page.locator('.msg.user');
+  await expect(sent.locator('.mention-chip')).toHaveCount(4);
+  await expect(sent.locator('.msg-content')).toHaveText([
+    comment,
+    'Handle the empty case.\nRetain the existing behavior.',
+    'Show the browser fixture and explain the changes.',
+  ]);
+  await expect(sent.locator('script')).toHaveCount(0);
+  await sent.screenshot({ path: testInfo.outputPath('citation-feedback.png') });
+  expect(app.pageErrors).toEqual([]);
+});
+
 async function applicationStyles(page) {
   return page.evaluate(() => {
     let probe = document.getElementById('xlsx-style-probe');

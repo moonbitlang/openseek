@@ -815,6 +815,11 @@ fn user_text_nodes(
         )
       }
       body.push(@html.div(class="mention-tray", chips))
+      for mention in parsed.mentions {
+        if mention.comment() is Some(comment) {
+          body.push(@html.div(class="msg-content", inline_code_nodes(comment)))
+        }
+      }
       if !parsed.task.is_empty() {
         body.push(
           @html.div(class="msg-content", inline_code_nodes(parsed.task)),
