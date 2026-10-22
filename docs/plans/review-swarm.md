@@ -93,14 +93,15 @@ hold:
 1. **Same file**, after stripping a leading `./`.
 2. **Close lines**: both have no line, or the lines differ by at most 3.
 3. **Same claim**: their titles' word sets overlap at least half (Jaccard ≥
-   0.5, over lowercase words of 3 or more letters). A shared `category` alone
+   0.5, over lowercase words of 3 or more letters or digits). A shared `category` alone
    is not enough; it's a free-form label, not an issue identifier.
 
 Two findings from the same lens never merge: that reviewer already reported
 them as separate issues.
 
-A merged finding keeps the text and severity of its most severe member, and
-its `detail` gains a trailer naming the lenses that found it:
+A merged finding keeps the text, location and severity of its most severe
+member (later findings are still matched against the first report's
+location), and its `detail` gains a trailer naming the lenses that found it:
 `[found by: correctness, tests]`. The merge is deterministic: findings are
 taken lens by lens in the order given, and each finding joins the first
 matching group.

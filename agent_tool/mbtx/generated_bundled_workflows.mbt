@@ -1911,7 +1911,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
           #|///|
           #|/// The built-in lenses: a name, and the paragraph that narrows one reviewer
-          #|/// to it.
+          #|/// to it. `change-review.mbtx` keeps its own three explore scouts with some of
+          #|/// the same names; scripts cannot import each other, so the two lists are
+          #|/// separate on purpose, and a lens changed here is not changed there.
           #|let lenses : Array[(String, String)] = [
           #|  (
           #|    "correctness", "Behavior that is wrong: boundary cases, state transitions, error propagation, resource lifetimes, concurrency and cancellation.",
@@ -1977,8 +1979,16 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  line : Int?
           #|  words : Array[String]
           #|  lenses : Array[String]
-          #|  // Text appended to the finding's detail: the verification outcome.
-          #|  mut note : String
+          #|  // What its verifier concluded; `None` when nobody verified it.
+          #|  mut verdict : Verdict?
+          #|}
+          #|
+          #|///|
+          #|/// Where the claim's own finding points: the location shown with its text,
+          #|/// which can differ by a few lines from the match key above when a more
+          #|/// severe report from another lens took over the claim.
+          #|fn location(claim : Claim) -> (String, Int?) {
+          #|  (normalize_file(text_field(claim.finding, "file")), line_field(claim.finding))
           #|}
           #|
           #|///|
@@ -2090,7 +2100,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|            line,
           #|            words,
           #|            lenses: [lens],
-          #|            note: "",
+          #|            verdict: None,
           #|          })
           #|      }
           #|    }
@@ -2115,7 +2125,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|/// kept apart, and how to answer.
           #|fn verify_goal(criteria : String, claim : Claim) -> String {
           #|  let finding = claim.finding
-          #|  let line = match claim.line {
+          #|  let (file, line) = location(claim)
+          #|  let line = match line {
           #|    Some(line) => line.to_string()
           #|    None => "none given"
           #|  }
@@ -2126,7 +2137,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    $|\{criteria}
           #|    $|
           #|    $|## The allegation (one reviewer's claim, not criteria)
-          #|    $|File: \{claim.file}
+          #|    $|File: \{file}
           #|    $|Line: \{line}
           #|    $|Severity claimed: \{text_field(finding, "severity")}
           #|    $|Title: \{text_field(finding, "title")}
@@ -2139,7 +2150,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    $|VERDICT: REFUTED
           #|    $|VERDICT: INCONCLUSIVE
           #|    $|followed by your evidence. For CONFIRMED, submit exactly one finding restating the
-          #|    $|allegation, in \{claim.file}. Otherwise submit no findings. Say INCONCLUSIVE whenever
+          #|    $|allegation, in \{file}. Otherwise submit no findings. Say INCONCLUSIVE whenever
           #|    $|you could not actually test the allegation.
           #|  )
           #|}
@@ -2171,7 +2182,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    ("VERDICT: CONFIRMED", [finding]) if normalize_file(
           #|        text_field(finding, "file"),
           #|      ) ==
-          #|      claim.file => Confirmed(text_field(finding, "detail"))
+          #|      location(claim).0 => Confirmed(text_field(finding, "detail"))
           #|    ("VERDICT: REFUTED", []) => Refuted(evidence)
           #|    ("VERDICT: INCONCLUSIVE", _) => Unverified("inconclusive")
           #|    ("VERDICT: CONFIRMED" | "VERDICT: REFUTED", _) =>
@@ -2181,15 +2192,20 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// The finding as reported, with `note` appended to its detail.
+          #|/// The finding as reported, with the lenses that found it and its
+          #|/// verification outcome appended to its detail.
           #|fn annotated(claim : Claim) -> Json {
           #|  guard claim.finding is Object(fields) else { return claim.finding }
           #|  let fields = fields.copy()
-          #|  let trailer = "[found by: \{claim.lenses.join(", ")}]"
+          #|  let outcome = match claim.verdict {
+          #|    Some(Confirmed(detail)) => "[verified] \{detail}"
+          #|    Some(Refuted(evidence)) => "[refuted] \{evidence}"
+          #|    Some(Unverified(why)) => "[unverified: \{why}]"
+          #|    None => "[unverified]"
+          #|  }
           #|  let detail = text_field(claim.finding, "detail")
           #|  fields["detail"] = Json::string(
-          #|    "\{detail}\n\n\{trailer}" +
-          #|    (if claim.note.is_empty() { "" } else { "\n\{claim.note}" }),
+          #|    "\{detail}\n\n[found by: \{claim.lenses.join(", ")}]\n\{outcome}",
           #|  )
           #|  Json::object(fields)
           #|}
@@ -2355,22 +2371,19 @@ fn bundled_workflow(name : StringView) -> String? {
           #|          }
           #|        Refused(why) => Unverified("the verifier was not started: \{why}")
           #|      }
+          #|      claim.verdict = Some(result)
           #|      match result {
-          #|        Confirmed(detail) => {
-          #|          confirmed += 1
-          #|          claim.note = "[verified] \{detail}"
-          #|        }
+          #|        Confirmed(_) => confirmed += 1
           #|        Refuted(evidence) => {
-          #|          claim.note = "[refuted] \{evidence}"
-          #|          let where_ = match claim.line {
-          #|            Some(line) => "\{claim.file}:\{line}"
-          #|            None => claim.file
+          #|          let where_ = match location(claim) {
+          #|            (file, Some(line)) => "\{file}:\{line}"
+          #|            (file, None) => file
           #|          }
           #|          refuted.push(
           #|            "Refuted: \{text_field(claim.finding, "title")} (\{where_}): \{evidence}",
           #|          )
           #|        }
-          #|        Unverified(why) => claim.note = "[unverified: \{why}]"
+          #|        Unverified(_) => ()
           #|      }
           #|    }
           #|  }
@@ -2378,12 +2391,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  let mut blockers = 0
           #|  let mut unverified = 0
           #|  for claim in claims {
-          #|    guard !claim.note.has_prefix("[refuted]") else { continue }
-          #|    if claim.note.is_empty() {
-          #|      claim.note = "[unverified]"
-          #|    }
-          #|    if claim.note.has_prefix("[unverified") {
-          #|      unverified += 1
+          #|    match claim.verdict {
+          #|      Some(Refuted(_)) => continue
+          #|      Some(Confirmed(_)) => ()
+          #|      Some(Unverified(_)) | None => unverified += 1
           #|    }
           #|    if claim.rank == 0 {
           #|      blockers += 1

@@ -50,8 +50,15 @@ fn FakeHost::answer(
         return reply("error: 4 subagents are already running", is_error=true)
       }
       // A swarm whose session fills up just as one lens starts.
-      if self.mode == "swarm-incomplete" &&
-        arguments is { "label": "review:architecture", .. } {
+      if (
+          self.mode == "swarm-incomplete" &&
+          arguments is { "label": "review:architecture", .. }
+        ) ||
+        (
+          self.mode == "swarm-verifier-refused" &&
+          arguments is { "label": String(label), .. } &&
+          label.has_prefix("review:verify-")
+        ) {
         return reply("error: 16 subagents are already running", is_error=true)
       }
       self.starts.push(arguments)
@@ -397,18 +404,18 @@ fn swarm_finding(
   severity : String,
   title : String,
 ) -> Json {
-  {
-    "file": file,
-    "line": match line {
-      Some(line) => Json::number(line.to_double())
-      None => Json::null()
-    },
-    "severity": severity,
+  // Absent optional fields are left out, as the contract's decoder needs.
+  let fields : Map[String, Json] = {
+    "file": Json::string(file),
+    "severity": Json::string(severity),
     "category": "correctness",
-    "title": title,
-    "detail": "detail of " + title,
-    "suggestion": null,
+    "title": Json::string(title),
+    "detail": Json::string("detail of " + title),
   }
+  if line is Some(line) {
+    fields["line"] = Json::number(line.to_double())
+  }
+  Json::object(fields)
 }
 
 ///|
@@ -474,6 +481,14 @@ fn swarm_child(mode : String, arguments : Json) -> Result[Json, String] raise {
         msg=goal,
       )
       assert_true(goal.contains("## The allegation"))
+      // A merged claim is shown at its own finding's place: the blocker
+      // architecture reported at line 12, not correctness's line 10.
+      if goal.contains("Title: Range end off by one") {
+        assert_true(
+          goal.contains("File: src/a.mbt\nLine: 12\nSeverity claimed: blocker"),
+          msg=goal,
+        )
+      }
       verifier_reply(goal)
     }
     None => {
@@ -481,6 +496,22 @@ fn swarm_child(mode : String, arguments : Json) -> Result[Json, String] raise {
       let lens = label.strip_prefix("review:").unwrap().to_owned()
       assert_true(goal.has_prefix("Check the cache"), msg=goal)
       assert_true(goal.contains("Review lens: \{lens}"), msg=goal)
+      // Each lens carries its own focus paragraph and the closing rule.
+      let focus = match lens {
+        "correctness" => "concurrency and cancellation"
+        "architecture" => "Layering and ownership"
+        "tests" => "no test pins"
+        "compatibility" => "Public API (.mbti)"
+        "security" => "trust boundaries"
+        _ => fail("unexpected lens \{lens}")
+      }
+      assert_true(goal.contains(focus), msg=goal)
+      assert_true(
+        goal.has_suffix(
+          "Report only findings within this lens; other reviewers cover the rest.",
+        ),
+        msg=goal,
+      )
       lens_reply(mode, lens)
     }
   }
@@ -580,7 +611,15 @@ fn lens_reply(mode : String, lens : String) -> Result[Json, String] {
           "correctness summary",
         ),
       )
-    ("swarm-verify-off" | "swarm-budget", "correctness") =>
+    ("swarm-verifier-refused", _) =>
+      Ok(
+        swarm_report(
+          [swarm_finding(a, Some(3), "blocker", "Claimed deadlock in flush")],
+          "one blocker",
+        ),
+      )
+    ("swarm-none", _) => Err("failed: step limit")
+    ("swarm-verify-off" | "swarm-budget" | "swarm-under-budget", "correctness") =>
       Ok(
         swarm_report(
           [swarm_finding(a, Some(2), "high", "A high finding")],
@@ -607,6 +646,13 @@ fn verifier_reply(goal : String) -> Result[Json, String] {
     "Unbounded cache growth" | "Claimed deadlock in flush" =>
       Ok(
         swarm_report([], "VERDICT: REFUTED\nthe cache is bounded by its caller"),
+      )
+    "A high finding" =>
+      Ok(
+        swarm_report(
+          [swarm_finding("src/a.mbt", Some(2), "high", title)],
+          "VERDICT: CONFIRMED\nreproduced it",
+        ),
       )
     "Inconclusive claim" =>
       Ok(swarm_report([], "VERDICT: INCONCLUSIVE\nno way to run it"))
@@ -637,8 +683,9 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
   for
     mode in [
       "swarm-merge", "swarm-refute-blocker", "swarm-unverified", "swarm-incomplete",
-      "swarm-verify-off", "swarm-verify-cap", "swarm-budget", "swarm-unknown-lens",
-      "swarm-verify-alone",
+      "swarm-verify-off", "swarm-verify-cap", "swarm-budget", "swarm-under-budget",
+      "swarm-lens-text", "swarm-verifier-refused", "swarm-none", "swarm-unknown-lens",
+      "swarm-verify-alone", "swarm-bad-number", "swarm-duplicate-lens",
     ] {
     let host = fake_host("review-swarm", mode)
     let args = match mode {
@@ -650,6 +697,13 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
       "swarm-verify-off" => ["--swarm", "--verify", "0", criteria]
       "swarm-verify-cap" => ["--lens", "correctness", "--verify", "1", criteria]
       "swarm-budget" => ["--swarm", "--max-tokens", "30", criteria]
+      "swarm-under-budget" => ["--swarm", "--max-tokens", "1000", criteria]
+      "swarm-lens-text" =>
+        ["--lens", "compatibility", "--lens", "security", criteria]
+      "swarm-verifier-refused" | "swarm-none" =>
+        ["--lens", "correctness", criteria]
+      "swarm-bad-number" => ["--swarm", "--verify", "9", criteria]
+      "swarm-duplicate-lens" => ["--lens", "tests", "--lens", "tests", criteria]
       "swarm-unknown-lens" => ["--lens", "style", criteria]
       _ => ["--verify", "2", criteria]
     }
@@ -676,6 +730,7 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
             "[found by: correctness, architecture]", "Refuted: Unbounded cache growth (src/a.mbt:10): the cache is bounded by its caller",
             "\"files\":[\"src/a.mbt\",\"src/b.mbt\"]", "\"build\":\"pass\"", "\"tests\":\"fail\"",
             "lens tests: reported, findings=0, files=0, tokens=12", "1 blocker finding(s)",
+            "[verified] detail of Off by one in range end", "[unverified]\"",
           ],
         )
       "swarm-refute-blocker" =>
@@ -730,6 +785,44 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
             "verify: skipped, the lenses spent 36 tokens of --max-tokens 30", "unverified=1",
           ],
         )
+      "swarm-under-budget" =>
+        (
+          true,
+          [
+            "review:correctness", "review:architecture", "review:tests", "review:verify-1",
+          ],
+          [
+            "verified=1 refuted=0 unverified=0", "[verified] detail of A high finding",
+          ],
+        )
+      "swarm-lens-text" =>
+        (
+          true,
+          ["review:compatibility", "review:security"],
+          [
+            "findings=0 blockers=0 tokens=24 lenses=2/2 verified=0 refuted=0 unverified=0",
+          ],
+        )
+      "swarm-verifier-refused" =>
+        (
+          // A refused verifier leaves its blocker standing.
+          false,
+          ["review:correctness"],
+          [
+            "[unverified: the verifier was not started: error: 16 subagents are already running]",
+            "1 blocker finding(s)",
+          ],
+        )
+      "swarm-none" =>
+        (
+          false,
+          ["review:correctness"],
+          [
+            "lens correctness: no report: failed: step limit", "no lens reported: the review did not run",
+          ],
+        )
+      "swarm-bad-number" => (false, [], ["--verify takes a number from 0 to 8"])
+      "swarm-duplicate-lens" => (false, [], ["--lens tests given twice"])
       "swarm-unknown-lens" =>
         (
           false,
@@ -751,6 +844,43 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
       assert_true(
         output.contains(part),
         msg="\{mode}: missing \{part}\n\{output}",
+      )
+    }
+    // The merged report is a real ReviewReport: the engine's own parser and
+    // validator accept it.
+    let report = output
+      .split("\n")
+      .find_first(line => line.has_prefix("{\"schema_version\""))
+    let reports = match mode {
+      "swarm-none"
+      | "swarm-unknown-lens"
+      | "swarm-verify-alone"
+      | "swarm-bad-number"
+      | "swarm-duplicate-lens" => false
+      _ => true
+    }
+    assert_eq(report is Some(_), reports, msg=output)
+    if report is Some(line) {
+      match @agent_review.ReviewReport::parse(@json.parse(line.to_owned())) {
+        Ok(parsed) => assert_eq(parsed.validate(), [], msg=line.to_owned())
+        Err(why) => fail("\{mode}: the merged report does not parse: \{why}")
+      }
+    }
+    // The report first, then the lens lines, the refutations, the verdict.
+    if mode == "swarm-merge" {
+      let at = (part : String) => output.find(part).unwrap_or(-1)
+      let order = [
+        at("{\"schema_version\""),
+        at("lens correctness:"),
+        at("Refuted:"),
+        at("findings=3 blockers="),
+      ]
+      assert_true(
+        order[0] >= 0 &&
+        order[0] < order[1] &&
+        order[1] < order[2] &&
+        order[2] < order[3],
+        msg=output,
       )
     }
     println("review: \{mode} passed")
