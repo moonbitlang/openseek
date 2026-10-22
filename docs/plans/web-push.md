@@ -4,9 +4,13 @@ Status: design for review. No code is written yet. It builds on the
 installable PWA in #2206 (`claude/pwa-support-5b8cd3`).
 
 Goal: an installed console on a phone shows a notification while the app is
-closed when a run on one of the account's desktops finishes, or when a run
-stops to ask for permission. This must work on Android Chrome and on iOS
-16.4+ after Add to Home Screen.
+closed in three cases:
+
+- a run on one of the account's desktops finishes;
+- a run on a desktop stops to ask for permission;
+- a Cloud Agents turn finishes (§4).
+
+This must work on Android Chrome and on iOS 16.4+ after Add to Home Screen.
 
 ## Facts that shape the design
 
@@ -255,6 +259,55 @@ on top of `@crypto.hmac`. Tests:
 Writing P-256 in MoonBit was rejected: it is a correctness and side-channel
 risk for no gain.
 
+## 4. Cloud Agents
+
+Cloud turns never pass through a desktop host or the tunnel, so the `notify`
+frame cannot see them. Yet this is the case where push matters most: the
+user starts a task from the phone, closes the app, and Cloud is the only
+place that knows when it ends.
+
+Facts from `moonbitlang/cloud-agents`, a Rust service maintained outside this
+repo:
+
+- **A turn outlives its client.** `start` runs the turn in a detached
+  `tokio::spawn` (`src/task.rs`), so closing the app does not stop it.
+- **One place records the end.** The spawned task calls
+  `store.finish(session, task, outcome)` and then emits `task_finished`.
+  `outcome.status` is `completed` or `failed`. Cloud has no approvals and no
+  cancellation yet, so a turn's end is its only push trigger.
+- **Same account as the relay.** Every Cloud request carries the account
+  `Bearer ts_…`, which Cloud verifies with `GET AUTH_URL/v1/auth/me`. The
+  `user_id` it returns is openseek-api's `users.id`, which the subscriptions
+  hang off.
+- **Cloud already calls openseek-api as the user.** Sharing uploads to
+  `AUTH_URL/v2/shares` with the request's own bearer (`src/share.rs`).
+
+**Decision: Cloud asks openseek-api to notify the account, using the
+account's own bearer.** There is no service-to-service secret, and none
+exists today (`docs/cloud-auth.md` defers service authentication).
+
+- **openseek-api** adds `POST /v2/push/notify`:
+  - Body `{"event":{"kind":"cloud_finished","session":"…","status":"completed"|"failed","answer":"…"}}`.
+  - Uses v2 account auth and sends only to the caller's own subscriptions,
+    through the §3 sender.
+  - The relay sets `url = /cloud/session/<session>`. Cloud session ids are
+    the route's ids, so this opens the conversation directly.
+  - Returns 202 once the sends are queued. 404 means push is disabled.
+- **cloud-agents** keeps the bearer from the request that started the turn
+  in memory for the turn's lifetime. After `store.finish` succeeds, a
+  fire-and-forget task posts the event, with a 10 s timeout and no retry.
+  Any failure is logged and never changes the turn's outcome. If the user
+  signed out during the turn, the token is gone and the 401 means no push,
+  which is the right result.
+- **Abuse bound.** Any holder of an account token can now push to that
+  account's own phones. That harms only the account itself, but a per-account
+  limit (60 notify calls a minute, answering 429 above it) keeps a looping
+  client from burning the VAPID key's standing with push services. The
+  `notify` frame path shares the same limit.
+- **Worker:** `cloud_finished` reuses the finish strings, mapping `completed`
+  to "Task finished" and `failed` to "Task failed". The body is the answer
+  excerpt or the fallback body. There is no device name.
+
 ## PR plan
 
 Each PR is correct when merged alone:
@@ -273,8 +326,13 @@ Each PR is correct when merged alone:
    - The table and routes.
    - `notify` decoding.
    - The `webpush` package and fan-out.
+   - `POST /v2/push/notify` and the per-account limit.
 
    Against today's hosts it serves `/sw.js` and test pushes.
+3. **cloud-agents.** The notify call after `store.finish`, tested against a
+   fake `AUTH_URL` as `src/share.rs` already is. Against an openseek-api
+   without push, the call gets a 404 and the turn is unaffected. This
+   repo has its own maintainer, so the PR goes to them for review.
 
 **Acceptance (run by the user):**
 
@@ -285,6 +343,8 @@ Each PR is correct when merged alone:
 4. Close the app, start a run on a signed-in desktop, and get the finish
    push. Tapping it opens that conversation.
 5. Repeat with a permission request.
+6. Deploy cloud-agents to staging, start a Cloud turn from the phone, close
+   the app, and get the finish push. Tapping it opens `/cloud/session/<id>`.
 
 ## Open questions
 
@@ -299,3 +359,5 @@ Each PR is correct when merged alone:
 4. Whether agent questions (`user_questions`) should also push. The window
    does not post a banner for them today, so v1 leaves them out to stay at
    parity.
+5. Whether the cloud-agents change is ours to open as a PR, or a brief for
+   its maintainer.
