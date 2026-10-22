@@ -16,19 +16,23 @@ but do not track directory-only changes under `share/`.
 
 ## Prompt Sources
 
-- `default_prompt.mbt.md`: the built-in prompt used by every supported
-  DeepSeek, Kimi, and GLM model name. It has two parts: Part 1 is how the
-  agent works on any task (reading, running commands, the tool protocol,
-  delegation, shipping) and Part 2 is MoonBit (the compiler-driven loop,
-  project layout, and language rules). Language material is carried by
-  verified examples under `share/examples/`: a whole-line markdown link to a
-  `.mbtx` file is expanded into a fenced block by `md_to_mbt_string`, so the
-  prompt shows code that CI type-checks and runs.
+- `default_prompt.mbt.md`: agent working instructions, tool contracts,
+  development workflows, validation, and reference-document navigation.
+- `moonbit_syntax_and_api.mbt.md`: MoonBit syntax and library API teaching,
+  manifest examples, and complete programs illustrating the language and APIs.
+  Verified examples live under `share/examples/`: a whole-line markdown link
+  to a `.mbtx` file is expanded into a fenced block by `md_to_mbt_string`, so
+  the prompt shows code that CI type-checks and runs.
+
+Each source has its own dev-build rule and generated MoonBit string function.
+The built-in prompt always concatenates the working instructions first and the
+language guide second. `just prompt`, `just check-prompt`, CI, and the
+documentation updater generate or check both outputs.
 
 ## API Shape
 
-- `system_prompt_for_model(model)`: return the default built-in prompt for a
-  supported chat model. All supported model names use `default_prompt.mbt.md`.
+- `system_prompt_for_model(model)`: return the complete built-in prompt for a
+  supported chat model. All supported model names use both Markdown sources.
 
 The agent package depends on this package for its default prompt, while the CLI
 can still override or append prompt files for A/B experiments.

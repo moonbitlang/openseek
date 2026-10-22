@@ -14,7 +14,7 @@ concurrency:
 jobs:
   workflows:
     name: bundled workflow checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -69,7 +69,7 @@ jobs:
 
   check:
     name: check (${{ matrix.moonbit-channel }}, ${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     strategy:
@@ -100,10 +100,11 @@ jobs:
       - name: Update MoonBit package registry
         run: moon update
 
-      - name: Check generated resource layout
+      - name: Check generated prompts
         if: matrix.moonbit-channel == 'stable' && matrix.target == 'native'
         run: |
           moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
+          moon run scripts/md_to_mbt_string -- --check prompt/moonbit_syntax_and_api.mbt.md prompt/generated_moonbit_syntax_and_api.mbt
 
       - name: Check formatting
         # Run the repository's one canonical formatter once on stable/native.
@@ -236,9 +237,6 @@ jobs:
   # Keep it out of Desktop's recipe so either application can be tested alone.
   viz-e2e:
     name: viz e2e
-    # Pinned: `ubuntu-latest` now rolls out Ubuntu 26.04, where Playwright
-    # 1.60 cannot install Chromium ("does not support chromium on
-    # ubuntu26.04-x64"). Lift the pin with a Playwright that supports it.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:

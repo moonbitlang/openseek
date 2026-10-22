@@ -1356,3 +1356,56 @@ button.row-twisty:hover {
 .sidebar-search-clear { --icon-size: var(--icon-sm); width: 18px; height: 18px; }
 .conversation-row.search-selected { background: var(--color-bg-subtle); }
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
+
+/* Host identity and actions share the right edge without moving the title. */
+.workspace-row {
+  gap: 8px;
+  min-height: 32px;
+}
+.workspace-trailing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 44px;
+  max-width: 42%;
+}
+.workspace-host,
+.workspace-actions {
+  grid-area: 1 / 1;
+  justify-self: end;
+}
+.workspace-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.workspace-host-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-host-status {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.workspace-host-status.online { background: var(--color-success); }
+.workspace-host-status.offline { background: var(--color-text-muted); }
+.workspace-actions {
+  display: flex;
+  gap: 4px;
+}
+.workspace-row:is(:hover, :focus-within, :has(.workspace-menu-button[aria-expanded="true"])) .workspace-host {
+  visibility: hidden;
+}
+.workspace-row:is(:focus-within, :has(.workspace-menu-button[aria-expanded="true"])) .row-archive {
+  visibility: visible;
+}

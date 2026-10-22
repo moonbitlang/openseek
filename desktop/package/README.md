@@ -46,6 +46,8 @@ depends on a `<base>`. The relay serves one current Browser bundle; a host
 built for another `HostProtocolRevision` is shown as unavailable instead of
 being driven. The separate visualization app remains under `web/viz/` for the
 host's own session sharing.
+The web app manifest and its icons from `desktop/pwa/` ship in the same asset
+directory; see `desktop/pwa/README.md`.
 
 Add the executable and its licenses in `Build.stage`. Preserve platform
 suffixes and executable permissions. If a macOS binary requires signing, also
@@ -93,17 +95,25 @@ evidence that the installed lookup works.
 
 ## Validation
 
-Run source checks:
+### Development checks
 
-```sh
-just desktop-build-scripts-check
-moon -C desktop/backend test host --target native
-just check
-just test
-just build
-```
+Follow the [Desktop validation rules](../AGENTS.md#validation-by-change-scope).
+Commands below run from the repository root.
 
-Then build on every target operating system:
+| Change | Targeted checks |
+| --- | --- |
+| Platform-specific build entry or resources | Affected script/package checks and a build on that platform. |
+| Shared acquisition, staging, signing, or build logic | Matching tests listed in [desktop/justfile](../justfile); use `just desktop-build-scripts-check` when multiple entries are affected. Build affected platform variants. |
+| Installed lookup or process environment | Relevant native package tests, such as `moon -C desktop/backend test host --target native`, and the affected behavior in an installed package. |
+
+Expand to other platforms or root `just check`, `just test`, and `just build`
+when shared contracts, dependencies, or build changes affect them, or when
+explicitly required. Local packaging edits do not automatically require them.
+
+### Complete release validation
+
+For a complete release, build on every supported target operating system using
+its corresponding command:
 
 ```sh
 moon run ./desktop/package/macos -- --no-open
@@ -116,7 +126,9 @@ standalone esbuild executable, verify their checked-in SHA-256 digests, and
 cache only the archives below `desktop/target/vendor-web/cache`. They do not
 require npm.
 
-Inspect the installed copy, not the extraction directory:
+Inspect the installed copy, not the extraction directory. During development,
+select checks for the changed behavior; for complete release validation, apply
+the platform-relevant checks to each installed artifact:
 
 - run the packaged binary's harmless version probe;
 - confirm licenses and executable permissions;

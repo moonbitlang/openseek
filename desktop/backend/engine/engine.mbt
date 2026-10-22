@@ -1508,7 +1508,7 @@ async fn engine_process_args(
     args.push("--session-root=\{root.to_string()}")
   }
   args.append(engine_mcp_args(config.mcp_config, runtime_dir, env, host_mcp~))
-  args.append(["--dir", ".", "--approval", "ask"])
+  args.append(["--dir", ".", "--approval", config.approval.wire()])
   args
 }
 
@@ -3065,6 +3065,7 @@ async test "native engine env has one authoritative bundled moon path" {
     api_url: None,
     model: "m",
     thinking: ThinkingHigh,
+    approval: ApprovalAsk,
     max_steps: 1,
     engine: engine.to_string(),
     cwd: None,
@@ -3110,6 +3111,10 @@ async test "native engine env has one authoritative bundled moon path" {
   @debug.assert_eq(engine_process_args({ ..config, session: "--resume", }), [
     "serve", "--session=--resume", "--dir", ".", "--approval", "ask",
   ])
+  @debug.assert_eq(
+    engine_process_args({ ..config, approval: ApprovalReview, }),
+    ["serve", "--session=s-env", "--dir", ".", "--approval", "review"],
+  )
   let explicit_root = root.join("sessions").resolve()
   @debug.assert_eq(
     engine_process_args({ ..config, session_root: Some(explicit_root), }),
@@ -3256,6 +3261,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
     api_url: None,
     model: "test",
     thinking: ThinkingMax,
+    approval: ApprovalAsk,
     max_steps: 1,
     engine: dir + "/missing/openseek",
     cwd: None,
@@ -3372,6 +3378,7 @@ fn pump_test_config(session : String) -> RunConfig {
     api_url: None,
     model: "test",
     thinking: ThinkingMax,
+    approval: ApprovalAsk,
     max_steps: 1,
     engine: "unused",
     cwd: None,

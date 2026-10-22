@@ -7,6 +7,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/agent_review",
 }
 
 supported_targets = "+native"

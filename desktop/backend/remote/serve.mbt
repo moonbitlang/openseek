@@ -174,6 +174,7 @@ async fn WsClientActor::run(self : WsClientActor, url : String) -> Unit {
 async fn WsClientActor::serve(
   self : WsClientActor,
   conn : @websocket.Conn,
+  heartbeat_ms? : Int32,
 ) -> Unit {
   let subscription = self.open_subscription(on_overflow=() => conn.close())
   defer subscription.notifications.close()
@@ -191,7 +192,12 @@ async fn WsClientActor::serve(
   @async.with_task_group(group => {
     group.spawn_bg(() => {
       for ;; {
-        out.get().write(conn)
+        let message = out.get()
+        match heartbeat_ms {
+          Some(timeout) =>
+            @async.with_timeout(timeout, () => message.write(conn))
+          None => message.write(conn)
+        }
       }
     })
     group.spawn_bg(() => {
@@ -204,10 +210,10 @@ async fn WsClientActor::serve(
       )
     })
     group.spawn_bg(() => {
-      // Protocol-level keepalive: a dead middlebox connection surfaces as a
-      // failed ping write instead of lingering forever.
+      // SSH bounds each write, including ping's wait for a matching Pong.
+      // Other transports retain their existing heartbeat policy.
       for ;; {
-        @async.sleep(PingIntervalMs)
+        @async.sleep(heartbeat_ms.unwrap_or(PingIntervalMs))
         enqueue_outgoing(out, Ping)
       }
     })

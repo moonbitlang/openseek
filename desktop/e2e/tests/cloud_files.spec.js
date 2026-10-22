@@ -1230,3 +1230,91 @@ test('an older Cloud download cannot clear a newer download of the same file', a
   second();
   await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
 });
+
+async function selectCloudCode(page) {
+  const line = source(page).locator('.view-lines .view-line').nth(1);
+  await line.click();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+End');
+  const input = source(page).locator('.agent-feedback-input-widget textarea');
+  await expect(input).toBeVisible();
+  return input;
+}
+
+test('Cloud code feedback preserves the owning draft, sends Annotation and reopens the selected lines', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  await page.locator('#task').fill('Existing Cloud draft');
+  const feedback = await selectCloudCode(page);
+  await feedback.fill('Explain this function');
+  await page.getByRole('checkbox', { name: 'Batch', exact: true }).check();
+  await feedback.press('Enter');
+  const chip = page.locator('.composer .mention-chip');
+  await expect(chip).toContainText('hello #.mbt');
+  await expect(page.locator('#task')).toHaveValue('Existing Cloud draft');
+  expect(cloud.postCount).toBe(0);
+  await cloud.row(sessionB).click();
+  await expect(chip).toHaveCount(0);
+  await page.locator('#task').fill('Other draft');
+  await cloud.row(sessionA).click();
+  await expect(page.locator('#task')).toHaveValue('Existing Cloud draft');
+  await expect(chip).toContainText('hello #.mbt');
+  await chip.locator('button').first().click();
+  await expect(source(page)).toContainText('Cloud text');
+  await expect(source(page).locator('.agent-feedback-widget')).toContainText('Explain this function');
+  await page.screenshot({ path: testInfo.outputPath('cloud-code-annotation.png') });
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => cloud.postCount).toBe(1);
+  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
+  expect(send.path).toContain(sessionA);
+  const content = JSON.parse(send.body).content;
+  expect(content).toContain('Existing Cloud draft');
+  expect(content).toContain('<annotation file="src/hello #.mbt" lines="2-2">');
+  expect(content).toContain('fn hello() -> String { "Cloud text" }');
+  expect(content).toContain('Explain this function');
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud code feedback keeps generation send restrictions and archived files read only', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.generating.add(sessionA);
+  cloud.histories.set(sessionA, { messages: [], generating: true });
+  cloud.archived.add(sessionB);
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  const feedback = await selectCloudCode(page);
+  await feedback.fill('Keep this in my draft');
+  await feedback.press('Enter');
+  await expect(page.locator('.composer .mention-chip')).toContainText('hello #.mbt');
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  expect(cloud.postCount).toBe(0);
+  const archived = page.getByRole('button', { name: /^Archived chats \(/ });
+  if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
+  await cloud.row(sessionB).click();
+  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await openText(page);
+  const line = source(page).locator('.view-lines .view-line').nth(1);
+  await line.click(); await page.keyboard.press('Home'); await page.keyboard.press('Shift+End');
+  await expect(source(page).locator('.agent-feedback-input-widget')).toBeHidden();
+  await line.hover();
+  await expect(source(page).locator('.agent-feedback-glyph.line-hover')).toHaveCount(0);
+  expect(cloud.postCount).toBe(0);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud code feedback applies through the existing submit action when idle', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  await page.locator('#task').fill('Explain the selection');
+  const feedback = await selectCloudCode(page);
+  await feedback.fill('Why does this return a string?');
+  await feedback.press('Enter');
+  await expect.poll(() => cloud.postCount).toBe(1);
+  const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
+  const content = JSON.parse(request.body).content;
+  expect(content).toContain('Explain the selection');
+  expect(content).toContain('<annotation file="src/hello #.mbt" lines="2-2">');
+  expect(content).toContain('Why does this return a string?');
+  expect(cloud.device.pageErrors).toEqual([]);
+});

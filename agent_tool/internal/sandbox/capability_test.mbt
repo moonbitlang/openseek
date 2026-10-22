@@ -139,9 +139,9 @@ async fn create_raises(root : String, writable_subtree~ : String) -> Bool {
 }
 
 ///|
-/// The subjects a profile scan discovers must reach denial reporting: a denied
-/// DIRECTORY carries no protected suffix, so only the flowed-through subject
-/// can recognize it. The canned line is the real errno shape a directory
+/// The profile's subjects must reach denial reporting: a denied DIRECTORY
+/// carries no protected suffix, so only the flowed-through subject can
+/// recognize it. The canned line is the real errno shape a directory
 /// rename denial produces.
 async test "profile subjects flow into denial reporting" {
   @vfs.with_tmpdir(prefix="openseek-sandbox-capability-subjects-", dir => {
@@ -229,5 +229,42 @@ async test "source directory cannot be moved outside the protected workspace" {
     assert_true(exit_code != 0)
     assert_eq(@fs.read_file("\{workspace}/src/main.mbt").text(), "source")
     assert_false(@fs.exists("\{dir}/escaped"))
+  })
+}
+
+///|
+/// The directory rule covers every directory under the root, not only the ones
+/// holding source, and leaves file writes alone: data files still land in
+/// existing directories and moon's `_build` tree can still be created.
+async test "directory writes are denied in the workspace; files and _build are not" {
+  @vfs.with_tmpdir(prefix="sandbox-directory-writes-", dir => {
+    let workspace = "\{dir}/workspace"
+    @fs.mkdir("\{workspace}/assets", recursive=true)
+    guard @sandbox.SandboxedCommand::create_if_available(
+        workspace,
+        Shell("mkdir '\{workspace}/fresh'"),
+        profile_path="\{dir}/profile.sb",
+      )
+      is Some(command) else {
+      return
+    }
+    let (exit_code, text) = merged_output_text(command)
+    assert_true(exit_code != 0)
+    assert_false(@fs.exists("\{workspace}/fresh"))
+    assert_true(command.output_reports_denial(text), msg=text)
+    guard @sandbox.SandboxedCommand::create_if_available(
+        workspace,
+        Shell(
+          "printf data > '\{workspace}/assets/report.txt' && mkdir -p '\{workspace}/_build/wasm' && printf gen > '\{workspace}/_build/wasm/gen.mbt'",
+        ),
+        profile_path="\{dir}/profile.sb",
+      )
+      is Some(command) else {
+      return
+    }
+    let (exit_code, text) = merged_output_text(command)
+    assert_eq(exit_code, 0, msg=text)
+    assert_eq(@fs.read_file("\{workspace}/assets/report.txt").text(), "data")
+    assert_eq(@fs.read_file("\{workspace}/_build/wasm/gen.mbt").text(), "gen")
   })
 }

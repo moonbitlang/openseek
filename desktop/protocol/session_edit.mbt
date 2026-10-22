@@ -11,6 +11,8 @@ pub(all) struct SessionEditPayload {
   images : Array[String]
   attachment_paths : Array[String]
   thinking : OpenSeekThinking?
+  // Who answers the engine's permission questions; absent means ask.
+  approval : OpenSeekApproval?
   max_steps : Int32?
 } derive(Debug, Eq)
 
@@ -38,6 +40,9 @@ pub impl FromJson for SessionEditPayload with fn from_json(json, path) {
     thinking: object
     .optional_json("thinking")
     .map(value => @json.from_json(value, path=path.add_key("thinking"))),
+    approval: object
+    .optional_json("approval")
+    .map(value => @json.from_json(value, path=path.add_key("approval"))),
     max_steps: object
     .optional_json("max_steps")
     .map(value => @json.from_json(value, path=path.add_key("max_steps"))),
@@ -61,6 +66,9 @@ pub impl ToJson for SessionEditPayload with fn to_json(self) {
   }
   if self.thinking is Some(value) {
     fields["thinking"] = Json(value)
+  }
+  if self.approval is Some(value) {
+    fields["approval"] = Json(value)
   }
   if self.max_steps is Some(value) {
     fields["max_steps"] = Json(value)

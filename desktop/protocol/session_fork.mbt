@@ -5,6 +5,9 @@ pub(all) struct SessionForkPayload {
   through : Int32
   model : String
   source_title : String
+  // Fork as a side chat of `session` (see `side_chat_id`) rather than as a
+  // conversation of its own. Absent on the wire means an ordinary fork.
+  side_chat : Bool?
 } derive(Debug, Eq)
 
 ///|
@@ -22,18 +25,23 @@ pub impl FromJson for SessionForkPayload with fn from_json(json, path) {
     through: object.required_int("through"),
     model: object.required_string("model"),
     source_title: object.required_string("source_title"),
+    side_chat: object.optional_bool("side_chat"),
   }
 }
 
 ///|
 pub impl ToJson for SessionForkPayload with fn to_json(self) {
-  {
-    "session": self.session,
-    "workspace": self.workspace,
-    "through": self.through,
-    "model": self.model,
-    "source_title": self.source_title,
+  let fields : Map[String, Json] = {
+    "session": Json(self.session),
+    "workspace": Json(self.workspace),
+    "through": Json(self.through),
+    "model": Json(self.model),
+    "source_title": Json(self.source_title),
   }
+  if self.side_chat is Some(value) {
+    fields["side_chat"] = Json(value)
+  }
+  Json(fields)
 }
 
 ///|

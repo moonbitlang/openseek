@@ -491,9 +491,10 @@ fn wasm_policy_document(
 }
 
 ///|
-/// The guest's `env.set` block: whatever the caller injects, then the two
-/// names whose values are POLICY DECISIONS rather than messages, written last
-/// so no injected variable can override them.
+/// The guest's `env.set` block: whatever the caller injects, the PTC and MCP
+/// handoffs it did not inject (set to unavailable ones; see below), then the
+/// two names whose values are POLICY DECISIONS rather than messages, written
+/// last so no injected variable can override them.
 ///
 /// `TMPDIR` points the snippet's scratch space into the directory this run
 /// owns. `WORKFLOW_HOST` is always set — to the handoff when this run has one,
@@ -510,10 +511,15 @@ fn env_set(tmp_dir : String, inject : Map[String, String]) -> Map[String, Json] 
   if !set.contains(HostHandoffVar) {
     set[HostHandoffVar] = Json("")
   }
-  if !set.contains("OPENSEEK_PTC") {
-    set["OPENSEEK_PTC"] = Json(
-      ({ "version": 1, "available": false } : Json).stringify(),
-    )
+  // A run without PTC or without an MCP host gets an unavailable handoff
+  // rather than one its engine inherited from a hosted snippet: that one
+  // reaches another session's tools and servers.
+  for name in ["OPENSEEK_PTC", "OPENSEEK_MCP"] {
+    if !set.contains(name) {
+      set[name] = Json(
+        ({ "version": 1, "available": false } : Json).stringify(),
+      )
+    }
   }
   set["TMPDIR"] = Json(tmp_dir)
   set
@@ -551,13 +557,17 @@ test "a policy clears any inherited handoff and admits no engine" {
   // environment, and an engine launched under an old hosted workflow could
   // have inherited a handoff; an empty value fails that library's reader
   // closed.
-  assert_eq(set.length(), 3)
+  assert_eq(set.length(), 4)
   assert_true(set.get("TMPDIR") is Some(_))
   assert_eq(set.get("WORKFLOW_HOST"), Some(Json::string("")))
-  guard set.get("OPENSEEK_PTC") is Some(String(ptc)) else {
-    fail("missing PTC capability override")
+  // So are the PTC and MCP handoffs, to unavailable ones: an inherited one
+  // would reach another session's tools and MCP servers.
+  for name in ["OPENSEEK_PTC", "OPENSEEK_MCP"] {
+    guard set.get(name) is Some(String(handoff)) else {
+      fail("missing \{name} override")
+    }
+    assert_eq(@json.parse(handoff), { "version": 1, "available": false })
   }
-  assert_eq(@json.parse(ptc), { "version": 1, "available": false })
   for rule in allow {
     guard rule is { "program": String(program), .. } else { continue }
     assert_false(program.contains("openseek"))

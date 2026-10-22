@@ -1,6 +1,7 @@
 import {
   "moonbitlang/openseek/agent_tool/read_image",
   "moonbitlang/openseek/agent_tool/ptc",
+  "moonbitlang/openseek/mcp/host" @mcphost,
   "moonbitlang/async/os_error",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/core/int",

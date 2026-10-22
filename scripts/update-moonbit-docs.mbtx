@@ -1,3 +1,4 @@
+///|
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -5,6 +6,7 @@ import {
   "moonbitlang/core/env",
 }
 
+///|
 async fn main {
   guard @fs.exists("desktop/package/build.mjs") && @fs.exists("share/workflow") else {
     fail("Run this command from the OpenSeek repository root")
@@ -12,15 +14,23 @@ async fn main {
   let requested = match @env.args() {
     [_] => "latest"
     [_, revision] => revision
-    _ => fail("Usage: just update-docs [latest|40-character markdown-build commit]")
+    _ =>
+      fail(
+        "Usage: just update-docs [latest|40-character markdown-build commit]",
+      )
   }
   let commit = if requested == "latest" {
     let result = @shell.Cmd("git", [
-      "ls-remote", "--exit-code", "--heads",
-      "https://github.com/moonbitlang/moonbit-docs.git", "refs/heads/markdown-build",
+      "ls-remote", "--exit-code", "--heads", "https://github.com/moonbitlang/moonbit-docs.git",
+      "refs/heads/markdown-build",
     ]).output()
     result.check()
-    let fields = result.stdout().trim().split("\t").map(s => s.to_owned()).collect()
+    let fields = result
+      .stdout()
+      .trim()
+      .split("\t")
+      .map(s => s.to_owned())
+      .collect()
     guard fields is [sha, "refs/heads/markdown-build"] else {
       fail("Could not resolve the upstream markdown-build commit")
     }
@@ -29,7 +39,7 @@ async fn main {
     requested
   }
   guard commit.length() == 40 &&
-    commit.iter().all(c => c is ('0'..='9' | 'a'..='f')) else {
+    commit.iter().all(c => c is ('0'..<='9' | 'a'..<='f')) else {
     fail("Expected latest or a full 40-character markdown-build commit")
   }
   println("Using moonbit-docs markdown build \{commit}")
@@ -38,14 +48,20 @@ async fn main {
   let archive = "\{temp}/docs.tar.gz"
   let staged = "\{temp}/moonbit"
   @shell.Cmd("curl", [
-    "--fail", "--location", "--retry", "3", "--output", archive,
+    "--fail",
+    "--location",
+    "--retry",
+    "3",
+    "--output",
+    archive,
     "https://codeload.github.com/moonbitlang/moonbit-docs/tar.gz/\{commit}",
   ]).run()
   @fs.mkdir(staged)
-  @shell.Cmd("tar", [
-    "-xzf", archive, "-C", staged, "--strip-components=1",
-  ]).run()
-  for entry in ["README.md", "index.md", "language", "toolchain", "tutorial", "example"] {
+  @shell.Cmd("tar", ["-xzf", archive, "-C", staged, "--strip-components=1"]).run()
+  for
+    entry in [
+      "README.md", "index.md", "language", "toolchain", "tutorial", "example",
+    ] {
     guard @fs.exists("\{staged}/\{entry}") else {
       fail("The commit is not a complete markdown build: missing \{entry}")
     }
@@ -57,15 +73,22 @@ async fn main {
   if @fs.exists("\{staged}/.gitignore") {
     @fs.remove("\{staged}/.gitignore")
   }
-  if !@fs.exists("share/doc") { @fs.mkdir("share/doc", recursive=true) }
+  if !@fs.exists("share/doc") {
+    @fs.mkdir("share/doc", recursive=true)
+  }
   if @fs.exists("share/doc/moonbit") {
     @fs.rmdir("share/doc/moonbit", recursive=true)
   }
   @shell.Cmd("cp", ["-R", staged, "share/doc/moonbit"]).run()
   @fs.write_file("share/doc/moonbit.commit", "\{commit}\n")
   @shell.Cmd("moon", [
-    "run", "scripts/md_to_mbt_string", "--",
-    "prompt/default_prompt.mbt.md", "prompt/generated_default_prompt.mbt",
+    "run", "scripts/md_to_mbt_string", "--", "prompt/default_prompt.mbt.md", "prompt/generated_default_prompt.mbt",
   ]).run()
-  println("Updated share/doc/moonbit to \{commit}; review the diff before committing.")
+  @shell.Cmd("moon", [
+    "run", "scripts/md_to_mbt_string", "--", "prompt/moonbit_syntax_and_api.mbt.md",
+    "prompt/generated_moonbit_syntax_and_api.mbt",
+  ]).run()
+  println(
+    "Updated share/doc/moonbit to \{commit}; review the diff before committing.",
+  )
 }

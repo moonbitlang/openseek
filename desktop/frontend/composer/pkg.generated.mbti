@@ -69,6 +69,7 @@ pub(all) enum Action {
   PermissionSelected(identity~ : Identity, mode~ : @protocol.CodexPermissionMode)
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
+  ApprovalModeToggled(identity~ : Identity)
   ApiSetupRequested(identity~ : Identity)
   QueuedInputEditRequested(identity~ : Identity, id~ : String)
   QueuedInputSteerRequested(identity~ : Identity, id~ : String)
@@ -85,6 +86,11 @@ pub(all) struct ApprovalNotice {
   target_label : String?
   body : String?
   answered : Bool
+} derive(Eq)
+
+pub(all) struct ApprovalToggle {
+  on : Bool
+  enabled : Bool
 } derive(Eq)
 
 pub(all) struct CodexRequestInput {
@@ -244,6 +250,7 @@ pub(all) struct Mention {
   ref_ : @mention_context.MentionRef
   range : @common.Range?
 } derive(Eq, @debug.Debug)
+pub fn Mention::editor_annotation(String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn Mention::equal(Self, Self) -> Bool
 pub fn Mention::not_equal(Self, Self) -> Bool
 pub fn Mention::to_repr(Self) -> @debug.Repr
@@ -348,6 +355,7 @@ pub(all) struct ReasoningSelect {
 pub(all) enum ReplyContent {
   Text(quote~ : String?, comment~ : String)
   OfficeSelection(String)
+  Annotation(Mention)
 }
 
 pub(all) struct RunHeartbeat {
@@ -384,6 +392,7 @@ pub(all) struct SlashCommand {
   label : String
   detail : String
   command : String
+  prompt : String?
 } derive(Eq, @debug.Debug)
 pub fn SlashCommand::equal(Self, Self) -> Bool
 pub fn SlashCommand::not_equal(Self, Self) -> Bool
@@ -395,6 +404,7 @@ pub(all) enum StatusComponent {
   PermissionStatus(PermissionControl)
   GitStatus(GitControl)
   WorktreeStatus(WorktreeControl)
+  ApprovalStatus(ApprovalToggle)
 } derive(Eq)
 
 type Trigger derive(Eq)

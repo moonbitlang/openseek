@@ -1329,21 +1329,13 @@ pub fn State::with_editor_comment(
   side~ : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
 ) -> State {
   let mentions = self.mentions.copy()
-  let annotation : @composer.Mention = {
-    ref_: @mention_context.Annotation(
-      file~,
-      start_line=range.start_line_number,
-      end_line=range.end_line_number,
-      quote~,
-      comment~,
-      side~,
-    ),
-    range: if side is @mention_context.OriginalRevision {
-      None
-    } else {
-      Some(range)
-    },
-  }
+  let annotation = @composer.Mention::editor_annotation(
+    file,
+    range,
+    quote,
+    comment,
+    side~,
+  )
   if !mentions.contains(annotation) {
     mentions.push(annotation)
   }

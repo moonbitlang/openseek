@@ -4,6 +4,8 @@ async fn main {
     _ =>
       match @env.get_env_var("OPENSEEK_CI_FIXTURE") {
         Some(dir) => ci_child(dir)
+        None if @env.get_env_var("OPENSEEK_GH_FIXTURE") is Some(dir) =>
+          gh_child(dir)
         None => {
           let root = @fs.realpath(".")
           guard @env.args() is [exe] else {
@@ -14,6 +16,7 @@ async fn main {
             verify_hosted(root, temp)
             verify_review(root, temp)
             verify_ci(root, temp, exe)
+            verify_simplify(root, temp, exe)
           })
         }
       }
@@ -77,5 +80,6 @@ fn clean_env() -> Map[String, String] {
   env.remove("WORKFLOW_HOST")
   env.remove("OPENSEEK_PTC")
   env.remove("OPENSEEK_CI_FIXTURE")
+  env.remove("OPENSEEK_GH_FIXTURE")
   env
 }

@@ -76,6 +76,11 @@ startup banner) stores the conversation under `--session-root` (default
   `--continue` is rejected.
 - `openseek sessions list` lists what is resumable.
 
+`-C <dir>` (`--change-directory`) runs the UI as if started in `<dir>`. The
+process never changes directory: the workspace (`--dir`), a relative
+`--session-root` and a relative `--engine` path are resolved against `<dir>`
+at launch, and the engine and `!` shell commands are spawned there.
+
 `/inspect` shows the session live in the browser. It starts (or reuses) the
 session viewer for `--session-root`, `moonx moonbitlang/inspect@0.1.0 --ensure
 --watch`, in the background, and adds its link to the transcript on a line of

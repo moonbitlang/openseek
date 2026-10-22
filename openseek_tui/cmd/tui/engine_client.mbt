@@ -89,6 +89,7 @@ async fn[G] EngineClient::start(
     group,
     self.config.engine,
     self.config.engine_serve_args(),
+    cwd=self.config.cwd,
     inherit_env=false,
     extra_env=child_env,
     stdin=child_stdin,

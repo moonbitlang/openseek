@@ -6,9 +6,27 @@ pub async fn serve_app_server(
   lifetime : &@io.Reader,
   announce : &@io.Writer,
 ) -> Unit {
+  run_app_server(
+    state,
+    lifetime,
+    announce,
+    startup_timeout_ms=1_200_000,
+    heartbeat_ms=30_000,
+  )
+}
+
+///|
+async fn run_app_server(
+  state : @api.ApiState,
+  lifetime : &@io.Reader,
+  announce : &@io.Writer,
+  startup_timeout_ms~ : Int32,
+  heartbeat_ms~ : Int32,
+) -> Unit {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
   let instance = @uuid.mint()
+  let mut owned = false
   @async.with_task_group(group => {
     state.start_services(group)
     let announcement = AppServerAnnouncement::{
@@ -17,10 +35,16 @@ pub async fn serve_app_server(
     }
     announce.write(@json.to_json(announcement).stringify() + "\n")
     group.spawn_bg(() => {
-      while lifetime.read_some(max_len=4096) is Some(_) {
-        ()
+      ignore(
+        @async.with_timeout_opt(startup_timeout_ms, () => {
+          while lifetime.read_some(max_len=4096) is Some(_) {
+            ()
+          }
+        }),
+      )
+      if !owned {
+        group.return_immediately(())
       }
-      group.return_immediately(())
     })
     for ;; {
       let (conn, _) = server.accept()
@@ -36,7 +60,7 @@ pub async fn serve_app_server(
         }
         let ws = @websocket.from_http_server(request, conn)
         defer ws.close()
-        @async.with_timeout(10_000, () => {
+        let request = @async.with_timeout(10_000, () => {
           let message = ws.recv()
           guard message.kind is Text else {
             raise @host.HostError("Expected initialize")
@@ -54,13 +78,26 @@ pub async fn serve_app_server(
           guard request.instance == instance else {
             raise @host.HostError("App-server identity or protocol changed")
           }
+          request
+        })
+        // Only one successfully initialized connection owns this process.
+        // Claim before replying: the client may close bootstrap stdin as soon
+        // as it receives the response. Rejected peers must not end the owner.
+        guard !owned else { return }
+        owned = true
+        try {
           let response = AppServerInitializeResponse::{
             id: request.id,
             instance,
           }
-          ws.send_text(@json.to_json(response).stringify())
-        })
-        WsClientActor(state).serve(ws)
+          @async.with_timeout(heartbeat_ms, () => {
+            ws.send_text(@json.to_json(response).stringify())
+          })
+          WsClientActor(state).serve(ws, heartbeat_ms~)
+        } catch {
+          _ => ()
+        }
+        group.return_immediately(())
       })
     }
   })

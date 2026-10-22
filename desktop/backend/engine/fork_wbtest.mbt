@@ -44,6 +44,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
       through: 3,
       model: "deepseek-flash",
       source_title: "Original title",
+      side_chat: None,
     },
     on_created=_ => (),
     on_worktree_changed=(_, _) => (),
@@ -190,6 +191,7 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
         through: 2,
         model: "fork-model",
         source_title: "Original",
+        side_chat: None,
       },
       on_created=session => created.push(session),
       on_worktree_changed=(_, rows) => placements.push(rows),
@@ -277,6 +279,7 @@ async test "a fork is committed exactly when its record was written" {
         through: 2,
         model,
         source_title: "Original",
+        side_chat: None,
       }
       Some(
         fork_session(
@@ -342,6 +345,7 @@ async test "a fork cancelled after its record was written keeps its worktree and
               through: 2,
               model: "hangs-after",
               source_title: "Original",
+              side_chat: None,
             },
             on_created=session => created.push(session),
             on_worktree_changed=(_, rows) => placements.push(rows),
@@ -375,5 +379,144 @@ async test "a fork cancelled after its record was written keeps its worktree and
     let fork_checkout = @worktree.run_dir(repo, fork)
     assert_true(fork_checkout != checkout)
     assert_true(@fsx.is_dir(fork_checkout.to_path()))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a side chat is a numbered member of its conversation's family" {
+  with_worktree_fork_fixture((manager, repo, store, checkout) => {
+    let placements : Array[Array[WorktreeInfo]] = []
+    let created : Array[String] = []
+    async fn side_chat_of(session : String) -> @protocol.SessionForkReply {
+      fork_session(
+        manager,
+        {
+          session,
+          workspace: repo.resource_path(),
+          through: 2,
+          model: "fork-model",
+          source_title: "Original",
+          side_chat: Some(true),
+        },
+        on_created=session => created.push(session),
+        on_worktree_changed=(_, rows) => placements.push(rows),
+      )
+    }
+
+    // Side chats are named beside their conversation, each its own, and
+    // work in the conversation's checkout.
+    let first = side_chat_of("s-src")
+    let second = side_chat_of("s-src")
+    assert_eq(@protocol.split_side_chat_id(first.session), Some("s-src"))
+    assert_eq(@protocol.split_side_chat_id(second.session), Some("s-src"))
+    assert_true(first.session != second.session)
+    assert_eq(created, [first.session, second.session])
+    assert_eq(store.title(SessionId(first.session)), Some("Original"))
+    assert_eq(
+      @worktree.run_dir(repo, second.session).to_string(),
+      checkout.to_string(),
+    )
+    // A side chat opens none of its own.
+    let nested = try {
+      ignore(side_chat_of(first.session))
+      false
+    } catch {
+      EngineError(_) => true
+      error => raise error
+    }
+    assert_true(nested)
+    // Closing one keeps the checkout the conversation still works in.
+    assert_true(
+      delete_session(manager, first.session, repo.resource_path(), (_, _) => ())
+      is Deleted,
+    )
+    assert_true(@fsx.is_dir(checkout.to_path()))
+    guard @worktree.list(repo.to_string()).worktrees is [row] else {
+      fail("the worktree row must survive a closed side chat")
+    }
+    assert_eq(row.sessions, ["s-src", second.session])
+    let third = side_chat_of("s-src")
+    // Its side chats leave with the conversation, so they do not keep the
+    // checkout from the conversation's own delete or archive.
+    assert_true(
+      delete_session_check(manager, "s-src", repo.resource_path()).checkout
+      is Some(_),
+    )
+    // Archiving the conversation takes its side chats along, and with them
+    // the last holders of the checkout.
+    assert_true(archive_session(manager, "s-src", (_, _) => ()) is Archived(_))
+    assert_false(store.exists(SessionId(second.session)))
+    assert_false(store.exists(SessionId(third.session)))
+    assert_false(@fsx.exists(checkout.to_path()))
+  })
+}
+
+///|
+/// Another host attached to the project can open a side chat while this one
+/// archives the conversation. Whichever comes second under the store's
+/// shared lock is refused, so a side chat never outlives its conversation.
+#cfg(not(platform="windows"))
+async test "a side chat opened by another host mid-archive is never left behind" {
+  with_worktree_fork_fixture((manager, repo, store, _) => {
+    let root = @workspaces.store_root(repo)
+    let late = @protocol.side_chat_id("s-src", "0a1b2c3d")
+    // The other host's side-chat fork holds the lock while it writes.
+    let held = @fsx.FileLock::acquire(
+      @session_store.archived_root(root).to_path(),
+    )
+    let mut refusal : String? = None
+    @async.with_task_group(group => {
+      group.spawn_bg(() => {
+        refusal = Some(
+          try {
+            ignore(archive_session(manager, "s-src", (_, _) => ()))
+            "archived"
+          } catch {
+            EngineError(detail) => detail
+            error => raise error
+          },
+        )
+      })
+      // This host has found the family it will move.
+      while manager.record_guards.get("s-src") is None {
+        @async.sleep(5)
+      }
+      store.create(Session(SessionId(late), system_prompt="system"))
+      held.release()
+    })
+    assert_eq(
+      refusal,
+      Some("a side chat of this conversation was just opened; try again"),
+    )
+    assert_true(store.exists(SessionId("s-src")))
+    assert_true(store.exists(SessionId(late)))
+    // Asked again, the archive takes the side chat along.
+    assert_true(archive_session(manager, "s-src", (_, _) => ()) is Archived(_))
+    assert_false(store.exists(SessionId(late)))
+    // A side chat asked for after the conversation left is refused, not
+    // made beside a conversation that is gone.
+    let opened = try {
+      ignore(
+        fork_session(
+          manager,
+          {
+            session: "s-src",
+            workspace: repo.resource_path(),
+            through: 2,
+            model: "fork-model",
+            source_title: "Original",
+            side_chat: Some(true),
+          },
+          on_created=_ => (),
+          on_worktree_changed=(_, _) => (),
+        ),
+      )
+      None
+    } catch {
+      EngineError(detail) => Some(detail)
+      error => raise error
+    }
+    assert_eq(opened, Some("this conversation was archived or deleted"))
   })
 }

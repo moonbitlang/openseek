@@ -90,6 +90,8 @@ pub fn subscriptions(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub
 
 pub fn sync(@cmd.Emit[Msg], State, Ctx, review_context? : Array[@mention_context.ReviewChanges]) -> (State, @cmd.Cmd)
 
+pub fn sync_feedback_permission(Ctx) -> @cmd.Cmd
+
 pub fn update(@cmd.Emit[Msg], Msg, State, Ctx) -> (@cmd.Cmd, State)
 
 // Errors
@@ -156,6 +158,7 @@ pub(all) struct Ctx {
   thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationIdentity
   cloud_files : CloudFiles?
+  feedback_enabled : Bool
   request_epoch : Int32
   watch_namespace : String
   placement : @interop.CheckoutPlacement?
@@ -314,6 +317,7 @@ pub fn MbtiViewMode::not_equal(Self, Self) -> Bool
 
 pub struct ModelUri(String)
 pub fn ModelUri::of(@common.Uri) -> Self
+pub fn ModelUri::resource(Self) -> @common.Uri
 
 pub(all) enum MoonModViewMode {
   MoonModDependencies
@@ -449,6 +453,7 @@ pub(all) enum Msg {
   LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
   ApplyAllFeedback
+  ApplyEditorFeedback(ModelUri)
   DiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int32?, modified_line_number~ : Int32?, quote~ : String, comment~ : String, resource~ : ModelUri?, feedback_id~ : String?)
 }
 

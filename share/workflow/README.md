@@ -80,6 +80,8 @@ other colons. Paths with spaces are single args without shell quoting.
   is the working tree against HEAD, not committed branch history.
 - `repo-map.mbtx` surveys architecture and data flow, validation commands, and
   extension points for a new contributor.
+- `simplify.mbtx` sweeps the repository's MoonBit packages for safe, obvious
+  simplifications and opens one pull request per changed package (see below).
 
 Run these in a session that can start subagents; they start them through the
 host with `@tools.call("subagent", ...)`:
@@ -96,6 +98,10 @@ host with `@tools.call("subagent", ...)`:
 {"description":"Map repository architecture","filename":"@builtin/repo-map.mbtx","cwd":"/path/to/repository"}
 ```
 
+```json
+{"description":"Simplify the project","filename":"@builtin/simplify.mbtx","args":["--max-prs","2","--","pattern matching"]}
+```
+
 `review.mbtx` launches one `review` child (100-step ceiling). With no
 arguments it audits the standing goal and the baseline it recorded, which the
 script reads from the host's `audit_context` tool (`goal`, optional `sha` and
@@ -107,12 +113,59 @@ blocker so the caller cannot read past it. `--sha COMMIT` (with `--dirty`
 when the worktree was already dirty at that commit) overrides the engine's
 baseline; `--help` prints usage.
 
+Swarm mode runs several reviewers in parallel instead of one, each from its
+own angle (a *lens*). `--swarm` picks `correctness`, `architecture` and
+`tests`; `--lens NAME`, repeatable, picks lenses instead (`compatibility`
+and `security` are also available). Each lens reviewer gets the same
+criteria and baseline, narrowed to its lens, and 100 steps. Their findings
+are merged: two findings are one claim only when they come from different
+lenses, sit in the same file within 3 lines, and share at least half their
+title words. Then each blocker or high finding, at most `--verify N` of them
+(default 6, at most 8, `0` for none), goes to a fresh reviewer (40 steps)
+that is given the original criteria and the allegation and tries to refute
+it. The first line of its summary must be `VERDICT: CONFIRMED`, `REFUTED`
+or `INCONCLUSIVE` alone; a refuted finding is dropped and printed on a `Refuted:`
+line, and anything that isn't a clean confirmation or refutation leaves the
+finding `[unverified]`. Verification never changes a severity, so an
+unverified blocker still fails the run. `--max-tokens N` skips verification
+once the lenses have spent N tokens.
+
+Swarm mode prints the merged report in the same JSON shape, one line per
+lens, the refuted findings, and
+`findings=N blockers=M tokens=T lenses=R/L verified=V refuted=X unverified=U`.
+It fails on a remaining blocker, and when any lens was refused or did not
+report: an incomplete swarm is never a clean result. The design is in
+[docs/plans/review-swarm.md](../../docs/plans/review-swarm.md).
+
 The other two start read-only `explore` children together, wait for all of
 them, and read each report. Change review runs three scouts, allowing 16 steps each.
 Repo-map runs two scouts, allowing 12 steps each, and displays the root
 `justfile` recipes directly in MoonBit without asking a model to summarize
 commands. Recipes are marked as not executed; a missing `justfile` is reported
 explicitly. Long recipe files are visibly truncated.
+
+`simplify.mbtx` runs from the repository root with no uncommitted changes to
+tracked files. Unless `--no-pr` is given, HEAD must be an ancestor of
+`origin/HEAD` and `gh` must be signed in; all of this is checked before any
+child starts. The packages are the directories of tracked `moon.pkg` files
+(`--path DIR`, repeatable, narrows them), each with its own non-generated
+`.mbt` files. `--scouts N` read-only `explore` children (default 8, at most
+16, 80 steps each) split the packages among them and cite candidates. The
+packages with the most candidates, at most `--max-prs N` (default 8, at most
+16), each get one `worker` in its own worktree, allowed to change only that
+package's source files, at most 8 at once. A change goes on to review only
+when it is committed on the pinned HEAD by a worker that reported `done`.
+Then a fresh `explore` child (60 steps) reads it as git objects and answers
+`VERDICT: ACCEPT` or `VERDICT: REJECT` on the first line. Each accepted change
+is pushed to `simplify/<name>-<commit>` on `origin` and opened as a pull request
+against the default branch, and its worker's local branch is deleted; nothing
+is merged. Scouts and workers carry
+built-in MoonBit guidance: what to simplify, and what not to. The script prints
+a line per scout and per chosen package, then
+`packages=N chosen=K prs=P accepted=A rejected=R skipped=S tokens=T`. It fails
+when any start was refused, any child ended without a report, or a push or
+pull request failed. The design is in
+[docs/plans/simplify-swarm.md](../../docs/plans/simplify-swarm.md).
 
 For MoonBit, scouts start with the selected package’s `moon.pkg` and
 `pkg.generated.mbti`, then use its dependencies and public API to choose

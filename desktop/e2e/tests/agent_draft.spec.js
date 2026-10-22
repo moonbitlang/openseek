@@ -153,6 +153,41 @@ test('editing a goal protects its text until the editor is closed', async ({ pag
   expect(app.pageErrors).toEqual([]);
 });
 
+test('ultrareview stays a command in the composer and sends the swarm prompt', async ({ page }) => {
+  const app = await open(page);
+  const task = page.locator('#task');
+  await task.fill('/ultrareview');
+  await expect(page.locator('.completion-item').filter({ hasText: 'ultrareview' }).first()).toBeVisible();
+  await task.press('Enter');
+  await expect(task).toHaveValue('/ultrareview ');
+  await expect(task).toBeFocused();
+  await page.keyboard.type('the parser');
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('Focus: the parser');
+  const sent = app.requests.find(r => r.method === 'agent.start').params.task;
+  expect(sent).toContain('"@builtin/review.mbtx"');
+  expect(sent).toContain('"--swarm"');
+  // The composer clears as for any sent prompt; the expansion is not left behind.
+  await expect(task).toHaveValue('');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('simplify sends the sweep prompt with its focus', async ({ page }) => {
+  const app = await open(page);
+  const task = page.locator('#task');
+  await task.fill('/simpl');
+  await expect(page.locator('.completion-item').filter({ hasText: 'simplify' }).first()).toBeVisible();
+  await task.press('Enter');
+  await expect(task).toHaveValue('/simplify ');
+  await page.keyboard.type('pattern matching');
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('Focus: pattern matching');
+  expect(app.requests.find(r => r.method === 'agent.start').params.task).toContain('"@builtin/simplify.mbtx"');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('a failed first Codex send keeps the agent fixed while retrying', async ({ page }) => {
   const app = await open(page);
   await choose(page, 'Codex test');

@@ -479,11 +479,31 @@ fn Model::sidebar_component_sections(
       continue
     }
     let conversations = ordered_by_recency(stamped)
+    let host_name = if dev.channel == Local {
+      None
+    } else {
+      self.console.roster
+      .iter()
+      .find_first(host => host.id == dev.channel.device_id())
+      .map(host => host.name)
+    }
     projects.push(
       @section.Project({
         id: @project.Id(source="openseek.projects", channel~, root=path.path),
-        title: path.path,
+        title: match host_name {
+          None => path.path
+          Some(name) => name + " · " + path.path
+        },
         label: @resource.label(path),
+        host: if dev.channel == Local {
+          None
+        } else {
+          Some({
+            name: host_name.unwrap_or("Remote"),
+            online: dev.bridge is Connected,
+            details: @interop.is_native_ssh(dev.channel),
+          })
+        },
         // The Chat and Codex screens are exclusive, so at most one side
         // claims the row's activation.
         activation: if openseek_activation is Some(_) {
@@ -491,7 +511,11 @@ fn Model::sidebar_component_sections(
         } else {
           codex_activation
         },
-        can_start: true,
+        can_start: dev.bridge is Connected ||
+        (
+          self.is_desktop &&
+          self.ssh_ui.hosts.any(host => dev.channel == Remote(host.id))
+        ),
         managed: true,
         conversations,
       }),
@@ -534,7 +558,9 @@ fn Model::sidebar_component_sections(
   }
   match self.sidebar_mode {
     ChatMode => {
-      sections.push(self.cloud_chat_section(channel))
+      if dev.channel == self.focused {
+        sections.push(self.cloud_chat_section(channel))
+      }
       sections.push(
         self.local_chat_section(
           channel~,
@@ -605,7 +631,7 @@ fn Model::sidebar_component_sections(
       )
     }
   }
-  if self.sidebar_mode is ChatMode {
+  if self.sidebar_mode is ChatMode && dev.channel == self.focused {
     for row in ordered_by_recency(self.cloud_chat_rows(archived=true)) {
       archived_entries.push(@section.Conversation(row))
     }
@@ -644,6 +670,18 @@ fn Model::sidebar_component_sections(
               label: @resource.of_path(dev.channel, root).map_or(root, path => {
                 @resource.label(path)
               }),
+              host: if dev.channel == Local {
+                None
+              } else {
+                Some({
+                  name: self.console.roster
+                  .iter()
+                  .find_first(host => host.id == dev.channel.device_id())
+                  .map_or("Remote", host => host.name),
+                  online: dev.bridge is Connected,
+                  details: @interop.is_native_ssh(dev.channel),
+                })
+              },
               activation: None,
               can_start: false,
               managed: false,
@@ -742,56 +780,77 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   if self.cloud.notice is Some(notice) {
     notices.push(notice)
   }
-  let sections = match self.focused_device() {
-    Some(dev) => {
-      if dev.chat_root is Some(Err(message)) {
-        notices.push(
-          dynamic_text(self.locale, DStorageUnavailable(message.to_string())),
-        )
-      }
-      self.sidebar_component_sections(dev)
-    }
-    None => {
-      if self.console.page_device is Some(_) {
-        match self.console.roster_sync {
-          RosterLoading => notices.push(shell_text(self.locale, LoadingDevice))
-          RosterFailed(message) => notices.push(message)
-          RosterReady =>
-            if self.console.roster.is_empty() {
-              notices.push(shell_text(self.locale, NoDevices))
-            } else {
-              notices.push(shell_text(self.locale, NoOnlineDevice))
+  if self.focused_device() is Some({ chat_root: Some(Err(message)), .. }) {
+    notices.push(dynamic_text(self.locale, DStorageUnavailable(message)))
+  }
+  let sections = if self.is_desktop && !self.devices.is_empty() {
+    let combined : Array[@section.Input] = []
+    for dev in self.devices {
+      for section in self.sidebar_component_sections(dev) {
+        match
+          combined.search_by(item => item.id.source() == section.id.source()) {
+          Some(index) => {
+            let previous = combined[index]
+            combined[index] = {
+              ..previous,
+              entries: previous.entries + section.entries,
+              activation: match section.activation {
+                Some(_) => section.activation
+                None => previous.activation
+              },
             }
+          }
+          None => combined.push(section)
         }
       }
-      if self.sidebar_mode is ChatMode {
-        let archived_entries = ordered_by_recency(
-          self.cloud_chat_rows(archived=true),
-        ).map(row => @section.Conversation(row))
-        [
-          self.cloud_chat_section(self.focused.uri_authority()),
-          self.local_chat_section(
-            channel=self.focused.uri_authority(),
-            activation=None,
-            rows=[],
-          ),
-          {
-            id: @section.Id(
-              source="archived",
+    }
+    combined
+  } else {
+    match self.focused_device() {
+      Some(dev) => self.sidebar_component_sections(dev)
+      None => {
+        if self.console.page_device is Some(_) {
+          match self.console.roster_sync {
+            RosterLoading =>
+              notices.push(shell_text(self.locale, LoadingDevice))
+            RosterFailed(message) => notices.push(message)
+            RosterReady =>
+              if self.console.roster.is_empty() {
+                notices.push(shell_text(self.locale, NoDevices))
+              } else {
+                notices.push(shell_text(self.locale, NoOnlineDevice))
+              }
+          }
+        }
+        if self.sidebar_mode is ChatMode {
+          let archived_entries = ordered_by_recency(
+            self.cloud_chat_rows(archived=true),
+          ).map(row => @section.Conversation(row))
+          [
+            self.cloud_chat_section(self.focused.uri_authority()),
+            self.local_chat_section(
               channel=self.focused.uri_authority(),
+              activation=None,
+              rows=[],
             ),
-            label: @sidebar_messages.text(
-              self.locale,
-              ArchivedChats(archived_entries.length()),
-            ),
-            initially_collapsed: true,
-            activation: None,
-            action: None,
-            entries: archived_entries,
-          },
-        ]
-      } else {
-        []
+            {
+              id: @section.Id(
+                source="archived",
+                channel=self.focused.uri_authority(),
+              ),
+              label: @sidebar_messages.text(
+                self.locale,
+                ArchivedChats(archived_entries.length()),
+              ),
+              initially_collapsed: true,
+              activation: None,
+              action: None,
+              entries: archived_entries,
+            },
+          ]
+        } else {
+          []
+        }
       }
     }
   }
@@ -937,7 +996,7 @@ fn codex_account_rows(
         desc=@settings.text(model.locale, SignOutDescription),
       ),
     )
-  } else if codex.sign_in_required() {
+  } else if codex.sign_in_required() && !@interop.is_native_ssh(channel) {
     rows.push(
       @settings.row(
         @settings.text(model.locale, SignIn),
@@ -980,6 +1039,22 @@ fn codex_account_rows(
         desc=@settings.text(model.locale, FinishSignIn),
       ),
     )
+  }
+  if @interop.is_native_ssh(channel) {
+    rows.push(
+      @settings.row(
+        "Remote Codex",
+        [
+          @html.button(
+            class="button secondary",
+            on_click=dispatch(Codex(channel~, @codex.Msg::refresh())),
+            "Refresh account",
+          ),
+        ],
+        desc="Run codex login --device-auth in this host's terminal. Configure ~/.codex/config.toml on the remote host; credentials remain there.",
+      ),
+    )
+    return rows
   }
   rows.push(
     @settings.row(
@@ -1348,6 +1423,21 @@ fn api_settings_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> Array[@html.Html] {
+  if @interop.is_native_ssh(model.focused) {
+    return [
+      @settings.row(
+        "API key fallback from this computer",
+        [
+          @html.button(
+            class="button secondary",
+            on_click=dispatch(OpenLocalApiSettings),
+            "Open local API settings",
+          ),
+        ],
+        desc="Remote API settings take priority. This computer supplies a fallback API key; the remote provider, endpoint and model stay unchanged. Reconnect after changing the local key.",
+      ),
+    ]
+  }
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
   let rows : Array[@html.Html] = [
@@ -1478,6 +1568,11 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   ]
   let api_rows : Array[@html.Html] = api_settings_rows(dispatch, model)
   let groups : Array[@html.Html] = [
+    ..if model.is_desktop {
+      [ssh_settings(dispatch, model)]
+    } else {
+      []
+    },
     @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
     @settings.group(icon_key, "API", api_rows),
     @settings.group(
@@ -1967,7 +2062,22 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     // Until the bridge answers, this page knows nothing about the host's
     // projects. Offering to add one here would be a guess that the very next
     // message contradicts.
-    _ => card.push(@html.p(shell_text(model.locale, ConnectingDevice)))
+    _ =>
+      if model.focused is Remote(id) &&
+        model.ssh_ui.hosts.any(host => host.id == id) {
+        card.push(@html.p(ssh_connection_status(model, id)))
+        if model.ssh_ui.host_errors.get(id) is Some(error) {
+          card.push(
+            @html.pre(
+              class="ssh-error",
+              attrs=@html.Attrs::build().role("alert"),
+              error,
+            ),
+          )
+        }
+      } else {
+        card.push(@html.p(shell_text(model.locale, ConnectingDevice)))
+      }
   }
   @html.section(class="onboarding", [@html.div(class="onboarding-card", card)])
 }
@@ -2283,6 +2393,10 @@ fn view(
       )
     Schedules => @page_shell.header(ui(model.locale, ScheduledTasks))
   }
+  if @interop.is_native_ssh(model.focused) &&
+    model.screen.work_screen() is Some(_) {
+    header.insert(0, ssh_context(dispatch, model))
+  }
   let content = match model.screen {
     // `Model::chat_column` is the one fork that decides what the conversation
     // column is; the transcript component's lifetime follows the same value.
@@ -2517,6 +2631,13 @@ fn view(
       locale=model.locale,
       dispatch.map(msg => ExportDialog(msg)),
     ),
+    // Authentication input is deliberately DOM-only. Keep this slot before
+    // conditional overlays so resize/toasts cannot replace its input node.
+    if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {
+      ssh_modal(dispatch, model)
+    } else {
+      @html.nothing
+    },
   ]
   // On the narrow layout the sidebar's stable backdrop fades with the drawer;
   // keeping it mounted lets the closing transition finish before it becomes
@@ -2563,6 +2684,11 @@ fn view(
         locale=model.locale,
         dispatch.map(msg => ProjectPicker(msg)),
         picker,
+        location?=if model.is_desktop {
+          Some(ssh_locations(dispatch, model))
+        } else {
+          None
+        },
       ),
     )
   }
@@ -2592,6 +2718,7 @@ fn view(
   // rendered device readable while its topbar and composer show reconnecting.
   if !model.cloud_selected() &&
     model.is_desktop &&
+    model.focused == Local &&
     model.bridge_state() is BridgeLost(message) {
     children.push(bridge_lost_overlay(locale=model.locale, message))
   }

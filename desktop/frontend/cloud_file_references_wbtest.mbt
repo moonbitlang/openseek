@@ -94,3 +94,116 @@ test "Cloud file chips and transcript links open session source previews" {
     assert_true(ignored.docks == model.docks)
   }
 }
+
+///|
+test "Cloud editor feedback uses the current resource identity and Annotation contract" {
+  let model = integrated_cloud_model()
+  let path = @resource.join_relative(
+    file_ctx(model).root().unwrap(),
+    Relative("src/main.mbt"),
+  )
+  let range = @common.Range(2, 1, 3, 4)
+  let event = (resource : @common.Uri) => {
+    FileEditor(
+      @fileeditor.EditorCommentAdded(
+        resource=@fileeditor.ModelUri::of(resource),
+        file=Relative("src/main.mbt"),
+        range~,
+        quote="exact selection",
+        comment="Explain this",
+        feedback_id="feedback",
+      ),
+    )
+  }
+  let reply = model.routed_editor_feedback(event(path)).unwrap()
+  assert_eq(reply.identity, model.composer_input().identity)
+  assert_false(reply.send)
+  guard reply.content is @composer.Annotation(mention) else {
+    fail("missing annotation")
+  }
+  let draft : @composer.Draft = {
+    task: "Existing draft",
+    mentions: [mention],
+    images: [],
+  }
+  let (_, sending) = update(
+    test_dispatch(),
+    ComposerAction(@composer.DraftSubmitted(identity=reply.identity, draft~)),
+    model,
+  )
+  assert_eq(
+    sending.cloud.conversations["cloud-a"].pending.unwrap().content.text(),
+    draft.prompt(),
+  )
+  assert_true(draft.prompt().contains("<annotation"))
+  assert_true(draft.prompt().contains("exact selection"))
+  let (_, opened) = update(
+    test_dispatch(),
+    ComposerAction(@composer.MentionOpened(identity=reply.identity, mention~)),
+    model,
+  )
+  assert_eq(@dock.active_file(opened.dock_state()), Some(path))
+  assert_true(opened.file_panel.docs.contains(path))
+  assert_true(
+    model
+    .routed_editor_feedback(
+      FileEditor(
+        @fileeditor.ApplyEditorFeedback(@fileeditor.ModelUri::of(path)),
+      ),
+    )
+    .unwrap().send,
+  )
+  for (account, session) in [("other", "cloud-a"), ("fixture-user", "other")] {
+    let foreign = @resource.join_relative(
+      @resource.cloud_root(@cloud.CloudOrigin, account, session).unwrap(),
+      Relative("src/main.mbt"),
+    )
+    assert_true(model.routed_editor_feedback(event(foreign)) is None)
+    let (_, ignored) = update(test_dispatch(), event(foreign), model)
+    assert_true(ignored.active_conversation() == model.active_conversation())
+  }
+  let archived = {
+    ..model,
+    cloud: {
+      ..model.cloud,
+      sessions: model.cloud.sessions.map(session => {
+        ..session,
+        archived: true,
+      }),
+    },
+  }
+  assert_false(file_ctx(archived).feedback_enabled)
+  assert_true(archived.routed_editor_feedback(event(path)) is None)
+  let conversation = model.cloud.conversations["cloud-a"]
+  let conversations = model.cloud.conversations.copy()
+  conversations["cloud-a"] = { ..conversation, generating: true, }
+  let running = { ..model, cloud: { ..model.cloud, conversations, }, }
+  assert_true(running.routed_editor_feedback(event(path)) is Some(_))
+  let (_, unchanged) = update(
+    test_dispatch(),
+    ComposerAction(@composer.DraftSubmitted(identity=reply.identity, draft~)),
+    running,
+  )
+  assert_true(unchanged.cloud.conversations["cloud-a"].pending is None)
+}
+
+///|
+fn Model::routed_editor_feedback(
+  self : Model,
+  message : Msg,
+) -> @composer.QuoteReply? {
+  let replies : Array[@composer.QuoteReply] = []
+  ignore(
+    update(
+      @cmd.Emit(message => {
+        if message is ComposerReply(reply) {
+          replies.push(reply)
+        }
+        @cmd.none
+      }),
+      message,
+      self,
+    ),
+  )
+  replies.get(0)
+}

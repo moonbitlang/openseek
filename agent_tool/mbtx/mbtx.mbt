@@ -115,6 +115,10 @@ fn duration_label(milliseconds : Int32) -> String {
 /// `approval` is where a request to run OUTSIDE the sandbox goes. Its presence
 /// is what advertises the `escalated` argument at all: a build with nobody to
 /// ask does not offer an argument whose every use would come back refused.
+///
+/// `mcp_service` is the session's MCP host. Every sandboxed snippet gets its
+/// `OPENSEEK_MCP` handoff, with or without PTC; an escalated run inherits the
+/// agent's environment and gets neither handoff.
 pub fn definition(
   workspace_root~ : String,
   read_only~ : Bool = false,
@@ -132,6 +136,7 @@ pub fn definition(
   program_service? : @ptc.Service,
   on_program_trace? : (Json) -> Unit,
   on_program_output? : (@bgjobs.ImageOutput) -> Unit,
+  mcp_service? : @mcphost.Service,
 ) -> @agent_tool.AgentToolDefinition {
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
@@ -188,6 +193,7 @@ pub fn definition(
           generations~,
           approval?,
           program?,
+          mcp_service?,
         )
       }
       let action = if enabled {
@@ -280,6 +286,23 @@ fn described(
 const DescriptionBriefLimit : Int32 = 72
 
 ///|
+/// The program an escalation asks about, headed by the working directory and
+/// arguments it would run with.
+fn escalation_body(
+  source : String,
+  cwd : String,
+  args : Array[String],
+) -> String {
+  let body = StringBuilder()
+  body <+ "// cwd: \{cwd}\n"
+  if !args.is_empty() {
+    body <+ "// args: \{Json(args).stringify()}\n"
+  }
+  body.write_string(source)
+  body.to_string()
+}
+
+///|
 /// What the model is told when an escalation did not become a run.
 ///
 /// One text per outcome, and they are deliberately different sentences rather
@@ -325,6 +348,7 @@ async fn execute(
   generations~ : Map[String, Int32],
   approval? : @agent_runtime.ApprovalChannel,
   program? : @ptc.Program,
+  mcp_service? : @mcphost.Service,
 ) -> @agent_tool.ToolAction {
   if scratch_dir is Some(dir) {
     @fs.mkdir(dir, recursive=true, permission=0o700) catch {
@@ -454,14 +478,23 @@ async fn execute(
   let escalated = if input.escalated {
     let outcome = match approval {
       Some(channel) =>
-        // The program goes with the question. It is what the user is actually
-        // deciding about, and `detail` — which is a constant — describes only
-        // the permission. This is the resolved snapshot, so what is approved
-        // and what runs cannot differ even if the saved file changes.
+        // The program goes with the question, headed by the working
+        // directory and arguments it would run with: together they are what
+        // the user is actually deciding about, and `detail` — which is a
+        // constant — describes only the permission. The header is MoonBit
+        // comments, so the body still reads (and highlights) as the source.
+        // This is the resolved snapshot, so what is approved and what runs
+        // cannot differ even if the saved file changes.
         channel.ask({
           tool_name: "mbtx",
           detail: "run this snippet with no sandbox policy: no spawn allowlist, and writes anywhere",
-          body: Some(source),
+          body: Some(
+            escalation_body(
+              source,
+              run_cwd.unwrap_or(workspace_root),
+              input.args,
+            ),
+          ),
         })
       // The argument was not advertised in this build's schema, so reaching
       // here means the model asked for a field it was never offered.
@@ -620,6 +653,11 @@ async fn execute(
   // not also grant writing there, and reads are open, so a snippet can still
   // work in a directory it may not modify.
   let injected : Map[String, String] = Map([])
+  if mcp_service is Some(service) {
+    for key, value in service.env() {
+      injected[key] = value
+    }
+  }
   if program is Some(program) {
     for key, value in program.env() {
       injected[key] = value
@@ -686,7 +724,6 @@ async fn execute(
           workspace_root,
           Exec(program, command_argv),
           // Per-call storage outlives both compilation and any background run.
-          // Never put the repository-sized SBPL profile in the spawn argv.
           profile_path="\{build_dir}/source-write.sb",
           writable_subtree~,
         )
@@ -887,7 +924,7 @@ async fn execute(
       return @agent_tool.respond("mbtx: \{error}", is_error=true)
     }
     let raw = exec.head()
-    let exit_code = exec.exit_code().unwrap_or(-1)
+    let exit_code = exec.exit_code()
     // The retained execution is KILLED once output passes the inline cap, so a
     // clipped head means a stopped program, not a quiet one — say which.
     let output_limit_reached = exec.over_inline_cap() || exec.output_truncated()
@@ -900,7 +937,7 @@ async fn execute(
       sandboxed_command,
       denial_scan_source,
       raw,
-      exit_code=exec.exit_code(),
+      exit_code~,
       escalation=approval is Some(_),
       policy_active~,
     )
@@ -918,7 +955,7 @@ async fn execute(
       body
     }
     let body = with_denial_guidance(body, sandbox_denied)
-    let is_error = exit_code != 0 ||
+    let is_error = exit_code != Some(0) ||
       sandbox_denied is Some(_) ||
       output_limit_reached
     return @agent_tool.respond(
@@ -975,7 +1012,10 @@ async fn execute(
       // PREPEND the exit status so it survives the agent loop's outer 60k
       // result clamp (which cuts the tail); the output cap is below 60k so
       // both the status line and the body are retained.
-      let body = with_build_notes(build_notes, finished_body(text, exit_code))
+      let body = with_build_notes(
+        build_notes,
+        finished_body(text, Some(exit_code)),
+      )
       let body = with_denial_guidance(body, sandbox_denied)
       let is_error = exit_code != 0 || sandbox_denied is Some(_)
       @agent_tool.respond(
@@ -1114,9 +1154,9 @@ async fn build_snippet(
     return NotBuilt(
       @agent_tool.respond(
         if text.is_blank() {
-          "mbtx: the BUILD failed (exit \{exit_code}) with no output — the program never ran"
+          "mbtx: the BUILD failed (\{exit_status(exit_code)}) with no output — the program never ran"
         } else {
-          "[mbtx: BUILD failed (exit \{exit_code}) — the program never ran; the output below is the build's]\n\{text}"
+          "[mbtx: BUILD failed (\{exit_status(exit_code)}) — the program never ran; the output below is the build's]\n\{text}"
         },
         is_error=true,
         brief="mbtx build",
@@ -1207,18 +1247,39 @@ fn strip_artifact_report(text : String) -> String {
 /// The build already succeeded synchronously before this process started, so
 /// a failure here is from the RUN by construction. Say so to keep a runtime
 /// trap from being read as a compile error.
-fn finished_body(text : String, exit_code : Int32) -> String {
-  if exit_code == 0 {
-    return if text.is_blank() {
-      "mbtx: program exited 0 with no output"
-    } else {
-      text
-    }
+///
+/// `exit_code` is `None` when the program has no exit of its own because mbtx
+/// stopped it (the inline output cap); that is reported as such, never as a
+/// made-up code or signal.
+fn finished_body(text : String, exit_code : Int32?) -> String {
+  let status = match exit_code {
+    Some(0) =>
+      return if text.is_blank() {
+        "mbtx: program exited 0 with no output"
+      } else {
+        text
+      }
+    Some(code) => exit_status(code)
+    None => "stopped by mbtx before it exited"
   }
   if text.is_blank() {
-    "mbtx: the build succeeded, then the run exited \{exit_code} with no output"
+    "mbtx: the build succeeded, then the run failed (\{status}) with no output"
   } else {
-    "[mbtx: exited \{exit_code} at RUNTIME — the build succeeded; this failure is from the run, not the build]\n\{text}"
+    "[mbtx: run failed (\{status}) at RUNTIME — the build succeeded; this failure is from the run, not the build]\n\{text}"
+  }
+}
+
+///|
+/// A process's exit as a report names it. On POSIX `@process` reports a
+/// process killed by a signal as `-signal_number`; printed as a bare exit code,
+/// a crash reads like the compiler rejecting `source`. On Windows a negative
+/// code is the process's own status (an NTSTATUS such as `0xC0000005`), so it
+/// stays a code.
+fn exit_status(exit_code : Int32) -> String {
+  if exit_code < 0 && !(@async.platform is Windows) {
+    "killed by signal \{-exit_code}"
+  } else {
+    "exit \{exit_code}"
   }
 }
 
@@ -1684,8 +1745,10 @@ fn description(
     #|use args=["PR", "--repo", "OWNER/REPO", "--once"] for one snapshot.
     #|Agent workflows (they start subagents): @builtin/review.mbtx (independent
     #|worktree audit against the criteria in args), @builtin/change-review.mbtx
-    #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
-    #|(architecture, validation, extension points).
+    #|(working-tree review from three perspectives), @builtin/repo-map.mbtx
+    #|(architecture, validation, extension points) or @builtin/simplify.mbtx
+    #|(sweeps MoonBit packages for safe simplifications and opens one pull
+    #|request per package; --no-pr keeps them on local branches).
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
     #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.

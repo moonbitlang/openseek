@@ -129,6 +129,11 @@ pub fn State::is_maximized(self : State) -> Bool {
 /// The terminal package's view of the active conversation, recomputed per
 /// dispatch by the main package (mirrors `@fileeditor.Ctx`).
 pub struct Ctx {
+  host_name : String?
+  /// The owning host's offline status, when it manages its own connection
+  /// attempts (SSH can be authenticating, failed, or explicitly cancelled).
+  /// None keeps the automatic WebSocket recovery notice for other hosts.
+  connection_notice : String?
   /// The host connection that owns every terminal opened from this context.
   channel : @interop.ChannelId
   session : String
@@ -146,13 +151,23 @@ pub struct Ctx {
 ///|
 /// Construct the terminal's read-only view of the active conversation.
 pub fn Ctx::Ctx(
+  host_name? : String,
+  connection_notice? : String,
   channel~ : @interop.ChannelId,
   session~ : String,
   placement~ : @interop.CheckoutPlacement?,
   dark_mode~ : Bool,
   connected~ : Bool,
 ) -> Ctx {
-  { channel, session, placement, dark_mode, connected, }
+  {
+    channel,
+    session,
+    placement,
+    dark_mode,
+    connected,
+    host_name,
+    connection_notice,
+  }
 }
 
 ///|

@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.get_env_var("SEEKMOON_ASKPASS") == Some("1") {
+    @ssh.askpass_main()
+    return
+  }
   // A command line this host does not understand is a usage error like any
   // CLI's, and it ends the launch — Proton itself starts the binary with no
   // arguments, so only a person can get here.
@@ -128,7 +132,7 @@ async fn main {
     resources=@host.desktop_resources(resources),
     host_mcp~,
   )
-  let bridge = @extension.DesktopBridgeActor(state)
+  let bridge = @extension.DesktopBridgeActor(state, askpass=Some(executable))
   views.page_attached(payload => bridge.notify_browser_event(payload))
   let relay = @remote.RelayActor(state, announce=device => {
     @xlog.info() <? { "message": "relay registered", "device": device }
@@ -140,7 +144,8 @@ async fn main {
   // method catalog over the relay WebSocket (docs/remote-protocol.md).
   // One host per identity: `single_instance` hands a later launch to the
   // process already holding that identity's lock, and that process brings its
-  // window to the front. Off by default for now; see `single_instance_wanted`.
+  // window to the front. It also gives Proton exclusive ownership of the
+  // persistent browser profile used by localStorage.
   let single_instance = single_instance_wanted(matches, development~)
   let app = if single_instance { app..single_instance() } else { app }
   let app = app..debug_level(1)
@@ -221,6 +226,7 @@ async fn main {
     ..on_web_contents_event((contents, event) => {
       if contents.view_id() is Some(view) &&
         @extension.browser_view_id(view) is Some(id) {
+        views.view_event(id, event)
         if @extension.view_event_json(id, event) is Some(payload) {
           bridge.notify_browser_event(payload) catch {
             // Shutdown leaves no page to notify.
@@ -281,7 +287,7 @@ async fn main {
       // the forwarding in its own log, the running instance's window comes
       // to the front, and this process ends.
       println(
-        "SeekMoon is already running; its window was brought to the front. Quit it first, or start this one without --single-instance.",
+        "SeekMoon is already running; its window was brought to the front. Quit it first, or start this one with --no-single-instance to use a temporary browser profile.",
       )
     }
     @xlog.info() <?
@@ -379,7 +385,8 @@ let command : @argparse.Command = Command(
       "single-instance",
       long="single-instance",
       env="OPENSEEK_DESKTOP_SINGLE_INSTANCE",
-      about="Hand this launch to a release build already running under the same identity, bringing its window to the front. Off by default: a host Proton leaves stuck in cef_shutdown would otherwise capture every later launch.",
+      negatable=true,
+      about="Use one release instance and a persistent browser profile. Enabled by default; --no-single-instance uses a temporary profile. Development builds always use temporary profiles.",
     ),
   ],
 )
@@ -411,16 +418,13 @@ fn is_development(app : @proton.App) -> Bool raise @proton.AppPathError {
 ///|
 /// Whether this launch takes part in single instance.
 ///
-/// Off unless `--single-instance` (OPENSEEK_DESKTOP_SINGLE_INSTANCE=1) says
-/// so: a host that Proton leaves stuck in `cef_shutdown` keeps the identity's
-/// lock, and every later launch would hand itself to it. Even then only the
-/// shipped application takes part; a development build must start beside the
-/// binary it replaced.
+/// Release builds need exclusive profile ownership to retain localStorage.
+/// Development builds keep multi-instance launches and temporary profiles.
 fn single_instance_wanted(
   matches : @argparse.Matches,
   development~ : Bool,
 ) -> Bool {
-  matches.flags.get("single-instance") is Some(true) && !development
+  !development && matches.flags.get("single-instance").unwrap_or(true)
 }
 
 ///|

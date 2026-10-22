@@ -162,9 +162,12 @@ pub fn ApprovalDesk::withdraw_all(self : ApprovalDesk) -> Unit {
 /// a tool registry, and its absence is what decides whether the tools that
 /// would ask offer the argument that asks. A refusing channel would leave the
 /// argument advertised and every use of it dead on arrival.
+///
+/// `reviewer` answers under `Review`; the other policies never call it.
 pub fn approval_channel(
   policy : ApprovalPolicy,
   desk : ApprovalDesk,
+  reviewer~ : ApprovalReviewer,
 ) -> @agent_runtime.ApprovalChannel? {
   match policy {
     Never => None
@@ -178,6 +181,22 @@ pub fn approval_channel(
           announce_request(id, ask)
           @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
           AllowedOnce
+        }),
+      )
+    // Only a question the reviewer escalates reaches the wire, as one
+    // ordinary card. A decided one is not announced: a controller treats an
+    // `approval_requested` as a person's to answer (it shows a card and
+    // notifies), so announcing a settled question would ask for attention
+    // that is not needed. The decision is recorded in the reviewer's own
+    // transcript instead.
+    Review(ask_on_escalate~) =>
+      Some(
+        ApprovalChannel(ask => {
+          match (reviewer.0)(ask) {
+            Allow => AllowedOnce
+            Deny => Rejected
+            Escalate => if ask_on_escalate { desk.ask(ask) } else { Rejected }
+          }
         }),
       )
   }

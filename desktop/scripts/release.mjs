@@ -227,6 +227,17 @@ export class Release {
     if (!/^\d+\.\d+\.\d+$/.test(version)) {
       throw new Error(`release version must be three dot-separated numbers: ${version}`);
     }
+    // SSH downloads the CLI release, which has its own version in the root manifest.
+    const manifest = await readFile(join(this.desktop, "..", "moon.mod"), "utf8");
+    const cliVersion = manifest.match(/^version = "([^"]+)"$/m)?.[1];
+    if (!cliVersion) throw new Error("could not read CLI version from root moon.mod");
+    const path = join(this.desktop, "backend/ssh/version.mbt");
+    const source = await readFile(path, "utf8");
+    const declaration = /^const CliRelease = "[^"\r\n]*"$/gm;
+    if ([...source.matchAll(declaration)].length !== 1) {
+      throw new Error("expected one CliRelease constant in backend/ssh/version.mbt");
+    }
+    await writeFile(path, source.replace(declaration, () => `const CliRelease = ${JSON.stringify(cliVersion)}`));
     // The Desktop modules are released together. Keep their versions and the
     // workspace dependency pins between them on the same value.
     for (const { path, pins } of StampedModules) {

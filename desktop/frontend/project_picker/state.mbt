@@ -47,6 +47,11 @@ pub fn State::request_generation(self : State) -> Int32 {
 }
 
 ///|
+pub fn State::channel(self : State) -> @interop.ChannelId {
+  self.channel
+}
+
+///|
 /// Where the picker's current listing was taken: the raw protocol path of a
 /// real host directory — the only thing Confirm can register — or the
 /// Windows-only virtual level above the drive roots. Keeping the host path

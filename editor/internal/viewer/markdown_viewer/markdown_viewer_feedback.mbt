@@ -222,6 +222,8 @@ fn MarkdownViewerWidgetFeedbackBridge::layout(
     self.hide()
     return
   }
+  // The document may have resized since the selection opened the composer.
+  self.input.resize()
   let root = self.view.root().get_bounding_client_rect()
   let width = self.input.measured_width()
   let height = self.input.measured_height()

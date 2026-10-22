@@ -11,13 +11,21 @@ test "single edit payload preserves the message and optional fork boundary" {
     images: ["data:image/png;base64,aW1hZ2U="],
     attachment_paths: [".openseek/attachments/upload/report.pdf"],
     thinking: None,
+    approval: None,
     max_steps: None,
   }
   assert_eq(@json.from_json(first.to_json()), first)
   assert_true(
-    first.to_json() is Object(fields) && fields.get("through") is None,
+    first.to_json() is Object(fields) &&
+    fields.get("through") is None &&
+    fields.get("approval") is None,
   )
-  let later = { ..first, through: Some(3), max_steps: Some(100), }
+  let later = {
+    ..first,
+    through: Some(3),
+    approval: Some(ApprovalReview),
+    max_steps: Some(100),
+  }
   assert_eq(@json.from_json(later.to_json()), later)
   for field in ["session", "workspace", "task", "images", "source_sequence"] {
     guard first.to_json() is Object(fields) else { fail("object") }

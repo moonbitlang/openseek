@@ -50,9 +50,6 @@ pub struct AgentToolDefinition {
   name : String
   description : String
   schema : JsonSchema
-  /// The JSON Schema of the result's `data`, when the tool declares one.
-  /// Programs read `data`, so the shape helps whoever writes them.
-  output_schema : JsonSchema?
   execute : ToolExecutor
   /// This flag grants context-ceiling execution, not every Control action.
   /// In particular, WaitJobs needs another model step and must leave it false.
@@ -99,7 +96,6 @@ pub fn AgentToolDefinition::AgentToolDefinition(
   name~ : String,
   description~ : String,
   schema~ : JsonSchema,
-  output_schema? : JsonSchema,
   execute~ : ToolExecutor,
   control~ : Bool = false,
   concurrent_safe~ : Bool = false,
@@ -112,7 +108,6 @@ pub fn AgentToolDefinition::AgentToolDefinition(
     name,
     description,
     schema,
-    output_schema,
     execute,
     control,
     concurrent_safe,
@@ -385,6 +380,13 @@ pub async fn execute_tool_call(
         }
       }
     }
+    None if call.name.has_prefix("mcp__") =>
+      // A model may still call an MCP tool by the name it once had here, from
+      // habit or from older history.
+      respond(
+        "error: unknown tool \{call.name}. MCP tools are not in your function list: from an mbtx script, find them with `@mcp.search` and call them with `@mcp.call(server, tool, arguments)`.",
+        is_error=true,
+      )
     None => respond("error: unknown tool \{call.name}", is_error=true)
   }
 }
@@ -418,6 +420,18 @@ async test "execute_tool_call reports unknown tool" {
   }
   assert_eq(output.content, "error: unknown tool ghost")
   assert_true(output.is_error)
+}
+
+///|
+async test "execute_tool_call points an old MCP tool name to the mcp package" {
+  let call = AgentToolCall(
+    ToolCall(id="call_1", name="mcp__tracker__list_issues", arguments="{}"),
+  )
+  guard execute_tool_call(call, Tools([])) is Respond(output) else {
+    fail("unknown tool should produce Respond")
+  }
+  assert_true(output.is_error)
+  assert_true(output.content.contains("@mcp.search"))
 }
 
 ///|

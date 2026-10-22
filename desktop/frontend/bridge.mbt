@@ -317,21 +317,9 @@ fn session_changed_msg(
 /// decoded into root messages here alongside connection and window events.
 fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
   match event {
+    @bridge.Event::Ssh(value) => dispatch(Ssh(Event(value)))
     @bridge.Event::Notification(channel~, notification~) =>
-      match notification {
-        TerminalOutput(payload) =>
-          @terminal.output(channel, payload.id, payload.sequence, payload.data)
-        TerminalExit(payload) =>
-          @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
-          |> Terminal
-          |> dispatch
-        _ =>
-          if notification_msg(channel, notification) is Some(msg) {
-            dispatch(msg)
-          } else {
-            @cmd.none
-          }
-      }
+      bridge_notification(dispatch, channel, notification)
     @bridge.Event::Unavailable(channel~, message~) =>
       dispatch(FromDevice(channel, BridgeUnavailable(message)))
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
@@ -393,7 +381,9 @@ fn Model::bridge_subscriptions(
   dispatch : @cmd.Emit[Msg],
 ) -> @sub.Sub {
   @sub.batch(
-    self.devices.map(dev => dev.bridge_subscription(dispatch, self.account)),
+    self.devices
+    .filter(dev => !@interop.is_native_ssh(dev.channel))
+    .map(dev => dev.bridge_subscription(dispatch, self.account)),
   )
 }
 
@@ -886,6 +876,7 @@ fn start_openseek(
   max_steps : String,
   session : String,
   workspace~ : @common.Uri,
+  approval~ : @protocol.OpenSeekApproval,
   images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
@@ -897,6 +888,7 @@ fn start_openseek(
     session,
     submission_id,
     workspace~,
+    approval~,
     images~,
   )
   @cmd.custom_cmd(scheduler => {
@@ -1005,6 +997,7 @@ fn start_payload(
   session : String,
   submission_id : String,
   workspace~ : @common.Uri,
+  approval~ : @protocol.OpenSeekApproval,
   images~ : Array[String] = [],
 ) -> @protocol.StartPayload {
   let session = session.trim().to_owned()
@@ -1014,6 +1007,7 @@ fn start_payload(
     submission_id: Some(submission_id),
     model: Some(selected_model.wire()),
     thinking: selected_model.thinking(reasoning),
+    approval: Some(approval),
     max_steps: parsed_max_steps(max_steps),
     session,
     workspace: Some(workspace.path),
@@ -1429,6 +1423,7 @@ fn compact_openseek(
   reasoning~ : OpenSeekReasoning,
   max_steps~ : String,
   workspace~ : @common.Uri,
+  approval~ : @protocol.OpenSeekApproval,
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -1444,6 +1439,7 @@ fn compact_openseek(
             session,
             model: Some(model.wire()),
             thinking: model.thinking(reasoning),
+            approval: Some(approval),
             max_steps: parsed_max_steps(max_steps),
             workspace: Some(workspace.path),
           },
@@ -1485,12 +1481,19 @@ fn goal_openseek(
   reasoning~ : OpenSeekReasoning,
   max_steps~ : String,
   workspace~ : @common.Uri,
+  approval~ : @protocol.OpenSeekApproval,
   command : String,
   text : String?,
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let payload = goal_payload(
-    session, model, reasoning, max_steps, workspace, text,
+    session,
+    model,
+    reasoning,
+    max_steps,
+    workspace,
+    text,
+    approval~,
   )
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -1522,6 +1525,7 @@ fn goal_payload(
   max_steps : String,
   workspace : @common.Uri,
   text : String?,
+  approval~ : @protocol.OpenSeekApproval,
 ) -> @protocol.GoalPayload {
   {
     session,
@@ -1535,6 +1539,7 @@ fn goal_payload(
     auto: None,
     model: Some(model.wire()),
     thinking: model.thinking(reasoning),
+    approval: Some(approval),
     max_steps: parsed_max_steps(max_steps),
     workspace: Some(workspace.path),
   }
@@ -1875,4 +1880,26 @@ fn recover_approvals(
       answered: item.answered,
     },
   })
+}
+
+///|
+fn bridge_notification(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  notification : @protocol.Notification,
+) -> @cmd.Cmd {
+  match notification {
+    TerminalOutput(payload) =>
+      @terminal.output(channel, payload.id, payload.sequence, payload.data)
+    TerminalExit(payload) =>
+      @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
+      |> Terminal
+      |> dispatch
+    _ =>
+      if notification_msg(channel, notification) is Some(msg) {
+        dispatch(msg)
+      } else {
+        @cmd.none
+      }
+  }
 }

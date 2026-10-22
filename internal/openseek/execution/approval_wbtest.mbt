@@ -60,9 +60,13 @@ async test "a refused question resolves to rejected" {
 /// absence is what stops the argument from being advertised at all.
 async test "never wires no channel; ask and always do" {
   let desk = ApprovalDesk::ApprovalDesk(now_ms=0)
-  assert_true(approval_channel(Never, desk) is None)
-  assert_true(approval_channel(Ask, desk) is Some(_))
-  assert_true(approval_channel(Always, desk) is Some(_))
+  let reviewer = ApprovalReviewer(_ => Escalate)
+  assert_true(approval_channel(Never, desk, reviewer~) is None)
+  assert_true(approval_channel(Ask, desk, reviewer~) is Some(_))
+  assert_true(approval_channel(Always, desk, reviewer~) is Some(_))
+  assert_true(
+    approval_channel(Review(ask_on_escalate=true), desk, reviewer~) is Some(_),
+  )
 }
 
 ///|

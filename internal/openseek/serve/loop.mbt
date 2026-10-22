@@ -110,12 +110,8 @@ async fn run_serve(
   let approval_desk = @execution.ApprovalDesk::ApprovalDesk(
     now_ms=@env.now().reinterpret_as_int64(),
   )
-  let approval = @execution.approval_channel(
-    @execution.approval_policy(matches, interactive=true),
-    approval_desk,
-  )
+  let approval_policy = @execution.approval_policy(matches, interactive=true)
   @async.with_task_group(group => {
-    let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
     // All scheduling flows through one ordered queue with one consumer:
     // wire commands from the reader, plus the internal turn-completion and
@@ -148,13 +144,28 @@ async fn run_serve(
       }
       None => None
     }
+    // Under `--approval review` a reviewer child decides each question
+    // against what the user has said so far in this session, read live.
+    let approval = @execution.approval_channel(
+      approval_policy,
+      approval_desk,
+      reviewer=@execution.build_approval_reviewer(
+        self_exe=exe,
+        model~,
+        api_key~,
+        api_url~,
+        workspace_root~,
+        intent=() => @execution.approval_intent(session),
+        child_session?,
+      ),
+    )
+    let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let mcp = @execution.connect_mcp(
       scope,
       @options.mcp_config_paths(matches),
       workspace_root~,
     )
     let extra_tools = @execution.build_extra_tools(
-      mcp,
       model~,
       api_key~,
       deepseek_api_key?=@options.deepseek_api_key(matches),
@@ -217,19 +228,24 @@ async fn run_serve(
         )
       _ => None
     }
+    let session_scratch_dir = match store {
+      Some(store) => Some(store.scratch_dir(initial_session.id()))
+      None => ephemeral_scratch
+    }
     let tools = @agent.build_tools(
       runtime,
       scope,
       subagents?,
       job_log_dir?,
-      session_scratch_dir?=match store {
-        Some(store) => Some(store.scratch_dir(initial_session.id()))
-        None => ephemeral_scratch
-      },
+      session_scratch_dir?,
       on_background_wake=() => {
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },
       extra_tools~,
+      mcp_service?=mcp.serve(
+        scope,
+        image_directory?=session_scratch_dir.map(dir => "\{dir}/mcp-images"),
+      ),
     )
     group.spawn_bg(no_wait=true) <| () => {
       @jsonl.each(@stdio.stdin, json => {

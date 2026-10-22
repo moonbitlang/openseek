@@ -52,30 +52,48 @@ You can browse and install extra skills here:
   description of the package. Review `.mbti` diffs for public signature changes;
   use behavior tests to check runtime effects.
 
-- For MoonBit code changes, finish with `moon info && moon fmt` to update the
-  interfaces and format the code. Check that the `.mbti` diffs are expected.
+- For MoonBit code changes, finish with `moon info` then `moon fmt`, selecting
+  the affected packages with path arguments. Check that the `.mbti` diffs are
+  expected.
 
 - Use `moon test` for package- or workspace-scoped MoonBit tests. MoonBit
   supports snapshot testing; when expected outputs change, run
   `moon test --update` and review the updated snapshots.
-
-- For implementation changes, run the root integration gates: `just check`,
-  `just test`, and `just build`. They cover the root workspace's native and JS
-  targets; `just test` also runs the offline OpenSeek cram tests. For editor
-  implementation changes, also run `just editor-test` for its all-target suite;
-  for browser behavior, run `just editor-test-browser` as well. For changes
-  limited to documentation, check the diff and referenced paths or commands.
-
-- `desktop/app` is outside the root workspace and builds in its own
-  `desktop/app/moon.work`, so the root gates do not cover it. For changes
-  that reach the window host, also run `just desktop-app-check` and
-  `just desktop-app-test`.
-
-- For editor UI work, follow `editor/AGENTS.md` for the preview loop and
-  OpenSeek integration requirements.
 
 - Prefer `assert_eq` or `assert_true(pattern is Pattern(...))` for results that
   are stable or very unlikely to change. Use snapshot tests to record current
   behavior. For solid, well-defined results (e.g. scientific computations),
   prefer assertion tests. You can use `moon coverage analyze > uncovered.log` to
   see which parts of your code are not covered by tests.
+
+## Validation By Change Scope
+
+Start with the smallest checks that exercise the changed behavior. Expand to
+consumers, integration paths, or more targets when shared behavior/styles,
+public contracts, dependencies, or build configuration affect them; explain why.
+Report checks, results, failures, and remaining gaps. A green backend suite does
+not establish UI correctness.
+
+Commands below run from the repository root.
+
+| Change | Targeted checks |
+| --- | --- |
+| Documentation only | Diff and referenced paths/commands; affected cram document if executable examples change. |
+| Pure CSS or static presentation assets | Rebuild/serve the frontend and inspect affected UI or run focused browser scenarios, including relevant themes, viewports, and interactions. No automatic MoonBit, backend/CLI, or root gates. |
+| MoonBit source | `moon check` and relevant `moon test` cases for affected packages/targets; update interfaces and formatting as above. |
+| CLI arguments, output, exit status, or requests | Owning package tests and matching document under `tests/cram/` or `openseek_tui/tests/cram/`. |
+| Background jobs, turn completion, or serve controls | Owning package tests and `just test-turn-finish`. |
+| Subagents, review, or workers | Owning package tests and the matching integration script from `test-subagents` in [justfile](justfile). |
+| Bundled workflows | Relevant cram document, `just check-workflows` for compilation, or `just test-workflows` for hosted behavior. |
+| Service startup or engine resolution | Owning native package tests and `just test-app-server`. |
+| Editor, Desktop, or session-viewer UI/host integration | [Editor guidance](editor/AGENTS.md), [Desktop guidance](desktop/AGENTS.md), or [session-viewer browser tests](cmd/viz_app/e2e/README.md). |
+
+Command details: `moon test --help`,
+[cram](tests/cram/README.md), and [integration tests](tests/integration/README.md).
+Select packages/files/test names for MoonBit tests and individual scripts for
+CLI integration; script assertions in `main` require `moon run`, not `moon test`.
+
+Full gates remain available when justified or explicitly required: `just check`,
+`just test`, and `just build`; their individual test groups are in [justfile](justfile).
+Root gates exclude `desktop/app` and browser suites; use the host-specific
+entries in the linked guides. CI requirements are unchanged.

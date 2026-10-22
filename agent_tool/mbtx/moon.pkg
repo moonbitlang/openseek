@@ -1,5 +1,6 @@
 import {
   "moonbitlang/openseek/agent_tool/ptc",
+  "moonbitlang/openseek/mcp/host" @mcphost,
   "moonbitlang/openseek/agent_tool/internal/uuid",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/write_scope",
@@ -33,6 +34,7 @@ dev_build(
     "../../share/workflow/repo-map.mbtx",
     "../../share/workflow/review.mbtx",
     "../../share/workflow/rg.mbtx",
+    "../../share/workflow/simplify.mbtx",
     "../../share/workflow/test.mbtx",
   ],
   output: "generated_bundled_workflows.mbt",

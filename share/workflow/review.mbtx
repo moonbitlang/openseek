@@ -11,9 +11,13 @@ import {
 /// One review subagent audits the current worktree against the standing goal
 /// the engine supplies and/or the criteria in args, prints its full
 /// structured report, and fails on a blocker finding; no retries or
-/// automatic edits.
+/// automatic edits. In swarm mode several reviewers audit in parallel, one
+/// per lens, their findings are merged, and fresh reviewers try to refute
+/// each serious one (docs/plans/review-swarm.md).
 const Usage : String =
-  #|usage: @builtin/review.mbtx [--sha COMMIT [--dirty]] [--] [CRITERIA...]
+  #|usage: @builtin/review.mbtx [--sha COMMIT [--dirty]]
+  #|                            [--swarm | --lens NAME ...] [--verify N]
+  #|                            [--max-tokens N] [--] [CRITERIA...]
   #|
   #|With no arguments the reviewer audits the standing goal and the baseline
   #|it recorded, which the engine supplies through the audit_context tool.
@@ -23,12 +27,25 @@ const Usage : String =
   #|recorded at (--dirty: the worktree was already dirty then) and overrides
   #|the engine's. A blocker finding fails the call: the claim does not hold
   #|yet. Needs an OpenSeek session that can start subagents.
+  #|
+  #|--swarm runs one reviewer per default lens (correctness, architecture,
+  #|tests); --lens NAME, repeatable, picks the lenses instead (also:
+  #|compatibility, security). Their findings are merged, and each blocker or
+  #|high finding, at most --verify N of them (default 6, at most 8, 0 for
+  #|none), goes to a fresh reviewer that tries to refute it. A refuted finding
+  #|is dropped and listed; one nobody could check stays, marked [unverified].
+  #|--max-tokens N skips verification once the lenses have spent N tokens.
+  #|A lens that did not report makes the run incomplete, which fails it.
 
 ///|
 async fn main {
   let mut sha : String? = None
   let mut dirty = false
   let criteria : Array[String] = []
+  let mut swarm = false
+  let selected : Array[String] = []
+  let mut verify : Int? = None
+  let mut max_tokens : Int? = None
   for args = @env.args()[1:] {
     match args {
       [] => break
@@ -36,6 +53,31 @@ async fn main {
         println(Usage)
         return
       }
+      ["--swarm", .. rest] => {
+        swarm = true
+        continue rest
+      }
+      ["--lens", name, .. rest] => {
+        guard lenses.iter().any(lens => lens.0 == name) else {
+          let known = lenses.map(lens => lens.0).join(", ")
+          fail("unknown lens \{name}: the lenses are \{known}\n\{Usage}")
+        }
+        guard !selected.contains(name) else {
+          fail("--lens \{name} given twice\n\{Usage}")
+        }
+        selected.push(name)
+        continue rest
+      }
+      ["--verify", value, .. rest] => {
+        verify = Some(count("--verify", value, MaxVerifiers))
+        continue rest
+      }
+      ["--max-tokens", value, .. rest] => {
+        max_tokens = Some(count("--max-tokens", value, 999_999_999))
+        continue rest
+      }
+      ["--lens" | "--verify" | "--max-tokens" as flag] =>
+        fail("\{flag} needs a value\n\{Usage}")
       ["--sha", commit, .. rest] => {
         sha = Some(commit)
         continue rest
@@ -55,6 +97,16 @@ async fn main {
     }
   }
   guard sha is Some(_) || !dirty else { fail("--dirty needs --sha\n\{Usage}") }
+  let chosen = match (selected, swarm) {
+    ([], true) => default_lenses
+    ([], false) => []
+    _ => selected
+  }
+  guard chosen is [_, ..] || (verify is None && max_tokens is None) else {
+    fail(
+      "--verify and --max-tokens apply only with --swarm or --lens\n\{Usage}",
+    )
+  }
   let focus = criteria.join(" ")
   // The standing goal and its baseline, from the engine: null when none.
   let context = @tools.call("audit_context", {})
@@ -91,12 +143,18 @@ async fn main {
     (None, Some((sha, dirty))) => (Some(sha), dirty)
     (None, None) => (None, false)
   }
-  // The same input the review child of the goal-met gate reads.
-  let input : Json = match sha {
-    Some(sha) => { "goal": goal, "sha": sha, "dirty": dirty }
-    None => { "goal": goal }
+  if chosen is [_, ..] {
+    run_swarm(
+      goal,
+      sha,
+      dirty,
+      chosen,
+      verify=verify.unwrap_or(DefaultVerifiers),
+      max_tokens~,
+    )
+    return
   }
-  let launch = start("review", input, "review", 100)
+  let launch = start("review", review_input(goal, sha, dirty), "review", 100)
   let id = match launch {
     Running(id) => id
     Refused(why) => fail("could not start the review: \{why}")
@@ -225,5 +283,611 @@ async fn outcome(id : String) -> Outcome {
         return NoReport(ended, tokens~)
       _ => return NoReport("no report", tokens~)
     }
+  }
+}
+
+///|
+/// The same input the review child of the goal-met gate reads: the criteria,
+/// plus the baseline commit when there is one.
+fn review_input(goal : String, sha : String?, dirty : Bool) -> Json {
+  match sha {
+    Some(sha) => { "goal": goal, "sha": sha, "dirty": dirty }
+    None => { "goal": goal }
+  }
+}
+
+///|
+/// A non-negative integer argument of at most `maximum`.
+fn count(flag : String, value : String, maximum : Int) -> Int raise {
+  guard !value.is_empty() && value.length() <= 9 else {
+    fail("\{flag} takes a number from 0 to \{maximum}\n\{Usage}")
+  }
+  let mut result = 0
+  for c in value {
+    guard c >= '0' && c <= '9' else {
+      fail("\{flag} takes a number from 0 to \{maximum}\n\{Usage}")
+    }
+    result = result * 10 + c.to_int() - '0'.to_int()
+  }
+  guard result <= maximum else {
+    fail("\{flag} takes a number from 0 to \{maximum}\n\{Usage}")
+  }
+  result
+}
+
+///|
+/// The built-in lenses: a name, and the paragraph that narrows one reviewer
+/// to it. `change-review.mbtx` keeps its own three explore scouts with some of
+/// the same names; scripts cannot import each other, so the two lists are
+/// separate on purpose, and a lens changed here is not changed there.
+let lenses : Array[(String, String)] = [
+  (
+    "correctness", "Behavior that is wrong: boundary cases, state transitions, error propagation, resource lifetimes, concurrency and cancellation.",
+  ),
+  (
+    "architecture", "Layering and ownership: whether the change sits in the right package, duplicated mechanisms, contracts that leak, and designs that will not scale.",
+  ),
+  (
+    "tests", "Behavior the change adds or alters that no test pins, tests that assert nothing, and whether the build and tests pass.",
+  ),
+  (
+    "compatibility", "Public API (.mbti), JSON and wire formats, CLI output, and how absence versus failure is represented.",
+  ),
+  (
+    "security", "Sandbox and trust boundaries, untrusted input, paths, process spawning, and secrets.",
+  ),
+]
+
+///|
+/// What `--swarm` runs: three lenses, to keep the cost down.
+let default_lenses : Array[String] = ["correctness", "architecture", "tests"]
+
+///|
+/// Step budget for one lens reviewer: what single mode gives its reviewer.
+const LensSteps : Int = 100
+
+///|
+/// Step budget for one verifier: it checks one claim, not the whole change.
+const VerifySteps : Int = 40
+
+///|
+/// How many findings are verified when `--verify` is not given.
+const DefaultVerifiers : Int = 6
+
+///|
+/// The most verifiers one run starts. With five lenses that is 13 children,
+/// inside the session's 16 at once and a script's 64 in all.
+const MaxVerifiers : Int = 8
+
+///|
+/// Severities, most severe first, as the review contract orders them.
+let severities : Array[String] = ["blocker", "high", "medium", "low", "nit"]
+
+///|
+/// A severity's rank: 0 for a blocker, larger for less severe.
+fn rank(severity : String) -> Int {
+  match severities.search(severity) {
+    Some(index) => index
+    None => severities.length()
+  }
+}
+
+///|
+/// One issue after merging: the most severe report of it, and every lens
+/// that reported it.
+priv struct Claim {
+  // The finding as its most severe reporter wrote it.
+  mut finding : Json
+  mut rank : Int
+  // What later findings are matched against: the first report's location
+  // and title words.
+  file : String
+  line : Int?
+  words : Array[String]
+  lenses : Array[String]
+  // What its verifier concluded; `None` when nobody verified it.
+  mut verdict : Verdict?
+}
+
+///|
+/// Where the claim's own finding points: the location shown with its text,
+/// which can differ by a few lines from the match key above when a more
+/// severe report from another lens took over the claim.
+fn location(claim : Claim) -> (String, Int?) {
+  (normalize_file(text_field(claim.finding, "file")), line_field(claim.finding))
+}
+
+///|
+fn text_field(finding : Json, name : String) -> String {
+  match finding {
+    Object(fields) =>
+      match fields.get(name) {
+        Some(String(text)) => text
+        _ => ""
+      }
+    _ => ""
+  }
+}
+
+///|
+fn line_field(finding : Json) -> Int? {
+  match finding {
+    { "line": Number(line, ..), .. } => Some(line.to_int())
+    _ => None
+  }
+}
+
+///|
+fn normalize_file(file : String) -> String {
+  match file.strip_prefix("./") {
+    Some(rest) => rest.to_owned()
+    None => file
+  }
+}
+
+///|
+/// A title's lowercase words of three or more letters or digits, each once.
+fn title_words(title : String) -> Array[String] {
+  let words : Array[String] = []
+  let word = StringBuilder()
+  fn flush() {
+    let text = word.to_string()
+    if text.length() >= 3 && !words.contains(text) {
+      words.push(text)
+    }
+    word.reset()
+  }
+  for c in title.to_lower() {
+    if c is ('a'..<='z' | '0'..<='9') {
+      word.write_char(c)
+    } else {
+      flush()
+    }
+  }
+  flush()
+  words
+}
+
+///|
+/// Whether two findings from different lenses are the same claim: the same
+/// file, lines at most 3 apart (or neither has one), and titles sharing at
+/// least half their words. A shared category alone is not enough: it is a
+/// free-form label, not an issue identifier.
+fn same_claim(
+  claim : Claim,
+  file : String,
+  line : Int?,
+  words : Array[String],
+) -> Bool {
+  guard claim.file == file else { return false }
+  let close = match (claim.line, line) {
+    (None, None) => true
+    (Some(a), Some(b)) => (a - b).abs() <= 3
+    _ => false
+  }
+  guard close else { return false }
+  let shared = words.filter(word => claim.words.contains(word)).length()
+  let union = claim.words.length() + words.length() - shared
+  union > 0 && shared * 2 >= union
+}
+
+///|
+/// Merge the lenses' findings, lens by lens in the order given: each finding
+/// joins the first claim it matches from another lens, or starts a new one.
+/// Two findings from one lens never merge; that reviewer already reported
+/// them as separate issues.
+fn merge(reports : Array[(String, Json)]) -> Array[Claim] {
+  let claims : Array[Claim] = []
+  for entry in reports {
+    let (lens, report) = entry
+    guard report is { "findings": Array(findings), .. } else { continue }
+    for finding in findings {
+      let file = normalize_file(text_field(finding, "file"))
+      let line = line_field(finding)
+      let words = title_words(text_field(finding, "title"))
+      let severity = rank(text_field(finding, "severity"))
+      match
+        claims.search_by(claim => {
+          !claim.lenses.contains(lens) && same_claim(claim, file, line, words)
+        }) {
+        Some(index) => {
+          let claim = claims[index]
+          claim.lenses.push(lens)
+          if severity < claim.rank {
+            claim.finding = finding
+            claim.rank = severity
+          }
+        }
+        None =>
+          claims.push({
+            finding,
+            rank: severity,
+            file,
+            line,
+            words,
+            lenses: [lens],
+            verdict: None,
+          })
+      }
+    }
+  }
+  claims
+}
+
+///|
+/// The text a lens reviewer audits: the criteria, narrowed to one lens.
+fn lens_goal(criteria : String, name : String, focus : String) -> String {
+  (
+    $|\{criteria}
+    $|
+    $|Review lens: \{name}
+    $|\{focus}
+    $|Report only findings within this lens; other reviewers cover the rest.
+  )
+}
+
+///|
+/// The text a verifier audits: the original criteria and the allegation,
+/// kept apart, and how to answer.
+fn verify_goal(criteria : String, claim : Claim) -> String {
+  let finding = claim.finding
+  let (file, line) = location(claim)
+  let line = match line {
+    Some(line) => line.to_string()
+    None => "none given"
+  }
+  (
+    $|You are verifying ONE allegation another reviewer made about this work. Review nothing else.
+    $|
+    $|## The criteria the work is held to (verbatim)
+    $|\{criteria}
+    $|
+    $|## The allegation (one reviewer's claim, not criteria)
+    $|File: \{file}
+    $|Line: \{line}
+    $|Severity claimed: \{text_field(finding, "severity")}
+    $|Title: \{text_field(finding, "title")}
+    $|Detail: \{text_field(finding, "detail")}
+    $|
+    $|## How to answer
+    $|Try to refute the allegation first: read the code, and run what would show it false.
+    $|Then call submit_review once. The first line of its summary must be exactly one of
+    $|VERDICT: CONFIRMED
+    $|VERDICT: REFUTED
+    $|VERDICT: INCONCLUSIVE
+    $|followed by your evidence. For CONFIRMED, submit exactly one finding restating the
+    $|allegation, in \{file}. Otherwise submit no findings. Say INCONCLUSIVE whenever
+    $|you could not actually test the allegation.
+  )
+}
+
+///|
+/// What one verifier concluded, read strictly from its verdict line and the
+/// shape of its findings together.
+priv enum Verdict {
+  Confirmed(String)
+  Refuted(String)
+  Unverified(String)
+}
+
+///|
+/// The verifier's verdict on `claim`. Anything but a well-formed confirmation
+/// or refutation leaves the claim unverified.
+///
+/// The summary's first line must be the verdict token alone (trailing
+/// periods aside), so a hedge such as `VERDICT: REFUTED/INCONCLUSIVE` is no
+/// verdict. A literal `\n` also ends the line: live verifiers wrote one
+/// there rather than a newline.
+fn verdict(report : Json, claim : Claim) -> Verdict {
+  let summary = text_field(report, "summary").replace_all(
+    old="\\n",
+    new="\n",
+  )
+  let (head, evidence) = match summary.trim().split("\n").to_array() {
+    [] => ("", "")
+    [head, .. rest] =>
+      (
+        head.trim().trim_end(chars=".").to_owned(),
+        rest.join(" ").trim().to_owned(),
+      )
+  }
+  let findings = match report {
+    { "findings": Array(findings), .. } => findings
+    _ => []
+  }
+  match (head, findings) {
+    ("VERDICT: CONFIRMED", [finding]) if normalize_file(
+        text_field(finding, "file"),
+      ) ==
+      location(claim).0 => Confirmed(text_field(finding, "detail"))
+    ("VERDICT: REFUTED", []) => Refuted(evidence)
+    ("VERDICT: INCONCLUSIVE", _) => Unverified("inconclusive")
+    ("VERDICT: CONFIRMED" | "VERDICT: REFUTED", _) =>
+      Unverified("the verdict did not match its findings")
+    _ => Unverified("no verdict line")
+  }
+}
+
+///|
+/// The finding as reported, with the lenses that found it and its
+/// verification outcome appended to its detail.
+fn annotated(claim : Claim) -> Json {
+  guard claim.finding is Object(fields) else { return claim.finding }
+  let fields = fields.copy()
+  let outcome = match claim.verdict {
+    Some(Confirmed(detail)) => "[verified] \{detail}"
+    Some(Refuted(evidence)) => "[refuted] \{evidence}"
+    Some(Unverified(why)) => "[unverified: \{why}]"
+    None => "[unverified]"
+  }
+  let detail = text_field(claim.finding, "detail")
+  fields["detail"] = Json::string(
+    "\{detail}\n\n[found by: \{claim.lenses.join(", ")}]\n\{outcome}",
+  )
+  Json::object(fields)
+}
+
+///|
+/// The worst of the lenses' build or test results: "fail" if any failed,
+/// else "pass" if any passed, else the first reported value.
+fn combined(values : Array[String]) -> String {
+  if values.contains("fail") {
+    "fail"
+  } else if values.contains("pass") {
+    "pass"
+  } else {
+    match values {
+      [first, ..] => first
+      [] => "skipped"
+    }
+  }
+}
+
+///|
+fn stat_text(report : Json, name : String) -> String {
+  match report {
+    { "stats": stats, .. } => text_field(stats, name)
+    _ => ""
+  }
+}
+
+///|
+fn stat_number(report : Json, name : String) -> Int {
+  match report {
+    { "stats": Object(stats), .. } =>
+      match stats.get(name) {
+        Some(Number(value, ..)) => value.to_int()
+        _ => 0
+      }
+    _ => 0
+  }
+}
+
+///|
+fn first_line(text : String) -> String {
+  match text.split("\n").next() {
+    Some(line) => line.trim().to_owned()
+    None => ""
+  }
+}
+
+///|
+/// The swarm: one reviewer per lens in parallel, a deterministic merge, then
+/// fresh reviewers that try to refute each blocker or high finding. Prints
+/// the merged report, a line per lens, the refuted findings and a verdict
+/// line; fails when a blocker stands or a lens did not report.
+async fn run_swarm(
+  criteria : String,
+  sha : String?,
+  dirty : Bool,
+  names : Array[String],
+  verify~ : Int,
+  max_tokens~ : Int?,
+) -> Unit {
+  let launches : Array[Launch] = []
+  for name in names {
+    let focus = match lenses.iter().find_first(lens => lens.0 == name) {
+      Some((_, focus)) => focus
+      None => fail("unknown lens \{name}")
+    }
+    launches.push(
+      start(
+        "review",
+        review_input(lens_goal(criteria, name, focus), sha, dirty),
+        "review:\{name}",
+        LensSteps,
+      ),
+    )
+  }
+  wait_all(launches)
+  let mut tokens = 0
+  let mut incomplete = 0
+  let lines : Array[String] = []
+  let reports : Array[(String, Json)] = []
+  for index, launch in launches {
+    let name = names[index]
+    guard launch is Running(id) else {
+      incomplete += 1
+      if launch is Refused(why) {
+        lines.push("lens \{name}: not started: \{why}")
+      }
+      continue
+    }
+    match outcome(id) {
+      Reported(report, tokens=spent) => {
+        tokens += spent
+        reports.push((name, report))
+        let found = match report {
+          { "findings": Array(items), .. } => items.length()
+          _ => 0
+        }
+        let files = stat_number(report, "files_reviewed")
+        lines.push(
+          "lens \{name}: reported, findings=\{found}, files=\{files}, tokens=\{spent}",
+        )
+      }
+      NoReport(why, tokens=spent) => {
+        tokens += spent
+        incomplete += 1
+        lines.push("lens \{name}: no report: \{why}, tokens=\{spent}")
+      }
+    }
+  }
+  guard reports is [(_, first), ..] else {
+    for line in lines {
+      println(line)
+    }
+    fail("no lens reported: the review did not run")
+  }
+  let claims = merge(reports)
+  // Verify blockers first, then high findings, each in merge order.
+  let candidates : Array[Claim] = []
+  for severity in 0..<=1 {
+    for claim in claims {
+      if claim.rank == severity && candidates.length() < verify {
+        candidates.push(claim)
+      }
+    }
+  }
+  let refuted : Array[String] = []
+  let mut confirmed = 0
+  let over_budget = match max_tokens {
+    Some(limit) => tokens >= limit
+    None => false
+  }
+  if over_budget && candidates is [_, ..] {
+    lines.push(
+      "verify: skipped, the lenses spent \{tokens} tokens of --max-tokens \{max_tokens.unwrap_or(0)}",
+    )
+  } else if candidates is [_, ..] {
+    let checks : Array[Launch] = []
+    for index, claim in candidates {
+      checks.push(
+        start(
+          "review",
+          review_input(verify_goal(criteria, claim), sha, dirty),
+          "review:verify-\{index + 1}",
+          VerifySteps,
+        ),
+      )
+    }
+    wait_all(checks)
+    for index, check in checks {
+      let claim = candidates[index]
+      let result = match check {
+        Running(id) =>
+          match outcome(id) {
+            Reported(report, tokens=spent) => {
+              tokens += spent
+              verdict(report, claim)
+            }
+            NoReport(why, tokens=spent) => {
+              tokens += spent
+              Unverified("the verifier did not report: \{why}")
+            }
+          }
+        Refused(why) => Unverified("the verifier was not started: \{why}")
+      }
+      claim.verdict = Some(result)
+      match result {
+        Confirmed(_) => confirmed += 1
+        Refuted(evidence) => {
+          let where_ = match location(claim) {
+            (file, Some(line)) => "\{file}:\{line}"
+            (file, None) => file
+          }
+          refuted.push(
+            "Refuted: \{text_field(claim.finding, "title")} (\{where_}): \{evidence}",
+          )
+        }
+        Unverified(_) => ()
+      }
+    }
+  }
+  let kept : Array[Json] = []
+  let mut blockers = 0
+  let mut unverified = 0
+  for claim in claims {
+    match claim.verdict {
+      Some(Refuted(_)) => continue
+      Some(Confirmed(_)) => ()
+      Some(Unverified(_)) | None => unverified += 1
+    }
+    if claim.rank == 0 {
+      blockers += 1
+    }
+    kept.push(annotated(claim))
+  }
+  // Scope: the first reporter's base and head, every lens's files.
+  let files : Array[String] = []
+  let summaries : Array[String] = []
+  let builds : Array[String] = []
+  let tests : Array[String] = []
+  let mut files_reviewed = 0
+  let (base, head) = match first {
+    { "scope": scope, .. } =>
+      (text_field(scope, "base"), text_field(scope, "head"))
+    _ => ("", "")
+  }
+  for entry in reports {
+    let (lens, report) = entry
+    summaries.push("\{lens}: \{first_line(text_field(report, "summary"))}")
+    if report is { "scope": scope, .. } {
+      if text_field(scope, "base") != base || text_field(scope, "head") != head {
+        summaries.push(
+          "\{lens} reviewed a different scope: \{text_field(scope, "base")}..\{text_field(scope, "head")}",
+        )
+      }
+      if scope is { "files": Array(listed), .. } {
+        for file in listed {
+          if file is String(file) && !files.contains(file) {
+            files.push(file)
+          }
+        }
+      }
+    }
+    files_reviewed = files_reviewed.max(stat_number(report, "files_reviewed"))
+    builds.push(stat_text(report, "build"))
+    tests.push(stat_text(report, "tests"))
+  }
+  let merged : Json = {
+    "schema_version": 1,
+    "scope": {
+      "base": base,
+      "head": head,
+      "files": Json::array(files.map(Json::string)),
+    },
+    "findings": Json::array(kept),
+    "summary": summaries.join("\n"),
+    "stats": {
+      "files_reviewed": Json::number(files_reviewed.to_double()),
+      "findings": Json::number(kept.length().to_double()),
+      "build": combined(builds),
+      "tests": combined(tests),
+    },
+  }
+  println(merged.stringify())
+  for line in lines {
+    println(line)
+  }
+  for line in refuted {
+    println(line)
+  }
+  println(
+    "findings=\{kept.length()} blockers=\{blockers} tokens=\{tokens} lenses=\{reports.length()}/\{names.length()} verified=\{confirmed} refuted=\{refuted.length()} unverified=\{unverified}",
+  )
+  // Everything is printed first; a failing exit makes the tool result an
+  // error the caller cannot read past.
+  let problems : Array[String] = []
+  if incomplete > 0 {
+    problems.push(
+      "\{incomplete} lens(es) did not report: the review is incomplete",
+    )
+  }
+  if blockers > 0 {
+    problems.push("\{blockers} blocker finding(s): the claim does not hold yet")
+  }
+  if problems is [_, ..] {
+    fail(problems.join("; "))
   }
 }

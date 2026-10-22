@@ -16,6 +16,11 @@
 /// keeps its worktree, gets its title, and is reported through `on_created`
 /// — also when the engine failed after writing it, and when the request was
 /// cancelled and has no reply to carry the news.
+///
+/// A side-chat fork is the same copy under the id `side_chat_id` gives it,
+/// with a random token, which makes it part of the source's family. It is an aside about the source's work, so it shares the
+/// source's checkout rather than getting one of its own. A side chat has no
+/// side chats of its own.
 pub async fn fork_session(
   manager : EngineManager,
   payload : @protocol.SessionForkPayload,
@@ -25,7 +30,11 @@ pub async fn fork_session(
   fork_session_in(
     manager,
     payload,
-    OwnWorktree,
+    if payload.side_chat is Some(true) {
+      SharedWorktree
+    } else {
+      OwnWorktree
+    },
     on_created~,
     on_worktree_changed~,
   )
@@ -58,6 +67,10 @@ async fn fork_session_in(
   guard @wire.split_child_session_id(payload.session) is None else {
     raise EngineError("forking a subrun conversation is not supported")
   }
+  let side_chat = payload.side_chat is Some(true)
+  guard !side_chat || @protocol.split_side_chat_id(payload.session) is None else {
+    raise EngineError("a side chat cannot open a side chat of its own")
+  }
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
   let lease = manager.begin_record_read(payload.session)
@@ -67,8 +80,41 @@ async fn fork_session_in(
     raise EngineError("workspace is not a registered workspace")
   }
   let root = @workspaces.store_root(workspace)
-  let session = "desktop-" + @uuid.mint()
   let store = @store.SessionStore(root.to_string())
+  // A side chat joins its conversation's family, which another host
+  // attached to this project may be archiving or deleting. Those moves take
+  // this lock on the store's archive and re-read the family under it, so
+  // holding it until the side chat exists means the move either takes the
+  // side chat along or finds its conversation gone here first.
+  let shared = if side_chat {
+    Some(
+      @fsx.FileLock::acquire(@session_store.archived_root(root).to_path()) catch {
+        error =>
+          raise EngineError("could not lock the archived store: \{error}")
+      },
+    )
+  } else {
+    None
+  }
+  defer (if shared is Some(lock) { lock.release() })
+  guard !side_chat || store.exists(SessionId(payload.session)) else {
+    raise EngineError("this conversation was archived or deleted")
+  }
+  // A side chat's token only has to differ from its siblings'; draw again on
+  // the rare collision. Under the placement lock no other fork claims one
+  // meanwhile, and the engine's claim on the directory refuses one anyway.
+  let session = if side_chat {
+    let mut candidate = @protocol.side_chat_id(
+      payload.session,
+      side_chat_token(),
+    )
+    while store.exists(SessionId(candidate)) {
+      candidate = @protocol.side_chat_id(payload.session, side_chat_token())
+    }
+    candidate
+  } else {
+    "desktop-" + @uuid.mint()
+  }
   let id : @agent_session.SessionId = SessionId(session)
   let workspace_token = workspace.resource_path()
   // The renderer uses the same label as the sidebar, including titles derived
@@ -243,6 +289,7 @@ async test "fork validates its request before spawning and releases its reader l
     through: 3,
     model: "deepseek-flash",
     source_title: "Source conversation",
+    side_chat: None,
   }
   let ordinary = try {
     ignore(
@@ -325,4 +372,11 @@ async test "fork validates its request before spawning and releases its reader l
     error => raise error
   }
   assert_eq(invalid, Some("invalid session fork boundary"))
+}
+
+///|
+/// A fresh side-chat token: the leading hex digits of a random UUID, which
+/// are all drawn from the entropy source.
+fn side_chat_token() -> String raise {
+  @uuid.mint().view(end_offset=@protocol.SideChatTokenLength).to_owned()
 }

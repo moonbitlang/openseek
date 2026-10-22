@@ -141,11 +141,20 @@ test("artifact checks preserve non-missing filesystem errors", async t => {
   await assert.rejects(new Release().localArtifact({ file: "SeekMoon.app.zip" }), actual => actual === error);
 });
 
-test("stamp keeps all Desktop module versions aligned", async t => {
+async function stampFixture(t) {
   const release = new Release();
-  release.desktop = await fs.mkdtemp(join(tmpdir(), "openseek-release-stamp-"));
+  const repo = await fs.mkdtemp(join(tmpdir(), "openseek-release-stamp-"));
+  release.desktop = join(repo, "desktop");
   release.dist = join(release.desktop, "dist");
-  t.after(() => fs.rm(release.desktop, { recursive: true, force: true }));
+  t.after(() => fs.rm(repo, { recursive: true, force: true }));
+  await fs.mkdir(join(release.desktop, "backend/ssh"), { recursive: true });
+  await fs.writeFile(join(repo, "moon.mod"), 'name = "moonbitlang/openseek"\nversion = "0.8.2"\n');
+  await fs.writeFile(join(release.desktop, "backend/ssh/version.mbt"), '///|\nconst CliRelease = "0.7.1"\n');
+  return release;
+}
+
+test("stamp aligns Desktop versions while taking SSH's CLI version from the root manifest", async t => {
+  const release = await stampFixture(t);
   // Each member with the sibling modules its manifest pins.
   const members = {
     backend: ["openseek_desktop"],
@@ -154,7 +163,7 @@ test("stamp keeps all Desktop module versions aligned", async t => {
   };
   await fs.writeFile(join(release.desktop, "moon.mod"), 'name = "openseek_desktop"\nversion = "0.1.5"\n');
   for (const [member, pins] of Object.entries(members)) {
-    await fs.mkdir(join(release.desktop, member));
+    await fs.mkdir(join(release.desktop, member), { recursive: true });
     const imports = pins.map(pin => `"${pin}@0.1.5"`).join(", ");
     await fs.writeFile(
       join(release.desktop, member, "moon.mod"),
@@ -175,7 +184,27 @@ test("stamp keeps all Desktop module versions aligned", async t => {
   }
   const config = JSON.parse(await fs.readFile(join(release.desktop, "proton.project.json"), "utf8"));
   assert.equal(config.package.version, "0.2.0");
+  assert.equal(await fs.readFile(join(release.desktop, "backend/ssh/version.mbt"), "utf8"), '///|\nconst CliRelease = "0.8.2"\n');
+  assert.match(await fs.readFile(join(release.desktop, "../moon.mod"), "utf8"), /^version = "0\.8\.2"$/m);
+  await fs.writeFile(join(release.desktop, "../moon.mod"), 'version = "0.8.3"\n');
+  await release.stamp("0.2.1");
+  assert.equal(await fs.readFile(join(release.desktop, "backend/ssh/version.mbt"), "utf8"), '///|\nconst CliRelease = "0.8.3"\n');
+  assert.equal(await release.moduleVersion(), "0.2.1");
 });
+
+for (const scenario of [
+  { name: "missing CLI version", file: "../moon.mod", content: 'name = "moonbitlang/openseek"\n', error: /could not read CLI version/ },
+  { name: "missing patch target", file: "backend/ssh/version.mbt", content: '///|\nconst Renamed = "0.7.1"\n', error: /expected one CliRelease constant/ },
+]) {
+  test(`stamp rejects ${scenario.name} instead of retaining a stale version`, async t => {
+    const release = await stampFixture(t);
+    await fs.writeFile(join(release.desktop, scenario.file), scenario.content);
+    const source = join(release.desktop, "backend/ssh/version.mbt");
+    const before = await fs.readFile(source, "utf8");
+    await assert.rejects(release.stamp("0.2.0"), scenario.error);
+    assert.equal(await fs.readFile(source, "utf8"), before);
+  });
+}
 
 test("missing artifacts have a useful message and retain the filesystem cause", async t => {
   const error = Object.assign(new Error("no such file"), { code: "ENOENT" });

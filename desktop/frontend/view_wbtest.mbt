@@ -5,6 +5,45 @@ test "shell classes leave native geometry to the window subscription" {
 }
 
 ///|
+test "sidebar preserves the focused host storage error in desktop and browser views" {
+  let remote : @interop.ChannelId = Remote("storage-test")
+  for desktop in [true, false] {
+    let base = {
+      ..test_model(),
+      is_desktop: desktop,
+      cloud: { ..test_model().cloud, notice: Some("cloud notice"), },
+      devices: test_model().devices +
+      [
+        {
+          ..empty_device_state(remote),
+          chat_root: Some(Err("remote disk unavailable")),
+        },
+      ],
+    }
+    let base = base.replace_device({
+      ..base.dev(),
+      chat_root: Some(Err("local permission denied")),
+    })
+    for
+      (channel, message) in [
+        (@interop.Local, "local permission denied"),
+        (remote, "remote disk unavailable"),
+      ] {
+      let focused = { ..base, focused: channel, }
+      assert_eq(focused.sidebar_component_input().notices, [
+        "cloud notice",
+        dynamic_text(focused.locale, DStorageUnavailable(message)),
+      ])
+      let recovered = focused.replace_device({
+        ..focused.focused_device().unwrap(),
+        chat_root: None,
+      })
+      assert_eq(recovered.sidebar_component_input().notices, ["cloud notice"])
+    }
+  }
+}
+
+///|
 fn sidebar_project_for_test(model : Model) -> @project.Input raise {
   for section in model.sidebar_component_sections(model.dev()) {
     guard section.id().source() == "openseek.projects" else { continue }
@@ -26,6 +65,7 @@ test "a fresh chat selects its project and materializes on first send" {
   })
   let fresh_project = sidebar_project_for_test(fresh)
   assert_eq(fresh_project.activation, Some("desktop-test"))
+  assert_true(fresh_project.host is None)
   assert_true(fresh_project.conversations.is_empty())
 
   // Typing still belongs to the new-chat page; it does not manufacture a

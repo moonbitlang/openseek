@@ -1008,6 +1008,21 @@ test('PDF element hover and a slightly moving click attach text, page and screen
   expect(selection.comment).toBe('Rename this heading');
   expect(selection.source.file).toBe('/workspace/docs/report.pdf');
   expect(JSON.stringify(params)).toContain('data:image/png;base64,');
+  const event = {
+    sequence: app.sessionEvents.at(-1).sequence + 1,
+    item: { kind: 'user', payload: { content: params.task } },
+  };
+  app.sessionEvents.push(event);
+  app.notify('session.event', {
+    session: 'session-1', session_root: '/workspace/.openseek', sequence: event.sequence, event,
+  });
+  const sent = page.locator('.msg.user').last();
+  await expect(sent.locator('.mention-chip')).toContainText('report.pdf · p. 1');
+  await expect(sent.locator('.msg-content')).toHaveText('Rename this heading');
+  await page.reload();
+  await app.openSession();
+  await expect(sent.locator('.mention-chip')).toContainText('report.pdf · p. 1');
+  await expect(sent.locator('.msg-content')).toHaveText('Rename this heading');
   expect(app.pageErrors).toEqual([]);
 });
 

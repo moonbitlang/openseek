@@ -31,7 +31,11 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(C
 
 pub async fn[Payload : ToJson, Reply : @json.FromJson] codex_request(ChannelId, @commands.Command[Payload, @protocol.CodexCommandReply[Reply]], Payload) -> Reply
 
+pub fn current_ssh_epoch(ChannelId) -> Int32?
+
 pub async fn[T] in_ordered_lane(String, async () -> T) -> T
+
+pub fn is_native_ssh(ChannelId) -> Bool
 
 pub fn js_method_promise(@js.Value, String, @js.Value) -> @js_async.Promise[@js.Value] raise @js.Error_
 
@@ -49,7 +53,11 @@ pub fn page_query_param(String) -> String?
 
 pub fn page_ws_origin() -> String?
 
+pub fn register_ssh_profile(@protocol.SshProfile) -> Unit
+
 pub fn session_command_lane(ChannelId, String) -> String
+
+pub fn set_ssh_epoch(ChannelId, Int32?) -> Unit
 
 pub fn viewport_width() -> Int32?
 

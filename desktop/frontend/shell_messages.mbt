@@ -90,6 +90,8 @@ priv enum ShellMessage {
   ShellTerminalUnavailable
   ShellWorktreeFailed
   SetGoal
+  UltraReview
+  SimplifyProject
   GoalPlaceholder
   EditQueuePlaceholder
   QueuePlaceholder
@@ -670,6 +672,26 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (TraditionalChinese, SetGoal) => "設定或清除此對話的長期目標"
     (Japanese, SetGoal) =>
       "このチャットの継続的な目標を設定・解除"
+    (English, SimplifyProject) =>
+      "Find safe simplifications and open a pull request per package — uses many tokens"
+    (Spanish, SimplifyProject) =>
+      "Buscar simplificaciones seguras y abrir un pull request por paquete; consume muchos tokens"
+    (SimplifiedChinese, SimplifyProject) =>
+      "查找安全的简化并为每个包创建一个拉取请求（消耗大量 token）"
+    (TraditionalChinese, SimplifyProject) =>
+      "尋找安全的簡化並為每個套件建立一個提取請求（耗用大量 token）"
+    (Japanese, SimplifyProject) =>
+      "安全な簡略化を探し、パッケージごとにプルリクエストを作成（トークンを大量に消費）"
+    (English, UltraReview) =>
+      "Parallel multi-lens review of your changes — uses many tokens"
+    (Spanish, UltraReview) =>
+      "Revisar tus cambios con revisores en paralelo; consume muchos tokens"
+    (SimplifiedChinese, UltraReview) =>
+      "用多个并行审阅者审查你的改动（消耗大量 token）"
+    (TraditionalChinese, UltraReview) =>
+      "用多個平行審閱者審查你的變更（耗用大量 token）"
+    (Japanese, UltraReview) =>
+      "複数のレビュアーが並行して変更をレビュー（トークンを大量に消費）"
     (English, GoalPlaceholder) =>
       "Describe the standing goal for this conversation — Enter sets it, Esc cancels."
     (Spanish, GoalPlaceholder) =>

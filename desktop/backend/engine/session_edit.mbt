@@ -51,6 +51,7 @@ pub async fn edit_session(
     images: payload.images,
     model: Some(payload.model),
     thinking: payload.thinking,
+    approval: payload.approval,
     max_steps: payload.max_steps,
     submission_id: Some(submission_id),
   })
@@ -116,6 +117,7 @@ async fn prepare_session_edit(
         through,
         model: payload.model,
         source_title: payload.source_title,
+        side_chat: None,
       },
       SharedWorktree,
       on_created~,

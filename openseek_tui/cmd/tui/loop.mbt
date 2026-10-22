@@ -194,9 +194,10 @@ async fn run_shell_command(
   command : String,
   messages : @async.Queue[Msg],
   id~ : Int32,
+  cwd? : String,
 ) -> Unit {
   let outcome : Result[@command_context.ShellOutput, Error]? = @async.handle_cancellation(() => {
-      try @command_context.collect_shell_output(command) catch {
+      try @command_context.collect_shell_output(command, cwd?) catch {
         error => Err(error)
       } noraise {
         output => Ok(output)
@@ -904,7 +905,7 @@ async fn[G] run_message_loop(
         StartAgent(run_id~, task) => engine.prompt(group, run_id, task)
         RunCommand(id~, command) =>
           command_tasks[id] = group.spawn(no_wait=true) <| () => {
-            run_shell_command(command, messages, id~)
+            run_shell_command(command, messages, id~, cwd=state.config.cwd)
           }
         // Absent once the command has reported: a repeated Ctrl-C then has
         // nothing left to cancel.

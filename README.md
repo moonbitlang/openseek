@@ -11,6 +11,13 @@ data model, and the life of one agent turn — see
 
 ## Running without a checkout
 
+`openseek-app-server` serves the working-host API at `ws://127.0.0.1:<port>/host`, intended for SSH forwarding.
+Stdout announces the port, instance ID and protocol version as one JSON line;
+stdin EOF ends the service. The server uses the `openseek` executable beside it;
+`OPENSEEK_ENGINE` can select an engine for source builds. Clients initialize
+with that instance ID and protocol version before calling the host API. Browser-origin requests are
+rejected. Keep the listener and SSH forward bound to loopback.
+
 The root CLI package builds on both native and wasm, and mooncakes.io hosts a
 prebuilt wasm binary for every published version. `moonx` fetches and caches it,
 so the engine runs with no clone and no build:
@@ -275,12 +282,14 @@ nonzero if any file cannot be loaded.
 
 A `command` entry is launched as a stdio subprocess (in the agent's workspace,
 inheriting the environment plus any `env` overrides); a `url` entry speaks the
-Streamable HTTP transport. Each server's tools join the agent's registry as
-`mcp__<server>__<tool>` for `run`, `serve`, and the TUI (which forwards
-`OPENSEEK_MCP_CONFIG` to its engine). A server that fails to start, handshake,
-or list its tools is logged and skipped — MCP never breaks a session. Tool
-results are size-capped, calls are bounded by a timeout, and tool names are
-sanitized to the provider's function-name rules.
+Streamable HTTP transport. The servers' tools form a catalog that the agent's
+mbtx scripts search and call through the tools SDK's `mcp` package
+(`@mcp.search`, `@mcp.call(server, tool, arguments)`), for `run`, `serve`, and
+the TUI (which forwards `OPENSEEK_MCP_CONFIG` to its engine). They are not in
+the model's function list, so the request stays the same size however many
+servers are configured. A server that fails to start, handshake, or list its
+tools is logged and reported as unavailable — MCP never breaks a session. Tool
+results are size-capped and calls are bounded by a timeout.
 
 HTTP `url` and `headers` values support `${VAR}` references to the engine's
 environment, for example `"Authorization": "Bearer ${MCP_TOKEN}"`. Expansion

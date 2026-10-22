@@ -225,6 +225,7 @@ fn show_tab_impl(
         content,
         document=path,
         live=true,
+        feedback_enabled=ctx.feedback_enabled,
         restore_scroll=true,
         review_original?=doc.quick_diff_original(),
         diff?=doc.visible_diff(),
@@ -268,6 +269,7 @@ fn show_tab_impl(
             content,
             document=path,
             live=false,
+            feedback_enabled=false,
             restore_scroll=true,
             diff?=doc.visible_diff(),
             search_highlights?,
@@ -4252,6 +4254,7 @@ fn update_inner(
                 content,
                 document=path,
                 live=true,
+                feedback_enabled=ctx.feedback_enabled,
                 range=reveal_range,
                 annotation?=reveal_annotation,
                 // A reload of a document already on screen keeps the reading
@@ -4957,6 +4960,7 @@ fn update_inner(
     ReviewContextChanged(..)
     | EditorCommentAdded(..)
     | DiffCommentAdded(..)
+    | ApplyEditorFeedback(_)
     | ApplyAllFeedback => (@cmd.none, state)
   }
 }
@@ -4980,6 +4984,7 @@ fn test_ctx() -> Ctx {
       session: "desktop-test",
     }),
     cloud_files: None,
+    feedback_enabled: true,
     request_epoch: 0,
     watch_namespace: "test-page",
     model: "deepseek-v4-flash",

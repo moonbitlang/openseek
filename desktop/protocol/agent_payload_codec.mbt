@@ -15,6 +15,17 @@ fn JsonObject::optional_thinking(
 }
 
 ///|
+fn JsonObject::optional_approval(
+  self : JsonObject,
+  name : String,
+) -> OpenSeekApproval? raise @json.JsonDecodeError {
+  match self.fields.get(name) {
+    Some(Null) | None => None
+    Some(value) => Some(@json.from_json(value, path=self.path.add_key(name)))
+  }
+}
+
+///|
 pub impl FromJson for StartPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.start payload")
   {
@@ -23,6 +34,7 @@ pub impl FromJson for StartPayload with fn from_json(json, path) {
     submission_id: object.optional_string("submission_id"),
     model: object.optional_string("model"),
     thinking: object.optional_thinking("thinking"),
+    approval: object.optional_approval("approval"),
     max_steps: object.optional_int("max_steps"),
     session: object.required_string("session"),
     workspace: object.optional_string("workspace"),
@@ -44,6 +56,9 @@ pub impl ToJson for StartPayload with fn to_json(self) {
   }
   if self.thinking is Some(thinking) {
     fields["thinking"] = thinking.to_json()
+  }
+  if self.approval is Some(approval) {
+    fields["approval"] = approval.to_json()
   }
   if self.max_steps is Some(max_steps) {
     fields["max_steps"] = Json(max_steps)
@@ -116,6 +131,7 @@ pub impl FromJson for CompactPayload with fn from_json(json, path) {
     session: object.required_string("session"),
     model: object.optional_string("model"),
     thinking: object.optional_thinking("thinking"),
+    approval: object.optional_approval("approval"),
     max_steps: object.optional_int("max_steps"),
     workspace: object.optional_string("workspace"),
   }
@@ -129,6 +145,9 @@ pub impl ToJson for CompactPayload with fn to_json(self) {
   }
   if self.thinking is Some(thinking) {
     fields["thinking"] = thinking.to_json()
+  }
+  if self.approval is Some(approval) {
+    fields["approval"] = approval.to_json()
   }
   if self.max_steps is Some(max_steps) {
     fields["max_steps"] = Json(max_steps)
@@ -148,6 +167,7 @@ pub impl FromJson for GoalPayload with fn from_json(json, path) {
     auto: object.optional_bool("auto"),
     model: object.optional_string("model"),
     thinking: object.optional_thinking("thinking"),
+    approval: object.optional_approval("approval"),
     max_steps: object.optional_int("max_steps"),
     workspace: object.optional_string("workspace"),
   }
@@ -167,6 +187,9 @@ pub impl ToJson for GoalPayload with fn to_json(self) {
   }
   if self.thinking is Some(thinking) {
     fields["thinking"] = thinking.to_json()
+  }
+  if self.approval is Some(approval) {
+    fields["approval"] = approval.to_json()
   }
   if self.max_steps is Some(max_steps) {
     fields["max_steps"] = Json(max_steps)
@@ -190,6 +213,20 @@ pub impl FromJson for OpenSeekThinking with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for OpenSeekThinking with fn to_json(self) {
+  Json(self.wire())
+}
+
+///|
+pub impl FromJson for OpenSeekApproval with fn from_json(json, path) {
+  guard json is String(value) &&
+    OpenSeekApproval::parse(value) is Some(approval) else {
+    raise JsonDecodeError((path, "expected ask or review"))
+  }
+  approval
+}
+
+///|
+pub impl ToJson for OpenSeekApproval with fn to_json(self) {
   Json(self.wire())
 }
 

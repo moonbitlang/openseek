@@ -1,10 +1,9 @@
 ///|
-/// `openseek mcp` — build the MCP tool registry exactly as a session would
-/// (one combined build, so cross-server renames and the global tool budget
-/// match a real run) and print it grouped by server, so a user can validate an
-/// mcp.json without starting a session. A missing, unreadable, or invalid
-/// configuration raises, exiting nonzero — the command is usable as a
-/// validation gate. Stdout carries only the summary, so the command never opens
+/// `openseek mcp` — connect the configured MCP servers exactly as a session
+/// would and print what each came to, with its tools under their own names, so
+/// a user can validate an mcp.json without starting a session. A missing,
+/// unreadable, or invalid configuration raises, exiting nonzero — the command
+/// is usable as a validation gate. Stdout carries only the summary, so the command never opens
 /// the event sink and an event the tool build reports is dropped.
 pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
   let paths = @options.mcp_config_paths(matches)
@@ -46,38 +45,36 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
   println("\{shown_path}: \{servers.length()} server(s)")
   @async.with_task_group() <| group => {
     let scope = @agent_runtime.AgentTaskScope(group)
-    // One combined, grouped build, exactly as serve/run register tools:
-    // cross-server renames and the global tool budget behave as in a real
-    // session, and ownership comes from the build itself.
-    let labels : Map[String, String] = Map([])
-    for server in servers {
-      labels[server.name()] = server_label(server)
-    }
-    for
-      (name, tools) in @mcptools.build_grouped(
-        scope,
-        servers,
-        client_name="openseek",
-        client_version=@execution.McpClientVersion,
-        workspace_root~,
-      ) {
-      let label = labels.get(name).unwrap_or("")
+    // Connect exactly as serve/run do, so what is printed is what a script's
+    // `@mcp.search` would find.
+    let entries = @mcptools.connect(
+      scope,
+      servers,
+      client_name="openseek",
+      client_version=@execution.McpClientVersion,
+      workspace_root~,
+    )
+    for entry in entries {
+      let label = server_label(entry.server)
       // The name is a config key — arbitrary JSON text — so guard it like the
       // rest of the displayed metadata.
-      let name = @cli.terminal_safe_line(name)
-      if tools.is_empty() {
-        // Neutral: an empty group can be a failed connection, a tools-less
-        // (e.g. resources-only) server, or one skipped over the tool budget.
-        println("- \{name} (\{label}): no tools registered")
-      } else {
-        println("- \{name} (\{label}): \{tools.length()} tool(s)")
-        for tool in tools {
-          // Descriptions are server-controlled: strip control characters so a
-          // hostile server cannot inject terminal escape sequences (tool names
-          // are already sanitized to the provider alphabet by the bridge).
+      let name = @cli.terminal_safe_line(entry.server.name())
+      match entry.connection {
+        Failed(error) =>
           println(
-            "    \{tool.name} — \{@cli.terminal_safe_line(tool.description)}",
+            "- \{name} (\{label}): unavailable: \{@cli.terminal_safe_line(error, limit=200)}",
           )
+        NoTools => println("- \{name} (\{label}): no tools")
+        Live(_) => {
+          println("- \{name} (\{label}): \{entry.tools.length()} tool(s)")
+          for tool in entry.tools {
+            // Names and descriptions are server-controlled: strip control
+            // characters so a hostile server cannot inject terminal escape
+            // sequences.
+            println(
+              "    \{@cli.terminal_safe_line(tool.name)} — \{@cli.terminal_safe_line(tool.description)}",
+            )
+          }
         }
       }
     }

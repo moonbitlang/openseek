@@ -1,4 +1,7 @@
 ///|
+// TODO: Normalize provider-specific cache fields (e.g. cached_tokens and
+// prompt_tokens_details.cached_tokens). Missing cache fields currently default
+// to zero, so zero does not necessarily mean no cache usage was reported.
 fn Usage::parse_json(
   json : Json,
   path : @json.JsonPath,

@@ -114,6 +114,7 @@ fn start_in_new_worktree(
   max_steps : String,
   session : String,
   workspace : @common.Uri,
+  approval~ : @protocol.OpenSeekApproval,
   images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
@@ -231,6 +232,7 @@ fn start_in_new_worktree(
             session,
             submission_id,
             workspace~,
+            approval~,
           )
           request_agent_start(
             scheduler, dispatch, channel, start, session, submission_id,
@@ -286,6 +288,7 @@ fn set_goal_in_new_worktree(
   max_steps : String,
   command : String,
   text : String?,
+  approval~ : @protocol.OpenSeekApproval,
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let device_dispatch = dispatch.map((msg : DeviceMsg) => {
@@ -402,7 +405,13 @@ fn set_goal_in_new_worktree(
             ),
           )
           let payload = goal_payload(
-            session, engine_model, reasoning, max_steps, workspace, text,
+            session,
+            engine_model,
+            reasoning,
+            max_steps,
+            workspace,
+            text,
+            approval~,
           )
           request_agent_goal(
             scheduler, dispatch, channel, payload, session, command, text,
@@ -1916,6 +1925,7 @@ test "a start payload never names a worktree" {
     "desktop-wt",
     "sub-1",
     workspace~,
+    approval=ApprovalReview,
   )
   // The typed wire shape has no worktree field at all; the workspace hint
   // is the only placement the start carries.
@@ -1924,6 +1934,7 @@ test "a start payload never names a worktree" {
   )
   assert_eq(payload.workspace, Some("/proj"))
   assert_eq(payload.thinking, Some(ThinkingMax))
+  assert_eq(payload.approval, Some(ApprovalReview))
   let unknown_model = start_payload(
     "go",
     Other("kimi-k2.5"),
@@ -1932,6 +1943,7 @@ test "a start payload never names a worktree" {
     "desktop-kimi",
     "sub-2",
     workspace~,
+    approval=ApprovalAsk,
   )
   assert_true(unknown_model.thinking is None)
 }

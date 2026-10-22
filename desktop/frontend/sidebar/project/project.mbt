@@ -35,10 +35,18 @@ pub fn Id::key(self : Id) -> String {
 }
 
 ///|
+pub(all) struct Host {
+  name : String
+  online : Bool
+  details : Bool
+} derive(Debug, Eq)
+
+///|
 pub(all) struct Input {
   id : Id
   title : String
   label : String
+  host : Host?
   // The active conversation's session id while this project holds the
   // focused chat; `None` otherwise. The value identifies the activation: a
   // fold made during one activation holds until a different one arrives.
@@ -58,6 +66,7 @@ pub(all) struct Actions {
   new_conversation : (Id) -> @cmd.Cmd
   open_settings : (Id) -> @cmd.Cmd
   detach : (Id) -> @cmd.Cmd
+  host_details : (Id) -> @cmd.Cmd
   conversation : @conversation.Actions
 }
 
@@ -191,6 +200,20 @@ pub fn Input::menu_entries(
       destructive: false,
       command: (actions.open_settings)(self.id),
     }),
+    ..if self.host is Some({ details: true, .. }) {
+      [
+        @action_menu.Action({
+          label: "Connection details",
+          title: "Connection details",
+          icon: Some(@icons.icon(@icons.icon_server)),
+          enabled: true,
+          destructive: false,
+          command: (actions.host_details)(self.id),
+        }),
+      ]
+    } else {
+      []
+    },
     Separator,
     Action({
       label: @messages.text(locale, DetachProject),
@@ -270,7 +293,23 @@ pub fn component(
         on_click=emit(ToggleDisclosure),
         attrs=@html.Attrs::build()
           .aria_expanded((!collapsed).to_string())
-          .aria_controls(input.id.key() + ":content"),
+          .aria_controls(input.id.key() + ":content")
+          // Pointer disclosure should not pin the hover controls open.
+          // Keyboard focus still reveals them for Tab navigation.
+          .on_mousedown(event => {
+            if event.get_button() == 0 {
+              event.prevent_default()
+              // Preserve click-away saving before folding makes the row inert.
+              if @dom.document()
+                .get_element_by_id(@conversation.RenameFieldId)
+                .to_option()
+                is Some(field) &&
+                field.to_html_element() is Some(field) {
+                field.blur()
+              }
+            }
+            @cmd.none
+          }),
         [
           @html.span(
             class="sidebar-icon",
@@ -286,9 +325,28 @@ pub fn component(
         ],
       ),
     ]
+    let trailing : Array[@html.Html] = []
+    if input.host is Some(host) {
+      let status = if host.online { "Connected" } else { "Disconnected" }
+      trailing.push(
+        @html.span(class="workspace-host", title=host.name + " · " + status, [
+          @html.span(class="workspace-host-name", host.name),
+          @html.span(
+            class=if host.online {
+              "workspace-host-status online"
+            } else {
+              "workspace-host-status offline"
+            },
+            attrs=@html.Attrs::build().aria_label(status),
+            "",
+          ),
+        ]),
+      )
+    }
+    let controls : Array[@html.Html] = []
     // Keep the action order aligned with the sidebar: menu first, new chat last.
     if input.managed {
-      row_children.push(
+      controls.push(
         @html.button(
           class="row-archive workspace-menu-button",
           type_="button",
@@ -301,7 +359,7 @@ pub fn component(
       )
     }
     if input.can_start {
-      row_children.push(
+      controls.push(
         @html.button(
           class="row-archive",
           type_="button",
@@ -316,6 +374,8 @@ pub fn component(
         ),
       )
     }
+    trailing.push(@html.div(class="workspace-actions", controls))
+    row_children.push(@html.div(class="workspace-trailing", trailing))
     let row_attrs = if input.managed {
       @action_menu.context_attrs(input.id.key())
     } else {
@@ -384,3 +444,9 @@ pub extend Input with Debug::{to_repr}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend Host with Debug::{to_repr}
+
+///|
+pub extend Host with Eq::{equal, not_equal}

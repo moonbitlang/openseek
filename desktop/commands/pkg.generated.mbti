@@ -307,6 +307,22 @@ pub let skills_set_enabled : Command[@protocol.SetSkillEnabledPayload, @protocol
 
 pub let skills_uninstall : Command[@protocol.UninstallSkillPayload, @protocol.UninstallSkillReply]
 
+pub let ssh_auth_respond : Command[@protocol.SshAuthResponse, @protocol.SshReply]
+
+pub let ssh_connect : Command[@protocol.SshConnect, @protocol.EmptyReply]
+
+pub let ssh_disconnect : Command[@protocol.SshConnect, @protocol.EmptyReply]
+
+pub let ssh_profiles : Command[@protocol.EmptyPayload, @protocol.SshProfiles]
+
+pub let ssh_projects_save : Command[@protocol.SshProjects, @protocol.EmptyReply]
+
+pub let ssh_remove : Command[@protocol.SshProfileTarget, @protocol.SshReply]
+
+pub let ssh_request : Command[@protocol.SshRequest, @protocol.SshReply]
+
+pub let ssh_save : Command[@protocol.SshProfile, @protocol.SshReply]
+
 pub let terminal_ack : Command[@protocol.TerminalAckPayload, @protocol.EmptyReply]
 
 pub let terminal_close : Command[@protocol.TerminalClosePayload, @protocol.EmptyReply]

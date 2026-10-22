@@ -6,18 +6,21 @@ test "agent start preserves all engine settings" {
     "submission_id": "submission-1",
     "model": "deepseek-v4-pro",
     "thinking": "max",
+    "approval": "review",
     "max_steps": 42,
     "session": "session-1",
     "workspace": "/work/project",
     "future_field": true,
   })
   assert_eq(payload.thinking, Some(ThinkingMax))
+  assert_eq(payload.approval, Some(ApprovalReview))
   @debug.assert_eq(payload.to_json(), {
     "task": "inspect",
     "images": [],
     "submission_id": "submission-1",
     "model": "deepseek-v4-pro",
     "thinking": "max",
+    "approval": "review",
     "max_steps": 42,
     "session": "session-1",
     "workspace": "/work/project",
@@ -87,6 +90,7 @@ test "agent payload optional fields accept null and encode absence by omission" 
     "session": "session-1",
     "model": null,
     "thinking": null,
+    "approval": null,
     "max_steps": null,
     "workspace": null,
   })
@@ -437,5 +441,33 @@ test "approval snapshots preserve accepted replies and reject malformed revision
       _ => None
     }
     assert_true(decoded is None)
+  }
+}
+
+///|
+/// Approval is a closed choice like thinking: an unknown value fails the
+/// request rather than quietly running the engine under a different policy.
+test "agent payload codecs reject unsupported approval values" {
+  let ask : @protocol.OpenSeekApproval = @json.from_json(Json("ask"))
+  assert_eq(ask, ApprovalAsk)
+  @debug.assert_eq(@protocol.ApprovalReview.to_json(), Json("review"))
+  for value in [Json("always"), Json("Review"), Json(true)] {
+    let start : @protocol.StartPayload? = Some(
+      @json.from_json({
+        "task": "inspect",
+        "images": [],
+        "session": "session-1",
+        "approval": value,
+      }),
+    ) catch {
+      _ => None
+    }
+    assert_true(start is None)
+    let goal : @protocol.GoalPayload? = Some(
+      @json.from_json({ "session": "session-1", "approval": value }),
+    ) catch {
+      _ => None
+    }
+    assert_true(goal is None)
   }
 }

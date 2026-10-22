@@ -37,12 +37,12 @@ fn Model::message_edit_busy(self : Model, source : Conversation) -> Bool {
     guard conv.device == source.device && conv.project() == source.project() else {
       return false
     }
-    let mut current = conv.session_id
-    while current != source.session_id {
-      guard @transcript.subrun_parent(current) is Some(parent) else {
-        return false
-      }
-      current = parent
+    // The edit deletes the source's whole family once the new message is
+    // saved — its sub-runs and its side chats — and the host refuses that
+    // while any of them is busy, so every member counts here.
+    guard conv.session_id == source.session_id ||
+      is_family_descendant(conv.session_id, source.session_id) else {
+      return false
     }
     conv.is_running() ||
     !(conv.compaction is NotCompacting) ||
@@ -97,6 +97,7 @@ fn Model::edit_user_message(
     images: draft.images.map(image => image.url),
     attachment_paths: paths,
     thinking: conv.engine_model.thinking(self.reasoning_for(conv.engine_model)),
+    approval: Some(self.approval_for(conv.device, conv.session_id)),
     max_steps: parsed_max_steps(self.max_steps),
   }
   let pending : ConversationFork = {
@@ -105,6 +106,7 @@ fn Model::edit_user_message(
     source_sequence: payload.source_sequence,
     kind: EditedMessage(payload),
     engine_model: conv.engine_model,
+    approval: self.approval_for(conv.device, conv.session_id),
     connection_generation: self.focused_connection_generation(),
   }
   (
@@ -133,6 +135,11 @@ test "message editing is blocked by active work in its own conversation family" 
     run: Starting(submission_id="child"),
   }
   assert_true(model.replace_conversation(child).message_edit_busy(source))
+  // A side chat goes with its conversation too, and so does its own sub-run.
+  for session_id in ["-sc-0a1b2c3d", "-sc-0a1b2c3d-sr-1"] {
+    let side = { ..child, session_id: source.session_id + session_id, }
+    assert_true(model.replace_conversation(side).message_edit_busy(source))
+  }
   let unrelated = { ..child, session_id: source.session_id + "-sr-unrelated", }
   assert_false(model.replace_conversation(unrelated).message_edit_busy(source))
 }

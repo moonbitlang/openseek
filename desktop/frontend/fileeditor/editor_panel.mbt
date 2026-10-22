@@ -131,6 +131,9 @@ priv struct ViewerHost {
   // review file still shows its HEAD baseline under an inert model URI, so
   // that preview takes no diagnostics and no working-side comments.
   mut live : Bool
+  // Workspace-relative feedback also applies to Cloud files, without Host
+  // language services or navigation providers.
+  mut feedback_root : @common.Uri?
   // The active host/workspace route for Definition/References targets and
   // cross-file Peek previews. Cleared together with the document so a late
   // navigation request can never reopen a previous conversation's file.
@@ -185,6 +188,7 @@ let viewer_state : ViewerHost = {
   services: None,
   document: None,
   live: false,
+  feedback_root: None,
   navigation: None,
   version: 0,
   theme: "light",
@@ -461,8 +465,8 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           // Chips name the file the way the conversation does, relative to
           // the navigation root; a file outside every root takes no chip.
           guard viewer_state.document is Some(document) &&
-            viewer_state.navigation is Some(context) &&
-            context.relative_path(document) is Some(file) else {
+            viewer_state.feedback_root is Some(root) &&
+            @resource.relative_to(document, root) is Some(file) else {
             return
           }
           // Each presentation owns its model; rich Markdown detaches the code
@@ -519,7 +523,9 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           // chip before this apply action. Ignore batches without user review
           // items; only the inline user's explicit action should send a prompt.
           if event.user_count > 0 {
-            scheduler.add(dispatch(ApplyAllFeedback))
+            scheduler.add(
+              dispatch(ApplyEditorFeedback(ModelUri::of(event.resource))),
+            )
           }
         })
         |> ignore
@@ -1326,6 +1332,7 @@ fn show_file_in_viewer(
   content : String,
   document~ : @common.Uri,
   live~ : Bool,
+  feedback_enabled~ : Bool,
   range~ : @common.Range? = None,
   annotation? : String,
   restore_scroll~ : Bool = false,
@@ -1490,6 +1497,7 @@ fn show_file_in_viewer(
     // Gate incoming diagnostics and navigation to the file now on screen; a
     // deleted preview or a notice document takes neither.
     viewer_state.document = Some(document)
+    viewer_state.feedback_root = root
     viewer_state.live = live
     viewer_state.navigation = owner
       .host()
@@ -1517,10 +1525,7 @@ fn show_file_in_viewer(
       )
       // Code, rendered Markdown, and modified diff panes share the live
       // resource's feedback permission.
-      services.feedback.set_feedback_enabled(
-        uri,
-        live && owner.host() is Some(_),
-      )
+      services.feedback.set_feedback_enabled(uri, live && feedback_enabled)
       if live && !show_markdown {
         // A fresh document view starts with no bubbles (comments become
         // chips the moment they are filed, so anything lingering here is a
@@ -1818,6 +1823,22 @@ fn forget_cloud_view_states(root : @common.Uri) -> @cmd.Cmd {
       if key.has_prefix(prefix) {
         viewer_state.markdown_view_states.remove(key)
       }
+    }
+  })
+}
+
+///|
+/// Refresh read-only permission without replacing the current text model.
+pub fn sync_feedback_permission(ctx : Ctx) -> @cmd.Cmd {
+  after_render_effect(() => {
+    if viewer_state.document is Some(document) &&
+      viewer_state.services is Some(services) {
+      services.feedback.set_feedback_enabled(
+        document,
+        viewer_state.live &&
+        ctx.feedback_enabled &&
+        ctx.root().map_or(false, root => @resource.contains(root, document)),
+      )
     }
   })
 }

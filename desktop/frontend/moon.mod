@@ -10,7 +10,7 @@ import {
   "Lampese/office-viewer@0.2.5",
   "moonbitlang/editor@0.4.6",
   "moonbitlang/x@0.5.5",
-  "moonbitlang/openseek@0.7.2",
+  "moonbitlang/openseek@0.7.3",
   "openseek_desktop@0.1.5",
   "moonbitlang/async@0.22.4",
 }

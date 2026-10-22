@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/ssh"
+
+import {
+  "moonbitlang/openseek/jsonrpc",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn arguments(String) -> Array[String] raise
+
+pub async fn askpass_main() -> Unit
+
+pub async fn profiles() -> @protocol.SshProfiles
+
+pub async fn remember_projects(@protocol.SshProjects) -> Unit
+
+pub async fn remove(String) -> Unit
+
+pub async fn save(@protocol.SshProfile) -> @protocol.SshProfile
+
+// Errors
+pub(all) suberror SshError {
+  SshError(String)
+}
+
+// Types and methods
+pub struct Connection {
+  profile : @protocol.SshProfile
+  attempt : Int32
+  epoch : Int32
+  // private fields
+}
+pub fn Connection::Connection(@protocol.SshProfile, Int32, attempt? : Int32, askpass? : String?) -> Self
+pub fn Connection::active(Self) -> Bool
+pub fn Connection::close(Self) -> Unit
+pub async fn Connection::request(Self, @protocol.SshRequest) -> @protocol.SshReply
+pub fn Connection::respond(Self, @protocol.SshAuthResponse) -> @protocol.SshReply
+pub async fn Connection::run(Self, (Json) -> Unit, model_environment? : async () -> Map[String, String]) -> Unit
+
+type TcpTransport
+pub fn TcpTransport::close(Self) -> Unit
+pub async fn TcpTransport::recv(Self) -> Json?
+pub async fn TcpTransport::send(Self, Json) -> Unit
+pub impl @jsonrpc.Transport for TcpTransport
+
+// Type aliases
+
+// Traits

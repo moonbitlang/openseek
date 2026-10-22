@@ -83,6 +83,7 @@ pub(all) enum MentionRef {
   OfficeSelection(materialized~ : String)
   Annotation(file~ : String, start_line~ : Int32, end_line~ : Int32, quote~ : String, comment~ : String, side~ : AnnotationSide)
 } derive(Eq, @debug.Debug)
+pub fn MentionRef::comment(Self) -> String?
 pub fn MentionRef::equal(Self, Self) -> Bool
 pub fn MentionRef::not_equal(Self, Self) -> Bool
 pub fn MentionRef::to_repr(Self) -> @debug.Repr

@@ -11,9 +11,10 @@
 let source_write_denial_feedback : String =
   #|mbtx sandbox: the "Operation not permitted" failure above is this tool's
   #|sandbox denying a write to a protected MoonBit source file (`*.mbt`, `*.mbti`,
-  #|`*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`) — not a filesystem or permissions
-  #|problem to debug. Snippets run source-write-readonly by design; writing non-source
-  #|files (data, logs, reports) stays allowed, and source-writing moon commands
+  #|`*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`) or creating, renaming, or removing
+  #|a directory in the workspace — not a filesystem or permissions problem to debug.
+  #|Snippets run source-write-readonly by design; writing non-source files (data, logs,
+  #|reports) into existing directories stays allowed, and source-writing moon commands
   #|(`moon fmt`, `moon info`, `moon add`, `moon test --update`) are denied here by the
   #|same rule. Make source changes with the line-anchored `edit` tool, and keep
   #|mbtx for commands, compute, probing, and non-source IO.
@@ -50,8 +51,8 @@ let protected_source_subjects : ReadOnlyArray[String] = [
 /// Matching is line-oriented. A line must contain a recognized
 /// "Operation not permitted" or "Permission denied" form and name either a
 /// protected source suffix or one of `denial_subjects` (the directories the
-/// profile denies literally — a denied directory carries no protected
-/// suffix, so only its subject can recognize it). Unrelated permission
+/// profile denies — a denied directory carries no protected suffix, so only
+/// its subject can recognize it). Unrelated permission
 /// errors and mentions of source files without a denial are ignored.
 fn source_write_denied_in_text(
   output_text : String,

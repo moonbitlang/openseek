@@ -122,7 +122,11 @@ fn focus_channel(
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, Model) {
   guard channel != model.focused else { return (@cmd.none, model) }
-  let focus_cmd = if model.device_state(channel) is Some(dev) {
+  let focus_cmd = if channel is Remote(id) &&
+    model.ssh_ui.hosts.any(host => host.id == id) &&
+    !model.ssh_online(id) {
+    @cmd.none
+  } else if model.device_state(channel) is Some(dev) {
     @cmd.batch([
       fetch_host_settings(dispatch, channel, dev.connection_generation),
       fetch_installed_skills(dispatch, channel),
@@ -504,6 +508,11 @@ fn adopt_projects(
   let workspace_settings_request_generation = dev.workspace_settings_request_generation +
     1
   let commands : Array[@cmd.Cmd] = []
+  if model.is_desktop &&
+    channel is Remote(id) &&
+    model.ssh_ui.hosts.any(host => host.id == id) {
+    commands.push(save_ssh_projects(dispatch, id, paths))
+  }
   for path in paths {
     commands.push(
       fetch_worktrees(
@@ -1027,6 +1036,7 @@ fn run_slash_command(
             reasoning=model.reasoning_for(conv.engine_model),
             max_steps=model.max_steps,
             workspace=conv.project(),
+            approval=model.approval_for(conv.device, conv.session_id),
           ),
           {
             ..model.replace_conversation({
@@ -1086,6 +1096,7 @@ fn send_goal(
       model.max_steps,
       command,
       text,
+      approval=model.approval_for(conv.device, conv.session_id),
     )
   }
   goal_openseek(
@@ -1096,6 +1107,7 @@ fn send_goal(
     reasoning=model.reasoning_for(conv.engine_model),
     max_steps=model.max_steps,
     workspace=conv.project(),
+    approval=model.approval_for(conv.device, conv.session_id),
     command,
     text,
   )
@@ -1500,6 +1512,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
     owner: model.dock_owner(),
+    feedback_enabled: model.editor_feedback_enabled(),
     cloud_files: if model.cloud_selected() &&
       model.cloud_identity() is Some(@interop.Cloud(account~, ..)) &&
       model.cloud.user_id == Some(account) {
@@ -1560,6 +1573,17 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
     None => false
   }
   @terminal.Ctx(
+    connection_notice?=match active.owner.channel {
+      Remote(id) if model.ssh_ui.hosts.any(host => host.id == id) =>
+        Some(ssh_connection_status(model, id))
+      _ => None
+    },
+    host_name?=model.ssh_ui.hosts
+      .iter()
+      .find_first(host => {
+        @interop.ChannelId::Remote(host.id) == active.owner.channel
+      })
+      .map(host => host.display_label()),
     channel=active.owner.channel,
     session=active.owner.session,
     placement=active.placement,
@@ -1600,6 +1624,8 @@ fn sync_file_panel(
 fn covering_overlay(model : Model) -> Bool {
   (model.narrow && model.sidebar_open) ||
   model.project_picker is Some(_) ||
+  model.ssh_ui.editor_open ||
+  model.ssh_ui.details is Some(_) ||
   model.export_dialog.is_open() ||
   model.session_import_dialog.is_open() ||
   model.workspace_settings_dialog is Some(_) ||
@@ -1798,6 +1824,7 @@ fn update(
     | CodexOpenThread(_)
     | OpenCodex
     | OpenSetup
+    | OpenLocalApiSettings
     | OpenSkills
     | OpenSchedules
     | Navigation(Back | Forward)
@@ -2152,6 +2179,11 @@ fn update(
       quick_open_cmd,
       panel_visibility_cmd,
       panel_cmd,
+      if previous.editor_feedback_enabled() != model.editor_feedback_enabled() {
+        @fileeditor.sync_feedback_permission(file_ctx(model))
+      } else {
+        @cmd.none
+      },
       terminal_cmd,
       jobs_cmd,
       overview_cmd,
@@ -2232,6 +2264,15 @@ fn update_msg(
   msg : Msg,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
+  if ssh_open_target(msg, model) is Some(pending) {
+    let (focus, model) = focus_channel(dispatch, model, Remote(pending.host))
+    let (connect, model) = update_ssh(dispatch, Connect(pending.host), {
+      ..model,
+      screen: Chat,
+      ssh_ui: { ..model.ssh_ui, pending_open: Some(pending), },
+    })
+    return (@cmd.batch([focus, connect]), model)
+  }
   match msg {
     Init => {
       // Both pages boot the same console; they differ only in where its
@@ -2353,6 +2394,7 @@ fn update_msg(
       minimal_transcript~,
       model=stored,
       conversation_models=remembered,
+      conversation_approvals~,
       agent~,
       codex_model~,
       codex_effort~,
@@ -2426,6 +2468,9 @@ fn update_msg(
         default_agent,
         conversation_models: remembered
         .map(parse_conversation_models)
+        .unwrap_or([]),
+        reviewed_conversations: conversation_approvals
+        .map(parse_conversation_approvals)
         .unwrap_or([]),
         openseek_reasoning,
         glm_reasoning,
@@ -2568,13 +2613,21 @@ fn update_msg(
               model.cloud_identity() == Some(identity.owner) {
               return open_semantic_selection(dispatch, model)
             }
-            guard mention.ref_ is File(path~) else { return (@cmd.none, model) }
+            guard mention.ref_
+              is (File(..) | Annotation(side=WorkingRevision, ..)) &&
+              @mention_context.target(mention.ref_) is Some(target) else {
+              return (@cmd.none, model)
+            }
             return open_cloud_file(
               dispatch,
               model,
               identity.owner,
-              path,
-              mention.range,
+              target.file,
+              match mention.range {
+                Some(_) => mention.range
+                None => target.range
+              },
+              annotation?=target.annotation,
             )
           }
           @composer.FileIndexEnsured(identity~) => {
@@ -2607,6 +2660,7 @@ fn update_msg(
         | @composer.PermissionSelected(..)
         | @composer.GitDetailsToggled(..)
         | @composer.WorktreeModeToggled(..)
+        | @composer.ApprovalModeToggled(..)
         | @composer.ApiSetupRequested(..)
         | @composer.QueuedInputEditRequested(..)
         | @composer.QueuedInputSteerRequested(..)
@@ -2746,6 +2800,29 @@ fn update_msg(
                 ArchiveSession(conv.device, conv.session_id),
                 model,
               )
+            @composer.ApprovalModeToggled(..) => {
+              // A running turn keeps the policy its engine started with; the
+              // switch is locked meanwhile, so a late click changes nothing.
+              guard !conv.is_running() else { return (@cmd.none, model) }
+              // The next start, compaction, or goal carries the choice, and
+              // the host gives the conversation a new engine when it differs.
+              let approval : @protocol.OpenSeekApproval = if model.approval_for(
+                  conv.device,
+                  conv.session_id,
+                )
+                is ApprovalReview {
+                ApprovalAsk
+              } else {
+                ApprovalReview
+              }
+              (
+                save_conversation_approval(
+                  conversation_model_key(conv.device, conv.session_id),
+                  approval,
+                ),
+                model.with_approval(conv.device, conv.session_id, approval),
+              )
+            }
             @composer.PermissionMenuToggled(..)
             | @composer.PermissionMenuDismissed(..)
             | @composer.PermissionSelected(..)
@@ -3137,80 +3214,12 @@ fn update_msg(
       )
     }
     FileEditor(
-      EditorCommentAdded(
-        resource~,
-        file~,
-        range~,
-        quote~,
-        comment~,
-        feedback_id~
-      )
-    ) => {
-      if model.screen is Codex {
-        // Codex owns a separate wire model, but the visible editor annotation
-        // is the same structured chip as OpenSeek's. Keep it in Codex's shared
-        // composer tray; never leak it into the hidden OpenSeek conversation.
-        return (
-          @fileeditor.remove_editor_feedback(resource, feedback_id),
-          {
-            ..model,
-            codex: model.codex.with_editor_comment(
-              file.0,
-              range,
-              comment,
-              quote,
-            ),
-          },
-        )
-      }
-      guard model.active_conversation() is Some(conv) else {
-        return (@cmd.none, model)
-      }
-      let mentions = @composer.Draft::{
-          images: conv.images,
-          task: conv.task,
-          mentions: conv.mentions,
-        }.with_mention({
-          ref_: Annotation(
-            file=file.0,
-            start_line=range.start_line_number,
-            end_line=range.end_line_number,
-            quote~,
-            comment~,
-            side=@mention_context.WorkingRevision,
-          ),
-          range: Some(range),
-        }).mentions
-      // The chip is the comment's carrier from here on; clearing the editor's
-      // own bubble keeps the two from drifting apart (and from double-sending
-      // if the user comments again).
-      (
-        @fileeditor.remove_editor_feedback(resource, feedback_id),
-        model.replace_conversation({ ..conv, mentions, }),
-      )
-    }
-    // The feedback service queues this after the comment-added message above,
-    // so the new annotation is already in the visible composer batch. Reuse
-    // each agent's normal submit path: an idle task starts, while a running
-    // task receives the batch through its existing steer/message queue.
-    FileEditor(@fileeditor.ApplyAllFeedback) =>
-      match model.screen {
-        Chat => update_msg(dispatch, Send, model)
-        Codex => {
-          let input = model.codex_composer_input()
-          update_msg(
-            dispatch,
-            CodexComposerAction(
-              @composer.DraftSubmitted(
-                identity=input.identity,
-                draft=input.draft,
-              ),
-            ),
-            model,
-          )
-        }
-        Skills | Schedules | Settings => (@cmd.none, model)
-      }
+      EditorCommentAdded(..)
+      | ApplyAllFeedback
+      | ApplyEditorFeedback(_) as feedback
+    ) => update_editor_feedback(dispatch, feedback, model)
+    // Delivered to the component by boot, alongside the other component inputs.
+    ComposerReply(_) => (@cmd.none, model)
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a
@@ -3248,11 +3257,11 @@ fn update_msg(
             _ => return (clear_feedback, model)
           }
       }
+      let end_column = if quote.is_empty() { 1 } else { quote.length() + 1 }
+      let comment_range = range.unwrap_or(
+        @common.Range(line_number, 1, line_number, end_column),
+      )
       if model.screen is Codex {
-        let end_column = if quote.is_empty() { 1 } else { quote.length() + 1 }
-        let comment_range = range.unwrap_or(
-          @common.Range(line_number, 1, line_number, end_column),
-        )
         return (
           clear_feedback,
           {
@@ -3274,17 +3283,15 @@ fn update_msg(
           images: conv.images,
           task: conv.task,
           mentions: conv.mentions,
-        }.with_mention({
-          ref_: Annotation(
-            file=file.0,
-            start_line=line_number,
-            end_line=line_number,
-            quote~,
-            comment~,
+        }.with_mention(
+          @composer.Mention::editor_annotation(
+            file.0,
+            comment_range,
+            quote,
+            comment,
             side~,
           ),
-          range,
-        }).mentions
+        ).mentions
       (clear_feedback, model.replace_conversation({ ..conv, mentions, }))
     }
     // Search rows use the same ordinary positioned-open path as definition,
@@ -4378,6 +4385,18 @@ fn update_msg(
       (cmd, { ..next, update_ux, })
     }
     UpdateApplied => (close_window(), model)
+    OpenLocalApiSettings => {
+      let (cmd, focused) = focus_channel(dispatch, model, Local)
+      (
+        cmd,
+        {
+          ..focused,
+          screen: Settings,
+          setup_api_key: "",
+          api_setup_open: false,
+        },
+      )
+    }
     OpenSetup =>
       (
         @cmd.none,
@@ -4851,6 +4870,7 @@ fn update_msg(
             model.max_steps,
             conv.session_id,
             workspace,
+            approval=model.approval_for(conv.device, conv.session_id),
             images=conv.images.map(image => image.url),
           )
         } else {
@@ -4864,6 +4884,7 @@ fn update_msg(
             model.max_steps,
             conv.session_id,
             workspace=conv.project(),
+            approval=model.approval_for(conv.device, conv.session_id),
             images=conv.images.map(image => image.url),
           )
         }
@@ -5303,6 +5324,7 @@ fn update_msg(
         },
       )
     }
+    Ssh(msg) => update_ssh(dispatch, msg, model)
     PickProject(channel) => {
       // Focus moves for the surrounding UI, while the picker itself keeps
       // `channel` as its owner through every later navigation and confirm.
@@ -5341,7 +5363,27 @@ fn update_msg(
       } else {
         update(dispatch, PickProject(model.focused), model)
       }
-    ProjectPicker(msg) =>
+    ProjectPicker(msg) => {
+      // A suspended picker still owns its outstanding browse reply. Retain
+      // that reply so cancelling SSH returns to a usable directory listing.
+      if model.project_picker is None &&
+        model.ssh_ui.return_picker is Some(picker) {
+        let (cmd, next, _) = @project_picker.State::handle(
+          locale=model.locale,
+          picker,
+          dispatch.map(msg => ProjectPicker(msg)),
+          msg,
+        )
+        return (
+          cmd,
+          { ..model, ssh_ui: { ..model.ssh_ui, return_picker: next, }, },
+        )
+      }
+      let model = if msg is @project_picker.Close {
+        { ..model, ssh_ui: { ..model.ssh_ui, pick_after_connect: None, }, }
+      } else {
+        model
+      }
       match model.project_picker {
         Some(picker) => {
           let (cmd, next, outcome) = @project_picker.State::handle(
@@ -5350,7 +5392,18 @@ fn update_msg(
             dispatch.map(msg => ProjectPicker(msg)),
             msg,
           )
-          let model = { ..model, project_picker: next, }
+          let model = {
+            ..model,
+            project_picker: next,
+            ssh_ui: {
+              ..model.ssh_ui,
+              pick_after_connect: if next is None {
+                None
+              } else {
+                model.ssh_ui.pick_after_connect
+              },
+            },
+          }
           match outcome {
             None => (cmd, model)
             // A failed browse or create leaves the previous listing usable.
@@ -5372,6 +5425,7 @@ fn update_msg(
         }
         None => (@cmd.none, model)
       }
+    }
     RemoveProject(channel, path) =>
       // The row itself leaves with the registry commit broadcast; its open
       // "…" menu is component state and leaves with the keyed row.
@@ -7252,6 +7306,9 @@ fn update_device_msg(
           dispatch, channel, connection_generation, projects_request_generation,
         ),
       ]
+      if channel == Local && model.is_desktop {
+        commands.push(ssh_load(dispatch))
+      }
       // The focused-scoped half: the host-settings mirror and installed
       // skills (they feed the composer's `$` completion, so
       // they load on connect rather than when the Skills page opens) follow
@@ -7413,9 +7470,10 @@ fn update_device_msg(
     }
     BridgeUnavailable(message) =>
       (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message), }))
-    // The desktop window and its host ship as one build and are never gated.
+    // Only the desktop window's local host ships with its frontend. SSH hosts
+    // can use an explicitly selected executable from a different build.
     HostMismatched =>
-      if model.is_desktop {
+      if model.is_desktop && channel is Local {
         update_device_msg(dispatch, channel, BridgeReady, model)
       } else {
         (@cmd.none, model.replace_device({ ..dev, bridge: HostIncompatible, }))
@@ -10455,6 +10513,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
     conv.session_id,
     "test-submission",
     workspace=conv.project(),
+    approval=ApprovalAsk,
   )
   let json = payload.to_json()
   guard json is Object(fields) else { return None }
@@ -15310,6 +15369,7 @@ test "loaded UI preferences parse their wire names" {
       conversation_models=Some(
         "[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
       ),
+      conversation_approvals=Some("[\"local/desktop-test\", 7]"),
       agent=Some("codex"),
       codex_model=Some("gpt-5.4-codex"),
       codex_effort=Some("xhigh"),
@@ -15327,6 +15387,14 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.glm_reasoning is ReasoningMax)
   // The stored conversation outranks the stored default for its own chat.
   assert_true(restored.active().engine_model is DsPro)
+  // Its stored approval choice comes back too; a malformed row is skipped.
+  assert_true(
+    restored.approval_for(@interop.ChannelId::Local, "desktop-test")
+    is ApprovalReview,
+  )
+  assert_true(
+    restored.approval_for(@interop.ChannelId::Local, "other") is ApprovalAsk,
+  )
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
     dispatch,
@@ -15339,6 +15407,7 @@ test "loaded UI preferences parse their wire names" {
       minimal_transcript=false,
       model=None,
       conversation_models=Some("not json"),
+      conversation_approvals=None,
       agent=Some("broken"),
       codex_model=None,
       codex_effort=None,
@@ -16271,6 +16340,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
       minimal_transcript=false,
       model=Some("deepseek-v4-pro"),
       conversation_models=None,
+      conversation_approvals=None,
       agent=None,
       codex_model=None,
       codex_effort=None,
@@ -19941,32 +20011,38 @@ test "ApplyAllFeedback queues the attached annotation on a running task" {
     model,
   )
   assert_eq(batched.active().mentions.length(), 1)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
-  assert_true(applied.active().mentions.is_empty())
-  assert_eq(applied.active().pending_steers.length(), 1)
-  let steer = applied.active().pending_steers[0]
-  assert_eq(steer.mentions.length(), 1)
-  // Clearing the active composer preserves the selection in the queued draft.
-  assert_eq(batched.active().mentions, steer.mentions)
-  assert_eq(
-    steer.content,
-    (
-      #|<user_mentions>
-      #|<annotation file="README.md" lines="3-6">
-      #|<quote>
-      #|DeepSeek, Kimi, and Z.AI GLM models
-      #|</quote>
-      #|<user_comment>
-      #|make this clearer
-      #|</user_comment>
-      #|</annotation>
-      #|</user_mentions>
-    ),
-  )
+  for
+    feedback in [
+      @fileeditor.ApplyAllFeedback,
+      @fileeditor.ApplyEditorFeedback(
+        @fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/README.md"),
+        ),
+      ),
+    ] {
+    let (_, applied) = update(dispatch, FileEditor(feedback), batched)
+    assert_true(applied.active().mentions.is_empty())
+    assert_eq(applied.active().pending_steers.length(), 1)
+    let steer = applied.active().pending_steers[0]
+    assert_eq(steer.mentions.length(), 1)
+    // Clearing the active composer preserves the selection in the queued draft.
+    assert_eq(batched.active().mentions, steer.mentions)
+    assert_eq(
+      steer.content,
+      (
+        #|<user_mentions>
+        #|<annotation file="README.md" lines="3-6">
+        #|<quote>
+        #|DeepSeek, Kimi, and Z.AI GLM models
+        #|</quote>
+        #|<user_comment>
+        #|make this clearer
+        #|</user_comment>
+        #|</annotation>
+        #|</user_mentions>
+      ),
+    )
+  }
 }
 
 ///|
@@ -20213,35 +20289,41 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
   )
   let before = batched.codex_composer_input()
   assert_eq(before.draft.mentions.length(), 1)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
-  assert_eq(
-    before.draft.mentions,
-    batched.codex_composer_input().draft.mentions,
-  )
-  let queued = applied.codex.transcript_items()
-  assert_eq(queued.length(), 1)
-  guard queued[0].kind is @transcript.User(content=prompt) else {
-    fail("expected the queued comment as a user prompt")
+  for
+    feedback in [
+      @fileeditor.ApplyAllFeedback,
+      @fileeditor.ApplyEditorFeedback(
+        @fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/README.md"),
+        ),
+      ),
+    ] {
+    let (_, applied) = update(dispatch, FileEditor(feedback), batched)
+    assert_eq(
+      before.draft.mentions,
+      batched.codex_composer_input().draft.mentions,
+    )
+    let queued = applied.codex.transcript_items()
+    assert_eq(queued.length(), 1)
+    guard queued[0].kind is @transcript.User(content=prompt) else {
+      fail("expected the queued comment as a user prompt")
+    }
+    assert_eq(
+      prompt.text(),
+      (
+        #|<user_mentions>
+        #|<annotation file="README.md" lines="3-6">
+        #|<quote>
+        #|DeepSeek, Kimi, and Z.AI GLM models
+        #|</quote>
+        #|<user_comment>
+        #|make this clearer
+        #|</user_comment>
+        #|</annotation>
+        #|</user_mentions>
+      ),
+    )
   }
-  assert_eq(
-    prompt.text(),
-    (
-      #|<user_mentions>
-      #|<annotation file="README.md" lines="3-6">
-      #|<quote>
-      #|DeepSeek, Kimi, and Z.AI GLM models
-      #|</quote>
-      #|<user_comment>
-      #|make this clearer
-      #|</user_comment>
-      #|</annotation>
-      #|</user_mentions>
-    ),
-  )
 }
 
 ///|

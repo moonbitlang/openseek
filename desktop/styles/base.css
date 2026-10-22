@@ -522,3 +522,91 @@ html.native-titlebar-overlay .app
 .content.panel-expanded .editor-tabsbar {
   padding-inline-start: var(--main-titlebar-leading-inset);
 }
+
+
+
+
+/* SSH identity is separate from the executable command. */
+.ssh-host-row { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--color-border); }
+.ssh-host-icon { display: flex; padding: 10px; border-radius: 10px; background: var(--color-bg-subtle); color: var(--color-text-secondary); }
+.ssh-host-copy { flex: 1; min-width: 0; }
+.ssh-host-title { padding: 0; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssh-host-address, .ssh-help, .ssh-subtitle, .ssh-settings-footer > span { color: var(--color-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.ssh-host-address { margin: 3px 0 7px; }
+.ssh-host-actions, .ssh-modal-actions, .ssh-settings-footer { display: flex; align-items: center; gap: 8px; }
+.ssh-more { display: flex; padding: 6px; }
+.ssh-settings-footer { justify-content: space-between; padding: 16px 20px; gap: 16px; }
+.ssh-settings-footer button { display: flex; align-items: center; gap: 6px; }
+.ssh-empty { padding: 8px 20px; color: var(--color-text-secondary); }
+.ssh-status { display: inline-flex; gap: 6px; align-items: center; color: var(--color-text-secondary); font-size: 11px; flex-shrink: 0; }
+.ssh-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ssh-status.online .ssh-dot { background: #43876a; }
+.ssh-dot.pending { background: #bd8b36; animation: ssh-pulse 1.4s ease-in-out infinite; }
+@keyframes ssh-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .ssh-dot.pending { animation: none; } }
+.ssh-locations { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 20px; border-bottom: 1px solid var(--color-border); }
+.ssh-location { display: flex; align-items: center; gap: 6px; padding: 6px 9px; min-width: 0; max-width: 100%; border: 1px solid var(--color-border); font-size: 12px; }
+.ssh-location > span:not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssh-location small { color: var(--color-text-secondary); }
+.ssh-location.selected { background: var(--color-bg-subtle); border-color: var(--color-text-secondary); }
+.ssh-location.add { border-style: dashed; color: var(--color-text-secondary); }
+/* OpenSSH output includes fingerprints and fixed-column warning banners.
+   Preserve its lines; scrolling must not reflow them into misleading fragments. */
+.ssh-output, .ssh-error {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  max-height: min(280px, 35vh);
+  overflow: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  user-select: text;
+}
+.ssh-error { color: var(--color-danger, #c74949); }
+.modal-backdrop.ssh-backdrop { z-index: 140; }
+.modal.ssh-modal { width: min(640px, calc(100vw - 40px)); padding: 24px; box-sizing: border-box; max-height: calc(100vh - 48px); overflow-y: auto; }
+.ssh-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.ssh-modal-header h2 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+.ssh-subtitle { margin: 9px 0 22px; font-size: 13px; }
+.ssh-field { display: flex; flex-direction: column; gap: 7px; margin: 16px 0; font-size: 12px; font-weight: 500; }
+.ssh-field input { width: 100%; box-sizing: border-box; font-weight: 400; }
+#ssh-command { font-family: var(--font-family-mono); font-size: 12px; }
+.ssh-preview { display: flex; align-items: center; gap: 12px; padding: 13px 14px; margin: 18px 0 12px; background: var(--color-bg-subtle); border: 1px solid var(--color-border); border-radius: 8px; min-width: 0; }
+.ssh-preview > div { min-width: 0; flex: 1; }
+.ssh-preview-title { font-weight: 600; font-size: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ssh-preview .ssh-host-address { margin: 2px 0 0; }
+.ssh-preview small { color: var(--color-text-secondary); font-size: 10px; }
+.ssh-help { line-height: 1.6; margin: 10px 0 18px; }
+.ssh-modal-actions { justify-content: flex-end; margin-top: 24px; flex-wrap: wrap; }
+.ssh-detail-identity { display: flex; gap: 8px; align-items: center; margin: 16px 0 10px; overflow-wrap: anywhere; }
+.ssh-command-details { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); }
+.ssh-command-details summary { cursor: pointer; font-size: 12px; color: var(--color-text-secondary); }
+.ssh-command-details pre { font-size: 12px; padding: 12px; background: var(--color-bg-subtle); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ssh-context { display: inline-flex; align-items: center; gap: 8px; padding-right: 10px; border-right: 1px solid var(--color-border); min-width: 0; max-width: 100%; flex: 0 0 auto; }
+.ssh-context-host { max-width: 100px; display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--color-text-secondary); font-size: 12px; padding: 0; }
+.ssh-context-host > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ssh-context .button { flex: 0 0 auto; white-space: nowrap; margin-left: auto; font-size: 11px; padding: 3px 8px; }
+
+.terminal-host-label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--color-text-secondary); }
+
+.ssh-settings-error { padding: 0 20px 16px; }
+
+.ssh-auth { border-top: 1px solid var(--color-border); margin-top: 16px; padding-top: 8px; }
+.ssh-auth-heading { font-size: 12px; color: var(--color-text-secondary); }
+.ssh-auth-prompt { font-family: var(--font-family-mono); }
+.ssh-field .ssh-auth-prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ssh-secret { display: flex; gap: 8px; align-items: center; }
+.ssh-secret input { min-width: 0; flex: 1; }
+.ssh-auth-keys { text-align: right; font-size: 11px; color: var(--color-text-secondary); margin: 8px 0 0; }
+.ssh-auth .ssh-field { margin: 12px 0 8px; }
+.ssh-auth .ssh-modal-actions { margin-top: 16px; }
+.ssh-auth .ssh-auth-heading { margin: 8px 0 12px; }

@@ -3,7 +3,6 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/x/path",
   "moonbitlang/openseek/agent_tool/internal/platform_shell",
-  "moonbitlang/openseek/agent_tool/internal/source_write_policy",
   "moonbitlang/openseek/internal/workspace_path",
 }
 

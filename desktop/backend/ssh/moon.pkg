@@ -1,0 +1,31 @@
+import {
+  "moonbitlang/async/semaphore",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/stdio",
+  "moonbitlang/async/http",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/encoding/utf8",
+  "openseek_desktop/protocol",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/backend/internal/home",
+  "openseek_desktop/backend/uuid",
+  "moonbitlang/openseek/jsonrpc",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/os_error",
+  "moonbitlang/core/json",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "native"
+
+import {
+  "openseek_desktop/protocol",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+} for "test"
+
+import {
+  "openseek_desktop/backend/internal/processx",
+} for "wbtest"

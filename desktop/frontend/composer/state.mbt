@@ -14,6 +14,7 @@ priv struct CompletionItem {
   detail : String
   command : String
   insert : String
+  prompt : String?
   path : String?
   range : @common.Range?
 } derive(Eq)
@@ -49,6 +50,7 @@ fn CompletionItem::slash_commands(
     detail: command.detail,
     command: command.command,
     insert: "",
+    prompt: command.prompt,
     path: None,
     range: None,
   })
@@ -90,6 +92,7 @@ fn CompletionItem::from_symbol(symbol : @symbols.Symbol) -> CompletionItem {
     } else {
       "`\{symbol.name}` — \{location} "
     },
+    prompt: None,
     path: if symbol.path.is_empty() {
       None
     } else {
@@ -134,6 +137,23 @@ fn Input::shell_command(self : Input, draft : Draft) -> String? {
     return None
   }
   Some(command.to_owned())
+}
+
+///|
+/// The draft as sent: one that is a prompt command's label, optionally
+/// followed by text, becomes that command's prompt followed by the text.
+fn Input::expanded(self : Input, draft : Draft) -> Draft {
+  for command in self.slash_commands {
+    guard command.prompt is Some(prompt) &&
+      draft.task.strip_prefix(command.label) is Some(rest) &&
+      rest is ("" | [' ' | '\n', ..]) else {
+      continue
+    }
+    let rest = rest.trim()
+    let task = if rest.is_empty() { prompt } else { "\{prompt} \{rest}" }
+    return { ..draft, task, }
+  }
+  draft
 }
 
 ///|
@@ -291,6 +311,7 @@ fn Input::completion(
               detail: skill.description,
               command: "",
               insert: "\{skill.name} ",
+              prompt: None,
               path: None,
               range: None,
             }
@@ -333,6 +354,7 @@ fn Input::completion(
         detail: file.path.0,
         command: "",
         insert: file.path.0,
+        prompt: None,
         path: Some(file.path.0),
         range: None,
       })

@@ -21,8 +21,18 @@ pub(all) struct Actions {
   new_conversation : (Id) -> @cmd.Cmd
   open_settings : (Id) -> @cmd.Cmd
   detach : (Id) -> @cmd.Cmd
+  host_details : (Id) -> @cmd.Cmd
   conversation : @conversation.Actions
 }
+
+pub(all) struct Host {
+  name : String
+  online : Bool
+  details : Bool
+} derive(Eq, @debug.Debug)
+pub fn Host::equal(Self, Self) -> Bool
+pub fn Host::not_equal(Self, Self) -> Bool
+pub fn Host::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Id {
   source : String
@@ -44,6 +54,7 @@ pub(all) struct Input {
   id : Id
   title : String
   label : String
+  host : Host?
   activation : String?
   can_start : Bool
   managed : Bool

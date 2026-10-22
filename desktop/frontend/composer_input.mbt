@@ -75,6 +75,12 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   if self.openseek_reasoning_chip(conv) is Some(control) {
     status.push(@composer.ReasoningStatus(control))
   }
+  status.push(
+    @composer.ApprovalStatus({
+      on: self.approval_for(conv.device, conv.session_id) is ApprovalReview,
+      enabled: !conv.is_running(),
+    }),
+  )
   if conv.git_presentation() is Some(presentation) {
     status.push(
       @composer.GitStatus({ presentation, open: self.git_details_open, }),
@@ -224,11 +230,25 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         label: "/compact",
         detail: shell_text(self.locale, CompactContext),
         command: "compact",
+        prompt: None,
       },
       {
         label: "/goal",
         detail: shell_text(self.locale, SetGoal),
         command: "goal",
+        prompt: None,
+      },
+      {
+        label: "/ultrareview",
+        detail: shell_text(self.locale, UltraReview),
+        command: "ultrareview",
+        prompt: Some(UltrareviewPrompt),
+      },
+      {
+        label: "/simplify",
+        detail: shell_text(self.locale, SimplifyProject),
+        command: "simplify",
+        prompt: Some(SimplifyPrompt),
       },
     ],
     // Editing a queued message rewrites that message; it never runs one.
@@ -468,3 +488,27 @@ fn Conversation::sent_prompts(
   }
   prompts
 }
+
+///|
+/// What `/ultrareview [focus]` sends. It ends on `Focus:`, which the text typed
+/// after the command completes.
+const UltrareviewPrompt : String =
+  #|Review the changes on this branch with the bundled review swarm.
+  #|
+  #|1. Use git to find the merge base of HEAD with the default branch.
+  #|2. Call the `mbtx` tool with `filename: "@builtin/review.mbtx"` and `args: ["--swarm", "--sha", <merge base>, "--", <criteria>]`. The criteria are the Focus text below or, when it is empty, "The changes since that base are correct, well-structured and tested."
+  #|3. Wait for the job with `job_wait` and read it with `job_output`; a job that failed on a blocker still has its findings there. Report the merged findings: verified ones first, then unverified ones, then the refuted list.
+  #|
+  #|Focus:
+
+///|
+/// What `/simplify [focus]` sends. It ends on `Focus:`, which the text typed
+/// after the command completes.
+const SimplifyPrompt : String =
+  #|Sweep this repository for safe simplifications with the bundled simplify workflow.
+  #|
+  #|1. Call the `mbtx` tool with `filename: "@builtin/simplify.mbtx"` and `args: ["--", <focus>]`, where the focus is the Focus text below; when it is empty, pass no args.
+  #|2. Wait for the job with `job_wait` and read it with `job_output`. If the sweep stops before starting (not at the repository root, uncommitted changes, HEAD not on the default branch, gh not signed in), report why and stop: do not commit, stash or push anything to get past it.
+  #|3. Report the pull requests it opened, the changes the reviewers rejected, and the packages it skipped and why.
+  #|
+  #|Focus:

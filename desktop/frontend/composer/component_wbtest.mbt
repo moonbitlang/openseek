@@ -174,6 +174,64 @@ test "file completion accepts a local candidate inside the component" {
 }
 
 ///|
+test "a prompt slash command stays a command until sent, then sends its prompt" {
+  let input = {
+    ..Input::fixture(""),
+    slash_commands: [
+      {
+        label: "/review",
+        detail: "",
+        command: "review",
+        prompt: Some("Review it.\nFocus:"),
+      },
+    ],
+  }
+  let emitted : Array[Action] = []
+  let actions = @cmd.Emit(action => {
+    emitted.push(action)
+    @cmd.none
+  })
+  let (typed, _) = Model(input).update(
+    input,
+    TextChanged("/rev"),
+    Msg::test_emit(),
+    actions,
+  )
+  let (accepted, _) = typed.update(
+    input,
+    CompletionAccept,
+    Msg::test_emit(),
+    actions,
+  )
+  inspect(accepted.active(input).draft.task, content="/review ")
+  // Nothing runs on accepting it: the user adds a focus and sends.
+  assert_true(emitted.all(action => !(action is SlashCommand(..))))
+  fn sent(task) raise {
+    emitted.clear()
+    let (focused, _) = accepted.update(
+      input,
+      TextChanged(task),
+      Msg::test_emit(),
+      actions,
+    )
+    let (_, _) = focused.update(
+      input,
+      SubmitRequested,
+      Msg::test_emit(),
+      actions,
+    )
+    guard emitted is [DraftSubmitted(draft~, ..)] else {
+      fail("one prompt submission expected")
+    }
+    draft.task
+  }
+  inspect(sent("/review the parser "), content="Review it.\nFocus: the parser")
+  inspect(sent("/review"), content="Review it.\nFocus:")
+  // Only the whole command word expands.
+  inspect(sent("/reviewer"), content="/reviewer")
+}
+
+///|
 test "disabled installed skills stay out of skill completion" {
   let available : @skills.InstalledItem = {
     id: "available",

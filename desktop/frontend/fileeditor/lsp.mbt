@@ -20,6 +20,11 @@ pub fn ModelUri::of(resource : @common.Uri) -> ModelUri {
 }
 
 ///|
+pub fn ModelUri::resource(self : ModelUri) -> @common.Uri {
+  try! @common.Uri::parse(self.0)
+}
+
+///|
 /// The Viewer uses the frontend resource URI itself as its document URI. Its
 /// authority already carries the channel identity, so no platform-sensitive
 /// `file:` conversion is needed in the browser.

@@ -130,7 +130,7 @@ jobs:
   # workspace gates in ci.yml. Its other members are covered there.
   desktop-app:
     name: desktop app (Linux, native)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -216,9 +216,6 @@ jobs:
 
   desktop-e2e:
     name: desktop e2e
-    # Pinned: `ubuntu-latest` now rolls out Ubuntu 26.04, where Playwright
-    # 1.60 cannot install Chromium ("does not support chromium on
-    # ubuntu26.04-x64"). Lift the pin with a Playwright that supports it.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

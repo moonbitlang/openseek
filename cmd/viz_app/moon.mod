@@ -3,7 +3,7 @@ name = "moonbitlang/openseek-viz-app"
 version = "0.1.0"
 
 import {
-  "moonbitlang/openseek@0.7.2",
+  "moonbitlang/openseek@0.7.3",
   "moonbit-community/rabbita@0.16.4",
 }
 

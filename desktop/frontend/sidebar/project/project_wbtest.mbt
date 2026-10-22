@@ -4,6 +4,7 @@ fn test_input(activation? : String) -> Input {
     id: Id(source="openseek.projects", channel="local", root="/work/openseek"),
     title: "/work/openseek",
     label: "openseek",
+    host: None,
     activation,
     can_start: true,
     managed: true,

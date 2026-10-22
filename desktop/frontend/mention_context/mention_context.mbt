@@ -191,6 +191,16 @@ pub fn MentionMessage::display_text(self : MentionMessage) -> String {
 }
 
 ///|
+/// User feedback carried by a citation, separate from its selected source text.
+pub fn MentionRef::comment(self : MentionRef) -> String? {
+  match self {
+    Annotation(comment~, ..) if !comment.trim().is_empty() => Some(comment)
+    OfficeSelection(materialized~) => office_selection_comment(materialized)
+    _ => None
+  }
+}
+
+///|
 /// The editor location represented by a mention chip. Skills and unresolved
 /// symbols have no target; comments on the original revision deliberately do
 /// not point into the working file.

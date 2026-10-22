@@ -1,35 +1,4 @@
 ///|
-let source_write_profile_cache : Map[String, CachedSourceWriteProfile] = Map([])
-
-///|
-priv struct WatchedSourceProfileDir {
-  path : String
-  mtime_s : Int64
-  mtime_ns : Int32
-}
-
-///|
-priv struct SourceWriteProfileScan {
-  literal_paths : Array[String]
-  watched_dirs : Array[WatchedSourceProfileDir]
-  cacheable : Bool
-}
-
-///|
-priv struct SourceWriteProfileScanBuilder {
-  literal_paths : Array[String]
-  watched_dirs : Array[WatchedSourceProfileDir]
-  mut cacheable : Bool
-}
-
-///|
-priv struct CachedSourceWriteProfile {
-  profile : String
-  watched_dirs : Array[WatchedSourceProfileDir]
-  denial_subjects : Array[String]
-}
-
-///|
 /// A source-write protection profile and the subjects used to diagnose its
 /// denials.
 ///
@@ -50,84 +19,64 @@ priv struct SourceWriteProfileData {
 /// `real_workspace_root` should be an absolute, canonical filesystem path:
 /// SBPL evaluates file operations against resolved paths, but this function
 /// only performs lexical normalization. The profile denies protected source
-/// filenames and source-containing directories, then re-allows Moon-managed
-/// `_build` and `.mooncakes` trees.
+/// filenames and every directory write (create, rename, removal) under the
+/// root, then re-allows Moon-managed `_build` and `.mooncakes` trees.
+///
+/// The profile is a fixed handful of rules whatever the tree holds. It used to
+/// deny each source-containing directory literally, which scaled with the
+/// repository: libsandbox rejects a profile of about 20k such rules and
+/// crashes `sandbox-exec` with SIGSEGV at about 40k, so in a large workspace
+/// every sandboxed command died before it ran (issue #2158).
 ///
 /// When `writable_lab` is supplied, a final SBPL rule re-allows that entire
 /// normalized subtree. This function does not verify that the lab is inside
 /// the workspace, so callers must pass only a trusted scratch directory.
 ///
-/// Base profiles are cached by normalized workspace root. Directory mtimes
-/// invalidate cached scans when the protected source tree changes. The result
-/// is a best-effort write guard, not a complete process-security boundary.
-async fn source_write_readonly_profile_data(
+/// The result is a best-effort write guard, not a complete process-security
+/// boundary.
+fn source_write_readonly_profile_data(
   real_workspace_root : String,
   writable_lab? : String,
 ) -> SourceWriteProfileData {
-  let base = source_write_readonly_profile_base(real_workspace_root)
-  match writable_lab {
-    None => base
-    // SBPL is last-match-wins: one allow-subpath appended AFTER every deny
-    // re-opens exactly the lab — a per-child scratch directory where a
-    // read-only subagent may scaffold projects and write source to verify
-    // claims empirically. The composed profile is not cached (labs are
-    // per-child temp dirs); the base underneath still is.
-    Some(lab) => {
-      let lab = @workspace_path.strip_trailing_slash(
-        @path.Path(lab).normalize().to_string(),
-      )
-      {
-        profile: "\{base.profile}(allow file-write* (subpath \"\{sbpl_string_escape(lab)}\"))\n",
-        denial_subjects: base.denial_subjects,
-      }
-    }
-  }
-}
-
-///|
-async fn source_write_readonly_profile_base(
-  real_workspace_root : String,
-) -> SourceWriteProfileData {
-  let real_workspace_root = @workspace_path.strip_trailing_slash(
+  let root = @workspace_path.strip_trailing_slash(
     @path.Path(real_workspace_root).normalize().to_string(),
   )
-  if source_write_profile_cache.get(real_workspace_root) is Some(cached) &&
-    cached_source_write_profile_valid(cached) {
-    return { profile: cached.profile, denial_subjects: cached.denial_subjects, }
-  }
-  let scan = protected_source_tree_profile_scan(real_workspace_root)
-  let denial_subjects = source_write_denial_subjects(scan.literal_paths)
-  let source_regex = source_write_regex(real_workspace_root)
-  let build_carveout_regex = source_write_build_carveout_regex(
-    real_workspace_root,
-  )
+  let source_regex = source_write_regex(root)
+  let build_carveout_regex = source_write_build_carveout_regex(root)
   let profile = StringBuilder()
-  // `file-write*` already covers `file-write-create`, so this single deny blocks
-  // both rewriting existing source and creating new source files. SBPL is
-  // last-match-wins, so the following carve-out re-allows Moon-managed build and
-  // cache trees without the deny regex having to special-case them.
+  // `file-write*` already covers `file-write-create`, so the regex deny blocks
+  // both rewriting existing source and creating new source files. It protects
+  // files, not a containing directory: moving `src` out of the workspace would
+  // carry its source past the regex. The directory deny closes that, and with
+  // it creating or removing a directory, which a read-only role has no reason
+  // to do inside the workspace. SBPL is last-match-wins, so the following
+  // carve-out re-allows Moon-managed build and cache trees without either deny
+  // having to special-case them.
   profile <+
     $|(version 1)
     $|(allow default)
     $|(deny file-write* (regex "\{sbpl_string_escape(source_regex)}"))
+    $|(deny file-write* (require-all (subpath "\{sbpl_string_escape(root)}") (vnode-type DIRECTORY)))
     $|(allow file-write* (regex "\{sbpl_string_escape(build_carveout_regex)}"))
     $|
-  // The suffix regex protects files, not renames/removal of a containing
-  // directory. These literal rules cover those directory operations.
-  for dir in scan.literal_paths {
-    profile <+
-      $|(deny file-write* (literal "\{sbpl_string_escape(dir)}"))
-      $|
+  // SBPL is last-match-wins: one allow-subpath appended AFTER every deny
+  // re-opens exactly the lab — a per-child scratch directory where a
+  // read-only subagent may scaffold projects and write source to verify
+  // claims empirically.
+  if writable_lab is Some(lab) {
+    let lab = @workspace_path.strip_trailing_slash(
+      @path.Path(lab).normalize().to_string(),
+    )
+    profile <+ "(allow file-write* (subpath \"\{sbpl_string_escape(lab)}\"))\n"
   }
-  let profile = profile.to_string()
-  if scan.cacheable {
-    source_write_profile_cache[real_workspace_root] = {
-      profile,
-      watched_dirs: scan.watched_dirs,
-      denial_subjects,
-    }
+  // A denied directory carries no protected suffix, so the root is what lets a
+  // denial of one be recognized: every path the directory rule refuses is
+  // below it. Its basename is kept too, for a tool that reports the path as
+  // spelled rather than resolved (`/tmp/ws/x` for `/private/tmp/ws/x`).
+  {
+    profile: profile.to_string(),
+    denial_subjects: source_write_denial_subjects([root]),
   }
-  { profile, denial_subjects, }
 }
 
 ///|
@@ -141,21 +90,6 @@ fn source_write_denial_subjects(literal_paths : Array[String]) -> Array[String] 
     }
   }
   subjects
-}
-
-///|
-async fn cached_source_write_profile_valid(
-  cached : CachedSourceWriteProfile,
-) -> Bool {
-  for watched in cached.watched_dirs {
-    let (mtime_s, mtime_ns) = @fs.mtime(watched.path, follow_symlink=false) catch {
-      _ => return false
-    }
-    if mtime_s != watched.mtime_s || mtime_ns != watched.mtime_ns {
-      return false
-    }
-  }
-  true
 }
 
 ///|
@@ -178,98 +112,6 @@ fn source_write_build_carveout_regex(real_workspace_root : String) -> String {
     @workspace_path.strip_trailing_slash(real_workspace_root),
   )
   "^\{root}/(.*/)?(_build|\\.mooncakes)(/|$)"
-}
-
-///|
-async fn protected_source_tree_profile_scan(
-  real_workspace_root : String,
-) -> SourceWriteProfileScan {
-  let root = @workspace_path.strip_trailing_slash(
-    @path.Path(real_workspace_root).normalize().to_string(),
-  )
-  let state : SourceWriteProfileScanBuilder = {
-    literal_paths: [],
-    watched_dirs: [],
-    cacheable: true,
-  }
-  ignore(collect_protected_source_tree_profile_scan(root, root, state))
-  {
-    literal_paths: state.literal_paths,
-    watched_dirs: state.watched_dirs,
-    cacheable: state.cacheable,
-  }
-}
-
-///|
-async fn collect_protected_source_tree_profile_scan(
-  root : String,
-  dir : String,
-  state : SourceWriteProfileScanBuilder,
-) -> Bool {
-  if dir != root &&
-    @source_write_policy.is_moon_managed_workspace_path(root, dir) {
-    return false
-  }
-  if dir != root && should_prune_profile_scan_path(root, dir) {
-    return false
-  }
-  let (mtime_s, mtime_ns) = @fs.mtime(dir, follow_symlink=false) catch {
-    _ => {
-      state.cacheable = false
-      return false
-    }
-  }
-  state.watched_dirs.push({ path: dir, mtime_s, mtime_ns, })
-  let entries = @fs.readdir(dir, include_hidden=true) catch {
-    _ => {
-      state.cacheable = false
-      return false
-    }
-  }
-  let mut contains_protected = false
-  for entry in entries {
-    let child = @path.Path(dir).join(Path(entry)).normalize().to_string()
-    if @source_write_policy.is_moon_managed_workspace_path(root, child) {
-      continue
-    }
-    if @source_write_policy.is_protected_workspace_source_path(root, child) {
-      contains_protected = true
-      continue
-    }
-    let kind = @fs.kind(child, follow_symlink=false) catch {
-      _ => {
-        state.cacheable = false
-        continue
-      }
-    }
-    if kind is Directory &&
-      collect_protected_source_tree_profile_scan(root, child, state) {
-      contains_protected = true
-    }
-  }
-  if contains_protected && dir != root {
-    state.literal_paths.push(dir)
-  }
-  contains_protected
-}
-
-///|
-fn should_prune_profile_scan_path(root : String, path : String) -> Bool {
-  guard @workspace_path.is_under_workspace_root(root, path) && path != root else {
-    return false
-  }
-  let relative = path[root.length() + 1:]
-  let parts = relative.replace_all(old="\\", new="/").split("/").to_array()
-  for i, part in parts {
-    if part is (".git" | ".hg" | ".svn" | ".jj" | "node_modules" | ".worktrees") {
-      return true
-    }
-    // Do not prune an ordinary source directory named `worktrees`.
-    if part == "worktrees" && i > 0 && parts[i - 1] == ".claude" {
-      return true
-    }
-  }
-  false
 }
 
 ///|
