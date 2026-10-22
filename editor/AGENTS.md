@@ -6,7 +6,7 @@
 - Package contracts: the owning package's `README.md` and
   `pkg.generated.mbti`
 - Commands and test-layer selection: `docs/harness.md`
-- Required checks and conformance-test rules: `docs/quality.md`
+- Validation selection and conformance-test rules: `docs/quality.md`
 - Style: `docs/styles.md`
 - Active cross-package plans and planning rules: `docs/exec-plans/`
 - Monaco/CodeMirror source maps: `docs/references/{monaco,codemirror}.md`
@@ -33,11 +33,10 @@ host for the editor. Use it for the routine editor UI build-and-preview loop.
 - Keep OpenSeek product policy, host RPC, storage, and workspace behavior under
   `../desktop/**`. Keep the editor API host-neutral, and use `ViewerServices`
   and the public `viewer/common/**` capability handles as the integration seam.
-- During iteration, run focused editor tests/browser scenarios and a targeted
-  JS check of every touched OpenSeek adapter package. Run the required editor
-  and root integration gates before declaring the cross-host work complete;
-  package or launch the full desktop app only when OpenSeek-specific layout,
-  effects, assets, or packaging are part of the behavior under test.
+- Select checks using `docs/quality.md`. For OpenSeek adapter changes, check
+  touched MoonBit packages for JS and exercise the affected integration path.
+  Validate OpenSeek-specific layout in its UI; follow `../desktop/AGENTS.md`
+  when behavior depends on the window host or packaging.
 
 ## Architecture Changes
 

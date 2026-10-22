@@ -3,7 +3,25 @@
 Current docs and package READMEs are product contracts. Keep cross-package
 architecture in `docs/architecture.md` and package details in package READMEs.
 
-## Required Checks
+## Select Relevant Checks
+
+Apply the [root scope and expansion rules](../../AGENTS.md#validation-by-change-scope).
+Commands here run from `editor/`.
+
+| Change | Targeted checks |
+| --- | --- |
+| CSS or presentation assets | Rebuild the frontend and preview affected UI in `internal/shell`, or run a focused browser scenario. |
+| DOM-free model, parser, provider, or state logic | Check/test affected packages and targets with ordinary/headless tests; use `--warn-list +73 --deny-warn` for checks. |
+| DOM, layout, input/focus, or browser lifecycle | JS checks for changed MoonBit packages and focused Playwright component tests; use smoke tests for workbench/server/host integration. |
+| Public API, dependencies, or target support | Review manifests/interfaces and check/test affected consumers; select `--target all` when all supported targets are affected. |
+| OpenSeek adapters | Targeted JS checks and affected OpenSeek UI path; [Desktop guidance](../../desktop/AGENTS.md) for window-host behavior. |
+
+Build fresh frontend/scenario assets before browser tests. Command details and
+layer ownership: [harness](harness.md) and [browser tests](../tests/browser/README.md).
+
+## Full Editor Gates
+
+Available when justified or explicitly required; these commands run from `editor/`:
 
 ```sh
 moon check --target all --warn-list +73 --deny-warn
@@ -12,9 +30,6 @@ just test
 just build
 just test-browser-smoke
 ```
-
-Run the subset relevant to each milestone; run all of them before declaring a
-cross-package or browser-visible implementation complete.
 
 ## Guardrails
 

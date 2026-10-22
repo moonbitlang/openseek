@@ -51,6 +51,26 @@
   validate it in the packaged development app. Unpackaged launch paths are
   historical; their removal belongs to a task that includes that cleanup.
 
+## Validation By Change Scope
+
+Apply the [root scope and expansion rules](../AGENTS.md#validation-by-change-scope).
+
+| Change | Targeted checks |
+| --- | --- |
+| CSS or presentation assets | Rebuild the browser bundle and preview affected UI or run a focused Playwright spec. |
+| Frontend MoonBit source | JS checks and relevant model/package tests; browser cases for changed rendering, events, or user workflows. |
+| Protocol/codecs or backend behavior | Owning package and affected consumer checks/tests; exercise changed frontend/backend flows. |
+| Proton window host or contracts it consumes | Check/test affected packages from `app/moon.work`; validate host-dependent behavior in the packaged development app. |
+| Build scripts or packaging | Affected script syntax/tests or build-package checks, then inspect the affected artifact. |
+
+Command details: [browser tests](e2e/README.md), [host checks](README.md), and
+[packaging](package/README.md). Browser fixtures replace HTTP/WebSocket sources;
+use real backend/host checks when those layers change.
+
+Full entries from the repository root: `just desktop-test-browser`,
+`just desktop-app-check`, `just desktop-app-test`, and
+`just desktop-build-scripts-check`, when justified or explicitly required.
+
 ## UI Pull Requests
 
 - For PRs with visible Desktop UI changes, include screenshots in the PR
