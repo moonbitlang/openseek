@@ -128,6 +128,7 @@ pub(all) struct Conversation {
   control_inputs : Array[ControlInput]
   queue_edit : String?
   watch_request : Int32
+  watch_status : WatchStatus
   task : String?
   last_seq : Int32?
   streaming_response : String?
@@ -312,6 +313,14 @@ pub struct UploadedAttachment {
 } derive(Eq)
 pub fn UploadedAttachment::equal(Self, Self) -> Bool
 pub fn UploadedAttachment::not_equal(Self, Self) -> Bool
+
+pub(all) enum WatchStatus {
+  Watching
+  Reconnecting
+  Disconnected
+} derive(Eq)
+pub fn WatchStatus::equal(Self, Self) -> Bool
+pub fn WatchStatus::not_equal(Self, Self) -> Bool
 
 // Type aliases
 pub using @cloud_client {type Failure}

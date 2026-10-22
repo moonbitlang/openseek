@@ -69,6 +69,7 @@ pub fn Conversation::control_primary_action(
   default_submit : @composer.RunningSubmit,
 ) -> @composer.PrimaryAction {
   guard self.control is Some(control) &&
+    self.watch_status == Watching &&
     self.stream is Some({ active: true, .. }) &&
     self.last_seq is Some(_) else {
     return @composer.Send(available=false)
@@ -116,6 +117,7 @@ pub fn Conversation::control_context(
   }
   if self.control is Some(control) {
     let enabled = self.stream is Some({ active: true, .. }) &&
+      self.watch_status == Watching &&
       self.last_seq is Some(_) &&
       (
         (control.status == Running && control.active_task_id is Some(_)) ||
@@ -560,7 +562,10 @@ fn State::update_control(
     guard epoch == self.epoch &&
       snapshot.session_id == session &&
       snapshot.task_id == Some(task) &&
-      self.conversations.get(session) is Some(conversation) else {
+      self.conversations.get(session) is Some(conversation) &&
+      conversation.watch_status == Watching &&
+      conversation.stream is Some({ active: true, .. }) &&
+      conversation.last_seq is Some(_) else {
       return Some((self, @cmd.none))
     }
     if conversation.task == snapshot.task_id &&
@@ -717,6 +722,7 @@ fn State::update_control(
     token is Some(token) &&
     self.conversations.get(session) is Some(conversation) &&
     conversation.stream is Some({ active: true, .. }) &&
+    conversation.watch_status == Watching &&
     conversation.last_seq is Some(_) &&
     conversation.control is Some(control) &&
     conversation.task is Some(task) else {

@@ -195,6 +195,7 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   !conversation.loading &&
   !conversation.sending &&
   !conversation.generating &&
+  conversation.watch_status == Watching &&
   !conversation.history_required
 }
 
@@ -567,7 +568,7 @@ pub fn update(
               conversation.uploads
             },
           })
-          if admitted {
+          if admitted || (baseline && conversation.watch_status == Reconnecting) {
             let (next, command) = next.load(id, token, emit)
             (next, command, None)
           } else {
@@ -596,19 +597,37 @@ pub fn update(
         conversation.stream == Some(stream) else {
         return (state, @cmd.none, None)
       }
-      let error = error.unwrap_or(Unreachable)
+      stream.close()
+      if error is Some(Http(404)) {
+        return (state.forget(id), @cmd.none, None)
+      }
+      let retry = retry_observation(error)
+      let request = state.sequence + 1
       let next = state.replace(id, {
         ..conversation.clear_progress(),
+        // Fence history reads from the interrupted connection. Only a fresh
+        // snapshot can establish the run state for the following history read.
+        request,
         stream: None,
-        notice: Some(error.label()),
+        watch_request: conversation.watch_request + 1,
+        watch_status: if retry {
+          Reconnecting
+        } else {
+          Disconnected
+        },
+        notice: if retry {
+          conversation.notice
+        } else {
+          error.map(error => error.label())
+        },
       })
-      let (next, history) = next.load(id, token, emit)
-      let (next, command) = if error is Unauthorized {
-        next.failed(error)
+      let next = { ..next, sequence: request, }
+      let (next, command) = if error is Some(Unauthorized) {
+        next.failed(Unauthorized)
       } else {
         (next, @cmd.none)
       }
-      (next, @cmd.batch([history, command]), None)
+      (next, command, None)
     }
     ControlPreparationFailed(_, _, _, _, _)
     | ControlAction(_, _)
@@ -632,6 +651,7 @@ pub fn update(
           loading: true,
           history_required: true,
           watch_request: conversation.watch_request + 1,
+          watch_status: Watching,
           stream: None,
           last_seq: None,
           notice: None,
@@ -672,6 +692,11 @@ pub fn update(
         records: history.messages,
         events: conversation.events_not_in(history.messages),
         loading: false,
+        watch_status: if observed && conversation.last_seq is Some(_) {
+          Watching
+        } else {
+          conversation.watch_status
+        },
         generating: if conversation.stream is Some(stream) && stream.active {
           control.map_or(history.generating, control => {
             control.active_task_id is Some(_)
@@ -715,7 +740,7 @@ pub fn update(
         ..next,
         sessions: next.sessions.map(session => {
           if session.id == id {
-            { ..session, generating: history.generating, }
+            { ..session, generating: next.conversations[id].generating, }
           } else {
             session
           }
@@ -741,17 +766,36 @@ pub fn update(
       if error is Http(404) {
         return (state.forget(id), @cmd.none, None)
       }
+      let recovering = conversation.watch_status == Reconnecting
+      let retry = retry_observation(Some(error))
+      if recovering && !retry && conversation.stream is Some(stream) {
+        stream.close()
+      }
       let next = state.replace(id, {
         ..conversation,
         loading: false,
-        notice: Some(error.label()),
+        watch_status: if recovering && !retry {
+          Disconnected
+        } else {
+          conversation.watch_status
+        },
+        notice: if recovering && retry {
+          conversation.notice
+        } else {
+          Some(error.label())
+        },
       })
-      let (next, command) = next.failed(error)
+      let (next, command) = if recovering && retry {
+        (next, @cmd.none)
+      } else {
+        next.failed(error)
+      }
       (
         next,
         @cmd.batch([
           command,
-          if conversation.generating && !(error is Unauthorized) {
+          if (recovering && retry) ||
+            (!recovering && conversation.generating && !(error is Unauthorized)) {
             poll(epoch, id, request, emit)
           } else {
             @cmd.none
@@ -764,7 +808,13 @@ pub fn update(
       guard epoch == state.epoch &&
         state.conversations.get(id) is Some(conversation) &&
         conversation.request == request &&
-        conversation.generating &&
+        (conversation.generating || conversation.watch_status == Reconnecting) &&
+        // Recovery polling belongs to the selected subscription, just like
+        // its reconnect timer. Unloading it makes an already queued poll inert.
+        (
+          conversation.watch_status != Reconnecting ||
+          conversation.stream is Some({ active: true, .. })
+        ) &&
         !conversation.sending else {
         return (state, @cmd.none, None)
       }

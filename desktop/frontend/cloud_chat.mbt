@@ -417,6 +417,9 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         let context = conversation.map_or(input.presentation.context, value => {
           value.control_context()
         })
+        if conversation is Some({ watch_status: Reconnecting, .. }) {
+          context.push(@composer.ConnectionBanner(device_name=Some("Cloud")))
+        }
         if conversation is Some({ compacting: true, .. }) {
           context.push(@composer.CompactionNotice(queued=false))
         }
