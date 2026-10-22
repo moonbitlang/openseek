@@ -174,7 +174,7 @@ test "file completion accepts a local candidate inside the component" {
 }
 
 ///|
-test "a prompt slash command writes its prompt over the draft each time" {
+test "a prompt slash command stays a command until sent, then sends its prompt" {
   let input = {
     ..Input::fixture(""),
     slash_commands: [
@@ -191,27 +191,44 @@ test "a prompt slash command writes its prompt over the draft each time" {
     emitted.push(action)
     @cmd.none
   })
-  let mut model = Model(input)
-  // The second run replaces the prepared prompt with the same text. The root
-  // never sees either write, so the composer must make it itself.
-  for _ in 0..<2 {
-    let (typed, _) = model.update(
-      input,
-      TextChanged("/rev"),
-      Msg::test_emit(),
-      actions,
-    )
-    let (accepted, _) = typed.update(
-      input,
-      CompletionAccept,
-      Msg::test_emit(),
-      actions,
-    )
-    inspect(accepted.active(input).draft.task, content="Review it.\nFocus:")
-    model = accepted
-  }
-  // Nothing runs: the user edits the prompt and sends it.
+  let (typed, _) = Model(input).update(
+    input,
+    TextChanged("/rev"),
+    Msg::test_emit(),
+    actions,
+  )
+  let (accepted, _) = typed.update(
+    input,
+    CompletionAccept,
+    Msg::test_emit(),
+    actions,
+  )
+  inspect(accepted.active(input).draft.task, content="/review ")
+  // Nothing runs on accepting it: the user adds a focus and sends.
   assert_true(emitted.all(action => !(action is SlashCommand(..))))
+  fn sent(task) raise {
+    emitted.clear()
+    let (focused, _) = accepted.update(
+      input,
+      TextChanged(task),
+      Msg::test_emit(),
+      actions,
+    )
+    let (_, _) = focused.update(
+      input,
+      SubmitRequested,
+      Msg::test_emit(),
+      actions,
+    )
+    guard emitted is [DraftSubmitted(draft~, ..)] else {
+      fail("one prompt submission expected")
+    }
+    draft.task
+  }
+  inspect(sent("/review the parser "), content="Review it.\nFocus: the parser")
+  inspect(sent("/review"), content="Review it.\nFocus:")
+  // Only the whole command word expands.
+  inspect(sent("/reviewer"), content="/reviewer")
 }
 
 ///|

@@ -140,6 +140,23 @@ fn Input::shell_command(self : Input, draft : Draft) -> String? {
 }
 
 ///|
+/// The draft as sent: one that is a prompt command's label, optionally
+/// followed by text, becomes that command's prompt followed by the text.
+fn Input::expanded(self : Input, draft : Draft) -> Draft {
+  for command in self.slash_commands {
+    guard command.prompt is Some(prompt) &&
+      draft.task.strip_prefix(command.label) is Some(rest) &&
+      rest is ("" | [' ' | '\n', ..]) else {
+      continue
+    }
+    let rest = rest.trim()
+    let task = if rest.is_empty() { prompt } else { "\{prompt} \{rest}" }
+    return { ..draft, task, }
+  }
+  draft
+}
+
+///|
 /// Encode the typed text and chips into the durable prompt sent to the engine.
 pub fn Draft::prompt(self : Draft) -> String {
   @mention_context.encode(self.mentions.map(mention => mention.ref_), self.task)

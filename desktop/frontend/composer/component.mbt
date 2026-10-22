@@ -583,12 +583,14 @@ fn Entry::accept_completion(
     return ({ ..self, completion: None, }, @cmd.none)
   }
   let mention : Mention? = match completion.kind {
-    SlashCommands if item.prompt is Some(prompt) =>
-      // The prompt replaces the whole draft, and the composer, the draft's
-      // one writer, shows its end, where such a prompt leaves the user's part.
+    SlashCommands if item.prompt is Some(_) =>
       return (
-        { ..self, draft: { ..self.draft, task: prompt, }, completion: None, },
-        focus_message_end(),
+        {
+          ..self,
+          draft: { ..self.draft, task: "\{item.label} ", },
+          completion: None,
+        },
+        @cmd.none,
       )
     SlashCommands =>
       return (
@@ -1171,6 +1173,9 @@ fn Model::update(
           }) else {
           return (self.with_entry(entry), @cmd.none)
         }
+        // Expand the draft itself, not just the payload, so the pending
+        // submission records the text that was sent, as the root holds it.
+        let entry = { ..entry, draft: input.expanded(entry.draft), }
         (
           self.with_entry({
             ..entry,

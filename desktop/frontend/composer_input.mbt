@@ -478,9 +478,8 @@ fn Conversation::sent_prompts(
 }
 
 ///|
-/// What `/ultrareview` prepares for the user to edit and send: a swarm review
-/// costs millions of tokens. It ends on the `Focus:` line, where the composer
-/// leaves the caret.
+/// What `/ultrareview [focus]` sends. It ends on `Focus:`, which the text typed
+/// after the command completes.
 const UltrareviewPrompt : String =
   #|Review the changes on this branch with the bundled review swarm.
   #|
