@@ -1707,13 +1707,27 @@ fn load_active_side_chat(
     model.session_project(owner.channel, owner.session) is Some(project) else {
     return (model, @cmd.none)
   }
+  // The model it was forked with is remembered where it was made. Elsewhere
+  // — another device, a cleared store — its conversation's model is the
+  // nearest to it, and the dock has no selector to correct a default.
+  let parent = dock_home_key(owner)
+  let forked_model = match
+    model.remembered_model(owner.channel, owner.session) {
+    Some(remembered) => remembered
+    None =>
+      match model.find_conversation(parent.channel, parent.session) {
+        Some(conv) => conv.engine_model
+        None =>
+          model
+          .remembered_model(parent.channel, parent.session)
+          .unwrap_or(model.default_model)
+      }
+  }
   let conv = empty_conversation(
     owner.channel,
     owner.session,
     project,
-    model=model
-      .remembered_model(owner.channel, owner.session)
-      .unwrap_or(model.default_model),
+    model=forked_model,
   )
   let conv = if model.device_state(owner.channel) is Some(dev) {
     {
@@ -6946,7 +6960,7 @@ fn update_msg(
             id,
             url,
             model.theme.is_dark(model.system_dark),
-            model.dock_owner().host(),
+            model.browser_page_owner(id),
           ),
           { shown: None, rect: None, geo: None, },
         )
@@ -6959,7 +6973,7 @@ fn update_msg(
             id,
             url,
             model.theme.is_dark(model.system_dark),
-            model.dock_owner().host(),
+            model.browser_page_owner(id),
           ),
           model.browser_pane,
         )
@@ -7284,7 +7298,7 @@ fn update_msg(
                 id,
                 url,
                 model.theme.is_dark(model.system_dark),
-                model.dock_owner().host(),
+                model.browser_page_owner(id),
               ),
               {
                 ..model,

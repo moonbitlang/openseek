@@ -232,4 +232,5 @@ let blank_browser_page : @preview.PageState = {
   title: "",
   loading: false,
   failure: None,
+  owner: None,
 }

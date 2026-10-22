@@ -744,3 +744,58 @@ test "a reconnect re-reads the side chat while its conversation still loads" {
   let (_, reconnected) = update_dev(test_dispatch(), BridgeReady, loading)
   assert_true(side_chat_sync(reconnected) is Some(Reloading(..)))
 }
+
+///|
+test "a page the side chat's agent opened stays the side chat's in its conversation's dock" {
+  let (_, opened) = update(
+    test_dispatch(),
+    BrowserOpenRequested(
+      request="browser-1",
+      session=SideChatId,
+      url="https://example.com/",
+    ),
+    side_chat_model(),
+  )
+  guard @dock.active_browser(opened.dock_state()) is Some(id) else {
+    fail("the page must be on screen")
+  }
+  // Shown in the conversation's dock, it is still the side chat's page, so
+  // its browser tools keep reaching it after the reader navigates it.
+  assert_true(opened.browser_page_owner(id) == Some(side_chat_owner()))
+  let (_, edited) = update(
+    test_dispatch(),
+    BrowserAddressEdited("https://example.org/"),
+    opened,
+  )
+  let (_, navigated) = update(test_dispatch(), BrowserNavigateSubmitted, edited)
+  assert_true(
+    @preview.page(navigated.preview, id)
+    is Some({ url: Some("https://example.org/"), .. }),
+  )
+  assert_true(navigated.browser_page_owner(id) == Some(side_chat_owner()))
+  // A tab the reader opens belongs to the dock's conversation.
+  let (_, blank) = update(test_dispatch(), BrowserTabRequested, navigated)
+  guard @dock.active_browser(blank.dock_state()) is Some(own) else {
+    fail("the blank tab must be on screen")
+  }
+  assert_true(
+    blank.browser_page_owner(own) ==
+    Some({ channel: @interop.ChannelId::Local, session: "desktop-test", }),
+  )
+}
+
+///|
+test "a side chat restored without a remembered model takes its conversation's" {
+  let model = test_model()
+  let model = {
+    ..model.replace_conversation({ ..model.active(), engine_model: DsPro, }),
+    default_model: DsFlash,
+    right_panel_open: true,
+  }.with_listed(["desktop-test", SideChatId])
+  let (_, restored) = update(test_dispatch(), CloseSelectMenu, model)
+  guard restored.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the listed side chat must be restored")
+  }
+  assert_true(side.engine_model == DsPro)
+}
