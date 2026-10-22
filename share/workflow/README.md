@@ -158,7 +158,8 @@ when it is committed on the pinned HEAD by a worker that reported `done`.
 Then a fresh `explore` child (60 steps) reads it as git objects and answers
 `VERDICT: ACCEPT` or `VERDICT: REJECT` on the first line. Each accepted change
 is pushed to `simplify/<name>-<commit>` on `origin` and opened as a pull request
-against the default branch; nothing is merged. Scouts and workers carry
+against the default branch, and its worker's local branch is deleted; nothing
+is merged. Scouts and workers carry
 built-in MoonBit guidance: what to simplify, and what not to. The script prints
 a line per scout and per chosen package, then
 `packages=N chosen=K prs=P accepted=A rejected=R skipped=S tokens=T`. It fails

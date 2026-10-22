@@ -141,7 +141,9 @@ fn FakeHost::simplify_child(
             "worktree": {
               "name": name,
               "path": "/tmp/\{name}",
-              "branch": "openseek/\{name}--1a2b3c4d-sr-1",
+              "branch": self.fixture
+              .get("branch:\{dir}")
+              .unwrap_or("openseek/\{name}--1a2b3c4d-sr-1"),
               "base": base,
               "allowed_paths": Json::array(paths),
               "state": state,
@@ -249,6 +251,7 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
     append(repo + "/" + file, "// simplified")
     ignore(git(repo, ["commit", "-q", "-am", "simplify \{dir}"]))
     commits[dir] = git(repo, ["rev-parse", "HEAD"]).trim().to_owned()
+    commits["branch:\{dir}"] = "work-\{index}"
     ignore(git(repo, ["checkout", "-q", "main"]))
   }
   let bin = temp + "/simplify-bin"
@@ -347,6 +350,10 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
           commits["alpha"],
         )
         assert_eq(gh_calls.length(), 3, msg=output)
+        // The published change's local worker branch is gone; the rejected
+        // one's stays for inspection.
+        assert_eq(git(repo, ["branch", "--list", "work-0"]).trim(), "")
+        assert_eq(git(repo, ["branch", "--list", "work-2"]).trim(), "work-2")
         assert_true(
           gh_calls[0] is ["repo", "view", String(url), ..] && url == origin,
           msg=gh_calls[0].stringify(),
@@ -377,7 +384,7 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
             "beta: candidates=1 worker=committed",
             "review=rejected",
             "  rejected: loosens an invariant\n  - beta/b.mbt:1: adds mut",
-            "kept locally: openseek/",
+            "kept locally: work-2 (git branch -D work-2)",
             "delta: candidates=1 worker=nothing changed",
             "gamma: candidates=1 worker=started from",
             "packages=5 chosen=5 prs=1 accepted=1 rejected=1 skipped=3 tokens=108",

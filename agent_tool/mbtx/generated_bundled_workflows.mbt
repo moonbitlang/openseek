@@ -2690,6 +2690,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  #|  against shared named constants;
           #|  #|- turn a String stored in a long-lived structure into a StringView: a
           #|  #|  stored view pins its whole string. Own at storage, view in transit;
+          #|  #|- collapse match arms that name variants into a wildcard or catch-all such
+          #|  #|  as `Info(_)` or `_`: a variant added later would silently take that arm
+          #|  #|  instead of failing to compile;
           #|  #|- touch generated files (generated_*.mbt, *.mbti) or vendored code, or add
           #|  #|  files.
           #|  #|
@@ -2906,13 +2909,29 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      None => "branch \{change.branch}"
           #|      Some(target) =>
           #|        match open_pr(work, change, reasoning, target) {
-          #|          Ok(url) => url
+          #|          Ok(url) => {
+          #|            // The change lives on origin now; the worker's local branch is
+          #|            // only clutter in the repository.
+          #|            ignore(
+          #|              @shell.Cmd("git", ["branch", "-D", change.branch]).output(
+          #|                timeout_ms=30000,
+          #|              ),
+          #|            ) catch {
+          #|              _ => ()
+          #|            }
+          #|            url
+          #|          }
           #|          Err(why) => {
           #|            failures.push("\{shown(work.pkg.dir)}: \{why}")
           #|            why
           #|          }
           #|        }
           #|    }
+          #|  }
+          #|  // Reviewers may build a change in a worktree inside their scratch lab;
+          #|  // the lab is gone once they end, and this drops the records left behind.
+          #|  ignore(@shell.Cmd("git", ["worktree", "prune"]).output(timeout_ms=30000)) catch {
+          #|    _ => ()
           #|  }
           #|  report(packages, works, failures, tokens)
           #|}
@@ -3346,7 +3365,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    $|Package: \{shown(work.pkg.dir)}
           #|    $|Base: \{change.base}
           #|    $|Commit: \{change.commit}
-          #|    $|It is not checked out. Read it as git objects: `git diff \{change.base} \{change.commit}` for the patch, `git show \{change.commit}:<file>` for a file after it and `git show \{change.base}:<file>` before it.
+          #|    $|It is not checked out. Read it as git objects: `git diff \{change.base} \{change.commit}` for the patch, `git show \{change.commit}:<file>` for a file after it and `git show \{change.base}:<file>` before it. To build or test it, check it out with `git worktree add --detach <a directory in your scratch lab> \{change.commit}`; never create a branch.
           #|    $|
           #|    $|## The author's summary (a claim, not evidence)
           #|    $|\{change.summary}
@@ -3376,7 +3395,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    [head, .. rest] =>
           #|      (
           #|        head.trim().trim_end(chars=".").to_owned(),
-          #|        rest.join(" ").trim().to_owned(),
+          #|        rest.join("\n").trim().to_owned(),
           #|      )
           #|  }
           #|  match head {
@@ -3427,7 +3446,13 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    "refactor(\{dir}): simplify"
           #|  }
           #|  let hints = work.candidates
-          #|    .map(candidate => "- `\{candidate.file}`: \{candidate.note}")
+          #|    .map(candidate => {
+          #|      let at = match candidate.line {
+          #|        Some(line) => "\{candidate.file}:\{line}"
+          #|        None => candidate.file
+          #|      }
+          #|      "- `\{at}`: \{candidate.note}"
+          #|    })
           #|    .join("\n")
           #|  let body =
           #|    $|Simplifies `\{dir}`, with no behavior change intended.
@@ -3459,7 +3484,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    "--body",
           #|    body,
           #|  ]).output(timeout_ms=120000) catch {
-          #|    error => return Err("pushed to \{branch}, but gh pr create failed: \{error}")
+          #|    error =>
+          #|      return Err("pushed to \{branch}, but gh pr create failed: \{error}")
           #|  }
           #|  guard created.exit_code() == 0 else {
           #|    return Err(
