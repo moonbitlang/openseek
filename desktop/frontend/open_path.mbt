@@ -327,9 +327,23 @@ fn show_browser_path(
   } nobreak {
     None
   }
-  let (preview, id) = match reuse {
-    Some(id) => (@preview.navigate(model.preview, id, url), id)
-    None => @preview.open_page(model.preview, url~)
+  // A reused page keeps the conversation it was opened for — a side chat's,
+  // shown in this dock — so the host keeps it reachable by that one's tools.
+  let (preview, id, owner) = match reuse {
+    Some(id) =>
+      (
+        @preview.navigate(model.preview, id, url),
+        id,
+        model.browser_page_owner(id),
+      )
+    None => {
+      let (preview, id) = @preview.open_page(
+        model.preview,
+        url~,
+        owner=active.owner,
+      )
+      (preview, id, Some(active.owner))
+    }
   }
   let dock = if dock.active is Some(FilePicker) {
     @dock.resolve_pick(dock, Browser(id~))
@@ -342,7 +356,7 @@ fn show_browser_path(
       id,
       url,
       model.theme.is_dark(model.system_dark),
-      Some(active.owner),
+      owner,
     ),
     {
       ..model.with_dock_state_for(@interop.Host(active.owner), dock),
