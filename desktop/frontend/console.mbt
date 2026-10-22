@@ -644,7 +644,7 @@ test "a revoked page device is retired without connecting a survivor" {
         @interop.ChannelId::Remote("d_a").test_project(),
       ),
     )
-    .with_mirror(_ => {
+    .with_host_settings(_ => {
       current: Some(
         host_settings(
           provider="custom",
@@ -685,7 +685,7 @@ test "a revoked page device is retired without connecting a survivor" {
   assert_eq(refreshed.installed_skills.length(), 0)
   // The retired device's settings left with its device state.
   assert_false(refreshed.host_settings_loaded())
-  assert_true(refreshed.test_mirror() == HostSettingsMirror::loading())
+  assert_true(refreshed.host_settings_mirror() == HostSettingsMirror::loading())
   inspect(refreshed.setup_api_key, content="")
   inspect(
     refreshed.conversations
@@ -767,7 +767,7 @@ test "an action for another roster device cannot move page focus" {
   )
   assert_true(listed.focused == Remote("d_a"))
   assert_true(listed.device_state(Remote("d_b")) is None)
-  let seeded = listed.with_mirror(mirror => {
+  let seeded = listed.with_host_settings(mirror => {
     ..mirror,
     current: Some(
       host_settings(
@@ -1018,7 +1018,7 @@ test "account changes retire focused host mirrors before the new roster answers"
     _ => @cmd.none,
   )
   let old = {
-    ..listed.with_mirror(mirror => {
+    ..listed.with_host_settings(mirror => {
       ..mirror,
       current: Some(
         host_settings(
