@@ -1,0 +1,301 @@
+# Web Push for the browser console
+
+Status: design for review. No code is written yet. It builds on the
+installable PWA in #2206 (`claude/pwa-support-5b8cd3`).
+
+Goal: an installed console on a phone shows a notification while the app is
+closed when a run on one of the account's desktops finishes, or when a run
+stops to ask for permission. This must work on Android Chrome and on iOS
+16.4+ after Add to Home Screen.
+
+## Facts that shape the design
+
+- **The relay sees no notification events today.** `serve_browser` splices
+  browser and host sockets without parsing them, and the host sends nothing
+  on the `/v1/tunnel` control socket after `register`. When the phone app is
+  closed, no browser stream exists at all. So the host has to tell the relay
+  through a new control frame.
+- **The window frontend decides notifications, not the host.**
+  `frontend/system_notification.mbt` posts a banner for (a) the first
+  `Finished` of a run whose status is not `cancelled`, and (b) a live
+  `ApprovalRequested`. Recovered approvals never post. The host hub already
+  has both facts: `Hub::record_finished` dedupes settlements, and
+  `pending_approvals` / `message_approvals` hold live questions.
+- **openseek-api has no P-256.** Its dependencies give SHA-256, HMAC and AES
+  (ECB/CBC). Web Push needs ECDSA P-256 for VAPID (RFC 8292), and ECDH P-256
+  plus AES-128-GCM for payload encryption (RFC 8291). `moonbitlang/async`
+  already `dlopen`s `libssl.so.3` at runtime. The runtime image has it through
+  `ca-certificates → openssl`.
+- **Both console credentials are rows in `sessions`.** That covers the relay
+  cookie and the v2 account bearer that the proxy and Android use.
+  `SessionTtl` slides on use (7 days).
+
+## 1. Where the worker is served
+
+**Decision: `sw.js` at the bundle root, next to `index.html`, served at
+`/sw.js`.** A script at `/sw.js` gets scope `/` by default, which covers
+`/cloud/...` and `/device/...`. No `Service-Worker-Allowed` header is needed.
+The alternative was `/assets/sw.js` plus that header, which would change
+static serving in all three hosts. With the root location, two of the three
+hosts need no code at all.
+
+- Source: `desktop/pwa/sw.js`. `Build.stageFrontend` copies it to
+  `<output>/sw.js`, not into `assets/`.
+- **openseek-api** (`register_browser_release_routes`): add
+  `GET /sw.js`. It streams `<current release>/sw.js` with
+  `Content-Type: text/javascript` and `Cache-Control: no-cache`. A release
+  without the file returns 404, so registration fails and the console shows
+  push as unavailable. The route is registered before the homepage
+  `/*rest` wildcard, as `/assets/*file` already is.
+- **Local console** (`remote/local.mbt`): no change. `static_asset_route`
+  already maps `/sw.js` to the root file, and `content_type` returns JS. Add a
+  route test so this stays true.
+- **Console proxy**: no change. The `@unstable_static` middleware serves the
+  bundle root. Add a test in `console_proxy_test.mbt`. Its `/v2/*` forwarding
+  also carries the push API to the relay, so the proxy can test real pushes
+  (Android over `chrome://inspect` port forwarding runs on `localhost`, which
+  is a secure context). `--demo` answers `/v2/push/key` with 404.
+
+The worker only handles push. It has no `fetch` handler and no caching:
+
+- `push`: decode the JSON payload, then call
+  `showNotification(title, {body, tag, data: {url}, icon})` inside
+  `waitUntil`. It always shows something, because iOS revokes the
+  subscription after silent pushes.
+- `notificationclick`: focus an open client and navigate it to `data.url`,
+  or `clients.openWindow(url)`.
+- `install` / `activate`: call `skipWaiting` and `clients.claim`.
+- `pushsubscriptionchange` is ignored. The page heals subscriptions on every
+  boot (see §2).
+
+**Text formatting lives in the worker.** The host has no locale (it is a
+frontend setting), and openseek-api has no i18n. The payload is structured
+(§3). `sw.js` holds the same strings `system_notification.mbt` uses: the
+three finish titles, the fallback body and the approval title/body in five
+locales. It picks them by the `locale` stored with the subscription. That
+duplication is the cost; the alternative is i18n in openseek-api.
+
+## 2. Frontend
+
+- **Registration:** only when `!model.is_desktop` (no bridge) and
+  `'serviceWorker' in navigator && 'PushManager' in window`. Register
+  `/sw.js` with scope `/`. The Proton window never registers.
+- **UI:** a browser-only "Notifications on this device" control in the
+  console's account menu (sidebar, next to Sign out). The browser console
+  has no Settings page. Its state machine is the component's contract,
+  in its own package with blackbox tests:
+  - `Unsupported`: no Push API. On iOS Safari this means "not installed", and
+    the hint says to use Add to Home Screen.
+  - `Unavailable`: `GET /v2/push/key` returns 404 (relay not configured,
+    local console, or proxy `--demo`).
+  - `Off`: Enable button.
+  - `Requesting`: permission prompt open.
+  - `On`: Turn off, and Send test.
+  - `Blocked`: permission denied; points at browser settings.
+- **Enable** (user gesture): `Notification.requestPermission()`, then
+  `register`, then `pushManager.subscribe({userVisibleOnly: true,
+  applicationServerKey})`, then `PUT /v2/push/subscription`.
+- **Heal on boot:** when permission is `granted` and
+  `pushManager.getSubscription()` returns one, the page sends the same
+  `PUT` again. The upsert re-binds the row to the current session and locale,
+  and it re-creates a row the relay pruned.
+- **Sign out:** `DELETE /v2/push/subscription` and `unsubscribe()`. The
+  cascade in §3 covers sign-outs the page never sees.
+- These calls use the hand-rolled fetch the portal uses, because a 401 is
+  meaningful. They use the same credential as the page's other `/v2` calls:
+  the cookie on the relay, the bearer on the proxy.
+
+## 3. openseek-api
+
+### Config
+
+`UserSystemConfig` gains `web_push : WebPushConfig?`:
+
+- `WEB_PUSH_VAPID_PRIVATE_KEY`: base64url of the raw 32-byte P-256 scalar.
+  This is the format `web-push generate-vapid-keys` prints. The public key is
+  derived at startup, which also validates the key and fails fast.
+- `WEB_PUSH_SUBJECT`: a `mailto:` or `https:` contact. Apple rejects pushes
+  without one.
+
+Neither variable set means push is disabled (`None`). Exactly one set is a
+startup error. A `vapid-keygen` subcommand prints a fresh pair for
+`deploy/.env`.
+
+### Data model
+
+```sql
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint        TEXT PRIMARY KEY,
+    user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_hash    TEXT NOT NULL REFERENCES sessions(token_hash) ON DELETE CASCADE,
+    p256dh          TEXT NOT NULL,   -- base64url, 65-byte uncompressed point
+    auth            TEXT NOT NULL,   -- base64url, 16 bytes
+    locale          TEXT NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_success_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
+```
+
+- **One row per browser installation**, keyed by its push endpoint. A row
+  belongs to an account, and every host device of that account fans out to
+  it. Per-host muting can be a later column. It is not in v1.
+- **The row is bound to the session that created it.** Sign-out deletes the
+  session, and the cascade deletes the row. So a signed-out or shared browser
+  stops receiving pushes even if its page never ran the `DELETE`.
+  - The cost: an installation that goes unused for longer than `SessionTtl`
+    (7 days) stops receiving pushes until it is opened again, and the boot
+    heal then re-binds it. **Open question 1.**
+
+### Routes
+
+All routes use v2 account auth (`account_user`). Cookie requests get the
+existing `cookie_origin_allowed` check.
+
+| Route | Result |
+| --- | --- |
+| `GET /v2/push/key` | `{public_key}` (base64url, 65 bytes), or 404 when push is disabled. No auth needed. |
+| `PUT /v2/push/subscription` | Body `{endpoint, keys:{p256dh, auth}, locale}`. Upsert by endpoint into this user and session. Returns 204. |
+| `DELETE /v2/push/subscription` | Body `{endpoint}`. Deletes only the caller's own row. Returns 204. |
+| `POST /v2/push/test` | Body `{endpoint}`. Sends a test push to the caller's own row. This supports the real-device acceptance check. |
+
+**The endpoint must be `https://` on an allowlisted push-service host.**
+Otherwise the relay would POST to any URL a signed-in user names, which is
+an SSRF into the deployment network. The allowlist:
+
+- `fcm.googleapis.com`
+- `updates.push.services.mozilla.com`
+- `web.push.apple.com`
+- `*.notify.windows.com`
+- `*.push.apple.com`
+
+`p256dh` must decode to 65 bytes starting with `0x04`, and `auth` to 16 bytes,
+or the route answers 400. Without that check, encryption would fail later on
+every fan-out.
+
+### Host → relay: the `notify` control frame
+
+A new tunnel frame from host to relay. It goes into `desktop/backend/tunnel`,
+its verbatim copy `tunnel_frame.mbt`, and the control-frame table in
+`docs/remote-protocol.md`:
+
+```json
+{"type":"notify","event":{"kind":"finished","session":"…","run":"…","status":"finished","answer":"…"}}
+{"type":"notify","event":{"kind":"approval","session":"…","run":"…","tool":"mbtx","detail":"…"}}
+```
+
+- **Compatible in both directions, with no revision bump.** Today's relay
+  already reads and drops whatever the host sends after `register`, so a new
+  host on an old relay is a no-op. A new relay with an old host sends nothing.
+- **Host side** (`remote/connect.mbt`): while registered, `connect_once`
+  subscribes to the hub. It maps the same two triggers the window uses to
+  `Notify`:
+  - the first settlement of a top-level run with a status other than
+    `cancelled`;
+  - a live approval request, never a recovered one.
+  - `answer` and `detail` are cut to the window's 180-character banner limit.
+  - Frames go through one writer task, so they never interleave with
+    `register` or pings.
+  - A frame raised while the tunnel is down is dropped. Delivery is best
+    effort, like the banner.
+- **Relay side** (`serve_control`): the reader loop that now drops messages
+  decodes them instead, with the existing bounded reader and an 8 KiB limit.
+  It ignores anything other than `notify`, and hands a `notify` to the push
+  sender through a bounded queue (`try_put`; a full queue logs and drops).
+  The control reader therefore never waits on push services.
+
+**The payload carries the answer excerpt and the approval detail, the same
+text the desktop banner shows.** The relay already terminates TLS on both
+splice legs, so this does not widen what the relay operator can see. Push
+services see only ciphertext (RFC 8291). The relay never logs payloads.
+**Open question 2.**
+
+### Fan-out (`webpush/` package)
+
+For each `notify` from device `d` of user `u`, the relay sends to every
+subscription of `u`, with bounded concurrency and a 10 s timeout per send:
+
+- **Payload:** the event plus `{v:1, device, device_name, url, locale}`, where
+  `url = /device/<d>/chat/session/<session>`. The relay knows `d` from the
+  control session, so the host does not compose URLs. The payload stays
+  under 3 KiB.
+- **Encryption:** RFC 8291 `aes128gcm` with one record, a fresh ephemeral
+  ECDH key and a fresh salt.
+- **VAPID:** an ES256 JWT with `aud` = the endpoint origin, `exp` = now + 12 h,
+  and `sub` from config, cached per audience. Header
+  `Authorization: vapid t=…, k=…`.
+- **Headers:**
+  - `TTL: 86400`.
+  - `Urgency: high` for approval, `normal` for finished.
+  - `Topic`: a hash of the session, so undelivered pushes for one
+    conversation collapse.
+- **Responses:**
+  - 201: set `last_success_at`.
+  - 404 / 410: delete the row.
+  - 400 / 413: log.
+  - 429 / 5xx: log. No retry in v1.
+
+**Crypto:** a small C stub `dlopen`s libcrypto the way async's loader does
+(`libcrypto.so.3`, falling back to the macOS LibreSSL dylib). It exposes:
+
+- P-256 public key from a scalar
+- ephemeral keypair
+- ECDSA sign, returning raw `r‖s`
+- ECDH
+- AES-128-GCM seal
+
+It uses the `EC_KEY` / `ECDSA_do_sign` / `ECDH_compute_key` APIs, which
+both OpenSSL 3 and LibreSSL export. HKDF and the record framing are MoonBit
+on top of `@crypto.hmac`. Tests:
+
+- the RFC 8291 §5 vector reproduces byte for byte;
+- a VAPID JWT verifies against the derived key;
+- 404/410 pruning, using a fake push endpoint on loopback.
+
+Writing P-256 in MoonBit was rejected: it is a correctness and side-channel
+risk for no gain.
+
+## PR plan
+
+Each PR is correct when merged alone:
+
+1. **openseek, stacked on #2206.**
+   - `sw.js` and its staging.
+   - The frontend toggle component.
+   - The `notify` frame and host emission.
+   - Docs.
+   - Route tests for the local console and the proxy.
+
+   On a relay without push this shows `Unavailable`, and frames are ignored.
+2. **openseek-api.**
+   - The `/sw.js` route.
+   - Config and `vapid-keygen`.
+   - The table and routes.
+   - `notify` decoding.
+   - The `webpush` package and fan-out.
+
+   Against today's hosts it serves `/sw.js` and test pushes.
+
+**Acceptance (run by the user):**
+
+1. Deploy the openseek-api PR to staging with a VAPID pair.
+2. Publish a browser bundle that contains `sw.js`.
+3. Install the staging console on Android and on iOS 16.4+ (Add to Home
+   Screen), enable notifications, and send a test push.
+4. Close the app, start a run on a signed-in desktop, and get the finish
+   push. Tapping it opens that conversation.
+5. Repeat with a permission request.
+
+## Open questions
+
+1. **Session-bound rows** (recommended) or account-bound rows. Account-bound
+   rows would survive 7 idle days, but a browser that signed out without
+   running the page's `DELETE` would keep receiving pushes.
+2. Whether the payload may carry the answer excerpt and the approval detail
+   (recommended: yes, matching the desktop banner), or only kind and status.
+3. Whether a push should be suppressed while the same account has the
+   window or a console tab focused on that conversation. v1 always sends,
+   so a user at the desk also gets the phone push.
+4. Whether agent questions (`user_questions`) should also push. The window
+   does not post a banner for them today, so v1 leaves them out to stay at
+   parity.
