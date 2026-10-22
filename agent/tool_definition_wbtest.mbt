@@ -389,7 +389,7 @@ async test "binary output waits for the real exit instead of abandoning it" {
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     // The real exit code, not the -1 an abandoned execution would report.
-    assert_true(output.content.contains("exited 3"))
+    assert_true(output.content.contains("run failed (exit 3)"))
     assert_true(output.content.contains("non-UTF-8"))
   })
 }
