@@ -245,10 +245,9 @@ fn finish_anchor_candidates(
 fn sort_hover_anchor_candidates_stably(
   candidates : Array[@hover.HoverAnchor],
 ) -> Array[@hover.HoverAnchor] {
-  let indexed : Array[(Int32, @hover.HoverAnchor)] = []
-  for index, anchor in candidates {
-    indexed.push((index, anchor))
-  }
+  let indexed : Array[(Int32, @hover.HoverAnchor)] = [
+    for index, anchor in candidates => (index, anchor)
+  ]
   indexed.sort_by((left, right) => {
     let priority = right.1.priority() - left.1.priority()
     if priority != 0 {

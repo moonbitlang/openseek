@@ -276,8 +276,8 @@ fn MarkdownDocumentHoverWidget::dispose(
   }
   self.disposed = true
   self.hide()
-  while self.listeners.length() > 0 {
-    self.listeners.remove(self.listeners.length() - 1).dispose()
+  while self.listeners.pop() is Some(listener) {
+    listener.dispose()
   }
   @base_browser.remove_element(self.wrapper)
 }
@@ -923,9 +923,7 @@ fn markdown_measure_text_range_client_rects(
 /// coalesces only touching pieces on the same row. Keeping this arithmetic in
 /// MoonBit makes wrapping policy testable without a browser DOM.
 fn markdown_hover_fragment_geometry(measured : Array[Double]) -> Array[Double] {
-  guard measured.length() >= 2 else { return [] }
-  let line_height = measured[0]
-  let line_box_height = measured[1]
+  guard measured is [line_height, line_box_height, ..] else { return [] }
   let fragments : Array[(Double, Double, Double, Double)] = []
   let mut index = 2
   while index + 3 < measured.length() {
@@ -1059,7 +1057,7 @@ fn MarkdownDocumentHoverBridge::append_projected_span(
     displayed_range.start,
     displayed_range.end_exclusive,
   )
-  guard geometry.length() >= 2 else { return }
+  guard geometry is [left, width, ..] else { return }
   let span = markdown_projected_span(
     line,
     displayed_range,
@@ -1069,8 +1067,8 @@ fn MarkdownDocumentHoverBridge::append_projected_span(
     severity?,
     z_index?,
   )
-  @base_browser.set_style_property(span, "left", "\{geometry[0]}px")
-  @base_browser.set_style_property(span, "width", "\{geometry[1]}px")
+  @base_browser.set_style_property(span, "left", "\{left}px")
+  @base_browser.set_style_property(span, "width", "\{width}px")
   line.element.append_child(span.as_node())
   destination.push(span)
 }
@@ -1199,8 +1197,8 @@ pub fn MarkdownDocumentHoverBridge::dispose(
   self.cancel_request()
   self.clear_elements(self.hover_range_elements)
   self.clear_elements(self.diagnostic_elements)
-  while self.listeners.length() > 0 {
-    self.listeners.remove(self.listeners.length() - 1).dispose()
+  while self.listeners.pop() is Some(listener) {
+    listener.dispose()
   }
   self.widget.dispose()
 }
