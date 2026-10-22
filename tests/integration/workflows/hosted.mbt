@@ -502,6 +502,8 @@ fn lens_reply(mode : String, lens : String) -> Result[Json, String] {
               "medium",
               "Missing error propagation on close",
             ),
+            // One lens's two findings never merge, even with the same title.
+            swarm_finding(a, Some(10), "high", "Off by one in range end"),
           ],
           "correctness summary",
           files=[a],
@@ -535,6 +537,7 @@ fn lens_reply(mode : String, lens : String) -> Result[Json, String] {
           [
             swarm_finding(a, Some(1), "high", "Inconclusive claim"),
             swarm_finding(a, Some(40), "high", "Claim without verdict"),
+            swarm_finding(a, Some(80), "high", "Unreported claim"),
           ],
           "correctness summary",
         ),
@@ -567,6 +570,16 @@ fn lens_reply(mode : String, lens : String) -> Result[Json, String] {
         ),
       )
     ("swarm-incomplete", "tests") => Err("failed: step limit")
+    ("swarm-verify-cap", "correctness") =>
+      Ok(
+        swarm_report(
+          [
+            swarm_finding(a, Some(2), "high", "A high finding"),
+            swarm_finding(a, Some(30), "blocker", "Claimed deadlock in flush"),
+          ],
+          "correctness summary",
+        ),
+      )
     ("swarm-verify-off" | "swarm-budget", "correctness") =>
       Ok(
         swarm_report(
@@ -598,6 +611,7 @@ fn verifier_reply(goal : String) -> Result[Json, String] {
     "Inconclusive claim" =>
       Ok(swarm_report([], "VERDICT: INCONCLUSIVE\nno way to run it"))
     "Claim without verdict" => Ok(swarm_report([], "looked around, unsure"))
+    "Unreported claim" => Err("failed: step limit")
     "Elsewhere confirmed claim" =>
       // Confirmed, but about a different file than the allegation's.
       Ok(swarm_report([restated], "VERDICT: CONFIRMED\nyes"))
@@ -623,7 +637,8 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
   for
     mode in [
       "swarm-merge", "swarm-refute-blocker", "swarm-unverified", "swarm-incomplete",
-      "swarm-verify-off", "swarm-budget", "swarm-unknown-lens", "swarm-verify-alone",
+      "swarm-verify-off", "swarm-verify-cap", "swarm-budget", "swarm-unknown-lens",
+      "swarm-verify-alone",
     ] {
     let host = fake_host("review-swarm", mode)
     let args = match mode {
@@ -633,6 +648,7 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
         ["--lens", "correctness", "--lens", "tests", criteria]
       "swarm-incomplete" => ["--swarm", criteria]
       "swarm-verify-off" => ["--swarm", "--verify", "0", criteria]
+      "swarm-verify-cap" => ["--lens", "correctness", "--verify", "1", criteria]
       "swarm-budget" => ["--swarm", "--max-tokens", "30", criteria]
       "swarm-unknown-lens" => ["--lens", "style", criteria]
       _ => ["--verify", "2", criteria]
@@ -651,11 +667,12 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
           false,
           [
             "review:correctness", "review:architecture", "review:tests", "review:verify-1",
-            "review:verify-2",
+            "review:verify-2", "review:verify-3",
           ],
           [
-            // The merged claim keeps the blocker; the verifier's "low" is ignored.
-            "findings=2 blockers=1 tokens=60 lenses=3/3 verified=1 refuted=1 unverified=1",
+            // The merged claim keeps the blocker; the verifier's "low" is
+            // ignored. Correctness's repeated finding stays its own claim.
+            "findings=3 blockers=1 tokens=72 lenses=3/3 verified=2 refuted=1 unverified=1",
             "[found by: correctness, architecture]", "Refuted: Unbounded cache growth (src/a.mbt:10): the cache is bounded by its caller",
             "\"files\":[\"src/a.mbt\",\"src/b.mbt\"]", "\"build\":\"pass\"", "\"tests\":\"fail\"",
             "lens tests: reported, findings=0, files=0, tokens=12", "1 blocker finding(s)",
@@ -672,11 +689,12 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
           false,
           [
             "review:correctness", "review:tests", "review:verify-1", "review:verify-2",
-            "review:verify-3", "review:verify-4",
+            "review:verify-3", "review:verify-4", "review:verify-5",
           ],
           [
-            "findings=4 blockers=1 tokens=72 lenses=2/2 verified=0 refuted=0 unverified=4",
+            "findings=5 blockers=1 tokens=84 lenses=2/2 verified=0 refuted=0 unverified=5",
             "[unverified: inconclusive]", "[unverified: no verdict line]", "[unverified: the verdict did not match its findings]",
+            "[unverified: the verifier did not report: failed: step limit]",
           ],
         )
       "swarm-incomplete" =>
@@ -693,6 +711,16 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
           true,
           ["review:correctness", "review:architecture", "review:tests"],
           ["verified=0 refuted=0 unverified=1"],
+        )
+      "swarm-verify-cap" =>
+        (
+          // One verifier, and it goes to the blocker listed second.
+          true,
+          ["review:correctness", "review:verify-1"],
+          [
+            "findings=1 blockers=0 tokens=24 lenses=1/1 verified=0 refuted=1 unverified=1",
+            "Refuted: Claimed deadlock in flush (src/a.mbt:30)",
+          ],
         )
       "swarm-budget" =>
         (
