@@ -413,10 +413,14 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     },
     presentation: {
       images_enabled: true,
-      context: if conversation is Some({ compacting: true, .. }) {
-        [@composer.CompactionNotice(queued=false)]
-      } else {
-        input.presentation.context
+      context: {
+        let context = conversation.map_or(input.presentation.context, value => {
+          []
+        })
+        if conversation is Some({ compacting: true, .. }) {
+          context.push(@composer.CompactionNotice(queued=false))
+        }
+        context
       },
       status: [
         @composer.ModelStatus({
@@ -436,14 +440,19 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       placeholder: shell_text(self.locale, AskPlaceholder),
       disabled: pending ||
       (!creating && !self.cloud.can_compose(owner.session())),
-      primary_action: @composer.Send(
-        available=self.account is Some(_) &&
-          (if creating {
-            !pending
-          } else {
-            self.cloud.can_send(owner.session())
-          }),
-      ),
+      primary_action: if conversation is Some(value) &&
+        (value.generating || value.sending) {
+        value.control_primary_action(@composer.Steer)
+      } else {
+        @composer.Send(
+          available=self.account is Some(_) &&
+            (if creating {
+              !pending
+            } else {
+              self.cloud.can_send(owner.session())
+            }),
+        )
+      },
     },
   })
 }

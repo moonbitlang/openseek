@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/sub",
   "moonbitlang/async/http",
+  "moonbitlang/core/json",
   "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/composer",
@@ -30,17 +31,89 @@ pub async fn read_file_index(String, String) -> Array[String]
 
 pub async fn share(String, String, String) -> String
 
-pub fn subscriptions(State) -> @sub.Sub
+pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
 pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
 // Types and methods
+pub struct ControlInput {
+  task_id : String
+  key : String
+  operation : ControlOperation
+  draft : @composer.Draft?
+  source : @composer.Draft?
+  attachments : Array[@protocol.AttachmentSource]
+  acknowledged : Bool
+  unknown : Bool
+} derive(Eq)
+pub fn ControlInput::equal(Self, Self) -> Bool
+pub fn ControlInput::not_equal(Self, Self) -> Bool
+
+pub(all) enum ControlOperation {
+  Stop
+  Steer(submission_id~ : String, content~ : @openseek_protocol.Content)
+  QueueAdd(id~ : String, content~ : @openseek_protocol.Content)
+  QueueEdit(id~ : String, content~ : @openseek_protocol.Content)
+  QueueWithdraw(id~ : String)
+  QueueSteer(id~ : String)
+} derive(Eq)
+pub fn ControlOperation::equal(Self, Self) -> Bool
+pub fn ControlOperation::not_equal(Self, Self) -> Bool
+
+pub(all) enum ControlResult {
+  Accepted
+  Rejected(String)
+} derive(Eq)
+pub fn ControlResult::equal(Self, Self) -> Bool
+pub fn ControlResult::not_equal(Self, Self) -> Bool
+
+pub(all) enum ControlRunStatus {
+  Idle
+  Running
+  Stopping
+} derive(Eq)
+pub fn ControlRunStatus::equal(Self, Self) -> Bool
+pub fn ControlRunStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ControlRunStatus::not_equal(Self, Self) -> Bool
+pub impl @json.FromJson for ControlRunStatus
+
+pub(all) struct ControlSnapshot {
+  session_id : String
+  task_id : String?
+  seq : Int32
+  data : ControlState
+} derive(Eq)
+pub fn ControlSnapshot::equal(Self, Self) -> Bool
+pub fn ControlSnapshot::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ControlSnapshot::not_equal(Self, Self) -> Bool
+pub impl @json.FromJson for ControlSnapshot
+
+pub(all) struct ControlState {
+  active_task_id : String?
+  status : ControlRunStatus
+  paused : Bool
+  queue : Array[QueueEntry]
+  steers : Array[SteerReceipt]
+} derive(Eq)
+pub fn ControlState::equal(Self, Self) -> Bool
+pub fn ControlState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ControlState::not_equal(Self, Self) -> Bool
+pub impl @json.FromJson for ControlState
+
+pub(all) enum ControlStreamEvent {
+  Snapshot(ControlSnapshot)
+  EngineEvent(Event)
+} derive(Eq)
+pub fn ControlStreamEvent::equal(Self, Self) -> Bool
+pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool
+
 pub(all) struct Conversation {
   records : Array[Record]
   events : Array[Event]
   request : Int32
+  send_request : Int32
   loading : Bool
   sending : Bool
   generating : Bool
@@ -51,6 +124,10 @@ pub(all) struct Conversation {
   uploads : Array[UploadedAttachment]
   pending : Submission?
   stream : StreamLease?
+  control : ControlState?
+  control_inputs : Array[ControlInput]
+  queue_edit : String?
+  watch_request : Int32
   task : String?
   last_seq : Int32?
   streaming_response : String?
@@ -61,6 +138,8 @@ pub(all) struct Conversation {
   compacting : Bool
   notice : String?
 } derive(Eq)
+pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
+pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @composer.PrimaryAction
 pub fn Conversation::equal(Self, Self) -> Bool
 pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
 pub fn Conversation::not_equal(Self, Self) -> Bool
@@ -118,13 +197,32 @@ pub(all) enum Msg {
   CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
   LoadFailed(Int32, String, Int32, @cloud_client.Failure)
+  WatchOpened(Int32, String, StreamLease)
+  WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
+  WatchEnded(Int32, String, StreamLease, @cloud_client.Failure?)
+  ControlAction(@interop.ConversationIdentity, @composer.Action)
+  ControlAttachmentStored(Int32, String, String, String, @protocol.AttachmentSource, String)
+  ControlPrepared(Int32, String, String, String, @composer.Draft, @openseek_protocol.Content)
+  ControlChecked(Int32, String, String, ControlSnapshot)
+  ControlFinished(Int32, String, String, String, ControlResult)
+  ControlFailed(Int32, String, String, String, @cloud_client.Failure)
+  ControlPreparationFailed(Int32, String, String, String, @cloud_client.Failure)
   StreamEvent(Int32, String, Int32, Event)
-  StreamEnded(Int32, String, Int32)
+  SendAccepted(Int32, String, Int32)
   SendFailed(Int32, String, Int32, @cloud_client.Failure)
   AttachmentStored(Int32, String, Int32, @protocol.AttachmentSource, String)
   MessagePrepared(Int32, String, Int32, @composer.Draft, @openseek_protocol.Content)
   Poll(Int32, String, Int32)
 }
+
+pub(all) struct QueueEntry {
+  id : String
+  content : @openseek_protocol.Content
+} derive(Eq)
+pub fn QueueEntry::equal(Self, Self) -> Bool
+pub fn QueueEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QueueEntry::not_equal(Self, Self) -> Bool
+pub impl @json.FromJson for QueueEntry
 
 pub(all) struct Record {
   task_id : String
@@ -175,6 +273,26 @@ pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::is_archived(Self, String) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
+
+pub(all) struct SteerReceipt {
+  submission_id : String
+  status : SteerStatus
+} derive(Eq)
+pub fn SteerReceipt::equal(Self, Self) -> Bool
+pub fn SteerReceipt::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SteerReceipt::not_equal(Self, Self) -> Bool
+pub impl @json.FromJson for SteerReceipt
+
+pub(all) enum SteerStatus {
+  Pending
+  Applied
+  Dropped
+  Unknown
+} derive(Eq)
+pub fn SteerStatus::equal(Self, Self) -> Bool
+pub fn SteerStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SteerStatus::not_equal(Self, Self) -> Bool
+pub impl @json.FromJson for SteerStatus
 
 pub struct StreamLease {
   mut active : Bool

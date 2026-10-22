@@ -45,7 +45,6 @@ fn State::load(
 ) -> (State, @cmd.Cmd) {
   guard token is Some(token) else { return (self, @cmd.none) }
   let conversation = self.conversations.get(id).unwrap_or(Conversation::empty())
-  guard !conversation.sending else { return (self, @cmd.none) }
   let request = self.sequence + 1
   let next = self.replace(id, { ..conversation, request, })
   (
@@ -68,8 +67,7 @@ fn State::fence_archived_history(
   token : String?,
   emit : @cmd.Emit[Msg],
 ) -> (State, @cmd.Cmd) {
-  // A response stream owns its request until StreamEnded; load() cannot
-  // issue a history read while sending, so there is no history to fence yet.
+  // A prompt being prepared or submitted still owns its admission request.
   guard self.conversations.get(id) is Some(conversation) &&
     !conversation.sending else {
     return (self, @cmd.none)
@@ -232,6 +230,9 @@ pub fn update(
   token? : String,
   navigation~ : Int32,
 ) -> (State, @cmd.Cmd, String?) {
+  if state.update_control(msg, emit, token) is Some((next, command)) {
+    return (next, command, None)
+  }
   let (next, command, select) = match msg {
     AccountChanged(user_id) => {
       let next = {
@@ -494,6 +495,125 @@ pub fn update(
         None,
       )
     }
+    WatchOpened(epoch, id, stream) => {
+      guard epoch == state.epoch &&
+        stream.active &&
+        state.conversations.get(id) is Some(conversation) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, {
+          ..conversation,
+          stream: Some(stream),
+          last_seq: None,
+        }),
+        @cmd.none,
+        None,
+      )
+    }
+    WatchEvent(epoch, id, stream, incoming) => {
+      guard epoch == state.epoch &&
+        stream.active &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.stream == Some(stream) else {
+        return (state, @cmd.none, None)
+      }
+      match incoming {
+        Snapshot(snapshot) => {
+          let baseline = conversation.last_seq is None
+          guard baseline ||
+            (
+              snapshot.task_id == conversation.task &&
+              conversation.last_seq.map_or(true, seq => snapshot.seq > seq)
+            ) else {
+            return (state, @cmd.none, None)
+          }
+          let admitted = conversation.pending is Some(submitted) &&
+            snapshot.task_id is Some(task) &&
+            !submitted.known_tasks.contains(task)
+          let conversation = conversation.control_snapshot(
+            snapshot.task_id,
+            snapshot.data,
+          )
+          let next = state.replace(id, {
+            ..conversation,
+            task: snapshot.task_id,
+            last_seq: Some(snapshot.seq),
+            generating: snapshot.data.active_task_id is Some(_),
+            sending: conversation.sending && !admitted,
+            pending: if admitted {
+              None
+            } else {
+              conversation.pending
+            },
+            submission_sequence: conversation.submission_sequence +
+            (if admitted { 1 } else { 0 }),
+            initial_submission: if admitted {
+              None
+            } else {
+              conversation.initial_submission
+            },
+            initial_attachments: if admitted {
+              []
+            } else {
+              conversation.initial_attachments
+            },
+            uploads: if admitted {
+              []
+            } else {
+              conversation.uploads
+            },
+          })
+          if admitted {
+            let (next, command) = next.load(id, token, emit)
+            (next, command, None)
+          } else {
+            (next, @cmd.none, None)
+          }
+        }
+        EngineEvent(event) => {
+          // Only the connection's first snapshot establishes its baseline.
+          guard conversation.last_seq is Some(_) else {
+            return (state, @cmd.none, None)
+          }
+          update(
+            state,
+            StreamEvent(epoch, id, conversation.request, event),
+            emit,
+            token?,
+            navigation~,
+          )
+        }
+      }
+    }
+    WatchEnded(epoch, id, stream, error) => {
+      guard epoch == state.epoch &&
+        stream.active &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.stream == Some(stream) else {
+        return (state, @cmd.none, None)
+      }
+      let error = error.unwrap_or(Unreachable)
+      let next = state.replace(id, {
+        ..conversation.clear_progress(),
+        stream: None,
+        notice: Some(error.label()),
+      })
+      let (next, history) = next.load(id, token, emit)
+      let (next, command) = if error is Unauthorized {
+        next.failed(error)
+      } else {
+        (next, @cmd.none)
+      }
+      (next, @cmd.batch([history, command]), None)
+    }
+    ControlPreparationFailed(_, _, _, _, _)
+    | ControlAction(_, _)
+    | ControlPrepared(_, _, _, _, _, _)
+    | ControlAttachmentStored(_, _, _, _, _, _)
+    | ControlFinished(_, _, _, _, _)
+    | ControlChecked(_, _, _, _)
+    | ControlFailed(_, _, _, _, _) => (state, @cmd.none, None)
     Open(id) => {
       guard token is Some(_) && !state.retired.contains(id) else {
         return (state, @cmd.none, None)
@@ -508,6 +628,9 @@ pub fn update(
           ..conversation.clear_progress(),
           loading: true,
           history_required: true,
+          watch_request: conversation.watch_request + 1,
+          stream: None,
+          last_seq: None,
           notice: None,
         })
       }
@@ -517,8 +640,7 @@ pub fn update(
     Loaded(epoch, id, request, history) => {
       guard epoch == state.epoch &&
         state.conversations.get(id) is Some(conversation) &&
-        conversation.request == request &&
-        !conversation.sending else {
+        conversation.request == request else {
         return (state, @cmd.none, None)
       }
       let accepted = conversation.pending is Some(submission) &&
@@ -526,14 +648,41 @@ pub fn update(
           record.kind == "user" &&
           !submission.known_tasks.contains(record.task_id)
         })
+      let observed = conversation.stream.map_or(false, stream => stream.active)
+      let control = if !observed && !history.generating {
+        conversation.control.map(control => {
+          ..control,
+          active_task_id: None,
+          status: Idle,
+        })
+      } else {
+        conversation.control
+      }
+      let settled = if !history.generating && !observed {
+        conversation.clear_progress()
+      } else {
+        conversation
+      }
       let next = state.replace(id, {
-        ..conversation.clear_progress(),
+        ..settled,
+        control,
         records: history.messages,
-        events: [],
+        events: conversation.events_not_in(history.messages),
         loading: false,
-        generating: history.generating,
+        generating: if conversation.stream is Some(stream) && stream.active {
+          control.map_or(history.generating, control => {
+            control.active_task_id is Some(_)
+          })
+        } else {
+          history.generating
+        },
         history_required: false,
-        pending: None,
+        sending: conversation.sending && !accepted,
+        pending: if accepted || !conversation.sending {
+          None
+        } else {
+          conversation.pending
+        },
         uploads: if accepted {
           []
         } else {
@@ -570,7 +719,8 @@ pub fn update(
       }
       (
         next,
-        if history.generating {
+        if history.generating &&
+          !conversation.stream.map_or(false, stream => stream.active) {
           poll(epoch, id, request, emit)
         } else {
           @cmd.none
@@ -625,38 +775,83 @@ pub fn update(
       guard epoch == state.epoch &&
         event.session_id == id &&
         state.conversations.get(id) is Some(conversation) &&
-        conversation.request == request &&
-        conversation.sending &&
-        (conversation.task is None || conversation.generating) &&
-        (conversation.task is None || conversation.task == Some(event.task_id)) &&
-        (
-          conversation.last_seq is None ||
-          (conversation.last_seq is Some(seq) && event.seq > seq)
-        ) else {
+        conversation.request == request else {
         return (state, @cmd.none, None)
+      }
+      let same_task = conversation.task == Some(event.task_id)
+      let next_task = event.kind == "task_started" && !same_task
+      if next_task &&
+        event.data is { "previous_task_id": String(previous), .. } &&
+        conversation.task != Some(previous) {
+        return (state, @cmd.none, None)
+      }
+      guard (next_task || same_task || conversation.task is None) &&
+        (
+          next_task ||
+          conversation.last_seq.map_or(true, seq => event.seq > seq)
+        ) else {
+        // A late receipt can settle its own input, never the current run.
+        return (
+          state.replace(id, conversation.control_receipt(event)),
+          @cmd.none,
+          None,
+        )
+      }
+      guard event.kind == "task_started" ||
+        conversation.generating ||
+        conversation.task is None else {
+        return (
+          state.replace(id, conversation.control_receipt(event)),
+          @cmd.none,
+          None,
+        )
       }
       let admitted = event.kind == "task_started" &&
         conversation.pending is Some(_)
-      let events = if admitted && conversation.pending is Some(submission) {
-        [
-          {
-            ..event,
-            kind: "user",
-            data: { "content": submission.content.to_json() },
-          },
-        ]
-      } else if event.is_live_progress() {
-        conversation.events
-      } else {
-        conversation.events + [event]
+      let mut events = conversation.events
+      if admitted && conversation.pending is Some(submission) {
+        events = events +
+          [
+            {
+              ..event,
+              kind: "user",
+              data: { "content": submission.content.to_json() },
+            },
+          ]
+      } else if event.kind == "steer_applied" &&
+        event.data is { "content": content, .. } {
+        events = events +
+          [{ ..event, kind: "user", data: { "content": content }, }]
+      } else if !event.is_live_progress() &&
+        !(event.kind is ("steer_dropped" | "steer_applied")) {
+        events = events + [event]
       }
-      let conversation = conversation.live_progress(event)
+      let conversation = conversation
+        .live_progress(event)
+        .control_receipt(event)
+      let control = conversation.control.map(control => {
+        if event.kind == "task_started" {
+          {
+            ..control,
+            active_task_id: Some(event.task_id),
+            status: Running,
+            paused: false,
+            steers: [],
+          }
+        } else if event.kind == "task_finished" {
+          { ..control, active_task_id: None, status: Idle, }
+        } else {
+          control
+        }
+      })
       let next = state.replace(id, {
         ..conversation,
+        control,
         events,
         task: Some(event.task_id),
         last_seq: Some(event.seq),
         generating: event.kind != "task_finished",
+        sending: conversation.sending && !admitted,
         pending: if admitted {
           None
         } else {
@@ -674,42 +869,45 @@ pub fn update(
         } else {
           conversation.initial_submission
         },
+        initial_attachments: if admitted {
+          []
+        } else {
+          conversation.initial_attachments
+        },
       })
-      let (next, command) = if admitted {
-        next.list(token, emit)
+      if event.kind is ("task_finished" | "task_started") {
+        let (next, history) = next.load(id, token, emit)
+        let (next, list) = next.list(token, emit)
+        (next, @cmd.batch([history, list]), None)
       } else {
-        (next, @cmd.none)
+        (next, @cmd.none, None)
       }
-      (next, command, None)
     }
-    StreamEnded(epoch, id, request) => {
+    SendAccepted(epoch, id, request) => {
       guard epoch == state.epoch &&
         state.conversations.get(id) is Some(conversation) &&
-        conversation.request == request &&
-        conversation.sending else {
+        conversation.send_request == request else {
         return (state, @cmd.none, None)
       }
-      let (next, history) = state
-        .replace(id, {
-          ..conversation.clear_progress(),
-          sending: false,
-          stream: None,
-        })
-        .load(id, token, emit)
-      let (next, list) = next.list(token, emit)
-      (next, @cmd.batch([history, list]), None)
+      // HTTP acceptance cannot settle the run or clear the submitted draft.
+      if conversation.stream is None {
+        let (next, command) = state.load(id, token, emit)
+        (next, command, None)
+      } else {
+        (state, @cmd.none, None)
+      }
     }
     SendFailed(epoch, id, request, error) => {
       guard epoch == state.epoch &&
         state.conversations.get(id) is Some(conversation) &&
-        conversation.request == request else {
+        conversation.send_request == request &&
+        conversation.pending is Some(_) else {
         return (state, @cmd.none, None)
       }
       let configuration = error is ServiceNotConfigured
       let next = state.replace(id, {
         ..conversation.clear_progress(),
         sending: false,
-        stream: None,
         notice: Some(error.label()),
         history_required: if configuration {
           false
@@ -735,7 +933,7 @@ pub fn update(
     AttachmentStored(epoch, id, request, source, path) => {
       guard epoch == state.epoch &&
         state.conversations.get(id) is Some(conversation) &&
-        conversation.request == request &&
+        conversation.send_request == request &&
         conversation.sending else {
         return (state, @cmd.none, None)
       }
@@ -751,7 +949,7 @@ pub fn update(
     MessagePrepared(epoch, id, request, draft, content) => {
       guard epoch == state.epoch &&
         state.conversations.get(id) is Some(conversation) &&
-        conversation.request == request &&
+        conversation.send_request == request &&
         conversation.sending &&
         conversation.pending is Some(pending) else {
         return (state, @cmd.none, None)
@@ -824,7 +1022,6 @@ fn State::submit(
     return (state, @cmd.none, None)
   }
   let request = state.sequence + 1
-  let stream = StreamLease::new()
   let prompt = prompt_content(draft) catch {
     @cloud_client.RequestError(failure) =>
       return (
@@ -836,28 +1033,29 @@ fn State::submit(
   let next = state.replace(id, {
     ..conversation.clear_progress(),
     request,
+    send_request: request,
     sending: true,
     heartbeat: Some({ stage: @composer.Starting, started_ms: None, tokens: 0, }),
-    stream: Some(stream),
     history_required: true,
     events: [],
-    task: None,
-    last_seq: None,
     notice: None,
     pending: Some({
       content: prompt,
-      known_tasks: conversation.records
-      .filter(record => record.kind == "user")
-      .map(record => record.task_id),
+      known_tasks: {
+        let tasks = conversation.records
+          .filter(record => record.kind == "user")
+          .map(record => record.task_id)
+        if conversation.task is Some(task) && !tasks.contains(task) {
+          tasks.push(task)
+        }
+        tasks
+      },
     }),
   })
   let command = @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let task : async () -> Msg = () => {
         try {
-          guard stream.active else {
-            return StreamEnded(state.epoch, id, request)
-          }
           let prepared = prepare_submission(
             token,
             id,
@@ -874,10 +1072,8 @@ fn State::submit(
           scheduler.add(
             emit(MessagePrepared(state.epoch, id, request, prepared, prompt)),
           )
-          send_message(token, id, prompt, stream, event => {
-            scheduler.add(emit(StreamEvent(state.epoch, id, request, event)))
-          })
-          StreamEnded(state.epoch, id, request)
+          send_message(token, id, prompt)
+          SendAccepted(state.epoch, id, request)
         } catch {
           @cloud_client.RequestError(error) =>
             SendFailed(state.epoch, id, request, error)

@@ -43,6 +43,7 @@ pub(all) struct Conversation {
   records : Array[Record]
   events : Array[Event]
   request : Int32
+  send_request : Int32
   loading : Bool
   sending : Bool
   generating : Bool
@@ -55,6 +56,10 @@ pub(all) struct Conversation {
   uploads : Array[UploadedAttachment]
   pending : Submission?
   stream : StreamLease?
+  control : ControlState?
+  control_inputs : Array[ControlInput]
+  queue_edit : String?
+  watch_request : Int32
   task : String?
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
@@ -73,6 +78,7 @@ fn Conversation::empty() -> Conversation {
     records: [],
     events: [],
     request: 0,
+    send_request: 0,
     loading: true,
     sending: false,
     generating: false,
@@ -83,6 +89,10 @@ fn Conversation::empty() -> Conversation {
     uploads: [],
     pending: None,
     stream: None,
+    control: None,
+    control_inputs: [],
+    queue_edit: None,
+    watch_request: 0,
     task: None,
     last_seq: None,
     streaming_response: None,
@@ -193,8 +203,25 @@ pub(all) enum Msg {
   CreateFailed(Int32, Int32, Failure)
   Loaded(Int32, String, Int32, History)
   LoadFailed(Int32, String, Int32, Failure)
+  WatchOpened(Int32, String, StreamLease)
+  WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
+  WatchEnded(Int32, String, StreamLease, Failure?)
+  ControlAction(@interop.ConversationIdentity, @composer.Action)
+  ControlAttachmentStored(
+    Int32,
+    String,
+    String,
+    String,
+    @protocol.AttachmentSource,
+    String
+  )
+  ControlPrepared(Int32, String, String, String, @composer.Draft, @wire.Content)
+  ControlChecked(Int32, String, String, ControlSnapshot)
+  ControlFinished(Int32, String, String, String, ControlResult)
+  ControlFailed(Int32, String, String, String, Failure)
+  ControlPreparationFailed(Int32, String, String, String, Failure)
   StreamEvent(Int32, String, Int32, Event)
-  StreamEnded(Int32, String, Int32)
+  SendAccepted(Int32, String, Int32)
   SendFailed(Int32, String, Int32, Failure)
   AttachmentStored(Int32, String, Int32, @protocol.AttachmentSource, String)
   MessagePrepared(Int32, String, Int32, @composer.Draft, @wire.Content)

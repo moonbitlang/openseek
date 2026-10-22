@@ -271,22 +271,29 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
       "content": "Partial reasoning",
     })
   let request = live.conversations["session"].request
-  for
-    message in [
-      StreamEnded(1, "session", request),
-      SendFailed(1, "session", request, Unreachable),
-    ] {
-    let (next, _, _) = update(
-      live,
-      message,
-      _ => @cmd.none,
-      token="ts_fixture",
-      navigation=0,
-    )
-    assert_true(next.conversations["session"].streaming_reasoning is None)
-    assert_true(next.conversations["session"].heartbeat is None)
-    assert_false(next.conversations["session"].reasoning_complete)
-  }
+  let stream = StreamLease::new()
+  let live = live.replace("session", {
+    ..live.conversations["session"],
+    stream: Some(stream),
+  })
+  let (late_http, _, _) = update(
+    live,
+    SendFailed(1, "session", request, Unreachable),
+    _ => @cmd.none,
+    token="ts_fixture",
+    navigation=0,
+  )
+  assert_true(late_http == live)
+  let (disconnected, _, _) = update(
+    live,
+    WatchEnded(1, "session", stream, Some(Unreachable)),
+    _ => @cmd.none,
+    token="ts_fixture",
+    navigation=0,
+  )
+  assert_true(disconnected.conversations["session"].streaming_reasoning is None)
+  assert_true(disconnected.conversations["session"].heartbeat is None)
+  assert_false(disconnected.conversations["session"].reasoning_complete)
   let retry = live.progress_test_event(3, "stream_retry", {
     "attempt": 1,
     "max_attempts": 3,

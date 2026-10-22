@@ -56,10 +56,20 @@ fn Conversation::clear_progress(self : Conversation) -> Conversation {
 pub fn Conversation::run_heartbeat(
   self : Conversation,
 ) -> @composer.RunHeartbeat? {
-  self.heartbeat.map(heartbeat => {
-    ..heartbeat,
-    stage: self.retrying.unwrap_or(heartbeat.stage),
-  })
+  let stopping = self.control.map_or(false, control => {
+      control.status == Stopping
+    }) ||
+    self.control_inputs.any(input => {
+      input.operation is Stop && Some(input.task_id) == self.task
+    })
+  if stopping {
+    Some({ stage: @composer.Stopping, started_ms: None, tokens: 0, })
+  } else {
+    self.heartbeat.map(heartbeat => {
+      ..heartbeat,
+      stage: self.retrying.unwrap_or(heartbeat.stage),
+    })
+  }
 }
 
 ///|

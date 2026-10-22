@@ -262,11 +262,10 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     token="ts_fixture",
     navigation=0,
   )
-  let request = sending.conversations["session"].request
   let advance = (state : State, seq : Int32, kind : String, data : Json) => {
     update(
       state,
-      StreamEvent(1, "session", request, {
+      StreamEvent(1, "session", state.conversations["session"].request, {
         session_id: "session",
         task_id: "task",
         seq,
@@ -345,9 +344,14 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
   assert_true(
     advance(ended, 14, "assistant_delta", { "content": "late" }) == ended,
   )
+  let stream = StreamLease::new()
+  let observing = replacement.replace("session", {
+    ..replacement.conversations["session"],
+    stream: Some(stream),
+  })
   let (disconnected, _, _) = update(
-    replacement,
-    StreamEnded(1, "session", request),
+    observing,
+    WatchEnded(1, "session", stream, Some(Unreachable)),
     emit,
     token="ts_fixture",
     navigation=0,

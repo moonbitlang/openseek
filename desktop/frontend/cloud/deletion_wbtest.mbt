@@ -68,7 +68,7 @@ test "deletion retires history and late list or poll responses" {
     message in [
       Loaded(2, "a", history_request, { messages: [], generating: true, }),
       Poll(2, "a", history_request),
-      StreamEnded(2, "a", history_request),
+      SendAccepted(2, "a", history_request),
       Open("a"),
     ] {
     let (late, _, _) = update(

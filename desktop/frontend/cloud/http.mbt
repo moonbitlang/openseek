@@ -59,15 +59,12 @@ async fn edit_session(
 }
 
 ///|
-/// Async HTTP's JS client uses fetch, exposing its response stream. Reading
-/// complete UTF-8 lines buffers arbitrary network and codepoint boundaries.
-/// Cookies use fetch's default same-origin policy: none are sent to Cloud.
+/// The session subscription owns UI events. Closing this request's response
+/// after admission does not cancel the server task.
 async fn send_message(
   token : String,
   session : String,
   content : @wire.Content,
-  stream : StreamLease,
-  event : (Event) -> Unit,
 ) -> Unit {
   let client = @http.Client(CloudOrigin, headers={
     "Authorization": "Bearer " + token,
@@ -77,8 +74,6 @@ async fn send_message(
     _ => raise @cloud_client.RequestError(Unreachable)
   }
   defer client.close()
-  guard stream.active else { return }
-  stream.client = Some(client)
   let body : Json = { "content": content.to_json() }
   let response = client.post(
     "/v1/sessions/\{@uri.encode_component(session)}/messages",
@@ -95,19 +90,6 @@ async fn send_message(
     }
   }
   check_status(response.code)
-  let parser = @cloud_client.SseParser::new()
-  while stream.active {
-    let line = client.read_until("\n") catch {
-      _ => raise @cloud_client.RequestError(Unreachable)
-    }
-    guard line is Some(line) else { break }
-    if parser.line(line) is Some((_, data)) {
-      let json = @json.parse(data) catch {
-        _ => raise @cloud_client.RequestError(Malformed)
-      }
-      event(decode_event(json))
-    }
-  }
 }
 
 ///|

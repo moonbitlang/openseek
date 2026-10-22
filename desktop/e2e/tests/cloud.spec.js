@@ -121,12 +121,13 @@ test('drafts and task admission stay owned by the existing composer during gener
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   await expect(page.locator('#task')).toHaveValue('Second conversation draft');
   await expect(cloud.row(sessionA).locator('..').locator('.sidebar-run-status.running')).toHaveCount(1);
-  const recoveredA = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
   complete();
-  await (await recoveredA).finished();
-  await expect(cloud.row(sessionA).locator('..').locator('.sidebar-run-status.running')).toHaveCount(0);
+  await expect.poll(() => cloud.generating.has(sessionA)).toBe(false);
   await expect(page.locator('#task')).toHaveValue('Second conversation draft');
+  // Leaving closes only that session's observer. Re-entering reads its
+  // durable history and fresh control snapshot instead of keeping a hidden stream.
   await cloud.open(sessionA);
+  await expect(cloud.row(sessionA).locator('..').locator('.sidebar-run-status.running')).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Draft after admission');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   await cloud.open(sessionB);
@@ -308,10 +309,11 @@ test('Cloud sign-out closes the local reader even when stream cancellation rejec
     await page.locator('#task').fill('Question');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toBeVisible();
+    const cancelled = cloud.sessionStreamCancellations;
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
     await section.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await expect.poll(() => cloud.streamCancellations).toBe(1);
+    await expect.poll(() => cloud.sessionStreamCancellations).toBeGreaterThan(cancelled);
     resume();
     await expect(cloud.row(sessionA)).toBeHidden();
     await expect(page.locator('#frontend-crash')).toHaveCount(0);

@@ -115,3 +115,26 @@ pub fn Conversation::items(
   }
   items
 }
+
+///|
+/// Match occurrences against durable records, preserving repeated equal messages.
+/// A history read and its live events may describe the same saved message.
+fn Conversation::events_not_in(
+  self : Conversation,
+  records : Array[Record],
+) -> Array[Event] {
+  let consumed : Array[Int32] = []
+  self.events.filter(event => {
+    for index in 0..<records.length() {
+      let record = records[index]
+      if !consumed.contains(index) &&
+        record.task_id == event.task_id &&
+        record.kind == event.kind &&
+        record.data == event.data {
+        consumed.push(index)
+        return false
+      }
+    }
+    true
+  })
+}

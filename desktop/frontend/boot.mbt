@@ -506,7 +506,16 @@ fn main {
           // therefore unloads its WebSocket immediately; advancing its retry
           // identity replaces only that device's connection.
           model.bridge_subscriptions(emit),
-          @cloud.subscriptions(model.cloud),
+          @cloud.subscriptions(
+            model.cloud,
+            if model.screen is Chat {
+              model.cloud_identity().map(owner => owner.session())
+            } else {
+              None
+            },
+            model.account.map(account => account.token),
+            emit.map(message => CloudAction(message)),
+          ),
         ]
         if model.screen.work_screen() is None && !model.is_console_gated() {
           subs.push(management_navigation_subscription(emit))

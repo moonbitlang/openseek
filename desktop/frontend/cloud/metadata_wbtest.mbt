@@ -261,7 +261,7 @@ test "a completed archive wins over an earlier history response's running flag" 
   )
   let recovering = metadata_update(
     sending,
-    StreamEnded(2, "a", sending.conversations["a"].request),
+    SendFailed(2, "a", sending.conversations["a"].request, Unreachable),
   )
   let pending_recovery = metadata_update(
     recovering,
@@ -405,7 +405,7 @@ test "externally archived inventory fences pending history through restoration" 
   )
   let ended = metadata_update(
     listed,
-    StreamEnded(2, "a", sending.conversations["a"].request),
+    SendFailed(2, "a", sending.conversations["a"].request, Unreachable),
   )
   assert_false(ended.conversations["a"].sending)
   assert_true(ended.can_edit("a", Archive(false)))

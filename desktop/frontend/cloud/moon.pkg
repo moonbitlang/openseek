@@ -14,6 +14,7 @@ import {
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/protocol",
   "openseek_desktop/uri",
+  "openseek_desktop/frontend/internal/uuid/browser" @uuid,
 }
 
 supported_targets = "js"

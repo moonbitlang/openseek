@@ -2596,6 +2596,12 @@ fn update_msg(
           return (@cmd.none, model)
         }
         match action {
+          @composer.StopRequested(identity~) =>
+            return update_cloud(
+              dispatch,
+              @cloud.ControlAction(identity.owner, action),
+              model,
+            )
           @composer.DraftSubmitted(identity~, draft~) =>
             return update_cloud(
               dispatch,
