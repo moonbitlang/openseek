@@ -23,6 +23,62 @@ async fn tree_of(nodes : Array[Json]) -> Array[@cdp.AxNode] {
 }
 
 ///|
+/// Run `f` against a page that answers its commands, in order, with
+/// `replies` (each a CDP reply without its id), and give back the commands
+/// it was sent: each one's method and params.
+async fn scripted_page(
+  replies : Array[Json],
+  f : async (@cdp.Connection) -> Unit,
+) -> Array[(String, Json)] {
+  let sent : Array[(String, Json)] = []
+  @async.with_timeout(10000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      group.spawn_bg(() => {
+        serve_target_list(server, ["page"])
+        let (conn, _) = server.accept()
+        defer conn.close()
+        let ws = @websocket.from_http_server(conn.read_request(), conn)
+        defer ws.close()
+        for reply in replies {
+          guard @json.parse(ws.recv().read_all().text())
+            is { "id": id, "method": String(method_), "params": params, .. } else {
+            fail("malformed command")
+          }
+          sent.push((method_, params))
+          guard reply is Object(fields) else { fail("malformed reply") }
+          let answer = fields.copy()
+          answer["id"] = id
+          ws.send_text(Json::object(answer).stringify())
+        }
+      })
+      let connection = @cdp.list_targets(server.addr.port())[0].connect()
+      defer connection.close()
+      f(connection)
+    })
+  })
+  sent
+}
+
+///|
+fn value_reply(value : Json) -> Json {
+  { "result": { "result": { "type": "object", "value": value } } }
+}
+
+///|
+/// The page's account of its document, as `document` asks for it.
+fn document_reply(origin : Double, complete : Bool) -> Json {
+  value_reply({
+    "origin": Json(origin),
+    "entry": null,
+    "complete": Json(complete),
+    "url": "https://example.com/",
+    "title": "Example",
+  })
+}
+
+///|
 /// An accessibility node as the browser reports it.
 fn ax(
   id : String,
@@ -148,4 +204,34 @@ async test "browser_snapshot refuses a call that names no tab of its conversatio
     fail("a snapshot of another conversation's tab was not refused")
   }
   assert_true(message.contains("has no browser tab 1"))
+}
+
+///|
+async test "a snapshot is read again when the page changes documents under it" {
+  let tree : Json = {
+    "result": {
+      "nodes": [
+        {
+          "nodeId": "1",
+          "ignored": false,
+          "role": { "type": "role", "value": "RootWebArea" },
+        },
+      ],
+    },
+  }
+  let mut text = ""
+  // The first tree may be either document's: it is not answered.
+  let sent = scripted_page(
+    [
+      document_reply(1, true),
+      tree,
+      document_reply(2, false),
+      document_reply(2, true),
+      tree,
+      document_reply(2, true),
+    ],
+    connection => text = snapshot(connection, 4),
+  )
+  assert_eq(sent.length(), 6)
+  assert_true(text.contains("loading: false"))
 }

@@ -160,6 +160,32 @@ fn snapshot_text(document : Document, nodes : Array[@cdp.AxNode]) -> String {
 }
 
 ///|
+/// How many times a snapshot is read before a page that keeps changing
+/// documents under it is given up on.
+const SnapshotAttempts : Int32 = 3
+
+///|
+/// What tab `id`'s page shows, as `browser_snapshot` answers it.
+async fn snapshot(connection : @cdp.Connection, id : Int32) -> String {
+  // The tree and the page's account of its document are asked one after
+  // the other; a navigation between them would give one document's content
+  // under another's address. Only a tree read within one document is
+  // answered.
+  for _ in 0..<SnapshotAttempts {
+    guard document(connection) is Some(before) else {
+      raise @mcp.ToolError("Tab \{id} has no page to read yet.")
+    }
+    let nodes = connection.accessibility_tree()
+    if document(connection) is Some(after) && after.origin == before.origin {
+      return snapshot_text(after, nodes)
+    }
+  }
+  raise @mcp.ToolError(
+    "Tab \{id} kept going to other pages while it was read; try again once it has settled.",
+  )
+}
+
+///|
 /// `browser_snapshot`: what one of `session`'s tabs shows, as it stands.
 async fn BrowserViews::snapshot_tab(
   self : BrowserViews,
@@ -170,10 +196,5 @@ async fn BrowserViews::snapshot_tab(
     arguments, "browser_snapshot needs `tab`, the id of the tab to read.",
   )
   ignore(self.tab_view(session, id))
-  self.with_page(id, connection => {
-    guard document(connection) is Some(document) else {
-      raise @mcp.ToolError("Tab \{id} has no page to read yet.")
-    }
-    snapshot_text(document, connection.accessibility_tree())
-  })
+  self.with_page(id, connection => snapshot(connection, id))
 }
