@@ -96,7 +96,8 @@ servers come on top.
 
 The returned `SearchPage` has the same tools twice:
 - `text`, rendered for the model once the script prints it: each tool's
-  description and the JSON Schemas of its arguments and result `data`;
+  arguments and result `data` shown as the `Json` patterns a script matches,
+  with a ready-to-edit `@mcp.call` for the best matches;
 - `tools`, records of `server`, `name`, `description`, `input_schema : Json`,
   and `output_schema : Json?` (the raw JSON Schemas) for the script to select
   from.
