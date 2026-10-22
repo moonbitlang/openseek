@@ -72,3 +72,19 @@ async test "-C then --continue resumes the latest session under the new director
     assert_eq(config.session_id.value(), "in-dir")
   })
 }
+
+///|
+/// The TUI never changes its own directory: a `!` command's child is spawned
+/// in the -C directory, so `pwd` there reports it.
+async test "a ! command runs in the -C directory" {
+  @vfs.with_tmpdir(prefix="openseek-tui-chdir-shell-", root => {
+    let dir = @fs.realpath(root)
+    let messages = @async.Queue(kind=Unbounded)
+    run_shell_command("pwd", messages, id=1, cwd=dir)
+    guard messages.get() is CommandResult(Ok(output), ..) else {
+      fail("expected the command's output")
+    }
+    assert_true(output.text.contains(dir))
+    assert_true(@env.current_dir() != Some(dir))
+  })
+}
