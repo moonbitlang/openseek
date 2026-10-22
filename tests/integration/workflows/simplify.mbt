@@ -60,6 +60,8 @@ fn FakeHost::simplify_child(
         msg=query,
       )
       match dir {
+        "alpha" if self.mode == "simplify-review-missing" =>
+          Err("failed: step limit")
         "alpha" =>
           Ok({
             "answer": if self.mode == "simplify-limit" {
@@ -115,6 +117,14 @@ fn FakeHost::simplify_child(
       }
       let head = self.fixture["head"]
       let (state, base) : (Json, String) = match dir {
+        "delta" if self.mode == "simplify-unmergeable" =>
+          (
+            {
+              "kind": "unmergeable",
+              "defects": ["changed delta/moon.pkg outside the allowed paths"],
+            },
+            head,
+          )
         "delta" => ({ "kind": "no_changes" }, head)
         // HEAD moved under this worker: its base is another commit.
         "gamma" =>
@@ -124,16 +134,25 @@ fn FakeHost::simplify_child(
           )
         _ => ({ "kind": "committed", "commit": self.fixture[dir] }, head)
       }
-      self.workspaces[job] = {
-        "kind": "worktree",
-        "worktree": {
-          "name": name,
-          "path": "/tmp/\{name}",
-          "branch": "openseek/\{name}--1a2b3c4d-sr-1",
-          "base": base,
-          "allowed_paths": Json::array(paths),
-          "state": state,
-        },
+      let workspace = (state : Json) => {
+        (
+          {
+            "kind": "worktree",
+            "worktree": {
+              "name": name,
+              "path": "/tmp/\{name}",
+              "branch": "openseek/\{name}--1a2b3c4d-sr-1",
+              "base": base,
+              "allowed_paths": Json::array(paths),
+              "state": state,
+            },
+          } : Json)
+      }
+      self.workspaces[job] = workspace(state)
+      // Beta's first read races its capture.
+      if dir == "beta" {
+        self.workspaces[job] = workspace({ "kind": "working" })
+        self.fixture["capture:\{job}"] = workspace(state).stringify()
       }
       Ok({
         "schema_version": 1,
@@ -162,6 +181,8 @@ async fn gh_child(dir : String) -> Unit {
   match args {
     [_, "repo", "view", ..] => println("example/repo")
     [_, "auth", "status", ..] => ()
+    [_, "pr", "create", ..] if @fs.exists(dir + "/fail-pr") =>
+      fail("HTTP 502: bad gateway")
     [_, "pr", "create", ..] => println("https://github.com/example/repo/pull/7")
     _ => fail("unexpected gh call: \{args.join(" ")}")
   }
@@ -244,7 +265,8 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
   }
   for
     mode in [
-      "simplify-publish", "simplify-limit", "simplify-incomplete", "simplify-bad-number",
+      "simplify-publish", "simplify-limit", "simplify-incomplete", "simplify-unmergeable",
+      "simplify-refused", "simplify-review-missing", "simplify-pr-fails", "simplify-bad-number",
       "simplify-subdir", "simplify-dirty", "simplify-ahead",
     ] {
     let host = fake_host("simplify", mode)
@@ -257,6 +279,7 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
     }
     match mode {
       "simplify-dirty" => append(repo + "/alpha/a.mbt", "// local edit")
+      "simplify-pr-fails" => write(calls + "/fail-pr", "")
       "simplify-ahead" => {
         append(repo + "/README.md", "local")
         ignore(git(repo, ["commit", "-q", "-am", "local commit"]))
@@ -264,10 +287,13 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
       _ => ()
     }
     let args = match mode {
-      "simplify-publish" =>
+      "simplify-publish" | "simplify-pr-fails" =>
         ["--scouts", "2", "--max-prs", "8", "--", "pattern", "matching"]
       "simplify-limit" => ["--no-pr", "--max-prs", "2"]
       "simplify-incomplete" => ["--no-pr", "--path", "beta"]
+      "simplify-unmergeable" => ["--no-pr", "--path", "delta"]
+      "simplify-refused" | "simplify-review-missing" =>
+        ["--no-pr", "--path", "alpha"]
       "simplify-bad-number" => ["--max-prs", "9"]
       _ => []
     }
@@ -281,6 +307,7 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
     )
     match mode {
       "simplify-dirty" => ignore(git(repo, ["checkout", "--", "alpha/a.mbt"]))
+      "simplify-pr-fails" => @fs.remove(calls + "/fail-pr")
       "simplify-ahead" => ignore(git(repo, ["reset", "-q", "--hard", head]))
       _ => ()
     }
@@ -311,13 +338,19 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
           is [name] else {
           fail("no alpha worker")
         }
-        // The accepted change is on origin, and its PR targets the default
-        // branch by name in the named repository.
+        // The accepted change is on origin, under a branch its commit keeps
+        // apart from later sweeps, and its PR targets the default branch by
+        // name in origin's repository.
+        let pushed = "simplify/\{name}-\{commits["alpha"][:8]}"
         assert_eq(
-          git(origin, ["rev-parse", "refs/heads/simplify/\{name}"]).trim(),
+          git(origin, ["rev-parse", "refs/heads/\{pushed}"]).trim(),
           commits["alpha"],
         )
         assert_eq(gh_calls.length(), 3, msg=output)
+        assert_true(
+          gh_calls[0] is ["repo", "view", String(url), ..] && url == origin,
+          msg=gh_calls[0].stringify(),
+        )
         assert_true(
           gh_calls[2]
           is [
@@ -333,7 +366,7 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
             "refactor(alpha): simplify",
             ..,
           ] &&
-          branch == "simplify/\{name}",
+          branch == pushed,
           msg=gh_calls[2].stringify(),
         )
         (
@@ -374,6 +407,38 @@ async fn verify_simplify(root : String, temp : String, exe : String) -> Unit {
           ],
         )
       }
+      "simplify-unmergeable" =>
+        (
+          true,
+          [
+            "delta: candidates=1 worker=not mergeable: changed delta/moon.pkg outside the allowed paths review=- pr=-",
+            "skipped=1",
+          ],
+        )
+      "simplify-refused" =>
+        (
+          false,
+          [
+            "review=unreviewed: not started: error: 16 subagents are already running",
+            "the review of alpha was not started",
+          ],
+        )
+      "simplify-review-missing" =>
+        (
+          false,
+          [
+            "review=unreviewed: no report: failed: step limit", "the review of alpha did not report",
+          ],
+        )
+      "simplify-pr-fails" =>
+        (
+          // The report is still printed, and the failure ends the run.
+          false,
+          [
+            "but gh pr create failed", "packages=5 chosen=5 prs=0 accepted=1 rejected=1",
+            "the sweep is incomplete: alpha: pushed to simplify/",
+          ],
+        )
       "simplify-bad-number" => (false, ["--max-prs takes a number from 1 to 8"])
       "simplify-subdir" =>
         (false, ["run this from the repository root, not alpha/"])

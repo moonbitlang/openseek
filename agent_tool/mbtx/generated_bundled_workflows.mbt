@@ -2834,8 +2834,22 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    }
           #|    for id in wait_any(live.keys().collect()) {
           #|      guard live.get(id) is Some(role) else { continue }
-          #|      live.remove(id)
           #|      let end = finish(id)
+          #|      // The host reports a worker ended once its outcome is recorded, and
+          #|      // captures its worktree after that: until the capture is done, it is
+          #|      // still running, and it still holds one of the host's worker slots.
+          #|      if role is Worker(_) &&
+          #|        end.subagent
+          #|        is {
+          #|          "workspace": {
+          #|            "worktree": { "state": { "kind": "working", .. }, .. },
+          #|            ..
+          #|          },
+          #|          ..
+          #|        } {
+          #|        continue
+          #|      }
+          #|      live.remove(id)
           #|      tokens += end.tokens
           #|      match role {
           #|        Worker(index) => {
@@ -2948,16 +2962,21 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      "HEAD is not on \{default_ref}, so each pull request would carry local commits too: update HEAD to \{default_ref}, or pass --no-pr",
           #|    )
           #|  }
+          #|  // The repository branches are pushed to, so every PR is opened where its
+          #|  // head branch is, whatever gh would pick by default.
+          #|  let origin = run("git", ["remote", "get-url", "origin"]).trim().to_owned()
           #|  let repo = run("gh", [
-          #|    "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner",
+          #|    "repo", "view", origin, "--json", "nameWithOwner", "--jq", ".nameWithOwner",
           #|  ]).trim()
-          #|  guard !repo.is_empty() else { fail("gh repo view named no repository") }
+          #|  guard !repo.is_empty() else {
+          #|    fail("gh repo view named no repository for origin (\{origin})")
+          #|  }
           #|  ignore(run("gh", ["auth", "status"]))
           #|  { base: base.to_owned(), repo: repo.to_owned(), }
           #|}
           #|
           #|///|
-          #|/// One MoonBit pkg: its directory ("" for the root) and its own tracked
+          #|/// One MoonBit package: its directory ("" for the root) and its own tracked
           #|/// source files, with their total size for dealing packages to scouts.
           #|priv struct Package {
           #|  dir : String
@@ -3389,12 +3408,15 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  reasoning : String,
           #|  target : Target,
           #|) -> Result[String, String] {
-          #|  let branch = "simplify/\{work.name}"
+          #|  // The commit keeps a later sweep of the same package off this branch.
+          #|  let branch = "simplify/\{work.name}-\{change.commit[:8]}"
           #|  let pushed = @shell.Cmd("git", [
           #|    "push",
           #|    "origin",
           #|    "\{change.commit}:refs/heads/\{branch}",
-          #|  ]).output(timeout_ms=300000)
+          #|  ]).output(timeout_ms=300000) catch {
+          #|    error => return Err("push failed: \{error}")
+          #|  }
           #|  guard pushed.exit_code() == 0 else {
           #|    return Err("push failed: \{first_line(pushed.stderr())}")
           #|  }
@@ -3436,7 +3458,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    title,
           #|    "--body",
           #|    body,
-          #|  ]).output(timeout_ms=120000)
+          #|  ]).output(timeout_ms=120000) catch {
+          #|    error => return Err("pushed to \{branch}, but gh pr create failed: \{error}")
+          #|  }
           #|  guard created.exit_code() == 0 else {
           #|    return Err(
           #|      "pushed to \{branch}, but gh pr create failed: \{first_line(created.stderr())}",
@@ -3450,7 +3474,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// Print one line per chosen pkg, a rejected change's reasons, and the
+          #|/// Print one line per chosen package, a rejected change's reasons, and the
           #|/// totals; fail when the run was incomplete.
           #|fn report(
           #|  packages : Array[Package],

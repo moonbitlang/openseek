@@ -157,7 +157,7 @@ package's source files, at most 4 at once. A change goes on to review only
 when it is committed on the pinned HEAD by a worker that reported `done`.
 Then a fresh `explore` child (60 steps) reads it as git objects and answers
 `VERDICT: ACCEPT` or `VERDICT: REJECT` on the first line. Each accepted change
-is pushed to `simplify/<name>` on `origin` and opened as a pull request
+is pushed to `simplify/<name>-<commit>` on `origin` and opened as a pull request
 against the default branch; nothing is merged. Scouts and workers carry
 built-in MoonBit guidance: what to simplify, and what not to. The script prints
 a line per scout and per chosen package, then

@@ -68,6 +68,11 @@ fn FakeHost::answer(
         ) {
         return reply("error: 16 subagents are already running", is_error=true)
       }
+      if self.mode == "simplify-refused" &&
+        arguments is { "label": String(label), .. } &&
+        label.has_prefix("simplify:review-") {
+        return reply("error: 16 subagents are already running", is_error=true)
+      }
       // The engine runs at most 4 workers at once and refuses a fifth.
       if self.name == "simplify" &&
         arguments is { "kind": "worker", .. } &&
@@ -96,6 +101,16 @@ fn FakeHost::answer(
       let waiting = [
         for id in ids if id is String(id) && self.running.contains(id) => id
       ]
+      // A worker reported ended before its capture finished: every read
+      // until the next wait sees its worktree still working.
+      for id in ids {
+        if id is String(id) &&
+          !waiting.contains(id) &&
+          self.fixture.get("capture:\{id}") is Some(captured) {
+          self.fixture.remove("capture:\{id}")
+          self.workspaces[id] = @json.parse(captured)
+        }
+      }
       if self.name != "simplify" {
         self.running.clear()
       } else if waiting is [first, ..] &&
