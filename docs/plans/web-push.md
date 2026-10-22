@@ -239,6 +239,34 @@ subscription of `u`, with bounded concurrency and a 10 s timeout per send:
   - 400 / 413: log.
   - 429 / 5xx: log. No retry in v1.
 
+**Payload contract** (relay → worker; the plaintext before RFC 8291
+encryption). `sw.js` in openseek and the sender in openseek-api must agree
+on this shape:
+
+```json
+{"v":1,"kind":"finished","locale":"zh-Hans","url":"/device/d_1/chat/session/s1",
+ "device_name":"MacBook","status":"finished","answer":"…"}
+{"v":1,"kind":"approval","locale":"en","url":"/device/d_1/chat/session/s1",
+ "device_name":"MacBook","tool":"mbtx","detail":"…"}
+{"v":1,"kind":"cloud_finished","locale":"en","url":"/cloud/session/c1",
+ "status":"completed","answer":"…"}
+{"v":1,"kind":"test","locale":"en","url":"/cloud"}
+```
+
+- `locale` is the subscription's stored tag, one of the `@i18n.Locale::tag`
+  values: `en`, `zh-Hans`, `zh-Hant`, `ja`, `es`. The worker falls back to
+  `en` for anything else.
+- `url` is a root-relative application path. The worker resolves it against
+  its own origin.
+- `answer` is optional. Without it the worker uses the fallback body.
+- `status` is the host's run status for `finished`: `finished`,
+  `max_steps_exhausted`, or anything else, which reads as failed. For
+  `cloud_finished` it is Cloud's `completed` or `failed`.
+- The worker uses the url as the notification `tag`, so a newer push about
+  the same conversation replaces the older one.
+- A payload the worker cannot parse still shows a generic "SeekMoon"
+  notification. iOS revokes subscriptions whose pushes show nothing.
+
 **Crypto:** a small C stub `dlopen`s libcrypto the way async's loader does
 (`libcrypto.so.3`, falling back to the macOS LibreSSL dylib). It exposes:
 
