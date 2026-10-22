@@ -10,6 +10,8 @@ import {
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
+  "openseek_desktop/frontend/select_control",
+  "openseek_desktop/frontend/session_start",
   "openseek_desktop/frontend/transcript",
 }
 
@@ -28,6 +30,7 @@ pub(all) struct Actions {
   jump : @cmd.Emit[@mention_context.Target]
   open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
   open_session : @cmd.Emit[String]
+  session_start : @cmd.Emit[@session_start.Msg]
   fork : @cmd.Emit[Int32]
   edit_user : @cmd.Emit[(Int32, @composer.Draft)]
   choose_project : @cmd.Emit[@common.Uri]
@@ -39,7 +42,7 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused? : @interop.ChannelId, identity? : String, active_session~ : String, can_fork? : Bool, fork_busy? : Bool, edit_busy? : Bool, forking? : Int32, editable_users? : Array[Int32], scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
+pub fn Input::Input(locale? : @i18n.Locale, session_starts? : Array[@session_start.Card], session_start_models? : Array[@select_control.ViewOption], session_start_connected? : Bool, session_start_here_available? : Bool, session_start_error? : String?, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused? : @interop.ChannelId, identity? : String, active_session~ : String, can_fork? : Bool, fork_busy? : Bool, edit_busy? : Bool, forking? : Int32, editable_users? : Array[Int32], scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

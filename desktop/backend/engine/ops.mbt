@@ -508,7 +508,12 @@ pub fn queue_run(
       guard !live.queued_runs.any(queued => queued.id == id) else {
         return { accepted: false, }
       }
-      live.queued_runs.push({ id, run_id: mint_run_id(), content, })
+      live.queued_runs.push({
+        id,
+        run_id: mint_run_id(),
+        content,
+        host_owned: false,
+      })
     }
     QueueEdit(text~, images~, ..) => {
       if !images.is_empty() && !live.supports_images {
@@ -531,6 +536,7 @@ pub fn queue_run(
         return { accepted: false, }
       }
       ignore(live.queued_runs.remove(index))
+      live.message_receipts.settle(id, Dropped)
     }
     QueueSteer(..) => {
       guard live.queued_runs.search_by(queued => queued.id == id) is Some(index) else {

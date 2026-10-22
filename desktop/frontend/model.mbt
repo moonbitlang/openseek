@@ -1248,6 +1248,7 @@ priv struct ApprovalMirror {
 /// own host); the multi-device console renders one sidebar group per entry.
 priv struct DeviceState {
   questions : @user_questions.Model
+  session_starts : @session_start.Model
   approval_snapshot : ApprovalMirror?
   // The channel this state mirrors.
   channel : @interop.ChannelId
@@ -1322,6 +1323,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     connection_generation: 0,
     approval_snapshot: None,
     questions: @user_questions.Model(),
+    session_starts: @session_start.Model(),
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -2013,6 +2015,12 @@ priv enum Msg {
   // transcript the user is reading.
   SendInBackground
   Stop
+  TranscriptSessionStart(slot~ : String, @session_start.Msg)
+  SessionStarts(
+    channel~ : @interop.ChannelId,
+    connection_generation~ : Int32,
+    @session_start.Msg
+  )
   UserQuestions(
     channel~ : @interop.ChannelId,
     connection_generation~ : Int32,
@@ -2304,6 +2312,7 @@ priv enum Msg {
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
   QuestionsChanged(@protocol.UserQuestionSnapshot)
+  SessionStartsChanged(@protocol.SessionStartsSnapshot)
   ApprovalsChanged(ApprovalMirror)
   BridgeReady
   BridgeUnavailable(String)

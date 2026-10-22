@@ -240,6 +240,7 @@ fn MinimalToolStatus::view(
 
 ///|
 priv enum MinimalContent {
+  SessionStart(SessionStartContent)
   Prose(
     text~ : String,
     assistant~ : String,
@@ -385,6 +386,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
   }
   let assistant = self.source.assistant_name()
   let descriptions : Map[String, String] = Map([])
+  let shown_session_starts : Map[String, Bool] = Map([])
   for index, row in self.items {
     let identity = row.identity
     match row.item.kind {
@@ -430,7 +432,11 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
           collect_job_description(call, descriptions)
         }
         let activity : Array[MinimalActivity] = []
+        let session_cards : Array[SessionStartContent] = []
         for call in calls {
+          let (remaining, extracted) = self.extract_session_starts(call)
+          session_cards.append(extracted)
+          guard remaining is Some(call) else { continue }
           // Successful waits are coordination, not additional completed work.
           // Keep failed waits visible and counted; a wait result alone must
           // never be interpreted as a successful completion of its target job.
@@ -454,6 +460,19 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         }
         if !activity.is_empty() {
           builder.push_part("tools\u{0}\{identity}", Activity(activity))
+        }
+        for card in session_cards {
+          if shown_session_starts.get(card.request_id()).unwrap_or(false) {
+            continue
+          }
+          shown_session_starts[card.request_id()] = true
+          builder.flush_parts()
+          builder.sections.push(
+            Checkpoint({
+              identity: "session-start\u{0}" + card.request_id(),
+              content: SessionStart(card),
+            }),
+          )
         }
       }
       Answer(text) => {
@@ -764,6 +783,7 @@ fn MinimalContent::render(
   active~ : Bool = false,
 ) -> @html.Html {
   match self {
+    SessionStart(content) => content.render(locale, actions)
     Messages(parts, active_group~) => {
       // Preserve each child's identity while tool outcomes and live prose
       // update. Grouping must not recreate an already-open tool disclosure.

@@ -285,6 +285,10 @@ pub let session_snapshot : Command[@protocol.SessionExportPayload, @protocol.Ses
 
 pub let session_snapshot_save : Command[@protocol.SnapshotSavePayload, @protocol.SessionExportReply]
 
+pub let session_starts_decide : Command[@protocol.SessionStartDecision, @protocol.SessionStartsSnapshot]
+
+pub let session_starts_list : Command[@protocol.SessionStartsListPayload, @protocol.SessionStartsSnapshot]
+
 pub let session_unarchive : Command[@protocol.SessionPayload, @protocol.SessionsReply]
 
 pub let settings_get : Command[@protocol.EmptyPayload, @protocol.SettingsStatusPayload]

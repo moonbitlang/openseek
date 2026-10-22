@@ -2329,3 +2329,46 @@
   max-width: 100%;
   padding: 2px 8px;
 }
+.session-start-card,
+.session-start-folded {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-surface);
+  color: var(--color-text-primary);
+  text-align: left;
+  overflow: hidden;
+}
+
+.session-start-header {
+  padding: 12px 20px;
+  background: var(--color-control-surface);
+  font-size: 14px;
+}
+
+.session-start-body { padding: 16px 20px; }
+.session-start-heading { display: flex; align-items: flex-start; gap: 16px; }
+.session-start-title { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.session-start-dismiss { flex: none; padding: 2px; color: var(--color-text-muted); }
+.session-start-task { margin-top: 6px; color: var(--color-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.session-start-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; }
+.session-start-actions-right { display: flex; align-items: center; gap: 16px; }
+.session-start-actions button { border-radius: var(--radius-sm); padding: 5px 0; font-size: 13px; }
+.session-start-actions .session-start-submit { padding: 6px 12px; background: var(--color-text-primary); color: var(--color-bg-surface); }
+.session-start-card button:disabled { cursor: default; opacity: .5; }
+.session-start-options { padding: 0 20px 16px; }
+.session-start-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 10px; font-size: 13px; }
+.session-start-option .custom-select { min-width: 0; max-width: 65%; }
+.session-start-workspace { margin-top: 12px; font-size: 12px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.session-start-tool-details { margin-top: 12px; color: var(--color-text-secondary); font-size: 12px; }
+.session-start-tool-details > summary { cursor: pointer; }
+.session-start-error { padding: 0 20px 16px; color: var(--color-danger); font-size: 13px; overflow-wrap: anywhere; }
+.session-start-folded { display: flex; align-items: center; gap: 16px; padding: 12px 16px; cursor: pointer; }
+.session-start-folded:hover { background: var(--color-control-surface); }
+.session-start-folded-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-start-chevron { color: var(--color-text-muted); font-size: 20px; line-height: 1; }
+
+
+.session-start-retry { margin: 0 20px 16px; color: var(--color-accent); }

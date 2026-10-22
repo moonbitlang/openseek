@@ -1,4 +1,6 @@
 import {
+  "openseek_desktop/frontend/session_start",
+  "openseek_desktop/frontend/select_control",
   "openseek_desktop/frontend/composer",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol/command_context",

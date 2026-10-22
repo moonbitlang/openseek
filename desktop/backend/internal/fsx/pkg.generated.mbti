@@ -49,6 +49,7 @@ pub fn DirectoryEntry::name(Self) -> String
 type FileLock
 pub async fn FileLock::acquire(@pathx.Path) -> Self
 pub fn FileLock::release(Self) -> Unit
+pub async fn FileLock::try_acquire(@pathx.Path) -> Self?
 
 // Type aliases
 

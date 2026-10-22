@@ -24,6 +24,7 @@ pub(all) enum NotificationKind {
   WorktreeChanged
   SettingsChanged
   SessionArtifactsChanged
+  SessionStartsChanged
   SkillsChanged
   UpdateDownloadProgress
   UpdateDownloaded
@@ -62,6 +63,7 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
     WorktreeChanged => "worktree.changed"
     SettingsChanged => "settings.changed"
     SessionArtifactsChanged => "session.artifacts_changed"
+    SessionStartsChanged => "session.starts_changed"
     SkillsChanged => "skills.changed"
     UpdateDownloadProgress => "update.download_progress"
     UpdateDownloaded => "update.downloaded"
@@ -101,6 +103,7 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
     WorktreeChanged,
     SettingsChanged,
     SessionArtifactsChanged,
+    SessionStartsChanged,
     SkillsChanged,
     UpdateDownloadProgress,
     UpdateDownloaded,
@@ -141,6 +144,7 @@ pub(all) enum Notification {
   WorktreeChanged(WorktreeChangedPayload)
   SettingsChanged(SettingsStatusPayload)
   SessionArtifactsChanged(SessionArtifactsChangedPayload)
+  SessionStartsChanged(SessionStartsSnapshot)
   SkillsChanged
   UpdateDownloadProgress(UpdateDownloadProgressPayload)
   UpdateDownloaded(UpdateDownloadedPayload)
@@ -217,6 +221,10 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
           },
         ),
       )
+    "session.starts_changed" =>
+      Some(
+        SessionStartsChanged(@json.from_json(params) catch { _ => return None }),
+      )
     "skills.changed" => Some(SkillsChanged)
     "update.download_progress" =>
       Some(
@@ -281,6 +289,7 @@ pub fn Notification::kind(self : Notification) -> NotificationKind {
     WorktreeChanged(_) => WorktreeChanged
     SettingsChanged(_) => SettingsChanged
     SessionArtifactsChanged(_) => SessionArtifactsChanged
+    SessionStartsChanged(_) => SessionStartsChanged
     SkillsChanged => SkillsChanged
     UpdateDownloadProgress(_) => UpdateDownloadProgress
     UpdateDownloaded(_) => UpdateDownloaded
@@ -326,6 +335,7 @@ pub fn Notification::params(self : Notification) -> Json {
     WorktreeChanged(payload) => ToJson::to_json(payload)
     SettingsChanged(payload) => ToJson::to_json(payload)
     SessionArtifactsChanged(payload) => payload.to_json()
+    SessionStartsChanged(payload) => payload.to_json()
     SkillsChanged => Json::empty_object()
     UpdateDownloadProgress(payload) => ToJson::to_json(payload)
     UpdateDownloaded(payload) => ToJson::to_json(payload)

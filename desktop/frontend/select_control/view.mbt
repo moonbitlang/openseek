@@ -4,7 +4,7 @@
 pub(all) struct ViewOption {
   value : String
   label : String
-}
+} derive(Eq)
 
 ///|
 /// One optional group inside a custom select menu. A single group renders
@@ -351,3 +351,6 @@ pub fn Control::render(self : Control) -> @html.Html {
     children,
   )
 }
+
+///|
+pub extend ViewOption with Eq::{equal, not_equal}

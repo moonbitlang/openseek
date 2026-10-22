@@ -2400,6 +2400,7 @@ pub(all) enum Notification {
   WorktreeChanged(WorktreeChangedPayload)
   SettingsChanged(SettingsStatusPayload)
   SessionArtifactsChanged(SessionArtifactsChangedPayload)
+  SessionStartsChanged(SessionStartsSnapshot)
   SkillsChanged
   UpdateDownloadProgress(UpdateDownloadProgressPayload)
   UpdateDownloaded(UpdateDownloadedPayload)
@@ -2442,6 +2443,7 @@ pub(all) enum NotificationKind {
   WorktreeChanged
   SettingsChanged
   SessionArtifactsChanged
+  SessionStartsChanged
   SkillsChanged
   UpdateDownloadProgress
   UpdateDownloaded
@@ -3586,6 +3588,103 @@ pub fn SessionSnapshot::not_equal(Self, Self) -> Bool
 pub fn SessionSnapshot::to_json(Self) -> Json
 pub impl ToJson for SessionSnapshot
 pub impl @json.FromJson for SessionSnapshot
+
+pub(all) struct SessionStartDecision {
+  session : String
+  request_id : String
+  action : String
+  model : String??
+  workspace_mode : String?
+  here : SessionStartHereOptions?
+} derive(Eq, @debug.Debug)
+pub fn SessionStartDecision::equal(Self, Self) -> Bool
+pub fn SessionStartDecision::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionStartDecision::not_equal(Self, Self) -> Bool
+pub fn SessionStartDecision::to_json(Self) -> Json
+pub fn SessionStartDecision::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionStartDecision
+pub impl @json.FromJson for SessionStartDecision
+
+pub(all) struct SessionStartHereOptions {
+  model : String?
+  thinking : OpenSeekThinking?
+  approval : OpenSeekApproval?
+  max_steps : Int32?
+  followup_behavior : String
+} derive(Eq, @debug.Debug)
+pub fn SessionStartHereOptions::equal(Self, Self) -> Bool
+pub fn SessionStartHereOptions::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionStartHereOptions::not_equal(Self, Self) -> Bool
+pub fn SessionStartHereOptions::to_json(Self) -> Json
+pub fn SessionStartHereOptions::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionStartHereOptions
+pub impl @json.FromJson for SessionStartHereOptions
+
+pub(all) struct SessionStartProposal {
+  id : String
+  request_id : String
+  title : String
+  task : String
+  workspace : String
+  model : String?
+  thinking : OpenSeekThinking?
+  max_steps : Int32?
+  workspace_mode : String
+  status : String
+  target_session : String?
+  error : String?
+} derive(Eq, @debug.Debug)
+pub fn SessionStartProposal::equal(Self, Self) -> Bool
+pub fn SessionStartProposal::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionStartProposal::not_equal(Self, Self) -> Bool
+pub fn SessionStartProposal::request(Self) -> SessionStartRequest
+pub fn SessionStartProposal::to_json(Self) -> Json
+pub fn SessionStartProposal::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionStartProposal
+pub impl @json.FromJson for SessionStartProposal
+
+pub(all) struct SessionStartRequest {
+  request_id : String
+  title : String
+  task : String
+  workspace : String
+  model : String?
+  thinking : OpenSeekThinking?
+  max_steps : Int32?
+  workspace_mode : String
+} derive(Eq, @debug.Debug)
+pub fn SessionStartRequest::equal(Self, Self) -> Bool
+pub fn SessionStartRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionStartRequest::not_equal(Self, Self) -> Bool
+pub fn SessionStartRequest::proposal(Self, String) -> SessionStartProposal
+pub fn SessionStartRequest::to_json(Self) -> Json
+pub fn SessionStartRequest::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionStartRequest
+pub impl @json.FromJson for SessionStartRequest
+
+pub(all) struct SessionStartsListPayload {
+  session : String
+} derive(Eq, @debug.Debug)
+pub fn SessionStartsListPayload::equal(Self, Self) -> Bool
+pub fn SessionStartsListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionStartsListPayload::not_equal(Self, Self) -> Bool
+pub fn SessionStartsListPayload::to_json(Self) -> Json
+pub fn SessionStartsListPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionStartsListPayload
+pub impl @json.FromJson for SessionStartsListPayload
+
+pub(all) struct SessionStartsSnapshot {
+  session : String
+  generation : Int32
+  proposals : Array[SessionStartProposal]
+} derive(Eq, @debug.Debug)
+pub fn SessionStartsSnapshot::equal(Self, Self) -> Bool
+pub fn SessionStartsSnapshot::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionStartsSnapshot::not_equal(Self, Self) -> Bool
+pub fn SessionStartsSnapshot::to_json(Self) -> Json
+pub fn SessionStartsSnapshot::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionStartsSnapshot
+pub impl @json.FromJson for SessionStartsSnapshot
 
 pub(all) struct SessionSummary {
   content : String

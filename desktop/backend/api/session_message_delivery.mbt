@@ -23,6 +23,7 @@ async fn ApiState::deliver_session_input(
   session : String,
   text : String,
   id : String,
+  here_options? : @protocol.SessionStartHereOptions,
 ) -> Unit {
   @async.with_task_group(group => {
     let events : @async.Queue[MessageDeliveryInput] = Queue(kind=Blocking(64))
@@ -56,6 +57,7 @@ async fn ApiState::deliver_session_input(
       text,
       id,
       result => group.spawn_bg(no_wait=true, () => events.put(Receipt(result))),
+      here_options?,
     )
     defer submitted.close()
     for ;; {
@@ -92,6 +94,7 @@ async fn ApiState::deliver_session_input(
           if submitted.result() is None &&
             (
               submitted.steering ||
+              submitted.queued ||
               self.hub.active_starts.contains(submitted.run_id)
             ) {
             continue

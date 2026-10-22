@@ -285,6 +285,21 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
     locale=self.locale,
     dark_mode=self.theme.is_dark(self.system_dark),
     minimal=self.minimal_transcript_effective(),
+    session_start_here_available=conversation
+      .map(conv => self.session_start_here_available(conv))
+      .unwrap_or(false),
+    session_start_error=self
+      .focused_device()
+      .bind(dev => dev.session_starts.load_error(content.session)),
+    session_starts=self
+      .focused_device()
+      .map(dev => dev.session_starts.cards(content.session))
+      .unwrap_or([]),
+    session_start_models=self.session_start_models(),
+    session_start_connected=conversation
+      .map(conv => conv.record is LiveRecord)
+      .unwrap_or(false) &&
+      self.focused_device().map(dev => dev.bridge is Connected).unwrap_or(false),
     source=content.source,
     focused=self.focused,
     active_session=content.session,
@@ -342,4 +357,27 @@ fn Model::project_display_label(self : Model, project : @common.Uri) -> String? 
   } else {
     Some(@resource.label(project))
   }
+}
+
+///|
+fn Model::session_start_models(
+  self : Model,
+) -> Array[@select_control.ViewOption] {
+  openseek_model_group(
+    self.api_provider,
+    self
+    .active_conversation()
+    .map(conv => conv.engine_model)
+    .unwrap_or(self.default_model),
+  ).options.map(option => {
+    value: ModelChoice::parse(option.value)
+    .map(choice => {
+      match choice {
+        OpenSeekModel(model) => model.wire()
+        _ => option.value
+      }
+    })
+    .unwrap_or(option.value),
+    label: option.label,
+  })
 }

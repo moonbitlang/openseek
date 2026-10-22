@@ -8,6 +8,7 @@ import {
   "openseek_desktop/backend/endpoint",
   "openseek_desktop/backend/host",
   "openseek_desktop/backend/mcp",
+  "openseek_desktop/backend/uuid",
   "openseek_desktop/backend/internal/session_messages",
   "openseek_desktop/backend/internal/shares",
   "openseek_desktop/backend/internal/user_questions",
@@ -32,6 +33,7 @@ import {
 import {
   "moonbitlang/async/fs",
   "openseek_desktop/backend/internal/fsx",
+  "openseek_desktop/backend/internal/processx",
   "moonbitlang/core/env" @sys,
   "moonbitlang/openseek/mcp/streamhttp",
 } for "test"

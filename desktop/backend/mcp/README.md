@@ -104,7 +104,7 @@ there is no SSE stream and no server-initiated request.
 
 The backend registers `session` alongside the window's browser tools. Include
 `session` in `X-SeekMoon-Tool-Groups` if a configured client filters groups.
-Its actions are `list`, `read`, `send`, `status`, and `cancel`. These operate on
+Its actions are `list`, `read`, `send`, `status`, `cancel`, and `start`. These operate on
 OpenSeek conversations attached to this host, not Codex threads or independent
 CLI processes.
 
@@ -170,6 +170,66 @@ approval with the destination and message.
 
 These tools are offered to the OpenSeek engine; Codex-backed chats are not
 message targets for this implementation.
+
+## Suggested session starts
+
+`session` with `action: "start"` adds a suggestion card to the calling
+conversation. It requires a caller-generated `request_id`, `title`, exact
+initial `task`, and the `workspace` path of a registered project. Optional
+`model`, `thinking` (`no`, `high`, `max`), positive `max_steps`, and
+`workspace_mode` (`local`, the default, or `worktree`) configure a new session.
+The MCP call returns the proposal immediately; the agent can continue its
+current turn. Creating a suggestion creates neither a session nor a worktree.
+
+The source session comes from the bearer grant. An identical retry of the same
+`request_id` returns its saved proposal; changed arguments require a new id.
+The host stores proposals beside the source transcript in `session-starts.json`,
+so archive/restore/delete move them with that conversation. Pending cards and
+started-session links survive frontend reloads and host restarts.
+
+The user chooses one of three actions in the transcript:
+
+- **Start** creates a new OpenSeek session with the proposal's options and
+  submits its exact initial task. Options can override the model and local or
+  worktree mode. A requested worktree uses the ordinary host worktree flow.
+  After the engine confirms the durable initial user message, the card folds
+  to its title; clicking it uses ordinary session navigation.
+- **Work here** submits the task to the source conversation through its existing
+  active/idle input handling and ignores new-session options. A running source
+  follows the ordinary Send preference (steer or queue); an idle source uses
+  its current composer model and reasoning settings. The card hides after
+  confirmed delivery. With queue mode it remains pending until promotion
+  commits the task; withdrawing that input or stopping its predecessor before
+  promotion makes the card retryable. Ordinary composer queue entries keep
+  their existing resume behavior.
+- **Dismiss** hides the suggestion without submitting a task.
+
+`session.starts_list({session})` returns `{session, generation, proposals}`.
+`session.starts_decide({session, request_id, action, model?, workspace_mode?})`
+accepts `start`, `here`, or `dismiss` and returns the same snapshot shape.
+An omitted `model` keeps the suggested selection, `null` selects project defaults,
+and a string explicitly selects that model.
+For Work here, `here` optionally carries the source composer's `model`,
+`thinking`, `approval` (`ask` or `review`), `max_steps`, and `followup_behavior` (`steer` or `queue`). These
+settings are separate from new-session options. An omitted `here` uses host
+defaults and the host's saved follow-up preference.
+`session.starts_changed` broadcasts a new snapshot after each durable save;
+clients keep the newest `generation` for that source. Proposal `status` is
+`pending`, `starting`, `started`, `here`, `dismissed`, or `failed`. `id` is the
+host-minted durable submission identity; `request_id` associates the proposal
+with the tool call. `target_session` is present after a destination has been
+reserved, and `error` describes a failed attempt.
+
+Starting is serialized against other clients and host processes. The host
+reserves one target before creation and confirms its unique user-message
+submission id before marking it started. Transport disconnects do not cancel
+an admitted choice. A failed attempt retains the card and the reserved target
+for retry; a retry first checks for an already committed task. On restart,
+reading an interrupted start reconciles that same receipt and either recovers
+the completed link or makes the card retryable. A list request skips actively
+owned operations and promptly returns their current `starting` state.
+Repeated clicks cannot create
+a sibling session or submit a confirmed task twice.
 
 ## Session artifacts
 

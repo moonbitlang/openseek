@@ -618,6 +618,12 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.session_starts_list, payload => {
+      state.session_starts_list(payload.session)
+    }),
+    Endpoint(@commands.session_starts_decide, payload => {
+      state.session_starts_decide(payload)
+    }),
     Endpoint(@commands.session_artifacts_list, payload => {
       @engine.session_artifacts_list(state.manager, payload.session)
     }),

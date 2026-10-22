@@ -39,7 +39,9 @@ pub(all) enum Presentation {
 pub(all) struct ViewOption {
   value : String
   label : String
-}
+} derive(Eq)
+pub fn ViewOption::equal(Self, Self) -> Bool
+pub fn ViewOption::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

@@ -9,6 +9,7 @@ pub(all) enum MessageReceipt {
 pub struct MessageSubmission {
   run_id : String
   steering : Bool
+  queued : Bool
   priv receipt : @message_receipts.Receipt[MessageReceipt]
 }
 
@@ -28,9 +29,15 @@ fn ServeEngine::watch_message(
   run_id : String,
   id : String,
   steering~ : Bool,
+  queued~ : Bool = false,
   notify : (MessageReceipt) -> Unit,
 ) -> MessageSubmission {
-  { run_id, steering, receipt: self.message_receipts.watch(id, notify), }
+  {
+    run_id,
+    steering,
+    queued,
+    receipt: self.message_receipts.watch(id, notify),
+  }
 }
 
 ///|
@@ -48,8 +55,25 @@ fn ServeEngine::drop_unwritten_message(
 }
 
 ///|
+/// A stopped/failed predecessor leaves ordinary composer queue entries for
+/// the user's existing resume controls. A transcript-owned queued task has
+/// no such row: withdraw just those entries and release their waiting cards.
+fn ServeEngine::drop_unpromoted_host_inputs(self : ServeEngine) -> Unit {
+  self.queued_runs.retain(queued => {
+    if queued.host_owned {
+      self.message_receipts.settle(queued.id, Dropped)
+      false
+    } else {
+      true
+    }
+  })
+}
+
+///|
 /// Submit host-owned input to an existing conversation. A live process keeps
 /// its model/configuration; a reclaimed process is resumed with host defaults.
+/// Work here supplies the source composer's options: idle input goes through
+/// ordinary run configuration, and running input follows its steer/queue choice.
 /// Reject input while compaction is in progress. A returned submission is
 /// admission only; the caller confirms the durable User submission id.
 /// The receipt observer outlives turn-finished and settles on the exact steer
@@ -61,6 +85,7 @@ pub async fn submit_session_message(
   text : String,
   submission_id : String,
   notify : (MessageReceipt) -> Unit,
+  here_options? : @protocol.SessionStartHereOptions,
 ) -> MessageSubmission {
   guard !text.is_blank() &&
     normalize_submission_id(Some(submission_id)) is Some(_) else {
@@ -77,6 +102,27 @@ pub async fn submit_session_message(
           raise EngineError(
             "conversation is compacting; message was not submitted",
           )
+        Running(run_id~, ..) if here_options is Some(options) &&
+          options.followup_behavior == "queue" => {
+          let reply = queue_run(manager, {
+            run_id,
+            action: QueueAdd(id=submission_id, text~, images=[]),
+          })
+          guard reply.accepted &&
+            live.queued_runs.search_by(queued => queued.id == submission_id)
+            is Some(index) else {
+            raise EngineError("conversation stopped accepting queued input")
+          }
+          let queued = live.queued_runs[index]
+          live.queued_runs[index] = { ..queued, host_owned: true, }
+          return live.watch_message(
+            queued.run_id,
+            submission_id,
+            steering=false,
+            queued=true,
+            notify,
+          )
+        }
         Running(run_id~, ..) => {
           let reply = steer_run(manager, {
             text,
@@ -94,6 +140,7 @@ pub async fn submit_session_message(
             notify,
           )
         }
+        Idle(..) if here_options is Some(_) => ()
         Idle(..) => {
           let run_id = mint_run_id()
           let content = prompt_content(text, [])
@@ -133,10 +180,10 @@ pub async fn submit_session_message(
     submission_id: Some(submission_id),
     session,
     workspace: None,
-    model: None,
-    thinking: None,
-    approval: None,
-    max_steps: None,
+    model: here_options.bind(options => options.model),
+    thinking: here_options.bind(options => options.thinking),
+    approval: here_options.bind(options => options.approval),
+    max_steps: here_options.bind(options => options.max_steps),
   })
   guard manager.serving().get(session) is Some(slot) &&
     slot.live() is Some(live) else {

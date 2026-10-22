@@ -56,6 +56,22 @@ pub async fn FileLock::acquire(path : @pathx.Path) -> FileLock {
 }
 
 ///|
+/// Inspect lock ownership without waiting for an in-flight operation. Readers
+/// use this to reconcile orphaned durable work while promptly returning live
+/// pending work to reconnecting clients.
+pub async fn FileLock::try_acquire(path : @pathx.Path) -> FileLock? {
+  ensure_dir(path.dirname())
+  let file = open_lock_file(lock_file(path).to_string())
+  errdefer file.close()
+  if file.try_lock(Exclusive) {
+    Some({ file, })
+  } else {
+    file.close()
+    None
+  }
+}
+
+///|
 /// Open the sidecar without being redirected by a link at its name. The
 /// sidecar has to live beside the data file — every writer must agree on
 /// where it is — and beside the data file can mean inside an attached
