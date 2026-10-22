@@ -10,7 +10,7 @@ test "host prompt snapshots resolve pending drafts once and leave captured draft
         { ..empty_device_state(other), bridge: Connected, },
       ],
     }
-    .with_mirror(_ => HostSettingsMirror::loading())
+    .with_host_settings(_ => HostSettingsMirror::loading())
     .activate(host, "pending-prompt", host.test_project())
   assert_true(pending.active().system_prompt is None)
   assert_false(pending.active().prompt_ready())
