@@ -49,7 +49,7 @@ moon run ./desktop/package/macos -- \
 
 # Windows; defaults to ZIP and installer
 moon run ./desktop/package/windows
-moon run ./desktop/package/windows --target native -- --release --target app --target installer
+moon run ./desktop/package/windows --target native -- --release --target installer
 
 # Linux AppImage
 moon run ./desktop/package/linux -- --release
@@ -62,9 +62,9 @@ moon run ./desktop/package/dev
 Windows installer builds require NSIS (`makensis.exe` on `PATH`). Only the
 release workflow installs NSIS 3.12.0 through Chocolatey; ordinary Windows CI
 builds and uploads the unpacked app. Both jobs set `CL=/bigobj` for MSVC.
-The release workflow retains the unpacked app for its version check and
-publishes `SeekMoon-windows-x64-setup.exe`; `--target zip` remains available
-for local portable builds.
+The release workflow builds the installer and publishes
+`SeekMoon-windows-x64-setup.exe`; `--target zip` remains available for local
+portable builds.
 
 Browser inputs and the standalone esbuild executable are fixed-version
 upstream distributions with checked-in SHA-256 digests. Builds cache only
