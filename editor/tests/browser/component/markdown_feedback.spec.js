@@ -390,6 +390,26 @@ test('empty drafts follow reselection, typed drafts keep source and selected tex
   }
 });
 
+test('visible composer follows document resizing without losing its draft', async ({ page }) => {
+  await openFixture(page);
+  await openComposer(page, '自动保存');
+  await page.locator(input).fill('Keep this draft while resizing');
+  const host = page.locator('.markdown-feedback-host');
+
+  for (const width of [320, 800]) {
+    await host.evaluate((node, width) => { node.style.width = `${width}px`; }, width);
+    await expect.poll(async () => (await page.locator(documentRoot).boundingBox()).width).toBe(width);
+    await expect.poll(async () => (await page.locator(widget).boundingBox()).width)
+      .toBeCloseTo(Math.min(360, width * 0.9), 0);
+    const root = await page.locator(documentRoot).boundingBox();
+    const composer = await page.locator(widget).boundingBox();
+    expect(composer.x).toBeGreaterThanOrEqual(root.x);
+    expect(composer.x + composer.width).toBeLessThanOrEqual(root.x + root.width);
+    await expect(page.locator(input)).toHaveValue('Keep this draft while resizing');
+    await expect(page.locator(input)).toBeFocused();
+  }
+});
+
 test('composer follows the active selection endpoint and fits a narrow document on first display', async ({ page }) => {
   await openFixture(page);
   // Prose must not override the shared compact composer's typography. Check
