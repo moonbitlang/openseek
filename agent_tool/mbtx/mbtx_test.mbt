@@ -41,29 +41,28 @@ async test "runs a pure-core program and returns its output" {
 ///|
 /// The text of a `share/examples` script the prompt deliberately does not
 /// link. `cli_greet.mbtx` is not shown to the model — `share/workflow/
-/// check.mbtx` already teaches the `args` contract inline, four lines above
-/// where it used to sit — but it stays the fixture driven through the real
-/// tool below, being the smallest script whose whole behavior is its
-/// arguments.
+/// check.mbtx` already teaches the `args` contract in the language guide —
+/// but it stays the fixture driven through the real tool below, being the
+/// smallest script whose whole behavior is its arguments.
 async fn unlinked_example(name : String) -> String {
   @fs.read_file("share/examples/\{name}").text()
 }
 
 ///|
-/// The same guarantee for a `share/workflow` script the prompt shows inline:
-/// the bundled workflows are linked the same way, so the reusable-script
+/// The same guarantee for a `share/workflow` script shown inline in the
+/// language guide: the bundled workflows are linked the same way, so the reusable-script
 /// contract is verified against the very file `@builtin/` runs.
 async fn prompt_workflow(name : String) -> String {
-  let prompt = @fs.read_file("prompt/default_prompt.mbt.md").text()
+  let prompt = @fs.read_file("prompt/moonbit_syntax_and_api.mbt.md").text()
   assert_true(
     prompt.contains("[share/workflow/\{name}](../share/workflow/\{name})"),
-    msg="the default prompt no longer links share/workflow/\{name}",
+    msg="the language guide no longer links share/workflow/\{name}",
   )
   @fs.read_file("share/workflow/\{name}").text()
 }
 
 ///|
-async test "default prompt reusable check script forwards arguments" {
+async test "language guide reusable check script forwards arguments" {
   let source = prompt_workflow("check.mbtx")
   @vfs.with_tmpdir(ws => {
     @fs.write_file(
