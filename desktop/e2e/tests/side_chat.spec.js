@@ -309,3 +309,29 @@ test('a copied tool call keeps its own tab choice in each transcript', async ({ 
   await expect(original(columnCall)).toBeChecked();
   await expect(original(sideCall)).toBeChecked();
 });
+
+test('a copied message keeps its own changes popup in the side chat', async ({ page }) => {
+  const selection = `<file path="src/main.mbt" version="saved-comparison">\n<hunk>\n<original lines="8">\nlet old_value = 1\n</original>\n<modified lines="9">\nlet saved_value = 2\n</modified>\n</hunk>\n</file>`;
+  const ask = `Explain the parser.\n\n<user_mentions>\n<review_changes workspace="/workspace">\n${selection}\n</review_changes>\n</user_mentions>`;
+  const main = [
+    event(1, 'user', { content: ask }),
+    event(2, 'terminal', { kind: 'finished', message: 'The parser reads tokens.' }),
+  ];
+  const side = [
+    ...main,
+    event(3, 'user', { content: 'An aside about tokens.' }),
+    event(4, 'terminal', { kind: 'finished', message: 'Tokens are lexemes.' }),
+  ];
+  const app = await setup(page, { main, side });
+  const sideChip = page.locator('#side-chat-transcript .user-bubble .changes-chip .mention-jump');
+  await sideChip.click();
+  const popup = page.locator('.side-chat').getByRole('dialog', { name: 'Selected changes' });
+  await expect(popup).toContainText('let saved_value = 2');
+  // Working inside the dock's popup does not count as leaving it.
+  await popup.getByTitle('src/main.mbt', { exact: true }).click();
+  await expect(popup).toBeVisible();
+  await expect(popup.locator('.changes-preview')).toHaveCount(0);
+  await popup.getByTitle('src/main.mbt', { exact: true }).click();
+  await expect(popup.locator('.changes-preview')).toContainText('let saved_value = 2');
+  expect(app.pageErrors).toEqual([]);
+});

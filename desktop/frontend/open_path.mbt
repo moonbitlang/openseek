@@ -199,7 +199,7 @@ fn finish_open_path(
         office_target?=context.office_target,
       )
     }
-    Browser(path) => show_browser_path(dispatch, selected, path)
+    Browser(path) => show_browser_path(dispatch, selected, path, context.owner)
     Directory(target) =>
       reveal_local_directory(dispatch, selected, Relative(target.path))
     Refused(message) => selected.notify_error(dispatch, message)
@@ -306,10 +306,14 @@ fn show_editor_resource(
 }
 
 ///|
+/// Show `path` in a browser tab of the dock on screen. `opener` is the
+/// conversation the file was opened for — a side chat's, when its dock is its
+/// conversation's — and owns a new page.
 fn show_browser_path(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : String,
+  opener : @interop.ConversationKey,
 ) -> (@cmd.Cmd, Model) {
   guard model.is_desktop &&
     model.active_checkout() is Some(active) &&
@@ -337,12 +341,8 @@ fn show_browser_path(
         model.browser_page_owner(id),
       )
     None => {
-      let (preview, id) = @preview.open_page(
-        model.preview,
-        url~,
-        owner=active.owner,
-      )
-      (preview, id, Some(active.owner))
+      let (preview, id) = @preview.open_page(model.preview, url~, owner=opener)
+      (preview, id, Some(opener))
     }
   }
   let dock = if dock.active is Some(FilePicker) {

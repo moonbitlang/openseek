@@ -48,9 +48,13 @@ test "a side chat file mention opens in the visible parent dock" {
         assert_true(opened.file_panel.expanded.contains(Relative("src")))
       }
       Browser(_) => {
-        assert_true(@dock.active_browser(opened.dock_state()) is Some(_))
+        guard @dock.active_browser(opened.dock_state()) is Some(page) else {
+          fail("the preview must be on screen")
+        }
         assert_eq(opened.preview.pages.length(), 1)
         assert_eq(replayed.preview.pages.length(), 1)
+        // The preview is the side chat's, whose tools reach it there.
+        assert_true(opened.browser_page_owner(page) == Some(side_chat_owner()))
       }
       _ => fail("the fixture must resolve to an in-app dock tab")
     }
