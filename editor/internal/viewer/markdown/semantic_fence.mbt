@@ -23,15 +23,11 @@ pub fn MarkdownCodeBlock::is_moonbit_check_fence(
 
 ///|
 fn markdown_info_string_is_moonbit_check(info_string : String) -> Bool {
-  let tokens : Array[String] = []
-  for token in info_string.split(" ") {
-    let token = token.to_owned()
-    if token != "" {
-      tokens.push(token)
-    }
-  }
-  guard tokens.length() >= 2 else { return false }
-  (tokens[0] == "mbt" || tokens[0] == "moonbit") && tokens[1] == "check"
+  let tokens : Array[String] = [
+    for token in info_string.split(" ") if !token.is_empty() => token.to_owned()
+  ]
+  guard tokens is [first, second, ..] else { return false }
+  (first == "mbt" || first == "moonbit") && second == "check"
 }
 
 ///|

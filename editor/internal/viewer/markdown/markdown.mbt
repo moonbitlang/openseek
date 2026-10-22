@@ -183,10 +183,7 @@ fn markdown_cmark_input(markdown : String) -> String {
 
 ///|
 fn markdown_code_block_text(block : @cmark.CodeBlock) -> String {
-  let lines : Array[String] = []
-  for line in block.code {
-    lines.push(line.v)
-  }
+  let lines : Array[String] = [ for line in block.code => line.v ]
   if lines.length() == 0 {
     ""
   } else {

@@ -60,10 +60,11 @@ test "tight list item source ranges exclude their unselected siblings" {
       "- parent\n  - first **target**\n  - second target",
     ] {
     let rendered = render_markdown(source, source_mapping=true)
-    let item_sources : Array[String] = []
-    for range in html_source_ranges_for_tag(rendered.html, "li") {
-      item_sources.push(source[range.start:range.end_exclusive].to_owned())
-    }
+    let item_sources : Array[String] = [
+      for range in html_source_ranges_for_tag(rendered.html, "li") => {
+        source[range.start:range.end_exclusive].to_owned()
+      }
+    ]
     item_sources.sort()
     let expected = if source.has_prefix("3.") {
       ["3. first **target**", "4. second target"]
@@ -86,7 +87,6 @@ test "table cell HTML ranges retain markup and UTF-16 source boundaries" {
     #|| three | four |
   let rendered = render_markdown(source, source_mapping=true)
   let cell_sources : Array[String] = []
-  let row_sources : Array[String] = []
   for tag in ["th", "td"] {
     for range in html_source_ranges_for_tag(rendered.html, tag) {
       cell_sources.push(
@@ -94,9 +94,11 @@ test "table cell HTML ranges retain markup and UTF-16 source boundaries" {
       )
     }
   }
-  for range in html_source_ranges_for_tag(rendered.html, "tr") {
-    row_sources.push(source[range.start:range.end_exclusive].to_owned())
-  }
+  let row_sources : Array[String] = [
+    for range in html_source_ranges_for_tag(rendered.html, "tr") => {
+      source[range.start:range.end_exclusive].to_owned()
+    }
+  ]
   cell_sources.sort()
   row_sources.sort()
   let expected_cells = [
