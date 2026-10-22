@@ -46,9 +46,9 @@ struct SandboxedCommand {
 /// protection.
 ///
 /// The root is resolved to its real path here, because the kernel matches
-/// profile rules against realpaths. The rules are built from the tree as it
-/// exists now — renaming the root or subtree afterwards makes them stale, so
-/// prepare the command close to where it runs.
+/// profile rules against realpaths. The rules name the root and subtree as they
+/// resolve now — renaming either afterwards makes them stale, so prepare the
+/// command close to where it runs.
 ///
 /// `writable_subtree` re-allows writes below one directory — a scratch lab or
 /// throwaway build directory — via a last-match-wins allow rule. It is resolved
@@ -56,8 +56,8 @@ struct SandboxedCommand {
 /// under-allow, never over-allow.
 ///
 /// `profile_path` is a caller-owned file in an existing temporary directory.
-/// The generated profile is written there and passed with `sandbox-exec -f`:
-/// source-containing directories can make it larger than the OS argv limit.
+/// The generated profile is written there and passed with `sandbox-exec -f`,
+/// the transport the worker profile needs for its list of denied roots.
 /// Keep the file until `sandbox-exec` has loaded it; retaining it until the
 /// command exits avoids racing that load. Its final rule denies writes to the
 /// profile even inside a writable lab. Prepare again before a new spawn.

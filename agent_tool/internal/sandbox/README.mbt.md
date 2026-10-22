@@ -53,18 +53,18 @@ raises instead, on every platform, so a caller bug cannot silently disable
 protection where the probe happens to fail. The root is realpath'd inside the
 constructor, because the kernel matches profile rules against real paths.
 
-The profile is built from the tree as it exists at preparation; renaming the
-root or subtree afterwards makes the rules stale. Prepare close to where the
+The profile names the root and subtree as they resolve at preparation; renaming
+either afterwards makes the rules stale. Prepare close to where the
 command runs. The caller supplies `profile_path` in a temporary directory and
 prepares it again for each spawn. The profile is loaded by `sandbox-exec` at
 launch; keeping the file until the command exits avoids racing that load.
 The profile travels through `sandbox-exec -f`,
-so repository size does not consume the OS command-line argument limit. `mbtx`
+so a long list of worker deny roots does not consume the OS command-line
+argument limit. `mbtx`
 keeps this file in its per-call build directory, including background runs.
 The final profile rule denies writes to the profile itself, even when that
 temporary directory is inside a writable lab. Temporary test workspaces can
-also own the file; a separate temporary directory avoids changing the source
-scan's watched directory mtimes.
+also own the file.
 
 ## Commands
 
@@ -89,7 +89,7 @@ A generic denial, a read denial, or a mere mention of a source file does not
 match.
 
 A denied *directory* has no protected suffix, so it is recognized only
-through the subjects the profile scan discovered. Those subjects never leave
+through the profile's subjects: the workspace root and its basename. Those subjects never leave
 the prepared command, so a background reader cannot accidentally classify
 output using metadata from another profile. The exhaustive platform-independent
 line-shape pins live in `denial_output_wbtest.mbt`; the end-to-end kernel tests
@@ -104,20 +104,21 @@ The generated profile starts from `(allow default)` and then:
   `moon.work`, including the legacy JSON manifests, under the workspace root;
 - re-allows `_build` and `.mooncakes` trees where Moon writes generated
   sources;
-- denies source-containing directories literally, preventing a direct rename
-  or removal of those directories.
+- denies every directory write under the workspace root (`vnode-type
+  DIRECTORY`): creating, renaming, or removing a directory.
 
-The directory rules are intentional: the suffix regex alone would let a
-containing directory be moved outside the protected workspace. Their scan and
-mtime tracking skip `.worktrees` and `.claude/worktrees`, which contain separate
-checkouts rather than the active source tree. The source-file regex still
-covers these paths. An active workspace rooted inside either location is
-scanned normally, and ordinary directories named `worktrees` are not excluded.
+The directory rule is intentional: the suffix regex alone would let a
+containing directory be moved outside the protected workspace. It is one rule
+rather than one per source-containing directory because the profile must not
+grow with the repository: libsandbox rejects a profile of about 20k literal
+rules and `sandbox-exec` crashes with SIGSEGV at about 40k, which failed every
+read-only command in a large workspace (#2158). The cost is that a read-only
+role cannot create a directory in the workspace outside `_build`,
+`.mooncakes`, and its `writable_subtree`.
 
-The base profile is cached by normalized workspace root; directory mtimes
-from the source-tree scan invalidate the cache when the tree changes. The
-`writable_subtree` variant is composed per command preparation and never cached.
-`sandbox_wbtest.mbt` pins the emitted SBPL byte for byte.
+The profile depends only on the root and the optional `writable_subtree`, so
+nothing is scanned or cached. `sandbox_wbtest.mbt` pins the emitted SBPL byte
+for byte.
 
 The profile builder classifies names through `@source_write_policy`, so what
 the kernel profile protects is exactly what that policy calls source.
