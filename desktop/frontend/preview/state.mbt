@@ -31,6 +31,11 @@ pub(all) struct PageState {
   loading : Bool
   // The last load failure's description, cleared by the next navigation.
   failure : String?
+  // The conversation the page was opened for. The host lets only that
+  // conversation's browser tools reach it, so every later navigation names
+  // it — even when the page shows in another conversation's dock, as a side
+  // chat's pages do in its conversation's.
+  owner : @interop.ConversationKey?
 } derive(Eq)
 
 ///|
@@ -51,7 +56,11 @@ pub fn State::empty() -> State {
 ///|
 /// Allocate a page. A blank tab starts without a URL; a routed link opens
 /// with one (the caller also asks the host to create the native view then).
-pub fn open_page(state : State, url? : String) -> (State, Int32) {
+pub fn open_page(
+  state : State,
+  url? : String,
+  owner? : @interop.ConversationKey,
+) -> (State, Int32) {
   let id = state.next_id
   let pages = state.pages.copy()
   pages[id] = {
@@ -60,6 +69,7 @@ pub fn open_page(state : State, url? : String) -> (State, Int32) {
     title: "",
     loading: url is Some(_),
     failure: None,
+    owner,
   }
   ({ ..state, pages, next_id: id + 1, }, id)
 }
