@@ -1,6 +1,6 @@
 # Review swarm
 
-Status: design, for review before implementation.
+Status: design, revised after a Codex (high) design review.
 
 `@builtin/review.mbtx` starts one `review` child to audit the worktree against
 some criteria. This plan adds a swarm mode: several review children, each
@@ -70,28 +70,34 @@ Report only findings within this lens; other reviewers cover the rest.
 ```
 
 The baseline (`sha`, `dirty`) is passed unchanged. The label is
-`review:<name>`.
+`review:<name>`, and each lens gets an explicit 100-step budget (the `review`
+kind's own ceiling is 120).
 
-**Build ownership.** Children share the checkout, and concurrent
-`moon check` runs serialize on moon's `_build` lock. So only the `tests` lens
-is told to run the build and tests. The others are told to read code and run
-targeted commands only. When the `tests` lens is not selected, the
-`correctness` lens takes the build over; when neither is, nobody runs it.
-Either way, the report's `stats.build`/`stats.tests` come from the lens that
-ran them, or are `"skipped"`.
+**Builds.** Every reviewer may run `moon check`/`moon test`: the audit system
+prompt tells it to, and the script can't override that from the goal text.
+Children share the checkout, so concurrent builds wait on moon's `_build`
+lock. That costs wall time, not correctness. Experiments that need a writable
+project use each child's own scratch lab, as today.
 
 ## Merge and dedupe
 
-All lens reports are merged into one list. Two findings are the same issue
-when all three of these hold:
+All lens reports are merged into one list. Merging is deliberately
+conservative: wrongly merging two distinct bugs would hide one of them, while
+failing to merge a duplicate only costs a reader a second look. Two findings
+from **different** lenses are the same issue only when all three of these
+hold:
 
 1. **Same file**, after stripping a leading `./`.
 2. **Close lines**: both have no line, or the lines differ by at most 3.
-3. **Same issue**: the same `category`, or titles whose word sets overlap at
-   least half (Jaccard ≥ 0.5, over lowercase words of 3 or more letters).
+3. **Same claim**: their titles' word sets overlap at least half (Jaccard ≥
+   0.5, over lowercase words of 3 or more letters). A shared `category` alone
+   is not enough; it's a free-form label, not an issue identifier.
 
-A merged finding keeps the text of its most severe member, and its `detail`
-gains a trailer naming the lenses that found it:
+Two findings from the same lens never merge: that reviewer already reported
+them as separate issues.
+
+A merged finding keeps the text and severity of its most severe member, and
+its `detail` gains a trailer naming the lenses that found it:
 `[found by: correctness, tests]`. The merge is deterministic: findings are
 taken lens by lens in the order given, and each finding joins the first
 matching group.
@@ -104,23 +110,37 @@ model), so it does not skip verification. It is shown so a reader can weigh it.
 Each finding of severity `blocker` or `high` (most severe first, at most
 `--verify N`) goes to a fresh `review` child, which tries to disprove it.
 
-- Input: `goal` holds the claim (file, line, severity, title, detail) and the
-  instruction:
-  *"Verify this one claim. Try to refute it first. If it holds, submit exactly
-  one finding restating it, with the severity you judge it deserves. If it
-  does not hold, submit no findings and explain why in the summary."*
+- **Input.** Children don't see this conversation, so the `goal` text carries
+  everything, in clearly separated parts:
+  1. *The original criteria*, verbatim, labeled as what the work is held to.
+  2. *The allegation*: the finding's file, line, severity, title and detail,
+     labeled as one reviewer's claim, not as criteria.
+  3. *The instruction*: try to refute the allegation first. Then submit with
+     a summary whose first line is exactly one of `VERDICT: CONFIRMED`,
+     `VERDICT: REFUTED` or `VERDICT: INCONCLUSIVE`, followed by the evidence.
+     For `CONFIRMED`, submit exactly one finding restating the claim, in the
+     same file. Otherwise submit no findings. Say `INCONCLUSIVE` whenever the
+     claim couldn't actually be tested.
+
   Same baseline. Label `review:verify-<n>`. Step budget 40.
-- **Confirmed**: the verifier's report has a finding. The verifier's severity
-  replaces the original, so verification can downgrade but never adds a new
-  issue. Its first finding's detail is appended to the merged finding's
-  detail.
-- **Refuted**: the report has no findings. The finding is dropped from
-  `findings` and listed, with the verifier's summary, under
-  `Refuted:` in the printed output.
-- **Unverified**: the verifier was refused, or ended without a report. The
-  finding stays at its severity, with `[unverified]` in its detail.
-  Being conservative here is deliberate: a blocker nobody could check still
-  blocks.
+- **The outcome is read strictly**, from the verdict line and the finding
+  shape together:
+  - **Confirmed**: `VERDICT: CONFIRMED` and exactly one finding in the
+    claim's file. The verifier's detail is appended to the merged finding's
+    detail.
+  - **Refuted**: `VERDICT: REFUTED` and no findings. The finding is dropped
+    from `findings` and listed, with the verifier's summary, under
+    `Refuted:` in the printed output.
+  - **Unverified**: everything else. That includes `INCONCLUSIVE`, a missing
+    or unknown verdict line, a verdict whose findings don't fit it (for
+    example `CONFIRMED` with an unrelated file or with two findings), and a
+    verifier that was refused or ended without a report. The finding stays,
+    with `[unverified]` in its detail. A blocker nobody could check still
+    blocks.
+- **Severity never changes.** Verification only confirms or removes a
+  claim. A verifier doesn't own the criteria's notion of `blocker` ("the goal
+  is not met"), so letting it re-grade would let a confirmed blocker turn
+  into a successful exit.
 
 Verifiers start together, after every lens has ended, so their number
 plus the lenses' never exceeds 16 at once.
@@ -134,8 +154,9 @@ are, marked `[unverified]`.
   That's at most 13 starts, well inside the 64-start quota and the 16-child
   limit. The script can't see how many other children the session already
   has, so a refused start is handled, not prevented.
-- **Steps**: lens children use the `review` kind's goal ceiling (100 steps),
-  verifiers 40. Worst case: 5 × 100 + 8 × 40 = 820 steps.
+- **Steps**: lens children get an explicit 100 steps (as single mode does
+  today; the kind's ceiling is 120), verifiers 40. Worst case:
+  5 × 100 + 8 × 40 = 820 steps.
 - **Tokens**: each child's usage is read from `job_output` and summed. With
   `--max-tokens N`, the verify pass is skipped when the lenses have already
   spent N or more; their findings are then reported unverified. A running
@@ -148,13 +169,17 @@ The script prints, in order:
 1. The merged report as one JSON line, in the `ReviewReport` v1 shape
    (`schema_version`, `scope`, `findings`, `summary`, `stats`), so anything
    that parses today's report parses this one.
-   - `scope`: from the first lens that reported.
-   - `stats.findings`: the merged count. `stats.files_reviewed`: the maximum
-     over lenses. `stats.build`/`stats.tests`: from the build owner, else
-     `"skipped"`.
+   - `scope`: `base` and `head` from the first lens that reported (a lens
+     that reports different ones is noted in the summary), and `files` the
+     union of every lens's files, in first-seen order.
+   - `stats.findings`: the merged count. `stats.files_reviewed`: the most
+     any one lens reviewed. The per-lens lines below give each count; the
+     total isn't derivable, since lenses overlap.
+   - `stats.build`/`stats.tests`: `"fail"` when any lens reported `"fail"`,
+     else `"pass"` when any reported `"pass"`, else the first lens's value.
    - `summary`: each lens's one-line summary, prefixed with its name.
-2. One line per lens: `lens <name>: reported, findings=N, tokens=T`, or why
-   it has no report.
+2. One line per lens: `lens <name>: reported, findings=N, files=F, tokens=T`,
+   or why it has no report.
 3. `Refuted:` lines, one per dropped finding, when there are any.
 4. A verdict line extending today's:
    `findings=N blockers=M tokens=T lenses=L verified=V refuted=R unverified=U`.
@@ -180,12 +205,16 @@ host, which records every start and serves scripted reports:
 
 - `--swarm` starts the three default lenses with the right labels, lens text,
   baseline and step budgets.
-- Two lenses report the same issue in nearby lines: one merged finding naming
-  both lenses.
-- A high finding with a confirming verifier is kept, with the verifier's
-  severity. One with a refuting verifier is dropped and listed under
-  `Refuted:`. One whose verifier has no report stays, marked `[unverified]`.
-- A confirmed blocker fails the run. A refuted blocker does not.
+- Two lenses report the same claim in nearby lines: one merged finding
+  naming both lenses. Two different claims at nearby lines, and two findings
+  from one lens, stay separate.
+- A confirming verifier keeps a finding, at its original severity. An
+  explicit refutation drops it and lists it under `Refuted:`. Each of these
+  leaves it `[unverified]`: an `INCONCLUSIVE` verdict, an empty report with
+  no verdict line, `CONFIRMED` with an unrelated file or two findings, and a
+  verifier with no report.
+- A confirmed or unverified blocker fails the run. An explicitly refuted one
+  does not.
 - A refused lens makes the run incomplete and fails it, while the other
   lenses' findings are still printed.
 - `--verify 0` and `--max-tokens` skip verification.
@@ -194,6 +223,10 @@ host, which records every start and serves scripted reports:
 
 `just check-workflows` type-checks the script, and the mbtx package tests
 check the bundle.
+
+These tests check the script's logic against canned reports. Whether real
+children follow the lens and verifier framing is checked by a live run on a
+real branch before the change merges.
 
 ## Out of scope
 
