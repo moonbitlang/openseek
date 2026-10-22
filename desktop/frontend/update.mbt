@@ -108,8 +108,9 @@ fn session_snapshot_command(
 
 ///|
 /// Move the UI's focus to `channel`: refetch the focused-scoped mirrors
-/// that BridgeReady only loads for the then-focused device (host settings,
-/// installed skills) and reset their local bookkeeping, so
+/// that BridgeReady only loads for the then-focused device (installed
+/// skills), re-read the newly focused host's settings so its reply settles
+/// the setup modal for that host, and reset the focused form state, so
 /// nothing of the previous device's host bleeds through. The active
 /// conversation is the caller's to place afterwards (an activation or a
 /// rotation); until it does, nothing is selected. A no-op when focus is
@@ -149,7 +150,7 @@ fn focus_channel(
   (
     @cmd.batch([focus_cmd, unwatch_cmd]),
     {
-      ..model.clear_host_settings(),
+      ..model.reset_api_setup(),
       focused: channel,
       active_session: "",
       selected_conversation: None,
@@ -164,7 +165,7 @@ fn focus_channel(
       // owner/root state until the post-dispatch sync retires its file-index
       // cache and re-roots against the newly focused host.
       file_panel,
-    },
+    }.receive_default_prompt(),
   )
 }
 
@@ -3957,10 +3958,13 @@ fn update_msg(
           model.focused,
           model.focused_connection_generation(),
         ),
-        { ..model, host_settings_error: None, },
+        model.map_host_settings(model.focused, mirror => {
+          ..mirror,
+          error: None,
+        }),
       )
     Prompt(msg) => {
-      guard model.host_settings_loaded() && model.settings_saves == 0 else {
+      guard model.host_settings_loaded() && !model.host_settings_saving() else {
         return (@cmd.none, model)
       }
       if msg is @prompt.Edited(_) {
@@ -3996,8 +4000,7 @@ fn update_msg(
           model.focused_connection_generation(),
         ),
         {
-          ..model,
-          settings_saves: model.settings_saves + 1,
+          ..model.map_host_settings(model.focused, mirror => mirror.write_sent()),
           select_menu: None,
         },
       )
@@ -4008,7 +4011,9 @@ fn update_msg(
       (@cmd.none, { ..model, setup_api_key: value, })
     }
     ProviderChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       let provider = ApiProvider::parse(value)
       // The update channel no longer derives from the chat provider (only
       // the hosted chat proxy was retired; self-update and the relay stay
@@ -4017,20 +4022,21 @@ fn update_msg(
       let push = push_host_settings(
         dispatch,
         model.focused,
-        provider_settings_patch(provider, model.custom_api_url),
+        provider_settings_patch(provider, endpoint.custom_api_url),
         model.focused_connection_generation(),
       )
       let next = {
-        ..model,
-        api_provider: provider,
-        custom_api_url: if provider is Custom &&
-          model.custom_api_url == OpenRouterChatCompletionsUrl {
-          ""
-        } else {
-          model.custom_api_url
-        },
+        ..model.edit_host_endpoint({
+          ..endpoint,
+          provider,
+          custom_api_url: if provider is Custom &&
+            endpoint.custom_api_url == OpenRouterChatCompletionsUrl {
+            ""
+          } else {
+            endpoint.custom_api_url
+          },
+        }),
         setup_api_key: "",
-        settings_saves: model.settings_saves + 1,
         select_menu: None,
       }.align_fresh_conversation_with_provider()
       // The switch can move the endpoint between usable and not. Inside the
@@ -4040,7 +4046,9 @@ fn update_msg(
       (push, next.settle_api_setup())
     }
     FollowupBehaviorChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       let behavior = FollowupBehavior::parse(value)
       (
         push_host_settings(
@@ -4050,15 +4058,18 @@ fn update_msg(
           model.focused_connection_generation(),
         ),
         {
-          ..model,
-          followup_behavior: behavior,
-          settings_saves: model.settings_saves + 1,
+          ..model.edit_host_endpoint({
+            ..endpoint,
+            followup_behavior: behavior,
+          }),
           select_menu: None,
         },
       )
     }
     CustomApiUrlChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       (
         push_host_settings(
           dispatch,
@@ -4066,11 +4077,7 @@ fn update_msg(
           custom_url_settings_patch(value),
           model.focused_connection_generation(),
         ),
-        {
-          ..model,
-          custom_api_url: value,
-          settings_saves: model.settings_saves + 1,
-        },
+        model.edit_host_endpoint({ ..endpoint, custom_api_url: value, }),
       )
     }
     NotificationCornerChanged(value) => {
@@ -4532,12 +4539,14 @@ fn update_msg(
       }
     }
     SaveApiKey => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings() is Some({ endpoint, .. }) else {
+        return (@cmd.none, model)
+      }
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
         (@cmd.none, model)
       } else {
-        match model.api_provider {
+        match endpoint.provider {
           // The key goes straight to the host's store; the mirror keeps
           // only its presence. The save never navigates — it lands on
           // whatever page the form (Settings or the modal over any screen)
@@ -4547,14 +4556,15 @@ fn update_msg(
           // comes back as a toast.
           Deepseek | Glm | OpenRouter | Custom as provider => {
             let next = {
-              ..model,
-              deepseek_key_saved: model.deepseek_key_saved ||
-              provider is Deepseek,
-              glm_key_saved: model.glm_key_saved || provider is Glm,
-              custom_key_saved: model.custom_key_saved ||
-              provider is (OpenRouter | Custom),
+              ..model.edit_host_endpoint({
+                ..endpoint,
+                deepseek_key_saved: endpoint.deepseek_key_saved ||
+                provider is Deepseek,
+                glm_key_saved: endpoint.glm_key_saved || provider is Glm,
+                custom_key_saved: endpoint.custom_key_saved ||
+                provider is (OpenRouter | Custom),
+              }),
               setup_api_key: "",
-              settings_saves: model.settings_saves + 1,
             }
             (
               push_host_settings(
@@ -4618,7 +4628,7 @@ fn update_msg(
       let followup_behavior = match msg {
         SendFollowup(@composer.SteerNow) => FollowupSteer
         SendFollowup(@composer.QueueNext) => FollowupQueue
-        _ => model.followup_behavior
+        _ => model.followup_behavior()
       }
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
@@ -7267,19 +7277,15 @@ fn update_device_msg(
         fetch_projects(
           dispatch, channel, connection_generation, projects_request_generation,
         ),
+        fetch_host_settings(dispatch, channel, connection_generation),
       ]
       if channel == Local && model.is_desktop {
         commands.push(ssh_load(dispatch))
       }
-      // The focused-scoped half: the host-settings mirror and installed
-      // skills (they feed the composer's `$` completion, so
-      // they load on connect rather than when the Skills page opens) follow
-      // the device the UI acts on — always this one while the app runs a
-      // single channel.
+      // The focused-scoped half: installed skills (they feed the composer's
+      // `$` completion, so they load on connect rather than when the Skills
+      // page opens) follow the device the UI acts on.
       if channel == model.focused {
-        commands.push(
-          fetch_host_settings(dispatch, channel, connection_generation),
-        )
         commands.push(fetch_installed_skills(dispatch, channel))
         // Codex conversations are always visible in the global sidebar, so
         // populate that focused-host catalog on bridge readiness rather than
@@ -7341,14 +7347,14 @@ fn update_device_msg(
         // before this connection's re-read lands. Absent rows read as the
         // safe Local default.
         workspace_settings: [],
+        // Replies from writes issued on the dead bridge carry their captured
+        // generation and are ignored below. The new host may have restarted
+        // its in-memory settings revision, so its first authoritative status
+        // starts a fresh monotonic round.
+        host_settings: HostSettingsMirror::loading(),
       })
-      // Replies from writes issued on the dead bridge carry their captured
-      // generation and are ignored below. The new host may have restarted
-      // its in-memory settings revision, so its first authoritative status
-      // starts a fresh monotonic round. Focused-scoped, like the fetches
-      // that repopulate the mirror.
       let model = if channel == model.focused {
-        { ..model.clear_host_settings(), conversations, }
+        { ..model.reset_api_setup(), conversations, }
       } else {
         { ..model, conversations, }
       }
@@ -7501,56 +7507,61 @@ fn update_device_msg(
       update_msg(dispatch, FileEditor(msg), model)
     }
     HostSettingsLoadFailed(message, connection_generation~) => {
-      guard channel == model.focused &&
-        connection_generation == dev.connection_generation else {
+      guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      (@cmd.none, { ..model, host_settings_error: Some(message), })
+      (
+        @cmd.none,
+        model.map_host_settings(channel, mirror => {
+          ..mirror,
+          error: Some(message),
+        }),
+      )
     }
     HostSettingsLoaded(settings, connection_generation~) => {
       guard connection_generation is None ||
         (connection_generation is Some(gen) && gen == dev.connection_generation) else {
         return (@cmd.none, model)
       }
-      // The settings mirror is the focused host's. A generation-carrying
-      // reply is only ever requested for the focused channel, but the
-      // `settings.changed` broadcast (generation None) arrives from every
-      // connected device — a background device's edit must not clobber the
-      // form. A focus switch refetches, so nothing is lost.
-      guard channel == model.focused else { return (@cmd.none, model) }
-      if settings.revision < model.host_settings_revision {
+      // A `settings.changed` broadcast (generation None) arrives from every
+      // connected device; each lands on its own device's mirror.
+      let mirror = dev.host_settings
+      if !mirror.accepts(settings) {
         (@cmd.none, model)
-      } else if model.settings_saves > 0 {
-        (@cmd.none, model.defer_host_settings(settings))
+      } else if mirror.saves > 0 {
+        (
+          @cmd.none,
+          model.map_host_settings(channel, mirror => mirror.hold(settings)),
+        )
       } else {
         // The settled mirror decides the modal (`settle_api_setup`); the
         // dismissal flag — not the mirror, which a reconnect clears — is
         // what keeps a "Not now" quiet across snapshots.
-        (@cmd.none, model.apply_host_settings(settings).settle_api_setup())
+        let next = model.apply_host_settings(channel, settings)
+        (
+          @cmd.none,
+          if channel == next.focused {
+            next.settle_api_setup()
+          } else {
+            next
+          },
+        )
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      // A save issued on the old focus may settle after the user switches
-      // devices. Its revision and localStorage cleanup belong to that old
-      // host and must not alter the newly focused host's mirror.
-      guard channel == model.focused else { return (@cmd.none, model) }
-      let next = {
-        ..model,
-        settings_saves: if model.settings_saves > 0 {
-          model.settings_saves - 1
-        } else {
-          0
-        },
-      }.defer_host_settings(settings)
+      // A save may settle after the user switched devices; it settles on
+      // the device it was issued against.
+      let mirror = dev.host_settings.write_settled().hold(settings)
+      let next = model.map_host_settings(channel, _ => mirror)
       (
         @cmd.none,
-        if next.settings_saves > 0 {
+        if mirror.saves > 0 {
           next
         } else {
-          next.flush_host_settings()
+          next.flush_host_settings(channel)
         },
       )
     }
@@ -7558,26 +7569,16 @@ fn update_device_msg(
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
-      guard channel == model.focused else { return (@cmd.none, model) }
-      let next = {
-        ..model,
-        settings_saves: if model.settings_saves > 0 {
-          model.settings_saves - 1
-        } else {
-          0
-        },
-      }
-      let next = if next.settings_saves == 0 {
-        next.flush_host_settings()
-      } else {
-        next
-      }
+      let mirror = dev.host_settings.write_settled()
+      let settled = mirror.saves == 0
+      let next = model.map_host_settings(channel, _ => mirror)
+      let next = if settled { next.flush_host_settings(channel) } else { next }
       let (notice, notified) = next.notify_error(
         dispatch,
         notice_text(model.locale, SaveSettings(message.to_string())),
       )
       let commands = [notice]
-      if next.settings_saves == 0 {
+      if settled {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
         // host truth after a definite or ambiguous write failure.
@@ -10216,21 +10217,63 @@ fn test_model() -> Model {
         bridge: Connected,
         projects: [@interop.ChannelId::Local.test_project()],
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
+        // The shared fixture represents a connected desktop after its
+        // initial settings snapshot. Loading-state tests opt back into
+        // `HostSettingsMirror::loading()`. BYOK means a ready app has a key
+        // saved: without one, the composer's send gate stays shut and every
+        // submission test would first need to configure an endpoint.
+        // Setup-flow tests load their own keyless settings payloads instead.
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="deepseek", has_deepseek_key=true),
+        ),
       },
     ],
     focused: @interop.ChannelId::Local,
     console: local_console_state(login_return_to="/console/"),
-    // The shared fixture represents a connected desktop after its initial
-    // settings snapshot. Loading-state tests opt back into revision -1.
-    host_settings_revision: 0,
-    // BYOK means a ready app has a key saved: without one, the composer's
-    // send gate stays shut and every submission test would first need to
-    // configure an endpoint. Setup-flow tests load their own keyless
-    // settings payloads instead.
-    deepseek_key_saved: true,
     active_session: "desktop-test",
     conversations: [test_conversation()],
   }
+}
+
+///|
+/// The focused host's mirror; a loading one when the page holds no device.
+fn Model::test_mirror(self : Model) -> HostSettingsMirror {
+  self
+  .focused_device()
+  .map(dev => dev.host_settings)
+  .unwrap_or(HostSettingsMirror::loading())
+}
+
+///|
+/// Rewrite the focused host's mirror.
+fn Model::with_mirror(
+  self : Model,
+  f : (HostSettingsMirror) -> HostSettingsMirror,
+) -> Model {
+  self.map_host_settings(self.focused, f)
+}
+
+///|
+/// Rewrite the focused host's loaded endpoint, keeping its revision; a
+/// fixture that is still loading starts from the zero-config endpoint at
+/// revision 0.
+fn Model::with_endpoint(
+  self : Model,
+  f : (HostEndpoint) -> HostEndpoint,
+) -> Model {
+  self.with_mirror(mirror => {
+    let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
+    { ..mirror, current: Some({ ..current, endpoint: f(current.endpoint), }), }
+  })
+}
+
+///|
+/// The focused host's loaded endpoint.
+fn Model::test_endpoint(self : Model) -> HostEndpoint raise {
+  guard self.host_settings() is Some(settings) else {
+    fail("the focused host has no settings snapshot")
+  }
+  settings.endpoint
 }
 
 ///|
@@ -12370,18 +12413,20 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
 test "BridgeReady clears focused host settings until the refetch lands" {
   let dispatch = test_dispatch()
   let model = {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "https://old.example/chat",
-    custom_key_saved: true,
+    ..test_model()
+    .with_endpoint(endpoint => {
+      ..endpoint,
+      custom_api_url: "https://old.example/chat",
+      custom_key_saved: true,
+      provider: Custom,
+    })
+    .with_mirror(mirror => { ..mirror, saves: 1, }),
     setup_api_key: "old-key",
-    host_settings_revision: 7,
   }
   let (_, next) = update_dev(dispatch, BridgeReady, model)
   assert_false(next.host_settings_loaded())
-  assert_true(next.api_provider is Deepseek)
-  inspect(next.custom_api_url, content="")
-  assert_false(next.custom_key_saved)
+  assert_true(next.test_mirror() == HostSettingsMirror::loading())
+  assert_true(next.api_provider() is Deepseek)
   inspect(next.setup_api_key, content="")
 }
 
@@ -15433,48 +15478,62 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
 
 ///|
 test "the official endpoint requires a key, a custom endpoint a URL" {
-  let official = {
-    ..test_model(),
-    api_provider: Deepseek,
+  let official = test_model().with_endpoint(endpoint => {
+    ..endpoint,
     deepseek_key_saved: false,
-  }
+    provider: Deepseek,
+  })
   assert_false(official.api_ready())
   assert_true(official.display_status() is ApiKeyRequired)
-  assert_true({ ..official, deepseek_key_saved: true, }.api_ready())
+  assert_true(
+    official
+    .with_endpoint(endpoint => { ..endpoint, deepseek_key_saved: true, })
+    .api_ready(),
+  )
   // The GLM provider is gated on its own key, never DeepSeek's.
-  let glm = {
-    ..test_model(),
-    api_provider: Glm,
+  let glm = test_model().with_endpoint(endpoint => {
+    ..endpoint,
     deepseek_key_saved: true,
     glm_key_saved: false,
-  }
+    provider: Glm,
+  })
   assert_false(glm.api_ready())
   assert_true(glm.display_status() is ApiKeyRequired)
-  assert_true({ ..glm, glm_key_saved: true, }.api_ready())
-  let custom = { ..test_model(), api_provider: Custom, custom_api_url: "", }
+  assert_true(
+    glm
+    .with_endpoint(endpoint => { ..endpoint, glm_key_saved: true, })
+    .api_ready(),
+  )
+  let custom = test_model().with_endpoint(endpoint => {
+    ..endpoint,
+    custom_api_url: "",
+    provider: Custom,
+  })
   assert_false(custom.api_ready())
   assert_true(custom.display_status() is SetupRequired)
-  let configured = {
-    ..custom,
+  let configured = custom.with_endpoint(endpoint => {
+    ..endpoint,
     custom_api_url: "https://proxy.example/chat/completions",
-  }
+  })
   assert_true(configured.api_ready())
 }
 
 ///|
 test "OpenRouter setup requires only its stored custom key" {
-  let openrouter = {
-    ..test_model(),
-    api_provider: OpenRouter,
+  let openrouter = test_model().with_endpoint(endpoint => {
+    ..endpoint,
     deepseek_key_saved: true,
     custom_key_saved: false,
-  }
+    provider: OpenRouter,
+  })
   assert_false(openrouter.api_ready())
-  assert_true({ ..openrouter, custom_key_saved: true, }.api_ready())
+  let keyed = openrouter.with_endpoint(endpoint => {
+    ..endpoint,
+    custom_key_saved: true,
+  })
+  assert_true(keyed.api_ready())
   // Model choice belongs to the chat, just as with the official endpoint.
-  assert_true(
-    { ..openrouter, custom_key_saved: true, default_model: Deepseek(V4Pro), }.api_ready(),
-  )
+  assert_true({ ..keyed, default_model: Deepseek(V4Pro), }.api_ready())
 }
 
 ///|
@@ -16238,29 +16297,30 @@ fn host_settings(
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
 ) -> HostSettings {
-  {
+  HostSettings::from_status({
     revision,
     provider,
-    custom_api_url,
+    custom_api_url: Some(custom_api_url),
     has_deepseek_key,
     has_glm_key,
     has_custom_key,
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
-  }
+  })
 }
 
 ///|
 test "the OpenRouter custom preset restores as OpenRouter" {
   let restored = test_model().apply_host_settings(
+    Local,
     host_settings(
       provider="custom",
       custom_api_url=OpenRouterChatCompletionsUrl,
       has_custom_key=true,
     ),
   )
-  assert_true(restored.api_provider is OpenRouter)
+  assert_true(restored.api_provider() is OpenRouter)
   assert_true(restored.api_ready())
 }
 
@@ -16268,15 +16328,11 @@ test "the OpenRouter custom preset restores as OpenRouter" {
 test "host settings edits wait for the focused host snapshot" {
   let dispatch = test_dispatch()
   // Model a queued DOM message from the old Settings page after focus already
-  // moved. The negative revision is authoritative: none of these stale values
-  // or events may be applied to the replacement host.
+  // moved. The loading mirror is authoritative: none of these stale events
+  // may be applied to the replacement host.
   let loading = {
-    ..test_model(),
-    api_provider: Deepseek,
-    custom_api_url: "https://old.example/chat",
-    deepseek_key_saved: true,
+    ..test_model().with_mirror(_ => HostSettingsMirror::loading()),
     setup_api_key: "old-device-key",
-    host_settings_revision: -1,
   }
   let messages : Array[Msg] = [
     SetupApiKeyChanged("queued-key"),
@@ -16287,14 +16343,10 @@ test "host settings edits wait for the focused host snapshot" {
   for message in messages {
     let (_, once) = update(dispatch, message, loading)
     let (_, twice) = update(dispatch, message, loading)
-    assert_true(once.api_provider == loading.api_provider)
-    assert_eq(once.custom_api_url, loading.custom_api_url)
+    assert_true(once.test_mirror() == HostSettingsMirror::loading())
     assert_eq(once.setup_api_key, loading.setup_api_key)
-    assert_eq(once.settings_saves, 0)
-    assert_true(twice.api_provider == loading.api_provider)
-    assert_eq(twice.custom_api_url, loading.custom_api_url)
+    assert_true(twice.test_mirror() == HostSettingsMirror::loading())
     assert_eq(twice.setup_api_key, loading.setup_api_key)
-    assert_eq(twice.settings_saves, 0)
   }
 }
 
@@ -16313,7 +16365,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   )
   assert_true(zero_config.screen is Chat)
   assert_true(zero_config.api_setup_open)
-  assert_true(zero_config.api_provider is Deepseek)
+  assert_true(zero_config.api_provider() is Deepseek)
   assert_true(zero_config.display_status() is ApiKeyRequired)
   let (_, keyless) = update_dev(
     dispatch,
@@ -16336,7 +16388,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   )
   assert_true(restored.screen is Chat)
   assert_true(!restored.api_setup_open)
-  assert_true(restored.deepseek_key_saved)
+  assert_true(restored.test_endpoint().deepseek_key_saved)
 }
 
 ///|
@@ -16371,12 +16423,11 @@ test "the setup modal tracks endpoint usability without toasts" {
       host_settings(provider="custom", custom_api_url=""),
       connection_generation=None,
     ),
-    {
-      ..test_model(),
-      host_settings_revision: 0,
-      api_provider: Custom,
+    test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      provider: Custom,
       custom_api_url: "https://ok.example/chat",
-    },
+    }),
   )
   assert_true(broken.api_setup_open)
   // "Not now" dismisses; an unrelated payload that leaves the endpoint
@@ -16411,11 +16462,12 @@ test "the setup modal tracks endpoint usability without toasts" {
       connection_generation=None,
     ),
     {
-      ..test_model(),
+      ..test_model().with_endpoint(endpoint => {
+        ..endpoint,
+        provider: Custom,
+        custom_api_url: "https://ok.example/chat",
+      }),
       screen: Settings,
-      host_settings_revision: 0,
-      api_provider: Custom,
-      custom_api_url: "https://ok.example/chat",
     },
   )
   assert_true(!mid_edit.api_setup_open)
@@ -16428,31 +16480,36 @@ test "switching to a provider missing its key or URL opens the setup modal" {
   // no URL takes the endpoint from usable to not. Off the Settings page
   // the setup modal is the announcement — no toast underneath it.
   let (_, switched) = update(dispatch, ProviderChanged("custom"), test_model())
-  assert_true(switched.api_provider is Custom)
+  assert_true(switched.api_provider() is Custom)
   assert_true(switched.api_setup_open)
   assert_eq(switched.notifications.length(), 0)
   // A switch that stays usable stays quiet.
-  let (_, kept) = update(dispatch, ProviderChanged("deepseek"), {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "https://ok.example/chat",
-  })
+  let (_, kept) = update(
+    dispatch,
+    ProviderChanged("deepseek"),
+    test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      provider: Custom,
+      custom_api_url: "https://ok.example/chat",
+    }),
+  )
   assert_true(!kept.api_setup_open)
   // Switching back to a provider the stored key makes usable retires the
   // modal that the break opened.
   let (_, back) = update(dispatch, ProviderChanged("deepseek"), switched)
-  assert_true(back.api_provider is Deepseek)
+  assert_true(back.api_provider() is Deepseek)
   assert_true(!back.api_setup_open)
 }
 
 ///|
 test "the GLM provider aligns only a fresh chat to its model family" {
   let dispatch = test_dispatch()
-  let (_, glm) = update(dispatch, ProviderChanged("glm"), {
-    ..test_model(),
-    glm_key_saved: true,
-  })
-  assert_true(glm.api_provider is Glm)
+  let (_, glm) = update(
+    dispatch,
+    ProviderChanged("glm"),
+    test_model().with_endpoint(endpoint => { ..endpoint, glm_key_saved: true, }),
+  )
+  assert_true(glm.api_provider() is Glm)
   assert_true(glm.default_model is Glm(G53))
   assert_true(glm.active().engine_model is Glm(G53))
   // GLM's forced-thinking default is the shared low wire value, independent
@@ -16499,7 +16556,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   // Once a conversation has begun, its pinned model remains explicit and
   // visible for the user to change rather than being rewritten by Settings.
   let (_, running) = update(dispatch, ProviderChanged("glm"), running_model())
-  assert_true(running.api_provider is Glm)
+  assert_true(running.api_provider() is Glm)
   assert_true(running.default_model is Glm(G53))
   assert_true(running.active().engine_model is Deepseek(V4Pro))
   assert_true(running.display_status() is Running)
@@ -16517,10 +16574,10 @@ test "a dismissal survives the mirror reset a reconnect performs" {
     test_model(),
   )
   let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
-  // A reconnect (or focus switch) resets the mirror to the loading
-  // sentinel; the refetched snapshot must not re-pop the modal on every
-  // WS flap — dismissal is the user's answer for the session.
-  let cleared = dismissed.clear_host_settings()
+  // A reconnect resets the mirror to loading; the refetched snapshot must
+  // not re-pop the modal on every WS flap — dismissal is the user's answer
+  // for the session.
+  let (_, cleared) = update_dev(dispatch, BridgeReady, dismissed)
   assert_true(!cleared.api_setup_open)
   let (_, reconnected) = update_dev(
     dispatch,
@@ -16568,8 +16625,9 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
   // Quiet must not mean lost: the notice stays while the endpoint is
   // unusable, dismissal or not.
   assert_true(dismissed.api_setup_banner_visible())
-  // The loading sentinel is not a verdict; a reconnect must not flash it.
-  assert_true(!dismissed.clear_host_settings().api_setup_banner_visible())
+  // A loading mirror is not a verdict; a reconnect must not flash it.
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, dismissed)
+  assert_true(!reconnected.api_setup_banner_visible())
   // A usable endpoint retires the notice with the modal.
   assert_true(!test_model().api_setup_banner_visible())
   // Its "Set up" reopens the modal, and reopening cancels the dismissal so
@@ -16589,35 +16647,69 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
 
 ///|
 test "a custom endpoint reads as usable only from a plausible URL" {
-  let custom = {
-    ..test_model(),
-    api_provider: Custom,
+  let custom = test_model().with_endpoint(endpoint => {
+    ..endpoint,
+    provider: Custom,
     deepseek_key_saved: false,
-  }
+  })
   // A prefix mid-typing must not arm Send or retire the setup modal.
-  assert_true(!{ ..custom, custom_api_url: "", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "h", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "https://", }.api_ready())
-  assert_true(!{ ..custom, custom_api_url: "ftp://host", }.api_ready())
-  assert_true({ ..custom, custom_api_url: "https://host", }.api_ready())
   assert_true(
-    { ..custom, custom_api_url: " https://host/chat/completions ", }.api_ready(),
+    !custom
+    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "", })
+    .api_ready(),
   )
   assert_true(
-    { ..custom, custom_api_url: "http://127.0.0.1:8080", }.api_ready(),
+    !custom
+    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "h", })
+    .api_ready(),
+  )
+  assert_true(
+    !custom
+    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "https://", })
+    .api_ready(),
+  )
+  assert_true(
+    !custom
+    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "ftp://host", })
+    .api_ready(),
+  )
+  assert_true(
+    custom
+    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "https://host", })
+    .api_ready(),
+  )
+  assert_true(
+    custom
+    .with_endpoint(endpoint => {
+      ..endpoint,
+      custom_api_url: " https://host/chat/completions ",
+    })
+    .api_ready(),
+  )
+  assert_true(
+    custom
+    .with_endpoint(endpoint => {
+      ..endpoint,
+      custom_api_url: "http://127.0.0.1:8080",
+    })
+    .api_ready(),
   )
 }
 
 ///|
 test "clearing the mirror never leaves an orphaned setup modal" {
-  // A modal left up over the loading sentinel would render default data
-  // with every control disabled; close it with the mirror it was showing.
+  // A modal left up over a loading mirror would render default data with
+  // every control disabled; close it with the mirror it was showing.
+  let dispatch = test_dispatch()
   let open = {
-    ..test_model(),
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      deepseek_key_saved: false,
+    }),
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
-  assert_true(!open.clear_host_settings().api_setup_open)
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, open)
+  assert_true(!reconnected.api_setup_open)
 }
 
 ///|
@@ -16626,10 +16718,12 @@ test "saving from the setup modal stays on the page it opened over" {
   // The modal renders over any screen; completing setup from it must not
   // yank the user to Chat.
   let over_skills = {
-    ..test_model(),
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      deepseek_key_saved: false,
+    }),
     screen: Skills,
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), over_skills)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
@@ -16638,9 +16732,11 @@ test "saving from the setup modal stays on the page it opened over" {
   // A save that leaves the setup incomplete (Custom, no URL yet) keeps the
   // modal up mid-setup instead of dumping the user on Settings.
   let custom_half = {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "",
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      provider: Custom,
+      custom_api_url: "",
+    }),
     api_setup_open: true,
   }
   let (_, keyed) = update(
@@ -16657,13 +16753,15 @@ test "saving from the setup modal stays on the page it opened over" {
 test "saving the key from the setup modal retires it" {
   let dispatch = test_dispatch()
   let open = {
-    ..test_model(),
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      deepseek_key_saved: false,
+    }),
     api_setup_open: true,
-    deepseek_key_saved: false,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), open)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
-  assert_true(saved.deepseek_key_saved)
+  assert_true(saved.test_endpoint().deepseek_key_saved)
   assert_true(saved.screen is Chat)
   assert_true(!saved.api_setup_open)
   assert_eq(saved.setup_api_key, "")
@@ -16674,14 +16772,17 @@ test "a settled host save that completes the setup closes the modal" {
   // A custom URL typed into the modal is saved optimistically; the host's
   // applied confirmation is what retires the modal, not mid-typing.
   let typing = {
-    ..test_model(),
+    ..test_model()
+    .with_endpoint(endpoint => {
+      ..endpoint,
+      provider: Custom,
+      custom_api_url: "https://ok.example/chat",
+    })
+    .with_mirror(mirror => { ..mirror, saves: 1, }),
     api_setup_open: true,
-    api_provider: Custom,
-    custom_api_url: "https://ok.example/chat",
-    settings_saves: 1,
     select_menu: Some(ApiProviderMenu),
   }
-  let closed = typing.flush_host_settings()
+  let closed = typing.flush_host_settings(Local)
   assert_true(!closed.api_setup_open)
   assert_true(closed.select_menu is None)
   // The same host reconciliation must not close the API selector when it is
@@ -16691,52 +16792,58 @@ test "a settled host save that completes the setup closes the modal" {
     screen: Settings,
     api_setup_open: false,
     select_menu: Some(ApiProviderMenu),
-  }.flush_host_settings()
+  }.flush_host_settings(Local)
   assert_true(page.select_menu == Some(ApiProviderMenu))
   // A flush that leaves the endpoint unusable keeps the modal up.
   let still = {
-    ..test_model(),
+    ..test_model().with_mirror(_ => {
+      ..HostSettingsMirror::loading(),
+      deferred: Some(host_settings(provider="deepseek")),
+    }),
     api_setup_open: true,
-    api_provider: Deepseek,
-    deepseek_key_saved: false,
-    deferred_host_settings: Some(host_settings(provider="deepseek")),
-    host_settings_revision: -1,
   }
-  assert_true(still.flush_host_settings().api_setup_open)
+  assert_true(still.flush_host_settings(Local).api_setup_open)
 }
 
 ///|
-test "a background device's pushes leave the focused mirrors alone" {
+test "a background device's settings broadcast lands on its own mirror" {
   let dispatch = test_dispatch()
   let background : @interop.ChannelId = Remote("d_bg")
+  let home = test_model()
   let model = {
-    ..test_model(),
+    ..home,
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      home.devices[0],
       { ..empty_device_state(background), bridge: Connected, },
     ],
   }
-  // A settings.changed broadcast from the background device: the form (and
-  // the incomplete-settings redirect) keeps the focused host's state.
   let (_, settled) = update(
     dispatch,
     FromDevice(
       background,
       HostSettingsLoaded(
-        host_settings(provider="deepseek"),
+        host_settings(provider="glm", revision=3),
         connection_generation=None,
       ),
     ),
     model,
   )
-  assert_true(settled.api_provider is Deepseek)
-  assert_true(settled.screen is Chat)
+  // The form (and the setup modal) keep the focused host's state.
+  assert_true(settled.test_mirror() == model.test_mirror())
+  assert_true(settled.api_ready())
+  assert_true(!settled.api_setup_open)
+  guard settled.device_state(background) is Some(dev) &&
+    dev.host_settings.current is Some(current) else {
+    fail("the background device keeps its own snapshot")
+  }
+  assert_true(current.endpoint.provider is Glm)
+  assert_eq(current.revision, 3)
 }
 
 ///|
 test "host settings are deferred while this client's writes are in flight" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), settings_saves: 1, }
+  let model = test_model().with_mirror(mirror => { ..mirror, saves: 1, })
   // A broadcast (or a stale get reply) arriving mid-write must not clobber
   // the optimistic mirror.
   let (_, ignored) = update_dev(
@@ -16747,8 +16854,8 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     model,
   )
-  assert_true(ignored.api_provider is Deepseek)
-  inspect(ignored.settings_saves, content="1")
+  assert_true(ignored.api_provider() is Deepseek)
+  inspect(ignored.test_mirror().saves, content="1")
   // The write's own reply reconciles once it is the last one out.
   let (_, settled) = update_dev(
     dispatch,
@@ -16758,12 +16865,12 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     model,
   )
-  inspect(settled.settings_saves, content="0")
-  assert_true(settled.api_provider is Deepseek)
-  assert_true(settled.deepseek_key_saved)
-  inspect(settled.host_settings_revision, content="2")
+  inspect(settled.test_mirror().saves, content="0")
+  assert_true(settled.api_provider() is Deepseek)
+  assert_true(settled.test_endpoint().deepseek_key_saved)
+  assert_true(settled.host_settings() is Some({ revision: 2, .. }))
   // With more writes still out, even a reply only decrements.
-  let stacked = { ..model, settings_saves: 2, }
+  let stacked = model.with_mirror(mirror => { ..mirror, saves: 2, })
   let (_, still_pending) = update_dev(
     dispatch,
     HostSettingsApplied(
@@ -16772,19 +16879,20 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     stacked,
   )
-  inspect(still_pending.settings_saves, content="1")
-  assert_true(still_pending.api_provider is Deepseek)
+  inspect(still_pending.test_mirror().saves, content="1")
+  assert_true(still_pending.api_provider() is Deepseek)
 }
 
 ///|
 test "a newer peer broadcast beats a delayed local settings reply" {
   let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    api_provider: Custom,
-    settings_saves: 1,
-    host_settings_revision: 5,
-  }
+  let model = test_model()
+    .with_mirror(mirror => {
+      ..mirror,
+      current: mirror.current.map(current => { ..current, revision: 5, }),
+    })
+    .with_endpoint(endpoint => { ..endpoint, provider: Custom, })
+    .with_mirror(mirror => { ..mirror, saves: 1, })
   let (_, broadcast) = update_dev(
     dispatch,
     HostSettingsLoaded(
@@ -16794,7 +16902,7 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     model,
   )
   // Preserve the optimistic form until the local RPC settles.
-  assert_true(broadcast.api_provider is Custom)
+  assert_true(broadcast.api_provider() is Custom)
   let (_, settled) = update_dev(
     dispatch,
     HostSettingsApplied(
@@ -16803,38 +16911,55 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     ),
     broadcast,
   )
-  assert_true(settled.api_provider is Deepseek)
-  inspect(settled.host_settings_revision, content="7")
-  inspect(settled.settings_saves, content="0")
+  assert_true(settled.api_provider() is Deepseek)
+  assert_true(settled.host_settings() is Some({ revision: 7, .. }))
+  inspect(settled.test_mirror().saves, content="0")
 }
 
 ///|
-test "background settings replies cannot alter the focused host mirror" {
+test "a settings write settles on the device it was sent to" {
   let dispatch = test_dispatch()
   let home = test_model()
-  let focused = {
+  let remote : @interop.ChannelId = Remote("d_b")
+  // The user saved on Local twice, then moved to `d_b` while the writes
+  // were out; `d_b` has a write of its own in flight.
+  let model = {
     ..home,
     devices: [
-      home.devices[0],
-      { ..empty_device_state(Remote("d_b")), bridge: Connected, },
+      {
+        ..home.devices[0],
+        host_settings: { ..home.devices[0].host_settings, saves: 2, },
+      },
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: {
+          ..HostSettingsMirror::loading().apply(
+            host_settings(provider="custom", custom_api_url="https://b.example"),
+          ),
+          saves: 1,
+        },
+      },
     ],
-    focused: Remote("d_b"),
-    api_provider: Custom,
-    settings_saves: 1,
+    focused: remote,
   }
   let (_, applied) = update(
     dispatch,
     FromDevice(
       Local,
       HostSettingsApplied(
-        host_settings(provider="deepseek", revision=7),
+        host_settings(provider="glm", revision=7),
         connection_generation=0,
       ),
     ),
-    focused,
+    model,
   )
-  assert_true(applied.api_provider is Custom)
-  assert_eq(applied.settings_saves, 1)
+  assert_true(applied.test_mirror() == model.test_mirror())
+  guard applied.device_state(Local) is Some(home_dev) else {
+    fail("Local stays connected")
+  }
+  assert_eq(home_dev.host_settings.saves, 1)
+  assert_true(home_dev.host_settings.deferred is Some({ revision: 7, .. }))
   let (_, failed) = update(
     dispatch,
     FromDevice(
@@ -16843,8 +16968,16 @@ test "background settings replies cannot alter the focused host mirror" {
     ),
     applied,
   )
-  assert_eq(failed.settings_saves, 1)
-  assert_eq(failed.notifications.length(), 0)
+  assert_true(failed.test_mirror() == model.test_mirror())
+  guard failed.device_state(Local) is Some(home_dev) &&
+    home_dev.host_settings.current is Some(current) else {
+    fail("Local keeps its snapshot")
+  }
+  // The last write out flushes the newest status held for that device, and
+  // the failure is still the user's to see.
+  assert_eq(home_dev.host_settings.saves, 0)
+  assert_true(current.endpoint.provider is Glm)
+  assert_eq(failed.notifications.length(), 1)
 }
 
 ///|
@@ -16882,18 +17015,20 @@ test "the tree-layout setting parses its wire names" {
 test "update is pure: a provider change is idempotent" {
   let dispatch = test_dispatch()
   let model = {
-    ..test_model(),
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      deepseek_key_saved: false,
+    }),
     setup_api_key: "typed",
-    deepseek_key_saved: false,
   }
   let (_, once) = update(dispatch, ProviderChanged("deepseek"), model)
   let (_, twice) = update(dispatch, ProviderChanged("deepseek"), model)
-  assert_true(once.api_provider is Deepseek)
-  assert_true(twice.api_provider is Deepseek)
+  assert_true(once.api_provider() is Deepseek)
+  assert_true(twice.api_provider() is Deepseek)
   inspect(once.setup_api_key, content="")
   inspect(twice.setup_api_key, content="")
-  inspect(once.settings_saves, content="1")
-  inspect(twice.settings_saves, content="1")
+  inspect(once.test_mirror().saves, content="1")
+  inspect(twice.test_mirror().saves, content="1")
   assert_true(once.display_status() is ApiKeyRequired)
   assert_true(twice.display_status() is ApiKeyRequired)
 }
@@ -16902,59 +17037,67 @@ test "update is pure: a provider change is idempotent" {
 test "saving a key marks the active provider credential only" {
   let dispatch = test_dispatch()
   let deepseek = {
-    ..test_model(),
-    api_provider: Deepseek,
-    deepseek_key_saved: false,
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      provider: Deepseek,
+      deepseek_key_saved: false,
+    }),
     setup_api_key: "  sk-new  ",
     screen: Settings,
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
-  assert_true(saved_deepseek.deepseek_key_saved)
-  assert_false(saved_deepseek.custom_key_saved)
+  assert_true(saved_deepseek.test_endpoint().deepseek_key_saved)
+  assert_false(saved_deepseek.test_endpoint().custom_key_saved)
   inspect(saved_deepseek.setup_api_key, content="")
-  inspect(saved_deepseek.settings_saves, content="1")
+  inspect(saved_deepseek.test_mirror().saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
   // user on the form they were filling in.
   assert_true(saved_deepseek.screen is Settings)
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
-    ..test_model(),
-    api_provider: Custom,
-    deepseek_key_saved: false,
-    custom_api_url: "https://proxy.example/chat/completions",
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      provider: Custom,
+      deepseek_key_saved: false,
+      custom_api_url: "https://proxy.example/chat/completions",
+    }),
     setup_api_key: "  sk-custom-new  ",
     screen: Settings,
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
-  assert_false(saved_custom.deepseek_key_saved)
-  assert_true(saved_custom.custom_key_saved)
+  assert_false(saved_custom.test_endpoint().deepseek_key_saved)
+  assert_true(saved_custom.test_endpoint().custom_key_saved)
   assert_true(saved_custom.screen is Settings)
   // A GLM key lands in the GLM slot alone.
   let glm = {
-    ..test_model(),
-    api_provider: Glm,
-    deepseek_key_saved: false,
-    glm_key_saved: false,
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      provider: Glm,
+      deepseek_key_saved: false,
+      glm_key_saved: false,
+    }),
     setup_api_key: "  glm-new  ",
     screen: Settings,
   }
   let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
-  assert_true(saved_glm.glm_key_saved)
-  assert_false(saved_glm.deepseek_key_saved)
-  assert_false(saved_glm.custom_key_saved)
+  assert_true(saved_glm.test_endpoint().glm_key_saved)
+  assert_false(saved_glm.test_endpoint().deepseek_key_saved)
+  assert_false(saved_glm.test_endpoint().custom_key_saved)
   assert_true(saved_glm.screen is Settings)
   let openrouter = {
-    ..test_model(),
-    api_provider: OpenRouter,
-    deepseek_key_saved: false,
-    custom_key_saved: false,
+    ..test_model().with_endpoint(endpoint => {
+      ..endpoint,
+      provider: OpenRouter,
+      deepseek_key_saved: false,
+      custom_key_saved: false,
+    }),
     setup_api_key: "  sk-openrouter-new  ",
     screen: Settings,
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
-  assert_true(saved_openrouter.custom_key_saved)
-  assert_false(saved_openrouter.deepseek_key_saved)
+  assert_true(saved_openrouter.test_endpoint().custom_key_saved)
+  assert_false(saved_openrouter.test_endpoint().deepseek_key_saved)
 }
 
 ///|
@@ -16962,7 +17105,7 @@ test "saving a key marks the active provider credential only" {
 /// even while the endpoint is unusable (the composer blocks sending then).
 test "sidebar navigation leaves the settings page" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), api_provider: Deepseek, screen: Settings, }
+  let model = { ..test_model(), screen: Settings, }
   let (_, next) = update(
     dispatch,
     SessionRotated({ channel: Local, session: "s-fresh", }),
@@ -21315,10 +21458,10 @@ test "switching the chat provider leaves the update answer alone" {
     ProviderChanged("openseek-staging"),
     available,
   )
-  assert_true(switched.api_provider is Deepseek)
+  assert_true(switched.api_provider() is Deepseek)
   assert_true(switched.update_ux is UpdateAvailable(..))
   let (_, kept) = update(dispatch, ProviderChanged("custom"), available)
-  assert_true(kept.api_provider is Custom)
+  assert_true(kept.api_provider() is Custom)
   assert_true(kept.update_ux is UpdateAvailable(..))
 }
 

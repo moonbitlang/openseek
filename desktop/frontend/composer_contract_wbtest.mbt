@@ -176,7 +176,10 @@ test "composer follow-up overrides route the message without changing the defaul
       (@composer.SteerNow, FollowupQueue),
     ] {
     let (choice, default) = pair
-    let model = { ..running_model(), followup_behavior: default, }
+    let model = running_model().with_endpoint(endpoint => {
+      ..endpoint,
+      followup_behavior: default,
+    })
     let identity = model.composer_input().identity
     let (_, submitted) = update(
       test_dispatch(),
@@ -190,7 +193,7 @@ test "composer follow-up overrides route the message without changing the defaul
       ),
       model,
     )
-    assert_true(submitted.followup_behavior == default)
+    assert_true(submitted.followup_behavior() == default)
     let conv = submitted.active()
     assert_eq(conv.pending_steers.length(), 1)
     match choice {
