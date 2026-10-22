@@ -1706,7 +1706,8 @@ fn description(
     #|per site, and lists the rest for you; --dry-run plans only.
     #|use args=["PR", "--repo", "OWNER/REPO", "--once"] for one snapshot.
     #|Agent workflows (they start subagents): @builtin/review.mbtx (independent
-    #|worktree audit against the criteria in args), @builtin/change-review.mbtx
+    #|worktree audit against the criteria in args; pass --swarm first for a
+    #|parallel multi-lens review of a large change), @builtin/change-review.mbtx
     #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
     #|(architecture, validation, extension points).
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
