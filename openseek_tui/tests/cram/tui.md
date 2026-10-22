@@ -110,7 +110,7 @@ $ sh <<'EOF'
 > rm -rf "$bin"
 > EOF
 error: the interactive UI needs a terminal; run a headless task with `openseek run "…"` (or `openseek serve` for the JSONL protocol).
-moonbitlang/openseek@0.7.2 --help
+moonbitlang/openseek@0.7.3 --help
 ```
 
 Without `moonx` on `PATH` (no MoonBit toolchain), the preflight says so.
@@ -120,7 +120,7 @@ $ sh <<'EOF'
 > ui=$(command -v openseek_tui.exe)
 > env -i PATH=/usr/bin:/bin DEEPSEEK=test-key "$ui"
 > EOF
-error: engine 'moonx moonbitlang/openseek@0.7.2' is not usable: `moonx` was not found on PATH.
+error: engine 'moonx moonbitlang/openseek@0.7.3' is not usable: `moonx` was not found on PATH.
 The default engine runs through moonx, part of the MoonBit toolchain; its first launch downloads the pinned openseek release, so it needs network access to mooncakes.io.
 Install MoonBit, or pass --engine <path> to an openseek binary.
 [1]
@@ -132,16 +132,16 @@ offline), the tail of its output is quoted so the cause is visible.
 ```mooncram
 $ sh <<'EOF'
 > bin=$(mktemp -d)
-> printf '#!/bin/sh\necho "fetching moonbitlang/openseek@0.7.2"\necho "error: failed to download from mooncakes.io" >&2\nexit 1\n' > "$bin/moonx"
+> printf '#!/bin/sh\necho "fetching moonbitlang/openseek@0.7.3"\necho "error: failed to download from mooncakes.io" >&2\nexit 1\n' > "$bin/moonx"
 > chmod +x "$bin/moonx"
 > PATH="$bin:$PATH" env DEEPSEEK=test-key openseek_tui.exe
 > status=$?
 > rm -rf "$bin"
 > exit $status
 > EOF
-error: engine 'moonx moonbitlang/openseek@0.7.2' is not usable: `--help` exited with code 1.
+error: engine 'moonx moonbitlang/openseek@0.7.3' is not usable: `--help` exited with code 1.
 Its output ended with:
-  fetching moonbitlang/openseek@0.7.2
+  fetching moonbitlang/openseek@0.7.3
   error: failed to download from mooncakes.io
 The default engine runs through moonx, part of the MoonBit toolchain; its first launch downloads the pinned openseek release, so it needs network access to mooncakes.io.
 Install MoonBit, or pass --engine <path> to an openseek binary.

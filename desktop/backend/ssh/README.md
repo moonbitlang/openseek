@@ -26,6 +26,8 @@ version from `https://cli.moonbitlang.com/openseek/cli/releases/v<version>/`, ve
 setup and connection progress and supports cancellation. Automatic preparation
 supports Linux x64/arm64 and macOS arm64 with SSH, a POSIX shell, curl, tar, and
 sha256sum or shasum. The matching CLI release must include `openseek-app-server`.
+CLI 0.7.3 or later is required for the WebSocket lifetime handoff; older
+releases stop the server when the bootstrap SSH input closes.
 
 Desktop release CI stamps `CliRelease` in `version.mbt` from the root OpenSeek
 `moon.mod`, the same manifest used by the CLI release workflow. Local builds

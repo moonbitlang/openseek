@@ -238,7 +238,7 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
 /// version this module imports in `moon.mod` (`engine_version_wbtest.mbt` keeps
 /// them in step), so the spawned engine speaks exactly the `serve` protocol and
 /// session format the UI was compiled against.
-const EngineModuleVersion : String = "0.7.2"
+const EngineModuleVersion : String = "0.7.3"
 
 ///|
 /// The engine command when `--engine` is unset: the pinned `moonbitlang/openseek`
@@ -500,7 +500,7 @@ test "cli accepts no initial task" {
   assert_true(config.max_steps is None)
   // With no --engine, the pinned openseek release runs through moonx.
   assert_eq(config.engine, "moonx")
-  @debug.assert_eq(config.engine_args_prefix, ["moonbitlang/openseek@0.7.2"])
+  @debug.assert_eq(config.engine_args_prefix, ["moonbitlang/openseek@0.7.3"])
   // No --session still converses in a session: a generated per-launch id, so
   // consecutive prompts share context instead of running amnesiac one-shots.
   assert_true(config.session_id.value().has_prefix("tui-"))

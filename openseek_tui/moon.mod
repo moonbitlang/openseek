@@ -1,10 +1,10 @@
 name = "moonbitlang/openseek_tui"
 
-version = "0.7.2"
+version = "0.7.3"
 
 import {
   "moonbitlang/jsonl@0.2.0",
-  "moonbitlang/openseek@0.7.2",
+  "moonbitlang/openseek@0.7.3",
   "moonbitlang/openseek_protocol@0.4.1",
   "moonbit-community/displaytext@0.1.6",
   "moonbit-community/tty@0.3.0",
