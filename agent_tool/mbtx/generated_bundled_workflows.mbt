@@ -2670,7 +2670,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  #|  `xs.length()`, not `xs.iter().count()`.
           #|  #|- `split_once`, `rev_split_once` and `strip_prefix` instead of index
           #|  #|  arithmetic around `find`.
-          #|  #|- Interpolation `"\{a}/\{b}"` instead of `+` chains of strings.
+          #|  #|- Interpolation `"\{a}/\{b}"` instead of `+` chains of strings, when the
+          #|  #|  result fits on one line of about 100 columns. `moon fmt` never wraps a
+          #|  #|  string literal, so leave a chain that splits a long string across lines.
           #|  #|- A functional `for` with state instead of the deprecated `loop`:
           #|  #|  `for v = view { match v { [x, .. rest] => continue rest
           #|  #|  [] => break } }`.
