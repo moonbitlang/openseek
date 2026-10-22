@@ -58,6 +58,82 @@ MoonBit async calls suspend directly; no `await` keyword is needed. Complete
 all calls and join spawned tasks before exiting. Only printed output enters
 the next model request; preserve selected source URLs and relevant failures.
 
+## MCP tools
+
+The `moonbitlang/openseek_tools/mcp` package reaches the tools of the MCP
+servers the host has connected. **`@mcp.search(query?, server?, limit?,
+offset?)`** finds them and **`@mcp.call(server, tool, arguments)`** calls one by
+the server's own names. They talk to the host's MCP host, a service of its own
+beside PTC, whose capability the host provides in `OPENSEEK_MCP` to every
+sandboxed `mbtx` run, with or without `ptc=true`.
+
+```mbtx
+import {
+  "moonbitlang/openseek_tools@0.3.0/mcp" @mcp,
+  "moonbitlang/async",
+}
+
+async fn main {
+  // Print the page so the next model request sees the tools and schemas.
+  let page = @mcp.search(query="list issues", server="github")
+  println(page.text)
+  guard page.tools is [tool, ..] else { return }
+  let result = @mcp.call(tool.server, tool.name, { "repo": "moonbitlang/openseek" })
+  if result.is_error { fail(result.content) }
+  println(result.content)
+}
+```
+
+`search` runs in the script. The first search downloads the host's catalog of
+servers and tools, and later searches in the same script reuse it. `server`
+alone lists that server's tools in order; `query` ranks tools with BM25 over
+their server, name, description, and the property names and descriptions in
+their schemas, within `server` when both are given; neither lists every tool.
+A blank string is the same as leaving the argument out. Pages hold at most
+`limit` tools (default 8) from `offset` (default 0), whose entries fit within
+40,000 characters of text; a server's instructions and the list of unavailable
+servers come on top.
+
+The returned `SearchPage` has the same tools twice:
+- `text`, rendered for the model once the script prints it: each tool's
+  description and the JSON Schemas of its arguments and result `data`;
+- `tools`, records of `server`, `name`, `description`, `input_schema : Json`,
+  and `output_schema : Json?` (the raw JSON Schemas) for the script to select
+  from.
+
+`total` counts every match, `next_offset` continues the listing, and
+`instructions` holds the named server's instructions on a first page. No match
+is a page with no tools. A search naming an unavailable server is a page with
+its error, and a listing of every tool ends with the servers that are
+unavailable.
+
+An unknown server, a `limit` below 1, a negative or past-the-end `offset`, and a
+catalog that could not be downloaded (no MCP host, a transport failure) raise
+`SearchError` with the reason. A search changes nothing, so a script may simply
+run it again.
+
+`call` returns the `mcp` package's own `CallResult`: `content`, `is_error`,
+`data`, and `images`. A tool failure is a result with `is_error`, and a
+connection/protocol failure raises the `mcp` package's own `TransportError`.
+The SDK never retries it. MCP calls never wait for approval, so each keeps the
+ordinary 125-second deadline. A run without `OPENSEEK_MCP` (an older host, or
+no MCP server configured) raises `TransportError` from `call` and `SearchError`
+from `search`, and sends nothing.
+
+A reply is JSON, so a tool's images do not travel in it: the host saves each
+in a file, names the file in `content`, and lists the paths in `images`. Pass
+a path to `@openseek_tools.call("read_image", { "path": path })` to show the
+image to the model.
+
+Both use the v1 result envelope. `call` sends
+`{"version":1,"call":{"server","tool","arguments"}}`, answered with an added
+`"images"` when it saved any. The catalog download sends
+`{"version":1,"list":{"cursor"?}}` until a reply has no `next_cursor`; each
+reply's `data` is `{"items":[...],"next_cursor"?}`, with each server
+(`{"server","instructions"?,"error"?}`) followed by its tools
+(`{"server","tool":{"name","description","input_schema","output_schema"?}}`) in
+configuration order.
+
 ## Standalone tests
 
 Run `moon -C tools_sdk test --target native` and
@@ -67,6 +143,14 @@ server, calls the dynamic entry point with built-in and extension tool names,
 and checks authentication, unchanged JSON arguments (including both multi_edit forms), and typed results. It restores
 the environment and joins the server on exit. Separate transport tests cover
 invalid capabilities/responses, errors, no retries, and cancellation.
+
+The `mcp` tests do the same with `OPENSEEK_MCP` for MCP calls and the catalog
+download: exact request bodies, saved images, a catalog over several replies,
+one download serving later searches, empty catalogs and unavailable servers,
+refused and malformed listings, transport failures, and a run with no MCP
+host. The catalog tests cover ranking, paging, and rendering on their own, and
+the `mcp` transport tests cover its handoff, envelopes, no retries, and
+cancellation.
 
 ## Complete example: fix deprecation warnings
 
@@ -81,8 +165,8 @@ independent of the host PR.
 
 ## Development and releases
 
-Version 0.1.0 is published; 0.2.0 is prepared here and is not published yet. Both
-speak wire protocol v1. Keep SDK and wire versions separate. Documentation and host tool additions do not require changing the SDK
+Versions 0.1.0 and 0.2.0 are published; 0.3.0 is prepared here and is not
+published yet. All of them speak wire protocol v1. Keep SDK and wire versions separate. Documentation and host tool additions do not require changing the SDK
 API. For a future SDK release, check and test the independent module first:
 
 ```sh

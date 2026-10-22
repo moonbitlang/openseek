@@ -1,0 +1,50 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek_tools/mcp"
+
+// Values
+pub async fn call(String, String, Json) -> CallResult
+
+pub async fn search(query? : String, server? : String, limit? : Int32, offset? : Int32) -> SearchPage raise SearchError
+
+// Errors
+pub suberror SearchError {
+  SearchError(String)
+}
+pub fn SearchError::output(Self, &Logger) -> Unit
+pub fn SearchError::to_string(Self) -> String
+pub impl Show for SearchError
+
+pub suberror TransportError {
+  TransportError(String)
+}
+pub fn TransportError::output(Self, &Logger) -> Unit
+pub fn TransportError::to_string(Self) -> String
+pub impl Show for TransportError
+
+// Types and methods
+pub struct CallResult {
+  content : String
+  is_error : Bool
+  data : Json?
+  images : Array[String]
+}
+
+pub struct SearchPage {
+  text : String
+  instructions : String?
+  tools : Array[Tool]
+  total : Int32
+  next_offset : Int32?
+}
+
+pub struct Tool {
+  server : String
+  name : String
+  description : String
+  input_schema : Json
+  output_schema : Json?
+}
+
+// Type aliases
+
+// Traits

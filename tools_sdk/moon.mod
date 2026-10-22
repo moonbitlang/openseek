@@ -1,6 +1,6 @@
 name = "moonbitlang/openseek_tools"
 
-version = "0.2.0"
+version = "0.3.0"
 
 import {
   "moonbitlang/async@0.22.4",
