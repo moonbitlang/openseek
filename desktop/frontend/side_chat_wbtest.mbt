@@ -1169,3 +1169,68 @@ test "a side chat completed after choosing another conversation stays in the bac
   assert_true(dock.active == Some(FilePicker))
   assert_true(dock.tabs == [FilePicker, SideChat(owner=side_chat_owner())])
 }
+
+///|
+test "a side chat another client started before the fork reply keeps its run" {
+  let model = side_chat_source_model()
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  let (_, requested) = update(
+    test_dispatch(),
+    SideChatRequested(owner~, quote="the parser"),
+    model,
+  )
+  guard requested.conversation_fork is Some(pending) else {
+    fail("a side chat must be forking")
+  }
+  // The announced side chat is already running here when the reply lands.
+  let running = requested.replace_conversation({
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      SideChatId,
+      @interop.ChannelId::Local.test_project(),
+    ),
+    run: Open(run_id="r-elsewhere", stage=Opened),
+  })
+  let (_, completed) = update(
+    test_dispatch(),
+    ForkCompleted(
+      pending,
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    running,
+  )
+  guard completed.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_true(side.run is Open(run_id="r-elsewhere", ..))
+  assert_eq(side.task, "> the parser\n\n")
+  // Read from the listing first, it still takes the model it was forked
+  // with, not the page's default.
+  let listed = requested.replace_conversation({
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      SideChatId,
+      @interop.ChannelId::Local.test_project(),
+      model=DsFlash,
+    ),
+  })
+  let (_, adopted) = update(
+    test_dispatch(),
+    ForkCompleted(
+      { ..pending, engine_model: DsPro, },
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    { ..listed, conversation_fork: Some({ ..pending, engine_model: DsPro, }), },
+  )
+  guard adopted.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_true(side.engine_model == DsPro)
+}

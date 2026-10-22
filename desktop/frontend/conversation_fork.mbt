@@ -251,12 +251,20 @@ fn Model::open_new_side_chat(
     channel,
     session: pending.source.session,
   }
-  let placed = empty_conversation(
-    channel,
-    session,
-    pending.source.workspace,
-    model=pending.engine_model,
-  )
+  // The host announces the side chat before this reply lands, so the page
+  // may hold it already: read from the listing with the default model, or
+  // running a turn another client started. That conversation and its run are
+  // kept; it takes the model it was forked with, and the quote.
+  let placed = match self.find_conversation(channel, session) {
+    Some(held) => { ..held, engine_model: pending.engine_model, }
+    None =>
+      empty_conversation(
+        channel,
+        session,
+        pending.source.workspace,
+        model=pending.engine_model,
+      )
+  }
   let workspace = match self.device_state(channel) {
     Some(dev) =>
       dev.conversation_workspace(
@@ -266,11 +274,15 @@ fn Model::open_new_side_chat(
       )
     None => placed.workspace
   }
-  let conv = {
-    ..placed,
-    workspace,
-    task: @composer.quoted_draft(quote),
-    composer_draft_present: true,
+  let conv = if placed.task.is_empty() {
+    {
+      ..placed,
+      workspace,
+      task: @composer.quoted_draft(quote),
+      composer_draft_present: true,
+    }
+  } else {
+    { ..placed, workspace, }
   }
   let (model, generation) = self
     .replace_conversation(conv)
