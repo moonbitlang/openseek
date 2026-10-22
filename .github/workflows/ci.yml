@@ -14,7 +14,7 @@ concurrency:
 jobs:
   workflows:
     name: bundled workflow checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -69,7 +69,7 @@ jobs:
 
   check:
     name: check (${{ matrix.moonbit-channel }}, ${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     strategy:
@@ -236,7 +236,7 @@ jobs:
   # Keep it out of Desktop's recipe so either application can be tested alone.
   viz-e2e:
     name: viz e2e
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
