@@ -30,49 +30,90 @@ pub struct AxNode {
 } derive(Debug, Eq)
 
 ///|
-/// The `value` of an `AXValue`, which may itself be missing.
-fn ax_value(json : Json, key : String) -> Json? raise {
-  guard field(json, key) is Some(value) else { return None }
-  field(value, "value")
+/// The `value` of the `AXValue` at `key`, when there is one: either can be
+/// missing.
+fn ax_value(
+  fields : Map[String, Json],
+  key : String,
+  path : @json.JsonPath,
+) -> Json? raise @json.JsonDecodeError {
+  match fields.get(key) {
+    None => None
+    Some(Object(value)) => value.get("value")
+    Some(_) => raise JsonDecodeError((path.add_key(key), "expected an AXValue"))
+  }
 }
 
 ///|
-fn ax_text(json : Json, key : String) -> String? raise {
-  match ax_value(json, key) {
+/// The text an `AXValue` at `key` holds, when there is one.
+fn ax_text(
+  fields : Map[String, Json],
+  key : String,
+  path : @json.JsonPath,
+) -> String? raise @json.JsonDecodeError {
+  match ax_value(fields, key, path) {
     None => None
     Some(String(text)) => Some(text)
-    Some(_) => raise Protocol("Expected text in the CDP field: \{key}")
+    Some(_) => raise JsonDecodeError((path.add_key(key), "expected text"))
   }
 }
 
 ///|
-fn decode_ax_node(json : Json) -> AxNode raise {
-  let properties = Map([])
-  let listed : Array[Json] = optional(json, "properties").unwrap_or([])
-  for property in listed {
-    let name : String = required(property, "name")
-    if ax_value(property, "value") is Some(value) {
-      properties[name] = value
-    }
+/// An `AXNode`. Fields the tree does not use are ignored; a field it uses
+/// that is present and malformed is an error.
+impl @json.FromJson for AxNode with fn from_json(json, path) {
+  guard json is Object(fields) &&
+    fields.get("nodeId") is Some(String(id)) &&
+    fields.get("ignored") is Some(True | False as ignored) else {
+    raise JsonDecodeError(
+      (path, "expected an AXNode with `nodeId` and `ignored`"),
+    )
   }
-  let children : Array[String] = optional(json, "childIds").unwrap_or([])
-  let dom_node : Int32? = optional(json, "backendDOMNodeId")
+  let properties = Map([])
+  match fields.get("properties") {
+    None => ()
+    Some(Array(listed)) =>
+      for i, property in listed {
+        let at = path.add_key("properties").add_index(i)
+        guard property is Object(property) &&
+          property.get("name") is Some(String(name)) else {
+          raise JsonDecodeError((at, "expected an AXProperty"))
+        }
+        if ax_value(property, "value", at) is Some(value) {
+          properties[name] = value
+        }
+      }
+    Some(_) =>
+      raise JsonDecodeError((path.add_key("properties"), "expected an array"))
+  }
+  let children : Array[String] = match fields.get("childIds") {
+    None => []
+    Some(ids) => @json.from_json(ids, path=path.add_key("childIds"))
+  }
+  let dom_node = match fields.get("backendDOMNodeId") {
+    None => None
+    Some(id) =>
+      Some(
+        BackendNodeId(
+          @json.from_json(id, path=path.add_key("backendDOMNodeId")),
+        ),
+      )
+  }
   {
-    id: AxNodeId(required(json, "nodeId")),
-    ignored: required(json, "ignored"),
-    role: ax_text(json, "role"),
-    name: ax_text(json, "name"),
-    value: ax_value(json, "value"),
+    id: AxNodeId(id),
+    ignored: ignored is True,
+    role: ax_text(fields, "role", path),
+    name: ax_text(fields, "name", path),
+    value: ax_value(fields, "value", path),
     properties,
     children: children.map(child => AxNodeId(child)),
-    dom_node: dom_node.map(node => BackendNodeId(node)),
+    dom_node,
   }
 }
 
 ///|
 fn decode_ax_tree(json : Json) -> Array[AxNode] raise {
-  let nodes : Array[Json] = required(json, "nodes")
-  nodes.map(decode_ax_node)
+  required(json, "nodes")
 }
 
 ///|

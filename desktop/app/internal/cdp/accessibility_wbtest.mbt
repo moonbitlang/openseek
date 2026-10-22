@@ -63,25 +63,31 @@ test "accessibility nodes keep the values of their AXValues" {
 }
 
 ///|
-test "a role or name that is not text is a protocol error" {
-  let rejected = try {
-    ignore(
-      decode_ax_tree({
-        "nodes": [
-          {
-            "nodeId": "1",
-            "ignored": false,
-            "role": { "type": "role", "value": 3 },
-          },
-        ],
-      }),
-    )
-    false
-  } catch {
-    Protocol(_) => true
-    error => raise error
+test "a malformed field the tree uses is a decoding error" {
+  for
+    node in [
+      ({ "ignored": false } : Json),
+      { "nodeId": "1", "ignored": "no" },
+      {
+        "nodeId": "1",
+        "ignored": false,
+        "role": { "type": "role", "value": 3 },
+      },
+      { "nodeId": "1", "ignored": false, "name": "Search" },
+      { "nodeId": "1", "ignored": false, "properties": {} },
+      { "nodeId": "1", "ignored": false, "properties": [{ "value": {} }] },
+      { "nodeId": "1", "ignored": false, "childIds": [2] },
+      { "nodeId": "1", "ignored": false, "backendDOMNodeId": "9" },
+    ] {
+    let rejected = try {
+      ignore(decode_ax_tree({ "nodes": [node] }))
+      false
+    } catch {
+      @json.JsonDecodeError(_) => true
+      error => raise error
+    }
+    assert_true(rejected, msg="accepted \{node.stringify()}")
   }
-  assert_true(rejected)
 }
 
 ///|
