@@ -1,19 +1,35 @@
 # Installable web app
 
 These files make the browser console installable as a standalone app (Chrome
-and Edge "Install", Android "Add to Home screen", iOS "Add to Home Screen").
-`package/build.mjs` copies them next to `frontend.js` under `/assets/`, and
-`index.html` links them by root-absolute path. Every host already serves that
-prefix, so no server route is involved.
+and Edge "Install", Android "Add to Home screen", iOS "Add to Home Screen")
+and let it receive Web Push. `package/build.mjs` copies the manifest and icons
+next to `frontend.js` under `/assets/`, and `index.html` links them by
+root-absolute path. `sw.js` goes to the bundle root instead, beside
+`index.html`.
 
 The manifest pins the app's identity to origin-absolute locations: `id` and
 `scope` are `/`, so every page route stays inside the installed app, and
 `start_url` is `/cloud`, the application route that needs no device. Icon `src`
 values are relative to the manifest.
 
-There is no service worker yet. Current Chrome installs without one, and iOS
-Add to Home Screen never needed one. Web Push will add it, at a root path, so
-its scope can cover every application route.
+## Service worker
+
+`sw.js` only shows pushes and opens the conversation a notification names; it
+has no fetch handler and caches nothing. Installing never needed it: current
+Chrome installs without one, and iOS Add to Home Screen never did. It is
+served at `/sw.js` because a worker's default scope is its own directory, and
+`/` covers `/cloud/...` and `/device/...` without a `Service-Worker-Allowed`
+header. The local console and the console proxy already serve root bundle
+files; openseek-api has its own `/sw.js` route.
+
+The page registers it only in a browser, never in the window. The payload it
+reads is the relay's contract in `docs/plans/web-push.md`, and its strings
+mirror `frontend/system_notification.mbt`. `sw.test.mjs` runs it against a
+fake worker scope:
+
+```bash
+node --test sw.test.mjs
+```
 
 ## Icons
 

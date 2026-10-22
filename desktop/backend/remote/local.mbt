@@ -512,6 +512,9 @@ test "routes: the entry, the console's account routes, then the bundle" {
   assert_true(
     route(Get, "/frontend.js", entry="index.html") is Static("frontend.js"),
   )
+  // The push worker is a root file, so its default scope is `/`.
+  assert_true(route(Get, "/sw.js", entry="index.html") is Static("sw.js"))
+  assert_eq(content_type("sw.js"), "text/javascript; charset=utf-8")
   assert_true(
     route(Get, "/mermaid/chunks/x.mjs", entry="index.html")
     is Static("mermaid/chunks/x.mjs"),
