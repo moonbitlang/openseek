@@ -16,6 +16,9 @@ pub(all) struct Account {
   page : Page
   // The account's online devices, in roster order; the selector offers these.
   online_devices : Array[DeviceChoice]
+  // This browser's Web Push row; None hides it (still checking, or the relay
+  // has no push).
+  notifications : Notifications?
 }
 
 ///|
@@ -25,6 +28,19 @@ pub(all) enum Page {
   CloudPage
   // `name` is None while the roster does not list the device.
   DevicePage(id~ : String, name~ : String?)
+}
+
+///|
+/// What the account area says about this browser's push notifications.
+#derive(Debug, Eq)
+pub(all) enum Notifications {
+  // No Push API here; on iOS that means the page is not installed.
+  NeedsInstall
+  Off(error~ : String?)
+  Busy
+  On(error~ : String?)
+  // Denied for this site; only the browser's settings can undo it.
+  Blocked
 }
 
 ///|
@@ -92,6 +108,9 @@ pub(all) struct Actions {
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
   open_downloads : @cmd.Cmd
+  turn_on_notifications : @cmd.Cmd
+  turn_off_notifications : @cmd.Cmd
+  test_notification : @cmd.Cmd
   // Switch the page to the device with this id, or to Cloud with None.
   select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
@@ -439,6 +458,12 @@ pub fn component(
           ],
         ),
       )
+      if account.notifications is Some(notifications) {
+        footer.push(notifications_row(input.locale, notifications, actions))
+        if notifications is (Off(error=Some(error)) | On(error=Some(error))) {
+          footer.push(@html.div(class="console-notice", error))
+        }
+      }
       footer.push(@html.div(class="console-account", account_row))
       if account.notice is Some(notice) {
         footer.push(@html.div(class="console-notice", notice))
@@ -498,6 +523,63 @@ pub fn component(
     ])
   })
 }
+
+///|
+/// The account area's push row: what this browser receives, and the
+/// actions its state allows.
+fn notifications_row(
+  locale : @i18n.Locale,
+  notifications : Notifications,
+  actions : Actions,
+) -> @html.Html {
+  // Every button passes `disabled`, so a slot that turns into another
+  // button never keeps a stale property.
+  let action = (label : @messages.Message, on_click : @cmd.Cmd, disabled : Bool) => {
+    @html.button(
+      class="console-account-action",
+      type_="button",
+      disabled~,
+      on_click~,
+      @messages.text(locale, label),
+    )
+  }
+  let (status, buttons) : (@messages.Message, Array[@html.Html]) = match
+    notifications {
+    NeedsInstall => (NotificationsNeedInstall, [])
+    Off(..) =>
+      (NotificationsOff, [action(TurnOn, actions.turn_on_notifications, false)])
+    Busy =>
+      (
+        NotificationsOn,
+        [
+          action(SendTest, actions.test_notification, true),
+          action(TurnOff, actions.turn_off_notifications, true),
+        ],
+      )
+    On(..) =>
+      (
+        NotificationsOn,
+        [
+          action(SendTest, actions.test_notification, false),
+          action(TurnOff, actions.turn_off_notifications, false),
+        ],
+      )
+    Blocked => (NotificationsBlocked, [])
+  }
+  @html.div(
+    class="console-account console-notifications",
+    [
+      @html.span(class="console-login", @messages.text(locale, status)),
+      ..buttons,
+    ],
+  )
+}
+
+///|
+pub extend Notifications with Debug::{to_repr}
+
+///|
+pub extend Notifications with Eq::{equal, not_equal}
 
 ///|
 pub extend Account with Debug::{to_repr}

@@ -1541,6 +1541,9 @@ priv struct Model {
   account_error : @account_failure.Failure?
   // The last failure of the Remote access switch, shown in Connections.
   remote_access_error : String?
+  // Whether this browser receives Web Push for the signed-in account; the
+  // account area shows and toggles it. Never leaves Checking in the window.
+  web_push : @web_push.State
 }
 
 ///|
@@ -1780,6 +1783,7 @@ priv enum Msg {
     Result[Array[@skills.InstalledItem], String]
   )
   CloudSkillsExpired(@cloud_client.Access)
+  WebPush(@web_push.Msg)
   DeviceAccountExpired(@interop.ChannelId, Int32, String)
   RemoteAccessSet(Bool)
   RemoteStatusLoaded(RemoteAccess)
@@ -2864,6 +2868,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     account_checked: false,
     account_error: None,
     remote_access_error: None,
+    web_push: @web_push.State(),
   }
 }
 

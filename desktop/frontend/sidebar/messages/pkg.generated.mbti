@@ -45,6 +45,13 @@ pub(all) enum Message {
   Refresh
   SignOut
   DownloadApps
+  NotificationsOff
+  NotificationsOn
+  NotificationsBlocked
+  NotificationsNeedInstall
+  TurnOn
+  TurnOff
+  SendTest
 }
 
 // Type aliases

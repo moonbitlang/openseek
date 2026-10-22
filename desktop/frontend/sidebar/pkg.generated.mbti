@@ -28,6 +28,7 @@ pub(all) struct Account {
   notice : String?
   page : Page
   online_devices : Array[DeviceChoice]
+  notifications : Notifications?
 }
 pub fn Account::equal(Self, Self) -> Bool
 pub fn Account::not_equal(Self, Self) -> Bool
@@ -42,6 +43,9 @@ pub(all) struct Actions {
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
   open_downloads : @cmd.Cmd
+  turn_on_notifications : @cmd.Cmd
+  turn_off_notifications : @cmd.Cmd
+  test_notification : @cmd.Cmd
   select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
@@ -89,6 +93,18 @@ pub(all) enum Mode {
 pub fn Mode::equal(Self, Self) -> Bool
 pub fn Mode::not_equal(Self, Self) -> Bool
 pub fn Mode::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Notifications {
+  NeedsInstall
+  Off(error~ : String?)
+  Busy
+  On(error~ : String?)
+  Blocked
+}
+pub fn Notifications::equal(Self, Self) -> Bool
+pub fn Notifications::not_equal(Self, Self) -> Bool
+pub fn Notifications::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
 pub(all) enum Page {
