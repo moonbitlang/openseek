@@ -117,8 +117,8 @@ lenses, sit in the same file within 3 lines, and share at least half their
 title words. Then each blocker or high finding, at most `--verify N` of them
 (default 6, at most 8, `0` for none), goes to a fresh reviewer (40 steps)
 that is given the original criteria and the allegation and tries to refute
-it. Its summary must open with `VERDICT: CONFIRMED`, `REFUTED` or
-`INCONCLUSIVE`; a refuted finding is dropped and printed on a `Refuted:`
+it. The first line of its summary must be `VERDICT: CONFIRMED`, `REFUTED`
+or `INCONCLUSIVE` alone; a refuted finding is dropped and printed on a `Refuted:`
 line, and anything that isn't a clean confirmation or refutation leaves the
 finding `[unverified]`. Verification never changes a severity, so an
 unverified blocker still fails the run. `--max-tokens N` skips verification

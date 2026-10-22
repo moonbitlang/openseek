@@ -2168,29 +2168,22 @@ fn bundled_workflow(name : StringView) -> String? {
           #|/// The verifier's verdict on `claim`. Anything but a well-formed confirmation
           #|/// or refutation leaves the claim unverified.
           #|///
-          #|/// The summary must begin with an exact verdict token, not followed by a
-          #|/// letter. What separates it from the evidence is not checked: a live
-          #|/// verifier wrote a literal `\n` there rather than a newline.
+          #|/// The summary's first line must be the verdict token alone (trailing
+          #|/// periods aside), so a hedge such as `VERDICT: REFUTED/INCONCLUSIVE` is no
+          #|/// verdict. A literal `\n` also ends the line: live verifiers wrote one
+          #|/// there rather than a newline.
           #|fn verdict(report : Json, claim : Claim) -> Verdict {
-          #|  let summary = text_field(report, "summary").trim()
-          #|  let mut head = ""
-          #|  let mut evidence = ""
-          #|  for word in ["CONFIRMED", "REFUTED", "INCONCLUSIVE"] {
-          #|    guard summary.strip_prefix("VERDICT: " + word) is Some(after) else {
-          #|      continue
-          #|    }
-          #|    guard !(after.iter().next() is Some('A'..='Z' | 'a'..='z')) else {
-          #|      continue
-          #|    }
-          #|    head = "VERDICT: " + word
-          #|    evidence = after
-          #|      .to_owned()
-          #|      .replace_all(old="\\n", new=" ")
-          #|      .replace_all(old="\n", new=" ")
-          #|      .trim_start(chars=" .:-")
-          #|      .trim()
-          #|      .to_owned()
-          #|    break
+          #|  let summary = text_field(report, "summary").replace_all(
+          #|    old="\\n",
+          #|    new="\n",
+          #|  )
+          #|  let (head, evidence) = match summary.trim().split("\n").to_array() {
+          #|    [] => ("", "")
+          #|    [head, .. rest] =>
+          #|      (
+          #|        head.trim().trim_end(chars=".").to_owned(),
+          #|        rest.join(" ").trim().to_owned(),
+          #|      )
           #|  }
           #|  let findings = match report {
           #|    { "findings": Array(findings), .. } => findings

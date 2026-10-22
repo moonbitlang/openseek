@@ -626,6 +626,8 @@ fn lens_reply(mode : String, lens : String) -> Result[Json, String] {
             swarm_finding(a, Some(1), "high", "Literal newline claim"),
             swarm_finding(a, Some(3), "high", "Period claim"),
             swarm_finding(a, Some(5), "high", "Glued claim"),
+            swarm_finding(a, Some(20), "high", "Compound claim"),
+            swarm_finding(a, Some(40), "high", "Trailing words claim"),
           ],
           "correctness summary",
         ),
@@ -674,9 +676,14 @@ fn verifier_reply(goal : String) -> Result[Json, String] {
         ),
       )
     "Period claim" =>
-      Ok(swarm_report([], "VERDICT: REFUTED. the code checks it"))
-    // A token run into a word is not a verdict.
+      Ok(swarm_report([], "VERDICT: REFUTED.\nthe code checks it"))
+    // A token run into a word, a hedge between two verdicts, and a token
+    // with more words on its line are no verdicts.
     "Glued claim" => Ok(swarm_report([], "VERDICT: REFUTEDLY not"))
+    "Compound claim" =>
+      Ok(swarm_report([], "VERDICT: REFUTED/INCONCLUSIVE\ncould not run it"))
+    "Trailing words claim" =>
+      Ok(swarm_report([], "VERDICT: REFUTED or maybe not"))
     "Inconclusive claim" =>
       Ok(swarm_report([], "VERDICT: INCONCLUSIVE\nno way to run it"))
     "Claim without verdict" => Ok(swarm_report([], "looked around, unsure"))
@@ -849,9 +856,10 @@ async fn verify_review_swarm(repo : String, artifact : String) -> Unit {
           true,
           [
             "review:correctness", "review:verify-1", "review:verify-2", "review:verify-3",
+            "review:verify-4", "review:verify-5",
           ],
           [
-            "findings=2 blockers=0 tokens=48 lenses=1/1 verified=1 refuted=1 unverified=1",
+            "findings=4 blockers=0 tokens=72 lenses=1/1 verified=1 refuted=1 unverified=3",
             "[verified] detail of Literal newline claim", "Refuted: Period claim (src/a.mbt:3): the code checks it",
             "[unverified: no verdict line]",
           ],

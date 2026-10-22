@@ -120,11 +120,12 @@ Each finding of severity `blocker` or `high` (most severe first, at most
   2. *The allegation*: the finding's file, line, severity, title and detail,
      labeled as one reviewer's claim, not as criteria.
   3. *The instruction*: try to refute the allegation first. Then submit with
-     a summary that begins with exactly one of `VERDICT: CONFIRMED`,
-     `VERDICT: REFUTED` or `VERDICT: INCONCLUSIVE`, followed by the evidence.
-     The token must not run into a letter (`VERDICT: REFUTEDLY` is no
-     verdict), but what separates it from the evidence isn't checked: in a
-     live run, two verifiers wrote a literal `\n` there instead of a newline.
+     a summary whose first line is exactly one of `VERDICT: CONFIRMED`,
+     `VERDICT: REFUTED` or `VERDICT: INCONCLUSIVE` (trailing periods aside),
+     followed by the evidence. A hedge such as
+     `VERDICT: REFUTED/INCONCLUSIVE`, or more words on that line, is no
+     verdict. A literal `\n` also ends the line: in a live run, two
+     verifiers wrote one there instead of a newline.
      For `CONFIRMED`, submit exactly one finding restating the claim, in the
      same file. Otherwise submit no findings. Say `INCONCLUSIVE` whenever the
      claim couldn't actually be tested.
