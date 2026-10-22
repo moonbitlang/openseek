@@ -417,7 +417,10 @@ priv enum BlockContent {
     subrun_parent~ : String?,
     wait_labels~ : Map[Int32, String],
     fork~ : ForkAction?,
-    edit~ : UserEditAction?
+    edit~ : UserEditAction?,
+    // Keys the item's native controls apart from the same item shown on the
+    // other surface, as a side chat's copied history is.
+    surface~ : @interop.ChatSurface
   )
   /// The response still streaming, shown through the same view a settled
   /// response gets. Durable commits are untagged and cannot prove ownership
@@ -505,6 +508,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
         assistant_name~,
         subrun_parent~,
         wait_labels=job_wait_labels(locale=input.locale, item, descriptions),
+        surface=input.surface,
       ),
     })
   }
@@ -557,13 +561,15 @@ fn Block::render(
       subrun_parent~,
       wait_labels~,
       fork~,
-      edit~
+      edit~,
+      surface~
     ) =>
       transcript_item_view(
         locale~,
         item,
         on_open,
         wait_labels~,
+        surface~,
         fork?=fork.map(value => value.render(locale~, actions.fork)),
         edit?=edit.map(value => value.render(locale~, begin_edit)),
         editor?,

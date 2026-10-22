@@ -25,12 +25,15 @@ async function selectIn(page, container, text) {
 // The conversation in the column, its host forking a side chat of it on
 // request. Unless `open` is false, a side chat is opened the way a reader
 // opens one, from text selected in the column's transcript.
-async function setup(page, { questions = [], open = true } = {}) {
+async function setup(page, {
+  questions = [], open = true, main = mainHistory, side = sideHistory, configure = () => {},
+} = {}) {
   const app = new DesktopBrowserHarness(page);
+  configure(app);
   let questionGeneration = 1;
   let questionRequests = questions;
   const questionSnapshot = () => ({ generation: questionGeneration, requests: questionRequests });
-  app.sessionEvents = mainHistory;
+  app.sessionEvents = main;
   const original = app.replyFor.bind(app);
   app.replyFor = request => {
     if (request.method === 'user_questions.list') return questionSnapshot();
@@ -46,8 +49,8 @@ async function setup(page, { questions = [], open = true } = {}) {
     }
     if (request.method === 'session.load' && request.params.session === 'session-1-sc-0a1b2c3d') {
       return {
-        session: { version: 1, id: 'session-1-sc-0a1b2c3d', events: sideHistory },
-        watermark: sideHistory.at(-1).sequence,
+        session: { version: 1, id: 'session-1-sc-0a1b2c3d', events: side },
+        watermark: side.at(-1).sequence,
         prediction: null,
       };
     }
@@ -245,4 +248,64 @@ test('a side chat lives only in the page that opened it', async ({ page }) => {
   expect(app.requests.filter(r => r.method === 'session.load' &&
     r.params.session === 'session-1-sc-0a1b2c3d')).toHaveLength(1);
   expect(app.pageErrors).toEqual([]);
+});
+
+test('both running composers keep their own follow-up menus', async ({ page }) => {
+  const app = await setup(page, { configure: app => { app.hostSettings.followup_behavior = 'queue'; } });
+  const column = page.locator('#task');
+  await column.fill('Start a turn');
+  await column.press('Enter');
+  const sideInput = page.locator('#side-chat-task');
+  await sideInput.fill('Start an aside');
+  await sideInput.press('Enter');
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').map(r => r.params.session).sort())
+    .toEqual(['session-1', 'session-1-sc-0a1b2c3d']);
+  const sideChoice = page.locator('.side-chat').getByRole('button', { name: 'Follow-up action', exact: true });
+  const columnChoice = page.locator('button[aria-label="Follow-up action"]:not(.side-chat *)');
+  await expect(sideChoice).toContainText('Queue next');
+  await expect(columnChoice).toContainText('Queue next');
+  // Choosing in the dock's menu settles the dock's choice alone.
+  await sideInput.fill('Correct the aside');
+  await sideChoice.focus();
+  await sideChoice.press('ArrowDown');
+  const sideMenu = page.locator('.side-chat').getByRole('listbox', { name: 'Follow-up action' });
+  // Focus moving into the dock's own options keeps its menu open.
+  await expect(sideMenu.getByRole('option', { name: /Queue next/ })).toBeFocused();
+  await expect(sideMenu).toBeVisible();
+  await page.keyboard.press('Home');
+  await expect(sideMenu.getByRole('option', { name: 'Steer now', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(sideChoice).toContainText('Steer now');
+  await expect(sideChoice).toBeFocused();
+  await expect(columnChoice).toContainText('Queue next');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a copied tool call keeps its own tab choice in each transcript', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
+  const call = { id: 'copied-call', name: 'mbtx', arguments: JSON.stringify({ source: 'fn main { () }', description: 'Copied check' }) };
+  const main = [
+    event(1, 'user', { content: 'Explain the parser.' }),
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [call] } } },
+    event(3, 'terminal', { kind: 'finished', message: 'The parser reads tokens.' }),
+  ];
+  const side = [
+    ...main,
+    event(4, 'user', { content: 'An aside about tokens.' }),
+    event(5, 'terminal', { kind: 'finished', message: 'Tokens are lexemes.' }),
+  ];
+  await setup(page, { main, side });
+  const columnCall = page.locator('#transcript details.tool-call');
+  const sideCall = page.locator('#side-chat-transcript details.tool-call');
+  await columnCall.locator('.tool-call-summary').click();
+  await sideCall.locator('.tool-call-summary').click();
+  const original = locator => locator.getByRole('radio', { name: 'Original JSON', exact: true });
+  // The side chat's label selects the side chat's view, not the column's.
+  await sideCall.getByText('Original JSON', { exact: true }).click();
+  await expect(original(sideCall)).toBeChecked();
+  await expect(original(columnCall)).not.toBeChecked();
+  // And the column's choice leaves the side chat's alone.
+  await columnCall.getByText('Original JSON', { exact: true }).click();
+  await expect(original(columnCall)).toBeChecked();
+  await expect(original(sideCall)).toBeChecked();
 });

@@ -458,7 +458,7 @@ fn Entry::view(
     followup_menu: if shell_command is Some(_) {
       None
     } else {
-      self.followup_menu(locale~, input, emit)
+      self.followup_menu(locale~, input, emit, surface~)
     },
     overlay: if goal_mode {
       None
@@ -502,6 +502,7 @@ fn Entry::followup_menu(
   self : Entry,
   input : Input,
   emit : @cmd.Emit[Msg],
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html? {
   guard input.goal.draft is None &&
     input.presentation.primary_action is Running(steer_available~, ..) &&
@@ -510,7 +511,12 @@ fn Entry::followup_menu(
   }
   Some(
     @select_control.Control::{
-      id: "composer-followup-select",
+      // Its trigger, root, and option ids derive from this one; the column's
+      // and the dock's composers can both be running.
+      id: match surface {
+        Column => "composer-followup-select"
+        Dock => "side-chat-followup-select"
+      },
       groups: [
         {
           label: ui(locale, ThisMessage),
