@@ -936,6 +936,8 @@ test "explicit SSH disconnect and cancellation stay offline until the next proje
     assert_false(late.ssh_ui.connecting.contains(id))
     assert_false(late.ssh_ui.host_errors.contains(id))
     assert_true(late.ssh_ui.pending_open is None)
+    assert_eq(ssh_connection_status(late, id), "Disconnected")
+    assert_eq(terminal_ctx(late).connection_notice, Some("Disconnected"))
     let (_, opened) = update(dispatch, NewChatIn(channel, Some(project)), late)
     assert_eq(opened.ssh_ui.next_attempt, 2)
     assert_true(opened.ssh_ui.connecting.contains(id))
@@ -962,6 +964,8 @@ test "failed SSH project open retries its destination unless add project replace
     )
     assert_true(failed.ssh_ui.pending_open is Some(_))
     assert_false(failed.ssh_ui.connecting.contains(id))
+    assert_eq(ssh_connection_status(failed, id), "Connection failed")
+    assert_eq(terminal_ctx(failed).connection_notice, Some("Connection failed"))
     let (_, retry) = update_ssh(
       dispatch,
       if add_project {
@@ -971,6 +975,8 @@ test "failed SSH project open retries its destination unless add project replace
       },
       failed,
     )
+    assert_eq(ssh_connection_status(retry, id), "Connecting…")
+    assert_eq(terminal_ctx(retry).connection_notice, Some("Connecting…"))
     let (_, ready) = update(dispatch, ssh_ready_event(id, 2), retry)
     assert_true(ready.ssh_ui.pending_open is None)
     if add_project {

@@ -93,7 +93,9 @@ fn panel_view(
     items.push(
       @html.span(
         class="terminal-status",
-        "Reconnecting… A new shell will open; previous input will not be replayed.",
+        ctx.connection_notice.unwrap_or(
+          "Reconnecting… A new shell will open; previous input will not be replayed.",
+        ),
       ),
     )
   } else if active is Some(tab) {

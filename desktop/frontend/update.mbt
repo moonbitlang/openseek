@@ -1569,6 +1569,11 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
     None => false
   }
   @terminal.Ctx(
+    connection_notice?=match active.owner.channel {
+      Remote(id) if model.ssh_ui.hosts.any(host => host.id == id) =>
+        Some(ssh_connection_status(model, id))
+      _ => None
+    },
     host_name?=model.ssh_ui.hosts
       .iter()
       .find_first(host => {

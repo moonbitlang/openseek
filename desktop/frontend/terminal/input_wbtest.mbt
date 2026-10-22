@@ -182,6 +182,7 @@ test "connection loss recovers with fresh input only in either callback order" {
   }
   let ctx : Ctx = {
     host_name: None,
+    connection_notice: None,
     channel: remote,
     session: "input",
     placement: Some(@interop.WorkspaceRoot(root~)),

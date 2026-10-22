@@ -4,6 +4,7 @@
 fn local_ctx(session : String, placement : @interop.CheckoutPlacement) -> Ctx {
   {
     host_name: None,
+    connection_notice: None,
     channel: @interop.ChannelId::Local,
     session,
     placement: Some(placement),
@@ -214,6 +215,7 @@ test "an open panel waits for a reconnected channel before replacing its PTY" {
   }
   let disconnected_ctx : Ctx = {
     host_name: None,
+    connection_notice: None,
     channel: remote,
     session: "reconnect",
     placement: Some(@interop.Scratch(root=Some(scratch_root))),

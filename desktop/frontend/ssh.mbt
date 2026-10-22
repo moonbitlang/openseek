@@ -1097,28 +1097,38 @@ fn Model::ssh_online(self : Model, id : String) -> Bool {
 }
 
 ///|
+/// Shared by the header, unopened project and terminal: being offline does
+/// not imply that a connection attempt is still running.
+fn ssh_connection_status(model : Model, id : String) -> String {
+  model.ssh_ui.connecting
+  .get(id)
+  .unwrap_or(
+    if model.ssh_online(id) {
+      "Connected"
+    } else if model.ssh_ui.host_errors.contains(id) {
+      "Connection failed"
+    } else {
+      "Disconnected"
+    },
+  )
+}
+
+///|
 fn ssh_status(model : Model, id : String) -> @html.Html {
   let progress = model.ssh_ui.connecting.get(id)
   let online = model.ssh_online(id)
   @html.span(
     class=if online { "ssh-status online" } else { "ssh-status" },
-    attrs=@html.Attrs::build().role("status"),
+    attrs=@html.Attrs::build()
+      .role("status")
+      .aria_label(ssh_connection_status(model, id)),
+    title=ssh_connection_status(model, id),
     [
       @html.span(
         class=if progress is Some(_) { "ssh-dot pending" } else { "ssh-dot" },
         "",
       ),
-      @html.span(
-        progress.unwrap_or(
-          if online {
-            "Connected"
-          } else if model.ssh_ui.host_errors.contains(id) {
-            "Connection failed"
-          } else {
-            "Disconnected"
-          },
-        ),
-      ),
+      @html.span(ssh_connection_status(model, id)),
     ],
   )
 }
@@ -1226,7 +1236,7 @@ fn ssh_settings(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   )
   if model.ssh_ui.error is Some(error) {
     rows.push(
-      @html.p(
+      @html.pre(
         class="ssh-error ssh-settings-error",
         attrs=@html.Attrs::build().role("alert"),
         error,
@@ -1285,7 +1295,7 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   )
   if model.ssh_ui.error is Some(error) {
     choices.push(
-      @html.p(
+      @html.pre(
         class="ssh-error",
         attrs=@html.Attrs::build().role("alert"),
         error,
@@ -1391,7 +1401,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     }
     if ui.error is Some(error) {
       content.push(
-        @html.p(
+        @html.pre(
           class="ssh-error",
           attrs=@html.Attrs::build().role("alert"),
           error,
@@ -1460,7 +1470,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
     if ui.error is Some(error) {
       content.push(
-        @html.p(
+        @html.pre(
           class="ssh-error",
           attrs=@html.Attrs::build().role("alert"),
           error,
@@ -1592,6 +1602,8 @@ fn ssh_context(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     [
       @html.button(
         class="ssh-context-host",
+        title=host.display_label(),
+        attrs=@html.Attrs::build().aria_label(host.display_label()),
         on_click=dispatch(Ssh(Details(id))),
         [@icons.icon(@icons.icon_server), @html.span(host.display_label())],
       ),
@@ -1735,7 +1747,7 @@ fn ssh_auth_region(
       ),
       ..if request.retry {
         [
-          @html.p(
+          @html.pre(
             class="ssh-error",
             attrs=@html.Attrs::build().role("alert"),
             "Authentication failed. Enter your password again.",
@@ -1745,7 +1757,7 @@ fn ssh_auth_region(
         []
       },
       ..if confirm {
-        [@html.p(class="ssh-auth-prompt", request.prompt)]
+        [@html.pre(class="ssh-output ssh-auth-prompt", request.prompt)]
       } else {
         [
           @html.node(

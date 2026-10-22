@@ -271,3 +271,20 @@ main > .conversation-load-state {
 .navigation-notice { padding: 24px; color: var(--color-text-muted); }
 
 .navigation-forward svg { transform: rotate(180deg); }
+
+/* The main pane can be narrow even in a wide window with the editor open.
+   Keep SSH recovery controls reachable before secondary header metadata. */
+.topbar:has(.ssh-context) .topbar-title { flex: 1 1 0; }
+
+@container main-pane (max-width: 700px) {
+  .topbar:has(.ssh-context) .topbar-workspace,
+  .topbar:has(.ssh-context) .pill,
+  .topbar:has(.ssh-context) .run-status {
+    display: none;
+  }
+  .ssh-context-host > span:last-child,
+  .ssh-context .ssh-status > span:last-child {
+    display: none;
+  }
+  .ssh-context { gap: 6px; padding-right: 6px; }
+}

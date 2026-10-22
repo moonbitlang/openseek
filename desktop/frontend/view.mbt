@@ -2062,7 +2062,22 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     // Until the bridge answers, this page knows nothing about the host's
     // projects. Offering to add one here would be a guess that the very next
     // message contradicts.
-    _ => card.push(@html.p(shell_text(model.locale, ConnectingDevice)))
+    _ =>
+      if model.focused is Remote(id) &&
+        model.ssh_ui.hosts.any(host => host.id == id) {
+        card.push(@html.p(ssh_connection_status(model, id)))
+        if model.ssh_ui.host_errors.get(id) is Some(error) {
+          card.push(
+            @html.pre(
+              class="ssh-error",
+              attrs=@html.Attrs::build().role("alert"),
+              error,
+            ),
+          )
+        }
+      } else {
+        card.push(@html.p(shell_text(model.locale, ConnectingDevice)))
+      }
   }
   @html.section(class="onboarding", [@html.div(class="onboarding-card", card)])
 }
