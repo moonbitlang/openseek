@@ -23,19 +23,20 @@ Usage: openseek_tui [options]
 OpenSeek terminal UI.
 
 Options:
-  -h, --help                             Show help information.
-  --continue                             Resume the most recently active session in --session-root.
-  --api-key <api-key>                    API key for the selected chat provider. [default: ]
-  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
-  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
-  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
-  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
-  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
-  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
-  --session <session>                    Create or resume this durable session id.
-  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
-  --engine <engine>                      Agent engine command to spawn instead of the default (moonx running the pinned moonbitlang/openseek release); it must speak the serve JSONL protocol.
-  --prompt <prompt>                      Initial prompt to send once the UI opens.
+  -h, --help                                 Show help information.
+  --continue                                 Resume the most recently active session in --session-root.
+  --api-key <api-key>                        API key for the selected chat provider. [default: ]
+  --model <model>                            Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                        OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>          Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>      Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                    Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                      Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                        Create or resume this durable session id.
+  --session-root <session-root>              Directory containing durable OpenSeek sessions. [default: .openseek]
+  --engine <engine>                          Agent engine command to spawn instead of the default (moonx running the pinned moonbitlang/openseek release); it must speak the serve JSONL protocol.
+  --prompt <prompt>                          Initial prompt to send once the UI opens.
+  -C, --change-directory <change-directory>  Run as if started in this directory: it becomes the workspace, and a relative --session-root or --engine path resolves against it.
 ```
 
 ## API Key Is Required

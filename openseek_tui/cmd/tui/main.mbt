@@ -15,6 +15,12 @@ pub fn tui_ui_options() -> Array[@argparse.OptionArg] {
       long="prompt",
       about="Initial prompt to send once the UI opens.",
     ),
+    OptionArg(
+      "change-directory",
+      short='C',
+      long="change-directory",
+      about="Run as if started in this directory: it becomes the workspace, and a relative --session-root or --engine path resolves against it.",
+    ),
   ]
 }
 
@@ -80,6 +86,37 @@ async fn with_latest_session(config : AppConfig) -> AppConfig {
   match @store.SessionStore(config.session_root).latest() {
     Some(id) => { ..config, session_id: id, }
     None => config
+  }
+}
+
+///|
+/// Re-root `config` for `-C dir`, as if the TUI had been started in `dir`.
+/// There is no process-wide chdir, so the workspace and every relative path
+/// taken from another flag (`--session-root`, an `--engine` path) are resolved
+/// here, and the processes the TUI spawns get `cwd` explicitly.
+async fn in_directory(config : AppConfig, dir : String) -> AppConfig {
+  let cwd = @fs.realpath(dir) catch {
+    error => fail("cannot change directory to \{dir}: \{error}")
+  }
+  guard @fs.kind(cwd) is Directory else {
+    fail("cannot change directory to \{dir}: not a directory")
+  }
+  // A bare engine name is a PATH lookup, not a path.
+  let engine = if config.engine.contains("/") || config.engine.contains("\\") {
+    resolve_in(cwd, config.engine)
+  } else {
+    config.engine
+  }
+  { ..config, cwd, session_root: resolve_in(cwd, config.session_root), engine, }
+}
+
+///|
+/// `path` resolved against the absolute directory `dir`; an absolute `path`
+/// (`/x`, `\\x`, or a drive-letter `C:...`) is returned unchanged.
+fn resolve_in(dir : String, path : String) -> String {
+  match path {
+    ['/' | '\\', ..] | ['A'..<='Z' | 'a'..<='z', ':', ..] => path
+    _ => "\{dir}/\{path}"
   }
 }
 
@@ -414,6 +451,9 @@ fn engine_probe_error(config : AppConfig, probe : EngineProbe) -> String {
 /// `openseek_tui` command (in `cmd/openseek_tui`) owns parsing and calls here.
 pub async fn run(matches : @argparse.Matches) -> Unit {
   let mut config = parse_config(matches)
+  if matches is { values: { "change-directory": [dir, ..], .. }, .. } {
+    config = in_directory(config, dir)
+  }
   if continue_requested(matches) {
     config = with_latest_session(config)
   }

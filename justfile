@@ -39,10 +39,13 @@ inspect *args:
 
 # Run the terminal UI on this checkout's engine instead of the pinned release
 # `moonx` would download; flags pass through to the UI
-# (e.g. just tui --continue, just tui --model deepseek-v4-flash).
+# (e.g. just tui --continue, just tui -C ../other-project). It runs in the
+# invoking directory, so a relative -C resolves against it like any other
+# command's, with absolute paths to this checkout.
+[no-cd]
 tui *args:
-    moon build . openseek_tui/cmd/openseek_tui --target native
-    _build/native/debug/build/moonbitlang/openseek_tui/cmd/openseek_tui/openseek_tui.exe --engine _build/native/debug/build/moonbitlang/openseek/openseek.exe {{ args }}
+    moon -C {{ justfile_directory() }} build . openseek_tui/cmd/openseek_tui --target native
+    {{ justfile_directory() }}/_build/native/debug/build/moonbitlang/openseek_tui/cmd/openseek_tui/openseek_tui.exe --engine {{ justfile_directory() }}/_build/native/debug/build/moonbitlang/openseek/openseek.exe {{ args }}
 
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
 test: test-moon test-cram test-app-server test-turn-finish test-subagents test-workflows

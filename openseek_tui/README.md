@@ -48,6 +48,9 @@ sessions:
 - `openseek_tui --continue` resumes the most recently active session.
 - `openseek_tui --session <id>` resumes (or creates) a specific one.
 - `openseek_tui --prompt "…"` sends an initial prompt once the UI opens.
+- `openseek_tui -C <dir>` runs as if started in `<dir>`: it becomes the
+  workspace, and a relative `--session-root` or `--engine` path resolves
+  against it.
 - `openseek sessions list` (the engine CLI) shows what is resumable.
 
 The shared engine options (`--api-key`, `--model`, `--api-url`, `--max-steps`,
@@ -87,7 +90,7 @@ compiles against; on its own the UI still spawns the pinned release through
 `moonx`, which may speak an older protocol than the one it was built against.
 From the repository root, `just tui` builds both binaries and runs the UI with
 `--engine` pointing at this checkout's `openseek` (flags pass through, e.g.
-`just tui --continue`).
+`just tui --continue`, `just tui -C ../other-project`).
 
 ## Publishing
 
