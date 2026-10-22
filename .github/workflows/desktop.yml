@@ -220,6 +220,9 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    env:
+      # Keep this version in sync with desktop/e2e/package.json and its lockfile.
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.60.0-noble
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -246,9 +249,8 @@ jobs:
         working-directory: desktop/e2e
         run: npm ci
 
-      - name: Install Chromium and WebKit
-        working-directory: desktop/e2e
-        run: npx playwright install --with-deps chromium webkit
+      - name: Pull preinstalled Playwright browsers
+        run: docker pull "$PLAYWRIGHT_IMAGE"
 
       - name: Build Desktop browser application
         working-directory: desktop
@@ -260,7 +262,22 @@ jobs:
 
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e
-        run: npm test
+        env:
+          OPENSEEK_DESKTOP_BROWSER_BASE_URL: http://127.0.0.1:5175
+        # Keep native compilation on the runner: the browser image has no C
+        # development toolchain. Tests reuse this server over the host network.
+        run: |
+          setsid moon run --target native --release ../../scripts/serve-static.mbtx ../dist/browser 5175 &
+          server_pid=$!
+          trap 'kill -- "-$server_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --retry 120 --retry-connrefused --retry-delay 1 \
+            --output /dev/null "$OPENSEEK_DESKTOP_BROWSER_BASE_URL/index.html"
+          docker run --rm --init --ipc=host --network host \
+            --env CI=true \
+            --env OPENSEEK_DESKTOP_BROWSER_BASE_URL \
+            --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
+            --workdir "$GITHUB_WORKSPACE/desktop/e2e" \
+            "$PLAYWRIGHT_IMAGE" npm test
 
       # A test that fails once and passes its retry leaves the job green, and
       # the failed attempt's screenshot and page snapshot are the only record
