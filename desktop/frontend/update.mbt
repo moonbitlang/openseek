@@ -3151,84 +3151,12 @@ fn update_msg(
       )
     }
     FileEditor(
-      EditorCommentAdded(
-        resource~,
-        file~,
-        range~,
-        quote~,
-        comment~,
-        feedback_id~
-      )
-    ) => {
-      guard resource.resource().scheme != "openseek-cloud" else {
-        return (@cmd.none, model)
-      }
-      if model.screen is Codex {
-        // Codex owns a separate wire model, but the visible editor annotation
-        // is the same structured chip as OpenSeek's. Keep it in Codex's shared
-        // composer tray; never leak it into the hidden OpenSeek conversation.
-        return (
-          @fileeditor.remove_editor_feedback(resource, feedback_id),
-          {
-            ..model,
-            codex: model.codex.with_editor_comment(
-              file.0,
-              range,
-              comment,
-              quote,
-            ),
-          },
-        )
-      }
-      guard model.active_conversation() is Some(conv) else {
-        return (@cmd.none, model)
-      }
-      let mentions = @composer.Draft::{
-          images: conv.images,
-          task: conv.task,
-          mentions: conv.mentions,
-        }.with_mention({
-          ref_: Annotation(
-            file=file.0,
-            start_line=range.start_line_number,
-            end_line=range.end_line_number,
-            quote~,
-            comment~,
-            side=@mention_context.WorkingRevision,
-          ),
-          range: Some(range),
-        }).mentions
-      // The chip is the comment's carrier from here on; clearing the editor's
-      // own bubble keeps the two from drifting apart (and from double-sending
-      // if the user comments again).
-      (
-        @fileeditor.remove_editor_feedback(resource, feedback_id),
-        model.replace_conversation({ ..conv, mentions, }),
-      )
-    }
-    // The feedback service queues this after the comment-added message above,
-    // so the new annotation is already in the visible composer batch. Reuse
-    // each agent's normal submit path: an idle task starts, while a running
-    // task receives the batch through its existing steer/message queue.
-    FileEditor(@fileeditor.ApplyCloudFeedback(_)) => (@cmd.none, model)
-    FileEditor(@fileeditor.ApplyAllFeedback) =>
-      match model.screen {
-        Chat => update_msg(dispatch, Send, model)
-        Codex => {
-          let input = model.codex_composer_input()
-          update_msg(
-            dispatch,
-            CodexComposerAction(
-              @composer.DraftSubmitted(
-                identity=input.identity,
-                draft=input.draft,
-              ),
-            ),
-            model,
-          )
-        }
-        Skills | Schedules | Settings => (@cmd.none, model)
-      }
+      EditorCommentAdded(..)
+      | ApplyAllFeedback
+      | ApplyEditorFeedback(_) as feedback
+    ) => update_editor_feedback(dispatch, feedback, model)
+    // Delivered to the component by boot, alongside the other component inputs.
+    ComposerReply(_) => (@cmd.none, model)
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a
@@ -3266,11 +3194,11 @@ fn update_msg(
             _ => return (clear_feedback, model)
           }
       }
+      let end_column = if quote.is_empty() { 1 } else { quote.length() + 1 }
+      let comment_range = range.unwrap_or(
+        @common.Range(line_number, 1, line_number, end_column),
+      )
       if model.screen is Codex {
-        let end_column = if quote.is_empty() { 1 } else { quote.length() + 1 }
-        let comment_range = range.unwrap_or(
-          @common.Range(line_number, 1, line_number, end_column),
-        )
         return (
           clear_feedback,
           {
@@ -3292,17 +3220,15 @@ fn update_msg(
           images: conv.images,
           task: conv.task,
           mentions: conv.mentions,
-        }.with_mention({
-          ref_: Annotation(
-            file=file.0,
-            start_line=line_number,
-            end_line=line_number,
-            quote~,
-            comment~,
+        }.with_mention(
+          @composer.Mention::editor_annotation(
+            file.0,
+            comment_range,
+            quote,
+            comment,
             side~,
           ),
-          range,
-        }).mentions
+        ).mentions
       (clear_feedback, model.replace_conversation({ ..conv, mentions, }))
     }
     // Search rows use the same ordinary positioned-open path as definition,
@@ -19959,32 +19885,38 @@ test "ApplyAllFeedback queues the attached annotation on a running task" {
     model,
   )
   assert_eq(batched.active().mentions.length(), 1)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
-  assert_true(applied.active().mentions.is_empty())
-  assert_eq(applied.active().pending_steers.length(), 1)
-  let steer = applied.active().pending_steers[0]
-  assert_eq(steer.mentions.length(), 1)
-  // Clearing the active composer preserves the selection in the queued draft.
-  assert_eq(batched.active().mentions, steer.mentions)
-  assert_eq(
-    steer.content,
-    (
-      #|<user_mentions>
-      #|<annotation file="README.md" lines="3-6">
-      #|<quote>
-      #|DeepSeek, Kimi, and Z.AI GLM models
-      #|</quote>
-      #|<user_comment>
-      #|make this clearer
-      #|</user_comment>
-      #|</annotation>
-      #|</user_mentions>
-    ),
-  )
+  for
+    feedback in [
+      @fileeditor.ApplyAllFeedback,
+      @fileeditor.ApplyEditorFeedback(
+        @fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/README.md"),
+        ),
+      ),
+    ] {
+    let (_, applied) = update(dispatch, FileEditor(feedback), batched)
+    assert_true(applied.active().mentions.is_empty())
+    assert_eq(applied.active().pending_steers.length(), 1)
+    let steer = applied.active().pending_steers[0]
+    assert_eq(steer.mentions.length(), 1)
+    // Clearing the active composer preserves the selection in the queued draft.
+    assert_eq(batched.active().mentions, steer.mentions)
+    assert_eq(
+      steer.content,
+      (
+        #|<user_mentions>
+        #|<annotation file="README.md" lines="3-6">
+        #|<quote>
+        #|DeepSeek, Kimi, and Z.AI GLM models
+        #|</quote>
+        #|<user_comment>
+        #|make this clearer
+        #|</user_comment>
+        #|</annotation>
+        #|</user_mentions>
+      ),
+    )
+  }
 }
 
 ///|
@@ -20231,35 +20163,41 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
   )
   let before = batched.codex_composer_input()
   assert_eq(before.draft.mentions.length(), 1)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
-  assert_eq(
-    before.draft.mentions,
-    batched.codex_composer_input().draft.mentions,
-  )
-  let queued = applied.codex.transcript_items()
-  assert_eq(queued.length(), 1)
-  guard queued[0].kind is @transcript.User(content=prompt) else {
-    fail("expected the queued comment as a user prompt")
+  for
+    feedback in [
+      @fileeditor.ApplyAllFeedback,
+      @fileeditor.ApplyEditorFeedback(
+        @fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/README.md"),
+        ),
+      ),
+    ] {
+    let (_, applied) = update(dispatch, FileEditor(feedback), batched)
+    assert_eq(
+      before.draft.mentions,
+      batched.codex_composer_input().draft.mentions,
+    )
+    let queued = applied.codex.transcript_items()
+    assert_eq(queued.length(), 1)
+    guard queued[0].kind is @transcript.User(content=prompt) else {
+      fail("expected the queued comment as a user prompt")
+    }
+    assert_eq(
+      prompt.text(),
+      (
+        #|<user_mentions>
+        #|<annotation file="README.md" lines="3-6">
+        #|<quote>
+        #|DeepSeek, Kimi, and Z.AI GLM models
+        #|</quote>
+        #|<user_comment>
+        #|make this clearer
+        #|</user_comment>
+        #|</annotation>
+        #|</user_mentions>
+      ),
+    )
   }
-  assert_eq(
-    prompt.text(),
-    (
-      #|<user_mentions>
-      #|<annotation file="README.md" lines="3-6">
-      #|<quote>
-      #|DeepSeek, Kimi, and Z.AI GLM models
-      #|</quote>
-      #|<user_comment>
-      #|make this clearer
-      #|</user_comment>
-      #|</annotation>
-      #|</user_mentions>
-    ),
-  )
 }
 
 ///|

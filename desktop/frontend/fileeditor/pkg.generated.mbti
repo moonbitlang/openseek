@@ -453,7 +453,7 @@ pub(all) enum Msg {
   LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
   ApplyAllFeedback
-  ApplyCloudFeedback(ModelUri)
+  ApplyEditorFeedback(ModelUri)
   DiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int32?, modified_line_number~ : Int32?, quote~ : String, comment~ : String, resource~ : ModelUri?, feedback_id~ : String?)
 }
 

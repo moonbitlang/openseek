@@ -1834,6 +1834,7 @@ priv enum Msg {
   CloudAction(@cloud.Msg)
   OpenCloudConversation(account~ : String, session~ : String)
   ComposerAction(@composer.Action)
+  ComposerReply(@composer.QuoteReply)
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
   // be mistaken for an OpenSeek conversation owned by the root store.

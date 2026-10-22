@@ -524,13 +524,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           // items; only the inline user's explicit action should send a prompt.
           if event.user_count > 0 {
             scheduler.add(
-              dispatch(
-                if event.resource.scheme == "openseek-cloud" {
-                  ApplyCloudFeedback(ModelUri::of(event.resource))
-                } else {
-                  ApplyAllFeedback
-                },
-              ),
+              dispatch(ApplyEditorFeedback(ModelUri::of(event.resource))),
             )
           }
         })

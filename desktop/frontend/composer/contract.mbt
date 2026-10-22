@@ -7,6 +7,33 @@ pub(all) struct Mention {
 } derive(Eq, @debug.Debug)
 
 ///|
+/// Convert editor feedback to the shared annotation envelope. Original-revision
+/// feedback keeps its source lines without claiming a working-file selection.
+pub fn Mention::editor_annotation(
+  file : String,
+  range : @common.Range,
+  quote : String,
+  comment : String,
+  side~ : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
+) -> Mention {
+  {
+    ref_: Annotation(
+      file~,
+      start_line=range.start_line_number,
+      end_line=range.end_line_number,
+      quote~,
+      comment~,
+      side~,
+    ),
+    range: if side is OriginalRevision {
+      None
+    } else {
+      Some(range)
+    },
+  }
+}
+
+///|
 /// The complete editable value owned by one composer entry.
 pub(all) struct Draft {
   task : String

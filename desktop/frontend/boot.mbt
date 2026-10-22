@@ -479,9 +479,9 @@ fn main {
       // `with_init(dispatch(Init))` did before the 0.13 migration.
       init=emit => (initial_model(desktop~), emit(Init)),
       update=(model, msg, emit) => {
-        let (cmd, next) = match model.cloud_editor_feedback(msg) {
-          Some(reply) => ((composer_reply.val)(reply), model)
-          None => update(emit, msg, model)
+        let (cmd, next) = match msg {
+          ComposerReply(reply) => ((composer_reply.val)(reply), model)
+          _ => update(emit, msg, model)
         }
         (next, cmd)
       },

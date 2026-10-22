@@ -115,7 +115,7 @@ test "Cloud editor feedback uses the current resource identity and Annotation co
       ),
     )
   }
-  let reply = model.cloud_editor_feedback(event(path)).unwrap()
+  let reply = model.routed_editor_feedback(event(path)).unwrap()
   assert_eq(reply.identity, model.composer_input().identity)
   assert_false(reply.send)
   guard reply.content is @composer.Annotation(mention) else {
@@ -146,8 +146,10 @@ test "Cloud editor feedback uses the current resource identity and Annotation co
   assert_true(opened.file_panel.docs.contains(path))
   assert_true(
     model
-    .cloud_editor_feedback(
-      FileEditor(@fileeditor.ApplyCloudFeedback(@fileeditor.ModelUri::of(path))),
+    .routed_editor_feedback(
+      FileEditor(
+        @fileeditor.ApplyEditorFeedback(@fileeditor.ModelUri::of(path)),
+      ),
     )
     .unwrap().send,
   )
@@ -156,7 +158,7 @@ test "Cloud editor feedback uses the current resource identity and Annotation co
       @resource.cloud_root(@cloud.CloudOrigin, account, session).unwrap(),
       Relative("src/main.mbt"),
     )
-    assert_true(model.cloud_editor_feedback(event(foreign)) is None)
+    assert_true(model.routed_editor_feedback(event(foreign)) is None)
     let (_, ignored) = update(test_dispatch(), event(foreign), model)
     assert_true(ignored.active_conversation() == model.active_conversation())
   }
@@ -171,16 +173,37 @@ test "Cloud editor feedback uses the current resource identity and Annotation co
     },
   }
   assert_false(file_ctx(archived).feedback_enabled)
-  assert_true(archived.cloud_editor_feedback(event(path)) is None)
+  assert_true(archived.routed_editor_feedback(event(path)) is None)
   let conversation = model.cloud.conversations["cloud-a"]
   let conversations = model.cloud.conversations.copy()
   conversations["cloud-a"] = { ..conversation, generating: true, }
   let running = { ..model, cloud: { ..model.cloud, conversations, }, }
-  assert_true(running.cloud_editor_feedback(event(path)) is Some(_))
+  assert_true(running.routed_editor_feedback(event(path)) is Some(_))
   let (_, unchanged) = update(
     test_dispatch(),
     ComposerAction(@composer.DraftSubmitted(identity=reply.identity, draft~)),
     running,
   )
   assert_true(unchanged.cloud.conversations["cloud-a"].pending is None)
+}
+
+///|
+fn Model::routed_editor_feedback(
+  self : Model,
+  message : Msg,
+) -> @composer.QuoteReply? {
+  let replies : Array[@composer.QuoteReply] = []
+  ignore(
+    update(
+      @cmd.Emit(message => {
+        if message is ComposerReply(reply) {
+          replies.push(reply)
+        }
+        @cmd.none
+      }),
+      message,
+      self,
+    ),
+  )
+  replies.get(0)
 }

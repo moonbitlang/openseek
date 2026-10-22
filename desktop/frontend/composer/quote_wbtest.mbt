@@ -438,3 +438,40 @@ test "Cloud annotations preserve typing, owner isolation and ordinary send avail
     saved == mention,
   )
 }
+
+///|
+test "editor feedback conversion preserves exact text and revision navigation" {
+  let range = @common.Range(5, 2, 6, 8)
+  for
+    side in [
+      @mention_context.WorkingRevision,
+      @mention_context.OriginalRevision,
+    ] {
+    let mention = Mention::editor_annotation(
+      "src/main.mbt",
+      range,
+      "exact\nselection",
+      "Explain this",
+      side~,
+    )
+    assert_eq(
+      mention.ref_,
+      @mention_context.Annotation(
+        file="src/main.mbt",
+        start_line=5,
+        end_line=6,
+        quote="exact\nselection",
+        comment="Explain this",
+        side~,
+      ),
+    )
+    assert_eq(
+      mention.range,
+      if side is @mention_context.OriginalRevision {
+        None
+      } else {
+        Some(range)
+      },
+    )
+  }
+}

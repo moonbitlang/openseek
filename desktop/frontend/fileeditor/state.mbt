@@ -1441,12 +1441,11 @@ pub(all) enum Msg {
     comment~ : String,
     feedback_id~ : String
   )
-  // The inline input's Apply all feedback action follows its synchronous
-  // comment-added event. The application root intercepts this after attaching
-  // the new annotation chip and submits the main-window composer through its
-  // ordinary prompt/steer queue.
+  // Submit feedback already attached by the root through its ordinary send path.
   ApplyAllFeedback
-  ApplyCloudFeedback(ModelUri)
+  // Viewer submissions follow the comment-added event and carry the resource
+  // identity so the root routes them to the owning composer's send behavior.
+  ApplyEditorFeedback(ModelUri)
   // The user submitted a comment from a full-diff surface. Both line domains
   // cross the package boundary: additions/context use the modified number,
   // while an original-pane selection remains identifiable to the composer

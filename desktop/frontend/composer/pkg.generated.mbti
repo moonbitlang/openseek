@@ -244,6 +244,7 @@ pub(all) struct Mention {
   ref_ : @mention_context.MentionRef
   range : @common.Range?
 } derive(Eq, @debug.Debug)
+pub fn Mention::editor_annotation(String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn Mention::equal(Self, Self) -> Bool
 pub fn Mention::not_equal(Self, Self) -> Bool
 pub fn Mention::to_repr(Self) -> @debug.Repr

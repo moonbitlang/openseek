@@ -4960,7 +4960,7 @@ fn update_inner(
     ReviewContextChanged(..)
     | EditorCommentAdded(..)
     | DiffCommentAdded(..)
-    | ApplyCloudFeedback(_)
+    | ApplyEditorFeedback(_)
     | ApplyAllFeedback => (@cmd.none, state)
   }
 }
