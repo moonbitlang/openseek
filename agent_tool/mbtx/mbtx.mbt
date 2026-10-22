@@ -886,7 +886,7 @@ async fn execute(
       return @agent_tool.respond("mbtx: \{error}", is_error=true)
     }
     let raw = exec.head()
-    let exit_code = exec.exit_code().unwrap_or(-1)
+    let exit_code = exec.exit_code()
     // The retained execution is KILLED once output passes the inline cap, so a
     // clipped head means a stopped program, not a quiet one — say which.
     let output_limit_reached = exec.over_inline_cap() || exec.output_truncated()
@@ -899,7 +899,7 @@ async fn execute(
       sandboxed_command,
       denial_scan_source,
       raw,
-      exit_code=exec.exit_code(),
+      exit_code~,
       escalation=approval is Some(_),
       policy_active~,
     )
@@ -917,7 +917,7 @@ async fn execute(
       body
     }
     let body = with_denial_guidance(body, sandbox_denied)
-    let is_error = exit_code != 0 ||
+    let is_error = exit_code != Some(0) ||
       sandbox_denied is Some(_) ||
       output_limit_reached
     return @agent_tool.respond(
@@ -974,7 +974,10 @@ async fn execute(
       // PREPEND the exit status so it survives the agent loop's outer 60k
       // result clamp (which cuts the tail); the output cap is below 60k so
       // both the status line and the body are retained.
-      let body = with_build_notes(build_notes, finished_body(text, exit_code))
+      let body = with_build_notes(
+        build_notes,
+        finished_body(text, Some(exit_code)),
+      )
       let body = with_denial_guidance(body, sandbox_denied)
       let is_error = exit_code != 0 || sandbox_denied is Some(_)
       @agent_tool.respond(
@@ -1206,18 +1209,25 @@ fn strip_artifact_report(text : String) -> String {
 /// The build already succeeded synchronously before this process started, so
 /// a failure here is from the RUN by construction. Say so to keep a runtime
 /// trap from being read as a compile error.
-fn finished_body(text : String, exit_code : Int32) -> String {
-  if exit_code == 0 {
-    return if text.is_blank() {
-      "mbtx: program exited 0 with no output"
-    } else {
-      text
-    }
+///
+/// `exit_code` is `None` when the program has no exit of its own because mbtx
+/// stopped it (the inline output cap); that is reported as such, never as a
+/// made-up code or signal.
+fn finished_body(text : String, exit_code : Int32?) -> String {
+  let status = match exit_code {
+    Some(0) =>
+      return if text.is_blank() {
+        "mbtx: program exited 0 with no output"
+      } else {
+        text
+      }
+    Some(code) => exit_status(code)
+    None => "stopped by mbtx before it exited"
   }
   if text.is_blank() {
-    "mbtx: the build succeeded, then the run failed (\{exit_status(exit_code)}) with no output"
+    "mbtx: the build succeeded, then the run failed (\{status}) with no output"
   } else {
-    "[mbtx: run failed (\{exit_status(exit_code)}) at RUNTIME — the build succeeded; this failure is from the run, not the build]\n\{text}"
+    "[mbtx: run failed (\{status}) at RUNTIME — the build succeeded; this failure is from the run, not the build]\n\{text}"
   }
 }
 

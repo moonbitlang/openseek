@@ -415,5 +415,7 @@ async test "the inline output cap gives actionable retry guidance" {
     assert_true(output.content.contains("Retrying the same call"))
     assert_true(output.content.contains("stdout=ToFile(path)"))
     assert_true(output.content.contains("same snippet read the file"))
+    // mbtx stopped the program, so it has no exit status to report.
+    assert_false(output.content.contains("killed by signal"))
   })
 }

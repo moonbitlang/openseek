@@ -80,12 +80,12 @@ test "cap_build_notes bounds a warning flood and marks the cut" {
 ///|
 /// A run-phase failure or timeout must say that the build already succeeded.
 test "finished_body and timeout_head identify run-phase failures" {
-  assert_eq(finished_body("out\n", 0), "out\n")
-  let staged_failure = finished_body("trace", 3)
+  assert_eq(finished_body("out\n", Some(0)), "out\n")
+  let staged_failure = finished_body("trace", Some(3))
   assert_true(staged_failure.contains("run failed (exit 3) at RUNTIME"))
   assert_true(staged_failure.contains("from the run, not the build"))
   assert_true(
-    finished_body("", 3).contains(
+    finished_body("", Some(3)).contains(
       "the build succeeded, then the run failed (exit 3)",
     ),
   )
@@ -94,7 +94,13 @@ test "finished_body and timeout_head identify run-phase failures" {
   assert_eq(exit_status(1), "exit 1")
   assert_eq(exit_status(-11), "killed by signal 11")
   assert_true(
-    finished_body("", -11).contains("run failed (killed by signal 11)"),
+    finished_body("", Some(-11)).contains("run failed (killed by signal 11)"),
+  )
+  // A program mbtx stopped has no exit status; none is invented for it.
+  assert_true(
+    finished_body("head", None).contains(
+      "run failed (stopped by mbtx before it exited)",
+    ),
   )
   assert_true(timeout_head(5_000).contains("the PROGRAM that did not finish"))
   assert_eq(with_build_notes("", "body"), "body")
