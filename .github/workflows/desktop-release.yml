@@ -34,7 +34,7 @@ permissions:
 jobs:
   release-needed:
     name: Check for updates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       OPENSEEK_API_ORIGIN: ${{ (github.event_name != 'schedule' && inputs.channel == 'staging') && 'https://openseek-api-staging.moonbitlang.cn' || 'https://openseek-api.moonbitlang.cn' }}
       RELEASE_CHANNEL: ${{ github.event_name == 'schedule' && 'stable' || inputs.channel }}
@@ -401,7 +401,7 @@ jobs:
     name: Publish
     needs: [release-needed, release-windows, release-macos]
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       actions: read

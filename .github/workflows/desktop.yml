@@ -130,7 +130,7 @@ jobs:
   # workspace gates in ci.yml. Its other members are covered there.
   desktop-app:
     name: desktop app (Linux, native)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -216,7 +216,7 @@ jobs:
 
   desktop-e2e:
     name: desktop e2e
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
