@@ -128,8 +128,8 @@ duplication is the cost; the alternative is i18n in openseek-api.
   without one.
 
 Neither variable set means push is disabled (`None`). Exactly one set is a
-startup error. A `vapid-keygen` subcommand prints a fresh pair for
-`deploy/.env`.
+startup error. `npx web-push generate-vapid-keys` prints a key in this
+form for `deploy/.env`.
 
 ### Data model
 
@@ -167,7 +167,7 @@ existing `cookie_origin_allowed` check.
 | `GET /v2/push/key` | `{public_key}` (base64url, 65 bytes), or 404 when push is disabled. No auth needed. |
 | `PUT /v2/push/subscription` | Body `{endpoint, keys:{p256dh, auth}, locale}`. Upsert by endpoint into this user and session. Returns 204. |
 | `DELETE /v2/push/subscription` | Body `{endpoint}`. Deletes only the caller's own row. Returns 204. |
-| `POST /v2/push/test` | Body `{endpoint}`. Sends a test push to the caller's own row. This supports the real-device acceptance check. |
+| `POST /v2/push/test` | Body `{endpoint}`. Sends a test push to the caller's own row and reports the push service's answer: 202 accepted, 410 gone (the row is pruned), 502 refused. This supports the real-device acceptance check. |
 
 **The endpoint must be `https://` on an allowlisted push-service host.**
 Otherwise the relay would POST to any URL a signed-in user names, which is
@@ -283,15 +283,18 @@ on this shape:
 - ephemeral keypair
 - ECDSA sign, returning raw `r‖s`
 - ECDH
-- AES-128-GCM seal
+- ECDSA verify, for tests
 
 It uses the `EC_KEY` / `ECDSA_do_sign` / `ECDH_compute_key` APIs, which
 both OpenSSL 3 and LibreSSL export. HKDF and the record framing are MoonBit
-on top of `@crypto.hmac`. Tests:
+on top of `@crypto.hmac`. AES-128-GCM is also MoonBit: counter mode and
+GHASH over `@crypto.aes_ecb_encrypt`, because macOS LibreSSL 3.3 refuses
+EVP AES-GCM. Tests:
 
-- the RFC 8291 §5 vector reproduces byte for byte;
+- the RFC 8291 §5 vector reproduces byte for byte, which also pins the GCM;
 - a VAPID JWT verifies against the derived key;
-- 404/410 pruning, using a fake push endpoint on loopback.
+- delivery and 404/410 classification against a fake `post`, since the
+  endpoint allowlist admits only real push services.
 
 Writing P-256 in MoonBit was rejected: it is a correctness and side-channel
 risk for no gain.
@@ -359,7 +362,7 @@ Each PR is correct when merged alone:
    On a relay without push this shows `Unavailable`, and frames are ignored.
 2. **openseek-api.**
    - The `/sw.js` route.
-   - Config and `vapid-keygen`.
+   - Config.
    - The table and routes.
    - `notify` decoding.
    - The `webpush` package and fan-out.
