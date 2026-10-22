@@ -45,6 +45,8 @@ export class CloudHarness {
     this.streamCancellations = 0;
     this.fileStreamCancellations = 0;
     this.sessionStreamCancellations = 0;
+    this.sessionEventStatus = 200;
+    this.pauseSessionEvents = null;
     this.controlSnapshots = new Map();
     this.manualTasks = false;
     this.pauseControl = null;
@@ -270,7 +272,10 @@ export class CloudHarness {
       const operation = control[2];
       const snapshot = this.controlState(session);
       if (operation === 'control') return json(snapshot);
-      if (operation === 'events') return route.fulfill({ headers, contentType: 'text/event-stream', body: this.sseFrame('control_state', snapshot) });
+      if (operation === 'events') {
+        if (this.pauseSessionEvents) await this.pauseSessionEvents;
+        return route.fulfill({ status: this.sessionEventStatus, headers, contentType: 'text/event-stream', body: this.sseFrame('control_state', this.controlState(session)) });
+      }
       const body = request.postDataJSON();
       if (this.pauseControl) await this.pauseControl;
       if (this.controlOffline) return route.abort('failed');
@@ -399,6 +404,16 @@ export class CloudHarness {
 
   sseFrame(kind, value) {
     return `event: ${kind}\ndata: ${JSON.stringify(value)}\n\n`;
+  }
+
+  async disconnectSession(session, { error = false } = {}) {
+    await this.page.evaluate(({ session, error }) => {
+      for (const controller of window.cloudSessionStreams.get(session) || []) {
+        if (error) controller.error(new Error('Fixture session stream disconnected'));
+        else controller.close();
+      }
+      window.cloudSessionStreams.delete(session);
+    }, { session, error });
   }
 
   async publishControl(session, change = {}, { kind = 'queue_changed' } = {}) {
