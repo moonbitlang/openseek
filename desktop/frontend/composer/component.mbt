@@ -502,7 +502,9 @@ fn Entry::can_send(self : Entry, input : Input) -> Bool {
   self.attachment_requests.all(request => request.phase is AttachmentStaged(_)) &&
   (match input.presentation.primary_action {
     Send(available~) => available
-    Running(steer_available~, ..) => steer_available
+    Running(steer_available~, ..) =>
+      steer_available &&
+      (self.owner is @interop.Cloud(..) || self.attachment_requests.is_empty())
   })
 }
 
@@ -1176,6 +1178,9 @@ fn Model::update(
         // Expand the draft itself, not just the payload, so the pending
         // submission records the text that was sent, as the root holds it.
         let entry = { ..entry, draft: input.expanded(entry.draft), }
+        let attachments = entry.attachment_requests.map(request => {
+          request.source
+        })
         (
           self.with_entry({
             ..entry,
@@ -1194,17 +1199,16 @@ fn Model::update(
                   identity=entry.identity(),
                   draft=entry.draft,
                   choice~,
+                  attachments~,
                 )
               None =>
-                if entry.attachment_requests.is_empty() {
+                if attachments.is_empty() {
                   DraftSubmitted(identity=entry.identity(), draft=entry.draft)
                 } else {
                   DraftAttachmentsSubmitted(
                     identity=entry.identity(),
                     draft=entry.draft,
-                    attachments=entry.attachment_requests.map(request => {
-                      request.source
-                    }),
+                    attachments~,
                   )
                 }
             },

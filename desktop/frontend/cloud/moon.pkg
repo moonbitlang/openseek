@@ -21,3 +21,7 @@ supported_targets = "js"
 import {
   "moonbitlang/async",
 } for "test"
+
+import {
+  "moonbitlang/async",
+} for "wbtest"

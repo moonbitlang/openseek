@@ -257,7 +257,14 @@ fn Entry::action_buttons(
           content: @icons.icon(@icons.icon_debug_stop),
         },
       ]
-      if steer_available && !self.draft.is_blank() {
+      if steer_available &&
+        (
+          !self.draft.is_blank() ||
+          (
+            self.owner is @interop.Cloud(..) &&
+            !self.attachment_requests.is_empty()
+          )
+        ) {
         actions.push({
           id: "send",
           class_name: "icon-button send-button",
@@ -266,9 +273,7 @@ fn Entry::action_buttons(
             Queue => ui(locale, QueueNextTurn)
             SaveQueue => ui(locale, SaveQueued)
           },
-          disabled: input.presentation.disabled ||
-          self.image_reads > 0 ||
-          !self.attachment_requests.is_empty(),
+          disabled: !self.can_send(input),
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
         })

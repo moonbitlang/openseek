@@ -321,7 +321,8 @@ pub(all) enum Action {
   FollowupSubmitted(
     identity~ : Identity,
     draft~ : Draft,
-    choice~ : FollowupChoice
+    choice~ : FollowupChoice,
+    attachments~ : Array[@protocol.AttachmentSource]
   )
   DraftPresenceChanged(
     identity~ : Identity,

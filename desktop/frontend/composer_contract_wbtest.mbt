@@ -184,6 +184,7 @@ test "composer follow-up overrides route the message without changing the defaul
         @composer.FollowupSubmitted(
           identity~,
           draft={ images: [], task: "one message", mentions: [], },
+          attachments=[],
           choice~,
         ),
       ),

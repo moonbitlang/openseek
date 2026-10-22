@@ -39,7 +39,7 @@ pub async fn stage_attachments(@interop.ChannelId, String, String, String, Array
 pub(all) enum Action {
   DraftSubmitted(identity~ : Identity, draft~ : Draft)
   DraftAttachmentsSubmitted(identity~ : Identity, draft~ : Draft, attachments~ : Array[@protocol.AttachmentSource])
-  FollowupSubmitted(identity~ : Identity, draft~ : Draft, choice~ : FollowupChoice)
+  FollowupSubmitted(identity~ : Identity, draft~ : Draft, choice~ : FollowupChoice, attachments~ : Array[@protocol.AttachmentSource])
   DraftPresenceChanged(identity~ : Identity, present~ : Bool, cleared_source~ : Draft?)
   ReviewChangesRemoved(identity~ : Identity, selections~ : Array[@mention_context.ReviewChanges])
   ReviewChangesOpened(identity~ : Identity, selection~ : @mention_context.ReviewChanges)
