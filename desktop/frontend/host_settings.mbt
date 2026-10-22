@@ -6,18 +6,89 @@
 
 ///|
 /// Project the shared settings status used by both replies and broadcasts.
+/// OpenRouter is stored as the custom backend at its fixed URL.
 fn HostSettings::from_status(
   payload : @protocol.SettingsStatusPayload,
 ) -> HostSettings {
+  let custom_api_url = payload.custom_api_url.unwrap_or("")
+  let provider = if payload.provider == "custom" &&
+    custom_api_url == OpenRouterChatCompletionsUrl {
+    OpenRouter
+  } else {
+    ApiProvider::parse(payload.provider)
+  }
   {
     revision: payload.revision,
-    provider: payload.provider,
-    custom_api_url: payload.custom_api_url.unwrap_or(""),
-    has_deepseek_key: payload.has_deepseek_key,
-    has_glm_key: payload.has_glm_key,
-    has_custom_key: payload.has_custom_key,
-    followup_behavior: payload.followup_behavior,
+    endpoint: {
+      provider,
+      custom_api_url,
+      followup_behavior: FollowupBehavior::parse(payload.followup_behavior),
+      deepseek_key_saved: payload.has_deepseek_key,
+      glm_key_saved: payload.has_glm_key,
+      custom_key_saved: payload.has_custom_key,
+    },
   }
+}
+
+///|
+/// A connection's mirror before its first authoritative status.
+fn HostSettingsMirror::loading() -> HostSettingsMirror {
+  { current: None, saves: 0, deferred: None, }
+}
+
+///|
+/// Whether `settings` is at least as new as the accepted status. Equal is
+/// deliberately accepted so a failed optimistic edit can be restored by an
+/// authoritative `get`.
+fn HostSettingsMirror::accepts(
+  self : HostSettingsMirror,
+  settings : HostSettings,
+) -> Bool {
+  !(self.current is Some(current) && settings.revision < current.revision)
+}
+
+///|
+fn HostSettingsMirror::apply(
+  self : HostSettingsMirror,
+  settings : HostSettings,
+) -> HostSettingsMirror {
+  { ..self, current: Some(settings), deferred: None, }
+}
+
+///|
+/// Retain the highest revision observed while optimistic writes are
+/// outstanding. It is applied only when the last write settles, preventing
+/// both stale rollback and mid-edit UI clobbering.
+fn HostSettingsMirror::hold(
+  self : HostSettingsMirror,
+  settings : HostSettings,
+) -> HostSettingsMirror {
+  guard self.accepts(settings) else { return self }
+  let deferred = match self.deferred {
+    Some(current) if current.revision > settings.revision => current
+    _ => settings
+  }
+  { ..self, deferred: Some(deferred), }
+}
+
+///|
+/// One optimistic write: the edited endpoint shows at once and the write is
+/// counted until its reply settles. Nothing changes before the first
+/// snapshot.
+fn HostSettingsMirror::edit(
+  self : HostSettingsMirror,
+  endpoint : HostEndpoint,
+) -> HostSettingsMirror {
+  guard self.current is Some(current) else { return self }
+  { ..self, current: Some({ ..current, endpoint, }), saves: self.saves + 1, }
+}
+
+///|
+/// One write's reply arrived, successful or not.
+fn HostSettingsMirror::write_settled(
+  self : HostSettingsMirror,
+) -> HostSettingsMirror {
+  { ..self, saves: if self.saves > 0 { self.saves - 1 } else { 0 }, }
 }
 
 ///|
