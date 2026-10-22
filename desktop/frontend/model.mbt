@@ -3143,12 +3143,9 @@ fn Model::apply_host_settings(
   channel : @interop.ChannelId,
   settings : HostSettings,
 ) -> Model {
-  let next = self.map_host_settings(channel, mirror => mirror.apply(settings))
-  if channel == next.focused {
-    next.align_fresh_conversation_with_provider()
-  } else {
-    next
-  }
+  self
+  .map_host_settings(channel, mirror => mirror.apply(settings))
+  .align_new_chats_with_provider(channel)
 }
 
 ///|
@@ -3160,25 +3157,42 @@ fn Model::edit_host_endpoint(self : Model, endpoint : HostEndpoint) -> Model {
 }
 
 ///|
-/// Keep a never-started chat aligned with the host endpoint. Stored and
+/// Keep `channel`'s never-started chats aligned with that host's endpoint,
+/// and the default model with it while it is focused. Stored and
 /// already-running conversations remain pinned: changing their model behind
 /// the user's back would rewrite conversation semantics, while a fresh chat
 /// has no history to preserve and otherwise begins with a known-bad
-/// provider/model mismatch.
-fn Model::align_fresh_conversation_with_provider(self : Model) -> Model {
-  let provider = self.api_provider()
-  let default_model = if self.default_model.matches_provider(provider) {
-    self.default_model
+/// provider/model mismatch. A retained draft on a background host is
+/// included: its cached settings arm Send as soon as it is reopened.
+fn Model::align_new_chats_with_provider(
+  self : Model,
+  channel : @interop.ChannelId,
+) -> Model {
+  guard self.device_state(channel) is Some(dev) &&
+    dev.host_settings.current is Some({ endpoint: { provider, .. }, .. }) else {
+    return self
+  }
+  let next = if channel == self.focused &&
+    !self.default_model.matches_provider(provider) {
+    { ..self, default_model: provider.default_model(), }
+  } else {
+    self
+  }
+  let new_chat_model = if next.default_model.matches_provider(provider) {
+    next.default_model
   } else {
     provider.default_model()
   }
-  let next = { ..self, default_model, }
-  guard next.composing_new_chat() &&
-    next.active_conversation() is Some(conv) &&
-    !conv.engine_model.matches_provider(provider) else {
-    return next
-  }
-  next.replace_conversation({ ..conv, engine_model: default_model, })
+  let conversations = next.conversations.map(conv => {
+    if conv.device == channel &&
+      !conv.engine_model.matches_provider(provider) &&
+      next.conversation_is_new_chat(conv) {
+      { ..conv, engine_model: new_chat_model, }
+    } else {
+      conv
+    }
+  })
+  { ..next, conversations, }
 }
 
 ///|
