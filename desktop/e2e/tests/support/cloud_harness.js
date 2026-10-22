@@ -275,9 +275,11 @@ export class CloudHarness {
       if (this.pauseControl) await this.pauseControl;
       if (this.controlOffline) return route.abort('failed');
       const current = this.controlState(session);
+      const idleQueueEdit = operation === 'queue' && ['edit', 'withdraw'].includes(body.action)
+        && current.data.status === 'idle' && current.data.paused;
       const rejected = this.controlRejected
         || (current.task_id !== body.task_id ? 'task_mismatch' : null)
-        || (!current.data.active_task_id ? 'task_not_running' : null)
+        || (!current.data.active_task_id && !idleQueueEdit ? 'task_not_running' : null)
         || (operation !== 'stop' && current.data.status === 'stopping' ? 'task_stopping' : null);
       if (rejected) return json({ accepted: false, error: rejected, task_id: body.task_id }, 409);
       if (operation === 'stop') {

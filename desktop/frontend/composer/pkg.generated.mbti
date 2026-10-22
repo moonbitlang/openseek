@@ -313,6 +313,7 @@ pub fn Presentation::not_equal(Self, Self) -> Bool
 
 pub(all) enum PrimaryAction {
   Send(available~ : Bool)
+  SaveQueuedInput(available~ : Bool)
   Running(steer_available~ : Bool, can_stop~ : Bool, submit~ : RunningSubmit, queue_available~ : Bool)
 } derive(Eq, @debug.Debug)
 pub fn PrimaryAction::equal(Self, Self) -> Bool
@@ -329,7 +330,7 @@ pub fn QueuedInput::not_equal(Self, Self) -> Bool
 
 pub(all) enum QueuedInputState {
   Queueing
-  Queued(editing~ : Bool, interactive~ : Bool)
+  Queued(editing~ : Bool, interactive~ : Bool, steer_available~ : Bool)
 } derive(Eq)
 pub fn QueuedInputState::equal(Self, Self) -> Bool
 pub fn QueuedInputState::not_equal(Self, Self) -> Bool

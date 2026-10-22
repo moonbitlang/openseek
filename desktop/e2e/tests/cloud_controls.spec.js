@@ -154,7 +154,7 @@ test('Cloud uses the shared queue editor, withdrawal and conversion to Steer', a
   await expect(rows).toHaveCount(0);
 });
 
-test('Cloud restores each selected conversation control snapshot and keeps paused queues read-only', async ({ page }) => {
+test('Cloud conversation switching restores drafts and paused queue controls', async ({ page }) => {
   const app = await running(page);
   await followup(page, 'Retained after stopping', 'queue');
   await expect(page.locator('.queued-input-row')).toBeVisible();
@@ -169,7 +169,9 @@ test('Cloud restores each selected conversation control snapshot and keeps pause
   await expect(page.locator('#task')).toHaveValue('Draft belonging to A');
   const row = page.locator('.queued-input-row');
   await expect(row).toContainText('Retained after stopping');
-  for (const button of await row.getByRole('button').all()) await expect(button).toBeDisabled();
+  await expect(row.getByTitle('Edit', { exact: true })).toBeEnabled();
+  await expect(row.getByTitle('Delete', { exact: true })).toBeEnabled();
+  await expect(row.getByTitle('Steer', { exact: true })).toBeDisabled();
   await page.locator('#send').click();
   await expect(page.locator('#stop')).toBeEnabled();
   const task = app.controlState(sessionA).task_id;
@@ -245,6 +247,68 @@ for (const status of ['completed', 'failed']) {
     await expect.poll(reads).toBeGreaterThan(before);
     await expect(page.locator('#stop')).toHaveCount(0);
     if (status === 'failed') await expect(page.locator('#transcript')).toContainText('interrupted');
+    expect(app.device.pageErrors).toEqual([]);
+  });
+}
+
+for (const stopped of [false, true]) {
+  test(`Cloud paused queue can be edited and withdrawn after ${stopped ? 'Stop' : 'failure'}`, async ({ page }, testInfo) => {
+    const app = await running(page);
+    await followup(page, 'Keep this queued input', 'queue');
+    await expect(page.locator('#task')).toHaveValue('');
+    await followup(page, 'Withdraw while paused', 'queue');
+    await expect(page.locator('.queued-input-row')).toHaveCount(2);
+    const previous = app.controlState(sessionA).task_id;
+    if (stopped) {
+      await page.locator('#stop').click();
+      await expect(page.locator('.composer')).toContainText('Stopping…');
+    }
+    await app.finishTask(sessionA, 'failed');
+    await expect(page.locator('#stop')).toHaveCount(0);
+    const rows = page.locator('.queued-input-row');
+    await expect(rows.getByTitle('Steer', { exact: true }).first()).toBeDisabled();
+    await rows.filter({ hasText: 'Keep this queued input' }).getByTitle('Edit', { exact: true }).click();
+    await page.locator('#task').fill('Edited while paused');
+    await expect(page.getByTitle('Save queued message', { exact: true })).toBeEnabled();
+    await expect(page.locator('#stop')).toHaveCount(0);
+    if (!stopped) await page.locator('.composer').screenshot({ path: testInfo.outputPath('cloud-paused-queue-edit.png') });
+    await page.getByTitle('Save queued message', { exact: true }).click();
+    await expect(rows.filter({ hasText: 'Edited while paused' })).toHaveCount(1);
+    await expect(page.locator('#task')).toHaveValue('');
+    expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: previous, action: 'edit', content: 'Edited while paused' });
+    await rows.filter({ hasText: 'Withdraw while paused' }).getByTitle('Delete', { exact: true }).click();
+    await expect(rows).toHaveCount(1);
+    expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: previous, action: 'withdraw' });
+    expect(app.postCount).toBe(1);
+    expect(app.controlState(sessionA).data.paused).toBe(true);
+    await page.locator('#task').fill('Explicit next prompt');
+    await page.locator('#send').click();
+    await expect(page.locator('#stop')).toBeEnabled();
+    let current = app.controlState(sessionA).task_id;
+    expect(current).not.toBe(previous);
+    await rows.getByTitle('Edit', { exact: true }).click();
+    await page.locator('#task').fill('Edit bound to the new task');
+    await page.getByTitle('Save queued message', { exact: true }).click();
+    await expect(rows).toContainText('Edit bound to the new task');
+    expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: current, action: 'edit' });
+    if (stopped) {
+      await page.locator('#stop').click();
+      await expect(page.locator('.composer')).toContainText('Stopping…');
+    }
+    await app.finishTask(sessionA, 'failed');
+    await expect(rows).toHaveCount(1);
+    await expect(page.locator('#stop')).toHaveCount(0);
+    expect(app.controlState(sessionA).data.paused).toBe(true);
+    expect(app.postCount).toBe(2);
+    await page.locator('#task').fill('Try the explicit prompt again');
+    await page.locator('#send').click();
+    await expect(page.locator('#stop')).toBeEnabled();
+    current = app.controlState(sessionA).task_id;
+    await app.finishTask(sessionA);
+    const next = app.controlState(sessionA).data.queue[0];
+    await app.emitSessionEvent(sessionA, 'task_started', { submission_id: next.id, previous_task_id: current }, { task: 'queued-next-task', seq: 1 });
+    await expect(rows).toHaveCount(0);
+    await expect(page.locator('#stop')).toBeEnabled();
     expect(app.device.pageErrors).toEqual([]);
   });
 }

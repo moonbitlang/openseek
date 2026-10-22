@@ -194,7 +194,7 @@ test "Cloud dropped queued steer restores its complete editable content" {
 }
 
 ///|
-test "Cloud paused queue stays visible and cannot be mutated while idle" {
+test "Cloud paused queue permits edit and withdrawal but not addition or steering" {
   let state = controls_fixture()
   let conversation = {
     ..state.conversations["session"],
@@ -210,27 +210,91 @@ test "Cloud paused queue stays visible and cannot be mutated while idle" {
   let state = state.replace("session", conversation)
   assert_true(
     conversation.control_context()
-    is [@composer.QueuedInputPanel(enabled=false, items=[{ id: "queue", .. }])],
+    is [
+      @composer.QueuedInputPanel(
+        enabled=true,
+        items=[
+          {
+            state: @composer.Queued(interactive=true, steer_available=false, ..),
+            ..
+          },
+        ]
+      ),
+    ],
   )
+  for choice in [@composer.QueueNext, @composer.SteerNow] {
+    assert_true(controls_submit(state, choice) == state)
+  }
   let owner : @interop.ConversationIdentity = Cloud(
     account="account",
     session="session",
   )
+  let identity : @composer.Identity = { owner, archive_generation: 0, }
   let emit : @cmd.Emit[Msg] = _ => @cmd.none
-  let (changed, _) = state
+  let advance = (state : State, action : @composer.Action) => {
+    state
+    .update_control(ControlAction(owner, action), emit, Some("token"))
+    .unwrap().0
+  }
+  assert_true(
+    advance(state, @composer.QueuedInputSteerRequested(identity~, id="queue")) ==
+    state,
+  )
+  let editing = advance(
+    state,
+    @composer.QueuedInputEditRequested(identity~, id="queue"),
+  )
+  assert_eq(editing.conversations["session"].queue_edit, Some("queue"))
+  assert_true(
+    editing.conversations["session"].control_primary_action(@composer.Steer)
+    is @composer.SaveQueuedInput(available=true),
+  )
+  let draft : @composer.Draft = {
+    task: "Edited while paused",
+    images: [],
+    mentions: [],
+  }
+  let saving = editing
+    .update_control(Submit(owner, draft), emit, Some("token"))
+    .unwrap().0
+  let input = saving.conversations["session"].control_inputs[0]
+  assert_eq(input.task_id, "task")
+  assert_true(
+    input.operation is QueueEdit(id="queue", content~) &&
+    content.text() == draft.task,
+  )
+  assert_true(
+    saving.conversations["session"].control_primary_action(@composer.Steer)
+    is @composer.SaveQueuedInput(available=false),
+  )
+  let accepted = saving
     .update_control(
-      ControlAction(
-        owner,
-        @composer.QueuedInputDeleteRequested(
-          identity={ owner, archive_generation: 0, },
-          id="queue",
-        ),
-      ),
+      ControlFinished(1, "session", "task", input.key, Accepted),
       emit,
       Some("token"),
     )
-    .unwrap()
-  assert_true(changed == state)
+    .unwrap().0
+  assert_eq(accepted.conversations["session"].queue_edit, None)
+  assert_eq(accepted.conversations["session"].submission_sequence, 1)
+  assert_false(accepted.conversations["session"].generating)
+  let withdrawing = advance(
+    state,
+    @composer.QueuedInputDeleteRequested(identity~, id="queue"),
+  )
+  let withdrawal = withdrawing.conversations["session"].control_inputs[0]
+  assert_eq(withdrawal.task_id, "task")
+  assert_true(withdrawal.operation is QueueWithdraw(id="queue"))
+  let removed = withdrawing.conversations["session"].control_snapshot(
+    Some("task"),
+    { ..conversation.control.unwrap(), queue: [], },
+  )
+  assert_true(removed.control_inputs.is_empty())
+  assert_true(removed.control.unwrap().paused)
+  let sending = metadata_update(
+    state,
+    Submit(owner, { task: "Explicit next prompt", images: [], mentions: [], }),
+  )
+  assert_true(sending.conversations["session"].sending)
 }
 
 ///|

@@ -111,6 +111,7 @@ pub(all) enum FollowupChoice {
 ///|
 pub(all) enum PrimaryAction {
   Send(available~ : Bool)
+  SaveQueuedInput(available~ : Bool)
   Running(
     steer_available~ : Bool,
     can_stop~ : Bool,
@@ -140,7 +141,7 @@ pub(all) struct PendingSteerInput {
 ///|
 pub(all) enum QueuedInputState {
   Queueing
-  Queued(editing~ : Bool, interactive~ : Bool)
+  Queued(editing~ : Bool, interactive~ : Bool, steer_available~ : Bool)
 } derive(Eq)
 
 ///|

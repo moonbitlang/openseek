@@ -170,6 +170,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         @composer.Queued(
           editing=conv.queue_edit is Some(edit) && edit.id() == item.id,
           interactive~,
+          steer_available=true,
         )
       },
     })
@@ -386,6 +387,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
       } else {
         match input.presentation.primary_action {
           Send(..) => @composer.Send(available=false)
+          SaveQueuedInput(..) => @composer.SaveQueuedInput(available=false)
           Running(submit~, ..) =>
             @composer.Running(
               submit~,

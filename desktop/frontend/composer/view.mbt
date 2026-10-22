@@ -465,7 +465,7 @@ pub fn ContextComponent::render(
             trailing.push(
               @html.span(class="queued-input-state pending", "queueing…"),
             )
-          Queued(editing~, interactive~) => {
+          Queued(editing~, interactive~, steer_available~) => {
             trailing.push(
               @html.span(
                 class="queued-input-state",
@@ -482,7 +482,7 @@ pub fn ContextComponent::render(
                   @html.button(
                     class="queued-input-action",
                     type_="button",
-                    disabled=!enabled,
+                    disabled=!enabled || !steer_available,
                     title=ui(locale, SteerLabel),
                     attrs=@html.Attrs::build().aria_label(
                       ui(locale, SteerLabel),

@@ -225,12 +225,16 @@ fn Entry::action_buttons(
     ]
   }
   match input.presentation.primary_action {
-    Send(available~) =>
+    Send(available~) | SaveQueuedInput(available~) =>
       [
         {
           id: "send",
           class_name: "icon-button send-button",
-          title: ui(locale, SendLabel),
+          title: if input.presentation.primary_action is SaveQueuedInput(..) {
+            ui(locale, SaveQueued)
+          } else {
+            ui(locale, SendLabel)
+          },
           disabled: !available ||
           self.image_reads > 0 ||
           !self.attachment_requests.all(request => {

@@ -501,7 +501,7 @@ fn Entry::can_send(self : Entry, input : Input) -> Bool {
   self.image_reads == 0 &&
   self.attachment_requests.all(request => request.phase is AttachmentStaged(_)) &&
   (match input.presentation.primary_action {
-    Send(available~) => available
+    Send(available~) | SaveQueuedInput(available~) => available
     Running(steer_available~, ..) =>
       steer_available &&
       (self.owner is @interop.Cloud(..) || self.attachment_requests.is_empty())

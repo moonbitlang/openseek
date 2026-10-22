@@ -441,7 +441,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       disabled: pending ||
       (!creating && !self.cloud.can_compose(owner.session())),
       primary_action: if conversation is Some(value) &&
-        (value.generating || value.sending) {
+        (value.generating || value.sending || value.queue_edit is Some(_)) {
         value.control_primary_action(
           if self.followup_behavior is FollowupQueue {
             @composer.Queue

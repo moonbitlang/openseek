@@ -717,3 +717,38 @@ test "Local running attachment readiness remains unchanged" {
   assert_true(actions.is_empty())
   assert_eq(model.active(input).draft, base.draft)
 }
+
+///|
+test "idle queue editing reuses draft submission without Stop or follow-up controls" {
+  let base = Input::fixture("Edited queue")
+  let input = {
+    ..base,
+    presentation: {
+      ..base.presentation,
+      primary_action: SaveQueuedInput(available=true),
+    },
+  }
+  let model = Model(input)
+  let buttons = model
+    .active(input)
+    .action_buttons(Msg::test_emit(), Action::test_emit(), input)
+  assert_eq(buttons.length(), 1)
+  assert_eq(buttons[0].id, "send")
+  assert_eq(buttons[0].title, "Save queued message")
+  assert_false(buttons[0].disabled)
+  let actions : Array[Action] = []
+  let (submitted, _) = model.update(input, SubmitRequested, Msg::test_emit(), action => {
+    actions.push(action)
+    @cmd.none
+  })
+  assert_true(
+    actions is [DraftSubmitted(draft={ task: "Edited queue", .. }, ..)],
+  )
+  let edited = attachment_step(submitted, input, TextChanged("Next draft"))
+  let acknowledged = {
+    ..input,
+    draft: { task: "", images: [], mentions: [], },
+    submission_sequence: 1,
+  }
+  assert_eq(edited.active(acknowledged).draft.task, "Next draft")
+}

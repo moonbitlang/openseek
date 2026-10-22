@@ -537,6 +537,9 @@ pub fn update(
           )
           let next = state.replace(id, {
             ..conversation,
+            queue_edit: conversation.queue_edit.filter(id => {
+              snapshot.data.queue.any(item => item.id == id)
+            }),
             task: snapshot.task_id,
             last_seq: Some(snapshot.seq),
             generating: snapshot.data.active_task_id is Some(_),

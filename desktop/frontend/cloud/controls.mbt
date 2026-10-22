@@ -69,14 +69,21 @@ pub fn Conversation::control_primary_action(
   default_submit : @composer.RunningSubmit,
 ) -> @composer.PrimaryAction {
   guard self.control is Some(control) &&
-    control.active_task_id is Some(_) &&
     self.stream is Some({ active: true, .. }) &&
     self.last_seq is Some(_) else {
     return @composer.Send(available=false)
   }
   let pending = self.control_inputs.any(input => {
-    Some(input.task_id) == control.active_task_id && !input.acknowledged
+    Some(input.task_id) == self.task && !input.acknowledged
   })
+  if self.queue_edit is Some(_) && control.status == Idle {
+    return @composer.SaveQueuedInput(
+      available=control.paused && self.task is Some(_) && !pending,
+    )
+  }
+  guard control.active_task_id is Some(_) else {
+    return @composer.Send(available=false)
+  }
   let stopping = control.status == Stopping ||
     self.control_inputs.any(input => {
       Some(input.task_id) == control.active_task_id && input.operation is Stop
@@ -110,10 +117,12 @@ pub fn Conversation::control_context(
   if self.control is Some(control) {
     let enabled = self.stream is Some({ active: true, .. }) &&
       self.last_seq is Some(_) &&
-      control.status == Running &&
-      control.active_task_id is Some(_) &&
+      (
+        (control.status == Running && control.active_task_id is Some(_)) ||
+        (control.status == Idle && control.paused && self.task is Some(_))
+      ) &&
       !self.control_inputs.any(input => {
-        Some(input.task_id) == control.active_task_id &&
+        Some(input.task_id) == self.task &&
         (input.operation is Stop || !input.acknowledged)
       })
     let queue : Array[@composer.QueuedInput] = control.queue.map(item => {
@@ -121,6 +130,8 @@ pub fn Conversation::control_context(
       content: item.content.text(),
       state: @composer.Queued(
         editing=self.queue_edit == Some(item.id),
+        steer_available=control.status == Running &&
+          control.active_task_id is Some(_),
         interactive=enabled &&
           !self.control_inputs.any(input => {
             input.task_id == self.task.unwrap_or("") &&
@@ -708,17 +719,21 @@ fn State::update_control(
     conversation.stream is Some({ active: true, .. }) &&
     conversation.last_seq is Some(_) &&
     conversation.control is Some(control) &&
-    control.status == Running &&
-    control.active_task_id is Some(task) else {
+    conversation.task is Some(task) else {
     return Some((self, @cmd.none))
   }
+  let running = control.status == Running &&
+    control.active_task_id == Some(task)
+  let queue_editable = running ||
+    (control.status == Idle && control.paused && control.active_task_id is None)
   let locked = conversation.control_inputs.any(input => {
     input.task_id == task && (!input.acknowledged || input.operation is Stop)
   })
   let id = @uuid.mint()
   let (operation, draft, attachments) = match message {
     ControlAction(_, @composer.StopRequested(..)) => {
-      guard !conversation.control_inputs.any(input => input.operation is Stop) else {
+      guard running &&
+        !conversation.control_inputs.any(input => input.operation is Stop) else {
         return Some((self, @cmd.none))
       }
       (Stop, None, [])
@@ -727,7 +742,7 @@ fn State::update_control(
       _,
       @composer.FollowupSubmitted(draft~, choice~, attachments~, ..)
     ) => {
-      guard !locked && (!draft.is_blank() || !attachments.is_empty()) else {
+      guard running && !locked && (!draft.is_blank() || !attachments.is_empty()) else {
         return Some((self, @cmd.none))
       }
       let content = prompt_content(draft) catch {
@@ -749,7 +764,8 @@ fn State::update_control(
       (operation, Some(draft), attachments)
     }
     ControlAction(_, @composer.QueuedInputEditRequested(id~, ..)) => {
-      guard !locked &&
+      guard queue_editable &&
+        !locked &&
         !conversation.control_inputs.any(input => {
           input.task_id == task && input.submission_id() == id
         }) &&
@@ -769,7 +785,8 @@ fn State::update_control(
       )
     }
     ControlAction(_, @composer.QueuedInputDeleteRequested(id~, ..)) => {
-      guard !locked &&
+      guard queue_editable &&
+        !locked &&
         !conversation.control_inputs.any(input => {
           input.task_id == task && input.submission_id() == id
         }) &&
@@ -781,7 +798,8 @@ fn State::update_control(
       )
     }
     ControlAction(_, @composer.QueuedInputSteerRequested(id~, ..)) => {
-      guard !locked &&
+      guard running &&
+        !locked &&
         !conversation.control_inputs.any(input => {
           input.task_id == task && input.submission_id() == id
         }) &&
@@ -800,7 +818,8 @@ fn State::update_control(
       )
     }
     Submit(_, draft) | SubmitAttachments(_, draft, _) => {
-      guard !locked &&
+      guard queue_editable &&
+        !locked &&
         conversation.queue_edit is Some(edit) &&
         control.queue.any(item => item.id == edit) else {
         return Some((self, @cmd.none))
