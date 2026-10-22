@@ -22,6 +22,11 @@ pub fn ToolError::to_string(Self) -> String
 pub impl Show for ToolError
 
 // Types and methods
+pub(all) enum Content {
+  Text(String)
+  Image(mime~ : String, data~ : String)
+}
+
 type Server
 pub async fn Server::Server(Array[Tool], version~ : String) -> Self
 pub fn Server::add_tools(Self, Array[Tool]) -> Unit raise ServerError
@@ -33,7 +38,7 @@ pub(all) struct Tool {
   name : String
   description : String
   input_schema : Json
-  call : async (ToolCall) -> String
+  call : async (ToolCall) -> Array[Content]
 }
 
 pub(all) struct ToolCall {

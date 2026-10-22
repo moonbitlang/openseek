@@ -13,9 +13,13 @@ fn ApiState::artifact_tools(self : ApiState) -> Array[@mcp.Tool] {
         guard call.arguments is Object(fields) && fields.is_empty() else {
           raise @mcp.ToolError("artifacts_list takes an empty object")
         }
-        @engine.session_artifacts_list(self.manager, call.session)
-        .to_json()
-        .stringify()
+        [
+          Text(
+            @engine.session_artifacts_list(self.manager, call.session)
+            .to_json()
+            .stringify(),
+          ),
+        ]
       },
     },
     {
@@ -37,12 +41,10 @@ fn ApiState::artifact_tools(self : ApiState) -> Array[@mcp.Tool] {
         let artifact : @protocol.SessionArtifact = @json.from_json(
           call.arguments,
         )
-        self
-        .save_session_artifacts(call.session, current => {
+        let artifacts = self.save_session_artifacts(call.session, current => {
           current.attach(artifact)
         })
-        .to_json()
-        .stringify()
+        [Text(artifacts.to_json().stringify())]
       },
     },
   ]

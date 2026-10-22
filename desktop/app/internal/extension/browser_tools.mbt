@@ -91,7 +91,7 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
         "properties": {},
         "additionalProperties": false,
       },
-      call: call => views.tabs(call.session).stringify(),
+      call: call => [Text(views.tabs(call.session).stringify())],
     },
     {
       name: "browser_open",
@@ -107,7 +107,9 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
         "required": ["url"],
         "additionalProperties": false,
       },
-      call: call => views.open_tab(call.session, call.arguments).stringify(),
+      call: call => {
+        [Text(views.open_tab(call.session, call.arguments).stringify())]
+      },
     },
     {
       name: "browser_navigate",
@@ -128,7 +130,9 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
         "required": ["tab"],
         "additionalProperties": false,
       },
-      call: call => views.navigate_tab(call.session, call.arguments).stringify(),
+      call: call => {
+        [Text(views.navigate_tab(call.session, call.arguments).stringify())]
+      },
     },
     {
       name: "browser_snapshot",
@@ -144,7 +148,7 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
         "required": ["tab"],
         "additionalProperties": false,
       },
-      call: call => views.snapshot_tab(call.session, call.arguments),
+      call: call => [Text(views.snapshot_tab(call.session, call.arguments))],
     },
     {
       name: "browser_click",
@@ -164,7 +168,7 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
         "required": ["tab", "ref"],
         "additionalProperties": false,
       },
-      call: call => views.click(call.session, call.arguments),
+      call: call => [Text(views.click(call.session, call.arguments))],
     },
     {
       name: "browser_type",
@@ -192,7 +196,23 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
         "required": ["tab", "ref", "text"],
         "additionalProperties": false,
       },
-      call: call => views.type_text(call.session, call.arguments),
+      call: call => [Text(views.type_text(call.session, call.arguments))],
+    },
+    {
+      name: "browser_screenshot",
+      description: "Take a picture of what one of this conversation's browser tabs shows: the part of the page on screen, as the user sees it. Use it for what a snapshot cannot say, such as layout, images, or colour. The picture is a JPEG at the display's resolution. A tab the user is not looking at gives the last frame it drew, which may be behind a page that moves; reload it, or ask the user to show it, for the page as it is now.",
+      input_schema: {
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "integer",
+            "description": "The tab's id, from browser_tabs or browser_open.",
+          },
+        },
+        "required": ["tab"],
+        "additionalProperties": false,
+      },
+      call: call => views.screenshot(call.session, call.arguments),
     },
   ]
 }

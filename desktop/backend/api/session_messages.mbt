@@ -86,7 +86,7 @@ fn ApiState::session_tools(self : ApiState) -> Array[@mcp.Tool] {
         "required": ["action"],
         "additionalProperties": false,
       },
-      call: call => self.call_session_tool(call).stringify(),
+      call: call => [Text(self.call_session_tool(call).stringify())],
     },
   ]
 }

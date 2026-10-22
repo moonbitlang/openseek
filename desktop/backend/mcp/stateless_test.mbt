@@ -159,7 +159,7 @@ async test "host validates encoded tool names and mirrored parameters before exe
             "tenant": { "type": "string", "x-mcp-header": "Tenant" },
           },
         },
-        call: call => call.session,
+        call: call => [Text(call.session)],
       },
     ],
     version="test",
@@ -202,7 +202,7 @@ async test "host rejects recognized headers for absent and null arguments" {
         },
         call: call => {
           calls.push(call.arguments)
-          "called"
+          [Text("called")]
         },
       },
     ],
@@ -248,7 +248,7 @@ async test "HTTP client discovers header schemas before a direct tool call" {
             "tenant": { "type": "string", "x-mcp-header": "Tenant" },
           },
         },
-        call: _ => "ok",
+        call: _ => [Text("ok")],
       },
     ],
     version="test",

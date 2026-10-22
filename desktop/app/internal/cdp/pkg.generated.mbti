@@ -70,6 +70,7 @@ pub async fn Connection::accessibility_tree(Self) -> Array[AxNode]
 pub async fn Connection::add_binding(Self, String) -> Unit
 pub async fn Connection::bring_to_front(Self) -> Unit
 pub async fn Connection::call_function_on(Self, CallFunction) -> Evaluation
+pub async fn Connection::capture_screenshot(Self, quality~ : Int32) -> String
 pub fn Connection::close(Self) -> Unit
 pub async fn Connection::content_quads(Self, BackendNodeId) -> Array[Array[Point]]
 pub async fn Connection::dispatch_key_event(Self, KeyEvent) -> Unit

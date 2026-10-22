@@ -25,7 +25,11 @@ keeping only each `AXValue`'s own value; frames' documents are not included.
 `viewport_size` in CSS pixels of the viewport) and gives the page trusted
 input:
 `dispatch_mouse_event` for the primary button, `dispatch_key_event` for the
-keys the browser tools press, and `insert_text`.
+keys the browser tools press, and `insert_text`. `screenshot.mbt` takes a JPEG
+of what the page last drew with `capture_screenshot`. It asks for no clip: the
+browser draws a clip by emulating another viewport, which leaves a zoomed view at
+100%. Like an accessibility tree, a picture may be larger than other replies (up
+to 32 MiB).
 
 The owner serializes commands and event reads and closes the connection.
 Overlapping reads are rejected. Events received before a command reply are

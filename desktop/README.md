@@ -260,7 +260,8 @@ history, or reloads it, and `browser_snapshot` reads what one shows as the
 page's accessibility tree, with a `ref` on each element that can be clicked
 or typed into. `browser_click` and `browser_type` act on such an element
 through the browser's own mouse and keyboard input and answer with a new
-snapshot once the page has settled. The engine connects directly to the host over MCP
+snapshot once the page has settled, and `browser_screenshot` takes a JPEG of
+what a tab shows. The engine connects directly to the host over MCP
 Streamable HTTP and registers these tools automatically, including for scheduled
 runs. No user configuration is required. To customize the host entry, put an
 override like this in `~/.openseek/mcp.json`:
