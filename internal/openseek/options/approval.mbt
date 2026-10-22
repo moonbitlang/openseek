@@ -9,6 +9,6 @@ fn approval_option() -> @argparse.OptionArg {
     long="approval",
     env="OPENSEEK_APPROVAL",
     default_values=["never"],
-    about="What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking).",
+    about="What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run).",
   )
 }

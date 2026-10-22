@@ -25,20 +25,29 @@ async fn run_task_turn(
   delegate~ : Bool,
 ) -> Unit {
   @async.with_task_group() <| group => {
-    // `run` reads no commands, so there is nobody to ask: `--approval ask` is
-    // refused where `run_task_command` reads it, and the surviving
-    // policies need no pending desk of their own — `always` answers from the
-    // channel itself, `never` wires none.
-    let approval = @execution.approval_channel(
-      approval_policy,
-      ApprovalDesk(now_ms=@env.now().reinterpret_as_int64()),
-    )
-    let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
-    let scope = @agent_runtime.AgentTaskScope(group)
     let exe = @setup.self_executable()
     // Mirror the latest appended session so a review a snippet delegates
     // audits against the LIVE standing goal, not the turn-start snapshot.
     let mut latest_session : @agent_session.Session = session
+    // `run` reads no commands, so there is nobody to ask: `--approval ask` is
+    // refused where `run_task_command` reads it, and the surviving
+    // policies never wait on the desk — `always` and `review` answer from the
+    // channel itself (a review's unsettled question is refused), `never`
+    // wires none.
+    let approval = @execution.approval_channel(
+      approval_policy,
+      ApprovalDesk(now_ms=@env.now().reinterpret_as_int64()),
+      reviewer=@execution.build_approval_reviewer(
+        self_exe=exe,
+        model~,
+        api_url~,
+        workspace_root~,
+        intent=() => @execution.approval_intent(latest_session),
+        child_session?,
+      ),
+    )
+    let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
+    let scope = @agent_runtime.AgentTaskScope(group)
     let extra_tools = @execution.build_extra_tools(
       @execution.connect_mcp(
         scope,

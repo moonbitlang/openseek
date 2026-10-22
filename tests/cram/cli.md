@@ -152,7 +152,7 @@ Options:
   --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
   --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are exposed to the agent, namespaced mcp__<server>__<tool>. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
   --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
-  --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking). [env: OPENSEEK_APPROVAL] [default: never]
+  --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run). [env: OPENSEEK_APPROVAL] [default: never]
   --result-file <result-file>                                  Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.
   --result-root <result-root>                                  The directory --result-file must be written in: the result must be a new file inside it. A launcher pins it to decide where a run it starts may write.
   --kind <kind>                                                Run a preset instead of the general agent: explore, review, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.
@@ -167,7 +167,7 @@ deadline no one was ever going to beat.
 
 ```mooncram
 $ env DEEPSEEK=test-key openseek.exe run --approval ask "probe" 2>&1
-error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation) or always (grant it unasked)
+error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation), always (grant it unasked), or review (a reviewer decides; what it cannot settle is refused)
 [1]
 ```
 
@@ -179,7 +179,7 @@ must hand it `@env.get_env_vars()` — and this case fails if it ever stops.
 
 ```mooncram
 $ env DEEPSEEK=test-key OPENSEEK_APPROVAL=ask openseek.exe run "probe" 2>&1
-error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation) or always (grant it unasked)
+error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation), always (grant it unasked), or review (a reviewer decides; what it cannot settle is refused)
 [1]
 ```
 

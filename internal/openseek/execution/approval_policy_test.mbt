@@ -31,6 +31,20 @@ test "approval values parse, and default to never" {
 }
 
 ///|
+/// The reviewer works where nobody reads commands too; only where its
+/// unsettled questions go differs.
+test "review escalates to the controller only where there is one" {
+  assert_true(
+    try_approval_policy(["--approval", "review"], interactive=true)
+    is Ok(Review(ask_on_escalate=true)),
+  )
+  assert_true(
+    try_approval_policy(["--approval", "review"], interactive=false)
+    is Ok(Review(ask_on_escalate=false)),
+  )
+}
+
+///|
 /// Refused where it is written, not five minutes later at a deadline nobody
 /// was ever going to beat.
 test "ask is refused where nobody can answer" {
@@ -49,5 +63,5 @@ test "an unknown approval value names the accepted ones" {
     is Err(message) else {
     fail("an unknown --approval value should be refused")
   }
-  assert_true(message.contains("ask, never, or always"))
+  assert_true(message.contains("ask, never, always, or review"))
 }

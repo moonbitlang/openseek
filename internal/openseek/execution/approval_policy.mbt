@@ -12,6 +12,11 @@ pub enum ApprovalPolicy {
   /// Grant without showing it to anyone, but still announced on the wire, so
   /// the transcript records what was auto-granted.
   Always
+  /// A reviewer subagent decides each question against the user's own
+  /// words. What it cannot settle (it escalates, times out, or never
+  /// reports) goes to the controller when `ask_on_escalate`, and is refused
+  /// otherwise — `run` reads no commands, so there is nobody to escalate to.
+  Review(ask_on_escalate~ : Bool)
 }
 
 ///|
@@ -50,12 +55,15 @@ pub fn approval_policy(
         Ask
       } else {
         fail(
-          "--approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation) or always (grant it unasked)",
+          "--approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation), always (grant it unasked), or review (a reviewer decides; what it cannot settle is refused)",
         )
       }
     "never" => Never
     "always" => Always
+    "review" => Review(ask_on_escalate=interactive)
     other =>
-      fail("unknown --approval value: \{other} (use ask, never, or always)")
+      fail(
+        "unknown --approval value: \{other} (use ask, never, always, or review)",
+      )
   }
 }

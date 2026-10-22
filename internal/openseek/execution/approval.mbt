@@ -116,6 +116,21 @@ async fn ApprovalDesk::ask(
 }
 
 ///|
+/// Announce one question and settle it at once with an outcome decided
+/// without the controller, so a grant or refusal nobody was asked about is
+/// still as visible in the stream as an answered one.
+fn ApprovalDesk::record(
+  self : ApprovalDesk,
+  ask : @agent_runtime.ApprovalAsk,
+  outcome : @agent_runtime.ApprovalOutcome,
+) -> @agent_runtime.ApprovalOutcome {
+  let id = self.mint_request_id()
+  announce_request(id, ask)
+  @emit.emit(ApprovalResolved(id~, outcome=approval_outcome_word(outcome)))
+  outcome
+}
+
+///|
 /// Deliver one controller decision to the question it answers.
 ///
 /// A decision for an id nobody is waiting on is discarded. It is a race, not a
@@ -162,22 +177,33 @@ pub fn ApprovalDesk::withdraw_all(self : ApprovalDesk) -> Unit {
 /// a tool registry, and its absence is what decides whether the tools that
 /// would ask offer the argument that asks. A refusing channel would leave the
 /// argument advertised and every use of it dead on arrival.
+///
+/// `reviewer` answers under `Review`; the other policies never call it.
 pub fn approval_channel(
   policy : ApprovalPolicy,
   desk : ApprovalDesk,
+  reviewer~ : ApprovalReviewer,
 ) -> @agent_runtime.ApprovalChannel? {
   match policy {
     Never => None
     Ask => Some(ApprovalChannel(ask => desk.ask(ask)))
-    // Announced and settled on the wire like any other question, so an
-    // auto-granted escalation is as visible in the stream as an answered one.
-    Always =>
+    Always => Some(ApprovalChannel(ask => desk.record(ask, AllowedOnce)))
+    // The question is announced only once it has an answer or goes to the
+    // controller, so the controller never holds a card the reviewer is
+    // still deciding — and an escalated one is a single card, not two.
+    Review(ask_on_escalate~) =>
       Some(
         ApprovalChannel(ask => {
-          let id = desk.mint_request_id()
-          announce_request(id, ask)
-          @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
-          AllowedOnce
+          match (reviewer.0)(ask) {
+            Allow => desk.record(ask, AllowedOnce)
+            Deny => desk.record(ask, Rejected)
+            Escalate =>
+              if ask_on_escalate {
+                desk.ask(ask)
+              } else {
+                desk.record(ask, Rejected)
+              }
+          }
         }),
       )
   }

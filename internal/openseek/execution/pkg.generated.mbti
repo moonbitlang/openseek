@@ -15,9 +15,13 @@ import {
 // Values
 pub const McpClientVersion : String = "0.2.2"
 
-pub fn approval_channel(ApprovalPolicy, ApprovalDesk) -> @agent_runtime.ApprovalChannel?
+pub fn approval_channel(ApprovalPolicy, ApprovalDesk, reviewer~ : ApprovalReviewer) -> @agent_runtime.ApprovalChannel?
+
+pub fn approval_intent(@agent_session.Session) -> Array[String]
 
 pub fn approval_policy(@argparse.Matches, interactive~ : Bool, delegated? : Bool) -> ApprovalPolicy raise
+
+pub fn build_approval_reviewer(self_exe~ : String, model~ : @deepseek.Model, api_url~ : String?, workspace_root~ : String, intent~ : () -> Array[String], deadline_ms? : Int32, child_session? : @agent_subrun.ChildSession) -> ApprovalReviewer
 
 pub fn build_extra_tools(McpRegistry, model~ : @deepseek.Model, api_key~ : String, deepseek_api_key? : String, api_url? : String) -> Array[@agent_tool.AgentToolDefinition]
 
@@ -45,7 +49,10 @@ pub enum ApprovalPolicy {
   Ask
   Never
   Always
+  Review(ask_on_escalate~ : Bool)
 }
+
+type ApprovalReviewer
 
 type McpRegistry
 pub fn McpRegistry::on_connection_closed(Self, () -> Unit) -> Unit
