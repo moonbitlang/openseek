@@ -22,6 +22,7 @@ import {
   "openseek_desktop/frontend/session_changes",
   "openseek_desktop/frontend/conversation_overview",
   "openseek_desktop/frontend/user_questions",
+  "openseek_desktop/frontend/web_push",
   "openseek_desktop/frontend/export_dialog",
   "openseek_desktop/frontend/github",
   "moonbitlang/core/cmp",

@@ -1735,6 +1735,9 @@ priv struct Model {
   remote_connecting : Bool
   // The last connect/disconnect failure, shown inside the section.
   remote_error : String?
+  // Whether this browser receives Web Push for the signed-in account; the
+  // account area shows and toggles it. Never leaves Checking in the window.
+  web_push : @web_push.State
 } derive(Eq)
 
 ///|
@@ -1910,6 +1913,7 @@ priv enum Msg {
   // An `auth.status` reply or `auth.changed` broadcast: the host's relay
   // sign-in state moved.
   AccountLoaded(Int32, Result[@protocol.AccountSession?, String])
+  WebPush(@web_push.Msg)
   DeviceAccountExpired(@interop.ChannelId, Int32, String)
   RemoteAccessSet(Bool)
   RemoteStatusLoaded(RemoteAccess)
@@ -2965,6 +2969,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     remote_access: None,
     remote_connecting: false,
     remote_error: None,
+    web_push: @web_push.State(),
   }
 }
 

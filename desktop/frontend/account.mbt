@@ -194,8 +194,24 @@ fn account_loaded(
   } else {
     @cmd.none
   }
+  // A browser's push state belongs to the account it registers with; a new
+  // sign-in probes again, and the probe re-registers an existing
+  // subscription for it.
+  let (push_command, next) = if changed && !model.is_desktop {
+    (
+      if account is Some(_) {
+        @web_push.probe(dispatch.map(msg => WebPush(msg)))
+      } else {
+        @cmd.none
+      },
+      { ..next, web_push: @web_push.State(), },
+    )
+  } else {
+    (@cmd.none, next)
+  }
   let command = @cmd.batch([
     export_command, retire_command, command, persistence, console_command, remote_status,
+    push_command,
   ])
   if account is Some(_) && intent == Some(model.chat_navigation_generation) {
     let (create, next) = update_cloud(dispatch, @cloud.Create, next)
