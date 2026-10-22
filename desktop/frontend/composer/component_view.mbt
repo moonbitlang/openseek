@@ -37,6 +37,7 @@ fn Entry::mention_chips(
   self : Entry,
   emit : @cmd.Emit[Msg],
   disabled~ : Bool,
+  surface~ : @interop.ChatSurface,
 ) -> Array[@html.Html] {
   let chips : Array[@html.Html] = []
   for index, mention in self.draft.mentions {
@@ -95,7 +96,7 @@ fn Entry::mention_chips(
     }
   }
   if self.review_changes().length() > 0 {
-    chips.push(self.changes_chip(locale~, emit, disabled~))
+    chips.push(self.changes_chip(locale~, emit, disabled~, surface~))
   }
   chips
 }
@@ -404,7 +405,12 @@ fn Entry::view(
     },
     before_inner: context,
     mentions: [
-      ..self.mention_chips(locale~, emit, disabled=input.presentation.disabled),
+      ..self.mention_chips(
+        locale~,
+        emit,
+        disabled=input.presentation.disabled,
+        surface~,
+      ),
       ..self.draft.image_previews(
         locale~,
         emit,

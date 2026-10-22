@@ -1373,7 +1373,7 @@ fn Model::subscriptions(
   @sub.batch([
     @sub.every(1000, emit(ClockTicked)),
     self.editing_subscriptions(input, emit),
-    changes_dismiss_subscription(self.active(input), emit),
+    changes_dismiss_subscription(self.active(input), emit, surface=self.surface),
   ])
 }
 
