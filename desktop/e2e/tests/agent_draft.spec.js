@@ -153,6 +153,32 @@ test('editing a goal protects its text until the editor is closed', async ({ pag
   expect(app.pageErrors).toEqual([]);
 });
 
+test('ultrareview prepares an editable swarm prompt and sends only on Send', async ({ page }) => {
+  const app = await open(page);
+  const task = page.locator('#task');
+  await task.fill('/ultrareview');
+  await expect(page.locator('.completion-item').filter({ hasText: 'ultrareview' }).first()).toBeVisible();
+  await task.press('Enter');
+  await expect(task).toHaveValue(/@builtin\/review\.mbtx/);
+  await expect(task).toHaveValue(/--swarm/);
+  await expect(task).toBeFocused();
+  // The caret lands on the Focus: line, scrolled into view.
+  await expect.poll(() => task.evaluate(input => ({
+    caret: input.value.slice(0, input.selectionStart).endsWith('Focus:'),
+    shown: input.scrollTop + input.clientHeight >= input.scrollHeight - 1,
+  }))).toEqual({ caret: true, shown: true });
+  // Running it again over the prepared prompt prepares it again.
+  await task.fill('/ultrareview');
+  await expect(page.locator('.completion-item').filter({ hasText: 'ultrareview' }).first()).toBeVisible();
+  await task.press('Enter');
+  await expect(task).toHaveValue(/--swarm/);
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+  await page.keyboard.type(' the parser');
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('Focus: the parser');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('a failed first Codex send keeps the agent fixed while retrying', async ({ page }) => {
   const app = await open(page);
   await choose(page, 'Codex test');

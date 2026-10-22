@@ -174,6 +174,47 @@ test "file completion accepts a local candidate inside the component" {
 }
 
 ///|
+test "a prompt slash command writes its prompt over the draft each time" {
+  let input = {
+    ..Input::fixture(""),
+    slash_commands: [
+      {
+        label: "/review",
+        detail: "",
+        command: "review",
+        prompt: Some("Review it.\nFocus:"),
+      },
+    ],
+  }
+  let emitted : Array[Action] = []
+  let actions = @cmd.Emit(action => {
+    emitted.push(action)
+    @cmd.none
+  })
+  let mut model = Model(input)
+  // The second run replaces the prepared prompt with the same text. The root
+  // never sees either write, so the composer must make it itself.
+  for _ in 0..<2 {
+    let (typed, _) = model.update(
+      input,
+      TextChanged("/rev"),
+      Msg::test_emit(),
+      actions,
+    )
+    let (accepted, _) = typed.update(
+      input,
+      CompletionAccept,
+      Msg::test_emit(),
+      actions,
+    )
+    inspect(accepted.active(input).draft.task, content="Review it.\nFocus:")
+    model = accepted
+  }
+  // Nothing runs: the user edits the prompt and sends it.
+  assert_true(emitted.all(action => !(action is SlashCommand(..))))
+}
+
+///|
 test "disabled installed skills stay out of skill completion" {
   let available : @skills.InstalledItem = {
     id: "available",

@@ -59,6 +59,9 @@ pub(all) struct SlashCommand {
   label : String
   detail : String
   command : String
+  // A prompt for the user to edit and send. Accepting the command writes it
+  // over the draft instead of emitting `SlashCommand`.
+  prompt : String?
 } derive(Eq, @debug.Debug)
 
 ///|

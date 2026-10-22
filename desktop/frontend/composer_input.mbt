@@ -224,11 +224,19 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         label: "/compact",
         detail: shell_text(self.locale, CompactContext),
         command: "compact",
+        prompt: None,
       },
       {
         label: "/goal",
         detail: shell_text(self.locale, SetGoal),
         command: "goal",
+        prompt: None,
+      },
+      {
+        label: "/ultrareview",
+        detail: shell_text(self.locale, UltraReview),
+        command: "ultrareview",
+        prompt: Some(UltrareviewPrompt),
       },
     ],
     // Editing a queued message rewrites that message; it never runs one.
@@ -468,3 +476,16 @@ fn Conversation::sent_prompts(
   }
   prompts
 }
+
+///|
+/// What `/ultrareview` prepares for the user to edit and send: a swarm review
+/// costs millions of tokens. It ends on the `Focus:` line, where the composer
+/// leaves the caret.
+const UltrareviewPrompt : String =
+  #|Review the changes on this branch with the bundled review swarm.
+  #|
+  #|1. Use git to find the merge base of HEAD with the default branch.
+  #|2. Call the `mbtx` tool with `filename: "@builtin/review.mbtx"` and `args: ["--swarm", "--sha", <merge base>, "--", <criteria>]`. The criteria are the Focus text below or, when it is empty, "The changes since that base are correct, well-structured and tested."
+  #|3. Wait for the job with `job_wait` and read it with `job_output`; a job that failed on a blocker still has its findings there. Report the merged findings: verified ones first, then unverified ones, then the refuted list.
+  #|
+  #|Focus:

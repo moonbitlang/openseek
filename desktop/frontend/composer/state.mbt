@@ -14,6 +14,7 @@ priv struct CompletionItem {
   detail : String
   command : String
   insert : String
+  prompt : String?
   path : String?
   range : @common.Range?
 } derive(Eq)
@@ -49,6 +50,7 @@ fn CompletionItem::slash_commands(
     detail: command.detail,
     command: command.command,
     insert: "",
+    prompt: command.prompt,
     path: None,
     range: None,
   })
@@ -90,6 +92,7 @@ fn CompletionItem::from_symbol(symbol : @symbols.Symbol) -> CompletionItem {
     } else {
       "`\{symbol.name}` — \{location} "
     },
+    prompt: None,
     path: if symbol.path.is_empty() {
       None
     } else {
@@ -291,6 +294,7 @@ fn Input::completion(
               detail: skill.description,
               command: "",
               insert: "\{skill.name} ",
+              prompt: None,
               path: None,
               range: None,
             }
@@ -333,6 +337,7 @@ fn Input::completion(
         detail: file.path.0,
         command: "",
         insert: file.path.0,
+        prompt: None,
         path: Some(file.path.0),
         range: None,
       })

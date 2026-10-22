@@ -410,11 +410,13 @@ pub fn State::composer_input(
         label: "/compact",
         detail: ui(locale, CompactContext),
         command: "compact",
+        prompt: None,
       },
       {
         label: "/review",
         detail: ui(locale, ReviewChanges),
         command: "review",
+        prompt: None,
       },
     ],
     // Codex runs its own shell tools; `!` mode is OpenSeek's.

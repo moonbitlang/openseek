@@ -583,6 +583,13 @@ fn Entry::accept_completion(
     return ({ ..self, completion: None, }, @cmd.none)
   }
   let mention : Mention? = match completion.kind {
+    SlashCommands if item.prompt is Some(prompt) =>
+      // The prompt replaces the whole draft, and the composer, the draft's
+      // one writer, shows its end, where such a prompt leaves the user's part.
+      return (
+        { ..self, draft: { ..self.draft, task: prompt, }, completion: None, },
+        focus_message_end(),
+      )
     SlashCommands =>
       return (
         {
