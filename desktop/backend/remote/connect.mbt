@@ -69,15 +69,50 @@ async fn RelayActor::connect_once(
   let device = match frame {
     Registered(device~) => device
     Fail(message~) => raise RegistrationRefused(message)
-    Register(..) | Open(..) =>
+    Register(..) | Open(..) | Notify(_) =>
       raise ConnectorError("relay broke the control protocol")
   }
   self.registered(device)
+  // Push triggers go out on this control socket while it stays registered.
+  // Subscribing and reading the seed share one non-suspending turn, so no
+  // event falls between them; a trigger raised while the tunnel is down is
+  // simply not pushed, like a banner nobody is there to see.
+  let triggers : @async.Queue[@protocol.Notification] = Queue(
+    kind=Blocking(256),
+  )
+  let subscription = self.state.subscribe(
+    triggers,
+    map=notification => {
+      if push_relevant(notification) {
+        Some(notification)
+      } else {
+        None
+      }
+    },
+    on_lag=subscription => {
+      // Only a stalled control socket lets this fill; its connection is
+      // about to fail and reconnect with a fresh subscription.
+      @xlog.warn(category="remote") <?
+        { "event": "hub_subscription_lagged", "transport": "push" }
+      subscription.close()
+    },
+  )
+  defer subscription.close()
+  let notifier = PushNotifier(self.state.runs())
   @async.with_task_group(group => {
     group.spawn_bg(() => {
       for ;; {
         @async.sleep(PingIntervalMs)
         control.ping()
+      }
+    })
+    // The socket serializes its own writes, so these frames never
+    // interleave with pings.
+    group.spawn_bg(() => {
+      for ;; {
+        for event in notifier.observe(triggers.get()) {
+          control.send_text((Notify(event) : @tunnel.Frame).encode())
+        }
       }
     })
     for ;; {
@@ -96,7 +131,7 @@ async fn RelayActor::connect_once(
         // A mid-session fail is the relay revoking this registration —
         // terminal like a refused one.
         Fail(message~) => raise RegistrationRefused(message)
-        Registered(..) | Register(..) =>
+        Registered(..) | Register(..) | Notify(_) =>
           raise ConnectorError("relay broke the control protocol")
       }
     }
