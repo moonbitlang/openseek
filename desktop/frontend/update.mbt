@@ -1563,8 +1563,11 @@ fn load_active_side_chat(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> (Model, @cmd.Cmd) {
+  // While a runs reply is awaited the side chat is left for it: if it is
+  // running, that reply makes it, with its run.
   guard model.dock_state().active is Some(SideChat(owner~)) &&
     model.find_conversation(owner.channel, owner.session) is None &&
+    model.device_state(owner.channel) is Some({ runs_in_flight: 0, .. }) &&
     model.session_project(owner.channel, owner.session) is Some(project) else {
     return (model, @cmd.none)
   }
@@ -7446,6 +7449,8 @@ fn update_device_msg(
         bridge: Connected,
         reconnect_failures: 0,
         connection_generation,
+        // The resync above is this connection's only request so far.
+        runs_in_flight: 1,
         approval_snapshot: None,
         questions: dev.questions.reconnecting(),
         sessions_request_generation,
@@ -7923,20 +7928,13 @@ fn update_device_msg(
       } else {
         closed
       }
-      let updated = model.replace_conversation({
+      model
+      .replace_conversation({
         ..closed,
         run: NoRun(ended=None),
         last_run_id: Some(run_id),
       })
-      (
-        fetch_runs(
-          dispatch,
-          channel,
-          updated.run_snapshot_frontier(channel),
-          dev.connection_generation,
-        ),
-        updated,
-      )
+      .request_runs(dispatch, channel)
     }
     CancelFailed(run_id~, message~) => {
       guard model.conversation_by_run(channel, run_id) is Some(conv) &&
@@ -7957,18 +7955,8 @@ fn update_device_msg(
           session: conv.session_id,
         })
       let (notice, notified) = retryable.notify_error(dispatch, message)
-      (
-        @cmd.batch([
-          notice,
-          fetch_runs(
-            dispatch,
-            channel,
-            notified.run_snapshot_frontier(channel),
-            dev.connection_generation,
-          ),
-        ]),
-        notified,
-      )
+      let (runs, notified) = notified.request_runs(dispatch, channel)
+      (@cmd.batch([notice, runs]), notified)
     }
     SessionsLoaded(items, connection_generation~, request_generation~) => {
       guard connection_generation == dev.connection_generation &&
@@ -9450,6 +9438,12 @@ fn update_device_msg(
         (@cmd.batch(commands), updated)
       }
     }
+    RunsFailed(connection_generation~) =>
+      if connection_generation == dev.connection_generation {
+        (@cmd.none, model.settle_runs_request(dev))
+      } else {
+        (@cmd.none, model)
+      }
     RunsLoaded(
       approval_generation~,
       runs~,
@@ -9466,7 +9460,7 @@ fn update_device_msg(
       // Started row is rendered, and a later BridgeReady invalidates both its
       // positive rows and its negative frontier together.
       let commands : Array[@cmd.Cmd] = []
-      let mut next = model
+      let mut next = model.settle_runs_request(dev)
       let accepted_settlements : Array[RecoveredSettlement] = []
       let settled_sessions : Array[String] = []
       for settlement in settled {
@@ -9924,15 +9918,8 @@ fn update_device_msg(
         let (sessions, model) = request_sessions_refresh(
           dispatch, channel, model,
         )
-        let commands = [
-          sessions,
-          fetch_runs(
-            dispatch,
-            channel,
-            model.run_snapshot_frontier(channel),
-            dev.connection_generation,
-          ),
-        ]
+        let (runs, model) = model.request_runs(dispatch, channel)
+        let commands = [sessions, runs]
         if generation is Some(generation) {
           commands.push(
             session_snapshot_command(
@@ -9966,15 +9953,8 @@ fn update_device_msg(
           let (sessions, updated) = request_sessions_refresh(
             dispatch, channel, updated,
           )
-          let commands = [
-            sessions,
-            fetch_runs(
-              dispatch,
-              channel,
-              updated.run_snapshot_frontier(channel),
-              dev.connection_generation,
-            ),
-          ]
+          let (runs, updated) = updated.request_runs(dispatch, channel)
+          let commands = [sessions, runs]
           if changed {
             commands.push(@cmd.none)
           }

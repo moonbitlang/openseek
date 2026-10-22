@@ -1131,6 +1131,11 @@ priv struct DeviceState {
   projects_request_generation : Int32
   worktrees_request_generation : Int32
   workspace_settings_request_generation : Int32
+  // `agent.runs` requests of this connection still waiting for their reply.
+  // A session a reply finds running and the page does not hold is made by
+  // that reply, with its run; one the page makes meanwhile would refuse the
+  // reply's row. A side chat restored from the listing waits for none here.
+  runs_in_flight : Int32
   // Durable sessions known to the engine's store, newest first, refreshed
   // when the bridge connects and when a run reaches the store. A new
   // conversation appears here once its first turn has been persisted.
@@ -1181,6 +1186,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     projects_request_generation: 0,
     worktrees_request_generation: 0,
     workspace_settings_request_generation: 0,
+    runs_in_flight: 0,
     sessions: [],
     archived: [],
     archive_overrides: [],
@@ -2482,6 +2488,9 @@ priv enum DeviceMsg {
     frontier~ : Array[RunSnapshotFrontier],
     connection_generation~ : Int32
   )
+  // An `agent.runs` request got no reply. It says nothing about the runs; it
+  // only stops being waited for.
+  RunsFailed(connection_generation~ : Int32)
   // The complete in-flight run set, from an `agent.runs` resync. Any
   // conversation still showing an open run this set lacks ended while the
   // client was away — its terminal event is gone for good (reconnect =

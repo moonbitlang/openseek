@@ -587,14 +587,50 @@ fn reconnect_delay(failures : Int32) -> Int32 {
 }
 
 ///|
+/// Ask `channel`'s host for its in-flight runs, against this page's lifecycle
+/// frontier now, and count the request as waited for.
+fn Model::request_runs(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+) -> (@cmd.Cmd, Model) {
+  guard self.device_state(channel) is Some(dev) else {
+    return (@cmd.none, self)
+  }
+  (
+    fetch_runs(
+      dispatch,
+      channel,
+      self.run_snapshot_frontier(channel),
+      dev.connection_generation,
+    ),
+    self.replace_device({ ..dev, runs_in_flight: dev.runs_in_flight + 1, }),
+  )
+}
+
+///|
+/// One of `dev`'s `agent.runs` requests is no longer waited for.
+fn Model::settle_runs_request(self : Model, dev : DeviceState) -> Model {
+  self.replace_device({
+    ..dev,
+    runs_in_flight: if dev.runs_in_flight > 0 {
+      dev.runs_in_flight - 1
+    } else {
+      0
+    },
+  })
+}
+
+///|
 /// Resync the in-flight runs after a (re)connect: `agent.runs` returns each
 /// live run's `agent.started` params, replayed through the same decoder, so
 /// a page that joined mid-run learns the run's identity and can cancel or
 /// steer it. The reply is the complete in-flight set, so it also settles the
 /// other direction — `RunsSettled` follows with every live id, and any run
 /// this client still shows that the host no longer has ended while the
-/// client was away. Nothing is dispatched when the op fails: a missing
-/// answer says nothing about the runs.
+/// client was away. A failed op dispatches only `RunsFailed`: a missing
+/// answer says nothing about the runs. Send it through `request_runs`, which
+/// counts it as waited for until one of the two arrives.
 fn fetch_runs(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -608,7 +644,10 @@ fn fetch_runs(
       let reply = @interop.bridge_request(
         channel, @commands.agent_runs, payload,
       ) catch {
-        _ => return
+        _ => {
+          scheduler.add(dispatch(RunsFailed(connection_generation~)))
+          return
+        }
       }
       let live = reply.runs.map(item => item.run_id)
       let recovered = reply.runs.filter_map(item => {
