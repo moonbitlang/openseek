@@ -46,6 +46,8 @@ depends on a `<base>`. The relay serves one current Browser bundle; a host
 built for another `HostProtocolRevision` is shown as unavailable instead of
 being driven. The separate visualization app remains under `web/viz/` for the
 host's own session sharing.
+The web app manifest and its icons from `desktop/pwa/` ship in the same asset
+directory; see `desktop/pwa/README.md`.
 
 Add the executable and its licenses in `Build.stage`. Preserve platform
 suffixes and executable permissions. If a macOS binary requires signing, also

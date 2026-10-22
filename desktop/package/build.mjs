@@ -53,6 +53,9 @@ const DevelopmentSuffix = ".dev";
 const DevelopmentConfig = "proton.project.dev.json";
 const DevelopmentProduct = "SeekMoonDev";
 
+// Shipped from desktop/pwa/; the SVG sources and README stay behind.
+const PwaFiles = ["manifest.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
+
 // These archives already contain browser-ready distributions. Fetching the
 // exact tarballs avoids installing a package manager or recreating its
 // dependency graph during an application build.
@@ -307,6 +310,10 @@ class Build {
       await cp(this.frontendBundle(profile), join(assets, "frontend.js"));
     }
     await this.sharedWeb(assets);
+    // The web app manifest and its icons; index.html links them.
+    for (const name of PwaFiles) {
+      await cp(join(this.desktop, "pwa", name), join(assets, name));
+    }
     // Cloud snapshot export reads the standalone renderer from /assets/viz/.
     await mkdir(join(assets, "viz"), { recursive: true });
     await cp(join(this.repo, "web/index.html"), join(assets, "viz/index.html"));

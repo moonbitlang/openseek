@@ -11,6 +11,14 @@
       content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
     />
     <title>SeekMoon</title>
+    <!-- Makes the browser console installable; desktop/pwa/README.md explains
+         the manifest's fixed identity and the two icon sets. The colors are
+         the light and dark canvas. -->
+    <link rel="manifest" href="/assets/manifest.json" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="SeekMoon" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfbf9" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#16181d" />
     <!-- The one document for both the proton window and the console page
          openseek-api serves; package/build.mjs ships it unchanged, with
          frontend.js and these sidecars under /assets/ in every host. Page

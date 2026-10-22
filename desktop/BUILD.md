@@ -114,6 +114,7 @@ seekmoon/
       vendor/pdfjs/
       pdf-runtime.js
       mermaid/
+      manifest.json, icon-*.png, apple-touch-icon.png
     viz/
   bin/
     openseek[.exe]
