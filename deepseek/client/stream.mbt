@@ -25,15 +25,19 @@ priv struct StreamAccumulator {
   reasoning_content : StringBuilder
   tool_calls : Array[StreamToolCall]
   mut usage : Json?
+  observation : AttemptState
 }
 
 ///|
-fn StreamAccumulator::StreamAccumulator() -> StreamAccumulator {
+fn StreamAccumulator::StreamAccumulator(
+  observation~ : AttemptState = AttemptState(),
+) -> StreamAccumulator {
   {
     content: StringBuilder(),
     reasoning_content: StringBuilder(),
     tool_calls: [],
     usage: None,
+    observation,
   }
 }
 
@@ -143,6 +147,7 @@ async fn apply_stream_json(
   on_content_delta~ : async (String) -> Unit,
   on_reasoning_delta~ : async (String) -> Unit,
 ) -> Unit {
+  acc.observation.observe(json)
   if json is { "usage": usage_json, .. } && !(usage_json is Null) {
     acc.usage = Some(usage_json)
   }
@@ -253,6 +258,7 @@ async fn read_chat_stream(
   reader : @http.Client,
   progress : RequestProgress,
   idle_timeout_ms~ : Int32,
+  observation~ : AttemptState,
   on_content_delta~ : async (String) -> Unit,
   on_reasoning_delta~ : async (String) -> Unit,
 ) -> @deepseek.ChatResponse {
@@ -266,8 +272,17 @@ async fn read_chat_stream(
     sse.event_count += 1
     sse.last_event_at = Some(@async.now())
   }
-  let acc = StreamAccumulator::StreamAccumulator()
+  let acc = StreamAccumulator::StreamAccumulator(observation~)
   let data_lines : Array[String] = []
+  // A socket exception or cancellation can bypass the EOF flush. Observe a
+  // complete buffered usage payload without delivering deltas or changing retry policy.
+  defer (if !data_lines.is_empty() {
+    try @json.parse(data_lines.join("\n")) catch {
+      _ => ()
+    } noraise {
+      json => observation.observe(json)
+    }
+  })
   async fn flush() -> Bool {
     sse.buffered_data = false
     flush_sse_event(

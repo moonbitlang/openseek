@@ -288,6 +288,8 @@ async fn[T] Client::with_retries(
 /// for auxiliary requests; omitted requests retain the provider default.
 /// Streaming failures include request progress in the Failure message after
 /// retries stop. Cancellation propagates unchanged.
+/// `on_attempt` observes each attempt once, including failed or interrupted
+/// attempts. It does not opt into retries or change retry decisions.
 pub async fn Client::chat(
   self : Client,
   messages : Array[@deepseek.ChatMessage],
@@ -295,6 +297,7 @@ pub async fn Client::chat(
   response_format? : @deepseek.ResponseFormat,
   max_tokens? : Int32,
   stream? : StreamHandler,
+  on_attempt? : (ChatAttempt) -> Unit,
 ) -> @deepseek.ChatResponse {
   if max_tokens is Some(limit) && limit <= 0 {
     fail("max_tokens must be positive")
@@ -311,15 +314,28 @@ pub async fn Client::chat(
   if max_tokens is Some(limit) && body is Object(fields) {
     fields["max_tokens"] = Json(limit)
   }
+  let mut attempt_number = 0
   try {
     match stream {
-      None => self.with_retries(() => self.chat_attempt(body), _ => false)
+      None =>
+        self.with_retries(
+          () => {
+            attempt_number += 1
+            observe_attempt(attempt_number, on_attempt, state => {
+              self.chat_attempt(body, state)
+            })
+          },
+          _ => false,
+        )
       Some(stream) => {
         let progress = RequestProgress()
         self.with_retries(
           () => {
             progress.begin_attempt()
-            self.chat_stream_attempt(body, progress, stream)
+            attempt_number += 1
+            observe_attempt(attempt_number, on_attempt, state => {
+              self.chat_stream_attempt(body, progress, stream, state)
+            })
           },
           error => {
             progress.streamed() &&
@@ -349,6 +365,7 @@ pub async fn Client::chat(
 async fn Client::chat_attempt(
   self : Client,
   body : Json,
+  observation : AttemptState,
 ) -> @deepseek.ChatResponse {
   let (resp, data) = @http.post(self.api_url, body, headers={
     "Content-Type": "application/json",
@@ -356,6 +373,11 @@ async fn Client::chat_attempt(
   })
   let text = data.text()
   guard resp.code >= 200 && resp.code < 300 else {
+    try @json.parse(text) catch {
+      _ => ()
+    } noraise {
+      json => observation.observe(json)
+    }
     if retryable_status(resp.code) {
       raise HttpStatusError(resp.code, text)
     }
@@ -367,6 +389,7 @@ async fn Client::chat_attempt(
   let json = @json.parse(text) catch {
     error => fail("DeepSeek response is not JSON: \{error}; body: \{text}")
   }
+  observation.observe(json)
   @json.from_json(json) catch {
     error => fail("DeepSeek response decode error: \{error}; body: \{text}")
   }
@@ -378,6 +401,7 @@ async fn Client::chat_stream_attempt(
   body : Json,
   progress : RequestProgress,
   stream : StreamHandler,
+  observation : AttemptState,
 ) -> @deepseek.ChatResponse {
   let client = @http.post_stream(self.api_url, headers={
     "Content-Type": "application/json",
@@ -405,6 +429,11 @@ async fn Client::chat_stream_attempt(
   guard resp.code >= 200 && resp.code < 300 else {
     progress.phase = ResponseBody
     let text = client.read_all().text()
+    try @json.parse(text) catch {
+      _ => ()
+    } noraise {
+      json => observation.observe(json)
+    }
     if retryable_status(resp.code) {
       raise HttpStatusError(resp.code, text)
     }
@@ -418,6 +447,7 @@ async fn Client::chat_stream_attempt(
     client,
     progress,
     idle_timeout_ms=self.idle_timeout_ms,
+    observation~,
     on_content_delta=stream.on_content_delta,
     on_reasoning_delta=stream.on_reasoning_delta,
   )

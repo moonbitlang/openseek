@@ -127,6 +127,16 @@ pub struct Usage {
 } derive(ToJson, @debug.Debug)
 pub impl @json.FromJson for Usage
 
+pub struct UsageReport {
+  reported : Bool
+  prompt_tokens : Int32?
+  completion_tokens : Int32?
+  total_tokens : Int32?
+  prompt_cache_hit_tokens : Int32?
+  prompt_cache_miss_tokens : Int32?
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn UsageReport::from_response(Json) -> Self
+
 // Type aliases
 
 // Traits

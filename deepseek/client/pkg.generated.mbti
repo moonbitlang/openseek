@@ -39,6 +39,20 @@ pub(all) suberror ImageRequestError {
 pub fn ImageRequestError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+pub struct ChatAttempt {
+  attempt : Int32
+  response_id : String?
+  report : @deepseek.UsageReport
+  outcome : ChatAttemptOutcome
+} derive(Eq, @debug.Debug)
+
+pub(all) enum ChatAttemptOutcome {
+  Completed
+  Failed
+  Interrupted
+} derive(Eq, @debug.Debug)
+pub fn ChatAttemptOutcome::name(Self) -> String
+
 pub struct Client {
   model : @deepseek.Model
   api_url : String
@@ -49,7 +63,7 @@ pub struct Client {
   // private fields
 } derive(@debug.Debug)
 pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode, retry_attempts? : Int32, retry_backoff_ms? : Int32, idle_timeout_ms? : Int32) -> Self
-pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat, max_tokens? : Int32, stream? : StreamHandler) -> @deepseek.ChatResponse
+pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat, max_tokens? : Int32, stream? : StreamHandler, on_attempt? : (ChatAttempt) -> Unit) -> @deepseek.ChatResponse
 pub fn Client::supports_image_input(Self) -> Bool
 pub async fn Client::upload_image(Self, Bytes, filename~ : String, expires_after_seconds? : Int32, timeout_ms? : Int32) -> UploadedFile
 
