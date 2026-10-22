@@ -1,7 +1,7 @@
 # Web Push for the browser console
 
-Status: design for review. No code is written yet. It builds on the
-installable PWA in #2206 (`claude/pwa-support-5b8cd3`).
+Status: approved 2026-10-22, open questions settled as recommended. It
+builds on the installable PWA in #2206 (`claude/pwa-support-5b8cd3`).
 
 Goal: an installed console on a phone shows a notification while the app is
 closed in three cases:
@@ -58,7 +58,8 @@ hosts need no code at all.
   bundle root. Add a test in `console_proxy_test.mbt`. Its `/v2/*` forwarding
   also carries the push API to the relay, so the proxy can test real pushes
   (Android over `chrome://inspect` port forwarding runs on `localhost`, which
-  is a secure context). `--demo` answers `/v2/push/key` with 404.
+  is a secure context). `--demo` answers `/v2/push/key` with its usual 503,
+  which the page treats like 404.
 
 The worker only handles push. It has no `fetch` handler and no caching:
 
@@ -81,33 +82,38 @@ duplication is the cost; the alternative is i18n in openseek-api.
 
 ## 2. Frontend
 
-- **Registration:** only when `!model.is_desktop` (no bridge) and
-  `'serviceWorker' in navigator && 'PushManager' in window`. Register
-  `/sw.js` with scope `/`. The Proton window never registers.
-- **UI:** a browser-only "Notifications on this device" control in the
-  console's account menu (sidebar, next to Sign out). The browser console
-  has no Settings page. Its state machine is the component's contract,
-  in its own package with blackbox tests:
+- **Registration:** only when `!model.is_desktop` (no bridge), once a
+  browser account loads, and only when `navigator.serviceWorker`,
+  `PushManager` and `Notification` all exist. It registers `/sw.js`, whose
+  default scope is `/`. The Proton window never registers.
+- **UI:** a browser-only notifications row in the sidebar's account area,
+  above the sign-in row. The browser console has no Settings page.
+  `frontend/web_push` owns the state machine, which is its blackbox-tested
+  contract:
   - `Unsupported`: no Push API. On iOS Safari this means "not installed", and
-    the hint says to use Add to Home Screen.
-  - `Unavailable`: `GET /v2/push/key` returns 404 (relay not configured,
-    local console, or proxy `--demo`).
-  - `Off`: Enable button.
-  - `Requesting`: permission prompt open.
-  - `On`: Turn off, and Send test.
+    the row says to add the app to the Home Screen.
+  - `Unavailable`: `GET /v2/push/key` answers anything but 200 (relay not
+    configured, local console, proxy `--demo`, or unreachable). The row is
+    hidden until the next page load.
+  - `Off`: Turn on.
+  - `Working`: prompt, subscribe, unsubscribe or test in flight.
+  - `On`: Test, and Turn off.
   - `Blocked`: permission denied; points at browser settings.
-- **Enable** (user gesture): `Notification.requestPermission()`, then
-  `register`, then `pushManager.subscribe({userVisibleOnly: true,
-  applicationServerKey})`, then `PUT /v2/push/subscription`.
+- **Turn on** (user gesture): `Notification.requestPermission()` runs first,
+  before anything waits. Then `pushManager.subscribe({userVisibleOnly: true,
+  applicationServerKey})` on the ready registration, then
+  `PUT /v2/push/subscription`. A dismissed prompt returns to `Off`.
 - **Heal on boot:** when permission is `granted` and
   `pushManager.getSubscription()` returns one, the page sends the same
   `PUT` again. The upsert re-binds the row to the current session and locale,
   and it re-creates a row the relay pruned.
-- **Sign out:** `DELETE /v2/push/subscription` and `unsubscribe()`. The
-  cascade in §3 covers sign-outs the page never sees.
-- These calls use the hand-rolled fetch the portal uses, because a 401 is
-  meaningful. They use the same credential as the page's other `/v2` calls:
-  the cookie on the relay, the bearer on the proxy.
+- **Turn off:** `DELETE /v2/push/subscription`, then `unsubscribe()`.
+- **Sign out:** an explicit sign-out calls `unsubscribe()`. The relay row
+  already went with the session (the cascade in §3). An expired sign-in
+  keeps the browser subscription, so signing in again heals it and pushes
+  resume.
+- The relay calls use the console's account Bearer, like its other `/v2`
+  calls.
 
 ## 3. openseek-api
 
@@ -184,8 +190,8 @@ its verbatim copy `tunnel_frame.mbt`, and the control-frame table in
 `docs/remote-protocol.md`:
 
 ```json
-{"type":"notify","event":{"kind":"finished","session":"…","run":"…","status":"finished","answer":"…"}}
-{"type":"notify","event":{"kind":"approval","session":"…","run":"…","tool":"mbtx","detail":"…"}}
+{"type":"notify","event":{"kind":"finished","session":"…","status":"finished","answer":"…"}}
+{"type":"notify","event":{"kind":"approval","session":"…","tool":"mbtx","detail":"…"}}
 ```
 
 - **Compatible in both directions, with no revision bump.** Today's relay
@@ -198,8 +204,11 @@ its verbatim copy `tunnel_frame.mbt`, and the control-frame table in
     `cancelled`;
   - a live approval request, never a recovered one.
   - `answer` and `detail` are cut to the window's 180-character banner limit.
-  - Frames go through one writer task, so they never interleave with
-    `register` or pings.
+  - The WebSocket serializes its own writes, so these frames never
+    interleave with pings.
+  - The notifier is seeded from `agent.runs` in the same turn it
+    subscribes. Approvals standing at connect time are never announced, so a
+    reconnect does not push them again; runs already in flight still push.
   - A frame raised while the tunnel is down is dropped. Delivery is best
     effort, like the banner.
 - **Relay side** (`serve_control`): the reader loop that now drops messages

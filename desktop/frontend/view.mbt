@@ -887,6 +887,14 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
         online_devices: self.console.roster
         .filter(meta => meta.online)
         .map(meta => meta.device_choice()),
+        notifications: match self.web_push {
+          Checking | Unavailable => None
+          Unsupported => Some(NeedsInstall)
+          Off(error~, ..) => Some(Off(error~))
+          Working(_) => Some(Busy)
+          On(error~, ..) => Some(On(error~))
+          Blocked => Some(Blocked)
+        },
       })
     _ => None
   }
