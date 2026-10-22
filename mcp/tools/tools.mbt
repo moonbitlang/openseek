@@ -210,7 +210,6 @@ pub async fn[X] connect(
           name~,
           description=tool.description,
           schema=tool.schema,
-          output_schema?=tool.output_schema,
           execute=tool.execute,
           program_callable=tool.is_program_callable(),
         ),
@@ -322,16 +321,10 @@ fn bridge_tool(
   } else {
     { "type": "object" }
   }
-  // The result's shape is a help, not a contract the host relies on: an
-  // oversized one is dropped rather than replaced.
-  let output_schema = tool.output_schema.filter(schema => {
-    schema.stringify().length() <= MaxSchemaChars
-  })
   AgentToolDefinition(
     name=tool_name(server, tool.name),
     description~,
     schema=JsonSchema(schema),
-    output_schema?=output_schema.map(schema => JsonSchema(schema)),
     execute=Async(args => call_tool(client, tool.name, args)),
     // This host-owned proxy completes through MCP transport tasks, without
     // agent-loop dispatch. Enable PTC independently of server annotations;
