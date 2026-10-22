@@ -27,5 +27,5 @@ test "SSH API settings open the local host's own settings" {
   assert_eq(opened.setup_api_key, "")
   assert_true(opened.api_provider() is Deepseek)
   let (_, pending) = update(test_dispatch(), SaveApiKey, opened)
-  assert_eq(pending.test_mirror().saves, 0)
+  assert_eq(pending.host_settings_mirror().saves, 0)
 }

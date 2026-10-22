@@ -10631,8 +10631,9 @@ fn test_model() -> Model {
 }
 
 ///|
-/// The focused host's mirror; a loading one when the page holds no device.
-fn Model::test_mirror(self : Model) -> HostSettingsMirror {
+/// The focused host's settings state (snapshot, writes in flight, deferred
+/// status); a loading one when the page holds no device.
+fn Model::host_settings_mirror(self : Model) -> HostSettingsMirror {
   self
   .focused_device()
   .map(dev => dev.host_settings)
@@ -10640,8 +10641,8 @@ fn Model::test_mirror(self : Model) -> HostSettingsMirror {
 }
 
 ///|
-/// Rewrite the focused host's mirror.
-fn Model::with_mirror(
+/// Rewrite the focused host's settings state.
+fn Model::with_host_settings(
   self : Model,
   f : (HostSettingsMirror) -> HostSettingsMirror,
 ) -> Model {
@@ -10652,11 +10653,11 @@ fn Model::with_mirror(
 /// Rewrite the focused host's loaded endpoint, keeping its revision; a
 /// fixture that is still loading starts from the zero-config endpoint at
 /// revision 0.
-fn Model::with_endpoint(
+fn Model::with_host_endpoint(
   self : Model,
   f : (HostEndpoint) -> HostEndpoint,
 ) -> Model {
-  self.with_mirror(mirror => {
+  self.with_host_settings(mirror => {
     let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
     { ..mirror, current: Some({ ..current, endpoint: f(current.endpoint), }), }
   })
@@ -10855,7 +10856,7 @@ test "Cloud preferences are local while device settings retain their owner" {
   let (_, missing) = update_msg(emit, CloudFollowupLoaded(None), cloud)
   assert_true(missing.followup_behavior() == cloud.followup_behavior())
   for
-    model in [host, host.with_mirror(_ => HostSettingsMirror::loading())] {
+    model in [host, host.with_host_settings(_ => HostSettingsMirror::loading())] {
     let (_, loaded) = update_msg(
       emit,
       CloudFollowupLoaded(Some("queue")),
@@ -12872,18 +12873,18 @@ test "BridgeReady clears focused host settings until the refetch lands" {
   let dispatch = test_dispatch()
   let model = {
     ..test_model()
-    .with_endpoint(endpoint => {
+    .with_host_endpoint(endpoint => {
       ..endpoint,
       custom_api_url: "https://old.example/chat",
       custom_key_saved: true,
       provider: Custom,
     })
-    .with_mirror(mirror => { ..mirror, saves: 1, }),
+    .with_host_settings(mirror => { ..mirror, saves: 1, }),
     setup_api_key: "old-key",
   }
   let (_, next) = update_dev(dispatch, BridgeReady, model)
   assert_false(next.host_settings_loaded())
-  assert_true(next.test_mirror() == HostSettingsMirror::loading())
+  assert_true(next.host_settings_mirror() == HostSettingsMirror::loading())
   assert_true(next.api_provider() is Deepseek)
   inspect(next.setup_api_key, content="")
 }
@@ -15936,7 +15937,7 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
 
 ///|
 test "the official endpoint requires a key, a custom endpoint a URL" {
-  let official = test_model().with_endpoint(endpoint => {
+  let official = test_model().with_host_endpoint(endpoint => {
     ..endpoint,
     deepseek_key_saved: false,
     provider: Deepseek,
@@ -15945,11 +15946,11 @@ test "the official endpoint requires a key, a custom endpoint a URL" {
   assert_true(official.display_status() is ApiKeyRequired)
   assert_true(
     official
-    .with_endpoint(endpoint => { ..endpoint, deepseek_key_saved: true, })
+    .with_host_endpoint(endpoint => { ..endpoint, deepseek_key_saved: true, })
     .api_ready(),
   )
   // The GLM provider is gated on its own key, never DeepSeek's.
-  let glm = test_model().with_endpoint(endpoint => {
+  let glm = test_model().with_host_endpoint(endpoint => {
     ..endpoint,
     deepseek_key_saved: true,
     glm_key_saved: false,
@@ -15959,17 +15960,17 @@ test "the official endpoint requires a key, a custom endpoint a URL" {
   assert_true(glm.display_status() is ApiKeyRequired)
   assert_true(
     glm
-    .with_endpoint(endpoint => { ..endpoint, glm_key_saved: true, })
+    .with_host_endpoint(endpoint => { ..endpoint, glm_key_saved: true, })
     .api_ready(),
   )
-  let custom = test_model().with_endpoint(endpoint => {
+  let custom = test_model().with_host_endpoint(endpoint => {
     ..endpoint,
     custom_api_url: "",
     provider: Custom,
   })
   assert_false(custom.api_ready())
   assert_true(custom.display_status() is SetupRequired)
-  let configured = custom.with_endpoint(endpoint => {
+  let configured = custom.with_host_endpoint(endpoint => {
     ..endpoint,
     custom_api_url: "https://proxy.example/chat/completions",
   })
@@ -15978,14 +15979,14 @@ test "the official endpoint requires a key, a custom endpoint a URL" {
 
 ///|
 test "OpenRouter setup requires only its stored custom key" {
-  let openrouter = test_model().with_endpoint(endpoint => {
+  let openrouter = test_model().with_host_endpoint(endpoint => {
     ..endpoint,
     deepseek_key_saved: true,
     custom_key_saved: false,
     provider: OpenRouter,
   })
   assert_false(openrouter.api_ready())
-  let keyed = openrouter.with_endpoint(endpoint => {
+  let keyed = openrouter.with_host_endpoint(endpoint => {
     ..endpoint,
     custom_key_saved: true,
   })
@@ -16789,7 +16790,7 @@ test "host settings edits wait for the focused host snapshot" {
   // moved. The loading mirror is authoritative: none of these stale events
   // may be applied to the replacement host.
   let loading = {
-    ..test_model().with_mirror(_ => HostSettingsMirror::loading()),
+    ..test_model().with_host_settings(_ => HostSettingsMirror::loading()),
     setup_api_key: "old-device-key",
   }
   let messages : Array[Msg] = [
@@ -16801,9 +16802,9 @@ test "host settings edits wait for the focused host snapshot" {
   for message in messages {
     let (_, once) = update(dispatch, message, loading)
     let (_, twice) = update(dispatch, message, loading)
-    assert_true(once.test_mirror() == HostSettingsMirror::loading())
+    assert_true(once.host_settings_mirror() == HostSettingsMirror::loading())
     assert_eq(once.setup_api_key, loading.setup_api_key)
-    assert_true(twice.test_mirror() == HostSettingsMirror::loading())
+    assert_true(twice.host_settings_mirror() == HostSettingsMirror::loading())
     assert_eq(twice.setup_api_key, loading.setup_api_key)
   }
 }
@@ -16881,7 +16882,7 @@ test "the setup modal tracks endpoint usability without toasts" {
       host_settings(provider="custom", custom_api_url=""),
       connection_generation=None,
     ),
-    test_model().with_endpoint(endpoint => {
+    test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       provider: Custom,
       custom_api_url: "https://ok.example/chat",
@@ -16920,7 +16921,7 @@ test "the setup modal tracks endpoint usability without toasts" {
       connection_generation=None,
     ),
     {
-      ..test_model().with_endpoint(endpoint => {
+      ..test_model().with_host_endpoint(endpoint => {
         ..endpoint,
         provider: Custom,
         custom_api_url: "https://ok.example/chat",
@@ -16945,7 +16946,7 @@ test "switching to a provider missing its key or URL opens the setup modal" {
   let (_, kept) = update(
     dispatch,
     ProviderChanged("deepseek"),
-    test_model().with_endpoint(endpoint => {
+    test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       provider: Custom,
       custom_api_url: "https://ok.example/chat",
@@ -16965,7 +16966,10 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   let (_, glm) = update(
     dispatch,
     ProviderChanged("glm"),
-    test_model().with_endpoint(endpoint => { ..endpoint, glm_key_saved: true, }),
+    test_model().with_host_endpoint(endpoint => {
+      ..endpoint,
+      glm_key_saved: true,
+    }),
   )
   assert_true(glm.api_provider() is Glm)
   assert_true(glm.default_model is Glm(G53))
@@ -17105,7 +17109,7 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
 
 ///|
 test "a custom endpoint reads as usable only from a plausible URL" {
-  let custom = test_model().with_endpoint(endpoint => {
+  let custom = test_model().with_host_endpoint(endpoint => {
     ..endpoint,
     provider: Custom,
     deepseek_key_saved: false,
@@ -17113,32 +17117,38 @@ test "a custom endpoint reads as usable only from a plausible URL" {
   // A prefix mid-typing must not arm Send or retire the setup modal.
   assert_true(
     !custom
-    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "", })
+    .with_host_endpoint(endpoint => { ..endpoint, custom_api_url: "", })
     .api_ready(),
   )
   assert_true(
     !custom
-    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "h", })
+    .with_host_endpoint(endpoint => { ..endpoint, custom_api_url: "h", })
     .api_ready(),
   )
   assert_true(
     !custom
-    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "https://", })
+    .with_host_endpoint(endpoint => { ..endpoint, custom_api_url: "https://", })
     .api_ready(),
   )
   assert_true(
     !custom
-    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "ftp://host", })
+    .with_host_endpoint(endpoint => {
+      ..endpoint,
+      custom_api_url: "ftp://host",
+    })
     .api_ready(),
   )
   assert_true(
     custom
-    .with_endpoint(endpoint => { ..endpoint, custom_api_url: "https://host", })
+    .with_host_endpoint(endpoint => {
+      ..endpoint,
+      custom_api_url: "https://host",
+    })
     .api_ready(),
   )
   assert_true(
     custom
-    .with_endpoint(endpoint => {
+    .with_host_endpoint(endpoint => {
       ..endpoint,
       custom_api_url: " https://host/chat/completions ",
     })
@@ -17146,7 +17156,7 @@ test "a custom endpoint reads as usable only from a plausible URL" {
   )
   assert_true(
     custom
-    .with_endpoint(endpoint => {
+    .with_host_endpoint(endpoint => {
       ..endpoint,
       custom_api_url: "http://127.0.0.1:8080",
     })
@@ -17160,7 +17170,7 @@ test "clearing the mirror never leaves an orphaned setup modal" {
   // every control disabled; close it with the mirror it was showing.
   let dispatch = test_dispatch()
   let open = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       deepseek_key_saved: false,
     }),
@@ -17176,7 +17186,7 @@ test "saving from the setup modal stays on the page it opened over" {
   // The modal renders over any screen; completing setup from it must not
   // yank the user to Chat.
   let over_skills = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       deepseek_key_saved: false,
     }),
@@ -17190,7 +17200,7 @@ test "saving from the setup modal stays on the page it opened over" {
   // A save that leaves the setup incomplete (Custom, no URL yet) keeps the
   // modal up mid-setup instead of dumping the user on Settings.
   let custom_half = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       provider: Custom,
       custom_api_url: "",
@@ -17211,7 +17221,7 @@ test "saving from the setup modal stays on the page it opened over" {
 test "saving the key from the setup modal retires it" {
   let dispatch = test_dispatch()
   let open = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       deepseek_key_saved: false,
     }),
@@ -17231,12 +17241,12 @@ test "a settled host save that completes the setup closes the modal" {
   // applied confirmation is what retires the modal, not mid-typing.
   let typing = {
     ..test_model()
-    .with_endpoint(endpoint => {
+    .with_host_endpoint(endpoint => {
       ..endpoint,
       provider: Custom,
       custom_api_url: "https://ok.example/chat",
     })
-    .with_mirror(mirror => { ..mirror, saves: 1, }),
+    .with_host_settings(mirror => { ..mirror, saves: 1, }),
     api_setup_open: true,
     select_menu: Some(ApiProviderMenu),
   }
@@ -17254,7 +17264,7 @@ test "a settled host save that completes the setup closes the modal" {
   assert_true(page.select_menu == Some(ApiProviderMenu))
   // A flush that leaves the endpoint unusable keeps the modal up.
   let still = {
-    ..test_model().with_mirror(_ => {
+    ..test_model().with_host_settings(_ => {
       ..HostSettingsMirror::loading(),
       deferred: Some(host_settings(provider="deepseek")),
     }),
@@ -17287,7 +17297,7 @@ test "a background device's settings broadcast lands on its own mirror" {
     model,
   )
   // The form (and the setup modal) keep the focused host's state.
-  assert_true(settled.test_mirror() == model.test_mirror())
+  assert_true(settled.host_settings_mirror() == model.host_settings_mirror())
   assert_true(settled.api_ready())
   assert_true(!settled.api_setup_open)
   guard settled.device_state(background) is Some(dev) &&
@@ -17301,7 +17311,7 @@ test "a background device's settings broadcast lands on its own mirror" {
 ///|
 test "host settings are deferred while this client's writes are in flight" {
   let dispatch = test_dispatch()
-  let model = test_model().with_mirror(mirror => { ..mirror, saves: 1, })
+  let model = test_model().with_host_settings(mirror => { ..mirror, saves: 1, })
   // A broadcast (or a stale get reply) arriving mid-write must not clobber
   // the optimistic mirror.
   let (_, ignored) = update_dev(
@@ -17313,7 +17323,7 @@ test "host settings are deferred while this client's writes are in flight" {
     model,
   )
   assert_true(ignored.api_provider() is Deepseek)
-  inspect(ignored.test_mirror().saves, content="1")
+  inspect(ignored.host_settings_mirror().saves, content="1")
   // The write's own reply reconciles once it is the last one out.
   let (_, settled) = update_dev(
     dispatch,
@@ -17323,12 +17333,12 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     model,
   )
-  inspect(settled.test_mirror().saves, content="0")
+  inspect(settled.host_settings_mirror().saves, content="0")
   assert_true(settled.api_provider() is Deepseek)
   assert_true(settled.test_endpoint().deepseek_key_saved)
   assert_true(settled.host_settings() is Some({ revision: 2, .. }))
   // With more writes still out, even a reply only decrements.
-  let stacked = model.with_mirror(mirror => { ..mirror, saves: 2, })
+  let stacked = model.with_host_settings(mirror => { ..mirror, saves: 2, })
   let (_, still_pending) = update_dev(
     dispatch,
     HostSettingsApplied(
@@ -17337,7 +17347,7 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     stacked,
   )
-  inspect(still_pending.test_mirror().saves, content="1")
+  inspect(still_pending.host_settings_mirror().saves, content="1")
   assert_true(still_pending.api_provider() is Deepseek)
 }
 
@@ -17345,12 +17355,12 @@ test "host settings are deferred while this client's writes are in flight" {
 test "a newer peer broadcast beats a delayed local settings reply" {
   let dispatch = test_dispatch()
   let model = test_model()
-    .with_mirror(mirror => {
+    .with_host_settings(mirror => {
       ..mirror,
       current: mirror.current.map(current => { ..current, revision: 5, }),
     })
-    .with_endpoint(endpoint => { ..endpoint, provider: Custom, })
-    .with_mirror(mirror => { ..mirror, saves: 1, })
+    .with_host_endpoint(endpoint => { ..endpoint, provider: Custom, })
+    .with_host_settings(mirror => { ..mirror, saves: 1, })
   let (_, broadcast) = update_dev(
     dispatch,
     HostSettingsLoaded(
@@ -17371,7 +17381,7 @@ test "a newer peer broadcast beats a delayed local settings reply" {
   )
   assert_true(settled.api_provider() is Deepseek)
   assert_true(settled.host_settings() is Some({ revision: 7, .. }))
-  inspect(settled.test_mirror().saves, content="0")
+  inspect(settled.host_settings_mirror().saves, content="0")
 }
 
 ///|
@@ -17442,7 +17452,7 @@ test "a settings write settles on the device it was sent to" {
     ),
     model,
   )
-  assert_true(applied.test_mirror() == model.test_mirror())
+  assert_true(applied.host_settings_mirror() == model.host_settings_mirror())
   guard applied.device_state(Local) is Some(home_dev) else {
     fail("Local stays connected")
   }
@@ -17456,7 +17466,7 @@ test "a settings write settles on the device it was sent to" {
     ),
     applied,
   )
-  assert_true(failed.test_mirror() == model.test_mirror())
+  assert_true(failed.host_settings_mirror() == model.host_settings_mirror())
   guard failed.device_state(Local) is Some(home_dev) &&
     home_dev.host_settings.current is Some(current) else {
     fail("Local keeps its snapshot")
@@ -17503,7 +17513,7 @@ test "the tree-layout setting parses its wire names" {
 test "update is pure: a provider change is idempotent" {
   let dispatch = test_dispatch()
   let model = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       deepseek_key_saved: false,
     }),
@@ -17515,8 +17525,8 @@ test "update is pure: a provider change is idempotent" {
   assert_true(twice.api_provider() is Deepseek)
   inspect(once.setup_api_key, content="")
   inspect(twice.setup_api_key, content="")
-  inspect(once.test_mirror().saves, content="1")
-  inspect(twice.test_mirror().saves, content="1")
+  inspect(once.host_settings_mirror().saves, content="1")
+  inspect(twice.host_settings_mirror().saves, content="1")
   assert_true(once.display_status() is ApiKeyRequired)
   assert_true(twice.display_status() is ApiKeyRequired)
 }
@@ -17525,7 +17535,7 @@ test "update is pure: a provider change is idempotent" {
 test "saving a key marks the active provider credential only" {
   let dispatch = test_dispatch()
   let deepseek = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       provider: Deepseek,
       deepseek_key_saved: false,
@@ -17537,14 +17547,14 @@ test "saving a key marks the active provider credential only" {
   assert_true(saved_deepseek.test_endpoint().deepseek_key_saved)
   assert_false(saved_deepseek.test_endpoint().custom_key_saved)
   inspect(saved_deepseek.setup_api_key, content="")
-  inspect(saved_deepseek.test_mirror().saves, content="1")
+  inspect(saved_deepseek.host_settings_mirror().saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
   // user on the form they were filling in.
   assert_true(saved_deepseek.management_dialog is Some(Settings(Engine)))
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       provider: Custom,
       deepseek_key_saved: false,
@@ -17559,7 +17569,7 @@ test "saving a key marks the active provider credential only" {
   assert_true(saved_custom.management_dialog is Some(Settings(Engine)))
   // A GLM key lands in the GLM slot alone.
   let glm = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       provider: Glm,
       deepseek_key_saved: false,
@@ -17574,7 +17584,7 @@ test "saving a key marks the active provider credential only" {
   assert_false(saved_glm.test_endpoint().custom_key_saved)
   assert_true(saved_glm.management_dialog is Some(Settings(Engine)))
   let openrouter = {
-    ..test_model().with_endpoint(endpoint => {
+    ..test_model().with_host_endpoint(endpoint => {
       ..endpoint,
       provider: OpenRouter,
       deepseek_key_saved: false,
