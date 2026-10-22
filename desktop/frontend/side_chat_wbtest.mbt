@@ -640,3 +640,59 @@ test "a side chat shown again after the dock was hidden is re-read" {
   assert_true(shown.mounted_side_chat_owner() == Some(side_chat_owner()))
   assert_true(side_chat_sync(shown) is Some(Reloading(..)))
 }
+
+///|
+test "a side chat's notification opens its conversation with the side chat on screen" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  // The reader is elsewhere in the strip when the notice is clicked.
+  let away = {
+    ..model.replace_conversation({ ..side, last_run_id: Some("r7"), }),
+    right_panel_open: false,
+  }
+  let (_, opened) = update(
+    test_dispatch(),
+    NotificationClicked(run_id="r7"),
+    away,
+  )
+  // The column keeps the conversation; the side chat is its dock's tab.
+  assert_eq(opened.active_session, "desktop-test")
+  assert_true(opened.right_panel_open)
+  assert_true(
+    opened.dock_state().active == Some(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(opened.mounted_side_chat_owner() == Some(side_chat_owner()))
+  // The strip keeps its side chats through the next reconcile.
+  let (_, settled) = update(test_dispatch(), CloseSelectMenu, opened)
+  assert_true(settled.dock_state().tabs == [SideChat(owner=side_chat_owner())])
+}
+
+///|
+test "an archived conversation's side chats are not rows of their own" {
+  let project = @interop.ChannelId::Local.test_project()
+  let archived = (id : String) => {
+    (
+      {
+        id,
+        title: Some("Archived"),
+        workspace: project,
+        workspace_name: "work",
+        updated_at_ms: Some(1),
+      } : @transcript.SessionListItem)
+  }
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    archived: [archived("desktop-gone"), archived("desktop-gone-sc-0a1b2c3d")],
+  })
+  guard model
+    .sidebar_component_sections(model.dev())
+    .iter()
+    .find_first(section => section.label.has_prefix("Archived"))
+    is Some(section) else {
+    fail("the archived section must be listed")
+  }
+  assert_eq(section.entries.length(), 1)
+}

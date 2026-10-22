@@ -1596,6 +1596,50 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
 }
 
 ///|
+/// Show the tab `dock` made active, coming from `before`: a file or a
+/// historical diff is activated in the viewer, which re-measures its host
+/// when it was hidden behind another kind of tab.
+fn show_active_tab(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  before : @dock.DockState,
+  dock : @dock.DockState,
+) -> (@cmd.Cmd, Model) {
+  let femit = dispatch.map(msg => FileEditor(msg))
+  if @dock.active_file(dock) is Some(path) {
+    let cmds : Array[@cmd.Cmd] = []
+    if @dock.active_file(before) is None {
+      // The file body was CSS-hidden behind the browser pane or the picker
+      // overlay; the viewer must re-measure its host on return.
+      cmds.push(@fileeditor.request_viewer_remeasure())
+    }
+    let (cmd, panel) = @fileeditor.activate(
+      femit,
+      model.file_panel,
+      file_ctx(model),
+      path,
+    )
+    cmds.push(cmd)
+    (@cmd.batch(cmds), { ..model, file_panel: panel, })
+  } else if @dock.active_history_diff(dock) is Some(diff) {
+    let cmds : Array[@cmd.Cmd] = []
+    if @dock.active_history_diff(before) is None {
+      cmds.push(@fileeditor.request_viewer_remeasure())
+    }
+    let (cmd, panel) = @fileeditor.activate_history_diff(
+      femit,
+      model.file_panel,
+      file_ctx(model),
+      diff,
+    )
+    cmds.push(cmd)
+    (@cmd.batch(cmds), { ..model, file_panel: panel, })
+  } else {
+    (@cmd.none, model)
+  }
+}
+
+///|
 /// Reconcile the file subsystem with the selected conversation's dock after
 /// every message. The dock map already retains every strip, so switching
 /// owners only changes this projection and re-roots the document table.
@@ -1603,14 +1647,23 @@ fn sync_file_panel(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> (Model, @cmd.Cmd) {
+  // The strip on screen is its conversation's even while a side chat of it
+  // is what the page selected, so its side chats are that conversation's.
   let chats = model
     .dock_owner()
     .host()
-    .map(owner => model.side_chats_of(owner))
+    .map(owner => model.side_chats_of(dock_home_key(owner)))
     .unwrap_or([])
   let before = model.dock_state()
   let dock = @dock.reconcile_side_chats(before, chats)
   let model = if dock == before { model } else { model.with_dock_state(dock) }
+  // A side chat deleted elsewhere hands the screen to a neighbour, which is
+  // shown as a chosen tab would be.
+  let (shown_tab_cmd, model) = if dock.active != before.active {
+    show_active_tab(dispatch, model, before, dock)
+  } else {
+    (@cmd.none, model)
+  }
   let (panel, cmd) = @fileeditor.sync(
     dispatch.map(msg => FileEditor(msg)),
     model.file_panel,
@@ -1636,7 +1689,7 @@ fn sync_file_panel(
   }
   (
     { ..model, shown_side_chat: shown, },
-    @cmd.batch([cmd, side_chat_cmd, closing_cmd, shown_cmd]),
+    @cmd.batch([shown_tab_cmd, cmd, side_chat_cmd, closing_cmd, shown_cmd]),
   )
 }
 
@@ -5960,6 +6013,30 @@ fn update_msg(
     // ordinary durable session, and `OpenSession` is how one is opened.
     OpenSessionHere(session_id) =>
       update_msg(dispatch, OpenSession(model.focused, session_id), model)
+    // A side chat is read in its conversation's dock: opening one — from a
+    // notification, a link — opens that conversation with the side chat's
+    // tab on screen.
+    OpenSession(channel, session_id) if @protocol.split_side_chat_id(session_id)
+      is Some(parent) => {
+      let (cmd, model) = update_msg(
+        dispatch,
+        OpenSession(channel, parent),
+        model,
+      )
+      let owner = @interop.Host({ channel, session: parent, })
+      let dock = @dock.open_side_chat(model.dock_state_for(owner), {
+        channel,
+        session: session_id,
+      })
+      (
+        cmd,
+        {
+          ..model.with_dock_state_for(owner, dock),
+          right_panel_open: true,
+          right_panel_menu_open: false,
+        },
+      )
+    }
     OpenSession(channel, session_id) =>
       // Selecting a conversation always returns to the chat — including
       // re-selecting the active one from the Skills page. The explicit channel
@@ -6498,38 +6575,7 @@ fn update_msg(
             // A tab selection is newer than any transcript link still waiting
             // on its host lookup, even when the selected tab is not a file.
             let model = model.begin_editor_navigation()
-            if @dock.active_file(dock) is Some(path) {
-              let cmds : Array[@cmd.Cmd] = []
-              if @dock.active_file(before) is None {
-                // The file body was CSS-hidden behind the browser pane or
-                // the picker overlay; the viewer must re-measure its host on
-                // return.
-                cmds.push(@fileeditor.request_viewer_remeasure())
-              }
-              let (cmd, panel) = @fileeditor.activate(
-                femit,
-                model.file_panel,
-                file_ctx(model),
-                path,
-              )
-              cmds.push(cmd)
-              (@cmd.batch(cmds), { ..model, file_panel: panel, })
-            } else if @dock.active_history_diff(dock) is Some(diff) {
-              let cmds : Array[@cmd.Cmd] = []
-              if @dock.active_history_diff(before) is None {
-                cmds.push(@fileeditor.request_viewer_remeasure())
-              }
-              let (cmd, panel) = @fileeditor.activate_history_diff(
-                femit,
-                model.file_panel,
-                file_ctx(model),
-                diff,
-              )
-              cmds.push(cmd)
-              (@cmd.batch(cmds), { ..model, file_panel: panel, })
-            } else {
-              (@cmd.none, model)
-            }
+            show_active_tab(dispatch, model, before, dock)
           } else {
             (@cmd.none, model)
           }
