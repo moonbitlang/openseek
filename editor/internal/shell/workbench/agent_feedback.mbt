@@ -42,10 +42,11 @@ fn persist_feedback_items(
   services : WorkbenchServices,
   resource : @base_common.Uri,
 ) -> Unit {
-  let items : Array[Json] = []
-  for item in services.agent_feedback_handle.get_feedback(resource) {
-    items.push(feedback_item_to_json(item))
-  }
+  let items : Array[Json] = [
+    for item in services.agent_feedback_handle.get_feedback(resource) => {
+      feedback_item_to_json(item)
+    }
+  ]
   @base_browser.local_storage_set(
     feedback_storage_key(resource),
     Json(items).stringify(),

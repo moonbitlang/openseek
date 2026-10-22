@@ -201,10 +201,9 @@ fn preview_resource_retains_remote_document(uri : @base_common.Uri) -> Bool {
 /// count reaches zero.
 fn shutdown_preview_resources() -> Unit {
   preview_resources_shutdown.val = true
-  let states : Array[PreviewResourceState] = []
-  for _key, state in preview_resources {
-    states.push(state)
-  }
+  let states : Array[PreviewResourceState] = [
+    for _, state in preview_resources => state
+  ]
   for state in states {
     begin_preview_resource_shutdown(state)
   }
