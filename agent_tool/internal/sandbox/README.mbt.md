@@ -102,10 +102,10 @@ The generated profile starts from `(allow default)` and then:
 
 - denies writes to `*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`, `moon.pkg`, and
   `moon.work`, including the legacy JSON manifests, under the workspace root;
-- re-allows `_build` and `.mooncakes` trees where Moon writes generated
-  sources;
 - denies every directory write under the workspace root (`vnode-type
-  DIRECTORY`): creating, renaming, or removing a directory.
+  DIRECTORY`): creating, renaming, or removing a directory;
+- re-allows `_build` and `.mooncakes` trees where Moon writes generated
+  sources. SBPL is last-match-wins, so this allow comes after both denies.
 
 The directory rule is intentional: the suffix regex alone would let a
 containing directory be moved outside the protected workspace. It is one rule

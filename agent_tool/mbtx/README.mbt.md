@@ -15,8 +15,8 @@ stages the program outside the working tree and runs it in **two phases**. The
 BUILD runs first, synchronously: `moon run <file>.mbtx --target wasm --build-only --target-dir
 <dir>`, bounded by its own wall clock (20s by default) so a hung dependency
 download cannot hold the turn. A nonzero exit here is reported immediately as
-`BUILD failed (exit N)`, or `(killed by signal N)` when the process crashed
-rather than exiting — a build failure **by construction**, since the run
+`BUILD failed (exit N)`, or `(killed by signal N)` when the process was
+killed by a signal (POSIX) — a build failure **by construction**, since the run
 phase never starts; no exit-code or output archaeology is needed to tell the
 stages apart, which matters because `moon run` alone exits 1 for a rejected
 build and a trapped program alike, and diagnostics in a merged stream prove

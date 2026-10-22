@@ -92,10 +92,13 @@ test "finished_body and timeout_head identify run-phase failures" {
   // A signal is not an exit code: a crash must not read like a rejection.
   // The build reports name the exit the same way.
   assert_eq(exit_status(1), "exit 1")
-  assert_eq(exit_status(-11), "killed by signal 11")
-  assert_true(
-    finished_body("", Some(-11)).contains("run failed (killed by signal 11)"),
-  )
+  let crashed = if @async.platform is Windows {
+    "exit -11"
+  } else {
+    "killed by signal 11"
+  }
+  assert_eq(exit_status(-11), crashed)
+  assert_true(finished_body("", Some(-11)).contains("run failed (\{crashed})"))
   // A program mbtx stopped has no exit status; none is invented for it.
   assert_true(
     finished_body("head", None).contains(

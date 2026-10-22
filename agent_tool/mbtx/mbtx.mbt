@@ -1232,11 +1232,13 @@ fn finished_body(text : String, exit_code : Int32?) -> String {
 }
 
 ///|
-/// A process's exit as a report names it. `@process` reports a process killed
-/// by a signal as `-signal_number`; printed as a bare exit code, a crash reads
-/// like the compiler rejecting `source`.
+/// A process's exit as a report names it. On POSIX `@process` reports a
+/// process killed by a signal as `-signal_number`; printed as a bare exit code,
+/// a crash reads like the compiler rejecting `source`. On Windows a negative
+/// code is the process's own status (an NTSTATUS such as `0xC0000005`), so it
+/// stays a code.
 fn exit_status(exit_code : Int32) -> String {
-  if exit_code < 0 {
+  if exit_code < 0 && !(@async.platform is Windows) {
     "killed by signal \{-exit_code}"
   } else {
     "exit \{exit_code}"
