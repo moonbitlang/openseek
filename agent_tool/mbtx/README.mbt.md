@@ -15,7 +15,8 @@ stages the program outside the working tree and runs it in **two phases**. The
 BUILD runs first, synchronously: `moon run <file>.mbtx --target wasm --build-only --target-dir
 <dir>`, bounded by its own wall clock (20s by default) so a hung dependency
 download cannot hold the turn. A nonzero exit here is reported immediately as
-`BUILD failed (exit N)` — a build failure **by construction**, since the run
+`BUILD failed (exit N)`, or `(killed by signal N)` when the process crashed
+rather than exiting — a build failure **by construction**, since the run
 phase never starts; no exit-code or output archaeology is needed to tell the
 stages apart, which matters because `moon run` alone exits 1 for a rejected
 build and a trapped program alike, and diagnostics in a merged stream prove
@@ -24,8 +25,8 @@ success the RUN phase execs `moonrun` directly on the artifact moon reported
 in its `{"artifacts_path":[…]}` line — the same process `moon run` would have
 exec'd — with the workspace (or explicit `cwd`) as the program's working
 directory, so relative reads reach workspace files while build artifacts stay
-out of your `_build`. A failure there is labeled `at RUNTIME — … from the
-run, not the build`. Compiler diagnostics are rewritten to stable
+out of your `_build`. A failure there is labeled `run failed (exit N) at RUNTIME — … from
+the run, not the build`. Compiler diagnostics are rewritten to stable
 `source:LINE:COL` locations (or the supplied filename), and build output (warnings under
 `warning: "on"`) is kept apart from program output by construction.
 

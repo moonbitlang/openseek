@@ -1387,7 +1387,7 @@ async test "a non-zero exit shows the exit code in the content, not just the bri
   let out = run("fn main { println(\"before\"); panic() }")
   assert_true(out.is_error)
   assert_true(out.content.contains("before"))
-  assert_true(out.content.contains("exited"))
+  assert_true(out.content.contains("run failed (exit "))
 }
 
 ///|

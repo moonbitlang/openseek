@@ -82,10 +82,19 @@ test "cap_build_notes bounds a warning flood and marks the cut" {
 test "finished_body and timeout_head identify run-phase failures" {
   assert_eq(finished_body("out\n", 0), "out\n")
   let staged_failure = finished_body("trace", 3)
-  assert_true(staged_failure.contains("exited 3 at RUNTIME"))
+  assert_true(staged_failure.contains("run failed (exit 3) at RUNTIME"))
   assert_true(staged_failure.contains("from the run, not the build"))
   assert_true(
-    finished_body("", 3).contains("the build succeeded, then the run exited 3"),
+    finished_body("", 3).contains(
+      "the build succeeded, then the run failed (exit 3)",
+    ),
+  )
+  // A signal is not an exit code: a crash must not read like a rejection.
+  // The build reports name the exit the same way.
+  assert_eq(exit_status(1), "exit 1")
+  assert_eq(exit_status(-11), "killed by signal 11")
+  assert_true(
+    finished_body("", -11).contains("run failed (killed by signal 11)"),
   )
   assert_true(timeout_head(5_000).contains("the PROGRAM that did not finish"))
   assert_eq(with_build_notes("", "body"), "body")

@@ -686,7 +686,6 @@ async fn execute(
           workspace_root,
           Exec(program, command_argv),
           // Per-call storage outlives both compilation and any background run.
-          // Never put the repository-sized SBPL profile in the spawn argv.
           profile_path="\{build_dir}/source-write.sb",
           writable_subtree~,
         )
@@ -1114,9 +1113,9 @@ async fn build_snippet(
     return NotBuilt(
       @agent_tool.respond(
         if text.is_blank() {
-          "mbtx: the BUILD failed (exit \{exit_code}) with no output — the program never ran"
+          "mbtx: the BUILD failed (\{exit_status(exit_code)}) with no output — the program never ran"
         } else {
-          "[mbtx: BUILD failed (exit \{exit_code}) — the program never ran; the output below is the build's]\n\{text}"
+          "[mbtx: BUILD failed (\{exit_status(exit_code)}) — the program never ran; the output below is the build's]\n\{text}"
         },
         is_error=true,
         brief="mbtx build",
@@ -1216,9 +1215,21 @@ fn finished_body(text : String, exit_code : Int32) -> String {
     }
   }
   if text.is_blank() {
-    "mbtx: the build succeeded, then the run exited \{exit_code} with no output"
+    "mbtx: the build succeeded, then the run failed (\{exit_status(exit_code)}) with no output"
   } else {
-    "[mbtx: exited \{exit_code} at RUNTIME — the build succeeded; this failure is from the run, not the build]\n\{text}"
+    "[mbtx: run failed (\{exit_status(exit_code)}) at RUNTIME — the build succeeded; this failure is from the run, not the build]\n\{text}"
+  }
+}
+
+///|
+/// A process's exit as a report names it. `@process` reports a process killed
+/// by a signal as `-signal_number`; printed as a bare exit code, a crash reads
+/// like the compiler rejecting `source`.
+fn exit_status(exit_code : Int32) -> String {
+  if exit_code < 0 {
+    "killed by signal \{-exit_code}"
+  } else {
+    "exit \{exit_code}"
   }
 }
 
