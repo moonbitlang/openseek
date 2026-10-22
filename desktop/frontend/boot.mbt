@@ -899,11 +899,7 @@ fn main {
       by=slot => {
         match slot {
           (Some(preview), _, Some(_)) =>
-            preview.owner.key() +
-            ":" +
-            preview.epoch.to_string() +
-            ":" +
-            preview.materialized
+            "\{preview.owner.key()}:\{preview.epoch}:\{preview.materialized}"
           _ => "closed"
         }
       },

@@ -269,9 +269,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       reasoning_complete=conversation.reasoning_complete,
       // Deltas do not change the committed-event count, so the live bubble
       // keeps one identity until a semantic response/step boundary.
-      streaming_identity=conversation.task.unwrap_or("idle") +
-        ":" +
-        conversation.events.length().to_string(),
+      streaming_identity="\{conversation.task.unwrap_or("idle")}:\{conversation.events.length()}",
     )
   }
   let content = self.transcript_content()

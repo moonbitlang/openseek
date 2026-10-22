@@ -10300,7 +10300,7 @@ fn large_semantic_reference_for_test() -> @mention_context.SemanticSearchReferen
     matches.push({
       rule_id: "rule",
       description: Some("test rule"),
-      file: "src/file-" + index.to_string() + ".mbt",
+      file: "src/file-\{index}.mbt",
       start_line: 1,
       start_column: 1,
       end_line: 1,
@@ -10642,7 +10642,7 @@ fn with_pending_steers(
   let mut next = conv
   for index, text in texts {
     next = next.enqueue_steer(
-      "test-steer-" + index.to_string(),
+      "test-steer-\{index}",
       Some(run_id),
       text,
       text,

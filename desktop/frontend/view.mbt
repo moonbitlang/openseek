@@ -2899,7 +2899,7 @@ test "archived families collapse while a live orphan child stays archivable" {
 test "project component receives the complete conversation list" {
   let project = @interop.ChannelId::Local.test_resource("/work/alpha")
   let sessions : Array[@transcript.SessionListItem] = []
-  for number = 1; number <= 6; number = number + 1 {
+  for number in 1..<=6 {
     sessions.push({
       id: "chat-\{number}",
       title: Some("Project chat \{number}"),

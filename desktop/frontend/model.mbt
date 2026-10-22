@@ -4227,7 +4227,7 @@ fn Model::allocate_submission_id(self : Model) -> (Model, String) {
   let sequence = self.submission_sequence + 1
   (
     { ..self, submission_sequence: sequence, },
-    self.page_namespace + "-submission-" + sequence.to_string(),
+    "\{self.page_namespace}-submission-\{sequence}",
   )
 }
 
