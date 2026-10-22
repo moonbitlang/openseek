@@ -21,7 +21,7 @@ pub fn approval_intent(@agent_session.Session) -> Array[String]
 
 pub fn approval_policy(@argparse.Matches, interactive~ : Bool, delegated? : Bool) -> ApprovalPolicy raise
 
-pub fn build_approval_reviewer(self_exe~ : String, model~ : @deepseek.Model, api_url~ : String?, workspace_root~ : String, intent~ : () -> Array[String], deadline_ms? : Int32, child_session? : @agent_subrun.ChildSession) -> ApprovalReviewer
+pub fn build_approval_reviewer(self_exe~ : String, model~ : @deepseek.Model, api_key~ : String, api_url~ : String?, workspace_root~ : String, intent~ : () -> Array[String], deadline_ms? : Int32, child_session? : @agent_subrun.ChildSession) -> ApprovalReviewer
 
 pub fn build_extra_tools(McpRegistry, model~ : @deepseek.Model, api_key~ : String, deepseek_api_key? : String, api_url? : String) -> Array[@agent_tool.AgentToolDefinition]
 

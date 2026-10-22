@@ -118,10 +118,14 @@ test "the reviewer reads the latest user messages, oldest first" {
 }
 
 ///|
-test "a long user message is clamped for the reviewer" {
-  let long = "x".repeat(intent_max_chars + 50)
-  let session = @agent_session.Session(SessionId("s"), system_prompt="").append(
-    user_message(long),
-  )
-  assert_eq(approval_intent(session)[0].length(), intent_max_chars)
+/// Neither a long message nor the engine's own continuation prompt changes
+/// what the reviewer reads as the user's words.
+test "the reviewer reads whole messages and skips continuation prompts" {
+  let long = "delete build/. " + "context ".repeat(1_000) + "but NOT src/"
+  let session = @agent_session.Session(SessionId("s"), system_prompt="")
+    .append(user_message(long))
+    .append(user_message(@agent_session.GoalContinuePrompt))
+    .append(user_message(@agent_session.GoalContinuePrompt))
+    .append(user_message(@agent_session.GoalContinuePrompt))
+  assert_eq(approval_intent(session), [long])
 }

@@ -40,6 +40,7 @@ async fn run_task_turn(
       reviewer=@execution.build_approval_reviewer(
         self_exe=exe,
         model~,
+        api_key~,
         api_url~,
         workspace_root~,
         intent=() => @execution.approval_intent(latest_session),

@@ -9,11 +9,6 @@ const ApprovalReviewDeadlineMs : Int32 = 300_000
 let intent_max_messages : Int32 = 3
 
 ///|
-/// Per-message cap on what the reviewer reads of the user's words: enough for
-/// any instruction, bounded against a pasted log.
-let intent_max_chars : Int32 = 4_000
-
-///|
 /// What a reviewer decided about one permission question.
 priv enum ReviewDecision {
   /// Grant the action once.
@@ -32,7 +27,11 @@ struct ApprovalReviewer(async (@agent_runtime.ApprovalAsk) -> ReviewDecision)
 
 ///|
 /// The user's words a reviewer holds a request to: the standing goal, when
-/// one stands, then the most recent user messages, oldest first.
+/// one stands, then the most recent user messages, oldest first. Whole, never
+/// truncated: a restriction at the end of a long message is exactly what a
+/// clipped prefix would lose. The prompt `serve` submits to auto-continue a
+/// goal is recorded as a `User` message but no person wrote it, so it is not
+/// authorization and does not take a slot.
 pub fn approval_intent(session : @agent_session.Session) -> Array[String] {
   let recent : Array[String] = []
   let events = session.events()
@@ -41,17 +40,14 @@ pub fn approval_intent(session : @agent_session.Session) -> Array[String] {
       i = i - 1 {
     if events.get(i) is Some(event) && event.item() is User(message) {
       let text = message.content().text()
-      if !text.is_blank() {
-        recent.push(text.clamped_view(end=intent_max_chars).to_owned())
+      if !text.is_blank() && text != @agent_session.GoalContinuePrompt {
+        recent.push(text)
       }
     }
   }
   recent.rev_in_place()
   if session.current_goal() is Some(goal) {
-    [
-      "[standing goal] \{goal.text().clamped_view(end=intent_max_chars)}",
-      ..recent,
-    ]
+    ["[standing goal] \{goal.text()}", ..recent]
   } else {
     recent
   }
@@ -151,10 +147,14 @@ fn decision_of(answer : String) -> ReviewDecision? {
 /// managed `run --kind explore` child — the read-only scout — asked whether
 /// the user's words, as `intent` reads them at the moment of asking,
 /// authorize it. The child is delegated, so its own approval policy is
-/// `never`: a reviewer can never ask for anything.
+/// `never`: a reviewer can never ask for anything. `api_key` is the parent's
+/// resolved key, handed over under its provider's variable exactly as a
+/// subagent's is: a key from the command line reaches the child, and an
+/// unrelated one in the environment does not win over it.
 pub fn build_approval_reviewer(
   self_exe~ : String,
   model~ : @deepseek.Model,
+  api_key~ : String,
   api_url~ : String?,
   workspace_root~ : String,
   intent~ : () -> Array[String],
@@ -196,6 +196,7 @@ pub fn build_approval_reviewer(
       kind~,
       label=@agent_tool.brief_line("\{ask.tool_name}: \{ask.detail}", limit=48),
       cwd=workspace_root,
+      extra_env=Map([(provider_key_variable(model), api_key)]),
       child_session?,
     )
     result.value().bind(decision_of).unwrap_or(Escalate)

@@ -152,6 +152,7 @@ async fn run_serve(
       reviewer=@execution.build_approval_reviewer(
         self_exe=exe,
         model~,
+        api_key~,
         api_url~,
         workspace_root~,
         intent=() => @execution.approval_intent(session),
