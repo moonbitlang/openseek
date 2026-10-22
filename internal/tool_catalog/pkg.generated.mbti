@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/internal/tool_catalog"
+
+// Values
+
+// Errors
+pub suberror SearchError {
+  SearchError(String)
+}
+pub fn SearchError::output(Self, &Logger) -> Unit
+pub fn SearchError::to_string(Self) -> String
+
+// Types and methods
+type Catalog
+pub fn Catalog::Catalog(Array[Source]) -> Self
+pub fn Catalog::search(Self, query? : String, server? : String, limit? : Int32, offset? : Int32) -> Page raise SearchError
+
+pub struct Page {
+  text : String
+  data : Json
+}
+
+type Source
+pub fn Source::Source(name~ : String, instructions? : String, tools~ : Array[Tool]) -> Self
+pub fn Source::unavailable(name~ : String, error~ : String) -> Self
+
+type Tool
+pub fn Tool::Tool(name~ : String, description~ : String, input_schema~ : Json, output_schema? : Json) -> Self
+
+// Type aliases
+
+// Traits
