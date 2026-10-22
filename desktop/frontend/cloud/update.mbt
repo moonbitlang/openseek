@@ -820,10 +820,6 @@ pub fn update(
               data: { "content": submission.content.to_json() },
             },
           ]
-      } else if event.kind == "steer_applied" &&
-        event.data is { "content": content, .. } {
-        events = events +
-          [{ ..event, kind: "user", data: { "content": content }, }]
       } else if !event.is_live_progress() &&
         !(event.kind is ("steer_dropped" | "steer_applied")) {
         events = events + [event]

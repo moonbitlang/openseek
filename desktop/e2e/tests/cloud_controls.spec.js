@@ -54,25 +54,34 @@ test('Cloud Stop waits for termination and preserves the editable draft', async 
   expect(app.device.pageErrors).toEqual([]);
 });
 
-test('Cloud Steer settles a receipt before HTTP acceptance without clearing later typing', async ({ page }) => {
-  const app = await running(page);
-  const held = deferred();
-  app.pauseControl = held.promise;
-  await followup(page, 'Inspect the login first', 'steer');
-  await expect.poll(() => controls(app, 'steer').length).toBe(1);
-  const request = controls(app, 'steer')[0];
-  expect(request.task_id).toBe(app.controlState(sessionA).task_id);
-  expect(request.content).toBe('Inspect the login first');
-  await page.locator('#task').fill('A later independent draft');
-  await app.emitSessionEvent(sessionA, 'steer_applied', { submission_id: request.submission_id, kind: 'prompt', content: request.content });
-  const accepted = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/steer'));
-  held.resolve();
-  await (await accepted).finished();
-  await expect(page.locator('.pending-steer-row')).toHaveCount(0);
-  await expect(page.locator('#task')).toHaveValue('A later independent draft');
-  await expect(page.locator('#stop')).toBeEnabled();
-  expect(controls(app, 'steer')).toHaveLength(1);
-});
+for (const receiptFirst of [true, false]) {
+  test(`Cloud Steer settles a receipt ${receiptFirst ? 'before' : 'after'} HTTP acceptance without clearing later typing`, async ({ page }) => {
+    const app = await running(page);
+    const held = deferred();
+    app.pauseControl = receiptFirst ? held.promise : null;
+    const accepted = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/steer'));
+    await followup(page, 'Inspect the login first', 'steer');
+    if (!receiptFirst) await (await accepted).finished();
+    await expect.poll(() => controls(app, 'steer').length).toBe(1);
+    const request = controls(app, 'steer')[0];
+    expect(request.task_id).toBe(app.controlState(sessionA).task_id);
+    expect(request.content).toBe('Inspect the login first');
+    await page.locator('#task').fill('A later independent draft');
+    await app.emitSessionEvent(sessionA, 'user', { submission_id: request.submission_id, content: request.content });
+    await app.emitSessionEvent(sessionA, 'steer_applied', { submission_id: request.submission_id, kind: 'prompt', content: request.content });
+    held.resolve();
+    await (await accepted).finished();
+    await expect(page.locator('.pending-steer-row')).toHaveCount(0);
+    await expect(page.locator('#task')).toHaveValue('A later independent draft');
+    await expect(page.locator('#stop')).toBeEnabled();
+    expect(controls(app, 'steer')).toHaveLength(1);
+    await expect(page.locator('#transcript').getByText(request.content, { exact: true })).toHaveCount(1);
+    await app.open(sessionB);
+    await app.open(sessionA);
+    await expect(page.locator('#transcript').getByText(request.content, { exact: true })).toHaveCount(1);
+    await expect(page.locator('#task')).toHaveValue('A later independent draft');
+  });
+}
 
 test('Cloud dropped Steer restores its input and preserves a newer draft', async ({ page }) => {
   const app = await running(page);
@@ -86,6 +95,7 @@ test('Cloud dropped Steer restores its input and preserves a newer draft', async
   await expect(page.locator('#task')).toHaveValue(/Newer input/);
   await expect(page.locator('.pending-steer-row')).toHaveCount(0);
   expect(controls(app, 'steer')).toHaveLength(1);
+  await expect(page.locator('#transcript').getByText(request.content, { exact: true })).toHaveCount(0);
 });
 
 test('Cloud Steer network failure stays unknown until a server receipt resolves it', async ({ page }) => {
@@ -106,6 +116,7 @@ test('Cloud Steer network failure stays unknown until a server receipt resolves 
   await expect(page.locator('.pending-steer-row')).toContainText('An uncertain submission');
   await expect(page.locator('#task')).toHaveValue('Draft after submission');
   app.controlOffline = false;
+  await app.emitSessionEvent(sessionA, 'user', { submission_id: request.submission_id, content: request.content });
   await app.emitSessionEvent(sessionA, 'steer_applied', { submission_id: request.submission_id, kind: 'prompt', content: request.content });
   await expect(page.locator('.pending-steer-row')).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Draft after submission');

@@ -268,3 +268,42 @@ test "Cloud current terminal settles after the idle control snapshot" {
     )
   }
 }
+
+///|
+test "Cloud steer receipts settle input without duplicating the durable user message" {
+  let pending = controls_submit(controls_fixture(), @composer.SteerNow)
+  let input = pending.conversations["session"].control_inputs[0]
+  let (state, stream) = watch_fixture(pending)
+  let state = watch_snapshot(
+    state,
+    stream,
+    Some("task"),
+    2,
+    controls_fixture().conversations["session"].control.unwrap(),
+  )
+  let content : Json = { "content": "Follow up", "submission_id": input.key }
+  let user = watch_event(state, stream, "task", 3, "user", content)
+  let applied = watch_event(user, stream, "task", 4, "steer_applied", {
+    "content": "Follow up",
+    "submission_id": input.key,
+    "kind": "prompt",
+  })
+  assert_true(applied.conversations["session"].control_inputs.is_empty())
+  assert_eq(
+    applied.conversations["session"].events
+    .filter(event => event.kind == "user")
+    .length(),
+    1,
+  )
+  let history : History = {
+    generating: true,
+    messages: [
+      { task_id: "task", kind: "user", data: content, created_at: 10, },
+    ],
+  }
+  let loaded = metadata_update(
+    applied,
+    Loaded(1, "session", applied.conversations["session"].request, history),
+  )
+  assert_eq(loaded.conversations["session"].items().length(), 1)
+}

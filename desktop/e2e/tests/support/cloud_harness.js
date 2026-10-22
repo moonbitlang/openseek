@@ -442,8 +442,6 @@ export class CloudHarness {
       this.histories.set(session, { ...history,
         messages: [...history.messages, { task_id: task, kind, data, created_at: 1000 + event.seq }],
         generating: kind !== 'task_finished', outcome: kind === 'task_finished' ? data : history.outcome });
-    } else if (kind === 'steer_applied') {
-      this.histories.set(session, { ...history, messages: [...history.messages, { task_id: task, kind: 'user', data: { content: data.content }, created_at: 1000 + event.seq }] });
     }
     if (!silent) {
       await this.page.evaluate(({ session, frame }) => window.cloudSessionEvent(session, frame), { session, frame: this.sseFrame(kind, event) });
