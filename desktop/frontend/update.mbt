@@ -147,25 +147,34 @@ fn focus_channel(
     dispatch.map(msg => FileEditor(msg)),
     file_ctx(model),
   )
+  let next = {
+    ..model.reset_api_setup(),
+    focused: channel,
+    active_session: "",
+    selected_conversation: None,
+    conversation_load_failure: None,
+    loading_conversation: None,
+    installed_skills: [],
+    // Codex is host-owned just like the other focused mirrors. Clear the
+    // previous device's account and conversation list before its replies
+    // can be mistaken for this device's sidebar section.
+    codex: model.codex.reset_for_channel(),
+    // The old HostConnection is already parked. Preserve the remaining
+    // owner/root state until the post-dispatch sync retires its file-index
+    // cache and re-roots against the newly focused host.
+    file_panel,
+  }
+  // A cached snapshot makes the new host ready at once, so its provider must
+  // own the default model before the caller places a fresh chat; the
+  // refetch reply arrives too late for a chat that was already sent. Its
+  // committed prompt default refills the Settings editor the same way.
   (
     @cmd.batch([focus_cmd, unwatch_cmd]),
-    {
-      ..model.reset_api_setup(),
-      focused: channel,
-      active_session: "",
-      selected_conversation: None,
-      conversation_load_failure: None,
-      loading_conversation: None,
-      installed_skills: [],
-      // Codex is host-owned just like the other focused mirrors. Clear the
-      // previous device's account and conversation list before its replies
-      // can be mistaken for this device's sidebar section.
-      codex: model.codex.reset_for_channel(),
-      // The old HostConnection is already parked. Preserve the remaining
-      // owner/root state until the post-dispatch sync retires its file-index
-      // cache and re-roots against the newly focused host.
-      file_panel,
-    }.receive_default_prompt(),
+    if next.host_settings_loaded() {
+      next.receive_default_prompt().align_fresh_conversation_with_provider()
+    } else {
+      next
+    },
   )
 }
 
@@ -16914,6 +16923,36 @@ test "a newer peer broadcast beats a delayed local settings reply" {
   assert_true(settled.api_provider() is Deepseek)
   assert_true(settled.host_settings() is Some({ revision: 7, .. }))
   inspect(settled.test_mirror().saves, content="0")
+}
+
+///|
+test "focusing a host with cached settings aligns the default model first" {
+  let dispatch = test_dispatch()
+  let home = test_model()
+  let remote : @interop.ChannelId = Remote("d_glm")
+  let model = {
+    ..home,
+    devices: [
+      home.devices[0],
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        host_settings: HostSettingsMirror::loading().apply(
+          host_settings(provider="glm", has_glm_key=true),
+        ),
+      },
+    ],
+    default_model: Deepseek(V4Pro),
+  }
+  let (_, focused) = focus_channel(dispatch, model, remote)
+  assert_true(focused.api_ready())
+  assert_true(focused.default_model is Glm(G53))
+  // A host still loading leaves the preference for its reply to align.
+  let loading = model.map_host_settings(remote, _ => {
+    HostSettingsMirror::loading()
+  })
+  let (_, pending) = focus_channel(dispatch, loading, remote)
+  assert_true(pending.default_model is Deepseek(V4Pro))
 }
 
 ///|
