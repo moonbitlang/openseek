@@ -24,7 +24,9 @@ test "Cloud status readiness ignores Local bridge and provider settings" {
   let host_model = test_model()
   assert_true(host_model.display_status() is Ready)
   assert_true(
-    { ..host_model, deepseek_key_saved: false, }.display_status()
+    host_model
+    .with_endpoint(endpoint => { ..endpoint, deepseek_key_saved: false, })
+    .display_status()
     is ApiKeyRequired,
   )
 }
