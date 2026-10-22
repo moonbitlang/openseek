@@ -44,8 +44,14 @@ test('a first-send rejection preserves the input and retries the existing Cloud 
   cloud.sendStatus = 503;
   cloud.sendErrorBody = 'server model credentials are not configured';
   await cloud.install(); await cloud.goto(); await cloud.create();
+  let releaseHistory;
+  cloud.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
   await page.locator('#task').fill('Keep this initial input');
   await page.locator('#task').press('Enter');
+  await expect(page.getByRole('main')).toContainText('Cloud model credentials are not configured');
+  const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionC}/messages`);
+  releaseHistory();
+  await (await history).finished();
   await expect(page.getByRole('main')).toContainText('Cloud model credentials are not configured');
   await expect(page.locator('#task')).toHaveValue('Keep this initial input');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();

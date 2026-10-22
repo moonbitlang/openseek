@@ -905,6 +905,12 @@ pub fn update(
       let configuration = error is ServiceNotConfigured
       let next = state.replace(id, {
         ..conversation.clear_progress(),
+        // A definite refusal supersedes history reads started for admission.
+        request: if configuration {
+          state.sequence + 1
+        } else {
+          conversation.request
+        },
         sending: false,
         notice: Some(error.label()),
         history_required: if configuration {
@@ -919,7 +925,11 @@ pub fn update(
         },
       })
       if configuration {
-        return ({ ..next, notice: Some(error.label()), }, @cmd.none, None)
+        return (
+          { ..next, sequence: state.sequence + 1, notice: Some(error.label()), },
+          @cmd.none,
+          None,
+        )
       }
       let (next, command) = if error is Unauthorized {
         next.failed(error)

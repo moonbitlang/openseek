@@ -139,7 +139,9 @@ test "sending failure after creation keeps the initial input and reuses its remo
     ),
     pending,
   )
-  let request = created.cloud.conversations["new-cloud"].request
+  let history_request = created.cloud.conversations["new-cloud"].request
+  let request = created.cloud.conversations["new-cloud"].send_request
+  assert_true(history_request != request)
   let (_, failed) = update(
     test_dispatch(),
     CloudAction(
@@ -149,7 +151,23 @@ test "sending failure after creation keeps the initial input and reuses its remo
   )
   assert_eq(failed.composer_input().draft.task, "First Cloud message")
   assert_true(failed.cloud.can_send("new-cloud"))
-  let sending = submit_blank_cloud(failed)
+  let (_, late_history) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.Loaded(3, "new-cloud", history_request, {
+        messages: [],
+        generating: false,
+      }),
+    ),
+    failed,
+  )
+  assert_eq(
+    late_history.cloud.conversations["new-cloud"].notice,
+    failed.cloud.conversations["new-cloud"].notice,
+  )
+  assert_eq(late_history.composer_input().draft.task, "First Cloud message")
+  assert_true(late_history.cloud.can_send("new-cloud"))
+  let sending = submit_blank_cloud(late_history)
   assert_true(sending.cloud.creation is None)
   assert_true(sending.cloud.conversations["new-cloud"].sending)
   let request = sending.cloud.conversations["new-cloud"].request
