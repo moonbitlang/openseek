@@ -49,11 +49,7 @@ fn start_url(
   challenge~ : String,
   port~ : Int32,
 ) -> String {
-  "\{relay}/v2/auth/account/start" +
-  "?state=\{oauth_state}" +
-  "&code_challenge=\{challenge}" +
-  "&code_challenge_method=S256" +
-  "&port=\{port}"
+  "\{relay}/v2/auth/account/start?state=\{oauth_state}&code_challenge=\{challenge}&code_challenge_method=S256&port=\{port}"
 }
 
 ///|
@@ -63,7 +59,7 @@ fn return_path(requested : String?) -> String {
   guard requested is Some(path) &&
     path.has_prefix("/") &&
     !path.has_prefix("//") &&
-    !path.iter().any(ch => ch == '\\' || ch.is_control()) else {
+    !path.any(ch => ch == '\\' || ch.is_control()) else {
     return "/cloud"
   }
   path
