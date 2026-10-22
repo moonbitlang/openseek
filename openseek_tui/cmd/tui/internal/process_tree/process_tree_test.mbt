@@ -4,7 +4,7 @@
 /// pipe. Kill only the root (as `TerminateProcess` does) once `ping` is known
 /// to be running, and report whether stdout reached EOF within `grace_ms`,
 /// i.e. whether every holder of the pipe died.
-#cfg(platform="windows")
+#cfg(all(target="native", platform="windows"))
 async fn root_kill_closes_stdout(
   contain~ : Bool,
   contain_after_child_started~ : Bool,
@@ -38,7 +38,7 @@ async fn root_kill_closes_stdout(
 }
 
 ///|
-#cfg(platform="windows")
+#cfg(all(target="native", platform="windows"))
 async test "windows: killing a bare root leaves its child holding stdout" {
   // The premise: without containment the grandchild survives the root's
   // TerminateProcess and keeps the pipe open (it exits on its own later).
@@ -52,7 +52,7 @@ async test "windows: killing a bare root leaves its child holding stdout" {
 }
 
 ///|
-#cfg(platform="windows")
+#cfg(all(target="native", platform="windows"))
 async test "windows: a contained tree dies with its root" {
   assert_true(
     root_kill_closes_stdout(
@@ -64,7 +64,7 @@ async test "windows: a contained tree dies with its root" {
 }
 
 ///|
-#cfg(platform="windows")
+#cfg(all(target="native", platform="windows"))
 async test "windows: containment adopts a child started before it" {
   // The spawn-to-assignment window: a child that already exists when the root
   // joins the job must be swept in too.

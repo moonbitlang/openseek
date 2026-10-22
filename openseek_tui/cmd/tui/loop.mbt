@@ -183,10 +183,10 @@ fn engine_env(
 /// Run a `!` shell command locally and post its result to the message loop.
 ///
 /// Unlike a prompt, a shell command is the TUI's own responsibility: it runs it
-/// through the agent's shell execution (`@command_context.collect_shell_output`, which
-/// picks `sh`/`pwsh` per platform and captures merged output but skips the
-/// agent-only command policy), then posts the raw result back to the message
-/// loop, which renders it and sends it into the conversation (see
+/// through the agent's shell execution (`@command_context.collect_shell_output`,
+/// which picks `sh`/`powershell.exe` per platform and captures merged output but
+/// skips the agent-only command policy), then posts the raw result back to the
+/// message loop, which renders it and sends it into the conversation (see
 /// `CommandResult` in `update`). A Ctrl-C cancels the child and reports that
 /// instead; nothing is sent for a cancelled command. `id` is the command's
 /// (`ShellCommand::id`), and names it in whichever report this makes.
@@ -2172,8 +2172,8 @@ async test "a cancelled shell command reports its cancellation" {
 ///|
 async test "a shell command runs locally and posts its output" {
   let messages = @async.Queue(kind=Unbounded)
-  // `echo` is the same on POSIX `sh` and Windows `pwsh`, so the platform shell
-  // `@command_context.collect_shell_output` picks runs this on either.
+  // `echo` is the same on POSIX `sh` and Windows PowerShell, so the platform
+  // shell `@command_context.collect_shell_output` picks runs this on either.
   run_shell_command("echo hello", messages, id=1)
   // The only message is the local command result: a completed tool item titled
   // with the command, its stdout as a dimmed detail line. Nothing is sent to the

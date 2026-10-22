@@ -1,6 +1,6 @@
 # moonbitlang/openseek_tui/cmd/tui/internal/process_tree
 
-Makes a spawned process's whole tree die with it.
+Makes a spawned process's whole tree die with it on native Windows.
 
 `moonbitlang/async/process` cancels a spawned process by signalling its PID
 alone. That is enough when the PID *is* the program you care about, but not
@@ -21,13 +21,10 @@ Call `contain` right after spawning, in the same task group:
 ```mbt check
 ///|
 /// A command that exits with status 3 on this platform.
-#cfg(platform="windows")
-let exit_3 : (String, Array[String]) = ("cmd.exe", ["/c", "exit", "3"])
-
-///|
-/// A command that exits with status 3 on this platform.
-#cfg(not(platform="windows"))
-let exit_3 : (String, Array[String]) = ("sh", ["-c", "exit 3"])
+let exit_3 : (String, Array[String]) = match @async.platform {
+  Windows => ("cmd.exe", ["/c", "exit", "3"])
+  Linux | MacOS => ("sh", ["-c", "exit 3"])
+}
 
 ///|
 async test "contain a spawned process" {
@@ -41,12 +38,12 @@ async test "contain a spawned process" {
 }
 ```
 
-After that, `proc.cancel()` (or `proc` exiting for any other reason) also ends
-everything `proc` started.
+On native Windows, `proc.cancel()` (or `proc` exiting for any other reason)
+also ends everything `proc` started when the process joined the job.
 
 ## How it works
 
-**Windows.** `contain` creates a Job Object with
+**Native Windows.** `contain` creates a Job Object with
 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, without the breakaway flags, and assigns
 `proc` to it. Every process `proc` starts from then on joins the job. The
 async runtime's own job does allow silent breakaway, which is why it doesn't
@@ -68,6 +65,12 @@ PID there too, so a child that forks instead of `exec`ing still leaves its own
 children behind. Containing them would need the child to start in its own
 process group, which `@process.spawn` does not do.
 
+**Wasm.** `contain` does nothing. `moonrun` exposes process spawning and
+cancellation, but has no host API for assigning Windows Job Objects. As on
+Unix, cancellation only guarantees termination of the spawned process. Use
+the native TUI on Windows when the default `moonx` engine needs tree-wide
+cleanup.
+
 ## Limits
 
 - **Best effort.** If the job cannot be created or assigned (for example,
@@ -87,5 +90,5 @@ reaches end-of-file:
 2. with `contain`, the whole tree dies;
 3. the whole tree still dies when `ping` was already running before `contain`.
 
-These run on the `windows-latest` CI job. On other platforms only the usage
-example above runs.
+These run on the native `windows-latest` CI job. On wasm and other platforms
+only the usage example above runs.
