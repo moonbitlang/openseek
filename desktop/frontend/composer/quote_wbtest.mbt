@@ -338,3 +338,103 @@ test "selection feedback retains the pending snapshot until acknowledgement for 
     assert_true(acknowledged.mentions is [{ ref_: OfficeSelection(..), .. }])
   }
 }
+
+///|
+test "Cloud annotations preserve typing, owner isolation and ordinary send availability" {
+  let base = Input::fixture("")
+  let input = {
+    ..base,
+    identity: {
+      owner: @interop.Cloud(account="account", session="session"),
+      archive_generation: 0,
+    },
+  }
+  let mention : Mention = {
+    ref_: Annotation(
+      file="src/main.mbt",
+      start_line=2,
+      end_line=3,
+      quote="selected code",
+      comment="Explain this",
+      side=WorkingRevision,
+    ),
+    range: Some(@common.Range(2, 1, 3, 4)),
+  }
+  let reply : QuoteReply = {
+    identity: input.identity,
+    content: Annotation(mention),
+    images: [],
+    send: false,
+    accepted: @cmd.none,
+    declined: @cmd.none,
+  }
+  let typed = Model(input).update(
+      input,
+      TextChanged("unsent typing"),
+      Msg::test_emit(),
+      Action::test_emit(),
+    ).0
+  let batched = typed.update(
+      input,
+      QuoteReplied(reply),
+      Msg::test_emit(),
+      Action::test_emit(),
+    ).0
+  assert_eq(batched.active(input).draft.task, "unsent typing")
+  assert_eq(batched.active(input).draft.mentions, [mention])
+  let running = {
+    ..input,
+    presentation: {
+      ..input.presentation,
+      primary_action: Send(available=false),
+    },
+  }
+  let entry = batched.update(
+    running,
+    QuoteReplied({ ..reply, send: true, }),
+    Msg::test_emit(),
+    Action::test_emit(),
+  ).0.active(running)
+  assert_eq(entry.draft.mentions, [mention])
+  assert_true(entry.pending_submission is None)
+  for
+    unavailable in [
+      { ..input, identity: { ..input.identity, archive_generation: 1, }, },
+      { ..input, presentation: { ..input.presentation, disabled: true, }, },
+      {
+        ..input,
+        identity: {
+          ..input.identity,
+          owner: @interop.Cloud(account="other", session="session"),
+        },
+      },
+      {
+        ..input,
+        identity: {
+          ..input.identity,
+          owner: @interop.Cloud(account="account", session="other"),
+        },
+      },
+    ] {
+    let entry = Model(unavailable).update(
+      unavailable,
+      QuoteReplied(reply),
+      Msg::test_emit(),
+      Action::test_emit(),
+    ).0.active(unavailable)
+    assert_true(entry.draft.mentions.is_empty())
+  }
+  let sent = batched.update(
+    input,
+    SubmitRequested,
+    Msg::test_emit(),
+    Action::test_emit(),
+  ).0.active(input)
+  assert_true(
+    sent.pending_submission
+    is Some(
+      PromptSubmission({ task: "unsent typing", mentions: [saved], .. }, ..)
+    ) &&
+    saved == mention,
+  )
+}

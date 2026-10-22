@@ -885,6 +885,7 @@ pub(all) struct Ctx {
   thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationIdentity
   cloud_files : CloudFiles?
+  feedback_enabled : Bool
   // The current placement incarnation for filesystem request/reply fencing.
   request_epoch : Int32
   // Page-unique prefix for watcher identities. The native watcher outlives a
@@ -1445,6 +1446,7 @@ pub(all) enum Msg {
   // the new annotation chip and submits the main-window composer through its
   // ordinary prompt/steer queue.
   ApplyAllFeedback
+  ApplyCloudFeedback(ModelUri)
   // The user submitted a comment from a full-diff surface. Both line domains
   // cross the package boundary: additions/context use the modified number,
   // while an original-pane selection remains identifiable to the composer

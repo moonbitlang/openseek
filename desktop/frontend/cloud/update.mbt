@@ -817,6 +817,7 @@ fn State::submit(
       mention.ref_
       is (File(..)
       | OfficeSelection(..)
+      | Annotation(side=WorkingRevision, ..)
       | SemanticSearch(_)
       | SemanticSearchArtifact(_))
     }) else {

@@ -1500,6 +1500,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
     owner: model.dock_owner(),
+    feedback_enabled: model.editor_feedback_enabled(),
     cloud_files: if model.cloud_selected() &&
       model.cloud_identity() is Some(@interop.Cloud(account~, ..)) &&
       model.cloud.user_id == Some(account) {
@@ -2152,6 +2153,11 @@ fn update(
       quick_open_cmd,
       panel_visibility_cmd,
       panel_cmd,
+      if previous.editor_feedback_enabled() != model.editor_feedback_enabled() {
+        @fileeditor.sync_feedback_permission(file_ctx(model))
+      } else {
+        @cmd.none
+      },
       terminal_cmd,
       jobs_cmd,
       overview_cmd,
@@ -2568,13 +2574,21 @@ fn update_msg(
               model.cloud_identity() == Some(identity.owner) {
               return open_semantic_selection(dispatch, model)
             }
-            guard mention.ref_ is File(path~) else { return (@cmd.none, model) }
+            guard mention.ref_
+              is (File(..) | Annotation(side=WorkingRevision, ..)) &&
+              @mention_context.target(mention.ref_) is Some(target) else {
+              return (@cmd.none, model)
+            }
             return open_cloud_file(
               dispatch,
               model,
               identity.owner,
-              path,
-              mention.range,
+              target.file,
+              match mention.range {
+                Some(_) => mention.range
+                None => target.range
+              },
+              annotation?=target.annotation,
             )
           }
           @composer.FileIndexEnsured(identity~) => {
@@ -3146,6 +3160,9 @@ fn update_msg(
         feedback_id~
       )
     ) => {
+      guard resource.resource().scheme != "openseek-cloud" else {
+        return (@cmd.none, model)
+      }
       if model.screen is Codex {
         // Codex owns a separate wire model, but the visible editor annotation
         // is the same structured chip as OpenSeek's. Keep it in Codex's shared
@@ -3193,6 +3210,7 @@ fn update_msg(
     // so the new annotation is already in the visible composer batch. Reuse
     // each agent's normal submit path: an idle task starts, while a running
     // task receives the batch through its existing steer/message queue.
+    FileEditor(@fileeditor.ApplyCloudFeedback(_)) => (@cmd.none, model)
     FileEditor(@fileeditor.ApplyAllFeedback) =>
       match model.screen {
         Chat => update_msg(dispatch, Send, model)

@@ -26,6 +26,7 @@ pub(all) struct QuoteReply {
 pub(all) enum ReplyContent {
   Text(quote~ : String?, comment~ : String)
   OfficeSelection(String)
+  Annotation(Mention)
 }
 
 ///|
@@ -104,7 +105,7 @@ fn Model::quote_replied(
     return (self, reply.declined)
   }
   let insertion = match reply.content {
-    OfficeSelection(_) => ""
+    OfficeSelection(_) | Annotation(_) => ""
     Text(quote=Some(quote), comment~) =>
       quote_insertion(entry.draft.task, quote, comment)
     Text(quote=None, comment~) => {
@@ -122,6 +123,7 @@ fn Model::quote_replied(
   let draft = match reply.content {
     OfficeSelection(materialized) =>
       entry.draft.with_office_selection(Some(materialized))
+    Annotation(mention) => entry.draft.with_mention(mention)
     Text(..) => entry.draft
   }
   let (model, changed) = self.commit_entry_change(

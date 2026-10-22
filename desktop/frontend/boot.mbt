@@ -470,12 +470,19 @@ fn main {
   let desktop = @interop.openseek_api() is Some(_)
   @crash_page.install()
   let app = @rabbita.new(() => {
+    // The root routes editor events; the composer created below owns its draft.
+    let composer_reply : Ref[@cmd.Emit[@composer.QuoteReply]] = Ref(
+      @cmd.Emit(_ => @cmd.none),
+    )
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.
       init=emit => (initial_model(desktop~), emit(Init)),
       update=(model, msg, emit) => {
-        let (cmd, next) = update(emit, msg, model)
+        let (cmd, next) = match model.cloud_editor_feedback(msg) {
+          Some(reply) => ((composer_reply.val)(reply), model)
+          None => update(emit, msg, model)
+        }
         (next, cmd)
       },
       // The narrow-layout flag must track the window: rotating a phone or
@@ -714,6 +721,7 @@ fn main {
       composer_input,
       emit.map(action => ComposerAction(action)),
     )
+    composer_reply.val = composer_quote
     let codex_composer_input = state.map(model => model.codex_composer_input())
     let (codex_composer_html, codex_composer_quote) = @composer.component(
       state.map(model => model.locale),

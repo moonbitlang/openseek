@@ -348,6 +348,7 @@ pub(all) struct ReasoningSelect {
 pub(all) enum ReplyContent {
   Text(quote~ : String?, comment~ : String)
   OfficeSelection(String)
+  Annotation(Mention)
 }
 
 pub(all) struct RunHeartbeat {
