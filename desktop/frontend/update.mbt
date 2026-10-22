@@ -2596,7 +2596,8 @@ fn update_msg(
           return (@cmd.none, model)
         }
         match action {
-          @composer.StopRequested(identity~) =>
+          @composer.StopRequested(identity~)
+          | @composer.FollowupSubmitted(identity~, ..) =>
             return update_cloud(
               dispatch,
               @cloud.ControlAction(identity.owner, action),

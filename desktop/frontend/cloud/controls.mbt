@@ -74,12 +74,15 @@ pub fn Conversation::control_primary_action(
     self.last_seq is Some(_) else {
     return @composer.Send(available=false)
   }
+  let pending = self.control_inputs.any(input => {
+    Some(input.task_id) == control.active_task_id && !input.acknowledged
+  })
   let stopping = control.status == Stopping ||
     self.control_inputs.any(input => {
       Some(input.task_id) == control.active_task_id && input.operation is Stop
     })
   @composer.Running(
-    steer_available=false,
+    steer_available=!stopping && !pending,
     can_stop=!stopping,
     submit=if self.queue_edit is Some(_) {
       @composer.SaveQueue
