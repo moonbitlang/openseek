@@ -48,7 +48,9 @@ pub fn AssistantMessage::is_replay(Self) -> Bool
 pub fn AssistantMessage::reasoning_content(Self) -> String?
 pub fn AssistantMessage::tool_calls(Self) -> Array[@deepseek.ToolCall]
 pub fn AssistantMessage::usage(Self) -> TokenUsage?
+pub fn AssistantMessage::usage_record(Self) -> UsageRecord?
 pub fn AssistantMessage::with_usage(Self, @deepseek.Usage) -> Self
+pub fn AssistantMessage::with_usage_record(Self, UsageRecord) -> Self
 
 pub(all) struct GoalBaseline {
   sha : String
@@ -67,9 +69,10 @@ pub fn RuntimeNotice::RuntimeNotice(String) -> Self
 pub fn RuntimeNotice::content(Self) -> String
 
 type Session derive(Eq, @debug.Debug)
-pub fn Session::Session(SessionId, system_prompt~ : String, events? : @vector.Vector[SessionEvent]) -> Self
+pub fn Session::Session(SessionId, system_prompt~ : String, events? : @vector.Vector[SessionEvent], supplemental_usage? : @vector.Vector[UsageRecord]) -> Self
 pub fn Session::append(Self, SessionItem, unix_ms? : Int64) -> Self
 pub fn Session::append_event(Self, SessionItem, unix_ms? : Int64) -> (Self, SessionEvent)
+pub fn Session::append_usage(Self, UsageRecord) -> Self
 pub fn Session::chat_messages(Self) -> Array[@deepseek.ChatMessage]
 pub fn Session::compact(Self, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32, unix_ms? : Int64) -> Self raise
 pub fn Session::current_goal(Self) -> StandingGoal?
@@ -79,8 +82,11 @@ pub fn Session::fork(Self, SessionId, system_prompt~ : String, through? : Int32)
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int32
 pub fn Session::last_terminal(Self) -> TurnTerminal?
+pub fn Session::next_usage_call(Self) -> Int32
 pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32) -> SessionItem raise
+pub fn Session::supplemental_usage(Self) -> @vector.Vector[UsageRecord]
 pub fn Session::system_prompt(Self) -> String
+pub fn Session::usage_records(Self) -> Array[UsageRecord]
 pub impl ToJson for Session
 pub impl @json.FromJson for Session
 
@@ -144,6 +150,19 @@ pub(all) enum TurnTerminal {
   Failed(String)
 } derive(Eq, @debug.Debug)
 pub impl @json.FromJson for TurnTerminal
+
+pub struct UsageRecord {
+  session_id : String
+  call : Int32
+  attempt : Int32
+  after_sequence : Int32
+  purpose : String
+  model : String
+  response_id : String?
+  outcome : String
+  report : @deepseek.UsageReport
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn UsageRecord::UsageRecord(Session, call~ : Int32, attempt~ : Int32, purpose~ : String, model~ : String, response_id? : String, outcome~ : String, report~ : @deepseek.UsageReport) -> Self
 
 type UserMessage derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn UserMessage::UserMessage(@openseek_protocol.Content, submission_id? : String) -> Self

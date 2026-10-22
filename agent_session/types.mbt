@@ -165,6 +165,7 @@ struct AssistantMessage {
   // The provider response's token usage, on the first durable record of that
   // response only. Absent on replays and on logs written before it existed.
   usage : TokenUsage?
+  usage_record : UsageRecord?
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -218,6 +219,7 @@ pub fn AssistantMessage::AssistantMessage(
       None
     },
     usage: None,
+    usage_record: None,
   }
 }
 
@@ -534,6 +536,7 @@ struct Session {
   system_prompt : String
   events : @vector.Vector[SessionEvent]
   last_sequence : Int32
+  supplemental_usage : @vector.Vector[UsageRecord]
 } derive(Eq, Debug)
 
 ///|
@@ -566,11 +569,12 @@ pub fn Session::Session(
   id : SessionId,
   system_prompt~ : String,
   events~ : @vector.Vector[SessionEvent] = @vector.new(),
+  supplemental_usage~ : @vector.Vector[UsageRecord] = @vector.new(),
 ) -> Session {
   let last_sequence = events.fold(init=0, (last_sequence, event) => {
     last_sequence.max(event.sequence)
   })
-  { id, system_prompt, events, last_sequence, }
+  { id, system_prompt, events, last_sequence, supplemental_usage, }
 }
 
 ///|
@@ -660,6 +664,7 @@ pub fn Session::append_event(
       system_prompt: self.system_prompt,
       events: self.events.push(event),
       last_sequence: event.sequence,
+      supplemental_usage: self.supplemental_usage,
     },
     event,
   )
@@ -751,7 +756,16 @@ pub fn Session::fork(
       User(_) => in_turn = true
       Terminal(_) => {
         if through == Some(event.sequence) {
-          return Session(id, system_prompt~, events=@vector.from_array(copied))
+          return Session(
+            id,
+            system_prompt~,
+            events=@vector.from_array(copied),
+            supplemental_usage=@vector.from_array(
+              self.supplemental_usage
+              .to_array()
+              .filter(record => record.after_sequence < event.sequence),
+            ),
+          )
         }
         in_turn = false
         settled = copied.length()
@@ -772,6 +786,11 @@ pub fn Session::fork(
     id,
     system_prompt~,
     events=@vector.from_array(copied[:settled].to_owned()),
+    supplemental_usage=@vector.from_array(
+      self.supplemental_usage
+      .to_array()
+      .filter(record => record.after_sequence < settled),
+    ),
   )
 }
 

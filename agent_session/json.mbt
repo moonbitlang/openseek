@@ -191,18 +191,22 @@ pub impl FromJson for SessionItem with fn from_json(
 /// complete `events` vector. `last_sequence` is intentionally not stored; it is
 /// recomputed by `Session::Session` from event sequence numbers when decoded.
 pub impl ToJson for Session with fn to_json(session : Session) -> Json {
-  {
-    "version": 1,
-    "id": session.id(),
+  let fields : Map[String, Json] = {
+    "version": Json(if session.supplemental_usage().is_empty() { 1 } else { 2 }),
+    "id": Json(session.id()),
     "system_prompt": session.system_prompt(),
     "events": @json.to_json(session.events()),
   }
+  if !session.supplemental_usage().is_empty() {
+    fields["supplemental_usage"] = Json(session.supplemental_usage())
+  }
+  Json(fields)
 }
 
 ///|
 /// Decode a complete `Session` snapshot.
 ///
-/// Only version `1` is accepted. Missing `events` is treated as an empty event
+/// Versions `1` and `2` are accepted. Missing `events` is treated as an empty event
 /// log for compatibility with older or minimal snapshots. Event order is kept
 /// exactly as encoded; the constructor recomputes `last_sequence` from the
 /// highest event sequence but does not validate contiguity.
@@ -212,7 +216,7 @@ pub impl FromJson for Session with fn from_json(
 ) -> Session {
   let fields = expect_object(json, path)
   match int_field(fields, path, "version") {
-    1 => ()
+    1 | 2 => ()
     other =>
       json_decode_error(
         path.add_key("version"),
@@ -240,6 +244,11 @@ pub impl FromJson for Session with fn from_json(
     id,
     system_prompt=string_field(fields, path, "system_prompt"),
     events~,
+    supplemental_usage=match fields.get("supplemental_usage") {
+      Some(value) =>
+        @json.from_json(value, path=path.add_key("supplemental_usage"))
+      None => @vector.new()
+    },
   )
 }
 

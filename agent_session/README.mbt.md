@@ -1,5 +1,7 @@
 # OpenSeek Agent Session
 
+For model accounting and log compatibility, see [Model usage records](USAGE.md).
+
 `moonbitlang/openseek/agent_session` is the typed, provider-aware conversation
 state for resumable OpenSeek agents. It owns the durable event log and the
 projection from that log into model history before provider-specific request encoding.
@@ -202,6 +204,7 @@ test "append leaves the original session unchanged" {
       #|      },
       #|    ]>,
       #|  last_sequence: 1,
+      #|  supplemental_usage: <Vector: []>,
       #|}
     ),
   )
@@ -390,6 +393,7 @@ test "summary replaces covered events in model projection only" {
       #|            reasoning_content: None,
       #|            is_replay: None,
       #|            usage: None,
+      #|            usage_record: None,
       #|          },
       #|        ),
       #|      },
@@ -406,6 +410,7 @@ test "summary replaces covered events in model projection only" {
       #|      },
       #|    ]>,
       #|  last_sequence: 3,
+      #|  supplemental_usage: <Vector: []>,
       #|}
     ),
   )
@@ -568,6 +573,7 @@ test "session JSON round-trips events" {
       #|      { sequence: 2, ts: 0, item: Terminal(Finished("done")) },
       #|    ]>,
       #|  last_sequence: 2,
+      #|  supplemental_usage: <Vector: []>,
       #|}
     ),
   )

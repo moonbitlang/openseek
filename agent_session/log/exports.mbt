@@ -27,6 +27,27 @@ pub(all) struct ParsedLog {
 /// `header=None`. A decode failure on any line other than an unterminated
 /// final line is recorded as a `LineError` and parsing continues.
 pub fn parse_events(text : String) -> ParsedLog {
+  parse_records(text, _ => ())
+}
+
+///|
+/// Parse messages and attempt metadata together. The original ParsedLog remains
+/// source-compatible; accounting-only lines do not appear in its events.
+/// Records are returned in file order. Deduplicate external event/log copies by
+/// (session_id, call, attempt), not by token values or response text.
+pub fn parse_with_usage(
+  text : String,
+) -> (ParsedLog, Array[@agent_session.UsageRecord]) {
+  let records : Array[@agent_session.UsageRecord] = []
+  let parsed = parse_records(text, record => records.push(record))
+  (parsed, records)
+}
+
+///|
+fn parse_records(
+  text : String,
+  on_usage : (@agent_session.UsageRecord) -> Unit,
+) -> ParsedLog {
   let mut header : SessionFileHeader? = None
   let events : Array[@agent_session.SessionEvent] = []
   let errors : Array[LineError] = []
@@ -67,11 +88,26 @@ pub fn parse_events(text : String) -> ParsedLog {
       header = Some(parsed_header)
       continue
     }
+    let metadata = usage_record(json) catch {
+      error => {
+        note_bad_line(line_number, line, torn, "\{error}")
+        continue
+      }
+    }
+    if metadata is Some(record) {
+      on_usage(record)
+      continue
+    }
     let event : @agent_session.SessionEvent = @json.from_json(json) catch {
       error => {
         note_bad_line(line_number, line, torn, "\{error}")
         continue
       }
+    }
+    if event.item() is Assistant(message) &&
+      !message.is_replay() &&
+      message.usage_record() is Some(record) {
+      on_usage(record)
     }
     events.push(event)
   }

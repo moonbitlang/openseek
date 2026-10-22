@@ -136,20 +136,27 @@ fn header_line(session : @agent_session.Session) -> String {
 }
 
 ///|
-fn events_jsonl(events : @vector.Vector[@agent_session.SessionEvent]) -> String {
+fn records_jsonl(session : @agent_session.Session) -> String {
   let builder = StringBuilder()
-  for event in events {
-    let line = ToJson::to_json(event).stringify()
-    builder <+ "\{line}\n"
+  for event in session.events() {
+    builder <+ "\{ToJson::to_json(event).stringify()}\n"
+  }
+  for record in session.supplemental_usage() {
+    builder <+ "\{usage_json(record).stringify()}\n"
   }
   builder.to_string()
+}
+
+///|
+fn usage_json(record : @agent_session.UsageRecord) -> Json {
+  { "type": "model_usage", "record": Json(record) }
 }
 
 ///|
 /// The complete durable form of a session: one header line followed by one
 /// line per event.
 fn session_file_text(session : @agent_session.Session) -> String {
-  "\{header_line(session)}\{events_jsonl(session.events())}"
+  "\{header_line(session)}\{records_jsonl(session)}"
 }
 
 ///|
@@ -208,7 +215,7 @@ fn parse_session_file(
     Header(header) => header
     UnsupportedVersion(version) =>
       fail(
-        "session file for \{requested_id.value()} uses unsupported session file version \{version}; this build reads version 1",
+        "session file for \{requested_id.value()} uses unsupported session file version \{version}; this build reads versions 1 and 2",
       )
     NotHeader =>
       fail(
@@ -223,25 +230,52 @@ fn parse_session_file(
   let ends_with_newline = text.has_suffix("\n")
   let segments = rest.split("\n").collect()
   let decoded : Array[@agent_session.SessionEvent] = []
+  let usage : Array[@agent_session.UsageRecord] = []
   for index, line in segments {
     if line.is_blank() {
       continue
     }
     let unterminated_last = index == segments.length() - 1 && !ends_with_newline
-    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line)) catch {
+    let json = @json.parse(line) catch {
+      error => if unterminated_last { continue } else { raise error }
+    }
+    let metadata = @session_log.usage_record(json) catch {
+      error => if unterminated_last { continue } else { raise error }
+    }
+    if metadata is Some(record) {
+      if record.after_sequence < 0 ||
+        record.after_sequence > decoded.length() ||
+        record.call <= 0 ||
+        record.attempt <= 0 {
+        fail("invalid model usage record position or identity")
+      }
+      usage.push(record)
+      continue
+    }
+    let event : @agent_session.SessionEvent = @json.from_json(json) catch {
       error => if unterminated_last { continue } else { raise error }
     }
     decoded.push(event)
   }
   let events = @vector.from_array(decoded)
   check_contiguous_sequences(events)
+  let session = @agent_session.Session(
+    SessionId(header.id),
+    system_prompt=header.system_prompt,
+    events~,
+    supplemental_usage=@vector.from_array(usage),
+  )
+  let seen : Map[String, Unit] = Map([])
+  for record in session.usage_records() {
+    let key = "\{record.session_id}:\{record.call}:\{record.attempt}"
+    if seen.contains(key) {
+      fail("duplicate model usage attempt: \{key}")
+    }
+    seen[key] = ()
+  }
   {
-    session: Session(
-      SessionId(header.id),
-      system_prompt=header.system_prompt,
-      events~,
-    ),
-    needs_tail_repair: !ends_with_newline,
+    session,
+    needs_tail_repair: !ends_with_newline || header_json is { "version": 1, .. },
   }
 }
 
@@ -323,7 +357,8 @@ async fn ensure_session_is_current(
   }
   let parsed = read_session_file(store, session.id()) catch {
     @os_error.OSError(_) as error if error.is_ENOENT() => {
-      if session.last_sequence() != 0 {
+      if session.last_sequence() != 0 ||
+        !session.supplemental_usage().is_empty() {
         fail(
           "stale session snapshot for \{session.id().value()}: no durable session file, in-memory last sequence \{session.last_sequence()}",
         )
@@ -334,10 +369,23 @@ async fn ensure_session_is_current(
   }
   let persisted = parsed.session
   if persisted.system_prompt() != session.system_prompt() ||
-    events_jsonl(persisted.events()) != events_jsonl(session.events()) {
+    Json(persisted.events()) != Json(session.events()) {
     fail("stale session snapshot for \{session.id().value()}")
   }
-  parsed.needs_tail_repair
+  let durable_usage = persisted.supplemental_usage()
+  let supplied_usage = session.supplemental_usage()
+  if supplied_usage.length() < durable_usage.length() {
+    fail("stale session snapshot for \{session.id().value()}")
+  }
+  for i in 0..<durable_usage.length() {
+    if durable_usage[i] != supplied_usage[i] {
+      fail("stale session snapshot for \{session.id().value()}")
+    }
+  }
+  // Legacy append_item-only adapters can carry new accounting in memory.
+  // Flush only a matching durable prefix plus its pending metadata suffix;
+  // conversation divergence or a concurrent accounting append still fails.
+  parsed.needs_tail_repair || supplied_usage.length() > durable_usage.length()
 }
 
 ///|
@@ -357,6 +405,16 @@ async fn persist_event(
   event : @agent_session.SessionEvent,
   repair_tail~ : Bool,
 ) -> Unit {
+  persist_record(store, session, ToJson::to_json(event), repair_tail~)
+}
+
+///|
+async fn persist_record(
+  store : SessionStore,
+  session : @agent_session.Session,
+  record : Json,
+  repair_tail~ : Bool,
+) -> Unit {
   let path = store.session_file_path(session.id())
   if !repair_tail && @fs.exists(path) {
     // `sync=Data` (fdatasync) is the durability policy for event appends: a
@@ -365,7 +423,7 @@ async fn persist_event(
     // does not silently follow an upstream default change.
     @fs.write_file(
       path,
-      ToJson::to_json(event).stringify() + "\n",
+      record.stringify() + "\n",
       create_mode=OpenOrCreate,
       append=true,
       sync=Data,
@@ -990,4 +1048,36 @@ pub fn SessionStore::inbox_path(
   id : @agent_session.SessionId,
 ) -> String raise {
   "\{self.session_dir(id)}/inbox.jsonl"
+}
+
+///|
+/// Durably append one attempt that has no assistant carrier, using the same
+/// lock, stale-snapshot checks and crash durability as conversation appends.
+pub async fn SessionStore::append_usage(
+  self : SessionStore,
+  session : @agent_session.Session,
+  record : @agent_session.UsageRecord,
+) -> @agent_session.Session {
+  if record.session_id != session.id().value() ||
+    record.after_sequence < 0 ||
+    record.after_sequence > session.last_sequence() ||
+    record.call <= 0 ||
+    record.attempt <= 0 {
+    fail("invalid model usage record position or identity")
+  }
+  for existing in session.usage_records() {
+    if existing.session_id == record.session_id &&
+      existing.call == record.call &&
+      existing.attempt == record.attempt {
+      fail("model usage attempt already recorded")
+    }
+  }
+  ensure_session_dir(self, session.id())
+  with_session_lock(self, session.id(), Exclusive, () => {
+    let repair_tail = ensure_session_is_current(self, session)
+    let next = session.append_usage(record)
+    persist_record(self, next, usage_json(record), repair_tail~)
+    record_mark(self, next)
+    next
+  })
 }

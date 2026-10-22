@@ -49,7 +49,7 @@ async test "store writes the header record on the first line" {
   store.create(Session(SessionId("s1"), system_prompt="system"))
   let text = @fs.read_file(session_file(store, "s1")).text()
   assert_eq(
-    text, "{\"version\":1,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
+    text, "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
   )
   let loaded = store.load(SessionId("s1"))
   assert_eq(loaded.events().length(), 0)
@@ -423,7 +423,7 @@ async test "first append creates the session file with its header" {
   let text = @fs.read_file(session_file(store, "s1")).text()
   assert_true(
     text.has_prefix(
-      "{\"version\":1,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
+      "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
     ),
   )
   let loaded = store.load(SessionId("s1"))
@@ -976,14 +976,14 @@ async test "store names an unsupported session file version on load" {
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   @fs.write_file(
     session_file(store, "s1"),
-    "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
+    "{\"version\":3,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
     create_mode=CreateOrTruncate,
   )
   try store.load(SessionId("s1")) catch {
     error =>
-      assert_true("\{error}".contains("unsupported session file version 2"))
+      assert_true("\{error}".contains("unsupported session file version 3"))
   } noraise {
-    _ => fail("version-2 session file was accepted")
+    _ => fail("version-3 session file was accepted")
   }
 }
 
@@ -1144,7 +1144,12 @@ async test "legacy JSONL can append and replay embedded images and text" {
   )
   let _ = store.append(appended, Tool(result))
   let written = @fs.read_file(session_file(store, "mixed")).text()
-  assert_true(written.has_prefix(legacy))
+  assert_eq(
+    written.split_once("\n").unwrap().1.has_prefix(
+      legacy.split_once("\n").unwrap().1,
+    ),
+    true,
+  )
   let event = @json.parse(written.split("\n").to_array()[5].to_owned())
   assert_true(
     event is { "item": { "payload": { "content": Array(_), .. }, .. }, .. },

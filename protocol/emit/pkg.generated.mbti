@@ -10,9 +10,13 @@ pub fn close() -> Unit
 
 pub async fn drain(async (@openseek_protocol.Event) -> Unit) -> Unit
 
+pub async fn drain_json(async (Json) -> Unit) -> Unit
+
 pub async fn drain_stdout() -> Unit
 
 pub fn emit(@openseek_protocol.Event) -> Unit
+
+pub fn emit_usage(Json, usage? : @openseek_protocol.Usage) -> Unit
 
 pub fn open() -> Unit
 

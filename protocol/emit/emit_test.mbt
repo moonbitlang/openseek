@@ -340,3 +340,25 @@ test "steer receipts preserve ordered images and legacy text encoding" {
     assert_eq(@protocol.parse({ "event": event }), None)
   }
 }
+
+///|
+test "usage metadata is additive and metadata-only records leave legacy Event unchanged" {
+  @emit.open()
+  defer @emit.close()
+  while @emit.poll_line() is Some(_) {
+
+  }
+  let record : Json = { "session_id": "s", "call": 1, "attempt": 1 }
+  @emit.emit_usage(record, usage=usage_sample())
+  let json = @json.parse(@emit.poll_line().unwrap())
+  assert_true(
+    json is { "event": "usage", "usage_record": { "call": 1, .. }, .. },
+  )
+  assert_true(@protocol.parse(json) is Some(Usage(..)))
+  @emit.emit_usage(record)
+  let json = @json.parse(@emit.poll_line().unwrap())
+  assert_true(
+    json is { "event": "model_usage", "usage_record": { "call": 1, .. }, .. },
+  )
+  assert_eq(@protocol.parse(json), None)
+}

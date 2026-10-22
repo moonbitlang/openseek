@@ -11,7 +11,11 @@ pub fn classify_header(Json) -> HeaderParse
 
 pub fn parse_events(String) -> ParsedLog
 
+pub fn parse_with_usage(String) -> (ParsedLog, Array[@agent_session.UsageRecord])
+
 pub fn session_from_parse(ParsedLog, id~ : String, system_prompt~ : String) -> @agent_session.Session
+
+pub fn usage_record(Json) -> @agent_session.UsageRecord? raise
 
 // Errors
 
