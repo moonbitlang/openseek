@@ -940,8 +940,9 @@ fn TranscriptDomMount::observe_resize(
   // The transcript viewport keeps the height its grid row gives it while a
   // disclosure's content box animates open or closed inside. Observe the
   // content column as well, or a pinned reader follows only the start of the
-  // animation and lands short of the final tail.
-  let next = element.query_selector("#stream")
+  // animation and lands short of the final tail. Its id differs by surface,
+  // so it is found by class inside this transcript.
+  let next = element.query_selector(".stream")
   let same = match (self.content, next) {
     (None, None) => true
     (Some(previous), Some(content)) => previous.is_same_node(content.as_node())

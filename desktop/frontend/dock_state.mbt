@@ -30,6 +30,27 @@ fn dock_home(
 }
 
 ///|
+/// Bring side chat `chat` on screen. A side chat is not a conversation the
+/// column can select — like a file, it is read in its conversation's dock —
+/// so the two ways a session is chosen, selecting it (`OpenSession`) and
+/// navigating to its address, select its conversation and then call this to
+/// put the side chat's tab on screen there.
+fn Model::reveal_side_chat(
+  self : Model,
+  chat : @interop.ConversationKey,
+) -> Model {
+  let owner = dock_home(@interop.Host(chat))
+  {
+    ..self.with_dock_state_for(
+      owner,
+      @dock.open_side_chat(self.dock_state_for(owner), chat),
+    ),
+    right_panel_open: true,
+    right_panel_menu_open: false,
+  }
+}
+
+///|
 /// `dock_home` for a Host conversation.
 fn dock_home_key(key : @interop.ConversationKey) -> @interop.ConversationKey {
   match @protocol.split_side_chat_id(key.session) {

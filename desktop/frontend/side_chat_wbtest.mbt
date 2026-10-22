@@ -696,3 +696,51 @@ test "an archived conversation's side chats are not rows of their own" {
   }
   assert_eq(section.entries.length(), 1)
 }
+
+///|
+test "a side chat's address leads to its conversation, never to a route of its own" {
+  let model = side_chat_model()
+  guard (
+      { device: Some("local"), target: Session(SideChatId), } : @routes.Location).path()
+    is Some(path) else {
+    fail("a host session has an address")
+  }
+  let snapshot : @navigation_browser.Snapshot = {
+    path,
+    settings: false,
+    can_back: true,
+    can_forward: false,
+  }
+  // The side chat is already held, as after reading it in the dock.
+  let away = { ..model, right_panel_open: false, }
+  let (_, arrived) = update(
+    test_dispatch(),
+    Navigation(Browser(snapshot)),
+    away,
+  )
+  assert_eq(arrived.active_session, "desktop-test")
+  assert_true(
+    arrived.navigation.location is Some({ target: Session("desktop-test"), .. }),
+  )
+  assert_true(arrived.right_panel_open)
+  assert_true(arrived.mounted_side_chat_owner() == Some(side_chat_owner()))
+}
+
+///|
+test "a reconnect re-reads the side chat while its conversation still loads" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  // The column's conversation was reselected and its read is still out.
+  let loading = {
+    ..model.replace_conversation({ ..side, sync: Synced, }),
+    loading_conversation: Some({
+      channel: @interop.ChannelId::Local,
+      session: "desktop-test",
+    }),
+  }
+  let (_, reconnected) = update_dev(test_dispatch(), BridgeReady, loading)
+  assert_true(side_chat_sync(reconnected) is Some(Reloading(..)))
+}
