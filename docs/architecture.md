@@ -29,7 +29,7 @@ flowchart LR
     SERVE["serve / run / review / sessions / mcp"]
     AGENT["agent — turn loop"]
     TOOLS["agent_tool — registry:<br/>mbtx·job_output·job_stop·job_wait<br/>edit·multi_edit·write·remove<br/>plan·goal·finish"]
-    MCP["mcp — client + tool bridge<br/>(mcp__server__tool)"]
+    MCP["mcp — client + catalog<br/>(@mcp.search / @mcp.call in scripts)"]
     PROMPT["prompt + agent_skill —<br/>system prompt & skills"]
     SESSION["agent_session (+ store) —<br/>durable event log"]
   end
@@ -147,8 +147,9 @@ Key invariants:
   (`agent_session/log` reads leniently).
 - **Tools are data.** A tool is a name, a JSON schema, and an executor.
   Normal tools return `Respond(ToolOutput)`; control tools (`finish`) end the
-  turn via `Control`. MCP tools enter the same registry namespaced as
-  `mcp__<server>__<tool>`, so the loop dispatches them identically.
+  turn via `Control`. MCP tools are not in the registry: scripts search and
+  call them through the MCP host, a loopback service beside PTC that routes
+  by server and tool name.
 
 ## One turn, end to end
 

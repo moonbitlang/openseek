@@ -1683,6 +1683,34 @@ async test "an unhosted snippet sees no handoff, even one its host inherited" {
 }
 
 ///|
+async test "a sandboxed snippet gets the MCP host's handoff" {
+  @async.with_task_group(group => {
+    let host = @mcphost.Service::start(
+      group,
+      call=(_, _, _) => @agent_tool.respond("unused"),
+      items=() => [],
+    )
+    @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+      let definition = @mbtx.definition(workspace_root=ws, mcp_service=host)
+      let out = dispatch(definition, {
+        "source": (
+          #|import { "moonbitlang/core/env" }
+          #|
+          #|fn main {
+          #|  println("mcp=\{@env.get_env_var("OPENSEEK_MCP").unwrap_or("none")}")
+          #|}
+        ),
+      })
+      assert_false(out.is_error, msg=out.content)
+      assert_true(
+        out.content.contains("mcp=\{host.env()["OPENSEEK_MCP"]}"),
+        msg=out.content,
+      )
+    })
+  })
+}
+
+///|
 async test "CI monitor bundled entry forwards arguments before querying GitHub" {
   let filename = @fs.realpath("share/workflow/ci-watch.mbtx")
   @vfs.with_tmpdir(ws => {

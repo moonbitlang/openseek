@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/mcp/host"
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/openseek/agent_tool",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type Service
+pub fn Service::env(Self) -> Map[String, String]
+pub async fn[X] Service::start(@async.TaskGroup[X], call~ : async (String, String, Json) -> @agent_tool.ToolAction, items~ : () -> Array[Json], image_directory? : String) -> Self
+
+// Type aliases
+
+// Traits

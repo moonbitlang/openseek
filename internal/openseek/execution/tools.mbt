@@ -1,25 +1,21 @@
 ///|
-/// The extra tools a turn's registry carries on top of the built-ins: the
-/// configured MCP servers' tools and `web_search` when a key the official
-/// DeepSeek endpoint accepts is in hand.
+/// The extra tools a turn's registry carries on top of the built-ins:
+/// `web_search` when a key the official DeepSeek endpoint accepts is in hand.
+/// MCP servers' tools are not among them: scripts reach those through
+/// `McpRegistry::endpoint`.
 /// Model-initiated scouts and reviews run through hosted `mbtx` workflows.
 ///
 /// `run`'s one-shot turn and `serve`'s long-lived loop wire the identical
 /// set. They used to build it from two copies of the same expression, which is
 /// two chances for one entry point to grow a tool surface the other does not
 /// have.
-///
-/// `mcp` is what `connect_mcp` made of the configured servers. The caller
-/// connects first and passes it in because a long-lived loop goes on holding
-/// it, to report as `mcp_status`; a one-shot turn has no other use for it.
 pub fn build_extra_tools(
-  mcp : McpRegistry,
   model~ : @deepseek.Model,
   api_key~ : String,
   deepseek_api_key? : String,
   api_url? : String,
 ) -> Array[@agent_tool.AgentToolDefinition] {
-  let tools = mcp.tools()
+  let tools = []
   if web_search_api_key(model, api_key, api_url, deepseek_api_key)
     is Some(web_search_key) {
     tools.push(@web_search.definition(api_key=web_search_key))

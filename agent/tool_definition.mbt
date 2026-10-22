@@ -66,9 +66,11 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
 /// subagent job with its outcome and report.
 ///
 /// `extra_tools` are appended to the registry after the built-ins — the seam for
-/// dynamically discovered tools (e.g. MCP servers' tools, namespaced so they do
-/// not collide with the built-ins). The caller builds them (keeping this package
-/// free of MCP dependencies); `Tools` still raises on any duplicate name.
+/// tools the caller builds; `Tools` still raises on any duplicate name.
+///
+/// `mcp_service`, when supplied, is the session's MCP host, whose handoff
+/// `mbtx` gives every sandboxed script. The caller starts it over the servers
+/// it connected, keeping this package free of MCP clients.
 pub async fn[X] build_tools(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[X],
@@ -77,6 +79,7 @@ pub async fn[X] build_tools(
   session_scratch_dir? : String,
   extra_tools~ : Array[@agent_tool.AgentToolDefinition] = [],
   subagents? : @subagent.Subagents,
+  mcp_service? : @mcphost.Service,
 ) -> @agent_tool.Tools {
   let workspace_root = runtime.workspace_root()
   // One session-scoped file-state map, shared by the file-writing tools so they
@@ -282,6 +285,7 @@ pub async fn[X] build_tools(
         program_service~,
         on_program_trace=data => program_trace.val = Some(data),
         on_program_output=content => program_output.val = Some(content),
+        mcp_service?,
       ),
       // Deliberately NOT told about escalation. It reports a job that already
       // ran — a policy refusal reaches it after minutes of real work — and the

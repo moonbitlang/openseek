@@ -274,7 +274,8 @@ override like this in `~/.openseek/mcp.json`:
 }
 ```
 
-The tools reach the agent as `mcp__seekmoon__<tool>`. The host supplies the
+The agent's scripts reach the tools as `@mcp.call("seekmoon", tool, arguments)`
+and find them with `@mcp.search(server="seekmoon")`. The host supplies the
 address and conversation token in the engine's environment; no relay process
 or credentials on disk are needed. The generated configuration stores only the
 placeholders shown above. Outside a desktop-launched engine the variables are
@@ -297,8 +298,9 @@ remote branch URLs to its current conversation:
   appends one artifact and returns the saved list. Use `"type": "branch"` for
   remote branch URLs. Both fields are required.
 
-The agent sees these as `mcp__seekmoon__artifacts_list` and
-`mcp__seekmoon__artifacts_attach`. The host's token selects the conversation.
+Scripts call them as `@mcp.call("seekmoon", "artifacts_list", {})` and
+`@mcp.call("seekmoon", "artifacts_attach", …)`. The host's token selects the
+conversation.
 Attach checks basic HTTPS syntax and deduplicates by type and normalized URL,
 without checking remote existence or changing the checkout. Concurrent
 attachments append to the latest saved list under a shared lock. A conversation

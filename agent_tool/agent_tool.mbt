@@ -380,6 +380,13 @@ pub async fn execute_tool_call(
         }
       }
     }
+    None if call.name.has_prefix("mcp__") =>
+      // A model may still call an MCP tool by the name it once had here, from
+      // habit or from older history.
+      respond(
+        "error: unknown tool \{call.name}. MCP tools are not in your function list: from an mbtx script, find them with `@mcp.search` and call them with `@mcp.call(server, tool, arguments)`.",
+        is_error=true,
+      )
     None => respond("error: unknown tool \{call.name}", is_error=true)
   }
 }
@@ -413,6 +420,18 @@ async test "execute_tool_call reports unknown tool" {
   }
   assert_eq(output.content, "error: unknown tool ghost")
   assert_true(output.is_error)
+}
+
+///|
+async test "execute_tool_call points an old MCP tool name to the mcp package" {
+  let call = AgentToolCall(
+    ToolCall(id="call_1", name="mcp__tracker__list_issues", arguments="{}"),
+  )
+  guard execute_tool_call(call, Tools([])) is Respond(output) else {
+    fail("unknown tool should produce Respond")
+  }
+  assert_true(output.is_error)
+  assert_true(output.content.contains("@mcp.search"))
 }
 
 ///|

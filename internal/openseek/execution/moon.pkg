@@ -8,6 +8,7 @@ import {
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_subrun",
   "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/mcp/host" @mcphost,
   "moonbitlang/async/aqueue",
   "moonbitlang/core/argparse",
   "moonbitlang/async",

@@ -166,7 +166,6 @@ async fn run_serve(
       workspace_root~,
     )
     let extra_tools = @execution.build_extra_tools(
-      mcp,
       model~,
       api_key~,
       deepseek_api_key?=@options.deepseek_api_key(matches),
@@ -229,19 +228,24 @@ async fn run_serve(
         )
       _ => None
     }
+    let session_scratch_dir = match store {
+      Some(store) => Some(store.scratch_dir(initial_session.id()))
+      None => ephemeral_scratch
+    }
     let tools = @agent.build_tools(
       runtime,
       scope,
       subagents?,
       job_log_dir?,
-      session_scratch_dir?=match store {
-        Some(store) => Some(store.scratch_dir(initial_session.id()))
-        None => ephemeral_scratch
-      },
+      session_scratch_dir?,
       on_background_wake=() => {
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },
       extra_tools~,
+      mcp_service?=mcp.serve(
+        scope,
+        image_directory?=session_scratch_dir.map(dir => "\{dir}/mcp-images"),
+      ),
     )
     group.spawn_bg(no_wait=true) <| () => {
       @jsonl.each(@stdio.stdin, json => {

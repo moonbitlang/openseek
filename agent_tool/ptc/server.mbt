@@ -158,12 +158,7 @@ pub async fn[X] Service::start(
     ) => {
       let conn = @http.ServerConnection::new(socket)
       defer conn.close()
-      let reader : RequestReader = {
-        socket,
-        buffer: b"",
-        offset: 0,
-        wire_bytes: 0,
-      }
+      let reader = @loopback_http.RequestReader(socket)
       // Bound the entire admission phase, starting at acceptance, including
       // partial headers. No executor is reserved until authentication and body
       // framing have both succeeded.

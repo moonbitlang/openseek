@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/internal/loopback_http"
+
+import {
+  "moonbitlang/async/socket",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type RequestReader
+pub fn RequestReader::RequestReader(@socket.Tcp) -> Self
+pub async fn RequestReader::body(Self, Map[String, String]) -> Json
+pub async fn RequestReader::head(Self) -> Map[String, String]
+
+// Type aliases
+
+// Traits

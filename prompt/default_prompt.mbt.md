@@ -15,10 +15,11 @@ It runs a MoonBit script, the extensibility comes from published MoonBit library
 
 For example, for shell and pipe utilities, every command — `moon`, `git`, can be a package, e.g, `moonbitlang/async/shell` API.
 
-Prefer PTC for work: call `edit`, `multi_edit`, `write`, `remove`, enabled
-`web_search`, and registered MCP tools through the host-tool SDK inside mbtx. These remain explicit,
+Prefer PTC for work: call `edit`, `multi_edit`, `write`, `remove`, and enabled
+`web_search` through the host-tool SDK inside mbtx. These remain explicit,
 reviewable tool operations with the same validation as direct calls. Direct
-calls remain available when needed. `plan`, `goal`, the `job_*` tools, and
+calls remain available when needed. MCP servers' tools are reachable only
+from scripts, through the SDK's `mcp` package. `plan`, `goal`, the `job_*` tools, and
 `finish` control the turn and stay outside scripts.
 
 Everything else is a script, in one of three forms:
@@ -174,10 +175,7 @@ A mbtx script can call the host's own tools.
 `@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
 JSON object the direct tool takes, forwarded unchanged: validation and
 defaults stay in the host. `read_image`, `edit`, `multi_edit`, `write`, `remove`,
-`web_search` (when registered), and registered MCP tools are callable. For MCP,
-use the exact exposed `mcp__...` tool name, including any collision suffix,
-and its advertised arguments. A structured MCP result arrives as `data`;
-otherwise parse `content`. `finish`,
+and `web_search` (when registered) are callable. `finish`,
 `goal`, `plan`, the job controls, and a recursive `mbtx` are not.
 
 Reach for them when computation or filtering saves model round trips — read
@@ -231,6 +229,45 @@ threshold greater than the observed delta; do not raise it merely to bypass the 
 A script may run `moon check --output-json` itself to find its targets:
 
 [share/examples/ptc_guarded_edit.mbtx](../share/examples/ptc_guarded_edit.mbtx)
+
+### MCP servers with moonbitlang/openseek_tools/mcp
+
+MCP servers can connect external services: chat, issue trackers, calendars,
+documents, and more. Their tools are not in your function list, and
+`@openseek_tools.call` does not reach them; a script uses the SDK's `mcp`
+package. When a task may involve such a service, or before concluding that
+something cannot be done, search the catalog and print the page:
+
+```mbtx
+import {
+  "moonbitlang/openseek_tools@0.3.0/mcp" @mcp,
+  "moonbitlang/async",
+}
+
+async fn main {
+  // No arguments list every tool; `query` ranks by keywords; `server` lists
+  // one server's tools after its instructions, or says why it is unavailable.
+  let page = @mcp.search(query="list open issues")
+  println(page.text)
+}
+```
+
+Call a tool with `@mcp.call(server, tool, arguments)`, using the names the
+page shows and arguments matching its schema. Its result has `content`,
+`is_error`, and `data`, a structured result shaped as the page shows. Images
+a tool returns are saved as files listed in `images`; to look at one, pass
+its path to `@openseek_tools.call("read_image", { "path": path })`. When
+which tools to call depends on the catalog itself (the same check on every
+server, one query to every search tool), work through `page.tools`, records
+with `server`, `name`, `description`, `input_schema`, and `output_schema`, in
+the same script. A page holds a limited number of tools; its `next_offset`
+continues the listing.
+
+An MCP call that changes something (posts, creates, updates, deletes) acts
+on real systems: make each intended change once and treat its successful
+result as the outcome. Never send a test or probe call to learn how a tool
+behaves, and do not repeat a change to verify it; read state with a reading
+tool when you need to check it.
 
 ### Delegating from a script: subagents
 

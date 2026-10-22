@@ -47,10 +47,10 @@ PTC-enabled tools and their argument shapes:
 - `write`, e.g. `{ "path": "note.txt", "content": "hello" }`
 - `remove`, e.g. `{ "path": "note.txt", "reason": "remove obsolete notes" }`
 - `web_search`, e.g. `{ "query": query }`, when registered
-- Registered MCP tools, using their exact exposed `mcp__...` names (including
-  any collision suffix) and the same arguments as direct calls. PTC invokes
-  the same MCP proxy and preserves its text result, its `structuredContent` as
-  `data` when that fits the reply, and its error flag.
+
+MCP servers' tools are not host tools and never pass through PTC: scripts
+reach them through the engine's MCP host (`mcp/host`, handed over as
+`OPENSEEK_MCP`) with SDK 0.3.0's `@mcp.search` and `@mcp.call`.
 
 SDK 0.1.0 also ships `@tools.edit` and friends as thin wrappers; 0.2.0 removes
 them in favor of `call`, so new scripts should use `call` directly.

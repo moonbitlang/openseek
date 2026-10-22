@@ -1,4 +1,23 @@
 ///|
+/// The catalog a script downloads through `host`, in one listing: these
+/// tests' catalogs are small.
+async fn catalog(host : @mcphost.Service?) -> Array[Json] {
+  guard host is Some(host) else { fail("expected an MCP host") }
+  guard @json.parse(host.env()["OPENSEEK_MCP"])
+    is { "url": String(url), "token": String(token), .. } else {
+    fail("missing MCP host handoff")
+  }
+  let request : Json = { "version": 1, "list": {} }
+  let (_, body) = @http.post(url, request, headers={
+    "Authorization": "Bearer \{token}",
+  })
+  guard body.json() is { "data": { "items": Array(items), .. }, .. } else {
+    fail("expected the whole catalog in one listing")
+  }
+  items
+}
+
+///|
 async test "multiple MCP files merge before connecting and bad files do not hide valid tools" {
   let directory = @fs.tmpdir(prefix="openseek-mcp-merge-")
   defer @fs.rmdir(directory, recursive=true)
@@ -79,19 +98,25 @@ async test "multiple MCP files merge before connecting and bad files do not hide
         [first, broken, missing, second],
         workspace_root=directory,
       )
-      let tools = @execution.build_extra_tools(
-        mcp,
-        model=Deepseek(V4Pro),
-        api_key="test",
-        api_url=base,
-      )
+      let items = catalog(mcp.serve(AgentTaskScope(group)))
       let events : Array[Json] = []
       while @emit.poll_line() is Some(line) {
         events.push(@json.parse(line))
       }
+      // Each server, then its tools, in configuration order.
       assert_eq(
-        tools.length(),
-        2,
+        items.map(item => {
+          match item {
+            {
+              "server": String(server),
+              "tool": { "name": String(name), .. },
+              ..
+            } => "\{server}/\{name}"
+            { "server": String(server), .. } => server
+            _ => "?"
+          }
+        }),
+        ["seekmoon", "seekmoon/echo", "extra", "extra/echo"],
         msg=events.map(event => event.stringify()).join("\n"),
       )
       assert_true(
@@ -107,8 +132,6 @@ async test "multiple MCP files merge before connecting and bad files do not hide
           path == missing
         }),
       )
-      assert_true(tools.any(tool => tool.name == "mcp__seekmoon__echo"))
-      assert_true(tools.any(tool => tool.name == "mcp__extra__echo"))
       assert_eq(discovered.length(), 2)
       assert_true(discovered.contains("/selected"))
       assert_true(discovered.contains("/extra"))
@@ -132,8 +155,8 @@ async test "multiple MCP files merge before connecting and bad files do not hide
         ] else {
         fail("expected the merged servers in configuration order")
       }
-      assert_eq(t1.map(tool => tool.name), ["mcp__seekmoon__echo"])
-      assert_eq(t2.map(tool => tool.name), ["mcp__extra__echo"])
+      assert_eq(t1.map(tool => tool.name), ["echo"])
+      assert_eq(t2.map(tool => tool.name), ["echo"])
       // Failed inputs alone must not publish a successful registration.
       // In particular, retain the original single-file event contract.
       for paths in [[broken], [broken, missing]] {
@@ -144,13 +167,8 @@ async test "multiple MCP files merge before connecting and bad files do not hide
         )
         assert_true(failed.status().servers is [])
         assert_eq(failed.status().configs.length(), paths.length())
-        let failed_tools = @execution.build_extra_tools(
-          failed,
-          model=Deepseek(V4Pro),
-          api_key="test",
-          api_url=base,
-        )
-        assert_eq(failed_tools.length(), 0)
+        // With no server there is no host to hand scripts.
+        assert_true(failed.serve(AgentTaskScope(group)) is None)
         // The sink is process-global and async tests run concurrently, so
         // match only events this call can have produced: failures by their
         // path, and a registration by its zero servers, the only count failed
@@ -221,16 +239,19 @@ async test "the MCP registry tells its owner when a connected server is lost" {
         return
       }
       Connected(tools) => {
-        assert_eq([ for tool in tools => tool.name ], ["mcp__brief__ping"])
+        assert_eq([ for tool in tools => tool.name ], ["ping"])
         @async.with_timeout(10000, () => closed.get())
       }
       _ => ()
     }
-    // The tools stay registered with the model, so a lost server still lists
-    // them — that is what tells it from one that never connected.
+    // A lost server's status still lists the tools it offered — that is what
+    // tells it from one that never connected.
     guard registry.status().servers is [{ state: Lost(tools), .. }] else {
       fail("a server whose connection closed should be lost")
     }
-    assert_eq([ for tool in tools => tool.name ], ["mcp__brief__ping"])
+    assert_eq([ for tool in tools => tool.name ], ["ping"])
+    // Its tools leave the catalog, which says why.
+    let lost : Json = { "server": "brief", "error": "the connection was lost" }
+    assert_eq(catalog(registry.serve(AgentTaskScope(group))), [lost])
   })
 }

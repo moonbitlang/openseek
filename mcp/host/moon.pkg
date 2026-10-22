@@ -1,0 +1,17 @@
+import {
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/internal/loopback_http",
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/x/crypto",
+}
+
+import {
+  "moonbitlang/core/json",
+} for "wbtest"
+
+supported_targets = "+wasm+native"

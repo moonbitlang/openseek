@@ -9,15 +9,13 @@ import {
 }
 
 // Values
-pub async fn[X] build(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[@agent_tool.AgentToolDefinition]
+pub async fn call_tool(@mcp.McpClient, String, Json) -> @agent_tool.ToolAction
 
-pub async fn[X] build_grouped(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[(String, Array[@agent_tool.AgentToolDefinition])]
+pub fn catalog_items(Array[ServerEntry]) -> Array[Json]
 
 pub async fn[X] connect(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[ServerEntry]
 
-pub fn tool_name(String, String) -> String
-
-pub async fn tools_for_client(String, @mcp.McpClient) -> Array[@agent_tool.AgentToolDefinition]
+pub async fn discover(String, @mcp.McpClient) -> Array[@mcp.McpTool]
 
 // Errors
 
@@ -26,14 +24,15 @@ pub enum Connection {
   Live(@mcp.McpClient)
   NoTools
   Failed(String)
-  Skipped
 }
 
 pub struct ServerEntry {
   server : @config.McpServer
   connection : Connection
-  tools : Array[@agent_tool.AgentToolDefinition]
+  instructions : String?
+  tools : Array[@mcp.McpTool]
 }
+pub async fn ServerEntry::call(Self, String, Json) -> @agent_tool.ToolAction
 
 // Type aliases
 

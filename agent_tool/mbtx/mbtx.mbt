@@ -115,6 +115,10 @@ fn duration_label(milliseconds : Int32) -> String {
 /// `approval` is where a request to run OUTSIDE the sandbox goes. Its presence
 /// is what advertises the `escalated` argument at all: a build with nobody to
 /// ask does not offer an argument whose every use would come back refused.
+///
+/// `mcp_service` is the session's MCP host. Every sandboxed snippet gets its
+/// `OPENSEEK_MCP` handoff, with or without PTC; an escalated run inherits the
+/// agent's environment and gets neither handoff.
 pub fn definition(
   workspace_root~ : String,
   read_only~ : Bool = false,
@@ -132,6 +136,7 @@ pub fn definition(
   program_service? : @ptc.Service,
   on_program_trace? : (Json) -> Unit,
   on_program_output? : (@bgjobs.ImageOutput) -> Unit,
+  mcp_service? : @mcphost.Service,
 ) -> @agent_tool.AgentToolDefinition {
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
@@ -188,6 +193,7 @@ pub fn definition(
           generations~,
           approval?,
           program?,
+          mcp_service?,
         )
       }
       let action = if enabled {
@@ -342,6 +348,7 @@ async fn execute(
   generations~ : Map[String, Int32],
   approval? : @agent_runtime.ApprovalChannel,
   program? : @ptc.Program,
+  mcp_service? : @mcphost.Service,
 ) -> @agent_tool.ToolAction {
   if scratch_dir is Some(dir) {
     @fs.mkdir(dir, recursive=true, permission=0o700) catch {
@@ -646,6 +653,11 @@ async fn execute(
   // not also grant writing there, and reads are open, so a snippet can still
   // work in a directory it may not modify.
   let injected : Map[String, String] = Map([])
+  if mcp_service is Some(service) {
+    for key, value in service.env() {
+      injected[key] = value
+    }
+  }
   if program is Some(program) {
     for key, value in program.env() {
       injected[key] = value

@@ -58,24 +58,48 @@ pub async fn[X] connect_mcp(
     client_version=McpClientVersion,
     workspace_root~,
   )
-  let registry = { configs, servers: entries, }
-  let tools = registry.tools()
+  let names : Array[String] = []
+  for entry in entries {
+    for tool in entry.tools {
+      names.push("\{entry.server.name()}/\{tool.name}")
+    }
+  }
   @emit.emit(
-    McpToolsRegistered(
-      servers=servers.length(),
-      tools=tools.length(),
-      names=[ for tool in tools => tool.name ],
-    ),
+    McpToolsRegistered(servers=servers.length(), tools=names.length(), names~),
   )
-  registry
+  { configs, servers: entries, }
 }
 
 ///|
-/// The agent tools the connected servers contributed, in config order.
-fn McpRegistry::tools(
+/// Serve these servers to scripts through an MCP host on `scope`'s group,
+/// which lives as long as the connections do. Calls go to the named server,
+/// and the catalog lists the servers as they stand now (a lost one as
+/// unavailable). Images in results are saved under `image_directory`. Without
+/// a configured server there is nothing to serve, and no host starts.
+pub async fn[X] McpRegistry::serve(
   self : McpRegistry,
-) -> Array[@agent_tool.AgentToolDefinition] {
-  self.servers.map(entry => entry.tools).flatten()
+  scope : @agent_runtime.AgentTaskScope[X],
+  image_directory? : String,
+) -> @mcphost.Service? {
+  guard !self.servers.is_empty() else { return None }
+  let servers = self.servers
+  Some(
+    @mcphost.Service::start(
+      scope.group(),
+      call=(server, tool, arguments) => {
+        match servers.search_by(entry => entry.server.name() == server) {
+          Some(index) => servers[index].call(tool, arguments)
+          None =>
+            @agent_tool.respond(
+              "no MCP server `\{@agent_tool.brief_line(server, limit=128)}`; list them with `@mcp.search()`",
+              is_error=true,
+            )
+        }
+      },
+      items=() => @mcptools.catalog_items(servers),
+      image_directory?,
+    ),
+  )
 }
 
 ///|
@@ -95,9 +119,10 @@ pub fn McpRegistry::on_connection_closed(
 }
 
 ///|
-/// The registry as the `mcp_status` event reports it. A server's state is
-/// read now, not remembered: one that connected at startup and has since lost
-/// its connection is `Lost`, with the tools that are still registered.
+/// The registry as the `mcp_status` event reports it, with tools under the
+/// servers' own names. A server's state is read now, not remembered: one that
+/// connected at startup and has since lost its connection is `Lost`, with the
+/// tools it offered.
 pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
   let servers : Array[@protocol.McpServerStatus] = []
   for entry in self.servers {
@@ -114,7 +139,6 @@ pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
         }
       NoTools => NoTools
       Failed(error) => Failed(error)
-      Skipped => Skipped
     }
     servers.push({
       name: entry.server.name(),

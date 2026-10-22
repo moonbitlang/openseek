@@ -49,12 +49,12 @@ async fn run_task_turn(
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
+    let mcp = @execution.connect_mcp(
+      scope,
+      @options.mcp_config_paths(matches),
+      workspace_root~,
+    )
     let extra_tools = @execution.build_extra_tools(
-      @execution.connect_mcp(
-        scope,
-        @options.mcp_config_paths(matches),
-        workspace_root~,
-      ),
       model~,
       api_key~,
       deepseek_api_key?=@options.deepseek_api_key(matches),
@@ -82,6 +82,10 @@ async fn run_task_turn(
       runtime,
       scope,
       extra_tools~,
+      mcp_service?=mcp.serve(
+        scope,
+        image_directory="\{session_scratch_dir}/mcp-images",
+      ),
       subagents?,
       job_log_dir?,
       session_scratch_dir~,
