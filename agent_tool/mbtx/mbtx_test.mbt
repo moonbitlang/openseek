@@ -1030,7 +1030,7 @@ async test "filename approval executes the reviewed snapshot even if the file ch
     let definition = @mbtx.definition(
       workspace_root=ws,
       approval=ApprovalChannel(ask => {
-        assert_eq(ask.body, Some(original))
+        assert_true(ask.body is Some(body) && body.has_suffix(original))
         @fs.write_file(
           path,
           "fn main { println(\"replacement program\") }",
@@ -1422,6 +1422,7 @@ async fn run_escalating(
   source : String,
   answer : @agent_runtime.ApprovalOutcome,
   asked~ : Array[@agent_runtime.ApprovalAsk],
+  args? : Array[String],
 ) -> @agent_tool.ToolOutput {
   @vfs.with_tmpdir(prefix="mbtx-escalate-", ws => {
     let definition = @mbtx.definition(
@@ -1431,8 +1432,32 @@ async fn run_escalating(
         answer
       }),
     )
-    dispatch(definition, { "source": source, "escalated": true })
+    let input : Map[String, Json] = {
+      "source": Json(source),
+      "escalated": Json(true),
+    }
+    if args is Some(args) {
+      input["args"] = Json(args)
+    }
+    dispatch(definition, Json(input))
   })
+}
+
+///|
+/// The question carries what decides what runs besides the program: where it
+/// runs and with which arguments — the same source elsewhere is a different
+/// operation to approve.
+#cfg(not(platform="windows"))
+async test "an escalation asks with the program's working directory and arguments" {
+  let asked : Array[@agent_runtime.ApprovalAsk] = []
+  let out = run_escalating("fn main {  }", Rejected, asked~, args=["notes/"])
+  assert_true(out.is_error)
+  guard asked is [{ body: Some(body), .. }] else {
+    fail("expected one question with a body")
+  }
+  assert_true(body.has_prefix("// cwd: "))
+  assert_true(body.contains("// args: [\"notes/\"]\n"))
+  assert_true(body.has_suffix("fn main {  }"))
 }
 
 ///|

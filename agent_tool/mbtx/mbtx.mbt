@@ -280,6 +280,23 @@ fn described(
 const DescriptionBriefLimit : Int32 = 72
 
 ///|
+/// The program an escalation asks about, headed by the working directory and
+/// arguments it would run with.
+fn escalation_body(
+  source : String,
+  cwd : String,
+  args : Array[String],
+) -> String {
+  let body = StringBuilder()
+  body <+ "// cwd: \{cwd}\n"
+  if !args.is_empty() {
+    body <+ "// args: \{Json(args).stringify()}\n"
+  }
+  body.write_string(source)
+  body.to_string()
+}
+
+///|
 /// What the model is told when an escalation did not become a run.
 ///
 /// One text per outcome, and they are deliberately different sentences rather
@@ -454,14 +471,23 @@ async fn execute(
   let escalated = if input.escalated {
     let outcome = match approval {
       Some(channel) =>
-        // The program goes with the question. It is what the user is actually
-        // deciding about, and `detail` — which is a constant — describes only
-        // the permission. This is the resolved snapshot, so what is approved
-        // and what runs cannot differ even if the saved file changes.
+        // The program goes with the question, headed by the working
+        // directory and arguments it would run with: together they are what
+        // the user is actually deciding about, and `detail` — which is a
+        // constant — describes only the permission. The header is MoonBit
+        // comments, so the body still reads (and highlights) as the source.
+        // This is the resolved snapshot, so what is approved and what runs
+        // cannot differ even if the saved file changes.
         channel.ask({
           tool_name: "mbtx",
           detail: "run this snippet with no sandbox policy: no spawn allowlist, and writes anywhere",
-          body: Some(source),
+          body: Some(
+            escalation_body(
+              source,
+              run_cwd.unwrap_or(workspace_root),
+              input.args,
+            ),
+          ),
         })
       // The argument was not advertised in this build's schema, so reaching
       // here means the model asked for a field it was never offered.
