@@ -1276,32 +1276,66 @@ test('Cloud code feedback preserves the owning draft, sends Annotation and reope
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('Cloud code feedback keeps generation send restrictions and archived files read only', async ({ page }) => {
-  const cloud = new CloudFilesHarness(page);
-  cloud.generating.add(sessionA);
-  cloud.histories.set(sessionA, { messages: [], generating: true });
-  cloud.archived.add(sessionB);
-  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  const feedback = await selectCloudCode(page);
-  await feedback.fill('Keep this in my draft');
-  await feedback.press('Enter');
-  await expect(page.locator('.composer .mention-chip')).toContainText('hello #.mbt');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  expect(cloud.postCount).toBe(0);
-  const archived = page.getByRole('button', { name: /^Archived chats \(/ });
-  if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
-  await cloud.row(sessionB).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
-  await openText(page);
-  const line = source(page).locator('.view-lines .view-line').nth(1);
-  await line.click(); await page.keyboard.press('Home'); await page.keyboard.press('Shift+End');
-  await expect(source(page).locator('.agent-feedback-input-widget')).toBeHidden();
-  await line.hover();
-  await expect(source(page).locator('.agent-feedback-glyph.line-hover')).toHaveCount(0);
-  expect(cloud.postCount).toBe(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
+for (const batch of [true, false]) {
+  test(`Cloud code feedback ${batch ? 'batches into the draft' : 'steers the active task'} and keeps archived files read only`, async ({ page }) => {
+    const cloud = new CloudFilesHarness(page);
+    const task = 'cloud-feedback-task';
+    cloud.generating.add(sessionA);
+    cloud.histories.set(sessionA, { messages: [], generating: true });
+    cloud.controlSnapshots.set(sessionA, {
+      session_id: sessionA, task_id: task, seq: 1,
+      data: { active_task_id: task, status: 'running', paused: false, queue: [], steers: [] },
+    });
+    cloud.archived.add(sessionB);
+    const submissions = () => cloud.requests.filter(request => request.method === 'POST' && /\/(messages|steer|queue|stop)$/.test(request.path));
+    await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+    await expect(page.locator('#stop')).toBeEnabled();
+    await page.locator('#task').fill('Existing Cloud draft');
+    if (!batch) {
+      await page.getByRole('button', { name: 'Follow-up action', exact: true }).click();
+      await page.getByRole('option', { name: /^Steer now/ }).click();
+    }
+    const feedback = await selectCloudCode(page);
+    await feedback.fill('Keep this in my draft');
+    await page.getByRole('checkbox', { name: 'Batch', exact: true }).setChecked(batch);
+    const accepted = batch ? null : page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/steer`);
+    await feedback.press('Enter');
+    if (batch) {
+      await expect(page.locator('.composer .mention-chip')).toContainText('hello #.mbt');
+      await expect(page.locator('#task')).toHaveValue('Existing Cloud draft');
+      expect(submissions()).toHaveLength(0);
+    } else {
+      expect((await accepted).status()).toBe(202);
+      await expect(page.locator('#task')).toHaveValue('');
+      await expect(page.locator('.pending-steer-row')).toContainText('Keep this in my draft');
+      const requests = submissions();
+      expect(requests).toHaveLength(1);
+      expect(requests[0].path).toBe(`/v1/sessions/${sessionA}/steer`);
+      const request = JSON.parse(requests[0].body);
+      expect(request.task_id).toBe(task);
+      expect(request.submission_id).toBeTruthy();
+      expect(request.content).toContain('Existing Cloud draft');
+      expect(request.content).toContain('<annotation file="src/hello #.mbt" lines="2-2">');
+      expect(request.content).toContain('fn hello() -> String { "Cloud text" }');
+      expect(request.content).toContain('Keep this in my draft');
+    }
+    expect(cloud.postCount).toBe(0);
+    const archived = page.getByRole('button', { name: /^Archived chats \(/ });
+    if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
+    await cloud.row(sessionB).click();
+    await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+    await openText(page);
+    const line = source(page).locator('.view-lines .view-line').nth(1);
+    await line.click(); await page.keyboard.press('Home'); await page.keyboard.press('Shift+End');
+    await expect(source(page).locator('.agent-feedback-input-widget')).toBeHidden();
+    await line.hover();
+    await expect(source(page).locator('.agent-feedback-glyph.line-hover')).toHaveCount(0);
+    expect(cloud.postCount).toBe(0);
+    expect(submissions()).toHaveLength(batch ? 0 : 1);
+    expect(fileHostRequests(cloud)).toEqual([]);
+    expect(cloud.device.pageErrors).toEqual([]);
+  });
+}
 
 test('Cloud code feedback applies through the existing submit action when idle', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
