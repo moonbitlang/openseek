@@ -799,3 +799,73 @@ test "a side chat restored without a remembered model takes its conversation's" 
   }
   assert_true(side.engine_model == DsPro)
 }
+
+///|
+/// A page that restarted with a side chat's tab in its strip and its record
+/// listed, its first runs reply still out.
+fn side_chat_restart_model() -> Model raise {
+  {
+    ..test_model().with_listed(["desktop-test", SideChatId]),
+    right_panel_open: true,
+  }.with_dev(dev => { ..dev, runs_in_flight: 1, })
+}
+
+///|
+test "a side chat restored before the runs reply is made by that reply with its run" {
+  let (_, waiting) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    side_chat_restart_model(),
+  )
+  // The tab is back, but the side chat waits for the reply.
+  assert_true(waiting.dock_state().tabs == [SideChat(owner=side_chat_owner())])
+  assert_true(waiting.find_conversation(Local, SideChatId) is None)
+  let (_, recovered) = update_dev(
+    test_dispatch(),
+    RunsLoaded(
+      approval_generation=0,
+      runs=[
+        {
+          run_id: "r-side",
+          session: SideChatId,
+          model: DsPro,
+          max_steps: 1000,
+          session_root: None,
+          submission_id: None,
+        },
+      ],
+      settled=[],
+      approvals=[],
+      live=["r-side"],
+      frontier=waiting.run_snapshot_frontier(Local),
+      connection_generation=waiting.dev().connection_generation,
+    ),
+    waiting,
+  )
+  guard recovered.find_conversation(Local, SideChatId) is Some(side) else {
+    fail("the reply must make the running side chat")
+  }
+  assert_true(side.run is Open(run_id="r-side", ..))
+  assert_eq(recovered.dev().runs_in_flight, 0)
+  assert_true(recovered.mounted_side_chat_owner() == Some(side_chat_owner()))
+}
+
+///|
+test "a side chat restored before a runs request fails is made once it does" {
+  let (_, waiting) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    side_chat_restart_model(),
+  )
+  assert_true(waiting.find_conversation(Local, SideChatId) is None)
+  let (_, failed) = update_dev(
+    test_dispatch(),
+    RunsFailed(connection_generation=waiting.dev().connection_generation),
+    waiting,
+  )
+  assert_eq(failed.dev().runs_in_flight, 0)
+  guard failed.find_conversation(Local, SideChatId) is Some(side) else {
+    fail("the side chat must be made once nothing is awaited")
+  }
+  assert_true(side.run is NoRun(..))
+}
