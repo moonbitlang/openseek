@@ -11,6 +11,9 @@ fn State::replace(
   id : String,
   conversation : Conversation,
 ) -> State {
+  if self.creation is Some(creation) && creation.id == id {
+    return { ..self, creation: Some({ ..creation, conversation, }), }
+  }
   let conversations = self.conversations.copy()
   conversations[id] = conversation
   { ..self, conversations, }
@@ -165,7 +168,9 @@ pub fn State::can_delete(self : State, id : String) -> Bool {
   self.conversations
   .get(id)
   .map_or(true, conversation => {
-    !conversation.sending && !conversation.generating
+    !conversation.sending &&
+    conversation.outgoing is None &&
+    !conversation.generating
   })
 }
 
@@ -203,6 +208,7 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   !(self.metadata_saves.get(id) is Some({ edit: Archive(true), .. })) &&
   !conversation.loading &&
   !conversation.sending &&
+  conversation.outgoing is None &&
   !conversation.generating &&
   !conversation.controls.is_compacting() &&
   !conversation.controls.is_compact_queued() &&
@@ -242,7 +248,7 @@ pub fn update(
   token? : String,
   navigation~ : Int32,
 ) -> (State, @cmd.Cmd, String?) {
-  if state.update_command(msg, emit, token) is Some((next, command)) {
+  if state.update_command(msg, emit, token, navigation) is Some((next, command)) {
     return (next, command, None)
   }
   if state.update_control(msg, emit, token) is Some((next, command)) {
@@ -314,8 +320,12 @@ pub fn update(
           id: "draft:\{request}",
           request,
           navigation,
-          submission: None,
-          attachments: [],
+          conversation: {
+            ..Conversation::empty(),
+            loading: false,
+            history_required: false,
+          },
+          pending: None,
         }),
         notice: None,
       }
@@ -325,8 +335,8 @@ pub fn update(
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
         creation.request == request &&
-        creation.submission is Some(draft) &&
-        state.user_id is Some(account) else {
+        creation.pending is Some(submission) &&
+        state.user_id is Some(_) else {
         return (state, @cmd.none, None)
       }
       let sessions = [
@@ -339,27 +349,13 @@ pub fn update(
         },
         ..state.sessions.filter(session => session.id != id),
       ]
-      let ready = {
-        ..Conversation::empty(),
-        loading: false,
-        history_required: false,
-        initial_submission: Some(draft),
-        initial_attachments: creation.attachments,
-      }
+      let ready = { ..creation.conversation, outgoing: Some(submission), }
       let (next, command) = { ..state, sessions, creation: None, }
         .replace(id, ready)
         .list(token, emit)
-      let (next, send, _) = next.submit(
-        @interop.Cloud(account~, session=id),
-        draft,
-        creation.attachments,
-        emit,
-        token?,
-        navigation~,
-      )
       (
         next,
-        @cmd.batch([command, send]),
+        command,
         if creation.navigation == navigation {
           Some(id)
         } else {
@@ -371,12 +367,23 @@ pub fn update(
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
         creation.request == request &&
-        creation.submission is Some(_) else {
+        creation.pending is Some(submission) else {
         return (state, @cmd.none, None)
       }
       let (next, command) = {
         ..state,
-        creation: Some({ ..creation, submission: None, }),
+        creation: Some({
+          ..creation,
+          pending: None,
+          conversation: {
+            ..creation.conversation,
+            controls: creation.conversation.controls.delivered(
+              submission.command,
+              submission.request.to_string(),
+              @engine_session.Rejected,
+            ),
+          },
+        }),
       }.failed(error)
       (next, command, None)
     }
@@ -569,11 +576,15 @@ pub fn update(
               Some(task) => Some(task)
               None => conversation.observed_task
             },
-            controls: conversation.controls.observe_compaction(
-              queued=snapshot.data.compact_queued,
-              compacting=snapshot.data.compacting,
-              baseline~,
-            ),
+            controls: if conversation.outgoing is Some(_) {
+              conversation.controls
+            } else {
+              conversation.controls.observe_compaction(
+                queued=snapshot.data.compact_queued,
+                compacting=snapshot.data.compacting,
+                baseline~,
+              )
+            },
             sending: conversation.sending && !admitted,
             pending: if admitted {
               None
@@ -598,6 +609,17 @@ pub fn update(
               conversation.uploads
             },
           })
+          if baseline && next.conversations[id].outgoing is Some(submission) {
+            let next = next.replace(id, {
+              ..next.conversations[id],
+              outgoing: None,
+              watch_status: Watching,
+            })
+            let (next, command) = next.dispatch_command(
+              id, submission, token, emit,
+            )
+            return (next, command, None)
+          }
           if admitted || (baseline && conversation.watch_status == Reconnecting) {
             let (next, command) = next.load(id, token, emit)
             (next, command, None)
@@ -699,6 +721,11 @@ pub fn update(
       let conversation = state.conversations
         .get(id)
         .unwrap_or(Conversation::empty())
+      if conversation.outgoing is Some(_) &&
+        conversation.watch_status != Disconnected {
+        let (next, command) = state.load(id, token, emit)
+        return (next, command, None)
+      }
       let next = if conversation.sending ||
         conversation.stream is Some({ active: true, .. }) {
         state
@@ -1122,36 +1149,10 @@ fn State::submit(
   navigation~ : Int32,
 ) -> (State, @cmd.Cmd, String?) {
   let state = self
-  if state.draft_identity() == Some(owner) && state.creation is Some(creation) {
-    guard creation.submission is None &&
-      token is Some(_) &&
-      (!draft.is_blank() || !attachments.is_empty()) &&
-      draft.mentions.all(mention => {
-        mention.ref_ is (File(..) | OfficeSelection(..))
-      }) else {
-      return (state, @cmd.none, None)
-    }
-    let request = state.sequence + 1
-    let next = {
-      ..state,
-      sequence: request,
-      notice: None,
-      creation: Some({
-        ..creation,
-        request,
-        navigation,
-        submission: Some(draft),
-        attachments,
-      }),
-    }
-    let (next, command) = next.create(token, emit)
-    return (next, command, None)
-  }
   guard owner is @interop.Cloud(account~, session=id) &&
     state.user_id == Some(account) &&
-    token is Some(token) &&
-    state.conversations.get(id) is Some(conversation) &&
-    state.can_send(id) &&
+    token is Some(_) &&
+    (state.draft_identity() == Some(owner) || state.can_send(id)) &&
     (!draft.is_blank() || !attachments.is_empty()) &&
     draft.mentions.all(mention => {
       mention.ref_
@@ -1163,75 +1164,31 @@ fn State::submit(
     }) else {
     return (state, @cmd.none, None)
   }
-  let request = state.sequence + 1
-  let prompt = prompt_content(draft) catch {
+  let content = prompt_content(draft) catch {
     @cloud_client.RequestError(failure) =>
       return (
-        state.replace(id, { ..conversation, notice: Some(failure.label()), }),
+        if state.draft_identity() == Some(owner) {
+          { ..state, notice: Some(failure.label()), }
+        } else {
+          state.replace(id, {
+            ..state.conversations[id],
+            notice: Some(failure.label()),
+          })
+        },
         @cmd.none,
         None,
       )
   }
-  let next = state.replace(id, {
-    ..conversation.clear_progress(),
-    request,
-    send_request: request,
-    sending: true,
-    heartbeat: Some({ stage: @composer.Starting, started_ms: None, tokens: 0, }),
-    history_required: true,
-    notice: None,
-    pending: Some({
-      content: prompt,
-      known_tasks: {
-        let tasks = conversation.records
-          .filter(record => record.kind == "user")
-          .map(record => record.task_id)
-        if conversation.task is Some(task) && !tasks.contains(task) {
-          tasks.push(task)
-        }
-        tasks
-      },
-    }),
-  })
-  let command = @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let task : async () -> Msg = () => {
-        try {
-          let prepared = prepare_submission(
-            token,
-            id,
-            draft,
-            attachments,
-            conversation.uploads,
-            (source, path) => {
-              scheduler.add(
-                emit(AttachmentStored(state.epoch, id, request, source, path)),
-              )
-            },
-          )
-          let prompt = prompt_content(prepared)
-          scheduler.add(
-            emit(MessagePrepared(state.epoch, id, request, prepared, prompt)),
-          )
-          match
-            send_command(
-              token,
-              id,
-              @wire.Prompt(content=prompt, submission_id=None),
-            ) {
-            Accepted => ()
-            Rejected(_) => raise @cloud_client.RequestError(Busy)
-          }
-          SendAccepted(state.epoch, id, request)
-        } catch {
-          @cloud_client.RequestError(error) =>
-            SendFailed(state.epoch, id, request, error)
-          _ => SendFailed(state.epoch, id, request, Unreachable)
-        }
-      }
-      scheduler.add(emit(task()))
-    })
-    |> ignore
-  })
-  ({ ..next, sequence: request, notice: None, }, command, None)
+  let (next, command) = state.submit_command(
+    owner,
+    {
+      request: state.sequence + 1,
+      command: @wire.Prompt(content~, submission_id=None),
+      prompt: Some((draft, attachments)),
+    },
+    emit,
+    token,
+    navigation,
+  )
+  (next, command, None)
 }

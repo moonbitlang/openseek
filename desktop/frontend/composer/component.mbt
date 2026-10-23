@@ -4,7 +4,7 @@
 
 ///|
 priv enum PendingSubmission {
-  PromptSubmission(sequence_before~ : Int32, Draft)
+  PromptSubmission(sequence_before~ : Int32, Draft, attachments~ : Array[Int32])
   GoalSubmission(sequence_before~ : Int32, String)
 } derive(Eq)
 
@@ -71,6 +71,7 @@ fn FileCompletion::matches(
 priv struct Entry {
   owner : @interop.ConversationIdentity
   action_generation : Int32
+  moved : Bool
   source : Draft
   draft : Draft
   source_goal : String?
@@ -105,6 +106,7 @@ fn Entry::Entry(input : Input) -> Entry {
   {
     owner: input.identity.owner,
     action_generation: input.identity.archive_generation,
+    moved: false,
     source: input.draft,
     draft: input.draft,
     source_goal: input.goal.draft,
@@ -173,6 +175,17 @@ fn Entry::file_completion_for(
 /// Reconcile root-authored recovery with local edits. Submission acknowledgement
 /// clears only the submitted editor: prompt and goal drafts are independent.
 fn Entry::reconciled(self : Entry, input : Input) -> Entry {
+  let self = if self.moved {
+    {
+      ..self,
+      attachment_requests: self.attachment_requests.map(request => {
+        ..request,
+        root: input.root,
+      }),
+    }
+  } else {
+    self
+  }
   let self = if self.cloud_access != input.cloud_access {
     let mut sequence = self.attachment_sequence
     let requests = self.attachment_requests.map(request => {
@@ -222,10 +235,11 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   let incoming = input.draft
   let incoming_goal = input.goal.draft
   let root_changed = input.root != self.root
+  let discard_inputs = root_changed && !self.moved
   let context_changed = self.context_generation != input.context_generation
   let skills_changed = self.installed_skills != input.installed_skills
   let acknowledged : Draft? = match self.pending_submission {
-    Some(PromptSubmission(sequence_before~, submitted)) if input.submission_sequence >
+    Some(PromptSubmission(sequence_before~, submitted, ..)) if input.submission_sequence >
       sequence_before =>
       Some(self.draft.reconciled(source=submitted, incoming~))
     Some(GoalSubmission(sequence_before~, _)) if input.submission_sequence >
@@ -234,8 +248,13 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
     _ => None
   }
   if acknowledged is Some(draft) {
+    let sent_attachments = match self.pending_submission {
+      Some(PromptSubmission(_, attachments~, ..)) => attachments
+      _ => []
+    }
     return {
       ..self,
+      moved: false,
       image_error: None,
       source: incoming,
       changes_open: false,
@@ -251,15 +270,17 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
       file_completion: self.file_completion_for(input, draft.task, input.root),
       root: input.root,
       cloud_access: input.cloud_access,
-      image_reads: if root_changed {
+      image_reads: if discard_inputs {
         0
       } else {
         self.image_reads
       },
-      attachment_requests: if root_changed {
+      attachment_requests: if discard_inputs {
         []
       } else {
-        self.attachment_requests
+        self.attachment_requests.filter(request => {
+          !sent_attachments.contains(request.id)
+        })
       },
       images_enabled: input.presentation.images_enabled,
       installed_skills: input.installed_skills,
@@ -321,7 +342,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
     self.completion
   }
   let pending_submission = match self.pending_submission {
-    Some(PromptSubmission(sequence_before=_, submitted)) if incoming ==
+    Some(PromptSubmission(sequence_before=_, submitted, ..)) if incoming ==
       submitted => None
     Some(GoalSubmission(sequence_before=_, submitted)) if incoming_goal ==
       Some(submitted) => None
@@ -329,6 +350,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   }
   {
     ..self,
+    moved: false,
     source: incoming,
     changes_open: self.changes_open &&
     draft.mentions.any(mention => {
@@ -342,12 +364,12 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
     file_completion,
     root: input.root,
     cloud_access: input.cloud_access,
-    image_reads: if root_changed {
+    image_reads: if discard_inputs {
       0
     } else {
       self.image_reads
     },
-    attachment_requests: if root_changed {
+    attachment_requests: if discard_inputs {
       []
     } else {
       self.attachment_requests
@@ -362,7 +384,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
 ///|
 priv struct Model {
   entries : Array[Entry]
-  applied_retirements : Int32
+  applied_changes : Int32
   // The clock the running row's elapsed span is measured against, advanced by
   // `ClockTicked` and only while a turn is open. Component state rather than
   // the application's: a value that changes every second belongs to the one
@@ -375,44 +397,69 @@ priv struct Model {
 fn Model::Model(input : Input) -> Model {
   {
     entries: [Entry(input)],
-    applied_retirements: input.retirements.length(),
+    applied_changes: input.entry_changes.length(),
     clock_ms: @interop.now_ms(),
   }
 }
 
 ///|
-fn Model::owner_has_pending_retirement(
-  self : Model,
-  input : Input,
-  owner : @interop.ConversationIdentity,
-) -> Bool {
-  for index in self.applied_retirements..<input.retirements.length() {
-    if input.retirements[index] == owner {
-      return true
+fn Model::with_entry_changes_applied(self : Model, input : Input) -> Model {
+  let mut entries = self.entries
+  for index in self.applied_changes..<input.entry_changes.length() {
+    match input.entry_changes[index] {
+      Retire(owner) => entries = entries.filter(entry => entry.owner != owner)
+      Move(from~, to~) =>
+        entries = entries.map(entry => {
+          if entry.owner == from {
+            { ..entry, owner: to, action_generation: index + 1, moved: true, }
+          } else {
+            entry
+          }
+        })
     }
   }
-  false
-}
-
-///|
-fn Model::with_retirements_applied(self : Model, input : Input) -> Model {
-  let mut entries = self.entries
-  for index in self.applied_retirements..<input.retirements.length() {
-    let retired = input.retirements[index]
-    entries = entries.filter(entry => entry.owner != retired)
-  }
-  { ..self, entries, applied_retirements: input.retirements.length(), }
+  { ..self, entries, applied_changes: input.entry_changes.length(), }
 }
 
 ///|
 fn Model::active(self : Model, input : Input) -> Entry {
-  for entry in self.entries {
-    if entry.owner == input.identity.owner &&
-      !self.owner_has_pending_retirement(input, entry.owner) {
+  let current = self.with_entry_changes_applied(input)
+  for entry in current.entries {
+    if entry.owner == input.identity.owner {
       return entry.reconciled(input)
     }
   }
   Entry(input)
+}
+
+///|
+fn Input::resolve_identity(self : Input, original : Identity) -> Identity? {
+  let mut identity = original
+  for index in original.archive_generation..<self.entry_changes.length() {
+    match self.entry_changes[index] {
+      Retire(owner) if identity.owner == owner => return None
+      Move(from~, to~) if identity.owner == from =>
+        identity = { owner: to, archive_generation: index + 1, }
+      _ => ()
+    }
+  }
+  Some(identity)
+}
+
+///|
+fn Model::callback_entry(
+  self : Model,
+  input : Input,
+  original : Identity,
+  root : @common.Uri?,
+) -> Entry? {
+  guard input.resolve_identity(original) is Some(identity) else { return None }
+  self.entries
+  .iter()
+  .find_first(entry => {
+    entry.identity() == identity &&
+    (entry.root == root || identity.owner != original.owner)
+  })
 }
 
 ///|
@@ -433,7 +480,7 @@ priv enum Msg {
   CompletionAccept
   CompletionPick(Int32)
   CompletionDismiss
-  EntriesRetired
+  EntriesChanged
   CompletionPump
   // A second passed while a turn was open. Carries nothing: the handler reads
   // the clock, and the message exists only to advance the span on screen.
@@ -722,7 +769,7 @@ fn Model::update(
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
 ) -> (Model, @cmd.Cmd) {
-  let self = self.with_retirements_applied(input)
+  let self = self.with_entry_changes_applied(input)
   let entry = self.active(input)
   let self = self.with_entry(entry)
   match msg {
@@ -736,10 +783,7 @@ fn Model::update(
     ImageRead(identity, root, event) => {
       // A read belongs to the draft that selected it. Navigation may retain
       // that draft in the cache, but cannot redirect its bytes into another.
-      let target = self.entries
-        .iter()
-        .find_first(entry => entry.identity() == identity)
-      guard target is Some(target) && target.root == root else {
+      guard self.callback_entry(input, identity, root) is Some(target) else {
         return (self, @cmd.none)
       }
       if event is @image_input.DocumentsReady(images~, documents~) {
@@ -813,10 +857,7 @@ fn Model::update(
       self.commit_entry_change(target, next, @cmd.none, action_emit)
     }
     AttachmentPrepared(identity, root, id, result) => {
-      guard self.entries
-        .iter()
-        .find_first(entry => entry.identity() == identity && entry.root == root)
-        is Some(target) &&
+      guard self.callback_entry(input, identity, root) is Some(target) &&
         target.attachment_requests
         .iter()
         .find_first(request => {
@@ -855,10 +896,7 @@ fn Model::update(
       guard input.identity == identity && input.root == root else {
         return (self, @cmd.none)
       }
-      guard self.entries
-        .iter()
-        .find_first(entry => entry.identity() == identity && entry.root == root)
-        is Some(target) &&
+      guard self.callback_entry(input, identity, root) is Some(target) &&
         target.attachment_requests
         .iter()
         .find_first(request => {
@@ -889,10 +927,7 @@ fn Model::update(
       guard input.identity == identity && input.root == root else {
         return (self, @cmd.none)
       }
-      guard self.entries
-        .iter()
-        .find_first(entry => entry.identity() == identity && entry.root == root)
-        is Some(target) &&
+      guard self.callback_entry(input, identity, root) is Some(target) &&
         target.attachment_requests
         .iter()
         .any(request => {
@@ -909,10 +944,7 @@ fn Model::update(
       )
     }
     AttachmentImported(identity, root, id, result) => {
-      guard self.entries
-        .iter()
-        .find_first(entry => entry.identity() == identity && entry.root == root)
-        is Some(target) &&
+      guard self.callback_entry(input, identity, root) is Some(target) &&
         target.attachment_requests
         .iter()
         .any(request => request.id == id && request.phase is AttachmentImporting) else {
@@ -1026,7 +1058,7 @@ fn Model::update(
       let (next, command) = entry.accept_completion(item, action_emit)
       self.commit_entry_change(entry, next, command, action_emit)
     }
-    EntriesRetired => (self, @cmd.none)
+    EntriesChanged => (self, @cmd.none)
     ChangesToggled =>
       (
         self.with_entry({ ..entry, changes_open: !entry.changes_open, }),
@@ -1132,6 +1164,7 @@ fn Model::update(
             PromptSubmission(
               sequence_before=input.submission_sequence,
               entry.draft,
+              attachments=[],
             ),
           ),
         }),
@@ -1189,6 +1222,7 @@ fn Model::update(
               PromptSubmission(
                 sequence_before=input.submission_sequence,
                 entry.draft,
+                attachments=entry.attachment_requests.map(request => request.id),
               ),
             ),
           }),
@@ -1344,8 +1378,8 @@ fn Model::editing_subscriptions(
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @sub.Sub {
-  if self.applied_retirements < input.retirements.length() {
-    return @sub.every(150, emit(EntriesRetired))
+  if self.applied_changes < input.entry_changes.length() {
+    return @sub.every(150, emit(EntriesChanged))
   }
   let entry = self.active(input)
   guard entry.completion is Some(completion) && completion.menu.loading() else {

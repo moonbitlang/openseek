@@ -175,3 +175,45 @@ for (const [method, editText] of [['picker', false], ['paste', true]]) {
     }
   });
 }
+
+for (const command of ['goal', 'compact']) {
+  test(`first Cloud ${command} retains unsubmitted images and documents for the following prompt`, async ({ page }) => {
+    const cloud = new AttachmentHarness(page);
+    await cloud.install(); await cloud.goto(); await cloud.create();
+    await select(page, [document, image]);
+    await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+    await expect(page.locator('.composer .mention-chip')).toContainText('report.pdf');
+    const task = page.locator('#task');
+    await task.fill(`/${command}`);
+    await expect(page.locator('.completion-item').filter({ hasText: `/${command}` })).toBeVisible();
+    await task.press('Enter');
+    if (command === 'goal') {
+      await task.fill('Inspect these files');
+      await page.locator('#goal-set').click();
+    }
+    await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+    await expect.poll(() => messages(cloud).length).toBe(1);
+    await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
+    await expect(page.locator('.composer .mention-chip')).toContainText('report.pdf');
+    expect(cloud.imports).toEqual([]);
+    if (command === 'goal') {
+      await cloud.emitSessionEvent(sessionC, 'goal_updated', { goal: 'Inspect these files' }, { task: null });
+    } else {
+      await cloud.emitSessionEvent(sessionC, 'compaction_started', { from_sequence: 1, to_sequence: 1 }, { task: null });
+      await cloud.emitSessionEvent(sessionC, 'compaction_finished', { from_sequence: 1, to_sequence: 1, summary: 'Fixture summary' }, { task: null });
+      await cloud.publishControl(sessionC, { compact_queued: false, compacting: false });
+    }
+    await task.fill('Now inspect the files');
+    await page.locator('#send').click();
+    await expect.poll(() => messages(cloud).length).toBe(2);
+    const payload = JSON.parse(messages(cloud)[1].body).command;
+    expect(payload.command).toBe('prompt');
+    expect(payload.content).toContainEqual({ type: 'image', media_type: 'image/png', data: png });
+    expect(payload.content.find(part => part.type === 'text').text).toContain('report.pdf');
+    expect(cloud.imports.map(item => item.source.name)).toEqual(['report.pdf', 'two-colors.png']);
+    await expect(page.locator('.composer-image')).toHaveCount(0);
+    await expect(page.locator('.composer .mention-chip')).toHaveCount(0);
+    expect(creations(cloud)).toHaveLength(1);
+    expect(cloud.device.pageErrors).toEqual([]);
+  });
+}

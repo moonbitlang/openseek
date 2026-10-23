@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const commands = app => app.requests.filter(request => request.method === 'POST' && request.path.endsWith('/commands')).map(request => JSON.parse(request.body));
 
@@ -83,13 +83,92 @@ for (const [name, workflow] of [['simplify', 'simplify.mbtx'], ['ultrareview', '
   }
 }
 
-test('Cloud blank does not expose engine-only commands or create a session for them', async ({ page }) => {
+for (const name of ['goal', 'compact']) {
+  test(`first Cloud ${name} creates once, observes before sending, and keeps later typing`, async ({ page }, testInfo) => {
+    const app = await open(page);
+    await app.create();
+    let create;
+    let observe;
+    app.pauseCreate = new Promise(resolve => { create = resolve; });
+    app.pauseSessionEvents = new Promise(resolve => { observe = resolve; });
+    const task = page.locator('#task');
+    await task.fill(`/${name}`);
+    await expect(page.locator('.completion-item').filter({ hasText: `/${name}` })).toBeVisible();
+    await task.press('Enter');
+    if (name === 'goal') {
+      expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
+      await task.fill('A goal before the first prompt');
+      await page.locator('#goal-set').click();
+    }
+    await expect.poll(() => app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);
+    await expect(task).toBeDisabled();
+    expect(commands(app)).toEqual([]);
+    create();
+    await expect(app.row(sessionC)).toHaveAttribute('aria-current', 'true');
+    await expect(task).toBeEnabled();
+    await task.fill('Keep this unsent prompt');
+    expect(commands(app)).toEqual([]);
+    if (name === 'compact') await app.open(sessionB);
+    observe();
+    await expect.poll(() => commands(app)).toEqual([{ command: name === 'goal'
+      ? { command: 'goal', action: 'set', text: 'A goal before the first prompt' }
+      : { command: 'compact' } }]);
+    if (name === 'goal') {
+      await app.emitSessionEvent(sessionC, 'goal_updated', { goal: 'A goal before the first prompt' }, { task: null });
+      await expect(page.locator('.composer-goal')).toContainText('Goal: A goal before the first prompt');
+    } else {
+      await app.emitSessionEvent(sessionC, 'compaction_started', { from_sequence: 1, to_sequence: 1 }, { task: null });
+      await app.emitSessionEvent(sessionC, 'compaction_finished', { from_sequence: 1, to_sequence: 1, summary: 'Empty fixture' }, { task: null });
+      await app.publishControl(sessionC, { compact_queued: false, compacting: false });
+      await app.open(sessionC);
+      await expect(page.locator('.composer-notice-text')).toHaveCount(0);
+    }
+    await expect(task).toHaveValue('Keep this unsent prompt');
+    await expect(page.locator('#stop')).toHaveCount(0);
+    expect(app.postCount).toBe(0);
+    await app.open(sessionB);
+    await app.open(sessionC);
+    await expect(task).toHaveValue('Keep this unsent prompt');
+    expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(1);
+    expect(commands(app)).toHaveLength(1);
+    await page.screenshot({ path: testInfo.outputPath(`cloud-first-${name}.png`) });
+    expect(app.device.pageErrors).toEqual([]);
+  });
+}
+
+test('first Cloud goal creation failure retains its editor and command rejection reuses the created session', async ({ page }) => {
   const app = await open(page);
-  await page.getByRole('button', { name: 'New chat', exact: true }).click();
-  await page.locator('#task').fill('/goal');
-  await expect(page.locator('.completion-item')).toHaveCount(0);
+  await app.create();
+  app.createStatus = 503;
+  const task = page.locator('#task');
+  await task.fill('/goal');
+  await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
+  await task.press('Enter');
+  await expect(page.locator('#goal-set')).toBeVisible();
+  await task.fill('Retain this goal');
+  await page.locator('#goal-set').click();
+  await expect(page.getByRole('main')).toContainText('Error');
+  await expect(task).toHaveValue('Retain this goal');
+  await expect(page.locator('#goal-set')).toBeEnabled();
   expect(commands(app)).toEqual([]);
-  expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
+  app.createStatus = 201;
+  let releaseHistory;
+  app.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
+  app.controlRejected = 'Model is unavailable';
+  await page.locator('#goal-set').click();
+  await expect(page.getByRole('main')).toContainText('Model is unavailable');
+  const history = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/${sessionC}/messages`));
+  releaseHistory();
+  await (await history).finished();
+  await expect(page.getByRole('main')).toContainText('Model is unavailable');
+  await expect(task).toHaveValue('Retain this goal');
+  await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
+  app.controlRejected = null;
+  await page.locator('#goal-set').click();
+  await expect.poll(() => commands(app).length).toBe(2);
+  expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(2);
+  expect(commands(app)[1]).toEqual({ command: { command: 'goal', action: 'set', text: 'Retain this goal' } });
+  expect(app.device.pageErrors).toEqual([]);
 });
 
 async function compact(page) {

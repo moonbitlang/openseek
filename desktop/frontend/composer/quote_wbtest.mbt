@@ -82,7 +82,8 @@ test "a reply sent now submits the draft past an open completion menu" {
     is Some(
       PromptSubmission(
         sequence_before=0,
-        { task: "@main\n\n> quoted\n\nwhy?\n\n", .. }
+        { task: "@main\n\n> quoted\n\nwhy?\n\n", .. },
+        ..
       )
     ),
   )

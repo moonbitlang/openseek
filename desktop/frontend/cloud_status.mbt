@@ -13,7 +13,7 @@ fn Model::cloud_display_status(self : Model) -> Status? {
     return Some(
       if self.cloud.notice is Some(_) {
         Errored
-      } else if self.cloud.creation is Some({ submission: Some(_), .. }) {
+      } else if self.cloud.creation is Some({ pending: Some(_), .. }) {
         Starting
       } else {
         Ready

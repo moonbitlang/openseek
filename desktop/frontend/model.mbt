@@ -1521,10 +1521,10 @@ priv struct Model {
   // beside `select_menu` so the shell can hide native Browser views beneath
   // the complete top-layer surface.
   project_menu_query : String
-  // Every newly observed archive appends its exact owner. The composer consumes
-  // this page-lifetime log in order, so a background session cannot regain an
-  // old component-local draft when the same session id is later unarchived.
-  composer_entry_retirements : Array[@interop.ConversationIdentity]
+  // The composer consumes ownership moves and retirements in order, including
+  // for hidden entries. Archived sessions cannot regain an old local draft
+  // when later unarchived.
+  composer_entry_changes : Array[@composer.EntryChange]
   // Cmd/Ctrl+P/T unified Quick Open in the native window and browser console.
   // It is global UI for the focused conversation, not durable conversation
   // state. Owned by the `quick_open` package: this shell only opens it, fences
@@ -2754,7 +2754,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     composer_context_generation: 0,
     select_menu: None,
     project_menu_query: "",
-    composer_entry_retirements: [],
+    composer_entry_changes: [],
     quick_open: @quick_open.State::empty(),
     git_request_generation: 0,
     git_details_open: false,
@@ -3371,11 +3371,11 @@ fn Model::with_archive_override(
   if !newly_retired {
     return model
   }
-  let composer_entry_retirements = model.composer_entry_retirements.copy()
-  composer_entry_retirements.push(
-    @interop.Host({ channel, session: key.session, }),
+  let composer_entry_changes = model.composer_entry_changes.copy()
+  composer_entry_changes.push(
+    @composer.Retire(@interop.Host({ channel, session: key.session, })),
   )
-  { ..model, composer_entry_retirements, }
+  { ..model, composer_entry_changes, }
 }
 
 ///|

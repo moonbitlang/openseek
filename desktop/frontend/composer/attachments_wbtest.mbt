@@ -76,7 +76,7 @@ test "native selection belongs to its original draft and ignores retired drafts"
   let next = attachment_step(model, other, msg)
   assert_eq(next.active(input).attachment_requests.length(), 1)
   assert_true(next.active(other).attachment_requests.is_empty())
-  let retired = { ..other, retirements: [input.identity.owner], }
+  let retired = { ..other, entry_changes: [Retire(input.identity.owner)], }
   let dropped = attachment_step(model, retired, msg)
   assert_true(dropped.entries.all(entry => entry.owner != input.identity.owner))
   let changed = { ..input, root: Some(@common.Uri::file("/other")), }

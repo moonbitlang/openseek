@@ -53,7 +53,8 @@ test "first Cloud file-only submission creates once and admits the prepared file
     navigation=0,
   )
   assert_true(
-    creating.creation is Some({ submission: Some(_), attachments: [_], .. }),
+    creating.creation
+    is Some({ pending: Some({ prompt: Some((_, [_])), .. }), .. }),
   )
   let (created, _, selected) = update(
     creating,
@@ -64,8 +65,36 @@ test "first Cloud file-only submission creates once and admits the prepared file
   )
   assert_eq(selected, Some("new-session"))
   let conversation = created.conversations["new-session"]
-  assert_true(conversation.sending)
-  assert_eq(conversation.initial_attachments, attachments)
+  assert_true(
+    conversation.outgoing is Some({ prompt: Some((_, sources)), .. }) &&
+    sources == attachments,
+  )
+  let stream = StreamLease::new()
+  let created = metadata_update(created, WatchOpened(1, "new-session", stream))
+  let created = metadata_update(
+    created,
+    WatchEvent(
+      1,
+      "new-session",
+      stream,
+      Snapshot({
+        session_id: "new-session",
+        task_id: None,
+        seq: 0,
+        data: {
+          active_task_id: None,
+          status: Idle,
+          paused: false,
+          queue: [],
+          steers: [],
+          compacting: false,
+          compact_queued: false,
+        },
+      }),
+    ),
+  )
+  let conversation = created.conversations["new-session"]
+  assert_true(conversation.sending && conversation.outgoing is None)
   let path = ".openseek/attachments/uuid/report.pdf"
   let (stored, _, _) = update(
     created,
@@ -96,8 +125,8 @@ test "first Cloud file-only submission creates once and admits the prepared file
   )
   assert_true(ready.conversations["new-session"].initial_attachments.is_empty())
   assert_eq(
-    ready.conversations["new-session"].initial_submission,
-    Some(prepared),
+    ready.conversations["new-session"].pending.unwrap().content.text(),
+    prepared.prompt(),
   )
   let (admitted, _, _) = update(
     ready,

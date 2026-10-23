@@ -431,7 +431,9 @@ pub fn State::composer_input(
     context_generation: 0,
     turn_id: active_turn,
     submission_sequence: self.submission_sequence,
-    retirements: self.composer_retirements.map(key => @interop.Host(key)),
+    entry_changes: self.composer_retirements.map(key => {
+      @composer.Retire(@interop.Host(key))
+    }),
     prediction_source: None,
     prediction: None,
     file_candidates: context.file_candidates,

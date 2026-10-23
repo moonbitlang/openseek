@@ -68,6 +68,7 @@ pub fn subscriptions(
 ///|
 fn Conversation::needs_observation(self : Conversation) -> Bool {
   self.sending ||
+  self.outgoing is Some(_) ||
   self.generating ||
   self.observed_task is Some(_) ||
   self.control.map_or(false, control => {

@@ -80,12 +80,12 @@ fn Model::accepts_composer_action(
   self : Model,
   identity : @composer.Identity,
 ) -> Bool {
-  guard identity.archive_generation <= self.composer_entry_retirements.length() else {
+  guard identity.archive_generation <= self.composer_entry_changes.length() else {
     return false
   }
   for
-    index in identity.archive_generation..<self.composer_entry_retirements.length() {
-    if self.composer_entry_retirements[index] == identity.owner {
+    index in identity.archive_generation..<self.composer_entry_changes.length() {
+    if self.composer_entry_changes[index].retires(identity.owner) {
       return false
     }
   }
@@ -127,7 +127,7 @@ fn update_cloud(
     cloud
   }
   let switched = before.user_id is Some(_) && before.user_id != cloud.user_id
-  let retirements = model.composer_entry_retirements.copy()
+  let retirements = model.composer_entry_changes.copy()
   let created = match message {
     @cloud.Created(epoch, request, session) if epoch == before.epoch &&
       before.creation is Some(creation) &&
@@ -135,12 +135,16 @@ fn update_cloud(
       cloud.creation is None => Some(session)
     _ => None
   }
-  if created is Some(_) && before.draft_identity() is Some(owner) {
-    retirements.push(owner)
+  if created is Some(session) &&
+    before.draft_identity() is Some(owner) &&
+    cloud.user_id is Some(account) {
+    retirements.push(
+      @composer.Move(from=owner, to=@interop.Cloud(account~, session~)),
+    )
   }
   if switched && before.user_id is Some(account) {
     if before.draft_identity() is Some(owner) {
-      retirements.push(owner)
+      retirements.push(@composer.Retire(owner))
     }
     let sessions = before.sessions.map(item => item.id)
     for session in before.conversations.keys() {
@@ -149,7 +153,7 @@ fn update_cloud(
       }
     }
     for session in sessions {
-      retirements.push(@interop.Cloud(account~, session~))
+      retirements.push(@composer.Retire(@interop.Cloud(account~, session~)))
     }
   }
   let removed = if before.user_id == cloud.user_id {
@@ -163,7 +167,7 @@ fn update_cloud(
   let mut navigation = model.navigation
   if before.user_id is Some(account) {
     for session in removed {
-      retirements.push(@interop.Cloud(account~, session~))
+      retirements.push(@composer.Retire(@interop.Cloud(account~, session~)))
       let location : @routes.Location = {
         device: None,
         target: CloudSession(account=Some(account), session~),
@@ -276,7 +280,7 @@ fn update_cloud(
         ) => None
       other => other
     },
-    composer_entry_retirements: retirements,
+    composer_entry_changes: retirements,
     selected_conversation: if message is @cloud.Create &&
       cloud.draft_identity() is Some(@interop.Cloud(account~, session=id)) {
       Some(CloudDraftSelection(account~, id~))
@@ -396,11 +400,15 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     None => self.cloud_identity()
   }
   guard owner is Some(owner) else { return None }
-  let conversation = self.cloud_conversation()
   let creating = self.cloud_draft_identity() is Some(_)
+  let conversation = if creating {
+    self.cloud.creation.map(creation => creation.conversation)
+  } else {
+    self.cloud_conversation()
+  }
   guard creating || conversation is Some(_) else { return None }
   let pending = creating &&
-    self.cloud.creation is Some({ submission: Some(_), .. })
+    self.cloud.creation is Some({ pending: Some(_), .. })
   let history : Array[String] = []
   if conversation is Some(conversation) {
     for record in conversation.records {
@@ -440,7 +448,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     slash_commands: if !creating && !self.cloud.can_compose(owner.session()) {
       []
     } else {
-      self.openseek_commands(session_commands=!creating)
+      self.openseek_commands()
     },
     history,
     root: file_ctx(self).root(),

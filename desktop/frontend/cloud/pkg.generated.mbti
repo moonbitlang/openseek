@@ -39,6 +39,14 @@ pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) 
 // Errors
 
 // Types and methods
+pub struct CommandSubmission {
+  request : Int32
+  command : @openseek_protocol.Command
+  prompt : (@composer.Draft, Array[@protocol.AttachmentSource])?
+} derive(Eq)
+pub fn CommandSubmission::equal(Self, Self) -> Bool
+pub fn CommandSubmission::not_equal(Self, Self) -> Bool
+
 pub struct ControlInput {
   task_id : String
   key : String
@@ -133,6 +141,7 @@ pub(all) struct Conversation {
   initial_attachments : Array[@protocol.AttachmentSource]
   uploads : Array[UploadedAttachment]
   pending : Submission?
+  outgoing : CommandSubmission?
   stream : StreamLease?
   control : ControlState?
   control_inputs : Array[ControlInput]
@@ -158,8 +167,8 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
-  submission : @composer.Draft?
-  attachments : Array[@protocol.AttachmentSource]
+  conversation : Conversation
+  pending : CommandSubmission?
 } derive(Eq)
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool

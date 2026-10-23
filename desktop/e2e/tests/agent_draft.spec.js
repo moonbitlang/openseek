@@ -251,11 +251,13 @@ test('reusing a draft waits for its pending open and close before reopening', as
 test('Local native goal and compact commands share input and wait for engine confirmation', async ({ page }, testInfo) => {
   const app = await open(page);
   await app.openSession();
+  await expect(page.locator('.composer-goal')).toContainText('Ship Rabbita 0.15 browser tests');
   const task = page.locator('#task');
   const requests = () => app.requests.filter(r => r.method === 'agent.command');
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({hasText: '/goal'})).toBeVisible();
   await task.press('Enter');
+  await expect(page.locator('#goal-set')).toBeVisible();
   await task.fill('Finish the shared command work');
   await page.locator('#goal-set').click();
   await expect.poll(() => requests().length).toBe(1);

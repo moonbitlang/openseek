@@ -3875,12 +3875,14 @@ fn update_msg(
                   item.device != conv.device ||
                   item.session_id != conv.session_id
                 }),
-                composer_entry_retirements: [
-                  ..model.composer_entry_retirements,
-                  @interop.Host({
-                    channel: conv.device,
-                    session: conv.session_id,
-                  }),
+                composer_entry_changes: [
+                  ..model.composer_entry_changes,
+                  @composer.Retire(
+                    @interop.Host({
+                      channel: conv.device,
+                      session: conv.session_id,
+                    }),
+                  ),
                 ],
                 sidebar_open: model.sidebar_open && !model.narrow,
               },
@@ -15649,11 +15651,11 @@ test "model switches transfer one draft and retire the old owner actions" {
   assert_true(switched.codex_composer_input().draft == draft)
   assert_true(switched.codex == repeated.codex)
   assert_true(
-    switched.composer_entry_retirements == repeated.composer_entry_retirements,
+    switched.composer_entry_changes == repeated.composer_entry_changes,
   )
   assert_true(switched.codex.draft_worktree_mode())
   assert_true(before.active_conversation() is Some(_))
-  assert_true(before.composer_entry_retirements.is_empty())
+  assert_true(before.composer_entry_changes.is_empty())
   let codex_identity = switched.codex_composer_input().identity
   let edited = { ..draft, task: "Edited in Codex", }
   let back_action = CodexComposerAction(
@@ -15720,10 +15722,10 @@ test "Codex composer retirements stay monotonic across device focus" {
     Codex(channel=source, @codex.Msg::abandon_draft()),
     started,
   )
-  let old_retirements = retired.codex_composer_input().retirements
+  let old_retirements = retired.codex_composer_input().entry_changes
   assert_eq(old_retirements.length(), 1)
   let (_, focused) = focus_channel(dispatch, retired, remote)
-  assert_true(focused.codex_composer_input().retirements == old_retirements)
+  assert_true(focused.codex_composer_input().entry_changes == old_retirements)
   assert_true(!focused.codex.has_active())
   let (_, remote_started) = update(
     dispatch,
@@ -15735,12 +15737,14 @@ test "Codex composer retirements stay monotonic across device focus" {
     Codex(channel=remote, @codex.Msg::abandon_draft()),
     remote_started,
   )
-  let retirements = remote_retired.codex_composer_input().retirements
+  let retirements = remote_retired.codex_composer_input().entry_changes
   assert_eq(retirements.length(), 2)
   assert_true(retirements[0] == old_retirements[0])
   assert_true(
     retirements[1] ==
-    @interop.Host({ channel: remote, session: "remote-draft", }),
+    @composer.Retire(
+      @interop.Host({ channel: remote, session: "remote-draft", }),
+    ),
   )
   let (_, returned) = focus_channel(dispatch, remote_retired, source)
   let (_, reopened) = update(
@@ -15748,9 +15752,9 @@ test "Codex composer retirements stay monotonic across device focus" {
     Codex(channel=source, @codex.Msg::start_draft("local-draft", "/local")),
     returned,
   )
-  assert_true(reopened.codex_composer_input().retirements == retirements)
+  assert_true(reopened.codex_composer_input().entry_changes == retirements)
   assert_true(!reopened.codex.accepts_composer_identity(old_identity, source))
-  assert_true(retired.codex_composer_input().retirements == old_retirements)
+  assert_true(retired.codex_composer_input().entry_changes == old_retirements)
 }
 
 ///|
@@ -15774,7 +15778,7 @@ test "a goal editor cannot lose its draft through an agent switch" {
   )
   assert_true(after.screen is Chat)
   assert_true(after.active().controls.edit == before.active().controls.edit)
-  assert_true(after.composer_entry_retirements.is_empty())
+  assert_true(after.composer_entry_changes.is_empty())
 }
 
 ///|
@@ -15854,7 +15858,7 @@ test "an agent switch cannot discard a pending semantic submission" {
     after.active().pending_semantic_submission ==
     before.active().pending_semantic_submission,
   )
-  assert_true(after.composer_entry_retirements.is_empty())
+  assert_true(after.composer_entry_changes.is_empty())
 }
 
 ///|

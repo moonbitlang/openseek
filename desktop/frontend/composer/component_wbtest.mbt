@@ -19,7 +19,7 @@ fn Input::fixture(task : String) -> Input {
     installed_skills: [],
     context_generation: 0,
     submission_sequence: 0,
-    retirements: [],
+    entry_changes: [],
     prediction_source: None,
     prediction: None,
     file_candidates: [],
@@ -130,10 +130,10 @@ test "background retirement prevents an old draft from reviving" {
     Msg::test_emit(),
     Action::test_emit(),
   )
-  let retired = { ..input, retirements: [input.identity.owner], }
+  let retired = { ..input, entry_changes: [Retire(input.identity.owner)], }
   let (without_old, _) = drafted.update(
     retired,
-    EntriesRetired,
+    EntriesChanged,
     Msg::test_emit(),
     Action::test_emit(),
   )
@@ -467,7 +467,7 @@ test "a mention-only draft is a submit-ready prompt" {
   )
   assert_true(
     submitted.active(input).pending_submission
-    is Some(PromptSubmission(sequence_before=_, _)),
+    is Some(PromptSubmission(sequence_before=_, _, ..)),
   )
 }
 
@@ -885,7 +885,7 @@ test "draft acknowledgement removes its snapshot once and retains later image re
         assert_true(next.mentions.is_empty())
         assert_eq(next.images, [image])
       }
-      let retired = { ..input, retirements: [input.identity.owner], }
+      let retired = { ..input, entry_changes: [Retire(input.identity.owner)], }
       let (ignored, _) = reading.update(
         retired,
         ImageRead(input.identity, input.root, event),
@@ -1023,7 +1023,7 @@ test "image read events remain pure and settle their original cached draft" {
   assert_eq(failure.active(input).image_error, Some("read failed"))
   assert_eq(failure.active(input).image_reads, 0)
   assert_eq(failure.active(input).draft.task, "keep text")
-  let retired = { ..other, retirements: [input.identity.owner], }
+  let retired = { ..other, entry_changes: [Retire(input.identity.owner)], }
   let (dropped, _) = reading.update(
     retired,
     ready,
@@ -1214,4 +1214,123 @@ test "a shell command is accepted only where sending is" {
       ),
     ),
   )
+}
+
+///|
+test "editor ownership moves preserve drafts and settle the original prompt once" {
+  let input = {
+    ..Input::fixture(""),
+    identity: {
+      owner: @interop.Cloud(account="a", session="draft:1"),
+      archive_generation: 0,
+    },
+  }
+  let model = Model(input).with_entry({
+    ..Entry(input),
+    draft: {
+      task: "Keep this draft",
+      images: [{ name: "image.png", url: "data:image/png;base64,AA==", }],
+      mentions: [],
+    },
+    goal_draft: Some("Goal being edited"),
+    attachment_sequence: 1,
+    attachment_requests: [
+      {
+        id: 1,
+        source: @protocol.AttachmentBytes(name="notes.txt", data_base64="eA=="),
+        root: input.root,
+        cloud_access: None,
+        phase: AttachmentStaged(name="notes.txt"),
+      },
+    ],
+  })
+  let owner = @interop.Cloud(account="a", session="session")
+  let moved = {
+    ..input,
+    identity: { owner, archive_generation: 1, },
+    entry_changes: [Move(from=input.identity.owner, to=owner)],
+  }
+  let entry = model.active(moved)
+  assert_eq(entry.owner, owner)
+  assert_eq(entry.draft.task, "Keep this draft")
+  assert_eq(entry.draft.images.length(), 1)
+  assert_eq(entry.attachment_requests.length(), 1)
+  assert_eq(entry.goal_draft, Some("Goal being edited"))
+  let (applied, _) = model.update(
+    moved,
+    EntriesChanged,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_eq(applied.entries.length(), 1)
+  assert_true(applied.active(moved) == entry)
+  let submitted = {
+    ..entry,
+    pending_submission: Some(
+      PromptSubmission(sequence_before=0, entry.draft, attachments=[1]),
+    ),
+  }
+  let pending = applied.with_entry(submitted)
+  let acknowledged = { ..moved, submission_sequence: 1, }
+  let settled = pending.active(acknowledged)
+  assert_true(settled.draft.is_blank())
+  assert_true(settled.attachment_requests.is_empty())
+  let retired = {
+    ..moved,
+    entry_changes: [..moved.entry_changes, Retire(owner)],
+  }
+  assert_true(pending.active(retired).draft.is_blank())
+}
+
+///|
+test "image reads follow an editor move but cannot outlive its retirement" {
+  let input = {
+    ..Input::fixture(""),
+    root: None,
+    identity: {
+      owner: @interop.Cloud(account="a", session="draft:1"),
+      archive_generation: 0,
+    },
+    presentation: { ..Input::fixture("").presentation, images_enabled: true, },
+  }
+  let (reading, _) = Model(input).update(
+    input,
+    ImageRead(input.identity, input.root, @image_input.Reading),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let owner = @interop.Cloud(account="a", session="session")
+  let moved = {
+    ..input,
+    identity: { owner, archive_generation: 1, },
+    root: Some(@common.Uri::file("/cloud-session")),
+    entry_changes: [Move(from=input.identity.owner, to=owner)],
+  }
+  let reply = ImageRead(
+    input.identity,
+    input.root,
+    @image_input.DocumentsReady(
+      images=[("image.png", "data:image/png;base64,AA==")],
+      documents=[],
+    ),
+  )
+  let (received, _) = reading.update(
+    moved,
+    reply,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_eq(received.active(moved).draft.images.length(), 1)
+  assert_eq(received.active(moved).image_reads, 0)
+  let retired = {
+    ..moved,
+    entry_changes: [..moved.entry_changes, Retire(owner)],
+  }
+  let (ignored, _) = reading.update(
+    retired,
+    reply,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(ignored.active(retired).draft.images.is_empty())
 }

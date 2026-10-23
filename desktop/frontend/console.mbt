@@ -923,20 +923,22 @@ fn console_signed_out(
   model : Model,
 ) -> (@cmd.Cmd, Model) {
   let (retire_command, model) = focus_channel(dispatch, model, Local)
-  let retirements = model.composer_entry_retirements.copy()
+  let retirements = model.composer_entry_changes.copy()
   for conversation in model.conversations {
     retirements.push(
-      @interop.Host({
-        channel: conversation.device,
-        session: conversation.session_id,
-      }),
+      @composer.Retire(
+        @interop.Host({
+          channel: conversation.device,
+          session: conversation.session_id,
+        }),
+      ),
     )
   }
   (
     retire_command,
     {
       ..model,
-      composer_entry_retirements: retirements,
+      composer_entry_changes: retirements,
       devices: [],
       focused: @interop.ChannelId::Local,
       active_session: "",

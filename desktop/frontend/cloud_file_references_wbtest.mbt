@@ -1,5 +1,5 @@
 ///|
-test "Cloud sends file mentions and restores the first submission as chips" {
+test "Cloud prepares file mentions in the same command before and after creation" {
   let model = integrated_cloud_model()
   let draft : @composer.Draft = {
     task: "",
@@ -32,10 +32,11 @@ test "Cloud sends file mentions and restores the first submission as chips" {
     ),
     creating,
   )
-  assert_true(created.composer_input().draft == draft)
-  assert_eq(
-    created.cloud.conversations["new-cloud"].pending.unwrap().content.text(),
-    draft.prompt(),
+  let submission = created.cloud.conversations["new-cloud"].outgoing.unwrap()
+  assert_true(submission.prompt is Some((source, _)) && source == draft)
+  assert_true(
+    submission.command is @wire.Prompt(content~, ..) &&
+    content.text() == draft.prompt(),
   )
 }
 

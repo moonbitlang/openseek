@@ -34,7 +34,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   }
   let identity : @composer.Identity = {
     owner: @interop.Host(owner),
-    archive_generation: self.composer_entry_retirements.length(),
+    archive_generation: self.composer_entry_changes.length(),
   }
   let checkout_ready = checkout is Some(value) && value.is_ready()
   let queue_save_pending = conv.saving_queue_edit()
@@ -230,7 +230,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       _ => None
     },
     submission_sequence: self.submission_sequence,
-    retirements: self.composer_entry_retirements,
+    entry_changes: self.composer_entry_changes,
     prediction: conv.prediction,
     prediction_source: if self.screen is Chat &&
       root_ready &&
@@ -388,7 +388,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
         channel: self.focused,
         session: self.active_session,
       }),
-      archive_generation: self.composer_entry_retirements.length(),
+      archive_generation: self.composer_entry_changes.length(),
     },
     draft: { images: [], task: "", mentions: [], },
     run: None,
@@ -403,7 +403,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
     context_generation: self.composer_context_generation,
     turn_id: None,
     submission_sequence: self.submission_sequence,
-    retirements: self.composer_entry_retirements,
+    entry_changes: self.composer_entry_changes,
     prediction_source: None,
     prediction: None,
     file_candidates: [],
@@ -481,11 +481,8 @@ const SimplifyPrompt : String =
   #|Focus:
 
 ///|
-fn Model::openseek_commands(
-  self : Model,
-  session_commands~ : Bool = true,
-) -> Array[@composer.SlashCommand] {
-  let commands : Array[@composer.SlashCommand] = [
+fn Model::openseek_commands(self : Model) -> Array[@composer.SlashCommand] {
+  [
     {
       label: "/compact",
       detail: shell_text(self.locale, CompactContext),
@@ -511,5 +508,4 @@ fn Model::openseek_commands(
       prompt: Some(SimplifyPrompt),
     },
   ]
-  commands.filter(command => session_commands || command.prompt is Some(_))
 }

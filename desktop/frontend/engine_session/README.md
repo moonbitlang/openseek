@@ -3,8 +3,11 @@
 Local and Cloud use this package for command interaction and native event state.
 Local and Cloud share the full `Model::openseek_commands` catalog, including
 prompt workflows (`/simplify` and `/ultrareview`). The shared composer expands
-prompt commands before normal submission. A Cloud draft without a created session
-only offers prompt commands; submitting one creates the session as usual.
+prompt commands before normal submission. Cloud offers the same catalog before
+and after session creation. Any actual command submission creates the session
+when needed, establishes its SSE baseline, then sends that command once. Opening
+a menu or editing a goal does not create a session. The shared composer moves its
+cached editor state to the returned session identity, retaining unsent input.
 
 For a native command, register its action in `slash_action`, add its menu entry
 to that shared catalog, and implement any new UI state in this package once.

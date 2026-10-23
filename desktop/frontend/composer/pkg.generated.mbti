@@ -137,6 +137,14 @@ pub fn Draft::with_office_selection(Self, String?) -> Self
 pub fn Draft::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
 pub fn Draft::with_semantic_selection(Self, @mention_context.SemanticSearchReference?) -> Self
 
+pub(all) enum EntryChange {
+  Retire(@interop.ConversationIdentity)
+  Move(from~ : @interop.ConversationIdentity, to~ : @interop.ConversationIdentity)
+} derive(Eq)
+pub fn EntryChange::equal(Self, Self) -> Bool
+pub fn EntryChange::not_equal(Self, Self) -> Bool
+pub fn EntryChange::retires(Self, @interop.ConversationIdentity) -> Bool
+
 pub(all) enum FileIndex {
   FileIndexEmpty(epoch~ : Int32)
   FileIndexLoading(epoch~ : Int32)
@@ -235,7 +243,7 @@ pub(all) struct Input {
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int32
   submission_sequence : Int32
-  retirements : Array[@interop.ConversationIdentity]
+  entry_changes : Array[EntryChange]
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
