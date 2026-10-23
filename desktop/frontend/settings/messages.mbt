@@ -648,19 +648,19 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (Japanese, Interface) => "インターフェース"
     (English, MoonBitGuide) => "MoonBit guide"
     (English, MoonBitGuideDescription) =>
-      "Include built-in MoonBit syntax, library API explanations and examples in new OpenSeek chats. Working instructions and tools remain available when off. Existing chats stay unchanged."
+      "Enable the MoonBit syntax guide for new chats only."
     (SimplifiedChinese, MoonBitGuide) => "MoonBit 指南"
     (SimplifiedChinese, MoonBitGuideDescription) =>
-      "新建 OpenSeek 会话时，附加内置的 MoonBit 语法、库 API 说明和示例。关闭后仍保留工作指令和工具，已有会话不变。"
+      "启用 MoonBit 语法指南，只对新对话有效"
     (TraditionalChinese, MoonBitGuide) => "MoonBit 指南"
     (TraditionalChinese, MoonBitGuideDescription) =>
-      "新增 OpenSeek 對話時，附加內建的 MoonBit 語法、函式庫 API 說明和範例。關閉後仍保留工作指令和工具，既有對話不變。"
+      "啟用 MoonBit 語法指南，只對新對話有效"
     (Japanese, MoonBitGuide) => "MoonBit ガイド"
     (Japanese, MoonBitGuideDescription) =>
-      "新しい OpenSeek チャットに MoonBit の構文、ライブラリ API の説明と例を含めます。オフでも作業指示とツールは利用できます。既存のチャットは変更されません。"
+      "MoonBit 構文ガイドを有効にします。新しいチャットにのみ適用されます。"
     (Spanish, MoonBitGuide) => "Guía de MoonBit"
     (Spanish, MoonBitGuideDescription) =>
-      "Incluye sintaxis, explicaciones de API de bibliotecas y ejemplos de MoonBit en los nuevos chats de OpenSeek. Al desactivarla se conservan las instrucciones de trabajo y las herramientas. Los chats existentes no cambian."
+      "Activa la guía de sintaxis de MoonBit solo para nuevos chats."
     (English, Engine) => "Engine"
     (Spanish, Engine) => "Motor"
     (SimplifiedChinese, Engine) => "引擎"
