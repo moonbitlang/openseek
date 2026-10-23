@@ -825,7 +825,6 @@ pub(all) struct SessionDocument {
   version : Int32?
   id : String?
   system_prompt : String?
-  moonbit_guide : Bool?
   events : Array[SessionEvent]?
 } derive(Debug, Eq)
 
@@ -3633,7 +3632,6 @@ pub impl ToJson for SessionEvent with fn to_json(self) {
 pub impl FromJson for SessionDocument with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "SessionDocument")
   {
-    moonbit_guide: object.optional_bool("moonbit_guide"),
     version: match object.optional_json("version") {
       None => None
       Some(value) => Some(@json.from_json(value, path=path.add_key("version")))
@@ -3657,9 +3655,6 @@ pub impl FromJson for SessionDocument with fn from_json(json, path) {
 ///|
 pub impl ToJson for SessionDocument with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  if self.moonbit_guide is Some(enabled) {
-    fields["moonbit_guide"] = Json(enabled)
-  }
   if self.version is Some(value) {
     fields["version"] = Json(value)
   }

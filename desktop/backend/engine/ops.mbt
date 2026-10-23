@@ -783,7 +783,6 @@ pub async fn load_session(
 fn empty_session_reply(session : String) -> LoadSessionReply {
   {
     session: {
-      moonbit_guide: None,
       version: None,
       id: Some(session),
       system_prompt: None,

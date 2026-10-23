@@ -109,7 +109,6 @@ pub fn SessionListItem::equal(Self, Self) -> Bool
 pub fn SessionListItem::not_equal(Self, Self) -> Bool
 
 pub struct SessionLoadView {
-  moonbit_guide : Bool?
   prediction : @openseek_protocol.PredictionRecord?
   items : Array[TranscriptItem]
   watermark : Int32

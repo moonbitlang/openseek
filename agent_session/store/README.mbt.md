@@ -114,7 +114,6 @@ async test "create and load a complete session" {
         #|{
         #|  id: { value: "demo" },
         #|  system_prompt: "system",
-        #|  moonbit_guide: None,
         #|  events: <Vector:
         #|    [
         #|      {

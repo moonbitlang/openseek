@@ -43,7 +43,6 @@ test "session load carries a plain nullable prediction record" {
       version: Some(1),
       id: Some("s"),
       system_prompt: None,
-      moonbit_guide: None,
       events: Some([]),
     },
     watermark: Some(2),

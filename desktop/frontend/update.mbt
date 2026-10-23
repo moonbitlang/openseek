@@ -776,7 +776,6 @@ fn apply_session_snapshot(
   generation : Int32,
   activate_on_success : Bool,
   prediction : @wire.PredictionRecord?,
-  moonbit_guide~ : Bool? = None,
 ) -> (@cmd.Cmd, Model) {
   guard model.find_conversation(channel, session) is Some(conv) &&
     conv.sync is Reloading(generation=current, reload_after_current~, ..) &&
@@ -800,7 +799,7 @@ fn apply_session_snapshot(
     goal~,
     goal_markers~,
   )
-  let conv = { ..conv.with_prediction(prediction), moonbit_guide, }
+  let conv = conv.with_prediction(prediction)
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
   let owner : @interop.ConversationKey = { channel, session, }
@@ -4757,7 +4756,7 @@ fn update_msg(
             conv.session_id,
             workspace,
             approval=model.approval_for(conv.device, conv.session_id),
-            moonbit_guide?=conv.moonbit_guide,
+            moonbit_guide=conv.moonbit_guide,
             images=conv.images.map(image => image.url),
           )
         } else {
@@ -4772,7 +4771,7 @@ fn update_msg(
             conv.session_id,
             workspace=conv.project(),
             approval=model.approval_for(conv.device, conv.session_id),
-            moonbit_guide?=conv.moonbit_guide,
+            moonbit_guide=conv.moonbit_guide,
             images=conv.images.map(image => image.url),
           )
         }
@@ -8697,22 +8696,11 @@ fn update_device_msg(
       goal~,
       goal_markers~,
       prediction~,
-      moonbit_guide~,
       generation~
     ) =>
       apply_session_snapshot(
-        dispatch,
-        channel,
-        model,
-        session,
-        items,
-        watermark,
-        goal,
-        goal_markers,
-        generation,
-        true,
-        prediction,
-        moonbit_guide~,
+        dispatch, channel, model, session, items, watermark, goal, goal_markers,
+        generation, true, prediction,
       )
     SessionRefreshed(
       session~,
@@ -8721,22 +8709,11 @@ fn update_device_msg(
       goal~,
       goal_markers~,
       prediction~,
-      moonbit_guide~,
       generation~
     ) =>
       apply_session_snapshot(
-        dispatch,
-        channel,
-        model,
-        session,
-        items,
-        watermark,
-        goal,
-        goal_markers,
-        generation,
-        false,
-        prediction,
-        moonbit_guide~,
+        dispatch, channel, model, session, items, watermark, goal, goal_markers,
+        generation, false, prediction,
       )
     SessionLoadFailed(session~, message~, generation~) =>
       retry_session_snapshot(
@@ -10505,7 +10482,6 @@ fn second_run_started_before_first_response() -> (Model, String)? {
   let (_, reconciled) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -10519,7 +10495,6 @@ fn second_run_started_before_first_response() -> (Model, String)? {
   let (_, post_finish) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -10570,7 +10545,6 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
   let (_, reconciled) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -11334,7 +11308,6 @@ test "finished run reloads the named durable session for an old host" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -11395,7 +11368,6 @@ test "Finished queues one follow-up behind an older in-flight snapshot" {
   let (_, followed) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -12690,7 +12662,6 @@ test "open session tracks the latest load and ignores stale replies" {
   let (_, after_a) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -12716,7 +12687,6 @@ test "open session tracks the latest load and ignores stale replies" {
   let (_, after_b) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -12764,7 +12734,6 @@ test "a restored session keeps the placement its listing named" {
   let (_, restored) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       session~,
       items=[],
       watermark=0,
@@ -12846,7 +12815,6 @@ test "same-id session loads are fenced by channel owner" {
     FromDevice(
       remote,
       SessionLoaded(
-        moonbit_guide=None,
         goal=None,
         goal_markers=[],
         prediction=None,
@@ -12923,7 +12891,6 @@ test "reselecting a synced active session reloads idle external writes" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -13010,7 +12977,6 @@ test "pruning and reopening cannot reuse a transcript request token" {
   let (_, stale) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -13041,7 +13007,6 @@ test "pruning and reopening cannot reuse a transcript request token" {
   let (_, fresh) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -13099,7 +13064,6 @@ test "archive removal and reopening cannot reuse a transcript request token" {
   let (_, stale) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -13423,7 +13387,6 @@ test "session loaded swaps the active conversation onto the stored session" {
   let (_, once) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -13437,7 +13400,6 @@ test "session loaded swaps the active conversation onto the stored session" {
   let (_, twice) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -13477,7 +13439,6 @@ test "session loaded adopts the store transcript and keeps live run state" {
   let (_, other) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -13514,7 +13475,6 @@ test "session loaded adopts the store transcript and keeps live run state" {
   let (_, same) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -14016,7 +13976,6 @@ test "an accepted start response opens the run without Started" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -14613,7 +14572,6 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
   let (_, empty) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -14878,7 +14836,6 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
   let (_, drained) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       session="desktop-test",
       items=[],
       watermark=0,
@@ -14938,7 +14895,6 @@ test "a snapshot never settles a local steer by text" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -15170,7 +15126,6 @@ test "a foreign background run schedules one causal read after Started" {
   let (_, after_old_cut) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       session~,
       items=[],
       watermark=1,
@@ -15189,7 +15144,6 @@ test "a foreign background run schedules one causal read after Started" {
   let (_, causal) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       session~,
       items=[
         {
@@ -15283,7 +15237,6 @@ test "buffered commits are delivery, not applied chronology" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -17621,7 +17574,6 @@ test "switching same-id archived stores fences the first transcript load" {
   let (_, stale_first) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       session=first_item.id,
       items=[
         {
@@ -17650,7 +17602,6 @@ test "switching same-id archived stores fences the first transcript load" {
   let (_, loaded_second) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       session=second_item.id,
       items=[
         {
@@ -17722,7 +17673,6 @@ test "an archived snapshot stays open across archived-list reconciliation" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -17804,7 +17754,6 @@ test "unarchiving an open transcript fences its archived snapshot" {
   let (_, stale) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -18357,7 +18306,6 @@ test "a new Started incarnation retires its exact deleted tombstone" {
   let (_, reconciled) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       session=deleted_item.id,
       items=[],
       watermark=0,
@@ -18850,7 +18798,6 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
   let (_, stale_archived) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -21417,7 +21364,6 @@ test "a snapshot drains buffered commits in sequence order" {
   let (_, next) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -21472,7 +21418,6 @@ test "a snapshot already containing the buffered commits drops them" {
   let (_, next) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -21518,7 +21463,6 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
   let (_, next) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -21604,7 +21548,6 @@ test "background retries preserve buffered commits until a later success" {
   let (_, healed) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -21666,7 +21609,6 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -21723,7 +21665,6 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   let (_, stale) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -21749,7 +21690,6 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   let (_, lower) = update_dev(
     dispatch,
     SessionRefreshed(
-      moonbit_guide=None,
       goal=None,
       goal_markers=[],
       prediction=None,
@@ -23402,7 +23342,6 @@ test "a sub-run's progress refreshes the child transcript on screen" {
   let (_, settled) = update_dev(
     test_dispatch(),
     SessionRefreshed(
-      moonbit_guide=None,
       session="desktop-test-sr-1",
       items=[
         {

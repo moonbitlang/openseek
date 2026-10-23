@@ -232,7 +232,6 @@ async fn run_general(
       )
       let session = @agent_session.Session(
         SessionId("one-shot"),
-        moonbit_guide?=@setup.configured_moonbit_guide(matches),
         system_prompt=system_prompt_text,
       )
       turn.started_after = session.last_sequence()

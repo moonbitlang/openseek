@@ -532,7 +532,6 @@ pub fn SessionEvent::is_agent_step(self : SessionEvent) -> Bool {
 struct Session {
   id : SessionId
   system_prompt : String
-  moonbit_guide : Bool?
   events : @vector.Vector[SessionEvent]
   last_sequence : Int32
 } derive(Eq, Debug)
@@ -566,13 +565,12 @@ struct Session {
 pub fn Session::Session(
   id : SessionId,
   system_prompt~ : String,
-  moonbit_guide? : Bool,
   events~ : @vector.Vector[SessionEvent] = @vector.new(),
 ) -> Session {
   let last_sequence = events.fold(init=0, (last_sequence, event) => {
     last_sequence.max(event.sequence)
   })
-  { id, system_prompt, moonbit_guide, events, last_sequence, }
+  { id, system_prompt, events, last_sequence, }
 }
 
 ///|
@@ -585,12 +583,6 @@ pub fn Session::id(self : Session) -> SessionId {
 /// Return the fixed system prompt for this conversation.
 pub fn Session::system_prompt(self : Session) -> String {
   self.system_prompt
-}
-
-///|
-/// Whether this session includes the built-in MoonBit guide. None for older or custom prompts.
-pub fn Session::moonbit_guide(session : Session) -> Bool? {
-  session.moonbit_guide
 }
 
 ///|
@@ -666,7 +658,6 @@ pub fn Session::append_event(
     {
       id: self.id,
       system_prompt: self.system_prompt,
-      moonbit_guide: self.moonbit_guide,
       events: self.events.push(event),
       last_sequence: event.sequence,
     },
@@ -749,7 +740,6 @@ pub fn Session::fork(
   self : Session,
   id : SessionId,
   system_prompt~ : String,
-  moonbit_guide? : Bool,
   through? : Int32,
 ) -> Session raise {
   let copied : Array[SessionEvent] = []
@@ -761,12 +751,7 @@ pub fn Session::fork(
       User(_) => in_turn = true
       Terminal(_) => {
         if through == Some(event.sequence) {
-          return Session(
-            id,
-            system_prompt~,
-            moonbit_guide?,
-            events=@vector.from_array(copied),
-          )
+          return Session(id, system_prompt~, events=@vector.from_array(copied))
         }
         in_turn = false
         settled = copied.length()
@@ -787,7 +772,6 @@ pub fn Session::fork(
     id,
     system_prompt~,
     events=@vector.from_array(copied[:settled].to_owned()),
-    moonbit_guide?,
   )
 }
 

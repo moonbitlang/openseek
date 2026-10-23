@@ -90,11 +90,7 @@ async test "the lenient log parser reads the frozen version-1 file cleanly" {
   )
   assert_eq(
     parsed.header,
-    Some({
-      id: "legacy",
-      system_prompt: "You are a test agent.",
-      moonbit_guide: None,
-    }),
+    Some({ id: "legacy", system_prompt: "You are a test agent.", }),
   )
   assert_eq(parsed.errors, [])
   assert_false(parsed.partial_tail)

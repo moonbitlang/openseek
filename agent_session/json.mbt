@@ -191,16 +191,12 @@ pub impl FromJson for SessionItem with fn from_json(
 /// complete `events` vector. `last_sequence` is intentionally not stored; it is
 /// recomputed by `Session::Session` from event sequence numbers when decoded.
 pub impl ToJson for Session with fn to_json(session : Session) -> Json {
-  let fields : Map[String, Json] = {
+  {
     "version": 1,
     "id": session.id(),
     "system_prompt": session.system_prompt(),
     "events": @json.to_json(session.events()),
   }
-  if session.moonbit_guide() is Some(enabled) {
-    fields["moonbit_guide"] = Json(enabled)
-  }
-  Json(fields)
 }
 
 ///|
@@ -243,11 +239,6 @@ pub impl FromJson for Session with fn from_json(
   Session(
     id,
     system_prompt=string_field(fields, path, "system_prompt"),
-    moonbit_guide?=match fields.get("moonbit_guide") {
-      None | Some(Null) => None
-      Some(value) =>
-        Some(@json.from_json(value, path=path.add_key("moonbit_guide")))
-    },
     events~,
   )
 }

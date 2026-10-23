@@ -1130,7 +1130,6 @@ fn open_session(
           goal=view.goal,
           goal_markers=view.goal_markers,
           prediction=view.prediction,
-          moonbit_guide=view.moonbit_guide,
           generation~,
         ),
       )
@@ -1178,7 +1177,6 @@ fn refresh_session(
           goal=view.goal,
           goal_markers=view.goal_markers,
           prediction=view.prediction,
-          moonbit_guide=view.moonbit_guide,
           generation~,
         ),
       )

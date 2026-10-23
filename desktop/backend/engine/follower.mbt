@@ -574,7 +574,6 @@ async fn await_follower_barrier(follower : SessionFollower) -> Unit {
 ///|
 test "session_max_sequence is the snapshot's watermark" {
   let session : @protocol.SessionDocument = {
-    moonbit_guide: None,
     version: None,
     id: Some("s"),
     system_prompt: None,
@@ -1370,13 +1369,7 @@ async test "load request is queued before its collapsed control message" {
     assert_true(request.active)
     request.active = false
     request.reply.put(
-      LoadOk({
-        moonbit_guide: None,
-        version: None,
-        id: None,
-        system_prompt: None,
-        events: Some([]),
-      }),
+      LoadOk({ version: None, id: None, system_prompt: None, events: Some([]), }),
     )
     assert_true(caller.wait() is LoadOk(_))
   })
@@ -1400,13 +1393,7 @@ async test "backpressured load schedules the next control generation" {
     assert_true(request.active)
     request.active = false
     request.reply.put(
-      LoadOk({
-        moonbit_guide: None,
-        version: None,
-        id: None,
-        system_prompt: None,
-        events: Some([]),
-      }),
+      LoadOk({ version: None, id: None, system_prompt: None, events: Some([]), }),
     )
     assert_true(caller.wait() is LoadOk(_))
   })

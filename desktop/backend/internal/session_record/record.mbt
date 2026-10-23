@@ -142,7 +142,6 @@ struct Tail {
   // whether that has happened: every header carries one.
   mut id : String?
   mut system_prompt : String?
-  mut moonbit_guide : Bool?
   // Every event folded in, oldest first. The document a `session.load` answers
   // with is this array — not another read of the file.
   events : Array[@protocol.SessionEvent]
@@ -165,7 +164,6 @@ pub fn Tail::Tail(root : @pathx.Absolute, session : String) -> Tail {
     carry: [],
     id: None,
     system_prompt: None,
-    moonbit_guide: None,
     events: [],
     watermark: 0,
   }
@@ -202,7 +200,6 @@ pub fn Tail::document(self : Tail) -> @protocol.SessionDocument {
     },
     id: self.id,
     system_prompt: self.system_prompt,
-    moonbit_guide: self.moonbit_guide,
     events: Some(self.events.copy()),
   }
 }
@@ -421,16 +418,6 @@ fn Tail::adopt_header(self : Tail, json : Json) -> Unit raise RecordError {
       }
       self.id = Some(id)
       self.system_prompt = Some(system_prompt)
-      self.moonbit_guide = match json {
-        { "moonbit_guide": True, .. } => Some(true)
-        { "moonbit_guide": False, .. } => Some(false)
-        { "moonbit_guide": Null, .. } => None
-        Object(fields) if !fields.contains("moonbit_guide") => None
-        _ =>
-          raise Unreadable(
-            "the session record has an invalid MoonBit guide choice",
-          )
-      }
     }
     _ =>
       raise Unreadable("the session record does not start with a header record")
@@ -446,7 +433,6 @@ fn Tail::rewind(self : Tail) -> Unit {
   self.carry.clear()
   self.id = None
   self.system_prompt = None
-  self.moonbit_guide = None
   self.events.clear()
   self.watermark = 0
 }

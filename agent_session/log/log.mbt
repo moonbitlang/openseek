@@ -10,7 +10,6 @@ let session_file_version : Int32 = 1
 pub(all) struct SessionFileHeader {
   id : String
   system_prompt : String
-  moonbit_guide : Bool?
 } derive(Eq, Debug)
 
 ///|
@@ -20,15 +19,11 @@ pub(all) struct SessionFileHeader {
 pub impl ToJson for SessionFileHeader with fn to_json(
   header : SessionFileHeader,
 ) -> Json {
-  let fields : Map[String, Json] = {
+  {
     "version": session_file_version,
     "id": header.id,
     "system_prompt": header.system_prompt,
   }
-  if header.moonbit_guide is Some(enabled) {
-    fields["moonbit_guide"] = Json(enabled)
-  }
-  Json(fields)
 }
 
 ///|
@@ -59,16 +54,7 @@ pub fn classify_header(json : Json) -> HeaderParse {
       "id": String(id),
       "system_prompt": String(system_prompt),
       ..
-    } => {
-      let moonbit_guide : Bool? = match json {
-        { "moonbit_guide": True, .. } => Some(true)
-        { "moonbit_guide": False, .. } => Some(false)
-        { "moonbit_guide": Null, .. } => None
-        Object(fields) if !fields.contains("moonbit_guide") => None
-        _ => return NotHeader
-      }
-      Header({ id, system_prompt, moonbit_guide, })
-    }
+    } => Header({ id, system_prompt, })
     _ => NotHeader
   }
 }
@@ -91,12 +77,10 @@ pub fn session_from_parse(
   parsed : ParsedLog,
   id~ : String,
   system_prompt~ : String,
-  moonbit_guide? : Bool,
 ) -> @agent_session.Session {
   Session(
     SessionId(id),
     system_prompt~,
-    moonbit_guide?,
     events=@vector.from_array(parsed.events),
   )
 }

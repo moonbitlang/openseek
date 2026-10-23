@@ -750,7 +750,8 @@ priv struct Conversation {
   // afterwards: a start is always older than the composer, so echoing one
   // back would undo a choice the user has already made for the next turn.
   engine_model : EngineModel
-  moonbit_guide : Bool?
+  // Creation default for this draft; stored chats keep their saved system prompt.
+  moonbit_guide : Bool
   // Root-authored prompt snapshot for submission and delivery recovery. The
   // live textarea value is component-local and is copied here atomically only
   // when the user submits; a rejection may write recovered text back here.
@@ -2257,7 +2258,6 @@ priv enum DeviceMsg {
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
     prediction~ : @wire.PredictionRecord?,
-    moonbit_guide~ : Bool?,
     generation~ : Int32
   )
   // A foreground stored-session read failed. Generation guards stale replies;
@@ -2273,7 +2273,6 @@ priv enum DeviceMsg {
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
     prediction~ : @wire.PredictionRecord?,
-    moonbit_guide~ : Bool?,
     generation~ : Int32
   )
   // A background re-read failed. The generation identifies the exact read,
@@ -2578,7 +2577,7 @@ fn empty_conversation(
     workspace: Project(root=project),
     worktree_mode: false,
     engine_model: model,
-    moonbit_guide: Some(moonbit_guide),
+    moonbit_guide,
     task: "",
     images: [],
     mentions: [],

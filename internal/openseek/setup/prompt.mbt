@@ -29,7 +29,7 @@ pub async fn configured_system_prompt(
   let base = if base_path == "" {
     @prompt.system_prompt_for_model(
       model,
-      moonbit_guide=configured_moonbit_guide(matches).unwrap_or(true),
+      moonbit_guide=configured_moonbit_guide(matches),
     )
   } else {
     @fs.read_file(@workspace_path.resolve(workspace_root, base_path)).text()
@@ -94,17 +94,13 @@ pub async fn configured_system_prompt(
 }
 
 ///|
-/// The built-in guide choice for a new session; custom prompts have no known guide state.
-pub fn configured_moonbit_guide(matches : @argparse.Matches) -> Bool? raise {
-  let enabled = match matches.values.get("moonbit-guide") {
+/// Whether new built-in prompts include the MoonBit syntax and API guide.
+fn configured_moonbit_guide(matches : @argparse.Matches) -> Bool raise {
+  match matches.values.get("moonbit-guide") {
     Some(["off", ..]) => false
     None | Some(["on", ..]) => true
     _ => fail("--moonbit-guide must be on or off")
   }
-  if matches.values.get("system-prompt-file") is Some([path, ..]) && path != "" {
-    return None
-  }
-  Some(enabled)
 }
 
 ///|

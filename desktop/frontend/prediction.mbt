@@ -55,7 +55,6 @@ test "prediction broadcasts are pure and survive snapshots that started before c
   let (_, refreshed) = update_dev(
     test_dispatch(),
     SessionRefreshed(
-      moonbit_guide=None,
       session="desktop-test",
       items=[],
       watermark=2,

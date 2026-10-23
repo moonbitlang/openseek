@@ -15,17 +15,6 @@ fn header_line(session : String) -> String {
 }
 
 ///|
-async test "record document carries the saved MoonBit guide choice" {
-  let (root, path) = record_fixture("guide")
-  write_record(
-    path, "{\"version\":1,\"id\":\"guide\",\"system_prompt\":\"working instructions\",\"moonbit_guide\":false}\n",
-  )
-  let tail = @session_record.Tail(root, "guide")
-  ignore(tail.poll())
-  assert_eq(tail.document().moonbit_guide, Some(false))
-}
-
-///|
 fn event_line(sequence : Int32, content : String) -> String {
   "{\"sequence\":\{sequence},\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"\{content}\"}}}\n"
 }

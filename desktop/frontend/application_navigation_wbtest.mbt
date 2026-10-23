@@ -121,7 +121,6 @@ test "returning to a cached conversation fences a slower foreground read" {
   let (_, settled) = update_dev(
     dispatch,
     SessionLoaded(
-      moonbit_guide=None,
       session="second",
       items=[],
       watermark=0,

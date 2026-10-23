@@ -5,7 +5,7 @@ test "session_root defaults to .openseek beside the workspace" {
 }
 
 ///|
-async test "MoonBit guide choice is saved with the actual session prompt" {
+async test "MoonBit guide defaults affect new prompts and leave saved sessions unchanged" {
   @vfs.with_tmpdir(prefix="openseek-guide-", root => {
     let store = @store.SessionStore("\{root}/store")
     @fs.write_file(
@@ -33,7 +33,6 @@ async test "MoonBit guide choice is saved with the actual session prompt" {
         Deepseek(V4Pro),
         workspace_root=root,
       )
-      assert_eq(session.moonbit_guide(), Some(enabled))
       assert_true(
         session
         .system_prompt()
@@ -47,14 +46,30 @@ async test "MoonBit guide choice is saved with the actual session prompt" {
       )
       assert_true(session.system_prompt().contains("project rule"))
       ignore(store.append(session, User(UserMessage(Content([Text("hello")])))))
+      let record = @fs.read_file(store.session_file(id)).text()
+      let header = record.split_once("\n").unwrap().0
+      assert_false(header.contains("\"moonbit_guide\":"))
+      let current_default = @testkit.run_matches(
+        argv=[
+          "--moonbit-guide",
+          if enabled {
+            "off"
+          } else {
+            "on"
+          },
+          "--global-skills-dir",
+          "\{root}/skills",
+          "hello",
+        ],
+        env=Map([]),
+      )
       let resumed = @setup.load_or_new_session(
         store,
         id,
-        parsed,
+        current_default,
         Deepseek(V4Pro),
         workspace_root=root,
       )
-      assert_eq(resumed.moonbit_guide(), Some(enabled))
       assert_eq(resumed.system_prompt(), session.system_prompt())
     }
   })

@@ -115,17 +115,7 @@ async fn sessions_fork(matches : @argparse.Matches) -> Unit {
   )
   let notice = fork_notice(workspace_root, addendum?)
   println(
-    store
-    .fork(
-      source,
-      fork,
-      through?,
-      system_prompt~,
-      moonbit_guide?=@setup.configured_moonbit_guide(matches),
-      notice~,
-    )
-    .id()
-    .value(),
+    store.fork(source, fork, through?, system_prompt~, notice~).id().value(),
   )
 }
 

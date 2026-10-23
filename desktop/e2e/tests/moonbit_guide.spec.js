@@ -2,23 +2,13 @@ import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 class GuideHarness extends DesktopBrowserHarness {
-  constructor(page) {
-    super(page);
-    this.guides = new Map([['session-1', true]]);
-  }
-
   replyFor(request) {
     if (request.method === 'agent.start') {
-      this.guides.set(request.params.session, request.params.moonbit_guide);
       if (!this.liveSessions.some(session => session.id === request.params.session)) {
         this.liveSessions.push({ id: request.params.session, title: 'Guide choice fixture', updated_at_ms: 2 });
       }
     }
-    const reply = super.replyFor(request);
-    if (request.method === 'session.load') {
-      return { ...reply, session: { ...reply.session, id: request.params.session, moonbit_guide: this.guides.get(request.params.session) } };
-    }
-    return reply;
+    return super.replyFor(request);
   }
 }
 
@@ -65,10 +55,12 @@ test('Settings default persists, applies to new chats and preserves saved sessio
   await newChat(page);
   expect((await send(page, app, 'Create without the guide')).moonbit_guide).toBe(false);
   const saved = new URL(page.url()).pathname;
+  const savedSession = app.requests.filter(request => request.method === 'agent.start').at(-1).params.session;
   await chooseDefault(page, true);
   await page.goto(saved);
   await expect(page.locator('#task')).toBeVisible();
-  expect((await send(page, app, 'Continue without the guide')).moonbit_guide).toBe(false);
+  // Existing chats resume their saved prompt; session.load no longer returns guide metadata.
+  expect((await send(page, app, 'Continue the saved chat')).session).toBe(savedSession);
   await chooseDefault(page, false);
   await page.reload();
   await expect(page.getByRole('switch', { name: 'MoonBit guide', exact: true })).toHaveAttribute('aria-checked', 'false');

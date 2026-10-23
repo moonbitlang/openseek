@@ -3,12 +3,10 @@ fn dataset(events? : String) -> String {
   let session = @agent_session.Session(
     SessionId("original"),
     system_prompt="old workspace",
-    moonbit_guide=false,
   ).append(User(UserMessage(Content([Text("Hello from imported history")]))))
   let header : @log.SessionFileHeader = {
     id: "original",
     system_prompt: "old workspace",
-    moonbit_guide: Some(false),
   }
   let text = StringBuilder()
   text.write_string(ToJson::to_json(header).stringify() + "\n")
@@ -50,7 +48,6 @@ async test "JSON import prepares independent ordinary sessions and their childre
     records[0].session.id() != @session_import.prepare(source)[0].session.id(),
   )
   assert_eq(records[0].session.system_prompt(), "old workspace")
-  assert_eq(records[0].session.moonbit_guide(), Some(false))
   assert_eq(records[0].session.last_sequence(), 1)
   assert_eq(
     records[1].session.id().value(),

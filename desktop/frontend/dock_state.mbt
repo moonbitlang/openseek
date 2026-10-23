@@ -67,7 +67,6 @@ fn Model::test_open_dock_conversation(
     test_dispatch(),
     on_home(
       SessionLoaded(
-        moonbit_guide=None,
         session~,
         items=[
           {
