@@ -1,174 +1,136 @@
 ///|
-test "Cloud history and SSE use the shared message projector with rich tool results" {
-  let events : Array[(String, Json)] = [
-    ("user", { "content": "  hello  " }),
-    ("assistant_message", { "content": "  answer  " }),
-    (
-      "tool_call",
-      { "id": "call", "function": { "name": "mbtx", "arguments": "{}" } },
+fn native_document(items : Array[Json]) -> @protocol.SessionDocument {
+  @json.from_json({
+    "events": Json(
+      items.mapi((index, item) => {
+        "sequence": Json(index + 1),
+        "ts": 100,
+        "item": item,
+      }),
     ),
-    (
-      "tool_result",
-      {
+  }) catch {
+    _ => abort("invalid test document")
+  }
+}
+
+///|
+test "Cloud renders native history through the Local projector including goals and summaries" {
+  let document = native_document([
+    { "kind": "user", "payload": { "content": "  hello  " } },
+    {
+      "kind": "assistant",
+      "payload": {
+        "content": "answer",
+        "reasoning_content": "Thinking",
+        "tool_calls": [{ "id": "call", "name": "mbtx", "arguments": "{}" }],
+      },
+    },
+    {
+      "kind": "tool_result",
+      "payload": {
         "tool_call_id": "call",
         "tool_name": "mbtx",
-        "content": "first",
+        "content": "result",
         "is_error": false,
       },
-    ),
-    ("tool_call", { "id": "call", "name": "mbtx", "arguments": "{}" }),
-    (
-      "tool_result",
-      {
-        "tool_call_id": "call",
-        "tool_name": "mbtx",
-        "content": [{ "type": "text", "text": "second" }],
-        "is_error": true,
-        "brief": "ran script",
-        "data": {
-          "ptc_calls": [
-            {
-              "name": "read",
-              "arguments": { "path": "moon.mod" },
-              "status": "done",
-              "result": { "content": "module", "is_error": false },
-            },
-          ],
-        },
+    },
+    { "kind": "runtime_notice", "payload": { "content": "[goal]\nShip it" } },
+    {
+      "kind": "summary",
+      "payload": {
+        "content": "Earlier context",
+        "from_sequence": 1,
+        "to_sequence": 3,
       },
-    ),
-  ]
-  let records = events.map(event => {
-    task_id: "task",
-    kind: event.0,
-    data: event.1,
-    created_at: 100,
+    },
+    {
+      "kind": "terminal",
+      "payload": { "kind": "finished", "message": "Final" },
+    },
+  ])
+  let conversation = { ..Conversation::empty(), document, }
+  let shared = @transcript.session_from_reply({
+    session: document,
+    watermark: None,
+    prediction: None,
   })
-  let history = { ..Conversation::empty(), records, }.items()
-  let stream = {
-    ..Conversation::empty(),
-    events: events.mapi((index, event) => {
-      session_id: "session",
-      task_id: "task",
-      seq: index + 1,
-      kind: event.0,
-      data: event.1,
-    }),
-  }.items()
-  assert_true(history.map(item => item.kind) == stream.map(item => item.kind))
+  assert_true(conversation.items() == shared.items)
   assert_true(
-    history[0].kind is @transcript.User(content=Content([Text("hello")])),
+    conversation.items()[0].kind is User(content=Content([Text("hello")])),
   )
   assert_true(
-    history[1].kind is @transcript.Assistant(prose=Some("answer"), ..),
-  )
-  assert_true(
-    history[2].kind
-    is @transcript.Assistant(
-      calls=[
-        {
-          outcome: @transcript.Done(
-            content=Content([Text("first")]),
-            brief=None,
-            ..
-          ),
-          ..
-        },
-      ],
+    conversation.items()[1].kind
+    is Assistant(
+      reasoning=Some("Thinking"),
+      calls=[{ outcome: Done(..), .. }],
       ..
     ),
   )
   assert_true(
-    history[3].kind
-    is @transcript.Assistant(
-      calls=[
-        {
-          outcome: @transcript.Done(
-            content=Content([Text("second")]),
-            brief=Some("ran script"),
-            is_error=true
-          ),
-          children: [{ name: "read", .. }],
-          ..
-        },
-      ],
-      ..
-    ),
+    conversation.items().any(item => item.kind is Summary("Earlier context")),
   )
   assert_true(
-    history.all(item => item.ts == Some(100) && item.sequence is None),
+    conversation.restore_goal(document).goal.standing
+    is Some({ text: "Ship it", .. }),
   )
-  assert_true(stream.all(item => item.ts is None && item.sequence is None))
-}
-
-///|
-test "Cloud task status and unknown events remain visible without inventing messages" {
-  let items : Array[@transcript.TranscriptItem] = []
-  append_item(items, "task_finished", { "status": "completed" }, None)
-  append_item(items, "task_finished", { "status": "failed" }, None)
-  append_item(items, "future_event", { "value": 1 }, None)
-  assert_true(items[0].kind is @transcript.TurnEnd)
+  // Repeated snapshots replace canonical history; they never append equal text.
+  let state = controls_fixture().replace("session", {
+    ..conversation,
+    request: 9,
+  })
+  let history : History = {
+    session: document,
+    messages: [],
+    generating: false,
+  }
+  let once = metadata_update(state, Loaded(1, "session", 9, history))
+  let twice = metadata_update(once, Loaded(1, "session", 9, history))
   assert_true(
-    items[1].kind is @transcript.Notice(label="Task failed", is_error=true, ..),
-  )
-  assert_true(
-    items[2].kind is @transcript.Notice(label="future_event", body=Some(_), ..),
+    once.conversations["session"].items() ==
+    twice.conversations["session"].items(),
   )
 }
 
 ///|
-test "Cloud completion uses only the actual result answer and avoids duplicate prose" {
-  let items : Array[@transcript.TranscriptItem] = []
-  append_item(
-    items,
-    "assistant_message",
-    { "content": "final answer" },
-    Some(100),
-  )
-  append_item(
-    items,
-    "task_finished",
-    {
-      "status": "completed",
-      "result": { "output": { "answer": "final answer" } },
-    },
-    Some(200),
-  )
-  assert_eq(items.length(), 1)
-  assert_true(
-    items[0].kind
-    is @transcript.Assistant(prose=Some("final answer"), finished=true, ..),
-  )
-  assert_true(items[0].ts == Some(100))
-  append_item(
-    items,
-    "task_finished",
-    {
-      "status": "completed",
-      "result": { "output": { "answer": "completion tool answer" } },
-    },
-    Some(300),
-  )
-  assert_true(items[1].kind is @transcript.Answer("completion tool answer"))
-}
-
-///|
-test "Cloud history preserves reasoning-only assistant messages without a separate reasoning row" {
+test "Cloud requires the native session document and preserves reasoning-only records" {
   let history = decode_history({
-    "messages": [
+    "messages": [],
+    "generating": false,
+    "session": {
+      "events": [
+        {
+          "sequence": 1,
+          "item": {
+            "kind": "assistant",
+            "payload": {
+              "content": "",
+              "reasoning_content": "Consider the input",
+            },
+          },
+        },
+      ],
+    },
+  })
+  let items = { ..Conversation::empty(), document: history.session, }.items()
+  assert_true(
+    items
+    is [
       {
-        "task_id": "task",
-        "kind": "assistant_message",
-        "data": { "content": "", "reasoning_content": "Consider the input" },
-        "created_at": 100,
+        kind: Assistant(
+          reasoning=Some("Consider the input"),
+          prose=None,
+          calls=[],
+          ..
+        ),
+        ..
       },
     ],
-    "generating": false,
-  })
-  let items = { ..Conversation::empty(), records: history.messages, }.items()
-  assert_eq(items.length(), 1)
-  assert_true(
-    items[0].kind
-    is Assistant(reasoning=Some("Consider the input"), prose=None, calls=[], ..),
   )
+  let rejected = try {
+    ignore(decode_history({ "messages": [], "generating": false }))
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(rejected)
 }

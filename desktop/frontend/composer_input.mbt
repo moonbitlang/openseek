@@ -227,18 +227,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       pending,
     },
     slash_commands: [
-      {
-        label: "/compact",
-        detail: shell_text(self.locale, CompactContext),
-        command: "compact",
-        prompt: None,
-      },
-      {
-        label: "/goal",
-        detail: shell_text(self.locale, SetGoal),
-        command: "goal",
-        prompt: None,
-      },
+      ..self.engine_commands(),
       {
         label: "/ultrareview",
         detail: shell_text(self.locale, UltraReview),
@@ -514,3 +503,21 @@ const SimplifyPrompt : String =
   #|3. Report the pull requests it opened, the changes the reviewers rejected, and the packages it skipped and why.
   #|
   #|Focus:
+
+///|
+fn Model::engine_commands(self : Model) -> Array[@composer.SlashCommand] {
+  [
+    {
+      label: "/compact",
+      detail: shell_text(self.locale, CompactContext),
+      command: "compact",
+      prompt: None,
+    },
+    {
+      label: "/goal",
+      detail: shell_text(self.locale, SetGoal),
+      command: "goal",
+      prompt: None,
+    },
+  ]
+}

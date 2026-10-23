@@ -34,7 +34,7 @@ for (const nextTurn of [false, true]) {
     await expect.poll(() => observations(app).length).toBe(2);
     await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Finished while disconnected.' });
     await app.finishTask();
-    if (nextTurn) await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: oldTask }, { task: 'next-task', seq: 1 });
+    if (nextTurn) await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: oldTask }, { task: 'next-task' });
     const history = deferred();
     app.pauseHistory = history.promise;
     const reads = () => app.requests.filter(request => request.method === 'GET' && request.path.endsWith(`/${sessionA}/messages`)).length;
@@ -103,9 +103,9 @@ test('Cloud recovers one durable answer after a burst of 256 deltas and EOF', as
   const app = await running(page);
   const baseline = app.controlState(sessionA);
   const content = '🌙'.repeat(256);
-  const frames = Array.from({ length: 256 }, (_, index) => app.sseFrame('assistant_delta', {
+  const frames = Array.from({ length: 256 }, (_, index) => app.sseFrame('engine_event', {
     session_id: sessionA, task_id: baseline.task_id, seq: baseline.seq + index + 1,
-    kind: 'assistant_delta', data: { content: '🌙' },
+    kind: 'engine_event', data: { event: 'assistant_delta', content: '🌙' },
   })).join('');
   app.controlSnapshots.set(sessionA, { ...baseline, seq: baseline.seq + 256 });
   await page.evaluate(({ session, frames }) => window.cloudSessionEvent(session, frames), { session: sessionA, frames });
@@ -204,7 +204,7 @@ test('Cloud reconnect fences an old history reply and retains newer live message
   app.pauseSessionEvents = connection.promise;
   await app.disconnectSession(sessionA);
   await expect.poll(() => observations(app).length).toBe(2);
-  await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: oldTask }, { task: 'next-task', seq: 1 });
+  await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: oldTask }, { task: 'next-task' });
   const freshRead = deferred();
   app.pauseHistory = freshRead.promise;
   const beforeFresh = reads();

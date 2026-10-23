@@ -33,15 +33,20 @@ fn watch_event(
   kind : String,
   data : Json,
 ) -> State {
-  metadata_update(
-    state,
-    WatchEvent(
-      state.epoch,
-      "session",
-      stream,
-      EngineEvent({ session_id: "session", task_id: task, seq, kind, data, }),
-    ),
-  )
+  let incoming = if kind is ("task_started" | "task_finished" | "user") {
+    EngineEvent({ session_id: "session", task_id: task, seq, kind, data, })
+  } else {
+    guard data is Object(fields) else { abort("event fixture") }
+    let fields = fields.copy()
+    fields["event"] = Json(kind)
+    NativeEvent({
+      session_id: "session",
+      task_id: Some(task),
+      seq,
+      data: Json(fields),
+    })
+  }
+  metadata_update(state, WatchEvent(state.epoch, "session", stream, incoming))
 }
 
 ///|
@@ -53,6 +58,8 @@ test "Cloud subscription uses its first snapshot as baseline and fences replaced
     paused: false,
     queue: [],
     steers: [],
+    compact_queued: false,
+    compacting: false,
   }
   let before = watch_event(state, stream, "task", 3, "assistant_delta", {
     "content": "before baseline",
@@ -96,7 +103,7 @@ test "Cloud old terminal and queue snapshots cannot end the next task" {
   let completed = watch_event(state, stream, "task", 3, "task_finished", {
     "status": "completed",
   })
-  let next = watch_event(completed, stream, "next", 1, "task_started", {
+  let next = watch_event(completed, stream, "next", 6, "task_started", {
     "previous_task_id": "task",
     "submission_id": "queue",
   })
@@ -107,53 +114,17 @@ test "Cloud old terminal and queue snapshots cannot end the next task" {
   let late = watch_event(next, stream, "task", 99, "task_finished", {
     "status": "failed",
   })
-  assert_true(late == next)
-  let late = watch_snapshot(late, stream, Some("task"), 100, {
+  assert_true(late.conversations["session"].generating)
+  assert_eq(late.conversations["session"].task, Some("next"))
+  assert_eq(late.conversations["session"].last_seq, Some(99))
+  let late = watch_snapshot(late, stream, Some("task"), 3, {
     ..control,
     status: Idle,
     active_task_id: None,
   })
-  assert_true(late == next)
+  assert_eq(late.conversations["session"].last_seq, Some(99))
   assert_eq(late.conversations["session"].task, Some("next"))
   assert_true(late.conversations["session"].generating)
-}
-
-///|
-test "Cloud history reconciliation counts repeated messages without duplicating live records" {
-  let event : Event = {
-    session_id: "session",
-    task_id: "task",
-    seq: 2,
-    kind: "user",
-    data: { "content": "same input" },
-  }
-  let conversation = {
-    ..Conversation::empty(),
-    events: [event, { ..event, seq: 3, }],
-  }
-  let record : Record = {
-    task_id: "task",
-    kind: "user",
-    data: event.data,
-    created_at: 1,
-  }
-  assert_eq(conversation.events_not_in([record]).length(), 1)
-  assert_true(conversation.events_not_in([record, record]).is_empty())
-  let state = controls_fixture().replace("session", {
-    ..conversation,
-    request: 9,
-    stream: Some(StreamLease::new()),
-    loading: false,
-    generating: true,
-    control: controls_fixture().conversations["session"].control,
-  })
-  let loaded = metadata_update(
-    state,
-    Loaded(1, "session", 9, { messages: [record], generating: false, }),
-  )
-  assert_eq(loaded.conversations["session"].items().length(), 2)
-  // A stale history generation flag cannot settle the session subscription.
-  assert_true(loaded.conversations["session"].generating)
 }
 
 ///|
@@ -191,6 +162,8 @@ test "Cloud observer failure retains the confirmed queue as read-only" {
     paused: false,
     queue: [{ id: "queued", content: Content([Text("Keep this input")]), }],
     steers: [],
+    compact_queued: false,
+    compacting: false,
   }
   let state = watch_snapshot(state, stream, Some("task"), 2, control)
   let disconnected = metadata_update(
@@ -208,6 +181,7 @@ test "Cloud observer failure retains the confirmed queue as read-only" {
   let recovered = metadata_update(
     disconnected,
     Loaded(1, "session", conversation.request, {
+      session: native_document([]),
       messages: [],
       generating: true,
     }),
@@ -249,22 +223,17 @@ test "Cloud current terminal settles after the idle control snapshot" {
     let after = finished.conversations["session"]
     assert_true(after.streaming_response is None)
     assert_true(after.heartbeat is None)
-    assert_true(
-      after.events.any(event => {
-        event.kind == "task_finished" && event.data == terminal
-      }),
-    )
     assert_true(after.request > before.request)
     assert_eq(after.last_seq, Some(5))
     assert_true(
       watch_event(finished, stream, "task", 5, "task_finished", terminal) ==
       finished,
     )
-    let next = watch_event(finished, stream, "next", 1, "task_started", {
+    let next = watch_event(finished, stream, "next", 6, "task_started", {
       "previous_task_id": "task",
     })
     assert_true(
-      watch_event(next, stream, "task", 6, "task_finished", terminal) == next,
+      watch_event(next, stream, "task", 5, "task_finished", terminal) == next,
     )
   }
 }
@@ -289,14 +258,11 @@ test "Cloud steer receipts settle input without duplicating the durable user mes
     "kind": "prompt",
   })
   assert_true(applied.conversations["session"].control_inputs.is_empty())
-  assert_eq(
-    applied.conversations["session"].events
-    .filter(event => event.kind == "user")
-    .length(),
-    1,
-  )
   let history : History = {
     generating: true,
+    session: native_document([
+      { "kind": "user", "payload": { "content": "Follow up" } },
+    ]),
     messages: [
       { task_id: "task", kind: "user", data: content, created_at: 10, },
     ],
@@ -324,7 +290,11 @@ test "Cloud reconnect fences old history and synchronizes after its new baseline
   )
   let stale = metadata_update(
     ended,
-    Loaded(1, "session", old_request, { messages: [], generating: false, }),
+    Loaded(1, "session", old_request, {
+      session: native_document([]),
+      messages: [],
+      generating: false,
+    }),
   )
   assert_true(stale == ended)
   assert_true(
@@ -343,6 +313,7 @@ test "Cloud reconnect fences old history and synchronizes after its new baseline
   let loaded = metadata_update(
     event,
     Loaded(1, "session", event.conversations["session"].request, {
+      session: native_document([]),
       messages: [],
       generating: false,
     }),
@@ -350,10 +321,10 @@ test "Cloud reconnect fences old history and synchronizes after its new baseline
   assert_true(loaded.conversations["session"].watch_status is Watching)
   assert_true(loaded.conversations["session"].generating)
   assert_true(loaded.sessions[0].generating)
-  assert_eq(loaded.conversations["session"].items().length(), 1)
-  assert_true(
-    watch_event(loaded, stream, "task", 99, "task_finished", {}) == loaded,
-  )
+  assert_true(loaded.conversations["session"].items().is_empty())
+  let late = watch_event(loaded, stream, "task", 99, "task_finished", {})
+  assert_true(late.conversations["session"].generating)
+  assert_eq(late.conversations["session"].task, Some("next"))
 }
 
 ///|

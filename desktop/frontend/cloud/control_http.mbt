@@ -99,6 +99,7 @@ async fn watch_control(
       let owner = match parsed {
         Snapshot(snapshot) => snapshot.session_id
         EngineEvent(event) => event.session_id
+        NativeEvent(event) => event.session_id
       }
       guard owner == session else {
         raise @cloud_client.RequestError(Malformed)

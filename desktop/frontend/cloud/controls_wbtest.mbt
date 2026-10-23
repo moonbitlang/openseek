@@ -28,6 +28,8 @@ fn controls_fixture() -> State {
           paused: false,
           queue: [],
           steers: [],
+          compact_queued: false,
+          compacting: false,
         }),
       },
     },
@@ -107,9 +109,9 @@ test "Cloud steer receipt before HTTP acceptance acknowledges exactly once and f
     data: { "submission_id": id, "content": "Follow up" },
   }
   assert_true(
-    conversation.control_receipt({ ..event, task_id: "old", }) == conversation,
+    conversation.steer_receipt("old", Some("s"), false) == conversation,
   )
-  let received = conversation.control_receipt(event)
+  let received = conversation.steer_receipt(event.task_id, Some(id), false)
   assert_eq(received.submission_sequence, 1)
   assert_eq(received.control_inputs.length(), 0)
   let received_state = state.replace("session", received)
@@ -182,13 +184,7 @@ test "Cloud dropped queued steer restores its complete editable content" {
       },
     ],
   }
-  let dropped = conversation.control_receipt({
-    session_id: "session",
-    task_id: "task",
-    seq: 4,
-    kind: "steer_dropped",
-    data: { "submission_id": "queued" },
-  })
+  let dropped = conversation.steer_receipt("task", Some("queued"), true)
   assert_eq(dropped.initial_submission, Some(draft))
   assert_eq(dropped.control_inputs.length(), 0)
 }
@@ -205,6 +201,8 @@ test "Cloud paused queue permits edit and withdrawal but not addition or steerin
       paused: true,
       queue: [{ id: "queue", content: Content([Text("Retained")]), }],
       steers: [],
+      compact_queued: false,
+      compacting: false,
     }),
   }
   let state = state.replace("session", conversation)
@@ -312,6 +310,8 @@ test "Cloud HTTP reconciliation settles inputs without replacing SSE state" {
       paused: false,
       queue: [{ id: input.key, content: Content([Text("Follow up")]), }],
       steers: [],
+      compact_queued: false,
+      compacting: false,
     },
   }
   let emit : @cmd.Emit[Msg] = _ => @cmd.none
@@ -397,13 +397,7 @@ test "Cloud old-task receipts settle their input without acknowledging a new dra
     task: Some("next"),
     initial_submission: Some(draft),
   }
-  let received = conversation.control_receipt({
-    session_id: "session",
-    task_id: "task",
-    seq: 4,
-    kind: "steer_applied",
-    data: { "submission_id": input.key },
-  })
+  let received = conversation.steer_receipt("task", Some(input.key), false)
   assert_eq(received.control_inputs.length(), 0)
   assert_eq(received.submission_sequence, conversation.submission_sequence)
   assert_eq(received.initial_submission, Some(draft))

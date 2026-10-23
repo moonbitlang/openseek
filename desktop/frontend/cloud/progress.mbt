@@ -1,38 +1,4 @@
 ///|
-/// Decode the engine's existing payload rather than inventing Cloud counters
-/// or interpreting missing metadata as a reported value.
-fn Event::engine_event(self : Event) -> @wire.Event? {
-  guard self.data is Object(fields) else { return None }
-  let fields = fields.copy()
-  fields["event"] = Json(
-    if self.kind == "step" {
-      "agent_step"
-    } else {
-      self.kind
-    },
-  )
-  @wire.parse(Json(fields))
-}
-
-///|
-fn Event::is_live_progress(self : Event) -> Bool {
-  match self.kind {
-    "task_started"
-    | "assistant_delta"
-    | "reasoning_delta"
-    | "reasoning_message"
-    | "stream_retry"
-    | "step"
-    | "usage"
-    | "compaction_started"
-    | "compaction_finished"
-    | "auto_compaction_started"
-    | "auto_compaction_finished" => true
-    _ => false
-  }
-}
-
-///|
 fn Conversation::clear_streams(self : Conversation) -> Conversation {
   {
     ..self,
@@ -44,12 +10,7 @@ fn Conversation::clear_streams(self : Conversation) -> Conversation {
 
 ///|
 fn Conversation::clear_progress(self : Conversation) -> Conversation {
-  {
-    ..self.clear_streams(),
-    heartbeat: None,
-    retrying: None,
-    compacting: false,
-  }
+  { ..self.clear_streams(), heartbeat: None, retrying: None, }
 }
 
 ///|
@@ -75,46 +36,41 @@ pub fn Conversation::run_heartbeat(
 ///|
 fn Conversation::live_progress(
   self : Conversation,
-  event : Event,
+  wire : @wire.Event,
 ) -> Conversation {
-  let progress = event.engine_event().bind(@transcript.decode_engine_event)
+  let progress = @transcript.decode_engine_event(wire)
   let self = if progress.map_or(false, event => event.ends_retry()) ||
-    event.kind
-    is ("assistant_message" | "tool_call" | "tool_result" | "task_finished") {
+    wire is (@wire.AssistantMessage(..) | @wire.ToolResult(..)) {
     { ..self, retrying: None, }
   } else {
     self
   }
-  if event.kind == "task_started" {
-    return {
-      ..self.clear_streams(),
-      heartbeat: Some({
-        stage: @composer.Thinking,
-        started_ms: None,
-        tokens: 0,
-      }),
-      compacting: false,
-      retrying: None,
-    }
-  }
-  if event.kind == "task_finished" {
-    return self.clear_progress()
-  }
-  if event.kind == "assistant_message" {
-    // This event is the canonical assistant, including reasoning-only replies.
+  if wire is @wire.AssistantMessage(..) {
+    // As in Local, semantic events settle transient text; history supplies
+    // the canonical assistant, including reasoning and structured tool calls.
     return self.clear_streams()
   }
-  if event.kind is ("tool_call" | "tool_result") {
+  if wire is @wire.ToolResult(..) {
     return { ..self, streaming_response: None, }
   }
-  guard event.engine_event() is Some(wire) else { return self }
   match wire {
-    CompactionStarted(..) | AutoCompactionStarted(..) =>
-      return { ..self, compacting: true, }
-    CompactionFinished(..) | AutoCompactionFinished(..) =>
-      return { ..self, compacting: false, }
-    CompactionFailed(..) | AutoCompactionFailed(..) =>
-      return { ..self, compacting: false, }
+    CompactionStarted(..) =>
+      return {
+        ..self,
+        compact_queued: false,
+        compact_request: None,
+        compacting: true,
+      }
+    AutoCompactionStarted(..) => return { ..self, compacting: true, }
+    CompactionFinished(..) | CompactionFailed(..) =>
+      return {
+        ..self,
+        compact_queued: false,
+        compact_request: None,
+        compacting: false,
+      }
+    AutoCompactionFinished(..) => return { ..self, compacting: false, }
+    AutoCompactionFailed(..) => return { ..self, compacting: false, }
     _ => ()
   }
   guard progress is Some(progress) else { return self }

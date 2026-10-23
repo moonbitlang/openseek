@@ -362,6 +362,29 @@ fn update_cloud(
     }
     return (@cmd.batch([command, finish]), next)
   }
+  if message is @cloud.WatchEvent(epoch, session, _, @cloud.NativeEvent(frame)) &&
+    epoch == before.epoch &&
+    before.conversations.get(session) is Some(previous) &&
+    previous.last_seq.map_or(false, seq => frame.seq > seq) &&
+    next.cloud.conversations.get(session) is Some(current) &&
+    current.last_seq == Some(frame.seq) &&
+    (frame.task_id is None || frame.task_id == previous.task) {
+    let error = match @wire.parse(frame.data) {
+      Some(
+        @wire.CommandError(error~)
+        | @wire.SessionError(error~)
+        | @wire.CompactionFailed(error~)
+        | @wire.AutoCompactionFailed(error~)
+      ) => Some(error)
+      _ => None
+    }
+    if error is Some(error) {
+      // A command diagnostic is not a chatting task failure. Use the same
+      // transient error reporting as Local instead of changing run status.
+      let (report, next) = next.notify_error(dispatch, error)
+      return (@cmd.batch([command, report]), next)
+    }
+  }
   (command, next)
 }
 
@@ -413,6 +436,12 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       None
     },
     turn_id: conversation.bind(value => value.task),
+    goal: conversation.map_or(input.goal, value => value.goal),
+    slash_commands: if creating || !self.cloud.can_compose(owner.session()) {
+      []
+    } else {
+      self.engine_commands().filter(command => command.command == "goal")
+    },
     history,
     root: file_ctx(self).root(),
     cloud_access: self.account.map(account => {
@@ -443,8 +472,9 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         if conversation is Some({ watch_status: Reconnecting, .. }) {
           context.push(@composer.ConnectionBanner(device_name=Some("Cloud")))
         }
-        if conversation is Some({ compacting: true, .. }) {
-          context.push(@composer.CompactionNotice(queued=false))
+        if conversation is Some(value) &&
+          (value.compacting || value.compact_queued) {
+          context.push(@composer.CompactionNotice(queued=!value.compacting))
         }
         context
       },

@@ -96,6 +96,8 @@ pub(all) struct ControlState {
   paused : Bool
   queue : Array[QueueEntry]
   steers : Array[SteerReceipt]
+  compact_queued : Bool
+  compacting : Bool
 } derive(Eq)
 pub fn ControlState::equal(Self, Self) -> Bool
 pub fn ControlState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -105,6 +107,7 @@ pub impl @json.FromJson for ControlState
 pub(all) enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
+  NativeEvent(EngineFrame)
 } derive(Eq)
 pub fn ControlStreamEvent::equal(Self, Self) -> Bool
 pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool
@@ -112,6 +115,7 @@ pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool
 pub(all) struct Conversation {
   records : Array[Record]
   events : Array[Event]
+  document : @protocol.SessionDocument
   request : Int32
   send_request : Int32
   loading : Bool
@@ -139,7 +143,12 @@ pub(all) struct Conversation {
   reasoning_complete : Bool
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
+  compact_queued : Bool
+  compact_request : Int32?
   compacting : Bool
+  goal : @composer.GoalInput
+  goal_since : Int32
+  goal_request : Int32
   notice : String?
 } derive(Eq)
 pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
@@ -159,6 +168,15 @@ pub struct Creation {
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool
 
+pub(all) struct EngineFrame {
+  session_id : String
+  task_id : String?
+  seq : Int32
+  data : Json
+} derive(Eq)
+pub fn EngineFrame::equal(Self, Self) -> Bool
+pub fn EngineFrame::not_equal(Self, Self) -> Bool
+
 pub(all) struct Event {
   session_id : String
   task_id : String
@@ -170,6 +188,7 @@ pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 
 pub(all) struct History {
+  session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
 }
@@ -205,6 +224,10 @@ pub(all) enum Msg {
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
   WatchEnded(Int32, String, StreamLease, @cloud_client.Failure?)
   ControlAction(@interop.ConversationIdentity, @composer.Action)
+  CompactFinished(Int32, String, Int32, ControlResult)
+  CompactFailed(Int32, String, Int32, @cloud_client.Failure)
+  GoalFinished(Int32, String, Int32, ControlResult)
+  GoalFailed(Int32, String, Int32, @cloud_client.Failure)
   ControlAttachmentStored(Int32, String, String, String, @protocol.AttachmentSource, String)
   ControlPrepared(Int32, String, String, String, @composer.Draft, @openseek_protocol.Content)
   ControlChecked(Int32, String, String, ControlSnapshot)

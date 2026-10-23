@@ -2600,7 +2600,12 @@ fn update_msg(
           | @composer.FollowupSubmitted(identity~, ..)
           | @composer.QueuedInputEditRequested(identity~, ..)
           | @composer.QueuedInputSteerRequested(identity~, ..)
-          | @composer.QueuedInputDeleteRequested(identity~, ..) =>
+          | @composer.QueuedInputDeleteRequested(identity~, ..)
+          | @composer.SlashCommand(identity~, ..)
+          | @composer.GoalEditStarted(identity~)
+          | @composer.GoalCancelled(identity~)
+          | @composer.GoalCleared(identity~)
+          | @composer.GoalSubmitted(identity~, ..) =>
             return update_cloud(
               dispatch,
               @cloud.ControlAction(identity.owner, action),

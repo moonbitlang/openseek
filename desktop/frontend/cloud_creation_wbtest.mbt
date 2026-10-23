@@ -155,6 +155,12 @@ test "sending failure after creation keeps the initial input and reuses its remo
     test_dispatch(),
     CloudAction(
       @cloud.Loaded(3, "new-cloud", history_request, {
+        session: {
+          version: None,
+          id: None,
+          system_prompt: None,
+          events: Some([]),
+        },
         messages: [],
         generating: false,
       }),

@@ -56,6 +56,21 @@ test('Cloud Stop waits for termination and preserves the editable draft', async 
   expect(app.device.pageErrors).toEqual([]);
 });
 
+test('Cloud native command errors use Local error reporting without failing a task or guessing an input', async ({ page }) => {
+  const app = await running(page);
+  await followup(page, 'A pending steer', 'steer');
+  await expect(page.locator('.pending-steer-row')).toContainText('A pending steer');
+  await page.locator('#task').fill('Keep editing this draft');
+  await app.emitSessionEvent(sessionA, 'command_error', { error: 'Command was not understood' });
+  await expect(page.getByText('Command was not understood', { exact: true })).toBeVisible();
+  await expect(page.locator('#stop')).toBeEnabled();
+  await expect(page.locator('.pending-steer-row')).toContainText('A pending steer');
+  await expect(page.locator('#task')).toHaveValue('Keep editing this draft');
+  expect(app.postCount).toBe(1);
+  expect(controls(app, 'steer')).toHaveLength(1);
+  expect(app.device.pageErrors).toEqual([]);
+});
+
 for (const receiptFirst of [true, false]) {
   test(`Cloud Steer settles a receipt ${receiptFirst ? 'before' : 'after'} HTTP acceptance without clearing later typing`, async ({ page }) => {
     const app = await running(page);
@@ -180,7 +195,7 @@ test('Cloud conversation switching restores drafts and paused queue controls', a
   await expect(row.getByTitle('Edit', { exact: true })).toBeEnabled();
   await app.finishTask(sessionA);
   const queued = app.controlState(sessionA).data.queue[0];
-  await app.emitSessionEvent(sessionA, 'task_started', { submission_id: queued.id, previous_task_id: task }, { task: 'queued-next-task', seq: 1 });
+  await app.emitSessionEvent(sessionA, 'task_started', { submission_id: queued.id, previous_task_id: task }, { task: 'queued-next-task' });
   await expect(page.locator('#stop')).toBeEnabled();
   await expect(row).toHaveCount(0);
   await app.open(sessionB);
@@ -194,7 +209,7 @@ test('Cloud late previous-task events cannot stop the next queued turn', async (
   const previous = app.controlState(sessionA).task_id;
   const queued = app.controlState(sessionA).data.queue[0];
   await app.finishTask(sessionA);
-  await app.emitSessionEvent(sessionA, 'task_started', { submission_id: queued.id, previous_task_id: previous }, { task: 'next-task', seq: 1 });
+  await app.emitSessionEvent(sessionA, 'task_started', { submission_id: queued.id, previous_task_id: previous }, { task: 'next-task' });
   await expect(page.locator('#stop')).toBeEnabled();
   await app.emitSessionEvent(sessionA, 'task_finished', { status: 'failed', result: { status: 'aborted' } }, { task: previous, seq: 999 });
   await app.emitSessionEvent(sessionA, 'assistant_delta', { content: 'OLD TURN SHOULD NOT APPEAR' }, { task: previous, seq: 1000 });
@@ -308,7 +323,7 @@ for (const stopped of [false, true]) {
     current = app.controlState(sessionA).task_id;
     await app.finishTask(sessionA);
     const next = app.controlState(sessionA).data.queue[0];
-    await app.emitSessionEvent(sessionA, 'task_started', { submission_id: next.id, previous_task_id: current }, { task: 'queued-next-task', seq: 1 });
+    await app.emitSessionEvent(sessionA, 'task_started', { submission_id: next.id, previous_task_id: current }, { task: 'queued-next-task' });
     await expect(rows).toHaveCount(0);
     await expect(page.locator('#stop')).toBeEnabled();
     expect(app.device.pageErrors).toEqual([]);

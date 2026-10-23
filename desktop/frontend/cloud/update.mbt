@@ -204,6 +204,8 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   !conversation.loading &&
   !conversation.sending &&
   !conversation.generating &&
+  !conversation.compacting &&
+  !conversation.compact_queued &&
   conversation.watch_status == Watching &&
   !conversation.history_required
 }
@@ -240,6 +242,9 @@ pub fn update(
   token? : String,
   navigation~ : Int32,
 ) -> (State, @cmd.Cmd, String?) {
+  if state.update_goal(msg, emit, token) is Some((next, command)) {
+    return (next, command, None)
+  }
   if state.update_control(msg, emit, token) is Some((next, command)) {
     return (next, command, None)
   }
@@ -532,10 +537,7 @@ pub fn update(
         Snapshot(snapshot) => {
           let baseline = conversation.last_seq is None
           guard baseline ||
-            (
-              snapshot.task_id == conversation.task &&
-              conversation.last_seq.map_or(true, seq => snapshot.seq > seq)
-            ) else {
+            conversation.last_seq.map_or(true, seq => snapshot.seq > seq) else {
             return (state, @cmd.none, None)
           }
           let admitted = conversation.pending is Some(submitted) &&
@@ -551,11 +553,30 @@ pub fn update(
               snapshot.data.queue.any(item => item.id == id)
             }),
             task: snapshot.task_id,
+            events: if snapshot.task_id != conversation.task {
+              []
+            } else {
+              conversation.events
+            },
             last_seq: Some(snapshot.seq),
             generating: snapshot.data.active_task_id is Some(_),
             observed_task: match snapshot.data.active_task_id {
               Some(task) => Some(task)
               None => conversation.observed_task
+            },
+            compacting: snapshot.data.compacting,
+            compact_queued: snapshot.data.compact_queued ||
+            (
+              !baseline &&
+              conversation.compact_request is Some(_) &&
+              !snapshot.data.compacting
+            ),
+            compact_request: if baseline ||
+              snapshot.data.compact_queued ||
+              snapshot.data.compacting {
+              None
+            } else {
+              conversation.compact_request
             },
             sending: conversation.sending && !admitted,
             pending: if admitted {
@@ -601,6 +622,12 @@ pub fn update(
             navigation~,
           )
         }
+        NativeEvent(frame) => {
+          guard conversation.last_seq is Some(seq) && frame.seq > seq else {
+            return (state, @cmd.none, None)
+          }
+          state.engine_event(id, frame, token, emit)
+        }
       }
     }
     WatchEnded(epoch, id, stream, error) => {
@@ -643,6 +670,10 @@ pub fn update(
       (next, command, None)
     }
     ControlPreparationFailed(_, _, _, _, _)
+    | CompactFinished(_, _, _, _)
+    | CompactFailed(_, _, _, _)
+    | GoalFinished(_, _, _, _)
+    | GoalFailed(_, _, _, _)
     | ControlAction(_, _)
     | ControlPrepared(_, _, _, _, _, _)
     | ControlAttachmentStored(_, _, _, _, _, _)
@@ -701,10 +732,16 @@ pub fn update(
         conversation
       }
       let next = state.replace(id, {
-        ..settled,
+        ..settled.restore_goal(history.session),
         control,
         records: history.messages,
-        events: conversation.events_not_in(history.messages),
+        events: conversation.events.filter(event => {
+          !history.messages.any(record => {
+            record.task_id == event.task_id &&
+            (record.kind == event.kind || record.kind == "task_finished")
+          })
+        }),
+        document: history.session,
         loading: false,
         watch_status: if observed && conversation.last_seq is Some(_) {
           Watching
@@ -860,14 +897,16 @@ pub fn update(
         conversation.task != Some(previous) {
         return (state, @cmd.none, None)
       }
-      guard (next_task || same_task || conversation.task is None) &&
-        (
-          next_task ||
-          conversation.last_seq.map_or(true, seq => event.seq > seq)
-        ) else {
+      guard conversation.last_seq.map_or(true, seq => event.seq > seq) else {
+        return (state, @cmd.none, None)
+      }
+      guard next_task || same_task || conversation.task is None else {
         // A late receipt can settle its own input, never the current run.
         return (
-          state.replace(id, conversation.control_receipt(event)),
+          state.replace(id, {
+            ..conversation.control_receipt(event),
+            last_seq: Some(event.seq),
+          }),
           @cmd.none,
           None,
         )
@@ -884,23 +923,22 @@ pub fn update(
       }
       let admitted = event.kind == "task_started" &&
         conversation.pending is Some(_)
-      let mut events = conversation.events
-      if admitted && conversation.pending is Some(submission) {
-        events = events +
-          [
-            {
-              ..event,
-              kind: "user",
-              data: { "content": submission.content.to_json() },
-            },
-          ]
-      } else if !event.is_live_progress() &&
-        !(event.kind is ("steer_dropped" | "steer_applied")) {
-        events = events + [event]
+      let conversation = if event.kind == "task_started" {
+        {
+          ..conversation.clear_streams(),
+          heartbeat: Some({
+            stage: @composer.Thinking,
+            started_ms: None,
+            tokens: 0,
+          }),
+          retrying: None,
+        }
+      } else if event.kind == "task_finished" {
+        conversation.clear_progress()
+      } else {
+        conversation
       }
-      let conversation = conversation
-        .live_progress(event)
-        .control_receipt(event)
+      let conversation = conversation.control_receipt(event)
       let control = conversation.control.map(control => {
         if event.kind == "task_started" {
           {
@@ -919,7 +957,11 @@ pub fn update(
       let next = state.replace(id, {
         ..conversation,
         control,
-        events,
+        events: if event.kind is ("task_started" | "task_finished") {
+          [event]
+        } else {
+          conversation.events
+        },
         task: Some(event.task_id),
         last_seq: Some(event.seq),
         generating: event.kind != "task_finished",
@@ -1124,7 +1166,6 @@ fn State::submit(
     sending: true,
     heartbeat: Some({ stage: @composer.Starting, started_ms: None, tokens: 0, }),
     history_required: true,
-    events: [],
     notice: None,
     pending: Some({
       content: prompt,

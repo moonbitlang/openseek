@@ -112,11 +112,7 @@ test "first Cloud file-only submission creates once and admits the prepared file
     token="fixture",
     navigation=0,
   )
-  assert_true(
-    admitted.conversations["new-session"].events[0].data
-    is { "content": String(content), .. } &&
-    content == prepared.prompt(),
-  )
+  assert_true(admitted.conversations["new-session"].pending is None)
   assert_true(admitted.conversations["new-session"].uploads.is_empty())
   assert_true(admitted.conversations["new-session"].initial_submission is None)
 }

@@ -308,18 +308,25 @@ fn Conversation::control_receipt(
       },
     }
   }
-  guard event.kind is ("steer_applied" | "steer_dropped") &&
-    event.data is { "submission_id": String(id), .. } &&
+  self
+}
+
+///|
+fn Conversation::steer_receipt(
+  self : Conversation,
+  task : String,
+  id : String?,
+  dropped : Bool,
+) -> Conversation {
+  guard id is Some(id) &&
     self.control_inputs
     .iter()
-    .find_first(input => {
-      input.submission_id() == id && input.task_id == event.task_id
-    })
+    .find_first(input => input.submission_id() == id && input.task_id == task)
     is Some(input) else {
     return self
   }
   let next = self.acknowledge_control(input.key)
-  if event.kind == "steer_dropped" {
+  if dropped {
     next.reject_control(
       input.key,
       Some("The additional input was not applied."),

@@ -24,7 +24,11 @@ fn deletion_state() -> State {
   let request = state.conversations["a"].request
   let (state, _, _) = update(
     state,
-    Loaded(2, "a", request, { messages: [], generating: false, }),
+    Loaded(2, "a", request, {
+      session: native_document([]),
+      messages: [],
+      generating: false,
+    }),
     _ => @cmd.none,
     token="fixture",
     navigation=0,
@@ -66,7 +70,11 @@ test "deletion retires history and late list or poll responses" {
   let history_request = initial.conversations["a"].request
   for
     message in [
-      Loaded(2, "a", history_request, { messages: [], generating: true, }),
+      Loaded(2, "a", history_request, {
+        session: native_document([]),
+        messages: [],
+        generating: true,
+      }),
       Poll(2, "a", history_request),
       SendAccepted(2, "a", history_request),
       Open("a"),
@@ -238,7 +246,11 @@ test "completed history supersedes an earlier generating list row for deletion" 
   let request = state.conversations["a"].request
   let (completed, _, _) = update(
     state,
-    Loaded(2, "a", request, { messages: [], generating: false, }),
+    Loaded(2, "a", request, {
+      session: native_document([]),
+      messages: [],
+      generating: false,
+    }),
     _ => @cmd.none,
     token="fixture",
     navigation=0,

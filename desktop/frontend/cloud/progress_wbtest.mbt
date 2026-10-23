@@ -32,18 +32,29 @@ fn State::progress_test_event(
   kind : String,
   data : Json,
 ) -> State {
-  update(
-    self,
-    StreamEvent(1, "session", self.conversations["session"].request, {
-      session_id: "session",
-      task_id: "task",
-      seq,
-      kind,
-      data,
-    }),
+  if kind is ("task_started" | "task_finished") {
+    return update(
+        self,
+        StreamEvent(1, "session", self.conversations["session"].request, {
+          session_id: "session",
+          task_id: "task",
+          seq,
+          kind,
+          data,
+        }),
+        _ => @cmd.none,
+        token="ts_fixture",
+        navigation=0,
+      ).0
+  }
+  guard data is Object(fields) else { abort("event object") }
+  let fields = fields.copy()
+  fields["event"] = Json(if kind == "step" { "agent_step" } else { kind })
+  self.engine_event(
+    "session",
+    { session_id: "session", task_id: Some("task"), seq, data: Json(fields), },
+    Some("ts_fixture"),
     _ => @cmd.none,
-    token="ts_fixture",
-    navigation=0,
   ).0
 }
 
@@ -56,7 +67,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
   let conversation = partial.conversations["session"]
   assert_eq(conversation.streaming_reasoning, Some("Consider the input"))
   assert_false(conversation.reasoning_complete)
-  assert_eq(conversation.items().length(), 1)
+  assert_true(conversation.items().is_empty())
   let settled = partial
     .progress_test_event(4, "reasoning_message", {
       "content": "Complete reasoning",
@@ -71,6 +82,40 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     "content": "Answer",
     "reasoning_content": "Complete reasoning",
   })
+  assert_true(canonical.conversations["session"].items().is_empty())
+  let canonical = metadata_update(
+    canonical,
+    Loaded(1, "session", canonical.conversations["session"].request, {
+      generating: true,
+      session: native_document([
+        { "kind": "user", "payload": { "content": "question" } },
+        {
+          "kind": "assistant",
+          "payload": {
+            "content": "Answer",
+            "reasoning_content": "Complete reasoning",
+          },
+        },
+      ]),
+      messages: [
+        {
+          task_id: "task",
+          kind: "user",
+          data: { "content": "question" },
+          created_at: 1,
+        },
+        {
+          task_id: "task",
+          kind: "assistant_message",
+          data: {
+            "content": "Answer",
+            "reasoning_content": "Complete reasoning",
+          },
+          created_at: 2,
+        },
+      ],
+    }),
+  )
   let conversation = canonical.conversations["session"]
   assert_true(conversation.streaming_reasoning is None)
   assert_eq(conversation.items().length(), 2)
@@ -173,18 +218,7 @@ test "Cloud stage and usage use validated per-response values rather than cumula
     "result": { "usage": { "total_tokens": 350 }, "steps": 3 },
   })
   assert_true(finished.conversations["session"].heartbeat is None)
-  assert_true(
-    finished.conversations["session"].events.last()
-    is Some(
-      {
-        data: {
-          "result": { "usage": { "total_tokens": 350, .. }, "steps": 3, .. },
-          ..
-        },
-        ..
-      }
-    ),
-  )
+  assert_false(finished.conversations["session"].generating)
 }
 
 ///|
@@ -214,7 +248,6 @@ test "Cloud retry ends on same-step progress without waiting for another step" {
     ("reasoning_message", { "content": "thought" }),
     ("assistant_delta", { "content": "answer" }),
     ("assistant_message", { "content": "answer" }),
-    ("tool_call", { "id": "call", "name": "read", "arguments": "{}" }),
     (
       "tool_result",
       {
@@ -235,8 +268,12 @@ test "Cloud retry ends on same-step progress without waiting for another step" {
 }
 
 ///|
-test "Cloud compaction follows real events and retains failures in the transcript" {
+test "Cloud compaction follows native lifecycle without treating failure as a task result" {
   let started = progress_test_state().progress_test_event(1, "task_started", {})
+  let started = started.replace("session", {
+    ..started.conversations["session"],
+    history_required: false,
+  })
   assert_false(started.conversations["session"].compacting)
   for prefix in ["compaction", "auto_compaction"] {
     let compacting = started.progress_test_event(2, prefix + "_started", {
@@ -250,16 +287,14 @@ test "Cloud compaction follows real events and retains failures in the transcrip
       "summary": "Earlier work",
     })
     assert_false(finished.conversations["session"].compacting)
-    assert_eq(finished.conversations["session"].items().length(), 1)
+    assert_true(finished.conversations["session"].items().is_empty())
     let failed = compacting.progress_test_event(3, prefix + "_failed", {
       "error": "Compaction failed",
     })
     assert_false(failed.conversations["session"].compacting)
     assert_true(failed.conversations["session"].notice is None)
-    assert_true(
-      failed.conversations["session"].items()[1].kind
-      is Failure("Compaction failed"),
-    )
+    assert_true(failed.conversations["session"].generating)
+    assert_true(failed.conversations["session"].items().is_empty())
   }
 }
 
@@ -304,8 +339,9 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
     "status": "failed",
   })
   assert_true(terminal.conversations["session"].streaming_reasoning is None)
-  assert_true(
-    terminal.progress_test_event(4, "reasoning_delta", { "content": "late" }) ==
-    terminal,
-  )
+  let late = terminal.progress_test_event(4, "reasoning_delta", {
+    "content": "late",
+  })
+  assert_true(late.conversations["session"].streaming_reasoning is None)
+  assert_false(late.conversations["session"].generating)
 }

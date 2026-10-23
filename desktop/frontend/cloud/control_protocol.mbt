@@ -72,6 +72,8 @@ pub(all) struct ControlState {
   paused : Bool
   queue : Array[QueueEntry]
   steers : Array[SteerReceipt]
+  compact_queued : Bool
+  compacting : Bool
 } derive(Eq)
 
 ///|
@@ -105,6 +107,21 @@ pub impl FromJson for ControlState with fn from_json(json, path) {
     paused: @json.from_json(paused, path=path.add_key("paused")),
     queue: @json.from_json(queue, path=path.add_key("queue")),
     steers: @json.from_json(steers, path=path.add_key("steers")),
+    compact_queued: match json {
+      Object(fields) if !fields.contains("compact_queued") => false
+      Object(fields) =>
+        @json.from_json(
+          fields["compact_queued"],
+          path=path.add_key("compact_queued"),
+        )
+      _ => false
+    },
+    compacting: match json {
+      Object(fields) if !fields.contains("compacting") => false
+      Object(fields) =>
+        @json.from_json(fields["compacting"], path=path.add_key("compacting"))
+      _ => false
+    },
   }
 }
 
@@ -248,7 +265,41 @@ fn ControlOperation::decode_reply(
 pub(all) enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
+  NativeEvent(EngineFrame)
 } derive(Eq)
+
+///|
+/// Native events can arrive between tasks. Their payload is decoded by the
+/// same OpenSeek parser as Local; the envelope owns only Cloud routing.
+pub(all) struct EngineFrame {
+  session_id : String
+  task_id : String?
+  seq : Int32
+  data : Json
+} derive(Eq)
+
+///|
+impl FromJson for EngineFrame with fn from_json(json, path) {
+  guard json
+    is {
+      "kind": "engine_event",
+      "session_id": String(session_id),
+      "task_id": task_id,
+      "seq": Number(seq, ..),
+      "data": Object(_) as data,
+      ..
+    } &&
+    seq > 0 &&
+    seq == seq.to_int().to_double() else {
+    raise @json.JsonDecodeError((path, "expected native engine event"))
+  }
+  {
+    session_id,
+    task_id: control_task_id(task_id, path.add_key("task_id")),
+    seq: seq.to_int(),
+    data,
+  }
+}
 
 ///|
 fn decode_control_event(
@@ -261,6 +312,12 @@ fn decode_control_event(
       _ => raise @cloud_client.RequestError(Malformed)
     }
     Snapshot(snapshot)
+  } else if json is { "kind": "engine_event", .. } {
+    NativeEvent(
+      @json.from_json(json) catch {
+        _ => raise @cloud_client.RequestError(Malformed)
+      },
+    )
   } else {
     EngineEvent(decode_event(json))
   }
@@ -310,3 +367,6 @@ pub extend ControlResult with Eq::{equal, not_equal}
 
 ///|
 pub extend ControlStreamEvent with Eq::{equal, not_equal}
+
+///|
+pub extend EngineFrame with Eq::{equal, not_equal}

@@ -17,6 +17,7 @@ pub(all) struct Record {
 
 ///|
 pub(all) struct History {
+  session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
 }
@@ -53,7 +54,9 @@ pub extend WatchStatus with Eq::{equal, not_equal}
 ///|
 pub(all) struct Conversation {
   records : Array[Record]
+  // Last task lifecycle event supplies status while canonical history reloads.
   events : Array[Event]
+  document : @protocol.SessionDocument
   request : Int32
   send_request : Int32
   loading : Bool
@@ -87,7 +90,12 @@ pub(all) struct Conversation {
   reasoning_complete : Bool
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
+  compact_queued : Bool
+  compact_request : Int32?
   compacting : Bool
+  goal : @composer.GoalInput
+  goal_since : Int32
+  goal_request : Int32
   notice : String?
 } derive(Eq)
 
@@ -96,6 +104,12 @@ fn Conversation::empty() -> Conversation {
   {
     records: [],
     events: [],
+    document: {
+      version: None,
+      id: None,
+      system_prompt: None,
+      events: Some([]),
+    },
     request: 0,
     send_request: 0,
     loading: true,
@@ -123,7 +137,12 @@ fn Conversation::empty() -> Conversation {
     reasoning_complete: false,
     heartbeat: None,
     retrying: None,
+    compact_queued: false,
+    compact_request: None,
     compacting: false,
+    goal: { draft: None, standing: None, pending: None, },
+    goal_since: 0,
+    goal_request: 0,
     notice: None,
   }
 }
@@ -230,6 +249,10 @@ pub(all) enum Msg {
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
   WatchEnded(Int32, String, StreamLease, Failure?)
   ControlAction(@interop.ConversationIdentity, @composer.Action)
+  CompactFinished(Int32, String, Int32, ControlResult)
+  CompactFailed(Int32, String, Int32, Failure)
+  GoalFinished(Int32, String, Int32, ControlResult)
+  GoalFailed(Int32, String, Int32, Failure)
   ControlAttachmentStored(
     Int32,
     String,
@@ -323,7 +346,13 @@ fn decode_history(json : Json) -> History raise RequestError {
     data: required_data(item),
     created_at: required_number(item, "created_at"),
   })
-  { messages, generating: required_bool(json, "generating"), }
+  guard json is { "session": document, .. } else {
+    raise @cloud_client.RequestError(Malformed)
+  }
+  let session : @protocol.SessionDocument = @json.from_json(document) catch {
+    _ => raise @cloud_client.RequestError(Malformed)
+  }
+  { session, messages, generating: required_bool(json, "generating"), }
 }
 
 ///|
