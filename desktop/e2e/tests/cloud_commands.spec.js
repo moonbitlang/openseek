@@ -136,3 +136,40 @@ test('Cloud reload restores the goal and summary from the native session documen
   await expect(page.getByText('Earlier release work', { exact: true })).toHaveCount(1);
   expect(commands(app)).toHaveLength(0);
 });
+
+test('Cloud preserves a service-only prompt and startup failure across reopen and reload', async ({ page }) => {
+  const app = new CloudHarness(page);
+  app.histories.set(sessionA, {
+    generating: false,
+    session: { events: [] },
+    messages: [
+      { task_id: 'failed-start', kind: 'user', data: { content: 'Please check the build' }, created_at: 1000 },
+      { task_id: 'failed-start', kind: 'task_finished', data: { status: 'failed', reason: 'Fixture engine could not start' }, created_at: 1001 },
+    ],
+  });
+  await app.install();
+  await app.goto();
+  await app.open();
+  const check = async () => {
+    await expect(page.locator('#transcript').getByText('Please check the build', { exact: true })).toHaveCount(1);
+    await expect(page.locator('#transcript').getByText('Fixture engine could not start', { exact: true })).toHaveCount(1);
+  };
+  await check();
+  await app.open(sessionB);
+  await app.open(sessionA);
+  await check();
+  await page.reload();
+  await app.open();
+  await check();
+  // The same saved native items arriving later replace the supplements.
+  app.histories.get(sessionA).session.events = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Please check the build' } } },
+    { sequence: 2, item: { kind: 'terminal', payload: { kind: 'failed', message: 'Fixture engine could not start' } } },
+  ];
+  await app.open(sessionB);
+  await app.open(sessionA);
+  await check();
+  expect(commands(app)).toHaveLength(0);
+  expect(app.device.pageErrors).toEqual([]);
+});
+
