@@ -29,6 +29,7 @@ fn JsonObject::optional_approval(
 pub impl FromJson for StartPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.start payload")
   {
+    moonbit_guide: object.optional_bool("moonbit_guide"),
     task: object.required_string("task"),
     images: object.required_string_array("images"),
     submission_id: object.optional_string("submission_id"),
@@ -50,6 +51,9 @@ pub impl ToJson for StartPayload with fn to_json(self) {
   }
   if self.submission_id is Some(submission_id) {
     fields["submission_id"] = Json(submission_id)
+  }
+  if self.moonbit_guide is Some(enabled) {
+    fields["moonbit_guide"] = Json(enabled)
   }
   if self.model is Some(model) {
     fields["model"] = Json(model)
@@ -128,6 +132,7 @@ pub impl ToJson for QueuePayload with fn to_json(self) {
 pub impl FromJson for SessionCommandSettings with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "session command settings")
   {
+    moonbit_guide: object.optional_bool("moonbit_guide"),
     session: object.required_string("session"),
     model: object.optional_string("model"),
     thinking: object.optional_thinking("thinking"),
@@ -140,6 +145,9 @@ pub impl FromJson for SessionCommandSettings with fn from_json(json, path) {
 ///|
 pub impl ToJson for SessionCommandSettings with fn to_json(self) {
   let fields : Map[String, Json] = { "session": Json(self.session) }
+  if self.moonbit_guide is Some(enabled) {
+    fields["moonbit_guide"] = Json(enabled)
+  }
   if self.model is Some(model) {
     fields["model"] = Json(model)
   }

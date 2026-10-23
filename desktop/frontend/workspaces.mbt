@@ -588,6 +588,7 @@ test "opening a stored session joins its project and loaded worktree" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionLoaded(
+      moonbit_guide=None,
       prediction=None,
       session="desktop-w",
       items=[],

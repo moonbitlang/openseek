@@ -336,6 +336,7 @@ pub async fn session_command(
     }
     Prompt(content~, submission_id~) => {
       let reply = start_run(sink, manager, {
+        moonbit_guide: None,
         session: settings.session,
         task: content.text(),
         images: command_images(content),
@@ -782,6 +783,7 @@ pub async fn load_session(
 fn empty_session_reply(session : String) -> LoadSessionReply {
   {
     session: {
+      moonbit_guide: None,
       version: None,
       id: Some(session),
       system_prompt: None,
@@ -1042,6 +1044,7 @@ fn test_start_payload(
   submission_id? : String,
 ) -> @protocol.StartPayload {
   {
+    moonbit_guide: None,
     images: [],
     task,
     submission_id,
@@ -1189,6 +1192,7 @@ async test "native commands share writer delivery and preserve turn ownership" {
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
     let settings : @protocol.SessionCommandSettings = {
+      moonbit_guide: None,
       session,
       model: None,
       thinking: None,
@@ -1920,6 +1924,7 @@ async test "a goal request is refused before it can reach the wrong engine" {
           command,
           run_id: None,
           settings: {
+            moonbit_guide: None,
             session: "s-goal",
             model: None,
             thinking: None,

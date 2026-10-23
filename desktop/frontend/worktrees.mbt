@@ -115,6 +115,7 @@ fn start_in_new_worktree(
   session : String,
   workspace : @common.Uri,
   approval~ : @protocol.OpenSeekApproval,
+  moonbit_guide? : Bool,
   images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
@@ -233,6 +234,7 @@ fn start_in_new_worktree(
             submission_id,
             workspace~,
             approval~,
+            moonbit_guide?,
           )
           request_agent_start(
             scheduler, dispatch, channel, start, session, submission_id,

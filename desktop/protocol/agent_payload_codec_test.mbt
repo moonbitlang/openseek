@@ -7,6 +7,7 @@ test "agent start preserves all engine settings" {
     "model": "deepseek-v4-pro",
     "thinking": "max",
     "approval": "review",
+    "moonbit_guide": false,
     "max_steps": 42,
     "session": "session-1",
     "workspace": "/work/project",
@@ -14,6 +15,7 @@ test "agent start preserves all engine settings" {
   })
   assert_eq(payload.thinking, Some(ThinkingMax))
   assert_eq(payload.approval, Some(ApprovalReview))
+  assert_eq(payload.moonbit_guide, Some(false))
   @debug.assert_eq(payload.to_json(), {
     "task": "inspect",
     "images": [],
@@ -21,6 +23,7 @@ test "agent start preserves all engine settings" {
     "model": "deepseek-v4-pro",
     "thinking": "max",
     "approval": "review",
+    "moonbit_guide": false,
     "max_steps": 42,
     "session": "session-1",
     "workspace": "/work/project",

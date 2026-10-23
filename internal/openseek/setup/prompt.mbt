@@ -27,7 +27,10 @@ pub async fn configured_system_prompt(
   // so ordering them first keeps the whole shared text cache-hittable; the
   // end position also gives the grounding instruction recency weight.
   let base = if base_path == "" {
-    @prompt.system_prompt_for_model(model)
+    @prompt.system_prompt_for_model(
+      model,
+      moonbit_guide=configured_moonbit_guide(matches).unwrap_or(true),
+    )
   } else {
     @fs.read_file(@workspace_path.resolve(workspace_root, base_path)).text()
   }
@@ -88,6 +91,20 @@ pub async fn configured_system_prompt(
     prompt <+ "\n\n\{section}"
   }
   prompt.to_string()
+}
+
+///|
+/// The built-in guide choice for a new session; custom prompts have no known guide state.
+pub fn configured_moonbit_guide(matches : @argparse.Matches) -> Bool? raise {
+  let enabled = match matches.values.get("moonbit-guide") {
+    Some(["off", ..]) => false
+    None | Some(["on", ..]) => true
+    _ => fail("--moonbit-guide must be on or off")
+  }
+  if matches.values.get("system-prompt-file") is Some([path, ..]) && path != "" {
+    return None
+  }
+  Some(enabled)
 }
 
 ///|

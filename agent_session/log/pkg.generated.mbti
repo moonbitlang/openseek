@@ -11,7 +11,7 @@ pub fn classify_header(Json) -> HeaderParse
 
 pub fn parse_events(String) -> ParsedLog
 
-pub fn session_from_parse(ParsedLog, id~ : String, system_prompt~ : String) -> @agent_session.Session
+pub fn session_from_parse(ParsedLog, id~ : String, system_prompt~ : String, moonbit_guide? : Bool) -> @agent_session.Session
 
 // Errors
 
@@ -38,6 +38,7 @@ pub(all) struct ParsedLog {
 pub(all) struct SessionFileHeader {
   id : String
   system_prompt : String
+  moonbit_guide : Bool?
 } derive(Eq, @debug.Debug)
 pub impl ToJson for SessionFileHeader
 

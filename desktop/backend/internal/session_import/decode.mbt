@@ -61,6 +61,7 @@ fn decode(text : String, imported : String) -> Array[Record] raise {
       parsed,
       id=local_id,
       system_prompt=header.system_prompt,
+      moonbit_guide?=header.moonbit_guide,
     )
     sessions.push({
       title: if prompt.is_blank() {

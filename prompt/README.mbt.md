@@ -25,14 +25,15 @@ but do not track directory-only changes under `share/`.
   the prompt shows code that CI type-checks and runs.
 
 Each source has its own dev-build rule and generated MoonBit string function.
-The built-in prompt always concatenates the working instructions first and the
-language guide second. `just prompt`, `just check-prompt`, CI, and the
+The built-in prompt includes the working instructions first and, by default,
+the language guide second. The guide can be omitted for a new session while
+retaining the working instructions and tools. `just prompt`, `just check-prompt`, CI, and the
 documentation updater generate or check both outputs.
 
 ## API Shape
 
-- `system_prompt_for_model(model)`: return the complete built-in prompt for a
-  supported chat model. All supported model names use both Markdown sources.
+- `system_prompt_for_model(model, moonbit_guide=true)`: return the built-in prompt
+  for a supported chat model. Set `moonbit_guide=false` to omit the language guide.
 
 The agent package depends on this package for its default prompt, while the CLI
 can still override or append prompt files for A/B experiments.

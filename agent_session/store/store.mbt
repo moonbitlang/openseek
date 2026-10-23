@@ -131,6 +131,7 @@ fn header_line(session : @agent_session.Session) -> String {
   let header : @session_log.SessionFileHeader = {
     id: session.id().value(),
     system_prompt: session.system_prompt(),
+    moonbit_guide: session.moonbit_guide(),
   }
   "\{Json(header).stringify()}\n"
 }
@@ -239,6 +240,7 @@ fn parse_session_file(
     session: Session(
       SessionId(header.id),
       system_prompt=header.system_prompt,
+      moonbit_guide?=header.moonbit_guide,
       events~,
     ),
     needs_tail_repair: !ends_with_newline,
@@ -334,6 +336,7 @@ async fn ensure_session_is_current(
   }
   let persisted = parsed.session
   if persisted.system_prompt() != session.system_prompt() ||
+    persisted.moonbit_guide() != session.moonbit_guide() ||
     events_jsonl(persisted.events()) != events_jsonl(session.events()) {
     fail("stale session snapshot for \{session.id().value()}")
   }
@@ -549,9 +552,12 @@ pub async fn SessionStore::fork(
   fork : @agent_session.SessionId,
   through? : Int32,
   system_prompt~ : String,
+  moonbit_guide? : Bool,
   notice? : String,
 ) -> @agent_session.Session {
-  let copy = self.load(source).fork(fork, system_prompt~, through?)
+  let copy = self
+    .load(source)
+    .fork(fork, system_prompt~, moonbit_guide?, through?)
   let copy = match notice {
     Some(notice) =>
       copy.append(

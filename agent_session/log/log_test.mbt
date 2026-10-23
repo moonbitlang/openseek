@@ -163,13 +163,20 @@ test "parse lifts the header record from the first line" {
   let header : @log.SessionFileHeader = {
     id: "demo",
     system_prompt: "You are a helpful agent.",
+    moonbit_guide: None,
   }
   let text = "\{Json(header).stringify()}\n\{events_jsonl(sample_session())}"
   let parsed = @log.parse_events(text)
   debug_inspect(
     parsed.header,
     content=(
-      #|Some({ id: "demo", system_prompt: "You are a helpful agent." })
+      #|Some(
+      #|  {
+      #|    id: "demo",
+      #|    system_prompt: "You are a helpful agent.",
+      #|    moonbit_guide: None,
+      #|  },
+      #|)
     ),
   )
   assert_eq(parsed.events.length(), 5)
@@ -188,7 +195,7 @@ test "classify_header separates versions, headers, and non-headers" {
   debug_inspect(
     @log.classify_header({ "version": 1, "id": "demo", "system_prompt": "SYS" }),
     content=(
-      #|Header({ id: "demo", system_prompt: "SYS" })
+      #|Header({ id: "demo", system_prompt: "SYS", moonbit_guide: None })
     ),
   )
   // A file written by a newer format is named as such, not misreported as

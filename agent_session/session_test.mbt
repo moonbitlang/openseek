@@ -16,6 +16,23 @@ test "session append assigns monotonic sequence numbers immutably" {
 }
 
 ///|
+test "session JSON preserves the MoonBit guide choice without guessing older prompts" {
+  let session = @agent_session.Session(
+    SessionId("guide"),
+    system_prompt="custom",
+    moonbit_guide=false,
+  )
+  let decoded : @agent_session.Session = @json.from_json(@json.to_json(session))
+  assert_eq(decoded.moonbit_guide(), Some(false))
+  let older : @agent_session.Session = @json.from_json({
+    "version": 1,
+    "id": "older",
+    "system_prompt": "custom",
+  })
+  assert_eq(older.moonbit_guide(), None)
+}
+
+///|
 test "session append_event returns the durable event" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   let (next, event) = session.append_event(

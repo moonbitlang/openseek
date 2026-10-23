@@ -1551,6 +1551,24 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
     @settings.row(
+      @settings.text(locale, MoonBitGuide),
+      [
+        MoonBitGuideMenu.setting_control(
+          dispatch,
+          model,
+          id="moonbit-guide-select",
+          options=[
+            { value: "on", label: @settings.text(locale, On), },
+            { value: "off", label: @settings.text(locale, Off), },
+          ],
+          selected=if model.default_moonbit_guide { "on" } else { "off" },
+          aria_label=@settings.text(locale, MoonBitGuide),
+          change=dispatch.map(value => MoonBitGuideDefaultChanged(value)),
+        ),
+      ],
+      desc=@settings.text(locale, MoonBitGuideDescription),
+    ),
+    @settings.row(
       @settings.text(locale, MaxSteps),
       [
         @html.input(

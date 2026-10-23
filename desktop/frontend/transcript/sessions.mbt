@@ -236,6 +236,7 @@ fn compare_subrun_path(left : Array[Int32], right : Array[Int32]) -> Int32 {
 /// from older hosts derive it from the maximum stored event sequence instead.
 /// An empty record therefore remains at 0 in either shape.
 pub struct SessionLoadView {
+  moonbit_guide : Bool?
   prediction : @protocol.PredictionRecord?
   items : Array[TranscriptItem]
   watermark : Int32
@@ -296,6 +297,7 @@ pub fn session_from_reply(
     items,
     watermark: reply.watermark.unwrap_or(derived_watermark),
     prediction: reply.prediction,
+    moonbit_guide: reply.session.moonbit_guide,
     goal,
     goal_markers,
   }

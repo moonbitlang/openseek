@@ -193,6 +193,7 @@ test "append leaves the original session unchanged" {
       #|{
       #|  id: { value: "example" },
       #|  system_prompt: "system",
+      #|  moonbit_guide: None,
       #|  events: <Vector:
       #|    [
       #|      {
@@ -373,6 +374,7 @@ test "summary replaces covered events in model projection only" {
       #|{
       #|  id: { value: "s1" },
       #|  system_prompt: "system",
+      #|  moonbit_guide: None,
       #|  events: <Vector:
       #|    [
       #|      {
@@ -558,6 +560,7 @@ test "session JSON round-trips events" {
       #|{
       #|  id: { value: "s1" },
       #|  system_prompt: "system",
+      #|  moonbit_guide: None,
       #|  events: <Vector:
       #|    [
       #|      {

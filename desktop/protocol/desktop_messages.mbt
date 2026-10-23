@@ -72,6 +72,8 @@ pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
 
 ///|
 pub(all) struct StartPayload {
+  // Creation-only choice. None retains the built-in default; saved sessions keep their prompt.
+  moonbit_guide : Bool?
   // Original images as data URLs. The engine persists the bytes before upload.
   images : Array[String]
   task : String
@@ -152,6 +154,7 @@ pub(all) struct RunsPayload {
 
 ///|
 pub(all) struct SessionCommandSettings {
+  moonbit_guide : Bool?
   // Native commands address a durable conversation; run-bound commands also carry a run ID.
   session : String
   // A resumed conversation may need a new engine process with these settings.

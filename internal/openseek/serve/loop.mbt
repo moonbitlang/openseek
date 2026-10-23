@@ -91,6 +91,7 @@ async fn run_serve(
         None,
         Session(
           SessionId("serve"),
+          moonbit_guide?=@setup.configured_moonbit_guide(matches),
           system_prompt=@setup.configured_system_prompt(
             matches,
             model,

@@ -45,6 +45,7 @@ pub async fn edit_session(
   )
   let submission_id = @uuid.mint()
   start({
+    moonbit_guide: None,
     session: reply.session,
     workspace: Some(payload.workspace),
     task: payload.task,

@@ -19,6 +19,13 @@ fn load_saved_settings(
     scheduler.add(load_language(is_desktop~, dispatch))
     scheduler.add(
       dispatch(
+        MoonBitGuideDefaultLoaded(
+          load_setting(MoonBitGuideStorageKey) != Some("false"),
+        ),
+      ),
+    )
+    scheduler.add(
+      dispatch(
         SettingsLoaded(
           notification_corner=load_setting(NotificationCornerStorageKey),
           tree_layout=load_setting(TreeLayoutStorageKey),
@@ -250,4 +257,9 @@ fn save_minimal_transcript(enabled : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     save_setting(MinimalTranscriptStorageKey, enabled.to_string())
   })
+}
+
+///|
+fn save_default_moonbit_guide(enabled : Bool) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(MoonBitGuideStorageKey, enabled.to_string()))
 }

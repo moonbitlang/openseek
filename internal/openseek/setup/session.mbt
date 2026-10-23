@@ -113,6 +113,7 @@ pub async fn load_or_new_session(
   async fn fresh() -> @agent_session.Session {
     Session(
       id,
+      moonbit_guide?=configured_moonbit_guide(matches),
       system_prompt=configured_system_prompt(
         matches,
         model,

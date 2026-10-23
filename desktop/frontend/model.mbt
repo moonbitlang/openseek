@@ -281,6 +281,9 @@ const AppFontSizeStorageKey : String = "openseek.font_size"
 const ModelStorageKey : String = "openseek.model"
 
 ///|
+const MoonBitGuideStorageKey : String = "openseek.moonbit_guide"
+
+///|
 /// The agent the next "New chat" starts with — whichever provider group the
 /// unified model chip was last picked from.
 const AgentStorageKey : String = "openseek.agent"
@@ -747,6 +750,7 @@ priv struct Conversation {
   // afterwards: a start is always older than the composer, so echoing one
   // back would undo a choice the user has already made for the next turn.
   engine_model : EngineModel
+  moonbit_guide : Bool?
   // Root-authored prompt snapshot for submission and delivery recovery. The
   // live textarea value is component-local and is copied here atomically only
   // when the user submits; a rejection may write recovered text back here.
@@ -1205,6 +1209,7 @@ type ComposerActionIdentity = @composer.Identity
 priv enum SelectMenu {
   OpenSeekModelMenu
   OpenSeekReasoningMenu
+  MoonBitGuideMenu
   CodexModelMenu
   CodexReasoningMenu
   ApiProviderMenu
@@ -1291,6 +1296,8 @@ priv struct Model {
   // stays on an inert `Local` default until the roster verifies and connects
   // the device required by its `?device=` query.
   focused : @interop.ChannelId
+  // Copied into each new OpenSeek conversation, persisted page-locally.
+  default_moonbit_guide : Bool
   // The tier a new conversation is born with: whatever was last picked in
   // the composer, persisted page-locally. The model a turn actually runs
   // with is the conversation's own `engine_model`, never this.
@@ -1738,6 +1745,8 @@ priv enum Msg {
   // OpenSeek's fixed `no`/`high`/`max` choice. It shares the composer control
   // with Codex but remains a separate typed value at the request boundary.
   OpenSeekEffortPicked(String)
+  MoonBitGuideDefaultLoaded(Bool)
+  MoonBitGuideDefaultChanged(String)
   MaxStepsChanged(String)
   SetupApiKeyChanged(String)
   ProviderChanged(String)
@@ -2249,6 +2258,7 @@ priv enum DeviceMsg {
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
     prediction~ : @wire.PredictionRecord?,
+    moonbit_guide~ : Bool?,
     generation~ : Int32
   )
   // A foreground stored-session read failed. Generation guards stale replies;
@@ -2264,6 +2274,7 @@ priv enum DeviceMsg {
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
     prediction~ : @wire.PredictionRecord?,
+    moonbit_guide~ : Bool?,
     generation~ : Int32
   )
   // A background re-read failed. The generation identifies the exact read,
@@ -2559,6 +2570,7 @@ fn empty_conversation(
   session_id : String,
   project : @common.Uri,
   model~ : EngineModel = DsPro,
+  moonbit_guide~ : Bool = true,
 ) -> Conversation {
   {
     device: channel,
@@ -2567,6 +2579,7 @@ fn empty_conversation(
     workspace: Project(root=project),
     worktree_mode: false,
     engine_model: model,
+    moonbit_guide: Some(moonbit_guide),
     task: "",
     images: [],
     mentions: [],
@@ -2669,6 +2682,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     websocket_epoch: 0,
     focused: @interop.ChannelId::Local,
     default_model: DsFlash,
+    default_moonbit_guide: true,
     default_agent: OpenSeekAgent,
     conversation_models: [],
     reviewed_conversations: [],
@@ -3819,6 +3833,7 @@ fn Model::activate(
         channel,
         session_id,
         project,
+        moonbit_guide=self.default_moonbit_guide,
         model=self
           .remembered_model(channel, session_id)
           .unwrap_or(self.default_model),
