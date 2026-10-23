@@ -328,6 +328,7 @@ async fn check_control_failures() -> Unit {
   for
     (status, body, expected) in [
       (409, "task_not_running", Some(Rejected("task_not_running"))),
+      (409, "{\"accepted\":false,\"error\":\"compaction_busy\"}", Some(Rejected("compaction_busy"))),
       (202, "{\"accepted\":true}", Some(Accepted)),
       (202, "{\"accepted\":false,\"task_id\":\"task\"}", None),
       (409, "", Some(Rejected("HTTP 409"))),

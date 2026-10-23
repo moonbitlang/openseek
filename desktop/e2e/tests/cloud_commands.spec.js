@@ -176,7 +176,7 @@ test('Cloud preserves a service-only prompt and startup failure across reopen an
 
 for (const { status, body, notice, label } of [
   { status: 503, body: 'server model credentials are not configured', notice: 'Cloud model credentials are not configured', label: 'model credentials are explicitly missing' },
-  { status: 409, body: 'Cannot accept this command while compaction is pending.', notice: 'Cannot accept this command while compaction is pending.', label: 'the command is rejected with plain text' },
+  { status: 409, body: JSON.stringify({accepted: false, error: 'Cannot accept this command while compaction is pending.'}), notice: 'Cannot accept this command while compaction is pending.', label: 'the command is rejected with JSON' },
 ]) {
   for (const command of ['compact', 'goal']) {
     test(`Cloud ${command} clears pending state when ${label}`, async ({ page }) => {

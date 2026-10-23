@@ -84,9 +84,13 @@ async fn send_command(
     }
   }
   if response.code == 409 {
-    // Commands reject with plain text; the status is definitive even when
-    // the body is empty. Do not turn a refusal into an unknown outcome.
-    let reason = data.text().trim()
+    // A refusal is definitive regardless of its body encoding.
+    let body = data.text()
+    let json : Json = @json.parse(body) catch { _ => null }
+    let reason = match json {
+      { "error": String(error), .. } => error.trim()
+      _ => body.trim()
+    }
     return Rejected(
       if reason.is_empty() {
         "HTTP 409"
