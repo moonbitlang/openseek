@@ -1,4 +1,7 @@
 ///|
+using @engine_session {type CompactionPhase, type GoalCommand, type GoalRequest}
+
+///|
 /// Which model a conversation's turns run with. The composer's shared selector
 /// offers the DeepSeek service tiers or the GLM models, following the
 /// configured provider; `Other` retains a wire name this build does not know —
@@ -507,31 +510,6 @@ fn EngineModel::matches_provider(
 }
 
 ///|
-/// The compaction lifecycle of one conversation, mirroring the host's
-/// `EnginePhase` design: one value instead of loose booleans, so a compact
-/// request that is in flight but not yet acknowledged still has a
-/// representation — every phase but `NotCompacting` holds the send gate and
-/// shows a composer notice, and a request the model forgot to track cannot
-/// exist. Settled by the engine's `compaction_*` events, or by
-/// `CompactRejected` when the request never reached one.
-priv enum CompactionPhase {
-  // Nothing pending; the only phase that accepts a `/compact`.
-  NotCompacting
-  // Requested while idle: the op is on the wire and the host may still be
-  // spawning a serve engine for it (a resumed conversation compacted before
-  // its first prompt — seconds, not milliseconds). `compaction_started`
-  // confirms it.
-  Requested
-  // Requested mid-turn: the engine queues it behind the open run, so this
-  // holds the gate through the gap between the turn's end and the queued
-  // compaction's start.
-  Queued
-  // The engine reported `compaction_started` and has not yet reported the
-  // summary or a failure.
-  Compacting
-} derive(Eq)
-
-///|
 /// The run lifecycle of one conversation, as a single value: the old
 /// `running`/`active_run_id`/`status` trio encoded the same facts three ways
 /// and let them drift ("running with no id yet" was Starting only by
@@ -907,7 +885,7 @@ priv struct Conversation {
   // The standing goal mirrored from the durable record's `[goal]` markers:
   // seeded by each snapshot's reduction and folded forward by marker
   // commits in `apply_commit`. Nothing local writes it — goal mode only
-  // sends `agent.goal`, and the engine's durable append is what lands here,
+  // sends `agent.command`, and the engine's durable append is what lands here,
   // so the row never claims a goal that was not persisted.
   goal : @transcript.GoalStanding?
   // The goal this conversation is composing, while `/goal` (or the row's
@@ -916,7 +894,7 @@ priv struct Conversation {
   // model-wide slot would let opening goal mode anywhere destroy the draft
   // waiting somewhere else.
   goal_edit : GoalEdit?
-  // A goal command sent but not yet durably confirmed. `agent.goal` returns
+  // A goal command sent but not yet durably confirmed. `agent.command` returns
   // once the command reaches the engine's stdin, which is not persistence:
   // the engine's own append can still fail, or the process can die with the
   // command queued, and then no `[goal]` marker ever commits.
@@ -945,84 +923,6 @@ priv struct ShellCommand {
   id : String
   command : String
 } derive(Eq)
-
-///|
-/// One goal command in flight: what it asks the record to say, and which
-/// send it was.
-///
-/// The id exists because `GoalRequest` alone is not an identity. The row
-/// keeps its actions while a command is out, so the same text — or Clear —
-/// can be sent twice, and two such sends are equal values. A late reply to
-/// the first would then retire the second, leaving its marker with nothing
-/// waiting for it. The id never goes on the wire: it identifies this
-/// client's own send to this client's own reply handler, which is the only
-/// place the question arises.
-priv struct GoalCommand {
-  id : String
-  request : GoalRequest
-  // The durable frontier when this was sent. Its marker can only commit
-  // above it, which is what separates "the record just did this" from "the
-  // record already said this before I asked" — the two are indistinguishable
-  // by state when a set re-asserts an unchanged goal, or a clear lands on an
-  // already-goalless session.
-  since : Int32
-} derive(Eq)
-
-///|
-/// A goal command in flight, named by the durable state it asks for.
-priv enum GoalRequest {
-  // The text this set asks to be standing.
-  Setting(String)
-  Clearing
-} derive(Eq)
-
-///|
-/// Whether these durable markers contain this request's own result.
-///
-/// The request is *not* matched against whose command produced the marker.
-/// The durable record has no provenance — a `[goal]` commit proves the engine
-/// is appending, never that *this* client is the one it appended for, and a
-/// retry or a second client can write markers this session never sent. Asking
-/// "did the record just do what I asked" is answerable from any durable read;
-/// asking "was that echo mine" is not.
-///
-/// It has to be *did*, not *agrees with*. Re-sending an unchanged goal is a
-/// real command, not a no-op: serve records a fresh baseline beside every set
-/// marker and restarts the goal cadence from it, and it explicitly keeps two
-/// same-text goals apart while they queue. A clear is the same trap in
-/// sharper form, since an absence is also what a record carries before any
-/// goal exists. So the reduced state is no evidence at all, and the marker is
-/// the whole of it: one of this request's own shape, committed above the
-/// frontier the request was sent from.
-///
-/// Nothing is asked of what stands *now*. A set can be blocked, or replaced,
-/// before this is ever read — by the agent, or by another client — and none
-/// of that unmakes the fact that the set was recorded. "Did my command land"
-/// and "what is the goal today" are two questions; the row answers the second
-/// from the mirror.
-///
-/// A commit carries its one marker; a snapshot carries every marker it read.
-/// Same question either way, which is why a reload can settle a send whose
-/// reply was lost — and why a reload that finds only older markers settles
-/// nothing, because there the record genuinely has not answered yet.
-fn GoalRequest::settled_by(
-  self : GoalRequest,
-  since : Int32,
-  markers : Array[(Int32, @transcript.GoalMarker)],
-) -> Bool {
-  for entry in markers {
-    let (sequence, marker) = entry
-    if sequence > since &&
-      (match (self, marker) {
-        (Setting(text), GoalSet(recorded)) => recorded == text
-        (Clearing, GoalCleared) => true
-        _ => false
-      }) {
-      return true
-    }
-  }
-  false
-}
 
 ///|
 /// One follow-up submitted into an open run. A queued follow-up waits for its
@@ -2645,6 +2545,7 @@ priv enum DeviceMsg {
   // The host saved a new list of this session's attached pull requests and
   // branches.
   ArtifactsChanged(String)
+  NativeEngine(String?, @wire.Event, session~ : String)
   Engine(String?, @transcript.EngineEvent, session~ : String?)
   // The exact local start request returned its run result. `accepted` is the
   // prompt's ownership receipt and can recover a Started notification lost on
@@ -2687,11 +2588,19 @@ priv enum DeviceMsg {
     diagnostics~ : String?,
     exit_code~ : Int32?
   )
+  // A native session command failed on the Local host or transport.
+  SessionCommandFailed(
+    session~ : String,
+    id~ : String,
+    command~ : @wire.Command,
+    refused~ : Bool,
+    message~ : String
+  )
   // The `compact` bridge request itself was rejected (no engine, host error):
   // nothing will report compaction events, so the conversation's queued /
   // in-flight compaction notice must be cleared here, not by the stream.
   CompactRejected(session~ : String, message~ : String)
-  // The `agent.goal` bridge request was rejected (no engine, host error):
+  // The `agent.command` bridge request was rejected (no engine, host error):
   // no `[goal]` marker will commit, so the failure is reported here. `draft`
   // is the text that never landed — carried back so the composer can return
   // it to the user, the way a rejected prompt restores its own draft. `None`
@@ -2703,7 +2612,7 @@ priv enum DeviceMsg {
     draft~ : String?,
     message~ : String
   )
-  // The `agent.goal` call failed on the transport rather than being refused,
+  // The `agent.command` call failed on the transport rather than being refused,
   // so whether the host took it is unknown: the socket can drop after the
   // command reached the engine and before the reply came back, and the
   // `[goal]` marker still commits. The request therefore stays in flight —
@@ -4212,26 +4121,6 @@ fn Conversation::clear_streams(self : Conversation) -> Conversation {
 }
 
 ///|
-fn Conversation::clear_response(self : Conversation) -> Conversation {
-  { ..self, turn: { ..self.turn, streaming_response: None, }, }
-}
-
-///|
-fn Conversation::complete_reasoning(self : Conversation) -> Conversation {
-  match self.turn.live_reasoning {
-    Some(reasoning) if !reasoning.complete =>
-      {
-        ..self,
-        turn: {
-          ..self.turn,
-          live_reasoning: Some({ ..reasoning, complete: true, }),
-        },
-      }
-    _ => self
-  }
-}
-
-///|
 fn Model::allocate_submission_id(self : Model) -> (Model, String) {
   let sequence = self.submission_sequence + 1
   (
@@ -4328,13 +4217,7 @@ fn Conversation::remove_queued_input(
 /// that window continues what was sent rather than reverting to what it was
 /// about to replace.
 fn Conversation::goal_draft_seed(self : Conversation) -> String {
-  match (self.goal_pending.map(pending => pending.request), self.goal) {
-    (Some(Setting(text)), _) => text
-    // A clear in flight is asking for nothing to stand, so it seeds nothing.
-    (Some(Clearing), _) => ""
-    (None, Some(goal)) => goal.text
-    (None, None) => ""
-  }
+  self.engine_controls().seed()
 }
 
 ///|
@@ -4526,25 +4409,16 @@ fn Conversation::apply_commit(
   } else {
     None
   }
-  let goal = if goal_marker is Some(marker) {
-    @transcript.apply_goal_marker(self.goal, marker)
+  let controls = if goal_marker is Some(marker) {
+    self
+    .engine_controls()
+    .restore_goal(@transcript.apply_goal_marker(self.goal, marker), [
+      (sequence, marker),
+    ])
   } else {
-    self.goal
+    self.engine_controls()
   }
-  let conv = {
-    ..self,
-    messages,
-    goal,
-    // Settled by what this commit made the record say, not by whose command
-    // it was — see `GoalRequest::settled_by`.
-    goal_pending: if self.goal_pending is Some(pending) &&
-      goal_marker is Some(marker) &&
-      pending.request.settled_by(pending.since, [(sequence, marker)]) {
-      None
-    } else {
-      self.goal_pending
-    },
-  }
+  let conv = { ..self.with_engine_controls(controls), messages, }
   (changed, conv)
 }
 
@@ -4675,27 +4549,9 @@ fn Conversation::adopt_snapshot(
   }
   // Sequence order, whatever the arrival order was.
   pending.sort_by((a, b) => a.sequence - b.sequence)
-  let reconciled = {
-    ..self
-    // The snapshot's reduced standing goal replaces the mirror wholesale;
-    // buffered commits newer than the snapshot fold on top below through
-    // `apply_commit`.
-    ,
-    goal,
-    // A complete durable read is as good a settling point as a marker: if
-    // the goal it reduces to is already what a request in flight asked
-    // for, that request has nothing left to wait for. This is what ends
-    // the wait after a delivery whose reply never came back — the reload
-    // that follows a reconnect answers the question the transport could
-    // not. A snapshot that does *not* show it settles nothing: the append
-    // may still be queued behind this read.
-    goal_pending: if self.goal_pending is Some(pending) &&
-      pending.request.settled_by(pending.since, goal_markers) {
-      None
-    } else {
-      self.goal_pending
-    },
-  }
+  let reconciled = self.with_engine_controls(
+    self.engine_controls().restore_goal(goal, goal_markers),
+  )
   let mut conv : Conversation = {
     ..reconciled,
     messages: items,

@@ -242,10 +242,7 @@ pub fn update(
   token? : String,
   navigation~ : Int32,
 ) -> (State, @cmd.Cmd, String?) {
-  if state.update_compact(msg, emit, token) is Some((next, command)) {
-    return (next, command, None)
-  }
-  if state.update_goal(msg, emit, token) is Some((next, command)) {
+  if state.update_command(msg, emit, token) is Some((next, command)) {
     return (next, command, None)
   }
   if state.update_control(msg, emit, token) is Some((next, command)) {
@@ -626,21 +623,26 @@ pub fn update(
           )
         }
         EngineFailed(session~, seq~, error~) => {
-          guard session == id && conversation.last_seq is Some(last) && seq > last else {
+          guard session == id &&
+            conversation.last_seq is Some(last) &&
+            seq > last else {
             return (state, @cmd.none, None)
           }
-          let goal = conversation.goal
-          let draft = if goal.draft is Some(_) { goal.draft } else {
-            match goal.pending {
-              Some(@composer.GoalSetting(text)) => Some(text)
-              _ => None
-            }
-          }
-          (state.replace(id, {
-            ..conversation, last_seq: Some(seq), goal: { ..goal, draft, pending: None, },
-            compact_request: None, compact_queued: false, compacting: false,
-            notice: Some(error),
-          }), @cmd.none, None)
+
+          (
+            state.replace(id, {
+              ..conversation.with_engine_controls(
+                conversation.engine_controls().host_failed(),
+              ),
+              last_seq: Some(seq),
+              compact_request: None,
+              compact_queued: false,
+              compacting: false,
+              notice: Some(error),
+            }),
+            @cmd.none,
+            None,
+          )
         }
         NativeEvent(frame) => {
           guard conversation.last_seq is Some(seq) && frame.seq > seq else {
@@ -690,10 +692,8 @@ pub fn update(
       (next, command, None)
     }
     ControlPreparationFailed(_, _, _, _, _)
-    | CompactFinished(_, _, _, _)
-    | CompactFailed(_, _, _, _)
-    | GoalFinished(_, _, _, _)
-    | GoalFailed(_, _, _, _)
+    | CommandFinished(_, _, _, _, _)
+    | CommandFailed(_, _, _, _, _)
     | ControlAction(_, _)
     | ControlPrepared(_, _, _, _, _, _)
     | ControlAttachmentStored(_, _, _, _, _, _)

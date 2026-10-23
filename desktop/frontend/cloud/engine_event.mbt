@@ -34,20 +34,11 @@ fn State::engine_event(
     // not replace the new task's run state or provisional text.
     return (next, @cmd.none, None)
   }
-  let idle_event = event
-    is (@wire.GoalUpdated(..)
-    | @wire.GoalBlocked(..)
-    | @wire.GoalUnblocked
-    | @wire.CompactionStarted(..)
-    | @wire.CompactionFinished(..)
-    | @wire.AutoCompactionFinished(..)
-    | @wire.CompactionFailed(..)
-    | @wire.CommandError(..)
-    | @wire.SessionError(..))
-  guard idle_event || (frame.task_id is Some(_) && conversation.generating) else {
+  guard @engine_session.is_idle_event(event) ||
+    (frame.task_id is Some(_) && conversation.generating) else {
     return (next, @cmd.none, None)
   }
-  let conversation = conversation.goal_event(event)
+  let conversation = conversation.command_event(event)
   let conversation = if frame.task_id is Some(_) ||
     event
     is (@wire.CompactionStarted(..)
@@ -59,16 +50,7 @@ fn State::engine_event(
     conversation
   }
   let next = next.replace(session, conversation)
-  if event
-    is (@wire.AssistantMessage(..)
-    | @wire.ToolResult(..)
-    | @wire.BackgroundNotice(..)
-    | @wire.SteerApplied(..)
-    | @wire.CompactionFinished(..)
-    | @wire.AutoCompactionFinished(..)
-    | @wire.GoalUpdated(..)
-    | @wire.GoalBlocked(..)
-    | @wire.GoalUnblocked) {
+  if @engine_session.refreshes_history(event) {
     // Live semantic events are not a second durable transcript. Refresh the
     // unchanged history source, as Local renders canonical session records.
     let (next, command) = next.load(session, token, emit)

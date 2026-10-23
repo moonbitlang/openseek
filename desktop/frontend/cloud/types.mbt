@@ -251,10 +251,8 @@ pub(all) enum Msg {
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
   WatchEnded(Int32, String, StreamLease, Failure?)
   ControlAction(@interop.ConversationIdentity, @composer.Action)
-  CompactFinished(Int32, String, Int32, ControlResult)
-  CompactFailed(Int32, String, Int32, Failure)
-  GoalFinished(Int32, String, Int32, ControlResult)
-  GoalFailed(Int32, String, Int32, Failure)
+  CommandFinished(Int32, String, Int32, @wire.Command, ControlResult)
+  CommandFailed(Int32, String, Int32, @wire.Command, Failure)
   ControlAttachmentStored(
     Int32,
     String,

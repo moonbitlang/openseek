@@ -54,60 +54,27 @@ fn Conversation::live_progress(
     return { ..self, streaming_response: None, }
   }
   match wire {
-    CompactionStarted(..) =>
-      return {
-        ..self,
-        compact_queued: false,
-        compact_request: None,
-        compacting: true,
-      }
     AutoCompactionStarted(..) => return { ..self, compacting: true, }
-    CompactionFinished(..) | CompactionFailed(..) =>
-      return {
-        ..self,
-        compact_queued: false,
-        compact_request: None,
-        compacting: false,
-      }
     AutoCompactionFinished(..) => return { ..self, compacting: false, }
     AutoCompactionFailed(..) => return { ..self, compacting: false, }
     _ => ()
   }
   guard progress is Some(progress) else { return self }
+  let stream : @engine_session.Stream = {
+    response: self.streaming_response,
+    reasoning: self.streaming_reasoning.map(content => {
+      content,
+      complete: self.reasoning_complete,
+    }),
+  }
+  let stream = stream.event(progress)
+  let self = {
+    ..self,
+    streaming_response: stream.response,
+    streaming_reasoning: stream.reasoning.map(r => r.content),
+    reasoning_complete: stream.reasoning.map_or(false, r => r.complete),
+  }
   match progress {
-    AssistantDelta(content) =>
-      if content.is_empty() {
-        self
-      } else {
-        {
-          ..self,
-          streaming_response: Some(
-            self.streaming_response.unwrap_or("") + content,
-          ),
-          reasoning_complete: self.streaming_reasoning is Some(_),
-        }
-      }
-    ReasoningDelta(content) =>
-      if content.is_empty() || self.reasoning_complete {
-        self
-      } else {
-        {
-          ..self,
-          streaming_reasoning: Some(
-            self.streaming_reasoning.unwrap_or("") + content,
-          ),
-        }
-      }
-    ReasoningMessage(content) =>
-      {
-        ..self,
-        streaming_reasoning: if content.trim().is_empty() {
-          None
-        } else {
-          Some(content)
-        },
-        reasoning_complete: !content.trim().is_empty(),
-      }
     AgentStep(step) =>
       {
         ..self.clear_streams(),

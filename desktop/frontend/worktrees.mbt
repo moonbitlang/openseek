@@ -413,8 +413,27 @@ fn set_goal_in_new_worktree(
             text,
             approval~,
           )
-          request_agent_goal(
-            scheduler, dispatch, channel, payload, session, command, text,
+          request_session_command(
+            scheduler,
+            dispatch,
+            channel,
+            {
+              run_id: None,
+              command: if text is Some(text) {
+                @wire.GoalSet(text~, auto=false)
+              } else {
+                @wire.GoalClear
+              },
+              settings: {
+                session,
+                model: payload.model,
+                thinking: payload.thinking,
+                max_steps: payload.max_steps,
+                approval: payload.approval,
+                workspace: payload.workspace,
+              },
+            },
+            command,
           )
         },
       ) catch {

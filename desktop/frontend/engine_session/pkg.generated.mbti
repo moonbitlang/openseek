@@ -1,0 +1,90 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/engine_session"
+
+import {
+  "moonbitlang/openseek_protocol",
+  "openseek_desktop/frontend/composer",
+  "openseek_desktop/frontend/transcript",
+}
+
+// Values
+pub fn composer_action(@composer.Action) -> Action?
+
+pub fn is_idle_event(@openseek_protocol.Event) -> Bool
+
+pub fn refreshes_history(@openseek_protocol.Event) -> Bool
+
+pub fn slash_action(String) -> Action?
+
+// Errors
+
+// Types and methods
+pub(all) enum Action {
+  EditGoal
+  CloseGoal
+  SetGoal(String)
+  ClearGoal
+  Send(@openseek_protocol.Command)
+}
+
+pub(all) enum CompactionPhase {
+  NotCompacting
+  Requested
+  Queued
+  Compacting
+} derive(Eq)
+pub fn CompactionPhase::equal(Self, Self) -> Bool
+pub fn CompactionPhase::not_equal(Self, Self) -> Bool
+
+pub(all) struct GoalCommand {
+  id : String
+  request : GoalRequest
+  since : Int32
+} derive(Eq)
+pub fn GoalCommand::equal(Self, Self) -> Bool
+pub fn GoalCommand::not_equal(Self, Self) -> Bool
+
+pub(all) enum GoalRequest {
+  Setting(String)
+  Clearing
+} derive(Eq)
+pub fn GoalRequest::equal(Self, Self) -> Bool
+pub fn GoalRequest::matches(Self, @transcript.GoalMarker) -> Bool
+pub fn GoalRequest::not_equal(Self, Self) -> Bool
+pub fn GoalRequest::settled_by(Self, Int32, Array[(Int32, @transcript.GoalMarker)]) -> Bool
+
+pub(all) struct Reasoning {
+  content : String
+  complete : Bool
+} derive(Eq)
+pub fn Reasoning::equal(Self, Self) -> Bool
+pub fn Reasoning::not_equal(Self, Self) -> Bool
+
+pub(all) struct State {
+  goal : @transcript.GoalStanding?
+  edit : String?
+  pending : GoalCommand?
+  compaction : CompactionPhase
+} derive(Eq)
+pub fn State::act(Self, Action, String, Int32, running~ : Bool) -> (Self, @openseek_protocol.Command?)
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::event(Self, @openseek_protocol.Event, live_goal? : Bool) -> Self
+pub fn State::host_failed(Self) -> Self
+pub fn State::input(Self) -> @composer.GoalInput
+pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::progress(Self, @transcript.EngineEvent) -> Self
+pub fn State::reject(Self, @openseek_protocol.Command, String) -> Self
+pub fn State::restore_goal(Self, @transcript.GoalStanding?, Array[(Int32, @transcript.GoalMarker)]) -> Self
+pub fn State::seed(Self) -> String
+
+pub(all) struct Stream {
+  response : String?
+  reasoning : Reasoning?
+} derive(Eq)
+pub fn Stream::equal(Self, Self) -> Bool
+pub fn Stream::event(Self, @transcript.EngineEvent) -> Self
+pub fn Stream::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

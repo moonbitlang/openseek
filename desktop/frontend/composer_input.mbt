@@ -207,12 +207,6 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       )
     Some(_) => ()
   }
-  let pending : @composer.GoalPending? = conv.goal_pending.map(command => {
-    match command.request {
-      Setting(text) => @composer.GoalSetting(text)
-      Clearing => @composer.GoalClearing
-    }
-  })
   let file_index = self.composer_file_index()
   {
     identity,
@@ -221,11 +215,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // rendered by the composer above the draft rather than persisted into the
     // transcript.
     run: conv.run_heartbeat(),
-    goal: {
-      draft: conv.goal_edit.map(edit => edit.draft),
-      standing: conv.goal,
-      pending,
-    },
+    goal: conv.engine_controls().input(),
     slash_commands: [
       ..self.engine_commands(),
       {

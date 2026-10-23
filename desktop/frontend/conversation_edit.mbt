@@ -120,7 +120,7 @@ test "message editing is blocked by active work in its own conversation family" 
   let model = test_model()
   let source = model.active()
   assert_false(model.message_edit_busy(source))
-  for phase in [Requested, Queued, Compacting] {
+  for phase in ([Requested, Queued, Compacting] : Array[CompactionPhase]) {
     let busy = model.replace_conversation({ ..source, compaction: phase, })
     assert_true(busy.message_edit_busy(source))
   }

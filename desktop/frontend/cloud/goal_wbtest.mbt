@@ -38,12 +38,18 @@ test "Cloud goals reuse shared input and wait for a saved goal rather than an as
   assert_true(conversation.goal.draft is None)
   let accepted = metadata_update(
     sent,
-    GoalFinished(1, "session", conversation.goal_request, Accepted),
+    CommandFinished(
+      1,
+      "session",
+      conversation.goal_request,
+      @wire.GoalClear,
+      Accepted,
+    ),
   )
   assert_true(accepted == sent)
   let saved = accepted.replace(
     "session",
-    conversation.goal_event(@wire.GoalUpdated(goal=Some("Ship it"))),
+    conversation.command_event(@wire.GoalUpdated(goal=Some("Ship it"))),
   )
   assert_true(saved.conversations["session"].goal.pending is None)
   assert_true(
@@ -54,7 +60,13 @@ test "Cloud goals reuse shared input and wait for a saved goal rather than an as
   assert_true(
     metadata_update(
       saved,
-      GoalFailed(1, "session", conversation.goal_request, Unreachable),
+      CommandFailed(
+        1,
+        "session",
+        conversation.goal_request,
+        @wire.GoalClear,
+        Unreachable,
+      ),
     ) ==
     saved,
   )
@@ -66,7 +78,7 @@ test "Cloud goals reuse shared input and wait for a saved goal rather than an as
     cleared.conversations["session"].goal.pending
     is Some(@composer.GoalClearing),
   )
-  let confirmed = cleared.conversations["session"].goal_event(
+  let confirmed = cleared.conversations["session"].command_event(
     @wire.GoalUpdated(goal=None),
   )
   assert_true(confirmed.goal.standing is None && confirmed.goal.pending is None)
@@ -86,7 +98,7 @@ test "Cloud goal failures retain recoverable input and fence earlier HTTP callba
   let first_request = first.conversations["session"].goal_request
   let unknown = metadata_update(
     first,
-    GoalFailed(1, "session", first_request, Unreachable),
+    CommandFailed(1, "session", first_request, @wire.GoalClear, Unreachable),
   )
   assert_true(
     unknown.conversations["session"].goal.pending
@@ -99,15 +111,19 @@ test "Cloud goal failures retain recoverable input and fence earlier HTTP callba
     @composer.GoalSubmitted(identity~, draft="Second", prompt_present=false),
   )
   assert_true(
-    metadata_update(second, GoalFailed(1, "session", first_request, Http(400))) ==
+    metadata_update(
+      second,
+      CommandFailed(1, "session", first_request, @wire.GoalClear, Http(400)),
+    ) ==
     second,
   )
   let rejected = metadata_update(
     second,
-    GoalFinished(
+    CommandFinished(
       1,
       "session",
       second.conversations["session"].goal_request,
+      @wire.GoalClear,
       Rejected("task_mismatch"),
     ),
   )
@@ -197,10 +213,11 @@ test "Cloud goal rejection preserves a reopened editor" {
   })
   let rejected = metadata_update(
     reopened,
-    GoalFinished(
+    CommandFinished(
       1,
       "session",
       conversation.goal_request,
+      @wire.GoalClear,
       Rejected("task_mismatch"),
     ),
   )
@@ -224,7 +241,7 @@ test "Cloud missing model credentials reject goal and restore the submitted edit
   let request = requested.conversations["session"].goal_request
   let refused = metadata_update(
     requested,
-    GoalFailed(1, "session", request, ServiceNotConfigured),
+    CommandFailed(1, "session", request, @wire.GoalClear, ServiceNotConfigured),
   )
   assert_true(refused.conversations["session"].goal.pending is None)
   assert_eq(refused.conversations["session"].goal.draft, Some("Ship it"))
@@ -235,7 +252,7 @@ test "Cloud missing model credentials reject goal and restore the submitted edit
   for failure in ([Unreachable, Http(503), Malformed] : Array[Failure]) {
     let unknown = metadata_update(
       requested,
-      GoalFailed(1, "session", request, failure),
+      CommandFailed(1, "session", request, @wire.GoalClear, failure),
     )
     assert_true(
       unknown.conversations["session"].goal.pending

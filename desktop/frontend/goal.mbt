@@ -39,7 +39,7 @@ test "submit holds the text until its marker lands" {
   inspect(edit.draft, content="ship it")
   let (_, submitted) = update(dispatch, SubmitGoal, edited)
   assert_true(submitted.active().goal_edit is None)
-  // `agent.goal` returning is not persistence, so the text waits for the
+  // `agent.command` returning is not persistence, so the text waits for the
   // durable marker rather than being dropped on the send.
   assert_true(
     submitted.active().goal_pending is Some({ request: Setting("ship it"), .. }),

@@ -1019,57 +1019,15 @@ fn run_slash_command(
     !conv.is_archived_read_only() else {
     return (@cmd.none, model)
   }
-  match command {
-    "compact" =>
-      // One compaction at a time: a repeat while one is queued or in flight
-      // would stack another behind it in the engine's pending queue (the
-      // host rejects it anyway) — swallow it like any settled command.
-      if !(conv.compaction is NotCompacting) {
-        (@cmd.none, { ..model.replace_conversation({ ..conv, task: "", }), })
-      } else {
-        (
-          compact_openseek(
-            dispatch,
-            model.focused,
-            session=conv.session_id,
-            model=conv.engine_model,
-            reasoning=model.reasoning_for(conv.engine_model),
-            max_steps=model.max_steps,
-            workspace=conv.project(),
-            approval=model.approval_for(conv.device, conv.session_id),
-          ),
-          {
-            ..model.replace_conversation({
-              ..conv,
-              task: "",
-              // Hold the send gate before the host answers: mid-turn the
-              // command queues behind the open run, and an idle request may
-              // sit in the spawn/write window for seconds (a resumed
-              // conversation gets its engine spawned on demand) — a prompt
-              // sent into either gap would be consumed and rejected instead
-              // of held. compaction_started confirms; CompactRejected clears.
-              compaction: if conv.is_running() {
-                Queued
-              } else {
-                Requested
-              },
-            }),
-          },
-        )
-      }
-    "goal" =>
-      (
-        @cmd.none,
-        {
-          ..model.replace_conversation({
-            ..conv,
-            task: "",
-            goal_edit: Some({ draft: conv.goal_draft_seed(), }),
-          }),
-        },
-      )
-    _ => (@cmd.none, model)
+  guard @engine_session.slash_action(command) is Some(action) else {
+    return (@cmd.none, model)
   }
+  apply_engine_action(
+    dispatch,
+    model.replace_conversation({ ..conv, task: "", }),
+    { ..conv, task: "", },
+    action,
+  )
 }
 
 ///|
@@ -1099,17 +1057,16 @@ fn send_goal(
       approval=model.approval_for(conv.device, conv.session_id),
     )
   }
-  goal_openseek(
+  send_session_command(
     dispatch,
-    conv.device,
-    session=conv.session_id,
-    model=conv.engine_model,
-    reasoning=model.reasoning_for(conv.engine_model),
-    max_steps=model.max_steps,
-    workspace=conv.project(),
-    approval=model.approval_for(conv.device, conv.session_id),
+    model,
+    conv,
     command,
-    text,
+    if text is Some(text) {
+      @wire.GoalSet(text~, auto=false)
+    } else {
+      @wire.GoalClear
+    },
   )
 }
 
@@ -1122,6 +1079,26 @@ fn apply_engine_event(
   event : @transcript.EngineEvent,
   event_run_id : String?,
 ) -> (String?, Conversation) {
+  let conv = conv.with_engine_controls(conv.engine_controls().progress(event))
+  let stream : @engine_session.Stream = {
+    response: conv.turn.streaming_response,
+    reasoning: conv.turn.live_reasoning.map(r => {
+      content: r.content,
+      complete: r.complete,
+    }),
+  }
+  let stream = stream.event(event)
+  let conv = {
+    ..conv,
+    turn: {
+      ..conv.turn,
+      streaming_response: stream.response,
+      live_reasoning: stream.reasoning.map(r => {
+        content: r.content,
+        complete: r.complete,
+      }),
+    },
+  }
   // A retry notice lasts until the engine reports progress on the request it
   // is retrying; events about other work in the run leave it in place.
   let conv = if event.ends_retry() {
@@ -1169,71 +1146,10 @@ fn apply_engine_event(
         },
       )
     }
-    AssistantDelta(content) =>
-      if content.is_empty() {
-        (None, conv)
-      } else {
-        let conv = conv.complete_reasoning()
-        let carried = conv.turn.streaming_response.unwrap_or("")
-        (
-          None,
-          {
-            ..conv,
-            turn: { ..conv.turn, streaming_response: Some(carried + content), },
-          },
-        )
-      }
-    ReasoningDelta(content) =>
-      if content.is_empty() ||
-        conv.turn.live_reasoning is Some({ complete: true, .. }) {
-        // A completed semantic event is the boundary. A delayed fragment must
-        // not resurrect or mutate the finished preview.
-        (None, conv)
-      } else {
-        let carried = match conv.turn.live_reasoning {
-          Some(reasoning) => reasoning.content
-          None => ""
-        }
-        (
-          None,
-          {
-            ..conv,
-            turn: {
-              ..conv.turn,
-              live_reasoning: Some({
-                content: carried + content,
-                complete: false,
-              }),
-            },
-          },
-        )
-      }
-    // Full semantic events never append transcript items: the store commit is
-    // the sole durable source. The complete reasoning payload replaces any
-    // accumulated fragments and seals their transient presentation.
-    ReasoningMessage(content) => {
-      let normalized = content.trim()
-      if normalized.is_empty() {
-        // Remote delivery strips the complete payload because the durable
-        // session event carries it. A remote client may have joined midway
-        // through the stream, so its accumulated deltas can be only a suffix;
-        // discard that provisional text at settlement and let the canonical
-        // commit supply the complete Markdown card.
-        (None, { ..conv, turn: { ..conv.turn, live_reasoning: None, }, })
-      } else {
-        (
-          None,
-          {
-            ..conv,
-            turn: {
-              ..conv.turn,
-              live_reasoning: Some({ content, complete: true, }),
-            },
-          },
-        )
-      }
-    }
-    AssistantMessage(_) => (None, conv.complete_reasoning().clear_response())
+    AssistantDelta(_)
+    | ReasoningDelta(_)
+    | ReasoningMessage(_)
+    | AssistantMessage(_) => (None, conv)
     // A background-job completion notice while idle. The durable record owns
     // the transcript card, and the completion is already surfaced to the
     // model as a steer — a toast would double it for an idle reader without
@@ -1405,8 +1321,8 @@ fn apply_engine_event(
         (None, conv)
       }
     AutoCompactionFinished(_) => (None, conv)
-    CompactionStarted => (None, { ..conv, compaction: Compacting, })
-    CompactionFinished(_) => (None, { ..conv, compaction: NotCompacting, })
+    CompactionStarted => (None, conv)
+    CompactionFinished(_) => (None, conv)
     // An idle-time append the engine could not persist. It names what failed
     // but not which command asked for it, so nothing is settled on it — a
     // pending goal keeps waiting, since this may have been some other item's
@@ -1440,7 +1356,7 @@ fn apply_engine_event(
       } else {
         "compaction failed: \{reason}"
       }
-      (Some(content), { ..conv, compaction: NotCompacting, })
+      (Some(content), conv)
     }
   }
 }
@@ -3046,7 +2962,7 @@ fn update_msg(
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
-          (@cmd.none, model.replace_conversation({ ..conv, goal_edit: None, }))
+          apply_engine_action(dispatch, model, conv, @engine_session.CloseGoal)
         }
         @composer.GoalEditStarted(identity~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
@@ -6060,23 +5976,7 @@ fn update_msg(
       if conv.is_archived_read_only() {
         return (@cmd.none, model)
       }
-      // Opening goal mode touches only this conversation, so an unsaved edit
-      // waiting on another one is untouched — the reason the draft lives here
-      // rather than in a single model-wide slot.
-      //
-      // A menu left open over the prompt does not survive the switch: it was
-      // computed from the prompt draft, and a goal draft has no slash
-      // commands to offer. Accepting one of its stale rows would replace the
-      // goal being written, or run something else entirely.
-      (
-        @cmd.none,
-        {
-          ..model.replace_conversation({
-            ..conv,
-            goal_edit: Some({ draft: conv.goal_draft_seed(), }),
-          }),
-        },
-      )
+      apply_engine_action(dispatch, model, conv, @engine_session.EditGoal)
     }
     GoalDraftEdited(draft) => {
       guard model.active_conversation() is Some(conv) else {
@@ -6102,26 +6002,11 @@ fn update_msg(
         return (@cmd.none, model)
       }
       guard conv.goal_edit is Some(edit) else { return (@cmd.none, model) }
-      let text = edit.draft.trim().to_owned()
-      // A blank draft has nothing to set (the button is disabled; this also
-      // catches Enter); goal mode stays open for the user to finish.
-      guard !text.is_empty() else { return (@cmd.none, model) }
-      // Goal mode closes, but the text stays as `goal_pending` until the
-      // durable marker lands. `agent.goal` returning only means the command
-      // reached the engine's stdin — the append behind it can still fail, and
-      // then nothing would carry the user's writing.
-      let (model, command) = model.allocate_submission_id()
-      (
-        send_goal(dispatch, model, conv, command, Some(text)),
-        model.replace_conversation({
-          ..conv,
-          goal_edit: None,
-          goal_pending: Some({
-            id: command,
-            request: Setting(text),
-            since: conv.durable_frontier(),
-          }),
-        }),
+      apply_engine_action(
+        dispatch,
+        model,
+        conv,
+        @engine_session.SetGoal(edit.draft),
       )
     }
     ClearGoal => {
@@ -6138,26 +6023,13 @@ fn update_msg(
       if conv.is_archived_read_only() {
         return (@cmd.none, model)
       }
-      let (model, command) = model.allocate_submission_id()
-      (
-        send_goal(dispatch, model, conv, command, None),
-        model.replace_conversation({
-          ..conv,
-          goal_edit: None,
-          // Supersedes a set still awaiting its marker.
-          goal_pending: Some({
-            id: command,
-            request: Clearing,
-            since: conv.durable_frontier(),
-          }),
-        }),
-      )
+      apply_engine_action(dispatch, model, conv, @engine_session.ClearGoal)
     }
     CloseGoalEditor => {
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      (@cmd.none, model.replace_conversation({ ..conv, goal_edit: None, }))
+      apply_engine_action(dispatch, model, conv, @engine_session.CloseGoal)
     }
     FileEditor(@fileeditor.GithubReview(CheckAvailability)) =>
       update_msg(dispatch, Github(@github.RefreshCurrent), model)
@@ -9654,6 +9526,32 @@ fn update_device_msg(
         (jobs_cmd, model)
       }
     }
+    NativeEngine(run_id, event, session~) => {
+      // Native command events share one reducer with Cloud. Host lifecycle
+      // and durable-commit synchronization stay on their existing paths.
+      let next = if model.find_conversation(channel, session) is Some(conv) &&
+        (
+          run_id is None ||
+          conv.last_run_id == run_id ||
+          @engine_session.is_idle_event(event)
+        ) {
+        model.replace_conversation(
+          conv.with_engine_controls(conv.engine_controls().event(event)),
+        )
+      } else {
+        model
+      }
+      match @transcript.decode_engine_event(event) {
+        Some(event) =>
+          update_device_msg(
+            dispatch,
+            channel,
+            Engine(run_id, event, session=Some(session)),
+            next,
+          )
+        None => (@cmd.none, next)
+      }
+    }
     Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
@@ -9947,6 +9845,21 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     }
+    SessionCommandFailed(session~, id~, command~, refused~, message~) =>
+      if model.find_conversation(channel, session) is Some(conv) {
+        let next = if refused {
+          model.replace_conversation(
+            conv.with_engine_controls(
+              conv.engine_controls().reject(command, id),
+            ),
+          )
+        } else {
+          model
+        }
+        next.notify_error(dispatch, message)
+      } else {
+        (@cmd.none, model)
+      }
     CompactRejected(session~, message~) =>
       if model.find_conversation(channel, session) is Some(conv) {
         model
@@ -9971,19 +9884,10 @@ fn update_device_msg(
         // successor and reopening the editor would claim a failure that is
         // not what this conversation now stands at. The toast still reports
         // it; nothing here is silent.
-        let restored = if !(conv.goal_pending is Some(pending) &&
-          pending.id == command) {
-          conv
-        } else if draft is Some(draft) && conv.goal_edit is None {
-          // Hand the goal text back, the way a rejected prompt restores its
-          // draft: nothing durable will ever carry it, so losing it here
-          // loses it for good. Only when this conversation has not claimed
-          // goal mode since — a newer edit is the user's, not this dead
-          // request's.
-          { ..conv, goal_edit: Some({ draft, }), goal_pending: None, }
-        } else {
-          { ..conv, goal_pending: None, }
-        }
+        ignore(draft)
+        let restored = conv.with_engine_controls(
+          conv.engine_controls().reject(@wire.GoalClear, command),
+        )
         model.replace_conversation(restored).notify_error(dispatch, message)
       } else {
         (@cmd.none, model)

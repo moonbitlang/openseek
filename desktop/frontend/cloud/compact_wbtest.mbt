@@ -16,7 +16,7 @@ test "Cloud manual compaction survives automatic compaction and chat completion"
   let request = queued.compact_request.unwrap()
   let accepted = metadata_update(
     state,
-    CompactFinished(1, "session", request, Accepted),
+    CommandFinished(1, "session", request, @wire.Compact, Accepted),
   )
   assert_true(accepted.conversations["session"].compact_queued)
   assert_true(accepted.conversations["session"].compact_request is None)
@@ -56,7 +56,10 @@ test "Cloud manual compaction survives automatic compaction and chat completion"
   assert_true(started.conversations["session"].compacting)
   assert_false(started.conversations["session"].compact_queued)
   assert_true(
-    metadata_update(started, CompactFinished(1, "session", request, Accepted)) ==
+    metadata_update(
+      started,
+      CommandFinished(1, "session", request, @wire.Compact, Accepted),
+    ) ==
     started,
   )
   let finished = native_event(
@@ -99,12 +102,18 @@ test "Cloud compaction rejection and lost response preserve their distinct outco
   let request = state.conversations["session"].compact_request.unwrap()
   let unknown = metadata_update(
     state,
-    CompactFailed(1, "session", request, Unreachable),
+    CommandFailed(1, "session", request, @wire.Compact, Unreachable),
   )
   assert_true(unknown.conversations["session"].compact_queued)
   let rejected = metadata_update(
     state,
-    CompactFinished(1, "session", request, Rejected("compaction_busy")),
+    CommandFinished(
+      1,
+      "session",
+      request,
+      @wire.Compact,
+      Rejected("compaction_busy"),
+    ),
   )
   assert_false(rejected.conversations["session"].compact_queued)
   assert_true(rejected.conversations["session"].notice is Some(_))
@@ -128,7 +137,10 @@ test "Cloud compaction rejection and lost response preserve their distinct outco
   assert_true(failed.conversations["session"].generating)
   let other = metadata_update(state, AccountChanged(Some("other")))
   assert_true(
-    metadata_update(other, CompactFinished(1, "session", request, Accepted)) ==
+    metadata_update(
+      other,
+      CommandFinished(1, "session", request, @wire.Compact, Accepted),
+    ) ==
     other,
   )
 }
@@ -144,7 +156,7 @@ test "Cloud missing model credentials reject compact without retaining a queued 
   let request = requested.conversations["session"].compact_request.unwrap()
   let refused = metadata_update(
     requested,
-    CompactFailed(1, "session", request, ServiceNotConfigured),
+    CommandFailed(1, "session", request, @wire.Compact, ServiceNotConfigured),
   )
   assert_false(refused.conversations["session"].compact_queued)
   assert_true(refused.conversations["session"].compact_request is None)
@@ -156,7 +168,7 @@ test "Cloud missing model credentials reject compact without retaining a queued 
   for failure in ([Unreachable, Http(503), Malformed] : Array[Failure]) {
     let unknown = metadata_update(
       requested,
-      CompactFailed(1, "session", request, failure),
+      CommandFailed(1, "session", request, @wire.Compact, failure),
     )
     assert_true(unknown.conversations["session"].compact_queued)
     assert_eq(unknown.conversations["session"].compact_request, Some(request))

@@ -247,3 +247,37 @@ test('reusing a draft waits for its pending open and close before reopening', as
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('Local native goal and compact commands share input and wait for engine confirmation', async ({ page }, testInfo) => {
+  const app = await open(page);
+  await app.openSession();
+  const task = page.locator('#task');
+  const requests = () => app.requests.filter(r => r.method === 'agent.command');
+  await task.fill('/goal');
+  await expect(page.locator('.completion-item').filter({hasText: '/goal'})).toBeVisible();
+  await task.press('Enter');
+  await task.fill('Finish the shared command work');
+  await page.locator('#goal-set').click();
+  await expect.poll(() => requests().length).toBe(1);
+  expect(requests()[0].params.command).toEqual({command: 'goal', action: 'set', text: 'Finish the shared command work'});
+  expect(requests()[0].params.session).toBe('session-1');
+  await expect(page.locator('.composer-goal.pending')).toContainText('Setting goal');
+  const sequence = app.sessionEvents.at(-1).sequence + 1;
+  const event = {sequence, item: {kind: 'runtime_notice', payload: {content: '[goal]\nFinish the shared command work'}}};
+  app.sessionEvents.push(event);
+  app.notify('session.event', {session: 'session-1', session_root: '/workspace/.openseek', sequence, event});
+  await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
+  await expect(page.locator('.composer-goal')).toContainText('Goal: Finish the shared command work');
+  await task.fill('/compact');
+  await expect(page.locator('.completion-item').filter({hasText: '/compact'})).toBeVisible();
+  await task.press('Enter');
+  await expect.poll(() => requests().length).toBe(2);
+  expect(requests()[1].params.command).toEqual({command: 'compact'});
+  await expect(page.locator('.composer-notice-text')).toContainText('Compacting context');
+  app.notify('agent.event', {session: 'session-1', event: {event: 'compaction_started', from_sequence: 1, to_sequence: sequence}});
+  app.notify('agent.event', {session: 'session-1', event: {event: 'compaction_finished', from_sequence: 1, to_sequence: sequence, summary: 'Shared command work'}});
+  await expect(page.locator('.composer-notice-text')).toHaveCount(0);
+  await task.fill('Keep this draft');
+  await page.screenshot({path: testInfo.outputPath('local-native-commands.png')});
+  expect(app.pageErrors).toEqual([]);
+});
