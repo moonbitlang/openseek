@@ -115,7 +115,7 @@ fn start_in_new_worktree(
   session : String,
   workspace : @common.Uri,
   approval~ : @protocol.OpenSeekApproval,
-  moonbit_guide? : Bool,
+  moonbit_guide~ : Bool,
   images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
@@ -234,7 +234,7 @@ fn start_in_new_worktree(
             submission_id,
             workspace~,
             approval~,
-            moonbit_guide?,
+            moonbit_guide~,
           )
           request_agent_start(
             scheduler, dispatch, channel, start, session, submission_id,
@@ -1912,7 +1912,7 @@ test "a dirty archive stages the discard dialog and confirm retries forced" {
 }
 
 ///|
-test "a start payload never names a worktree" {
+test "a start payload keeps launch choices without naming a worktree" {
   // Creation is the binding; the host routes a bound session's cwd through
   // its registry, so the start wire shape has no worktree field to leak.
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
@@ -1925,6 +1925,7 @@ test "a start payload never names a worktree" {
     "sub-1",
     workspace~,
     approval=ApprovalReview,
+    moonbit_guide=false,
   )
   // The typed wire shape has no worktree field at all; the workspace hint
   // is the only placement the start carries.
@@ -1934,6 +1935,7 @@ test "a start payload never names a worktree" {
   assert_eq(payload.workspace, Some("/proj"))
   assert_eq(payload.thinking, Some(ThinkingMax))
   assert_eq(payload.approval, Some(ApprovalReview))
+  assert_eq(payload.moonbit_guide, Some(false))
   let unknown_model = start_payload(
     "go",
     Other("kimi-k2.5"),
@@ -1943,6 +1945,8 @@ test "a start payload never names a worktree" {
     "sub-2",
     workspace~,
     approval=ApprovalAsk,
+    moonbit_guide=true,
   )
   assert_true(unknown_model.thinking is None)
+  assert_eq(unknown_model.moonbit_guide, Some(true))
 }

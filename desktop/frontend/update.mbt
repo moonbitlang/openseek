@@ -3936,7 +3936,7 @@ fn update_msg(
     MoonBitGuideDefaultChanged(enabled) =>
       (
         save_default_moonbit_guide(enabled),
-        { ..model, default_moonbit_guide: enabled, select_menu: None, },
+        { ..model, default_moonbit_guide: enabled, },
       )
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value, })
     SetupApiKeyChanged(value) => {
@@ -10352,6 +10352,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
     "test-submission",
     workspace=conv.project(),
     approval=ApprovalAsk,
+    moonbit_guide=conv.moonbit_guide,
   )
   let json = payload.to_json()
   guard json is Object(fields) else { return None }
