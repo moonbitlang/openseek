@@ -428,3 +428,67 @@ test "Cloud recovery retries failed history even when idle and cancels polls wit
   assert_true(fatal.conversations["session"].watch_status is Disconnected)
   assert_false(current.active)
 }
+
+///|
+test "Cloud background observation survives idle snapshots until a terminal and follows a live queue" {
+  let (state, stream) = watch_fixture(controls_fixture())
+  let control = state.conversations["session"].control.unwrap()
+  let running = watch_snapshot(state, stream, Some("task"), 2, control)
+  let idle = watch_snapshot(running, stream, Some("task"), 3, {
+    ..control,
+    active_task_id: None,
+    status: Idle,
+  })
+  assert_false(idle.conversations["session"].generating)
+  assert_true(idle.conversations["session"].needs_observation())
+  let terminal = watch_event(idle, stream, "task", 4, "task_finished", {
+    "status": "completed",
+  })
+  assert_false(terminal.conversations["session"].needs_observation())
+  let queued = {
+    ..terminal.conversations["session"],
+    control: Some({
+      ..control,
+      active_task_id: None,
+      status: Idle,
+      queue: [{ id: "q1", content: Content([Text("Next")]), }],
+    }),
+  }
+  assert_true(queued.needs_observation())
+  assert_false(
+    {
+      ..queued,
+      control: queued.control.map(control => { ..control, paused: true, }),
+    }.needs_observation(),
+  )
+}
+
+///|
+test "Cloud recovered history can release an observed task without replaying its terminal event" {
+  let (state, stream) = watch_fixture(controls_fixture())
+  let control = state.conversations["session"].control.unwrap()
+  let state = watch_snapshot(state, stream, Some("task"), 2, control)
+  let ended = metadata_update(state, WatchEnded(1, "session", stream, None))
+  let (reopened, current) = watch_fixture(ended)
+  let idle = watch_snapshot(reopened, current, Some("task"), 5, {
+    ..control,
+    active_task_id: None,
+    status: Idle,
+  })
+  let loaded = metadata_update(
+    idle,
+    Loaded(1, "session", idle.conversations["session"].request, {
+      messages: [
+        {
+          task_id: "task",
+          kind: "task_finished",
+          data: { "status": "completed" },
+          created_at: 100,
+        },
+      ],
+      generating: false,
+    }),
+  )
+  assert_false(loaded.conversations["session"].needs_observation())
+  assert_false(loaded.conversations["session"].unseen_finish)
+}

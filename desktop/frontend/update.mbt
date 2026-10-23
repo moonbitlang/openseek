@@ -5715,7 +5715,29 @@ fn update_msg(
         _ => (@cmd.none, model)
       }
     NotificationClicked(run_id~) => {
-      // Proton notifications are emitted only for the embedded local host. A
+      // Cloud payloads reuse the existing account-scoped conversation key.
+      // A notification from a signed-out account cannot open another account.
+      if model.account.map(account => account.user.user_id) ==
+        model.cloud.user_id &&
+        model.cloud.user_id is Some(account) {
+        for session in model.cloud.sessions {
+          let owner : @interop.ConversationIdentity = Cloud(
+            account~,
+            session=session.id,
+          )
+          if owner.key() == run_id && !session.archived {
+            return update_msg(
+              dispatch,
+              OpenCloudConversation(account~, session=session.id),
+              {
+                ..model,
+                chat_navigation_generation: model.chat_navigation_generation + 1,
+              },
+            )
+          }
+        }
+      }
+      // Local payloads retain their owning run ID. A
       // finished run usually matches by last run id; a permission request
       // still owns the active run while its tool waits for the answer.
       let conv = if model.conversation_by_last_run(Local, run_id) is Some(conv) {
@@ -10085,7 +10107,7 @@ fn update_device_msg(
         // the same Finished boundary must not post a second notification.
         if first_finish && channel is Local {
           commands.push(
-            FinishedSystemNotification::{ run_id, status, answer, }.command(
+            FinishedSystemNotification::{ payload: run_id, status, answer, }.command(
               locale=next.locale,
             ),
           )

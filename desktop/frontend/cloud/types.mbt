@@ -59,6 +59,12 @@ pub(all) struct Conversation {
   loading : Bool
   sending : Bool
   generating : Bool
+  unseen_finish : Bool
+  // Last live completion handled, independent of history replacement.
+  last_finished_task : String?
+  // Keep observing a known run through its idle snapshot until the terminal
+  // event arrives. An idle snapshot alone is not a completion notification.
+  observed_task : String?
   history_required : Bool
   submission_sequence : Int32
   // Seed the shared composer after creation assigns a remote ID. Clear only
@@ -95,6 +101,9 @@ fn Conversation::empty() -> Conversation {
     loading: true,
     sending: false,
     generating: false,
+    unseen_finish: false,
+    last_finished_task: None,
+    observed_task: None,
     history_required: true,
     submission_sequence: 0,
     initial_submission: None,

@@ -2067,7 +2067,7 @@ priv enum Msg {
     workspace~ : @common.Uri
   )
   // The user clicked the system notification posted through Proton's
-  // notification extension: jump to the conversation that owned that run.
+  // notification extension: open the owning local run or Cloud conversation.
   // The native extension brings the window forward before emitting the click.
   NotificationClicked(run_id~ : String)
   // A host-side action with no conversation of its own (opening a non-text
@@ -3927,6 +3927,7 @@ fn Model::conversation_is_visible(
 ) -> Bool {
   self.transcript_is_visible() &&
   self.screen is Chat &&
+  !self.cloud_selected() &&
   channel == self.focused &&
   session_id == self.active_session
 }
@@ -3957,6 +3958,13 @@ fn Model::mark_visible_conversation_read(self : Model) -> Model {
   guard self.transcript_is_visible() else { return self }
   if self.screen is Codex {
     { ..self, codex: self.codex.mark_visible_read(), }
+  } else if self.cloud_selected() {
+    if self.cloud_identity() is Some(@interop.Cloud(account~, session~)) &&
+      self.cloud.user_id == Some(account) {
+      { ..self, cloud: self.cloud.mark_read(session), }
+    } else {
+      self
+    }
   } else {
     self.mark_conversation_read(self.focused, self.active_session)
   }

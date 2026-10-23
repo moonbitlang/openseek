@@ -18,6 +18,7 @@ export class CloudHarness {
     this.device = new DesktopBrowserHarness(page);
     this.requests = [];
     this.hostRequests = [];
+    this.notifications = [];
     this.codes = new Map();
     this.userId = '123';
     this.apiStatus = 200;
@@ -221,6 +222,9 @@ export class CloudHarness {
   account() { return { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: 'octocat', avatar_url: '' } }; }
 
   async installDesktopBridge() {
+    await this.page.exposeFunction('cloudNotification', (method, params) => {
+      this.notifications.push({ method, params });
+    });
     await this.page.exposeFunction('cloudHostRequest', async request => {
       this.hostRequests.push(request);
       if (request.method === 'app.system_appearance') return { dark: false };
@@ -248,6 +252,10 @@ export class CloudHarness {
         for (const callback of listeners.get(name) || []) callback({ payload });
       };
       window.__MoonBit__ = { getTitlebarArea: async () => null, app: events, events,
+        notification: {
+          show: params => window.cloudNotification('show', params),
+          setBadge: params => window.cloudNotification('setBadge', params),
+        },
         openseek: new Proxy({}, { get: (_, method) => async params => {
           if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 1 } });
           return window.cloudHostRequest({ method, params });

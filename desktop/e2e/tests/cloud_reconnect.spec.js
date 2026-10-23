@@ -124,8 +124,12 @@ test('Cloud recovers one durable answer after a burst of 256 deltas and EOF', as
 });
 
 for (const leave of ['switch', 'sign out']) {
-  test(`Cloud ${leave} cancels a scheduled reconnect`, async ({ page }) => {
+  test(`Cloud ${leave} cancels a scheduled ${leave === 'switch' ? 'idle conversation ' : ''}reconnect`, async ({ page }) => {
     const app = await running(page);
+    if (leave === 'switch') {
+      await app.finishTask();
+      await expect(page.locator('#stop')).toHaveCount(0);
+    }
     await page.clock.install();
     await app.disconnectSession(sessionA);
     await expect(page.locator('.composer-banner')).toContainText('reconnecting');
@@ -224,8 +228,10 @@ test('Cloud reconnect fences an old history reply and retains newer live message
   expect(app.device.pageErrors).toEqual([]);
 });
 
-test('Cloud switching away retires an in-flight reconnect response', async ({ page }) => {
+test('Cloud switching away retires an in-flight idle reconnect response', async ({ page }) => {
   const app = await running(page);
+  await app.finishTask();
+  await expect(page.locator('#stop')).toHaveCount(0);
   const connection = deferred();
   app.pauseSessionEvents = connection.promise;
   await app.disconnectSession(sessionA);

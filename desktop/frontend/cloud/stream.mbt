@@ -47,21 +47,45 @@ pub fn subscriptions(
   token : String?,
   emit : @cmd.Emit[Msg],
 ) -> @sub.Sub {
-  guard selected is Some(id) &&
-    token is Some(token) &&
-    !state.needs_sign_in &&
-    !state.is_archived(id) &&
-    !state.retired.contains(id) &&
-    !state.deletions.contains(id) &&
-    !(state.metadata_saves.get(id) is Some({ edit: Archive(true), .. })) &&
-    state.conversations.get(id) is Some(conversation) &&
-    conversation.watch_status != Disconnected &&
-    !conversation.loading else {
+  guard token is Some(token) && !state.needs_sign_in else {
     return @sub.batch([])
   }
+  let subscriptions = []
+  for id, conversation in state.conversations {
+    if (selected == Some(id) || conversation.needs_observation()) &&
+      !state.is_archived(id) &&
+      !state.retired.contains(id) &&
+      !state.deletions.contains(id) &&
+      !(state.metadata_saves.get(id) is Some({ edit: Archive(true), .. })) &&
+      conversation.watch_status != Disconnected &&
+      !conversation.loading {
+      subscriptions.push(observe(state.epoch, id, conversation, token, emit))
+    }
+  }
+  @sub.batch(subscriptions)
+}
+
+///|
+fn Conversation::needs_observation(self : Conversation) -> Bool {
+  self.sending ||
+  self.generating ||
+  self.observed_task is Some(_) ||
+  self.control.map_or(false, control => {
+    !control.paused && !control.queue.is_empty()
+  })
+}
+
+///|
+fn observe(
+  epoch : Int32,
+  id : String,
+  conversation : Conversation,
+  token : String,
+  emit : @cmd.Emit[Msg],
+) -> @sub.Sub {
   @sub.custom_sub(
     "cloud-events-" +
-    state.epoch.to_string() +
+    epoch.to_string() +
     ":" +
     id +
     ":" +
@@ -72,11 +96,11 @@ pub fn subscriptions(
       let stream = StreamLease::new()
       let start = () => {
         guard stream.active else { return }
-        scheduler.add(emit(WatchOpened(state.epoch, id, stream)))
+        scheduler.add(emit(WatchOpened(epoch, id, stream)))
         @js.Promise::from_async(() => {
           let failure = try {
             watch_control(token, id, stream, event => {
-              scheduler.add(emit(WatchEvent(state.epoch, id, stream, event)))
+              scheduler.add(emit(WatchEvent(epoch, id, stream, event)))
             })
             None
           } catch {
@@ -84,13 +108,13 @@ pub fn subscriptions(
             _ => Some(Unreachable)
           }
           if stream.active {
-            scheduler.add(emit(WatchEnded(state.epoch, id, stream, failure)))
+            scheduler.add(emit(WatchEnded(epoch, id, stream, failure)))
           }
         })
         |> ignore
       }
-      // The subscription owns the timer as well as the stream. Leaving the
-      // conversation cancels both; a delayed callback cannot reopen it.
+      // The subscription owns the timer and stream. Deselected idle sessions
+      // release both, while known background tasks retain their observer.
       let timer = if conversation.watch_status == Reconnecting {
         Some(@base_browser.schedule_timeout(start, 1500))
       } else {

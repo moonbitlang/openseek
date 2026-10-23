@@ -44,13 +44,7 @@ fn Model::cloud_display_status(self : Model) -> Status? {
   if conversation.sending && conversation.pending is Some(_) {
     return Some(Starting)
   }
-  let mut status : Status = Ready
-  for record in conversation.records {
-    status = cloud_record_status(status, record.kind, record.data)
-  }
-  for event in conversation.events {
-    status = cloud_record_status(status, event.kind, event.data)
-  }
+  let status = cloud_recorded_status(conversation)
   Some(
     if status is Ready && conversation.history_required && !conversation.sending {
       Loading
@@ -61,6 +55,18 @@ fn Model::cloud_display_status(self : Model) -> Status? {
 }
 
 ///|
+fn cloud_recorded_status(conversation : @cloud.Conversation) -> Status {
+  let mut status : Status = Ready
+  for record in conversation.records {
+    status = cloud_record_status(status, record.kind, record.data)
+  }
+  for event in conversation.events {
+    status = cloud_record_status(status, event.kind, event.data)
+  }
+  status
+}
+
+///|
 /// A task's outer status describes orchestration; its existing result carries
 /// the engine outcome, including a successful checkpoint rather than completion.
 fn cloud_record_status(previous : Status, kind : String, data : Json) -> Status {
@@ -68,7 +74,11 @@ fn cloud_record_status(previous : Status, kind : String, data : Json) -> Status 
     "user" | "task_started" => Ready
     "task_finished" => {
       if data
-        is { "status": "failed", "result": { "status": "completed", .. }, .. } {
+        is {
+          "status": "failed",
+          "result": { "status": "ok" | "completed", .. },
+          ..
+        } {
         return Failed
       }
       let status = match data {
@@ -77,7 +87,7 @@ fn cloud_record_status(previous : Status, kind : String, data : Json) -> Status 
         _ => return Errored
       }
       match status {
-        "completed" => Finished(Completed)
+        "ok" | "completed" => Finished(Completed)
         "failed" => Failed
         "interrupted" => Finished(Aborted)
         other => Finished(RunOutcome::parse(other))

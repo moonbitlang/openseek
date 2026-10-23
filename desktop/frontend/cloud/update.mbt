@@ -17,6 +17,15 @@ fn State::replace(
 }
 
 ///|
+pub fn State::mark_read(self : State, id : String) -> State {
+  guard self.conversations.get(id) is Some(conversation) &&
+    conversation.unseen_finish else {
+    return self
+  }
+  self.replace(id, { ..conversation, unseen_finish: false, })
+}
+
+///|
 fn State::list(
   self : State,
   token : String?,
@@ -544,6 +553,10 @@ pub fn update(
             task: snapshot.task_id,
             last_seq: Some(snapshot.seq),
             generating: snapshot.data.active_task_id is Some(_),
+            observed_task: match snapshot.data.active_task_id {
+              Some(task) => Some(task)
+              None => conversation.observed_task
+            },
             sending: conversation.sending && !admitted,
             pending: if admitted {
               None
@@ -643,7 +656,8 @@ pub fn update(
       let conversation = state.conversations
         .get(id)
         .unwrap_or(Conversation::empty())
-      let next = if conversation.sending {
+      let next = if conversation.sending ||
+        conversation.stream is Some({ active: true, .. }) {
         state
       } else {
         state.replace(id, {
@@ -705,6 +719,13 @@ pub fn update(
           history.generating
         },
         history_required: false,
+        observed_task: conversation.observed_task.filter(task => {
+          conversation.watch_status != Reconnecting ||
+          control.map_or(false, control => control.active_task_id == Some(task)) ||
+          !history.messages.any(record => {
+            record.task_id == task && record.kind == "task_finished"
+          })
+        }),
         sending: conversation.sending && !accepted,
         pending: if accepted || !conversation.sending {
           None
@@ -902,6 +923,11 @@ pub fn update(
         task: Some(event.task_id),
         last_seq: Some(event.seq),
         generating: event.kind != "task_finished",
+        observed_task: if event.kind == "task_finished" {
+          None
+        } else {
+          Some(event.task_id)
+        },
         sending: conversation.sending && !admitted,
         pending: if admitted {
           None

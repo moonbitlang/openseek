@@ -117,6 +117,9 @@ pub(all) struct Conversation {
   loading : Bool
   sending : Bool
   generating : Bool
+  unseen_finish : Bool
+  last_finished_task : String?
+  observed_task : String?
   history_required : Bool
   submission_sequence : Int32
   initial_submission : @composer.Draft?
@@ -273,6 +276,7 @@ pub fn State::draft_identity(Self) -> @interop.ConversationIdentity?
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::is_archived(Self, String) -> Bool
+pub fn State::mark_read(Self, String) -> Self
 pub fn State::not_equal(Self, Self) -> Bool
 
 pub(all) struct SteerReceipt {

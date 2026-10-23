@@ -8,7 +8,7 @@ const NotificationBodyMaxChars : Int32 = 180
 
 ///|
 priv struct FinishedSystemNotification {
-  run_id : String
+  payload : String
   status : String
   answer : String?
 }
@@ -108,7 +108,7 @@ fn FinishedSystemNotification::body(
 fn show_system_notification(
   title : String,
   body : String,
-  run_id : String,
+  target : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     guard @interop.moonbit_bridge_root() is Some(root) &&
@@ -119,7 +119,7 @@ fn show_system_notification(
     let payload = @js.Object::new()
     payload["title"] = title
     payload["body"] = body
-    payload["payload"] = run_id
+    payload["payload"] = target
     @js.Promise::from_async(() => {
       let _ : @js.Value = @interop.js_method_promise(
         notification,
@@ -134,17 +134,27 @@ fn show_system_notification(
 }
 
 ///|
-/// The application badge is the number of local conversations that still need
+/// The application badge is the number of conversations that still need
 /// attention: either a permission decision or a background result the user has
 /// not opened. It is derived from replicated conversation state rather than
 /// incremented by events, so replay and reconnect converge to one value.
 fn Model::notification_badge_count(self : Model) -> Int32 {
-  self.conversations.count_if(conv => {
+  let local_count = self.conversations.count_if(conv => {
     conv.device is Local &&
     (
       conv.pending_approval is Some({ answered: false, .. }) ||
       conv.unseen_finish
     )
+  })
+  local_count +
+  self.cloud.conversations
+  .iter()
+  .count_if(entry => {
+    let (id, conversation) = entry
+    conversation.unseen_finish &&
+    !self.cloud.is_archived(id) &&
+    self.account is Some(account) &&
+    self.cloud.user_id == Some(account.user.user_id)
   })
 }
 
@@ -198,7 +208,61 @@ fn FinishedSystemNotification::command(
   self : FinishedSystemNotification,
 ) -> @cmd.Cmd {
   guard self.title(locale~) is Some(title) else { return @cmd.none }
-  show_system_notification(title, self.body(locale~), self.run_id)
+  show_system_notification(title, self.body(locale~), self.payload)
+}
+
+///|
+/// Adapt only a newly accepted live terminal event. History and control
+/// snapshots do not replay notifications, and duplicates cannot mark a read
+/// conversation unread again.
+fn cloud_finished_notification(
+  previous : @cloud.State,
+  next : @cloud.State,
+  message : @cloud.Msg,
+) -> (String, FinishedSystemNotification)? {
+  let (id, event) = match message {
+    @cloud.WatchEvent(_, id, _, @cloud.EngineEvent(event))
+    | @cloud.StreamEvent(_, id, _, event) => (id, event)
+    _ => return None
+  }
+  guard event.kind == "task_finished" &&
+    previous.user_id == next.user_id &&
+    next.user_id is Some(account) &&
+    previous.conversations.get(id) is Some(before) &&
+    next.conversations.get(id) is Some(after) &&
+    after.events.contains(event) &&
+    !before.events.contains(event) &&
+    before.last_finished_task != Some(event.task_id) else {
+    return None
+  }
+  let status = match cloud_record_status(Ready, event.kind, event.data) {
+    Finished(Completed) => "finished"
+    Finished(Aborted) => "cancelled"
+    Finished(MaxStepsExhausted) => "max_steps_exhausted"
+    Finished(ContextYield) => "context_yield"
+    _ => "failed"
+  }
+  let mut answer = None
+  for item in after.records {
+    if item.task_id == event.task_id &&
+      item.kind == "assistant_message" &&
+      item.data is { "content": String(text), .. } {
+      answer = Some(text)
+    }
+  }
+  for item in after.events {
+    if item.task_id == event.task_id &&
+      item.kind == "assistant_message" &&
+      item.data is { "content": String(text), .. } {
+      answer = Some(text)
+    }
+  }
+  if event.data
+    is { "result": { "output": { "answer": String(text), .. }, .. }, .. } {
+    answer = Some(text)
+  }
+  let owner : @interop.ConversationIdentity = Cloud(account~, session=id)
+  Some((id, { payload: owner.key(), status, answer, }))
 }
 
 ///|
@@ -261,7 +325,7 @@ fn approval_system_notification(
 ///|
 test "finished system notifications preserve status titles and fallback body" {
   let completed = FinishedSystemNotification::{
-    run_id: "r1",
+    payload: "r1",
     status: "finished",
     answer: None,
   }
