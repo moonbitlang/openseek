@@ -36,6 +36,8 @@ const Artifacts = [
   { platform: "macos-arm64-dmg", label: "Installer DMG", file: "SeekMoon.dmg", contentType: "application/x-apple-diskimage" },
   // Also uploaded to the API: `/console/` serves it from the API origin.
   { platform: "browser", label: "Browser bundle", file: "SeekMoon.browser.tar.gz", contentType: "application/gzip" },
+  { platform: "android", label: "Android APK", file: "SeekMoon-android.apk",
+    contentType: "application/vnd.android.package-archive", optionalOnRollback: true },
   // Renamed from Proton's `seekmoon-setup.exe` by the release workflow.
   // Rollbacks preserve older ZIP downloads or releases without Windows.
   { platform: "windows-x64", label: "Windows installer", file: "SeekMoon-windows-x64-setup.exe", contentType: "application/octet-stream",
