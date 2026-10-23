@@ -62,6 +62,11 @@ Use representative combinations when theme, viewport, renderer, or error
 variants share the same implementation. Keep extra variants when they exercise
 a distinct integration path or reproduce a browser-specific regression.
 
+For an existing signed-in browser Cloud session, `CloudHarness.openDirect()`
+loads its URL and waits for its live event reader without booting a device page.
+Keep `goto()` and `open()` for login, creation, Work/Cloud navigation, and native
+bridge scenarios.
+
 Avoid checks that only memorialize a removed control or feature, or pin icon
 paths, decorative pixel dimensions, alignment, and theme colors. Keep layout
 checks tied to observable behavior such as clipping, reachability, or scrolling.
