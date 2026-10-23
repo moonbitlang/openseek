@@ -17,9 +17,7 @@ pub let agent_approval : Command[@protocol.ApprovalPayload, @protocol.ApprovalRe
 
 pub let agent_cancel : Command[@protocol.CancelPayload, @protocol.CancelReply]
 
-pub let agent_compact : Command[@protocol.CompactPayload, @protocol.CompactReply]
-
-pub let agent_goal : Command[@protocol.GoalPayload, @protocol.GoalReply]
+pub let agent_command : Command[@protocol.SessionCommandPayload, @protocol.SessionCommandReply]
 
 pub let agent_queue : Command[@protocol.QueuePayload, @protocol.QueueReply]
 
@@ -164,6 +162,8 @@ pub let fs_search_files : Command[@protocol.SearchFilesPayload, @protocol.Search
 pub let fs_search_semantic : Command[@protocol.SearchSemanticPayload, @protocol.SearchSemanticReply]
 
 pub let fs_search_text : Command[@protocol.SearchTextPayload, @protocol.SearchTextReply]
+
+pub let fs_share_file : Command[@protocol.FileSharePayload, @protocol.SessionShareReply]
 
 pub let fs_stage_attachments : Command[@protocol.StageAttachmentsPayload, @protocol.EmptyReply]
 

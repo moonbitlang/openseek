@@ -126,7 +126,7 @@ fn moonbit_markdown_comment_anchor_content(line : String) -> String? {
   if content_start < line.length() && line[content_start].to_int() == 32 {
     content_start += 1
   }
-  Some(line.unsafe_substring(start=content_start, end=line.length()))
+  Some(line[content_start:].to_owned())
 }
 
 ///|
@@ -141,5 +141,5 @@ fn moonbit_markdown_comment_line_content(line : String) -> String? {
   if content_start < line.length() && line[content_start].to_int() == 32 {
     content_start += 1
   }
-  Some(line.unsafe_substring(start=content_start, end=line.length()))
+  Some(line[content_start:].to_owned())
 }

@@ -547,7 +547,7 @@ h2 {
   grid-template-columns: 40px 32px;
 }
 
-.skill-enable-switch,
+.setting-switch,
 .skill-menu-trigger {
   display: inline-flex;
   align-items: center;
@@ -558,11 +558,11 @@ h2 {
   flex-shrink: 0;
 }
 
-.skill-enable-switch {
+.setting-switch {
   width: 40px;
 }
 
-.skill-switch-track {
+.setting-switch-track {
   position: relative;
   width: 30px;
   height: 18px;
@@ -571,7 +571,7 @@ h2 {
   transition: background-color 160ms ease;
 }
 
-.skill-switch-track::after {
+.setting-switch-track::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -584,22 +584,22 @@ h2 {
   transition: transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.skill-enable-switch[aria-checked="true"] .skill-switch-track {
-  background: var(--color-text-primary);
+.setting-switch[aria-checked="true"] .setting-switch-track {
+  background: var(--color-switch-on);
 }
 
-.skill-enable-switch[aria-checked="true"] .skill-switch-track::after {
+.setting-switch[aria-checked="true"] .setting-switch-track::after {
   transform: translateX(12px);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skill-switch-track,
-  .skill-switch-track::after {
+  .setting-switch-track,
+  .setting-switch-track::after {
     transition: none;
   }
 }
 
-.skill-enable-switch:focus-visible {
+.setting-switch:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
@@ -652,7 +652,7 @@ h2 {
     grid-template-columns: 44px 44px;
   }
 
-  .skill-enable-switch,
+  .setting-switch,
   .skill-menu-trigger {
     width: 44px;
     height: 44px;

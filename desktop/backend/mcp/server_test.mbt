@@ -24,7 +24,7 @@ fn test_tools() -> Array[@mcp.Tool] {
       name: "echo",
       description: "Echo the caller and its arguments.",
       input_schema: { "type": "object" },
-      call: call => "\{call.session} \{call.arguments.stringify()}",
+      call: call => [Text("\{call.session} \{call.arguments.stringify()}")],
     },
     {
       name: "broken",
@@ -45,7 +45,7 @@ fn test_tools() -> Array[@mcp.Tool] {
         },
         "required": ["tab"],
       },
-      call: call => "\{call.session} \{call.arguments.stringify()}",
+      call: call => [Text("\{call.session} \{call.arguments.stringify()}")],
     },
   ]
 }
@@ -67,7 +67,7 @@ async test "backend tools register atomically and use ordinary MCP calls" {
     name: "session",
     description: "Approve a message",
     input_schema: { "type": "object" },
-    call: call => "approved for \{call.session}",
+    call: call => [Text("approved for \{call.session}")],
   }
   server.add_tools([tool])
   try server.add_tools([{ ..tool, name: "extra", }, tool]) catch {
@@ -341,5 +341,67 @@ async test "a body that is not JSON is a parse error" {
     assert_true(
       body.json() is { "error": { "code": Number(-32700, ..), .. }, .. },
     )
+  })
+}
+
+///|
+async test "a tool's images reach the engine's MCP client as images" {
+  // A one-pixel PNG.
+  let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+  let server = @mcp.Server(
+    [
+      {
+        name: "picture",
+        description: "Take a picture.",
+        input_schema: { "type": "object" },
+        call: _ => [Image(mime="image/png", data=png), Text("one pixel")],
+      },
+    ],
+    version="test",
+  )
+  @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, () => server.run())
+    let grant = grant(server, "s-picture")
+    let (status, reply) = post(
+      grant,
+      request(1, "tools/call", { "name": "picture" }),
+    )
+    assert_eq(status, 200)
+    guard reply
+      is Some({ "result": { "content": content, "isError": False, .. }, .. }) else {
+      fail("the picture was not a successful tool result")
+    }
+    assert_eq(content, [
+      { "type": "image", "data": Json(png), "mimeType": "image/png" },
+      { "type": "text", "text": "one pixel" },
+    ])
+    let servers = @mcpconfig.decode(
+      {
+        "mcpServers": {
+          "seekmoon": {
+            "url": "${OPENSEEK_DESKTOP_TOOLS_URL}",
+            "headers": {
+              "Authorization": "Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}",
+            },
+          },
+        },
+      },
+      env=server.grant("s-picture"),
+    )
+    guard servers[0] is Http(url~, headers~, ..) else { fail("expected HTTP") }
+    let connection = @streamhttp.connect(
+      group,
+      url~,
+      headers~,
+      client_name="openseek",
+      client_version="test",
+    )
+    defer connection.shutdown()
+    let rendered = connection
+      .client()
+      .call_tool(name="picture", arguments=Json::empty_object())
+      .render()
+    assert_eq(rendered.text, "one pixel")
+    assert_eq(rendered.images.length(), 1)
   })
 }

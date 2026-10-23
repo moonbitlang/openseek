@@ -2,6 +2,6 @@ import {
   "moonbitlang/openseek_tui/tui/internal/terminal_size",
 }
 
-supported_targets = "native"
+supported_targets = "+native+wasm"
 
 warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

@@ -24,7 +24,7 @@ fn JsonObject::decode(
   expected : String,
 ) -> JsonObject raise @json.JsonDecodeError {
   guard json is Object(fields) else {
-    raise JsonDecodeError((path, "expected " + expected + " object"))
+    raise JsonDecodeError((path, "expected \{expected} object"))
   }
   { fields, path, }
 }
@@ -169,11 +169,11 @@ fn[T : @json.FromJson] JsonObject::required_array_of(
   name : String,
 ) -> Array[T] raise @json.JsonDecodeError {
   let at = self.path.add_key(name)
-  let decoded : Array[T] = []
-  for index, raw in self.required_array(name) {
-    decoded.push(@json.from_json(raw, path=at.add_index(index)))
-  }
-  decoded
+  [
+    for index, raw in self.required_array(name) => {
+      @json.from_json(raw, path=at.add_index(index))
+    }
+  ]
 }
 
 ///|

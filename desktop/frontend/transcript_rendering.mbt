@@ -58,7 +58,7 @@ fn Conversation::streaming_render_identity(self : Conversation) -> String {
 /// mutate the preview from a commit: session commits carry no run/step identity,
 /// and an older delayed commit must not truncate a newer stream.
 fn Conversation::reasoning_for_render(self : Conversation) -> (String?, Bool) {
-  guard self.turn.live_reasoning is Some(live) && !live.content.is_empty() else {
+  guard self.turn.live.reasoning is Some(live) && !live.content.is_empty() else {
     return (None, false)
   }
   let candidate = live.content.trim()

@@ -36,6 +36,7 @@ pub(all) struct ContextActions {
   open_external_link : (String) -> @cmd.Cmd
   open_file : (String) -> @cmd.Cmd
   reveal_file : (String) -> @cmd.Cmd
+  share_file : (String) -> @cmd.Cmd
 }
 
 pub(all) struct ContextInput {

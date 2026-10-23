@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend/settings"
 
 import {
+  "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/i18n",
 }
@@ -10,6 +11,8 @@ import {
 pub fn group(() -> @html.Html, String, Array[@html.Html]) -> @html.Html
 
 pub fn row(String, Array[@html.Html], desc? : String, stack? : Bool) -> @html.Html
+
+pub fn switch_control(enabled~ : Bool, label~ : String, on_click~ : @cmd.Cmd, disabled? : Bool, title? : String) -> @html.Html
 
 pub fn text(@i18n.Locale, Message) -> String
 
@@ -93,6 +96,8 @@ pub(all) enum Message {
   Preferences
   Interface
   Engine
+  MoonBitGuide
+  MoonBitGuideDescription
   MaxSteps
   MaxStepsDescription
   Followup

@@ -9,44 +9,62 @@ pub fn Model::view(
 ) -> @html.Html {
   let children : Array[@html.Html] = []
   if self.content is Some(content) {
+    let file = content.source is File(_)
     let busy = content.operation.busy()
     children.push(
       @html.div(class="export-dialog-header", [
         @html.div(
-          id="conversation-export-title",
+          id=self.id_prefix + "-title",
           class="modal-title",
-          ui(locale, ExportConversation),
+          ui(locale, if file { ShareFile } else { ExportConversation }),
         ),
         @html.button(
           class="export-dialog-close",
           title=ui(locale, CloseLabel),
           on_click=emit(Close),
-          attrs=@html.Attrs::build().aria_label(ui(locale, CloseDialog)),
+          attrs=@html.Attrs::build().aria_label(
+            ui(locale, if file { CloseLabel } else { CloseDialog }),
+          ),
           @icons.icon(@icons.icon_close),
         ),
       ]),
     )
+    match content.source {
+      File(HostFile(_, payload)) =>
+        children.push(@html.p(class="modal-body", payload.path))
+      File(CloudFile(path~, ..)) =>
+        children.push(@html.p(class="modal-body", path))
+      _ => ()
+    }
     // The source title stays in the export metadata; the dialog only presents
     // the actions, without repeating the conversation heading behind it.
     children.push(
       @html.div(
-        id="conversation-export-description",
+        id=self.id_prefix + "-description",
         class="modal-body",
-        ui(locale, ExportDescription),
+        if file {
+          ui(locale, FileShareDescription)
+        } else {
+          ui(locale, ExportDescription)
+        },
       ),
     )
     children.push(
       @html.div(class="modal-actions", [
-        @html.button(
-          class="button secondary",
-          disabled=busy,
-          on_click=emit(Download),
-          if content.operation is Downloading {
-            ui(locale, SavingLabel)
-          } else {
-            ui(locale, DownloadLabel)
-          },
-        ),
+        if file {
+          @html.nothing
+        } else {
+          @html.button(
+            class="button secondary",
+            disabled=busy,
+            on_click=emit(Download),
+            if content.operation is Downloading {
+              ui(locale, SavingLabel)
+            } else {
+              ui(locale, DownloadLabel)
+            },
+          )
+        },
         @html.button(
           class="button primary",
           disabled=busy || content.publication is Some(_),
@@ -62,11 +80,25 @@ pub fn Model::view(
     let status = match content.operation {
       Ready => @html.nothing
       Downloading => @html.span(ui(locale, ChooseSavePath))
-      Sharing(progress) => share_progress_view(locale, progress)
+      Sharing(progress) =>
+        if file {
+          @html.span(ui(locale, SharingLabel))
+        } else {
+          share_progress_view(locale, progress)
+        }
       SigningIn => @html.span(ui(locale, CompleteBrowserSignIn))
       SignInRequired =>
         @html.div([
-          @html.p(ui(locale, SignInDescription)),
+          @html.p(
+            ui(
+              locale,
+              if file {
+                FileSignInDescription
+              } else {
+                SignInDescription
+              },
+            ),
+          ),
           @html.button(
             class="button primary",
             on_click=emit(SignIn),
@@ -77,7 +109,11 @@ pub fn Model::view(
         @html.div([
           @html.p(
             class="export-error",
-            dynamic_text(locale, DSignInFailure(message.to_string())),
+            if file {
+              message
+            } else {
+              dynamic_text(locale, DSignInFailure(message.to_string()))
+            },
           ),
           @html.button(
             class="button primary",
@@ -153,6 +189,22 @@ pub fn Model::view(
                   },
                 ),
               ),
+              if file {
+                @html.a(
+                  href=url,
+                  target=Blank,
+                  rel="noopener noreferrer",
+                  escape=true,
+                  class="button secondary",
+                  title=ui(locale, OpenShareLink),
+                  attrs=@html.Attrs::build().aria_label(
+                    ui(locale, OpenShareLink),
+                  ),
+                  @icons.icon_link_external(),
+                )
+              } else {
+                @html.nothing
+              },
             ]),
             match copy {
               Available | Copied => @html.nothing
@@ -165,12 +217,12 @@ pub fn Model::view(
     }
   }
   @html.dialog(
-    id=DialogId,
+    id=self.id_prefix + "-dialog",
     class="modal export-dialog",
     on_cancel=emit(Close),
     attrs=@html.Attrs::build()
-      .aria_labelledby("conversation-export-title")
-      .aria_describedby("conversation-export-description"),
+      .aria_labelledby(self.id_prefix + "-title")
+      .aria_describedby(self.id_prefix + "-description"),
     children,
   )
 }

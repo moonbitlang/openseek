@@ -46,6 +46,10 @@ jobs:
           moon update
           moon check --target native --deny-warn
           moon test --target native
+          moon check --target wasm --deny-warn
+          moon test --target wasm
+          moon build --target wasm --release cmd/openseek_tui
+          moon run --target wasm --release cmd/openseek_tui -- --help
           moon cram test tests/cram
 
       - name: publish

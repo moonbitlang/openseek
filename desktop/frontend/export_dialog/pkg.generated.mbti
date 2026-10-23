@@ -15,8 +15,16 @@ import {
 // Errors
 
 // Types and methods
+pub(all) enum FileSource {
+  HostFile(@interop.ChannelId, @protocol.ReadFilePayload)
+  CloudFile(account~ : String, session~ : String, path~ : String)
+} derive(Eq, @debug.Debug)
+pub fn FileSource::equal(Self, Self) -> Bool
+pub fn FileSource::not_equal(Self, Self) -> Bool
+pub fn FileSource::to_repr(Self) -> @debug.Repr
+
 type Model derive(Eq, @debug.Debug)
-pub fn Model::Model() -> Self
+pub fn Model::Model(id_prefix? : String) -> Self
 pub fn Model::account_changed(Self, Result[Unit, String]) -> (@cmd.Cmd, Self)
 pub fn Model::account_expired(Self, Msg) -> Bool
 pub fn Model::equal(Self, Self) -> Bool
@@ -24,6 +32,7 @@ pub fn Model::is_open(Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(Self, @protocol.SessionExportPayload, channel? : @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn Model::open_cloud(Self, session~ : String) -> (@cmd.Cmd, Self)
+pub fn Model::open_file(Self, FileSource) -> (@cmd.Cmd, Self)
 pub fn Model::to_repr(Self) -> @debug.Repr
 pub fn Model::update(Self, @cmd.Emit[Msg], Msg, account? : @protocol.AccountSession, desktop? : Bool, sign_in? : @cmd.Cmd) -> (@cmd.Cmd, Self)
 pub fn Model::view(locale? : @i18n.Locale, Self, @cmd.Emit[Msg]) -> @html.Html

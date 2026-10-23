@@ -455,12 +455,9 @@ async fn git_output_opt(dir : String, args : Array[String]) -> String? {
 /// `cwd`. Matching is case-insensitive because Windows preserves arbitrary key
 /// casing; removing the whole namespace also covers future Git overrides.
 fn sanitize_git_environment(env : Map[String, String]) -> Unit {
-  let remove : Array[String] = []
-  for name, _ in env {
-    if name.to_upper().has_prefix("GIT_") {
-      remove.push(name)
-    }
-  }
+  let remove = [
+    for name, _ in env if name.to_upper().has_prefix("GIT_") => name
+  ]
   for name in remove {
     env.remove(name)
   }

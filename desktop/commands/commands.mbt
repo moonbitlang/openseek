@@ -60,15 +60,10 @@ pub let agent_queue : Command[@protocol.QueuePayload, @protocol.QueueReply] = Co
 )
 
 ///|
-pub let agent_compact : Command[
-  @protocol.CompactPayload,
-  @protocol.CompactReply,
-] = Command("agent.compact")
-
-///|
-pub let agent_goal : Command[@protocol.GoalPayload, @protocol.GoalReply] = Command(
-  "agent.goal",
-)
+pub let agent_command : Command[
+  @protocol.SessionCommandPayload,
+  @protocol.SessionCommandReply,
+] = Command("agent.command")
 
 ///|
 pub let agent_approval : Command[
@@ -1042,3 +1037,9 @@ pub let cloud_file_download : Command[
   @protocol.CloudFileDownloadPayload,
   @protocol.CloudFileDownloadReply,
 ] = Command("cloud.file_download")
+
+///|
+pub let fs_share_file : Command[
+  @protocol.FileSharePayload,
+  @protocol.SessionShareReply,
+] = Command("fs.share_file")

@@ -78,8 +78,7 @@ async fn forward(
 ) -> Unit {
   let body = req.body.binary()
   let headers : @http.Headers = Map([])
-  for header in req.headers.iter() {
-    let (name, value) = header
+  for (name, value) in req.headers.iter() {
     if !dropped_request_header(name) {
       headers[name] = value
     }

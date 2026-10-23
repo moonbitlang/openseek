@@ -47,10 +47,9 @@ test "Approve for me is remembered for that conversation only" {
 
 ///|
 test "the reviewed list keeps the newest choices within the cap" {
-  let keys : Array[String] = []
-  for index in 0..<(ConversationModelsLimit + 5) {
-    keys.push("local/s\{index}")
-  }
+  let keys : Array[String] = [
+    for index in 0..<(ConversationModelsLimit + 5) => "local/s\{index}"
+  ]
   let folded = keys.fold(init=[], (acc, key) => {
     approvals_with(acc, key, ApprovalReview)
   })

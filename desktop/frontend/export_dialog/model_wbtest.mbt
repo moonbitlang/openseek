@@ -324,3 +324,83 @@ test "the local debug console explains sharing is unsupported without requesting
   let (_, downloading) = refused.update(emit, Download, desktop=false)
   assert_true(downloading.content is Some({ operation: Downloading, .. }))
 }
+
+///|
+test "file sharing survives dismissal and reopening without starting another operation" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let source = HostFile(@interop.Local, {
+    root: Some("/workspace"),
+    path: "report.bin",
+  })
+  let (_, opened) = Model().open_file(source)
+  let (_, pending) = opened.advance(emit, Share)
+  let (_, hidden) = pending.advance(emit, Close)
+  assert_false(hidden.is_open())
+  assert_true(hidden.file_pending())
+  let (_, reopened) = hidden.open_file(source)
+  assert_eq(reopened.generation, pending.generation)
+  let (_, duplicate) = reopened.advance(emit, Share)
+  assert_true(duplicate == reopened)
+  let (_, hidden) = reopened.advance(emit, Close)
+  let (_, finished) = hidden.advance(
+    emit,
+    Published(
+      generation=hidden.generation,
+      Shared(url="https://shares.test/file"),
+    ),
+  )
+  assert_false(finished.is_open())
+  let (_, reopened) = finished.open_file(source)
+  let (_, duplicate) = reopened.advance(emit, Share)
+  assert_true(duplicate == reopened)
+  assert_true(
+    reopened.content
+    is Some({ publication: Some({ url: "https://shares.test/file", .. }), .. }),
+  )
+  let (_, closed) = reopened.advance(emit, Close)
+  let (_, next) = closed.open_file(source)
+  assert_true(next.generation > reopened.generation)
+  assert_true(next.content is Some({ publication: None, .. }))
+}
+
+///|
+test "file share failures allow explicit retry and account changes fence hidden responses" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let (_, opened) = Model().open_file(
+    CloudFile(account="123", session="cloud", path="data.bin"),
+  )
+  let (_, pending) = opened.advance(emit, Share)
+  let (_, failed) = pending.advance(
+    emit,
+    Published(generation=pending.generation, Failed(message="offline")),
+  )
+  assert_false(failed.file_pending())
+  let (_, retry) = failed.advance(emit, Share)
+  assert_true(retry.generation > failed.generation)
+  let (_, hidden) = retry.advance(emit, Close)
+  let (_, changed) = hidden.account_changed(Ok(()))
+  let (_, late) = changed.advance(
+    emit,
+    Published(
+      generation=retry.generation,
+      Shared(url="https://shares.test/old"),
+    ),
+  )
+  assert_true(late == changed)
+  assert_false(late.is_open())
+  assert_true(late.content is None)
+}
+
+///|
+test "file sharing uses the existing explicit sign-in and confirmation flow" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let (_, opened) = Model().open_file(
+    HostFile(@interop.Local, { root: Some("/workspace"), path: "file.bin", }),
+  )
+  let (_, needs_login) = opened.update(emit, Share)
+  assert_true(needs_login.content is Some({ operation: SignInRequired, .. }))
+  let (_, signing_in) = needs_login.update(emit, SignIn)
+  let (_, signed_in) = signing_in.account_changed(Ok(()))
+  assert_true(signed_in.content is Some({ operation: Ready, .. }))
+  assert_false(signed_in.file_pending())
+}

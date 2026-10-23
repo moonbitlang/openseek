@@ -159,6 +159,12 @@ jobs:
         if: matrix.target == 'wasm'
         run: moon test --target wasm
 
+      - name: Build and launch the wasm TUI
+        if: matrix.target == 'wasm'
+        run: |
+          moon build --target wasm --release openseek_tui/cmd/openseek_tui
+          moonrun _build/wasm/release/build/moonbitlang/openseek_tui/cmd/openseek_tui/openseek_tui.wasm -- --help
+
       - name: openseek_tui versions in lockstep with openseek
         # openseek_tui@X runs openseek@X as its default engine; its own test
         # (openseek_tui/cmd/tui/engine_version_wbtest.mbt) ties the module

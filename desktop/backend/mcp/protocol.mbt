@@ -155,32 +155,31 @@ async fn Server::call_tool(
     { "arguments": arguments, .. } => arguments
     _ => Json::empty_object()
   }
-  async fn invoke() -> (String, Bool) {
+  async fn invoke() -> Result[Array[Content], String] {
     try (tool.call)({ session, arguments, }) catch {
       error if @async.is_being_cancelled() => raise error
-      error => ("\{error}", true)
+      error => Err("\{error}")
     } noraise {
-      text => (text, false)
+      content => Ok(content)
     }
   }
-  let outcome = @async.with_timeout_opt(CallTimeoutMs, invoke)
-  let (text, is_error) = match outcome {
-    Some(outcome) => outcome
-    None => ("\{name} timed out after \{CallTimeoutMs / 1000}s", true)
+  let outcome = @async.with_timeout_opt(CallTimeoutMs, invoke).unwrap_or(
+    Err("\{name} timed out after \{CallTimeoutMs / 1000}s"),
+  )
+  let (content, is_error) = match outcome {
+    Ok(content) => (content, false)
+    Err(error) => {
+      @xlog.warn(category="mcp") <?
+        {
+          "event": "mcp_tool_failed",
+          "tool": name,
+          "session": session,
+          "error": error,
+        }
+      ([Text(error)], true)
+    }
   }
-  if is_error {
-    @xlog.warn(category="mcp") <?
-      {
-        "event": "mcp_tool_failed",
-        "tool": name,
-        "session": session,
-        "error": text,
-      }
-  }
-  reply(id, {
-    "content": [{ "type": "text", "text": Json(text) }],
-    "isError": Json(is_error),
-  })
+  reply(id, { "content": Json(content), "isError": Json(is_error) })
 }
 
 ///|

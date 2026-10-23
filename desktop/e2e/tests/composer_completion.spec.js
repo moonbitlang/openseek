@@ -8,6 +8,11 @@ for (const marker of ['@', '$']) {
     app.installedSkills = Array.from({ length: 20 }, (_, i) => ({
       id: `skill-${i}`, name: `skill-${i}`, description: `Skill ${i}`, source: '', enabled: true,
     }));
+    // The model covers enabled/disabled filtering; exercise its projection in
+    // the existing skill-menu keyboard flow without another page startup.
+    app.installedSkills.push({
+      id: 'disabled', name: 'disabled', description: '', source: '', enabled: false,
+    });
     await app.install();
     await app.goto();
     await app.openSession();
@@ -52,17 +57,3 @@ for (const marker of ['@', '$']) {
     expect(app.pageErrors).toEqual([]);
   });
 }
-
-test('disabled skills stay out of skill completion', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.installedSkills = [
-    { id: 'available', name: 'available', description: '', source: '', enabled: true },
-    { id: 'disabled', name: 'disabled', description: '', source: '', enabled: false },
-  ];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await page.locator('#task').fill('$');
-  await expect(page.locator('.completion-item .completion-label')).toHaveText(['$available']);
-  expect(app.pageErrors).toEqual([]);
-});

@@ -265,7 +265,9 @@ Never trade an invariant for fewer lines.
   `xs.length()`, not `xs.iter().count()`.
 - **String helpers:** `split_once`, `rev_split_once` and `strip_prefix` instead
   of index arithmetic around `find`.
-- **Interpolation** `"\{a}/\{b}"` over `+` chains of strings.
+- **Interpolation** `"\{a}/\{b}"` over `+` chains of strings, when the result
+  fits on one line of about 100 columns. `moon fmt` never wraps a string
+  literal, so a chain that splits a long string across lines stays.
 - **Functional `for` with state** (`for v = view; ; { match v { … continue
   rest … } }`) instead of the deprecated `loop`.
 - **Inlining** a private function with exactly one caller, when its body reads
@@ -427,3 +429,24 @@ The run surfaced three fixes:
 - the published workers' local branches (now deleted);
 - review text whose line breaks were collapsed into one paragraph in the PR body
   (now kept).
+
+A sweep of this repository (`--no-pr`, defaults: 8 scouts, at most 8
+changes, deepseek-flash, from a clean worktree at `origin/main`):
+- **Coverage:** 350 packages and 85 cited candidates, after many earlier
+  manual sweeps. The scouts finished in about 3 minutes.
+- **Result:** 8 workers ran and 8 changes were reviewed and accepted
+  (`desktop/frontend`, `desktop/frontend/fileeditor`, `desktop/protocol`,
+  `desktop/backend/host`, `desktop/backend/internal/console_proxy`,
+  `editor/internal/shell/workbench`, `editor/internal/viewer/markdown`,
+  `editor/internal/viewer/contrib/hover/browser`).
+- **Tokens:** about 30M in all, of which the scouts used about 14M.
+- **Change quality:** every hunk keeps behavior, and the 8 commits apply
+  together cleanly and pass `moon fmt --check` and `moon check --deny-warn`.
+  Most are small: interpolation, direct container methods, comprehensions,
+  plus a few patterns that bind guarded indexes and a `while xs.pop() is Some(x)`
+  drain.
+- **Cleanup:** no worktree records were left behind.
+
+The run surfaced one fix: three interpolations joined a `+` chain that had
+been split across lines into one line of up to 123 columns. The guidance now
+keeps interpolation to results that fit on one line.

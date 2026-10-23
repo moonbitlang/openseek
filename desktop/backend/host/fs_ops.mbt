@@ -520,3 +520,24 @@ fn file_stamp(
 ) -> String {
   "\{mtime.0}:\{mtime.1}:\{ctime.0}:\{ctime.1}:\{size}"
 }
+
+///|
+/// Capture source bytes without the editor's format conversion or preview limits.
+pub async fn capture_file(
+  payload : @protocol.ReadFilePayload,
+) -> (String, Bytes) {
+  guard payload.root is Some(root) else {
+    raise HostError("Sharing requires a workspace root.")
+  }
+  let root = WirePath::parse(root)
+  let file = root.resolve(payload.path)
+  guard root.absolute.contains(file) else {
+    raise HostError("The file is outside the workspace.")
+  }
+  let source = @fs.open(file.to_string(), mode=ReadOnly)
+  defer source.close()
+  guard source.kind() is Regular else {
+    raise HostError("Only files can be shared.")
+  }
+  (file.to_path().basename().to_owned(), source.read_all().binary())
+}

@@ -464,30 +464,10 @@ pub async fn run(matches : @argparse.Matches) -> Unit {
     println(engine_probe_error(config, probe))
     @sys.exit(1)
   }
-  // The UI takes over the terminal, so refuse when stdin/stdout is not a TTY (a
-  // pipe, CI log, or cron) — otherwise it would garble a non-interactive stream.
-  // Checked after parsing and the engine probe so `--help`, argument errors, and
-  // the engine-usability error still surface when piped.
-  guard is_tty(@stdio.stdin) && is_tty(@stdio.stdout) else {
-    // To stderr: this guard exists precisely to keep a piped/redirected stdout
-    // clean, so the diagnostic must not land on it.
-    @stdio.stderr.write(
-      "error: the interactive UI needs a terminal; run a headless task with `openseek run \"…\"` (or `openseek serve` for the JSONL protocol).\n",
-    ) catch {
-      _ => ()
-    }
-    @sys.exit(1)
-  }
+  // with_ui opens the controlling terminal independently of stdin/stdout.
+  // Redirected streams are fine; failure to open the terminal propagates to
+  // the command's stderr error handler before the UI starts drawing.
   run_tui(config, initial_task(matches))
-}
-
-///|
-/// Whether `fd` is an interactive terminal; a probe error counts as "not a TTY"
-/// so a missing capability degrades to the headless guidance rather than crashes.
-fn[T : @tty.Fd] is_tty(fd : T) -> Bool {
-  @tty.isatty(fd) catch {
-    _ => false
-  }
 }
 
 ///|

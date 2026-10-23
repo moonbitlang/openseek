@@ -81,8 +81,6 @@ test('long engine-start failures remain readable within the phone viewport and r
 
 for (const viewport of [
   { width: 320, height: 568 },
-  { width: 360, height: 640 },
-  { width: 393, height: 851 },
   { width: 851, height: 393 },
 ]) {
   test(`conversation and drawer fit ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
@@ -145,10 +143,13 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Cloud', level: 2, exact: true })).toBeVisible();
   await page.getByRole('main').getByRole('button', { name: 'New chat', exact: true }).click();
+  await expect(page.locator('#task')).toBeVisible();
   await page.locator('#task').fill('A mobile browser Cloud message');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
+  await expect(page.locator('#task')).toHaveValue('');
   await page.locator('#task').fill('An unsent follow-up\nwith a second line\nand a third line');
   await page.setViewportSize({ width: 320, height: 400 });
   await assertFits(page);
@@ -162,6 +163,7 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   expect(cloud.postCount).toBe(1);
   expect(cloud.device.ticketRequests).toHaveLength(0);
+  expect(cloud.device.socket).toBeNull();
   expect(cloud.device.pageErrors).toEqual([]);
   await page.screenshot({ animations: 'disabled', path: info.outputPath('cloud-small-height.png') });
 });

@@ -76,7 +76,7 @@ test "native selection belongs to its original draft and ignores retired drafts"
   let next = attachment_step(model, other, msg)
   assert_eq(next.active(input).attachment_requests.length(), 1)
   assert_true(next.active(other).attachment_requests.is_empty())
-  let retired = { ..other, retirements: [input.identity.owner], }
+  let retired = { ..other, entry_changes: [Retire(input.identity.owner)], }
   let dropped = attachment_step(model, retired, msg)
   assert_true(dropped.entries.all(entry => entry.owner != input.identity.owner))
   let changed = { ..input, root: Some(@common.Uri::file("/other")), }
@@ -473,4 +473,282 @@ test "Cloud import failures keep the selected bytes for an explicit retry" {
     stale.active(refreshed).attachment_requests[0].phase
     is AttachmentConfirming(_),
   )
+}
+
+///|
+test "running follow-ups submit staged attachments with mixed or attachment-only drafts" {
+  let base = Input::fixture("")
+  let source = @protocol.AttachmentBytes(
+    name="report.pdf",
+    data_base64="JVBERg==",
+  )
+  let mixed : Draft = {
+    task: "inspect this report",
+    images: [{ name: "chart.png", url: "data:image/png;base64,YQ==", }],
+    mentions: [{ ref_: File(path="notes.txt"), range: None, }],
+  }
+  for submit in [Steer, Queue] {
+    for draft in [base.draft, mixed] {
+      let input = {
+        ..base,
+        identity: {
+          owner: @interop.Cloud(account="user", session="session"),
+          archive_generation: 0,
+        },
+        draft,
+        staged_attachments: [source],
+        presentation: {
+          ..base.presentation,
+          primary_action: Running(
+            steer_available=true,
+            can_stop=true,
+            submit~,
+            queue_available=true,
+          ),
+        },
+      }
+      let model = Model(input)
+      let buttons = model
+        .active(input)
+        .action_buttons(Msg::test_emit(), Action::test_emit(), input)
+      assert_eq(buttons.length(), 2)
+      assert_false(buttons[1].disabled)
+      let entry = model.active(input)
+      for
+        blocked_entry in [
+          entry.with_attachment_phase(1, AttachmentPreparing),
+          entry.with_attachment_phase(
+            1,
+            AttachmentConfirming(name="report.pdf"),
+          ),
+          entry.with_attachment_phase(1, AttachmentImporting),
+          entry.attachment_failed(1, "offline"),
+        ] {
+        let unready = model.with_entry(blocked_entry)
+        assert_true(
+          unready
+          .active(input)
+          .action_buttons(Msg::test_emit(), Action::test_emit(), input)[1].disabled,
+        )
+        let blocked : Array[Action] = []
+        ignore(
+          unready.update(input, SubmitRequested, Msg::test_emit(), action => {
+            blocked.push(action)
+            @cmd.none
+          }),
+        )
+        assert_true(blocked.is_empty())
+      }
+      let actions : Array[Action] = []
+      let (submitted, _) = model.update(
+        input,
+        SubmitRequested,
+        Msg::test_emit(),
+        action => {
+          actions.push(action)
+          @cmd.none
+        },
+      )
+      guard actions
+        is [FollowupSubmitted(identity~, draft=sent, choice~, attachments~)] else {
+        fail("expected the existing follow-up action with staged sources")
+      }
+      assert_eq(identity, input.identity)
+      assert_eq(sent, draft)
+      assert_eq(choice, if submit is Steer { SteerNow } else { QueueNext })
+      assert_eq(attachments, [source])
+      assert_eq(submitted.active(input).draft, draft)
+      assert_eq(submitted.active(input).attachment_requests.length(), 1)
+      let acknowledged = {
+        ..input,
+        draft: base.draft,
+        staged_attachments: [],
+        submission_sequence: 1,
+      }
+      assert_true(submitted.active(acknowledged).draft.is_blank())
+      assert_true(submitted.active(acknowledged).attachment_requests.is_empty())
+    }
+  }
+}
+
+///|
+test "running follow-up acknowledgement preserves newer draft text images and references" {
+  for submit in [Steer, Queue] {
+    let base = Input::fixture("submitted text")
+    let image : Image = { name: "sent.png", url: "data:image/png;base64,YQ==", }
+    let input = {
+      ..base,
+      identity: {
+        owner: @interop.Cloud(account="user", session="session"),
+        archive_generation: 0,
+      },
+      draft: {
+        ..base.draft,
+        images: [image],
+        mentions: [{ ref_: File(path="sent.txt"), range: None, }],
+      },
+      staged_attachments: [
+        @protocol.AttachmentBytes(name="report.pdf", data_base64="JVBERg=="),
+      ],
+      presentation: {
+        ..base.presentation,
+        primary_action: Running(
+          steer_available=true,
+          can_stop=true,
+          submit~,
+          queue_available=true,
+        ),
+      },
+    }
+    let submitted = attachment_step(Model(input), input, SubmitRequested)
+    let edited = attachment_step(submitted, input, TextChanged("next draft"))
+    let next_image : Image = {
+      name: "next.png",
+      url: "data:image/png;base64,Yg==",
+    }
+    let edited = attachment_step(
+      edited,
+      input,
+      ImageRead(input.identity, input.root, @image_input.Reading),
+    )
+    let edited = attachment_step(
+      edited,
+      input,
+      ImageRead(
+        input.identity,
+        input.root,
+        @image_input.Ready([(next_image.name, next_image.url)]),
+      ),
+    )
+    let next_reference : Mention = { ref_: File(path="next.txt"), range: None, }
+    let acknowledged = {
+      ..input,
+      draft: { task: "", images: [], mentions: [next_reference], },
+      staged_attachments: [],
+      submission_sequence: 1,
+    }
+    let entry = edited.active(acknowledged)
+    assert_eq(entry.draft.task, "next draft")
+    assert_eq(entry.draft.images, [next_image])
+    assert_eq(entry.draft.mentions, [next_reference])
+    assert_true(entry.attachment_requests.is_empty())
+    assert_true(entry.pending_submission is None)
+  }
+}
+
+///|
+test "running follow-ups without staged attachments retain their existing input" {
+  let base = Input::fixture("follow-up")
+  for submit in [Steer, Queue] {
+    for
+      draft in [
+        base.draft,
+        {
+          ..base.draft,
+          task: "",
+          images: [{ name: "chart.png", url: "data:image/png;base64,YQ==", }],
+        },
+        {
+          ..base.draft,
+          task: "",
+          mentions: [{ ref_: File(path="notes.txt"), range: None, }],
+        },
+      ] {
+      let input = {
+        ..base,
+        draft,
+        presentation: {
+          ..base.presentation,
+          primary_action: Running(
+            steer_available=true,
+            can_stop=true,
+            submit~,
+            queue_available=true,
+          ),
+        },
+      }
+      let actions : Array[Action] = []
+      ignore(
+        Model(input).update(input, SubmitRequested, Msg::test_emit(), action => {
+          actions.push(action)
+          @cmd.none
+        }),
+      )
+      assert_true(
+        actions is [FollowupSubmitted(draft=sent, attachments=[], ..)] &&
+        sent == draft,
+      )
+    }
+  }
+}
+
+///|
+test "Local running attachment readiness remains unchanged" {
+  let base = Input::fixture("keep this draft")
+  let input = {
+    ..base,
+    staged_attachments: [
+      @protocol.AttachmentBytes(name="report.pdf", data_base64="JVBERg=="),
+    ],
+    presentation: {
+      ..base.presentation,
+      primary_action: Running(
+        steer_available=true,
+        can_stop=true,
+        submit=Steer,
+        queue_available=true,
+      ),
+    },
+  }
+  let model = Model(input)
+  assert_false(model.active(input).can_send(input))
+  assert_true(
+    model
+    .active(input)
+    .action_buttons(Msg::test_emit(), Action::test_emit(), input)[1].disabled,
+  )
+  let actions : Array[Action] = []
+  ignore(
+    model.update(input, SubmitRequested, Msg::test_emit(), action => {
+      actions.push(action)
+      @cmd.none
+    }),
+  )
+  assert_true(actions.is_empty())
+  assert_eq(model.active(input).draft, base.draft)
+}
+
+///|
+test "idle queue editing reuses draft submission without Stop or follow-up controls" {
+  let base = Input::fixture("Edited queue")
+  let input = {
+    ..base,
+    presentation: {
+      ..base.presentation,
+      primary_action: SaveQueuedInput(available=true),
+    },
+  }
+  let model = Model(input)
+  let buttons = model
+    .active(input)
+    .action_buttons(Msg::test_emit(), Action::test_emit(), input)
+  assert_eq(buttons.length(), 1)
+  assert_eq(buttons[0].id, "send")
+  assert_eq(buttons[0].title, "Save queued message")
+  assert_false(buttons[0].disabled)
+  let actions : Array[Action] = []
+  let (submitted, _) = model.update(input, SubmitRequested, Msg::test_emit(), action => {
+    actions.push(action)
+    @cmd.none
+  })
+  assert_true(
+    actions is [DraftSubmitted(draft={ task: "Edited queue", .. }, ..)],
+  )
+  let edited = attachment_step(submitted, input, TextChanged("Next draft"))
+  let acknowledged = {
+    ..input,
+    draft: { task: "", images: [], mentions: [], },
+    submission_sequence: 1,
+  }
+  assert_eq(edited.active(acknowledged).draft.task, "Next draft")
 }

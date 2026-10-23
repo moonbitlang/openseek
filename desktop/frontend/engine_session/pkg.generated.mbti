@@ -1,0 +1,111 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/engine_session"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/openseek_protocol",
+  "openseek_desktop/frontend/composer",
+  "openseek_desktop/frontend/transcript",
+}
+
+// Values
+pub fn composer_action(@composer.Action) -> Action?
+
+pub fn is_idle_event(@openseek_protocol.Event) -> Bool
+
+pub fn refreshes_history(@openseek_protocol.Event) -> Bool
+
+pub fn slash_action(String) -> Action?
+
+// Errors
+
+// Types and methods
+pub(all) enum Action {
+  EditGoal
+  CloseGoal
+  SetGoal(String)
+  ClearGoal
+  Send(@openseek_protocol.Command)
+}
+
+pub(all) enum CompactionPhase {
+  NotCompacting
+  Requested
+  Queued
+  Compacting
+} derive(Eq)
+pub fn CompactionPhase::equal(Self, Self) -> Bool
+pub fn CompactionPhase::not_equal(Self, Self) -> Bool
+
+pub(all) enum Delivery {
+  Accepted
+  Rejected
+  Unknown
+} derive(Eq)
+pub fn Delivery::equal(Self, Self) -> Bool
+pub fn Delivery::not_equal(Self, Self) -> Bool
+
+pub(all) struct GoalCommand {
+  id : String
+  request : GoalRequest
+  since : Int32
+} derive(Eq)
+pub fn GoalCommand::equal(Self, Self) -> Bool
+pub fn GoalCommand::not_equal(Self, Self) -> Bool
+
+pub(all) struct GoalEdit {
+  draft : String
+} derive(Eq)
+pub fn GoalEdit::equal(Self, Self) -> Bool
+pub fn GoalEdit::not_equal(Self, Self) -> Bool
+
+pub(all) enum GoalRequest {
+  Setting(String)
+  Clearing
+} derive(Eq)
+pub fn GoalRequest::equal(Self, Self) -> Bool
+pub fn GoalRequest::not_equal(Self, Self) -> Bool
+
+pub(all) struct Reasoning {
+  content : String
+  complete : Bool
+} derive(Eq, @debug.Debug)
+pub fn Reasoning::equal(Self, Self) -> Bool
+pub fn Reasoning::not_equal(Self, Self) -> Bool
+pub fn Reasoning::to_repr(Self) -> @debug.Repr
+
+pub(all) struct State {
+  goal : @transcript.GoalStanding?
+  edit : GoalEdit?
+  pending : GoalCommand?
+  compaction : CompactionPhase
+  compact_request : String?
+  automatic_compacting : Bool
+} derive(Eq)
+pub fn State::act(Self, Action, String, Int32, running~ : Bool) -> (Self, @openseek_protocol.Command?)
+pub fn State::awaits(Self, @openseek_protocol.Command, String) -> Bool
+pub fn State::delivered(Self, @openseek_protocol.Command, String, Delivery) -> Self
+pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::event(Self, @openseek_protocol.Event, live_goal? : Bool) -> Self
+pub fn State::host_failed(Self) -> Self
+pub fn State::input(Self) -> @composer.GoalInput
+pub fn State::is_compact_queued(Self) -> Bool
+pub fn State::is_compacting(Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::observe_compaction(Self, queued~ : Bool, compacting~ : Bool, baseline~ : Bool) -> Self
+pub fn State::restore_goal(Self, @transcript.GoalStanding?, Array[(Int32, @transcript.GoalMarker)]) -> Self
+pub fn State::seed(Self) -> String
+
+pub(all) struct Stream {
+  response : String?
+  reasoning : Reasoning?
+} derive(Eq)
+pub fn Stream::empty() -> Self
+pub fn Stream::equal(Self, Self) -> Bool
+pub fn Stream::event(Self, @transcript.EngineEvent) -> Self
+pub fn Stream::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

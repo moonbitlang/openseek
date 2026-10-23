@@ -18,17 +18,40 @@ while the published package resolves them from mooncakes.
 ## Running it
 
 You need the [MoonBit toolchain](https://www.moonbitlang.com/download), which
-provides `moon` and `moonx`. The engine is not installed separately: the UI runs
-the `moonbitlang/openseek` release it was built against through `moonx`.
+provides `moon`, `moonrun`, and `moonx`. The engine is not installed separately:
+the UI runs the `moonbitlang/openseek` release it was built against through
+`moonx`.
+
+Run the wasm target locally through `moonrun` from the repository root:
 
 ```bash
-git clone https://github.com/moonbitlang/openseek && cd openseek/openseek_tui
-moon build --release cmd/openseek_tui
-cp ../_build/native/release/build/moonbitlang/openseek_tui/cmd/openseek_tui/openseek_tui.exe ~/.moon/bin/openseek_tui
-
+git clone https://github.com/moonbitlang/openseek && cd openseek
 export DEEPSEEK=sk-...
+moon run --target wasm openseek_tui/cmd/openseek_tui
+
+# Pass TUI options after --.
+moon run --target wasm openseek_tui/cmd/openseek_tui -- --continue
+```
+
+The native target is also supported and remains the default when `--target`
+is omitted. To install a native executable from the repository root:
+
+```bash
+moon build --target native --release openseek_tui/cmd/openseek_tui
+cp _build/native/release/build/moonbitlang/openseek_tui/cmd/openseek_tui/openseek_tui.exe ~/.moon/bin/openseek_tui
 openseek_tui
 ```
+
+On both targets, `tty` launches its bundled sidecar for the host platform to
+open the controlling terminal, manage raw mode, and report resize events.
+UI input and drawing use that terminal independently of stdin and stdout.
+Redirecting either stream still allows interaction when a controlling terminal
+is available. If the terminal cannot be opened, startup reports the error and
+exits.
+
+On Windows, use the native build when engine descendant-process cleanup is
+required. The wasm target uses direct-child cancellation; see
+[process-tree behavior](cmd/tui/internal/process_tree/README.mbt.md).
 
 **The engine.** With no `--engine`, the UI spawns
 `moonx moonbitlang/openseek@<version> serve …`, where `<version>` is the
@@ -72,11 +95,14 @@ along with the rest of the workspace. From the repository root, to work on the
 UI alone:
 
 ```bash
-moon check --target native --deny-warn
+moon check --target wasm --deny-warn $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
+moon test --target wasm $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
+moon build --target wasm openseek_tui/cmd/openseek_tui
+moon check --target native --deny-warn $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 moon test --target native $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 moon cram test openseek_tui/tests/cram   # verified CLI docs: tests/cram/tui.md
-moon fmt
-moon info                                # regenerate pkg.generated.mbti after API changes
+moon info $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
+moon fmt $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 ```
 
 A plain `moon test` tests every workspace member, not just this module.
@@ -91,6 +117,14 @@ compiles against; on its own the UI still spawns the pinned release through
 From the repository root, `just tui` builds both binaries and runs the UI with
 `--engine` pointing at this checkout's `openseek` (flags pass through, e.g.
 `just tui --continue`, `just tui -C ../other-project`).
+
+To run the wasm UI against the checkout's engine, including before that engine
+version is published, build the native engine and pass its absolute path:
+
+```bash
+moon build . --target native
+moon run --target wasm openseek_tui/cmd/openseek_tui -- --engine "$PWD/_build/native/debug/build/moonbitlang/openseek/openseek.exe"
+```
 
 ## Publishing
 

@@ -18,6 +18,7 @@ export class CloudHarness {
     this.device = new DesktopBrowserHarness(page);
     this.requests = [];
     this.hostRequests = [];
+    this.notifications = [];
     this.codes = new Map();
     this.userId = '123';
     this.apiStatus = 200;
@@ -25,7 +26,7 @@ export class CloudHarness {
     this.listStatus = 200;
     this.historyStatus = 200;
     this.createStatus = 201;
-    this.sendStatus = 200;
+    this.sendStatus = 202;
     this.shareStatus = 200;
     this.exportStatus = 200;
     this.exportSnapshots = new Map();
@@ -44,6 +45,14 @@ export class CloudHarness {
     this.rejectStreamCancel = false;
     this.streamCancellations = 0;
     this.fileStreamCancellations = 0;
+    this.sessionStreamCancellations = 0;
+    this.sessionEventStatus = 200;
+    this.pauseSessionEvents = null;
+    this.controlSnapshots = new Map();
+    this.manualTasks = false;
+    this.pauseControl = null;
+    this.controlRejected = null;
+    this.controlOffline = false;
     this.fileEventStatus = 200;
     this.pauseCreate = null;
     this.pauseSend = null;
@@ -53,6 +62,7 @@ export class CloudHarness {
     this.generating = new Set();
     this.archived = new Set();
     this.histories = new Map();
+    this.nativeNotices = new Map();
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
     this.exchangeCount = 0;
@@ -65,6 +75,7 @@ export class CloudHarness {
     await this.page.exposeFunction('cloudWaitForEvent', index => this.eventPauses?.get(index));
     await this.page.exposeFunction('cloudStreamCancelled', () => this.streamCancellations++);
     await this.page.exposeFunction('cloudFileStreamCancelled', () => this.fileStreamCancellations++);
+    await this.page.exposeFunction('cloudSessionStreamCancelled', () => { this.sessionStreamCancellations++; this.streamCancellations++; });
     await this.page.addInitScript(({ cached, authOrigin, cloudOrigin, rejectStreamCancel, streamChunkSize }) => {
       window.cloudUnhandledRejections = [];
       window.addEventListener('unhandledrejection', event => window.cloudUnhandledRejections.push(String(event.reason)));
@@ -75,6 +86,12 @@ export class CloudHarness {
         localStorage.setItem('seekmoon.account.v1', JSON.stringify({ token: 'ts_fixture-123', user: { user_id: '123', login: 'octocat', avatar_url: '' } }));
       }
       const original = window.fetch;
+      window.cloudSessionStreams = new Map();
+      window.cloudSessionEvent = (session, frame) => {
+        for (const controller of window.cloudSessionStreams.get(session) || []) {
+          controller.enqueue(new TextEncoder().encode(frame));
+        }
+      };
       window.cloudFileStreams = new Map();
       window.cloudInvalidateFiles = session => {
         for (const controller of window.cloudFileStreams.get(session) || []) {
@@ -87,6 +104,23 @@ export class CloudHarness {
       };
       window.fetch = async (...args) => {
         const response = await original(...args);
+        const sessionEvents = String(args[0]).match(/\/v1\/sessions\/([^/]+)\/events$/);
+        if (String(args[0]).startsWith(cloudOrigin) && sessionEvents && response.ok) {
+          const initial = new TextEncoder().encode(await response.text());
+          const session = decodeURIComponent(sessionEvents[1]);
+          let current;
+          return new Response(new ReadableStream({ start(controller) {
+            current = controller;
+            const streams = window.cloudSessionStreams.get(session) || new Set();
+            streams.add(controller);
+            window.cloudSessionStreams.set(session, streams);
+            controller.enqueue(initial);
+          }, cancel() {
+            window.cloudSessionStreams.get(session)?.delete(current);
+            window.cloudSessionStreamCancelled();
+            if (rejectStreamCancel) return Promise.reject(new Error('Fixture cancellation rejected'));
+          } }), { status: response.status, headers: response.headers });
+        }
         const fileEvents = String(args[0]).match(/\/v1\/sessions\/([^/]+)\/files\/events$/);
         if (String(args[0]).startsWith(cloudOrigin) && fileEvents && response.ok) {
           const initial = new TextEncoder().encode(await response.text());
@@ -189,6 +223,9 @@ export class CloudHarness {
   account() { return { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: 'octocat', avatar_url: '' } }; }
 
   async installDesktopBridge() {
+    await this.page.exposeFunction('cloudNotification', (method, params) => {
+      this.notifications.push({ method, params });
+    });
     await this.page.exposeFunction('cloudHostRequest', async request => {
       this.hostRequests.push(request);
       if (request.method === 'app.system_appearance') return { dark: false };
@@ -216,8 +253,12 @@ export class CloudHarness {
         for (const callback of listeners.get(name) || []) callback({ payload });
       };
       window.__MoonBit__ = { getTitlebarArea: async () => null, app: events, events,
+        notification: {
+          show: params => window.cloudNotification('show', params),
+          setBadge: params => window.cloudNotification('setBadge', params),
+        },
         openseek: new Proxy({}, { get: (_, method) => async params => {
-          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 1 } });
+          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 2 } });
           return window.cloudHostRequest({ method, params });
         } }),
       };
@@ -233,6 +274,70 @@ export class CloudHarness {
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
     if (/^\/v1\/sessions\/[^/]+\/files\/events$/.test(path)) {
       return route.fulfill({ status: this.fileEventStatus, headers, contentType: 'text/event-stream', body: 'event: workspace_invalidated\ndata: {}\n\n' });
+    }
+    const control = path.match(/^\/v1\/sessions\/([^/]+)\/(control|events|commands|queue)$/);
+    if (control) {
+      const session = decodeURIComponent(control[1]);
+      let operation = control[2];
+      const snapshot = this.controlState(session);
+      if (operation === 'control') return json(snapshot);
+      if (operation === 'events') {
+        if (this.pauseSessionEvents) await this.pauseSessionEvents;
+        return route.fulfill({ status: this.sessionEventStatus, headers, contentType: 'text/event-stream', body: this.sseFrame('control_state', this.controlState(session)) });
+      }
+      const envelope = request.postDataJSON();
+      if (operation === 'commands' && envelope.command.command === 'prompt') {
+        return this.promptCommand(route, json, headers, session, envelope.command);
+      }
+      if (operation === 'commands' && ['goal', 'compact'].includes(envelope.command.command)) {
+        if (this.pauseControl) await this.pauseControl;
+        if (this.controlOffline) return route.abort('failed');
+        const rejected = this.controlRejected || (envelope.task_id !== undefined && envelope.task_id !== snapshot.data.active_task_id ? 'task_mismatch' : null);
+        if (rejected) return route.fulfill({ status: 409, headers, contentType: 'text/plain', body: rejected });
+        if (envelope.command.command === 'compact') {
+          if (snapshot.data.compact_queued || snapshot.data.compacting) return route.fulfill({ status: 409, headers, contentType: 'text/plain', body: 'compaction_busy' });
+          await this.publishControl(session, { compact_queued: true });
+        }
+        return json({ accepted: true }, 202);
+      }
+      const body = operation === 'commands' ? { task_id: envelope.task_id, ...envelope.command } : envelope;
+      if (operation === 'commands') operation = body.command === 'cancel' ? 'stop' : body.command;
+      if (this.pauseControl) await this.pauseControl;
+      if (this.controlOffline) return route.abort('failed');
+      const current = this.controlState(session);
+      const idleQueueEdit = operation === 'queue' && ['edit', 'withdraw'].includes(body.action)
+        && current.data.status === 'idle' && current.data.paused;
+      const rejected = this.controlRejected
+        || (current.task_id !== body.task_id ? 'task_mismatch' : null)
+        || (!current.data.active_task_id && !idleQueueEdit ? 'task_not_running' : null)
+        || (operation !== 'stop' && current.data.status === 'stopping' ? 'task_stopping' : null);
+      if (rejected) return control[2] === 'commands'
+        ? route.fulfill({ status: 409, headers, contentType: 'text/plain', body: rejected })
+        : json({ accepted: false, error: rejected, task_id: body.task_id }, 409);
+      if (operation === 'stop') {
+        await this.publishControl(session, { status: 'stopping' });
+        return json({ accepted: true }, 202);
+      }
+      if (operation === 'steer') {
+        if (!current.data.steers.some(item => item.submission_id === body.submission_id)) {
+          await this.publishControl(session, { steers: [...current.data.steers, { submission_id: body.submission_id, status: 'pending' }] });
+        }
+        return json({ accepted: true }, 202);
+      }
+      const index = current.data.queue.findIndex(item => item.id === body.id);
+      if (body.action !== 'add' && index < 0) return json({ accepted: false, error: 'queue_item_missing', task_id: body.task_id }, 409);
+      const queue = current.data.queue.slice();
+      const steers = current.data.steers.slice();
+      if (body.action === 'add') {
+        if (index < 0) queue.push({ id: body.id, content: body.content });
+        else if (JSON.stringify(queue[index].content) !== JSON.stringify(body.content)) return json({ accepted: false, error: 'input_id_conflict', task_id: body.task_id }, 409);
+      } else if (body.action === 'edit') queue[index] = { id: body.id, content: body.content };
+      else {
+        queue.splice(index, 1);
+        if (body.action === 'steer') steers.push({ submission_id: body.id, status: 'pending' });
+      }
+      await this.publishControl(session, { queue, steers });
+      return json({ accepted: true, task_id: body.task_id, action: body.action, id: body.id });
     }
     if (path === '/v1/sessions') {
       if (request.method() === 'POST') {
@@ -285,16 +390,18 @@ export class CloudHarness {
     if (request.method() === 'GET') {
       const history = this.histories.get(session) || { messages: [], generating: false, outcome: null };
       if (this.pauseHistory) await this.pauseHistory;
-      return json(history, this.historyStatus);
+      return json(history.session ? history : { ...history, ...this.nativeHistory(session, history) }, this.historyStatus);
     }
+    throw new Error('Messages are read-only; use the native commands endpoint');
+  }
+
+  async promptCommand(route, json, headers, session, body) {
     this.postCount++;
-    const body = request.postDataJSON();
-    if (Object.keys(body).join(',') !== 'content') throw new Error('Cloud must send content without a model key');
-    if (this.sendStatus !== 200) return this.sendErrorBody ? route.fulfill({ status: this.sendStatus, headers, contentType: 'text/plain', body: this.sendErrorBody }) : json({}, this.sendStatus);
+    if (this.sendStatus !== 202) return this.sendErrorBody ? route.fulfill({ status: this.sendStatus, headers, contentType: 'text/plain', body: this.sendErrorBody }) : json({}, this.sendStatus);
     const text = typeof body.content === 'string' ? body.content : body.content.filter(part => part.type === 'text').map(part => part.text).join('');
     if (!this.titles.get(session) && text.trim()) this.titles.set(session, text.trim().split('\n')[0].trim());
     const task = `fixture-task-${++this.taskCount}`;
-    const data = this.streamEvents || [
+    const data = this.manualTasks ? [['task_started', {}]] : this.streamEvents || [
       ['task_started', {}],
       ['tool_call', { id: `calc-${task}`, name: 'mbtx', arguments: '{"source":"println(2)"}' }],
       ['tool_result', { tool_call_id: `calc-${task}`, tool_name: 'mbtx', content: '2', is_error: false }],
@@ -302,17 +409,165 @@ export class CloudHarness {
       ['task_finished', { status: 'completed', result: { output: { answer: '您好 🌙 — calculation complete.' } } }],
     ];
     const previous = this.histories.get(session)?.messages || [];
-    const messages = [...previous, { id: previous.length + 70, task_id: task, kind: 'user', data: { content: body.content }, created_at: 1000 },
-      ...data.slice(1).filter(([kind]) => !['assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'usage', 'compaction_started', 'compaction_finished', 'auto_compaction_started', 'auto_compaction_finished'].includes(kind)).map(([kind, value], i) => ({ id: previous.length + i + 71, task_id: task, kind, data: value, created_at: 1001 + i }))];
-    this.histories.set(session, { messages, generating: false, outcome: { status: 'completed' } });
+    const messages = [...previous, { task_id: task, kind: 'user', data: { content: body.content }, created_at: 1000 }];
+    this.histories.set(session, { messages, generating: true, outcome: null });
     if (this.pauseSend) await this.pauseSend;
     if (this.disconnectSend) return route.abort('failed');
-    const chunks = data.map(([kind, value], i) => `event: ${kind}\r\ndata: ${JSON.stringify({ session_id: session, task_id: task, seq: i + 1, kind, data: value })}\r\n\r\n`);
-    let bytes = 0;
-    const boundaries = chunks.map(chunk => bytes += Buffer.byteLength(chunk));
-    const streamHeaders = { ...headers, 'x-fixture-admission-bytes': String(boundaries[0]), 'x-fixture-event-boundaries': JSON.stringify(boundaries) };
-    if (this.disconnectStreamAfter !== undefined) streamHeaders['x-fixture-disconnect-after'] = String(this.disconnectStreamAfter);
-    return route.fulfill({ headers: streamHeaders, contentType: 'text/event-stream', body: chunks.join('') });
+    await json({ accepted: true }, 202);
+    await this.publishTaskStream(session, task, data);
+  }
+
+  // Fixtures retain their compact message builders; the wire response is the
+  // native document used by the Local projector, including non-message records.
+  nativeHistory(session, history) {
+    const items = [];
+    const messages = history.messages.map(record => {
+      if (record.kind === 'user') {
+        const mapped = { ...record, engine_sequence: items.length + 1 };
+        items.push({ kind: record.kind, payload: record.data });
+        return mapped;
+      }
+      const payload = record.data;
+      if (['tool_result', 'runtime_notice', 'summary'].includes(record.kind)) items.push({ kind: record.kind, payload });
+      if (record.kind === 'assistant_message') items.push({ kind: 'assistant', payload });
+      if (record.kind === 'tool_call') {
+        const call = payload.function ? { id: payload.id, name: payload.function.name, arguments: payload.function.arguments } : payload;
+        items.push({ kind: 'assistant', payload: { content: '', tool_calls: [call] } });
+      }
+      if (record.kind === 'task_finished') {
+        const result = payload.result || {};
+        const status = result.status || payload.status;
+        const kinds = { completed: 'finished', aborted: 'aborted', interrupted: 'interrupted', context_yield: 'context_yield', max_steps_exhausted: 'max_steps_exhausted' };
+        items.push({ kind: 'terminal', payload: { kind: kinds[status] || 'failed', message: result.output?.answer || result.reason || '' } });
+      }
+      return record;
+    });
+    items.push(...(this.nativeNotices.get(session) || []));
+    return { messages, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
+  }
+
+  controlState(session) {
+    return this.controlSnapshots.get(session) || {
+      session_id: session, task_id: null, seq: 0,
+      data: { active_task_id: null, status: 'idle', paused: false, queue: [], steers: [], compacting: false, compact_queued: false },
+    };
+  }
+
+  sseFrame(kind, value) {
+    return `event: ${kind}\ndata: ${JSON.stringify(value)}\n\n`;
+  }
+
+  async disconnectSession(session, { error = false } = {}) {
+    await this.page.evaluate(({ session, error }) => {
+      for (const controller of window.cloudSessionStreams.get(session) || []) {
+        if (error) controller.error(new Error('Fixture session stream disconnected'));
+        else controller.close();
+      }
+      window.cloudSessionStreams.delete(session);
+    }, { session, error });
+  }
+
+  async publishControl(session, change = {}, { kind = 'queue_changed' } = {}) {
+    const old = this.controlState(session);
+    const snapshot = { ...old, seq: old.seq + 1, kind, data: { ...old.data, ...change } };
+    this.controlSnapshots.set(session, snapshot);
+    await this.page.evaluate(({ session, frame }) => window.cloudSessionEvent(session, frame), { session, frame: this.sseFrame(kind, snapshot) });
+    return snapshot;
+  }
+
+  async emitSessionEvent(session, kind, data, { task, seq, silent = false } = {}) {
+    const old = this.controlState(session);
+    if (task === undefined) task = old.task_id;
+    const event = { session_id: session, task_id: task, seq: seq ?? old.seq + 1, kind, data };
+    let queueAdvanced = false;
+    if (kind === 'task_started') {
+      const queued = old.data.queue.find(item => item.id === data.submission_id);
+      if (queued) {
+        queueAdvanced = true;
+        const history = this.histories.get(session) || { messages: [] };
+        this.histories.set(session, { ...history, generating: true, messages: [...history.messages, { task_id: task, kind: 'user', data: { content: queued.content }, created_at: 1010 }] });
+      }
+      this.generating.add(session);
+      this.controlSnapshots.set(session, { session_id: session, task_id: task, seq: event.seq,
+        data: { ...old.data, active_task_id: task, status: 'running', paused: false, queue: old.data.queue.filter(item => item.id !== data.submission_id), steers: [] } });
+    } else if (task === old.task_id && event.seq > old.seq) {
+      const state = { ...old.data };
+      if (kind === 'task_finished') {
+        this.generating.delete(session);
+        state.active_task_id = null;
+        state.status = 'idle';
+        state.paused = old.data.paused || data.status !== 'completed' || old.data.status === 'stopping';
+      }
+      if (kind === 'steer_applied' || kind === 'steer_dropped') {
+        state.steers = state.steers.filter(item => item.submission_id !== data.submission_id);
+        state.steers.push({ submission_id: data.submission_id, status: kind === 'steer_applied' ? 'applied' : 'dropped' });
+      }
+      this.controlSnapshots.set(session, { ...old, seq: event.seq, data: state });
+    }
+    if (kind === 'goal_updated') {
+      const notices = this.nativeNotices.get(session) || [];
+      notices.push({ kind: 'runtime_notice', payload: { content: data.goal === null ? '[goal cleared]' : `[goal]\n${data.goal}` } });
+      this.nativeNotices.set(session, notices);
+    }
+    if (kind === 'compaction_started') {
+      const snapshot = this.controlState(session);
+      this.controlSnapshots.set(session, { ...snapshot, data: { ...snapshot.data, compact_queued: false, compacting: true } });
+    }
+    if (['compaction_finished', 'compaction_failed'].includes(kind)) {
+      const snapshot = this.controlState(session);
+      this.controlSnapshots.set(session, { ...snapshot, data: { ...snapshot.data, compacting: false } });
+    }
+    const history = this.histories.get(session) || { messages: [], generating: false };
+    const transient = ['task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error', 'engine_failed'];
+    if (!transient.includes(kind)) {
+      this.histories.set(session, { ...history,
+        messages: [...history.messages, { task_id: task, kind, data, created_at: 1000 + event.seq }],
+        generating: kind !== 'task_finished', outcome: kind === 'task_finished' ? data : history.outcome });
+    }
+    if (event.seq > this.controlState(session).seq) {
+      this.controlSnapshots.set(session, { ...this.controlState(session), seq: event.seq });
+    }
+    if (!silent && !['user', 'tool_call'].includes(kind)) {
+      const lifecycle = ['task_started', 'task_finished', 'engine_failed'].includes(kind);
+      const frame = lifecycle ? event : { ...event, kind: 'engine_event', data: { ...data, event: kind === 'step' ? 'agent_step' : kind } };
+      await this.page.evaluate(({ session, frame }) => window.cloudSessionEvent(session, frame), { session, frame: this.sseFrame(frame.kind, frame) });
+      if (queueAdvanced) await this.publishControl(session);
+    }
+    return event;
+  }
+
+  async publishTaskStream(session, task, events) {
+    for (let index = 0; index < events.length; index++) {
+      const [kind, data] = events[index];
+      await this.emitSessionEvent(session, kind, data, { task });
+      if (index === 0 && this.pauseStream) await this.pauseStream;
+      if (this.eventPauses?.get(index)) await this.eventPauses.get(index);
+      if (this.disconnectStreamAfter === index) {
+        // The reader disconnects independently of the server task. Complete
+        // this fixture's work so the history read sees the durable result.
+        for (let remaining = index + 1; remaining < events.length; remaining++) {
+          const [kind, data] = events[remaining];
+          await this.emitSessionEvent(session, kind, data, { task, silent: true });
+        }
+        await this.page.evaluate(session => {
+          for (const controller of window.cloudSessionStreams.get(session) || []) controller.error(new Error('Fixture stream disconnected'));
+          window.cloudSessionStreams.delete(session);
+        }, session);
+        return;
+      }
+    }
+  }
+
+  async finishTask(session = sessionA, status = 'completed') {
+    const snapshot = this.controlState(session);
+    const task = snapshot.task_id;
+    await this.publishControl(session, {
+      active_task_id: null, status: 'idle',
+      paused: status !== 'completed' || snapshot.data.status === 'stopping',
+    });
+    const result = { version: 1, request_id: task, session, status: status === 'completed' ? 'ok' : 'aborted', reason: status === 'completed' ? undefined : 'interrupted', usage: {}, steps: 1 };
+    const data = { status, result };
+    await this.emitSessionEvent(session, 'task_finished', data);
   }
 
   async goto() {

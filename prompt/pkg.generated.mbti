@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn system_prompt_for_model(@deepseek.Model) -> String
+pub fn system_prompt_for_model(@deepseek.Model, moonbit_guide? : Bool) -> String
 
 // Errors
 

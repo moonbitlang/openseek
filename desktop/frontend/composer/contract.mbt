@@ -7,6 +7,33 @@ pub(all) struct Mention {
 } derive(Eq, @debug.Debug)
 
 ///|
+/// Convert editor feedback to the shared annotation envelope. Original-revision
+/// feedback keeps its source lines without claiming a working-file selection.
+pub fn Mention::editor_annotation(
+  file : String,
+  range : @common.Range,
+  quote : String,
+  comment : String,
+  side~ : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
+) -> Mention {
+  {
+    ref_: Annotation(
+      file~,
+      start_line=range.start_line_number,
+      end_line=range.end_line_number,
+      quote~,
+      comment~,
+      side~,
+    ),
+    range: if side is OriginalRevision {
+      None
+    } else {
+      Some(range)
+    },
+  }
+}
+
+///|
 /// The complete editable value owned by one composer entry.
 pub(all) struct Draft {
   task : String
@@ -84,6 +111,7 @@ pub(all) enum FollowupChoice {
 ///|
 pub(all) enum PrimaryAction {
   Send(available~ : Bool)
+  SaveQueuedInput(available~ : Bool)
   Running(
     steer_available~ : Bool,
     can_stop~ : Bool,
@@ -113,7 +141,7 @@ pub(all) struct PendingSteerInput {
 ///|
 pub(all) enum QueuedInputState {
   Queueing
-  Queued(editing~ : Bool, interactive~ : Bool)
+  Queued(editing~ : Bool, interactive~ : Bool, steer_available~ : Bool)
 } derive(Eq)
 
 ///|
@@ -273,7 +301,7 @@ pub(all) struct Input {
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int32
   submission_sequence : Int32
-  retirements : Array[@interop.ConversationIdentity]
+  entry_changes : Array[EntryChange]
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
@@ -294,7 +322,8 @@ pub(all) enum Action {
   FollowupSubmitted(
     identity~ : Identity,
     draft~ : Draft,
-    choice~ : FollowupChoice
+    choice~ : FollowupChoice,
+    attachments~ : Array[@protocol.AttachmentSource]
   )
   DraftPresenceChanged(
     identity~ : Identity,
@@ -531,3 +560,27 @@ pub extend FollowupChoice with Eq::{equal, not_equal}
 
 ///|
 pub extend FollowupChoice with @debug.Debug::{to_repr}
+
+///|
+/// Changes to cached editor ownership, applied in order even while hidden.
+pub(all) enum EntryChange {
+  Retire(@interop.ConversationIdentity)
+  Move(
+    from~ : @interop.ConversationIdentity,
+    to~ : @interop.ConversationIdentity
+  )
+} derive(Eq)
+
+///|
+pub fn EntryChange::retires(
+  self : EntryChange,
+  owner : @interop.ConversationIdentity,
+) -> Bool {
+  match self {
+    Retire(retired) => retired == owner
+    Move(from~, ..) => from == owner
+  }
+}
+
+///|
+pub extend EntryChange with Eq::{equal, not_equal}

@@ -30,6 +30,7 @@ pub fn view_event_json(Int32, @proton.WebContentsEvent) -> Json?
 type BrowserViews
 pub async fn BrowserViews::BrowserViews() -> Self
 pub fn BrowserViews::page_attached(Self, async (Json) -> Unit) -> Unit
+pub fn BrowserViews::view_event(Self, Int32, @proton.WebContentsEvent) -> Unit
 pub fn BrowserViews::window_closed(Self) -> Unit
 pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit
 pub async fn[T] BrowserViews::with_cdp(Self, Int32, async (@cdp.Connection) -> T) -> T

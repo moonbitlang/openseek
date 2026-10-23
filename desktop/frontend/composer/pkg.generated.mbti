@@ -39,7 +39,7 @@ pub async fn stage_attachments(@interop.ChannelId, String, String, String, Array
 pub(all) enum Action {
   DraftSubmitted(identity~ : Identity, draft~ : Draft)
   DraftAttachmentsSubmitted(identity~ : Identity, draft~ : Draft, attachments~ : Array[@protocol.AttachmentSource])
-  FollowupSubmitted(identity~ : Identity, draft~ : Draft, choice~ : FollowupChoice)
+  FollowupSubmitted(identity~ : Identity, draft~ : Draft, choice~ : FollowupChoice, attachments~ : Array[@protocol.AttachmentSource])
   DraftPresenceChanged(identity~ : Identity, present~ : Bool, cleared_source~ : Draft?)
   ReviewChangesRemoved(identity~ : Identity, selections~ : Array[@mention_context.ReviewChanges])
   ReviewChangesOpened(identity~ : Identity, selection~ : @mention_context.ReviewChanges)
@@ -136,6 +136,14 @@ pub fn Draft::with_mention(Self, Mention) -> Self
 pub fn Draft::with_office_selection(Self, String?) -> Self
 pub fn Draft::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
 pub fn Draft::with_semantic_selection(Self, @mention_context.SemanticSearchReference?) -> Self
+
+pub(all) enum EntryChange {
+  Retire(@interop.ConversationIdentity)
+  Move(from~ : @interop.ConversationIdentity, to~ : @interop.ConversationIdentity)
+} derive(Eq)
+pub fn EntryChange::equal(Self, Self) -> Bool
+pub fn EntryChange::not_equal(Self, Self) -> Bool
+pub fn EntryChange::retires(Self, @interop.ConversationIdentity) -> Bool
 
 pub(all) enum FileIndex {
   FileIndexEmpty(epoch~ : Int32)
@@ -235,7 +243,7 @@ pub(all) struct Input {
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int32
   submission_sequence : Int32
-  retirements : Array[@interop.ConversationIdentity]
+  entry_changes : Array[EntryChange]
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
@@ -250,6 +258,7 @@ pub(all) struct Mention {
   ref_ : @mention_context.MentionRef
   range : @common.Range?
 } derive(Eq, @debug.Debug)
+pub fn Mention::editor_annotation(String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn Mention::equal(Self, Self) -> Bool
 pub fn Mention::not_equal(Self, Self) -> Bool
 pub fn Mention::to_repr(Self) -> @debug.Repr
@@ -312,6 +321,7 @@ pub fn Presentation::not_equal(Self, Self) -> Bool
 
 pub(all) enum PrimaryAction {
   Send(available~ : Bool)
+  SaveQueuedInput(available~ : Bool)
   Running(steer_available~ : Bool, can_stop~ : Bool, submit~ : RunningSubmit, queue_available~ : Bool)
 } derive(Eq, @debug.Debug)
 pub fn PrimaryAction::equal(Self, Self) -> Bool
@@ -328,7 +338,7 @@ pub fn QueuedInput::not_equal(Self, Self) -> Bool
 
 pub(all) enum QueuedInputState {
   Queueing
-  Queued(editing~ : Bool, interactive~ : Bool)
+  Queued(editing~ : Bool, interactive~ : Bool, steer_available~ : Bool)
 } derive(Eq)
 pub fn QueuedInputState::equal(Self, Self) -> Bool
 pub fn QueuedInputState::not_equal(Self, Self) -> Bool
@@ -354,6 +364,7 @@ pub(all) struct ReasoningSelect {
 pub(all) enum ReplyContent {
   Text(quote~ : String?, comment~ : String)
   OfficeSelection(String)
+  Annotation(Mention)
 }
 
 pub(all) struct RunHeartbeat {

@@ -71,9 +71,7 @@ async fn load_attachment(
   guard attachment_name_is_safe(loaded.name) else {
     raise HostError("invalid attachment filename")
   }
-  guard loaded.bytes.length() > 0 else {
-    raise HostError("attachment is empty")
-  }
+  guard !loaded.bytes.is_empty() else { raise HostError("attachment is empty") }
   guard loaded.bytes.length() <= @openpath.MaxOfficeFileBytes else {
     raise HostError("documents must be 20 MiB or smaller")
   }

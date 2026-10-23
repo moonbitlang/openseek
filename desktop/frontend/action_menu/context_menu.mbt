@@ -28,6 +28,7 @@ pub(all) struct ContextActions {
   open_external_link : (String) -> @cmd.Cmd
   open_file : (String) -> @cmd.Cmd
   reveal_file : (String) -> @cmd.Cmd
+  share_file : (String) -> @cmd.Cmd
 }
 
 ///|
@@ -35,7 +36,7 @@ priv enum ContextTarget {
   NoTarget
   WebLink(String)
   EmailLink(url~ : String, address~ : String)
-  FileLink(String)
+  FileLink(String, share_path~ : String?)
 } derive(Eq)
 
 ///|
@@ -135,7 +136,12 @@ fn keyboard_anchor(element : @dom.Element) -> (Int32, Int32) {
 fn element_context(element : @dom.Element) -> ContextTarget {
   if element.closest("[data-context-file]") is Some(file) &&
     file.get_attribute("data-context-file") is Some(path) {
-    return FileLink(path)
+    return FileLink(
+      path,
+      share_path=file
+        .get_attribute("data-context-share-file")
+        .filter(path => !path.is_empty()),
+    )
   }
   guard element.closest("a[href]") is Some(anchor) &&
     !anchor.has_attribute("download") else {
@@ -392,7 +398,7 @@ fn context_definition(
         copy_item(ui(locale, CopyEmail), ui(locale, CopyEmailHint), address),
       )
     }
-    FileLink(path) => {
+    FileLink(path, share_path~) => {
       navigation.push(
         context_item(
           ui(locale, OpenLabel),
@@ -409,6 +415,16 @@ fn context_definition(
             label,
             @icons.icon_folder_opened(),
             (actions.reveal_file)(path),
+          ),
+        )
+      }
+      if share_path is Some(path) {
+        navigation.push(
+          context_item(
+            ui(locale, ShareFile),
+            ui(locale, ShareFile),
+            @icons.icon_link_external(),
+            (actions.share_file)(path),
           ),
         )
       }

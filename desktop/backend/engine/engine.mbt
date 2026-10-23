@@ -418,7 +418,7 @@ priv enum EnginePhase {
   // `compaction_finished` would blindly idle it away.
   Running(run_id~ : String, compact_queued~ : Bool)
   // A `/compact` is rewriting the durable record: no run is open, but
-  // starts and archiving must wait. Entered by `compact_run` (idle send),
+  // starts and archiving must wait. Entered by `submit_compaction` (idle send),
   // a run's terminal event with a compaction queued behind it, or the
   // engine's own `compaction_started`; left on
   // `compaction_finished`/`compaction_failed` — or on engine death, which
@@ -579,7 +579,7 @@ const EngineActorRestartDelayMs = 1000
 priv enum PendingOp {
   StartPending
   CompactPending
-  GoalPending
+  CommandPending
   ArchivePending
 }
 
@@ -639,8 +639,8 @@ fn SessionSlot::claim(
           "an OpenSeek run is already starting for this conversation"
         CompactPending =>
           "a compaction is already being requested for this conversation"
-        GoalPending =>
-          "a goal update is already being sent for this conversation"
+        CommandPending =>
+          "a session command is already being sent for this conversation"
         ArchivePending =>
           "this conversation is moving between live and archived stores"
       },
@@ -1508,6 +1508,9 @@ async fn engine_process_args(
     args.push("--session-root=\{root.to_string()}")
   }
   args.append(engine_mcp_args(config.mcp_config, runtime_dir, env, host_mcp~))
+  if !config.moonbit_guide {
+    args.push("--moonbit-guide=off")
+  }
   args.append(["--dir", ".", "--approval", config.approval.wire()])
   args
 }
@@ -3059,6 +3062,7 @@ async test "native engine env has one authoritative bundled moon path" {
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(moon_home, version="0.10.0-test")
   let config : RunConfig = {
+    moonbit_guide: true,
     content: Content([Text("t")]),
     api_key: "k",
     key_env: "DEEPSEEK",
@@ -3255,6 +3259,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
   let sink = EventSink(_ => ())
   let slot : SessionSlot = { pending: None, engine: None, }
   let config : RunConfig = {
+    moonbit_guide: true,
     content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",
@@ -3372,6 +3377,7 @@ async test "record move waits for readers across pump replacement" {
 ///|
 fn pump_test_config(session : String) -> RunConfig {
   {
+    moonbit_guide: true,
     content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",

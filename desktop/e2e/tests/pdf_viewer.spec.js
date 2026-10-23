@@ -664,20 +664,6 @@ test.describe('PDF region screenshots', () => {
     expect(pixels.dark).toBeGreaterThan(100);
     expect(app.pageErrors).toEqual([]);
   });
-
-  test('a PDF screenshot reaches a Codex turn as an image attachment', async ({ page }) => {
-    const app = await setup(page, { codex: true });
-    await openFile(app, 'report.pdf');
-    await expectPdf(page);
-    const b = await page.locator('.pdfViewer canvas').first().boundingBox();
-    await captureRegion(page, { x: Math.ceil(b.x + 20), y: Math.ceil(b.y + 20), width: 180, height: 100 });
-    const url = await page.locator('.composer-image img').getAttribute('src');
-    await page.locator('#send').click();
-    await expect.poll(() => app.requests.filter(r => r.method === 'codex.turn.start').length).toBe(1);
-    expect(app.requests.find(r => r.method === 'codex.turn.start').params.input).toContainEqual({ type: 'image', url });
-    expect(app.pageErrors).toEqual([]);
-  });
-
 });
 
 for (const { rotation, partial = false, noRotate = false, hidden = false, note = false } of [
@@ -845,6 +831,11 @@ for (const codex of [false, true]) {
     expect(request).toContain('Keep my existing draft');
     expect(request).toContain('把这部分改成中文，并加上标题');
     const params = app.requests.find(r => r.method === method).params;
+    if (codex) {
+      expect(params.input.filter(item => item.type === 'image')).toEqual([
+        { type: 'image', url: expect.stringMatching(/^data:image\/png;base64,/) },
+      ]);
+    }
     const prompt = codex ? params.input.filter(item => item.type === 'text').map(item => item.text).join('\n') : params.task;
     const selections = [...prompt.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)].map(match => JSON.parse(match[1]));
     expect(selections).toHaveLength(1);

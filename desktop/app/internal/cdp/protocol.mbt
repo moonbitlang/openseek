@@ -33,7 +33,9 @@ fn[T : @json.FromJson] optional(json : Json, key : String) -> T? raise {
 }
 
 ///|
-pub struct BackendNodeId(Int32) derive(Debug, Eq)
+/// The browser's id for a DOM node. Callers make one from an id the browser
+/// reported earlier, such as a snapshot's `ref`.
+pub(all) struct BackendNodeId(Int32) derive(Debug, Eq)
 
 ///|
 pub struct RemoteObjectId(String) derive(Debug, Eq)

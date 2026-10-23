@@ -151,10 +151,10 @@ for (const broadcastDirectory of [true, false]) {
     await expect(page.locator('#transcript')).toContainText('Browser result');
     await expect(page.getByText('Scheduled task · Read only while running', { exact: true })).toBeVisible();
     await expect(page.locator('textarea#task')).toHaveCount(0);
-    const submissionsBefore = app.requests.filter(r => ['agent.start', 'agent.send', 'agent.goal'].includes(r.method)).length;
+    const submissionsBefore = app.requests.filter(r => ['agent.start', 'agent.command'].includes(r.method)).length;
     await page.keyboard.press('Enter');
     await page.keyboard.press('Control+Enter');
-    expect(app.requests.filter(r => ['agent.start', 'agent.send', 'agent.goal'].includes(r.method)).length).toBe(submissionsBefore);
+    expect(app.requests.filter(r => ['agent.start', 'agent.command'].includes(r.method)).length).toBe(submissionsBefore);
     const readsBefore = app.requests.filter(r => r.method === 'session.load').length;
     let sequence = Math.max(...app.sessionEvents.map(e => e.sequence));
     for (const content of ['Automatic live update one', 'Automatic live update two']) {

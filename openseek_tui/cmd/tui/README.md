@@ -40,13 +40,18 @@ Killing the engine (a second Ctrl-C, or a quit that the engine does not drain
 within two seconds) first asks it to stop — SIGTERM on Unix, CTRL_BREAK on
 Windows — and force-kills it five seconds later if it is still running. On
 Unix `moonx` `exec`s `moonrun`, so the spawned process *is* the engine. On
-Windows `moonx` runs `moonrun` as a child instead, so the UI places each engine
-in its own Job Object and terminates that job as soon as the spawned process
-exits: a killed `moonx` takes `moonrun` and everything it started with it, and
-none of them keeps the engine's pipes, session lock, or log open. Containment
+Windows `moonx` runs `moonrun` as a child instead. The native UI places each
+engine in its own Job Object and terminates that job as soon as the spawned
+process exits: a killed `moonx` takes `moonrun` and everything it started with
+it, and none of them keeps the engine's pipes, session lock, or log open. Containment
 is best effort; if the job cannot be created, only the spawned process is
 killed. The mechanism lives in
 [`internal/process_tree`](internal/process_tree/README.mbt.md).
+
+The wasm build uses `moonrun`'s process cancellation directly. It cannot call
+the native Windows Job Object helper, so it only guarantees termination of
+the spawned process. On Windows, use the native build when the engine is a
+launcher whose descendants need to be terminated with it.
 
 A custom or recorded-stream engine (`--engine`) speaks the same protocol: it
 is spawned as `<engine> serve --session=<id> --session-root=<root>
@@ -55,8 +60,11 @@ It may exit after answering a prompt: once its turn's terminal event has
 arrived, an engine exit is not an error, and the next prompt starts a fresh
 one on the same session.
 
-Because the UI takes over the terminal, launching it without a TTY (a pipe, CI
-log, or cron) is refused with a pointer to `openseek run` / `openseek serve`.
+The UI opens the controlling terminal directly through `Tty::open()`. Its
+input and drawing are independent of stdin/stdout, so redirecting those
+streams still allows interaction when a controlling terminal is available.
+If the terminal cannot be opened, the command reports the failure on stderr
+and exits nonzero. Use `openseek run` / `openseek serve` for headless work.
 
 From the source tree, `moon run cmd/openseek_tui` uses the same `moonx`
 default, so it needs no engine build of its own; pass `--engine <path>` to try a

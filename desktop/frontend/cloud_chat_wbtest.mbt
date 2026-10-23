@@ -34,11 +34,29 @@ fn integrated_cloud_model() -> Model {
     test_dispatch(),
     CloudAction(
       @cloud.Loaded(3, "cloud-a", request, {
+        session: {
+          version: None,
+          id: None,
+          system_prompt: None,
+          events: Some([
+            {
+              sequence: 1,
+              ts: Some(100),
+              item: @protocol.Assistant({
+                content: "Cloud answer",
+                reasoning_content: None,
+                tool_calls: None,
+                is_replay: None,
+              }),
+            },
+          ]),
+        },
         messages: [
           {
             task_id: "finished-task",
             kind: "assistant_message",
             data: { "content": "Cloud answer" },
+            engine_sequence: None,
             created_at: 100,
           },
         ],
@@ -303,9 +321,13 @@ test "Cloud uses the existing composer and transcript without a host workspace" 
   assert_true(input.root is Some({ scheme: "openseek-cloud", .. }))
   assert_false(input.shell_available)
   assert_true(input.presentation.images_enabled)
+  assert_eq(input.slash_commands.map(command => command.command), [
+    "compact", "goal", "ultrareview", "simplify",
+  ])
   assert_true(
-    input.slash_commands.is_empty() && input.installed_skills.is_empty(),
+    input.slash_commands == test_model().composer_input().slash_commands,
   )
+  assert_true(input.installed_skills.is_empty())
   assert_true(model.transcript_slot() is Some(CloudTranscriptSlot(_)))
   assert_eq(model.selected_conversation_title(), "Cloud conversation")
   assert_true(model.quote_screen() is Some(ChatQuote))
@@ -372,6 +394,12 @@ test "same-account sign-out retires old composer actions, while the new entry ca
     test_dispatch(),
     CloudAction(
       @cloud.Loaded(epoch, "cloud-a", request, {
+        session: {
+          version: None,
+          id: None,
+          system_prompt: None,
+          events: Some([]),
+        },
         messages: [],
         generating: false,
       }),

@@ -110,3 +110,27 @@ test "share request requires explicit authority and rejects account tokens as up
     assert_true(result is Err(_))
   }
 }
+
+///|
+test "file share requests preserve owner-side paths and explicit upload authority" {
+  let request : @protocol.FileSharePayload = {
+    source: { root: Some("/workspace"), path: "docs/报告.bin", },
+    idempotency_key: "a".repeat(64),
+    authorization: UploadGrant(upload_token="sug_fixture"),
+  }
+  let decoded : @protocol.FileSharePayload = @json.from_json(request.to_json())
+  assert_true(decoded == request)
+  for key in ["source", "idempotency_key", "authorization"] {
+    let invalid : Map[String, Json] = {
+      "source": request.source.to_json(),
+      "idempotency_key": Json(request.idempotency_key),
+      "authorization": request.authorization.to_json(),
+    }
+    invalid.remove(key)
+    try (@json.from_json(Json(invalid)) : @protocol.FileSharePayload) catch {
+      JsonDecodeError(_) => ()
+    } noraise {
+      _ => fail("missing share request field must be rejected")
+    }
+  }
+}

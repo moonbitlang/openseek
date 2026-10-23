@@ -221,10 +221,10 @@ async fn request_spawn(
 /// exactly as the next prompt would. The engine reports the real progress
 /// (started/finished/failed) through its event stream; this op only confirms
 /// the command reached a live engine.
-pub async fn compact_run(
+async fn submit_compaction(
   manager : EngineManager,
-  payload : @protocol.CompactPayload,
-) -> CompactReply {
+  payload : @protocol.SessionCommandSettings,
+) -> Unit {
   // Read the user's MCP configuration before the lifecycle lock, never under
   // it: the lock serializes every conversation's placement, and a slow home
   // directory must not hold all of them up.
@@ -254,11 +254,11 @@ pub async fn compact_run(
   // queued command. The next start applies the new fingerprint after both
   // settle.
   let replacement = match slot.live() {
-    None => Some(compact_config(manager, payload, mcp_config?))
+    None => Some(session_command_config(manager, payload, mcp_config?))
     Some(live) =>
       match live.phase {
         Idle(..) => {
-          let config = compact_config(manager, payload, mcp_config?)
+          let config = session_command_config(manager, payload, mcp_config?)
           if live.spec_key != engine_fingerprint(config) {
             Some(config)
           } else {
@@ -305,42 +305,114 @@ pub async fn compact_run(
     raise EngineError("engine changed before compaction was submitted")
   }
   live.phase = compacting_phase
-  { compacting: true, }
 }
 
 ///|
-/// Set or clear a conversation's standing goal: durable session state on the
-/// serve engine, addressed by session id like compaction. A conversation with
-/// no live engine (resumed after a restart, or whose process died between
-/// turns) gets one spawned on the durable session first. Unlike compaction
-/// the command is welcome in every phase — the serve engine appends it while
-/// idle, steers it into an open turn at a batch-safe boundary, and holds its
-/// wire-order position behind a queued compaction — so this op never gates on
-/// phase. The engine confirms through the durable `[goal]` marker commit;
-/// this op only confirms the command was accepted by a live engine's writer.
-pub async fn goal_run(
+/// Native commands share the existing per-session writer and lifecycle checks.
+/// Turn commands delegate to their existing admission operations.
+pub async fn session_command(
+  sink : EventSink,
   manager : EngineManager,
-  payload : @protocol.GoalPayload,
-) -> GoalReply {
-  let goal = if payload.text is Some(text) {
-    let text = text.trim().to_owned()
-    guard !text.is_empty() else {
-      raise EngineError("goal text must not be empty")
+  payload : @protocol.SessionCommandPayload,
+) -> @protocol.SessionCommandReply {
+  let settings = payload.settings
+  match payload.command {
+    Compact => {
+      submit_compaction(manager, settings)
+      { accepted: true, }
     }
-    Some(text)
-  } else {
-    None
+    GoalSet(text~, auto~) => {
+      guard !auto else {
+        raise EngineError("autonomous goal continuation is not supported yet")
+      }
+      guard !text.trim().is_empty() else {
+        raise EngineError("goal text must not be empty")
+      }
+      submit_session_command(
+        manager,
+        settings,
+        GoalSet(text=text.trim().to_owned(), auto=false),
+      )
+    }
+    Prompt(content~, submission_id~) => {
+      let reply = start_run(sink, manager, {
+        moonbit_guide: settings.moonbit_guide,
+        session: settings.session,
+        task: content.text(),
+        images: command_images(content),
+        submission_id,
+        model: settings.model,
+        thinking: settings.thinking,
+        approval: settings.approval,
+        max_steps: settings.max_steps,
+        workspace: settings.workspace,
+      })
+      { accepted: reply.status == "accepted", }
+    }
+    Steer(content~, submission_id~) => {
+      require_command_run(manager, payload)
+      let reply = steer_run(manager, {
+        text: content.text(),
+        images: command_images(content),
+        submission_id,
+        run_id: payload.run_id,
+      })
+      guard reply.steered else {
+        raise EngineError("the engine did not accept steering")
+      }
+      { accepted: true, }
+    }
+    Cancel => {
+      require_command_run(manager, payload)
+      let reply = cancel_run(manager, { run_id: payload.run_id, })
+      guard reply.run_id is Some(_) else {
+        raise EngineError("the target turn has ended")
+      }
+      { accepted: true, }
+    }
+    ApprovalDecision(id~, allow~) => {
+      require_command_run(manager, payload)
+      let reply = approve_run(manager, { id, allow, run_id: payload.run_id, })
+      guard reply.delivered else {
+        raise EngineError("the approval is no longer pending")
+      }
+      { accepted: true, }
+    }
+    command => submit_session_command(manager, settings, command)
   }
-  // Arming is not wired end to end. Serve announces the turns autonomous
-  // continuation starts with `GoalContinue`, which this host drops, so its
-  // phase stays Idle through one — and `start_run`, whose only gate is that
-  // phase, would hand the same engine to a prompt the autonomous turn's
-  // terminal event then settles. Refuse the capability here rather than
-  // trusting clients to ask for manual: this endpoint serves the relay, not
-  // only this app's own page.
-  guard !(payload.auto is Some(true)) else {
-    raise EngineError("autonomous goal continuation is not supported yet")
+}
+
+///|
+fn command_images(content : @wire.Content) -> Array[String] {
+  content
+  .iter()
+  .filter_map(part => {
+    match part {
+      Image(image) => Some(image.data_url())
+      _ => None
+    }
+  })
+  .collect()
+}
+
+///|
+fn require_command_run(
+  manager : EngineManager,
+  payload : @protocol.SessionCommandPayload,
+) -> Unit raise EngineError {
+  guard payload.run_id is Some(run_id) &&
+    open_run_engine(manager, run_id~) is Some(live) &&
+    live.session_key == payload.settings.session.trim().to_owned() else {
+    raise EngineError("the target turn is not running in this conversation")
   }
+}
+
+///|
+async fn submit_session_command(
+  manager : EngineManager,
+  settings : @protocol.SessionCommandSettings,
+  command : @wire.Command,
+) -> @protocol.SessionCommandReply {
   // Read the user's MCP configuration before the lifecycle lock, never under
   // it: the lock serializes every conversation's placement, and a slow home
   // directory must not hold all of them up.
@@ -348,9 +420,9 @@ pub async fn goal_run(
   manager.workspace_lifecycle_lock.acquire()
   let mut placement_locked = true
   defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
-  let session = payload.session.trim().to_owned()
+  let session = settings.session.trim().to_owned()
   // Checked before the slot lookup, not inside the spawn path: an engine
-  // already accepting on this key skips `goal_config` and its guard. Reject
+  // already accepting on this key skips `session_command_config` and its guard. Reject
   // malformed requests at the public operation boundary as well.
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
@@ -360,10 +432,10 @@ pub async fn goal_run(
   @session_store.ensure_not_archived(session)
   let sessions = manager.serving()
   let slot = slot_for(sessions, session)
-  // Claim before looking at the engine, exactly as compact_run does: this op
+  // Claim before looking at the engine, exactly as submit_compaction does: this op
   // may have to spawn one, and a start accepted during that wait could replace
   // the live process and lose the command in the dying engine's stdin.
-  let claim = slot.claim(sessions, session, GoalPending)
+  let claim = slot.claim(sessions, session, CommandPending)
   defer claim.release(manager)
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
@@ -373,11 +445,11 @@ pub async fn goal_run(
   // endpoint settings are therefore not resolved in that active path; the
   // next idle start applies their fingerprint.
   let replacement = match slot.live() {
-    None => Some(goal_config(manager, payload, mcp_config?))
+    None => Some(session_command_config(manager, settings, mcp_config?))
     Some(live) =>
       match live.phase {
         Idle(..) => {
-          let config = goal_config(manager, payload, mcp_config?)
+          let config = session_command_config(manager, settings, mcp_config?)
           if live.spec_key != engine_fingerprint(config) {
             Some(config)
           } else {
@@ -395,23 +467,15 @@ pub async fn goal_run(
   guard slot.live() is Some(live) else {
     raise EngineError("engine failed to start")
   }
-  let command = if goal is Some(text) {
-    @protocol.goal_set(text, auto=payload.auto is Some(true))
-  } else {
-    @protocol.goal_clear()
-  }
-  // The one command that must be acknowledged. A prompt or a compaction that
-  // never reaches stdin is reported by its run's lifecycle events, and a steer
-  // by its receipt or the run's durable recovery; a goal has neither. Its only
-  // other confirmation is the durable `[goal]` marker, so a dropped goal would
-  // leave the client believing a set or clear succeeded that never happened.
+  // Session commands have no chatting lifecycle to report an unwritten
+  // command. Confirm the writer handoff, never infer native completion from it.
   let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
   guard live.submit(
     command,
-    failure_reason="failed to write the goal command",
+    failure_reason="failed to write the session command",
     ack~,
   ) else {
-    raise EngineError("engine changed before the goal was submitted")
+    raise EngineError("engine changed before the session command was submitted")
   }
   // Affordable precisely because nothing above went public: no phase
   // transition, no event. A cancellation landing on this wait leaves nothing
@@ -419,7 +483,7 @@ pub async fn goal_run(
   if ack.get() is Some(error) {
     raise error
   }
-  { delivered: true, }
+  { accepted: true, }
 }
 
 ///|
@@ -979,6 +1043,7 @@ fn test_start_payload(
   submission_id? : String,
 ) -> @protocol.StartPayload {
   {
+    moonbit_guide: None,
     images: [],
     task,
     submission_id,
@@ -1084,7 +1149,7 @@ async test "start echoes the client submission id in Started" {
 /// must arrive when the command reaches stdin — otherwise the op hangs — and
 /// must not arrive when it does not.
 #cfg(not(platform="windows"))
-async test "a goal is delivered only once its command is on the wire" {
+async test "native commands share writer delivery and preserve turn ownership" {
   let dir = @fs.tmpdir(prefix="openseek-goal-ack-")
   defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
@@ -1100,6 +1165,7 @@ async test "a goal is delivered only once its command is on the wire" {
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
   let received = root.join("received")
+  let launch_args = root.join("launch-args")
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(
     runtime.join("toolchains/moonbit/macos-arm64"),
@@ -1109,7 +1175,7 @@ async test "a goal is delivered only once its command is on the wire" {
   // goal really left the host rather than only that the op returned.
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nprintf '%s\\n' \"$*\" >> '\{launch_args}';\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1117,25 +1183,107 @@ async test "a goal is delivered only once its command is on the wire" {
   let manager = actor.manager()
   configure_custom_provider(manager)
   let session = "s-" + mint_run_id()
-  let sink = EventSink(_ => ())
+  let active : Ref[String?] = Ref(None)
+  let sink = EventSink(event => {
+    if event is Started(payload) {
+      active.val = Some(payload.run_id)
+    }
+  })
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
-    let delivered = goal_run(manager, {
+    let settings : @protocol.SessionCommandSettings = {
+      moonbit_guide: Some(false),
       session,
-      text: Some("keep the build green"),
-      auto: None,
       model: None,
       thinking: None,
       approval: None,
       max_steps: None,
       workspace: Some(workspace),
-    })
-    assert_true(delivered.delivered)
+    }
+    for
+      command in (
+        [
+          GoalSet(text="keep the build green", auto=false),
+          GoalClear,
+          JobsSnapshot(request_id="native-request"),
+        ] : Array[@wire.Command]) {
+      assert_true(
+        session_command(sink, manager, { settings, command, run_id: None, }).accepted,
+      )
+    }
+    assert_true(
+      session_command(sink, manager, {
+        settings,
+        run_id: None,
+        command: Prompt(
+          content=Content([Text("native prompt")]),
+          submission_id=Some("native-prompt"),
+        ),
+      }).accepted,
+    )
+    let run_id = active.val.unwrap()
+    for (scope, target) in [(session, "old-run"), ("other-session", run_id)] {
+      let refused = try {
+        ignore(
+          session_command(sink, manager, {
+            settings: { ..settings, session: scope, },
+            run_id: Some(target),
+            command: Cancel,
+          }),
+        )
+        false
+      } catch {
+        EngineError(_) => true
+        _ => false
+      }
+      assert_true(refused)
+    }
+    assert_true(
+      session_command(sink, manager, {
+        settings,
+        run_id: Some(run_id),
+        command: Steer(
+          content=Content([Text("native steer")]),
+          submission_id=Some("native-steer"),
+        ),
+      }).accepted,
+    )
+    assert_true(
+      session_command(sink, manager, {
+        settings,
+        run_id: Some(run_id),
+        command: Cancel,
+      }).accepted,
+    )
+    assert_true(
+      session_command(sink, manager, {
+        settings,
+        run_id: Some(run_id),
+        command: Compact,
+      }).accepted,
+    )
+    let refused = try {
+      ignore(
+        session_command(sink, manager, {
+          settings,
+          command: Compact,
+          run_id: None,
+        }),
+      )
+      false
+    } catch {
+      EngineError(_) => true
+      _ => false
+    }
+    assert_true(refused)
     // The reply already means the bytes left this host, so the child has them
     // or is about to; only its append is asynchronous.
     assert_true(
       @async.with_timeout_opt(3000, () => {
-        while !@fsx.exists(received) {
+        while !@fsx.exists(received) ||
+              !@fs.read_file(received.to_string())
+              .text()
+              .contains("\"command\":\"compact\"") {
           @async.sleep(1)
         }
       })
@@ -1146,6 +1294,48 @@ async test "a goal is delivered only once its command is on the wire" {
       .text()
       .contains("keep the build green"),
     )
+    let lines = [
+      for line in @fs.read_file(received.to_string()).text().trim().split("\n") => {
+        @json.parse(line)
+      }
+    ]
+    assert_eq(lines.length(), 7)
+    assert_true(lines[1] is { "command": "goal", "action": "clear", .. })
+    assert_true(
+      lines[2]
+      is { "command": "jobs_snapshot", "request_id": "native-request", .. },
+    )
+    assert_true(
+      lines[3] is { "command": "prompt", "submission_id": "native-prompt", .. },
+    )
+    assert_true(
+      lines[4] is { "command": "steer", "submission_id": "native-steer", .. },
+    )
+    assert_true(lines[5] is { "command": "cancel", .. })
+    assert_true(lines[6] is { "command": "compact", .. })
+    // A goal and a first prompt can each create the session's engine. Both
+    // must preserve the draft's creation choice through the shared command API.
+    assert_true(
+      session_command(sink, manager, {
+        settings: { ..settings, session: session + "-prompt", },
+        run_id: None,
+        command: Prompt(
+          content=Content([Text("first native prompt")]),
+          submission_id=Some("first-native-prompt"),
+        ),
+      }).accepted,
+    )
+    @async.with_timeout(3000, () => {
+      while !@fsx.exists(launch_args) ||
+            @fsx.read_text(launch_args).trim().split("\n").count() < 2 {
+        @async.sleep(1)
+      }
+    })
+    let launches = @fsx.read_text(launch_args).trim().split("\n").collect()
+    assert_eq(launches.length(), 2)
+    for args in launches {
+      assert_true(args.contains("--moonbit-guide=off"))
+    }
     group.return_immediately(())
   })
 }
@@ -1750,43 +1940,40 @@ async test "workspace detach drains an idle writer and its follower first" {
 /// needed — reaching a live engine is precisely what they must prevent.
 async test "a goal request is refused before it can reach the wrong engine" {
   let manager = new_engine_manager("/nonexistent/engine")
-  async fn refusal(payload : @protocol.GoalPayload) -> String {
+  async fn refusal(command : @wire.Command) -> String {
     try {
-      ignore(goal_run(manager, payload))
+      ignore(
+        session_command(EventSink(_ => ()), manager, {
+          command,
+          run_id: None,
+          settings: {
+            moonbit_guide: None,
+            session: "s-goal",
+            model: None,
+            thinking: None,
+            approval: None,
+            max_steps: None,
+            workspace: None,
+          },
+        }),
+      )
       "no error"
     } catch {
       EngineError(detail) => detail
       error => "\{error}"
     }
   }
-
-  // Arming is not wired end to end, and this endpoint serves the relay: a
-  // remote client must not be able to ask for what the app's own page no
-  // longer offers.
   assert_true(
-    refusal({
-      session: "s-armed",
-      text: Some("ship it"),
-      auto: Some(true),
-      model: None,
-      thinking: None,
-      approval: None,
-      max_steps: None,
-      workspace: None,
-    }).contains("autonomous goal continuation is not supported yet"),
+    refusal(GoalSet(text="ship it", auto=true)).contains(
+      "autonomous goal continuation is not supported yet",
+    ),
   )
-  // Manual, named: past the refusal and on to the engine, which is where a
-  // nonexistent binary makes itself known.
+  assert_true(
+    refusal(GoalSet(text="  ", auto=false)).contains(
+      "goal text must not be empty",
+    ),
+  )
   assert_false(
-    refusal({
-      session: "s-named",
-      text: Some("ship it"),
-      auto: None,
-      model: None,
-      thinking: None,
-      approval: None,
-      max_steps: None,
-      workspace: None,
-    }).contains("not supported yet"),
+    refusal(GoalSet(text="ship it", auto=false)).contains("not supported yet"),
   )
 }

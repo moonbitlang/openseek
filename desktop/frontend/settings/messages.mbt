@@ -79,6 +79,8 @@ pub(all) enum Message {
   Preferences
   Interface
   Engine
+  MoonBitGuide
+  MoonBitGuideDescription
   MaxSteps
   MaxStepsDescription
   Followup
@@ -644,6 +646,21 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, Interface) => "界面"
     (TraditionalChinese, Interface) => "介面"
     (Japanese, Interface) => "インターフェース"
+    (English, MoonBitGuide) => "MoonBit guide"
+    (English, MoonBitGuideDescription) =>
+      "Enable the MoonBit syntax guide for new chats only."
+    (SimplifiedChinese, MoonBitGuide) => "MoonBit 指南"
+    (SimplifiedChinese, MoonBitGuideDescription) =>
+      "启用 MoonBit 语法指南，只对新对话有效"
+    (TraditionalChinese, MoonBitGuide) => "MoonBit 指南"
+    (TraditionalChinese, MoonBitGuideDescription) =>
+      "啟用 MoonBit 語法指南，只對新對話有效"
+    (Japanese, MoonBitGuide) => "MoonBit ガイド"
+    (Japanese, MoonBitGuideDescription) =>
+      "MoonBit 構文ガイドを有効にします。新しいチャットにのみ適用されます。"
+    (Spanish, MoonBitGuide) => "Guía de MoonBit"
+    (Spanish, MoonBitGuideDescription) =>
+      "Activa la guía de sintaxis de MoonBit solo para nuevos chats."
     (English, Engine) => "Engine"
     (Spanish, Engine) => "Motor"
     (SimplifiedChinese, Engine) => "引擎"

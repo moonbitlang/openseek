@@ -39,6 +39,13 @@ each fresh page loads the smaller production bundle. Local `just test-browser`
 keeps the debug bundle for diagnosis. Both use the same static-server script
 compiled for native release to avoid Wasm transfer overhead.
 
+CI runs the browser tests in the official Playwright image, which includes
+Chromium, WebKit, and their system dependencies. Keep `PLAYWRIGHT_IMAGE` in
+`.github/workflows/desktop.yml` at the same version as `@playwright/test` in
+`package.json` and `package-lock.json`. The frontend build and native static
+server stay on the Ubuntu runner; the container reuses that server through
+the host network, so it needs no MoonBit or C toolchain installation.
+
 Prefer accessible roles, labels, and visible text. Use classes only for
 product DOM whose presentation contract is itself under test. Mock network
 traffic with Playwright routes and use retrying assertions instead of fixed

@@ -3,9 +3,16 @@
 ///
 /// Supported DeepSeek, Kimi, and GLM model names currently share the one
 /// built-in prompt: the working instructions in `default_prompt.mbt.md`,
-/// followed by the teaching material in `moonbit_syntax_and_api.mbt.md`.
-pub fn system_prompt_for_model(_model : @deepseek.Model) -> String {
-  default_prompt() + "\n\n" + moonbit_syntax_and_api()
+/// followed by the optional teaching material in `moonbit_syntax_and_api.mbt.md`.
+pub fn system_prompt_for_model(
+  _model : @deepseek.Model,
+  moonbit_guide~ : Bool = true,
+) -> String {
+  if moonbit_guide {
+    default_prompt() + "\n\n" + moonbit_syntax_and_api()
+  } else {
+    default_prompt()
+  }
 }
 
 ///|
@@ -21,4 +28,12 @@ test "system_prompt_for_model includes working instructions and language guide f
   let expected = default_prompt() + "\n\n" + moonbit_syntax_and_api()
   assert_eq(system_prompt_for_model(Deepseek(V4Flash)), expected)
   assert_eq(system_prompt_for_model(Deepseek(V4Pro)), expected)
+}
+
+///|
+test "disabling the MoonBit guide preserves the working instructions" {
+  assert_eq(
+    system_prompt_for_model(Deepseek(V4Pro), moonbit_guide=false),
+    default_prompt(),
+  )
 }

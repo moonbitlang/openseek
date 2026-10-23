@@ -14,15 +14,33 @@ pub(all) struct ToolCall {
 }
 
 ///|
+/// One block of what a tool answers with, as MCP's `content` carries it.
+pub(all) enum Content {
+  Text(String)
+  // An image as base64 `data` of type `mime` (`image/png`, ...).
+  Image(mime~ : String, data~ : String)
+}
+
+///|
 /// One tool this host offers to the agents it runs.
 pub(all) struct Tool {
   name : String
   description : String
   // The JSON Schema of `arguments`, sent as `inputSchema`.
   input_schema : Json
-  // Returns the text the model reads. Raising makes the call a tool-level
-  // failure (`isError`), which the model also reads and can react to.
-  call : async (ToolCall) -> String
+  // Returns what the model reads, in order. Raising makes the call a
+  // tool-level failure (`isError`), which the model also reads and can
+  // react to.
+  call : async (ToolCall) -> Array[Content]
+}
+
+///|
+impl ToJson for Content with fn to_json(self) {
+  match self {
+    Text(text) => { "type": "text", "text": Json(text) }
+    Image(mime~, data~) =>
+      { "type": "image", "data": Json(data), "mimeType": Json(mime) }
+  }
 }
 
 ///|

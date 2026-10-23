@@ -39,7 +39,7 @@ fn ApiState::question_tools(self : ApiState) -> Array[@mcp.Tool] {
         }
         let entry = self.questions.request(call.session, payload)
         self.publish(UserQuestions(self.questions.snapshot()))
-        self.questions.wait(entry).stringify()
+        [Text(self.questions.wait(entry).stringify())]
       },
     },
   ]

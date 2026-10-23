@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, authOrigin } from './support/cloud_harness.js';
 
 // Exercise the browser packager's normal HTML, CSS and frontend bundle.
 // Only the remote account and host responses contain fixture data.
@@ -100,29 +99,6 @@ test('a device page whose roster failed can retry', async ({ page }) => {
   await expect(page.getByRole('main').getByText(/HTTP 502/)).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
-
-test('browser Chat sends Cloud messages without selecting or connecting a device', async ({ page }, info) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install();
-  await page.goto(`${authOrigin}/cloud`);
-  await expect(page.getByRole('main').getByRole('heading', { name: 'Cloud', level: 2, exact: true })).toBeVisible();
-  await page.screenshot({ path: info.outputPath('chat-home-signed-in.png') });
-  await page.getByRole('main').getByRole('button', { name: 'New chat', exact: true }).click();
-  await expect(page.locator('#task')).toBeVisible();
-  await page.locator('#task').fill('Cloud message from my phone');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
-  await expect(page.locator('#task')).toHaveValue('');
-  await page.locator('#task').fill('Unsent Cloud follow-up');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  expect(cloud.postCount).toBe(1);
-  expect(cloud.device.ticketRequests).toHaveLength(0);
-  expect(cloud.device.socket).toBeNull();
-  expect(cloud.device.pageErrors).toEqual([]);
-  await assertFits(page);
-  await page.screenshot({ path: info.outputPath('cloud-phone.png') });
-});
-
 
 test('Chat is the signed-out launch page and a saved Work preference cannot replace it', async ({ page }, info) => {
   const app = await installConsole(page);

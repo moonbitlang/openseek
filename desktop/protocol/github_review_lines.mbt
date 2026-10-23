@@ -34,9 +34,7 @@ pub fn GithubReview::can_comment(
   line : Int32,
 ) -> Bool {
   line > 0 &&
-  self.commentable
-  .iter()
-  .any(file => {
+  self.commentable.any(file => {
     file.path == path &&
     (if original { file.left_lines } else { file.right_lines }).contains(line)
   })

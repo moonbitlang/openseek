@@ -29,6 +29,7 @@ fn JsonObject::optional_approval(
 pub impl FromJson for StartPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.start payload")
   {
+    moonbit_guide: object.optional_bool("moonbit_guide"),
     task: object.required_string("task"),
     images: object.required_string_array("images"),
     submission_id: object.optional_string("submission_id"),
@@ -50,6 +51,9 @@ pub impl ToJson for StartPayload with fn to_json(self) {
   }
   if self.submission_id is Some(submission_id) {
     fields["submission_id"] = Json(submission_id)
+  }
+  if self.moonbit_guide is Some(enabled) {
+    fields["moonbit_guide"] = Json(enabled)
   }
   if self.model is Some(model) {
     fields["model"] = Json(model)
@@ -125,9 +129,10 @@ pub impl ToJson for QueuePayload with fn to_json(self) {
 }
 
 ///|
-pub impl FromJson for CompactPayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "agent.compact payload")
+pub impl FromJson for SessionCommandSettings with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session command settings")
   {
+    moonbit_guide: object.optional_bool("moonbit_guide"),
     session: object.required_string("session"),
     model: object.optional_string("model"),
     thinking: object.optional_thinking("thinking"),
@@ -138,49 +143,10 @@ pub impl FromJson for CompactPayload with fn from_json(json, path) {
 }
 
 ///|
-pub impl ToJson for CompactPayload with fn to_json(self) {
+pub impl ToJson for SessionCommandSettings with fn to_json(self) {
   let fields : Map[String, Json] = { "session": Json(self.session) }
-  if self.model is Some(model) {
-    fields["model"] = Json(model)
-  }
-  if self.thinking is Some(thinking) {
-    fields["thinking"] = thinking.to_json()
-  }
-  if self.approval is Some(approval) {
-    fields["approval"] = approval.to_json()
-  }
-  if self.max_steps is Some(max_steps) {
-    fields["max_steps"] = Json(max_steps)
-  }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = Json(workspace)
-  }
-  Json(fields)
-}
-
-///|
-pub impl FromJson for GoalPayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "agent.goal payload")
-  {
-    session: object.required_string("session"),
-    text: object.optional_string("text"),
-    auto: object.optional_bool("auto"),
-    model: object.optional_string("model"),
-    thinking: object.optional_thinking("thinking"),
-    approval: object.optional_approval("approval"),
-    max_steps: object.optional_int("max_steps"),
-    workspace: object.optional_string("workspace"),
-  }
-}
-
-///|
-pub impl ToJson for GoalPayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "session": Json(self.session) }
-  if self.text is Some(text) {
-    fields["text"] = Json(text)
-  }
-  if self.auto is Some(auto) {
-    fields["auto"] = Json(auto)
+  if self.moonbit_guide is Some(enabled) {
+    fields["moonbit_guide"] = Json(enabled)
   }
   if self.model is Some(model) {
     fields["model"] = Json(model)
@@ -289,22 +255,21 @@ pub impl ToJson for ApprovalReply with fn to_json(self) {
 /// with nothing in flight sends.
 pub impl FromJson for RunsReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.runs reply")
-  let runs : Array[StartedPayload] = []
-  for index, raw in object.required_array("runs") {
-    runs.push(@json.from_json(raw, path=path.add_key("runs").add_index(index)))
-  }
-  let settled : Array[RunSettlementPayload] = []
-  for index, raw in object.required_array("settled") {
-    settled.push(
-      @json.from_json(raw, path=path.add_key("settled").add_index(index)),
-    )
-  }
-  let approvals : Array[PendingApprovalPayload] = []
-  for index, raw in object.required_array("approvals") {
-    approvals.push(
-      @json.from_json(raw, path=path.add_key("approvals").add_index(index)),
-    )
-  }
+  let runs : Array[StartedPayload] = [
+    for index, raw in object.required_array("runs") => {
+      @json.from_json(raw, path=path.add_key("runs").add_index(index))
+    }
+  ]
+  let settled : Array[RunSettlementPayload] = [
+    for index, raw in object.required_array("settled") => {
+      @json.from_json(raw, path=path.add_key("settled").add_index(index))
+    }
+  ]
+  let approvals : Array[PendingApprovalPayload] = [
+    for index, raw in object.required_array("approvals") => {
+      @json.from_json(raw, path=path.add_key("approvals").add_index(index))
+    }
+  ]
   let approval_generation = object.required_int("approval_generation")
   guard approval_generation >= 0 else {
     raise JsonDecodeError((path, "negative approval generation"))

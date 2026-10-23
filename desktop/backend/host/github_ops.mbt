@@ -78,8 +78,8 @@ async fn git_pull_request_op(
         exact.push(branch.to_owned())
       }
     }
-    if exact.length() == 1 {
-      head = Some(exact[0])
+    if exact is [only] {
+      head = Some(only)
     }
   }
   let branch = head.unwrap_or(checkout)

@@ -72,6 +72,8 @@ pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
 
 ///|
 pub(all) struct StartPayload {
+  // Creation-only choice. None retains the built-in default; saved sessions keep their prompt.
+  moonbit_guide : Bool?
   // Original images as data URLs. The engine persists the bytes before upload.
   images : Array[String]
   task : String
@@ -151,30 +153,10 @@ pub(all) struct RunsPayload {
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct CompactPayload {
-  // Compaction addresses a durable conversation rather than a live run.
+pub(all) struct SessionCommandSettings {
+  moonbit_guide : Bool?
+  // Native commands address a durable conversation; run-bound commands also carry a run ID.
   session : String
-  // A resumed conversation may need a new engine process with these settings.
-  model : String?
-  thinking : OpenSeekThinking?
-  // Who answers the engine's permission questions; absent means ask.
-  approval : OpenSeekApproval?
-  max_steps : Int32?
-  workspace : String?
-} derive(Debug, Eq)
-
-///|
-pub(all) struct GoalPayload {
-  // Like compaction, a standing goal addresses a durable conversation rather
-  // than a live run: the serve engine accepts one in any phase (idle append,
-  // mid-turn steer, queued behind a compaction).
-  session : String
-  // The new standing goal; absent clears it.
-  text : String?
-  // Arms the engine's autonomous continuation for this goal. Optional, and
-  // absent means manual, so a client that predates the toggle still decodes.
-  // Meaningless without `text`: a clear disarms whatever was armed.
-  auto : Bool?
   // A resumed conversation may need a new engine process with these settings.
   model : String?
   thinking : OpenSeekThinking?
@@ -1449,7 +1431,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 1
+pub const HostProtocolRevision : Int32 = 2
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads
@@ -1800,16 +1782,16 @@ pub extend ClearFileSearchCachePayload with Eq::{equal, not_equal}
 pub extend ClearFileSearchCachePayload with ToJson::{to_json}
 
 ///|
-pub extend CompactPayload with Debug::{to_repr}
+pub extend SessionCommandSettings with Debug::{to_repr}
 
 ///|
-pub extend CompactPayload with FromJson::{from_json}
+pub extend SessionCommandSettings with FromJson::{from_json}
 
 ///|
-pub extend CompactPayload with Eq::{equal, not_equal}
+pub extend SessionCommandSettings with Eq::{equal, not_equal}
 
 ///|
-pub extend CompactPayload with ToJson::{to_json}
+pub extend SessionCommandSettings with ToJson::{to_json}
 
 ///|
 pub extend ConnectedPayload with Debug::{to_repr}
@@ -1966,18 +1948,6 @@ pub extend GitPullRequestPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend GitPullRequestPayload with ToJson::{to_json}
-
-///|
-pub extend GoalPayload with Debug::{to_repr}
-
-///|
-pub extend GoalPayload with FromJson::{from_json}
-
-///|
-pub extend GoalPayload with Eq::{equal, not_equal}
-
-///|
-pub extend GoalPayload with ToJson::{to_json}
 
 ///|
 pub extend InstallSkillPayload with Debug::{to_repr}

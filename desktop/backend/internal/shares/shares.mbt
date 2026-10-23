@@ -1,16 +1,18 @@
 ///|
-/// Retain the rendered files and boundary across retries. Multipart writes
-/// bounded chunks through the native HTTP client.
+/// Capture the share content and multipart boundary before upload. Conversation
+/// retries reuse that snapshot; file snapshots retain their original bytes.
 struct Snapshot {
   key : String
   parts : Array[(@http.Headers, String)]
+  file : (String, Bytes)?
 }
 
 ///|
-/// Why a conversation cannot become a share request at all; no upload starts.
+/// Why content cannot become a share request at all; no upload starts.
 pub(all) suberror ShareError {
   EmptyTitle
   Oversized
+  InvalidFilename
 }
 
 ///|
@@ -18,6 +20,7 @@ pub(all) suberror ShareError {
 pub impl Show for ShareError with fn output(self, logger) {
   logger.write_string(
     match self {
+      InvalidFilename => "The filename cannot contain line breaks."
       EmptyTitle => "The conversation title must not be empty."
       Oversized =>
         "This export exceeds the 20 MiB share limit. Use Download instead."
@@ -76,14 +79,14 @@ pub fn Snapshot::Snapshot(
     }
   }
   guard size <= 20 * 1024 * 1024 else { raise Oversized }
-  { key, parts, }
+  { key, parts, file: None, }
 }
 
 ///|
 /// The caller captures its own account credential with the source snapshot.
 /// Never consult a device token or a newer login while retrying publication.
-/// A failed or lost attempt is retried once with the same bytes and key, so
-/// no automatic retry creates a second share or uploads a newer snapshot.
+/// Conversation exports retry a lost attempt with the same bytes and key.
+/// File uploads return the failure without resending the request.
 pub async fn Snapshot::publish(
   self : Snapshot,
   server_url~ : String,
@@ -97,8 +100,14 @@ pub async fn Snapshot::publish(
     })
   }
   attempt(1) catch {
-    _ =>
-      attempt(2) catch {
+    error =>
+      try {
+        if self.file is None {
+          attempt(2)
+        } else {
+          raise error
+        }
+      } catch {
         @async.TimeoutError =>
           @protocol.Failed(
             message="The share request timed out. Please try again.",
@@ -176,5 +185,35 @@ async fn Snapshot::write_body(self : Snapshot, target : &@io.Writer) -> Unit {
       }
     })
   }
+  if self.file is Some((name, bytes)) {
+    let name = name
+      .replace_all(old="\\", new="\\\\")
+      .replace_all(old="\"", new="\\\"")
+    form.write_part(
+      headers={
+        "Content-Disposition": "form-data; name=\"file\"; filename=\"\{name}\"",
+        "Content-Type": "application/octet-stream",
+      },
+      target => target.write(bytes),
+    )
+  }
   form.finish()
+}
+
+///|
+/// File content is already captured by its host. Unlike conversation exports,
+/// file uploads have no client preview limit and are never retried implicitly.
+pub fn Snapshot::file(
+  name~ : String,
+  bytes~ : Bytes,
+  key~ : String,
+) -> Snapshot raise ShareError {
+  guard !name.contains("\r") && !name.contains("\n") else {
+    raise InvalidFilename
+  }
+  {
+    key,
+    parts: [({ "Content-Disposition": "form-data; name=\"title\"" }, name)],
+    file: Some((name, bytes)),
+  }
 }

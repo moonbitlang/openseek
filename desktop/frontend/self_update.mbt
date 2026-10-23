@@ -237,6 +237,6 @@ fn download_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// Whether restarting now would cut a conversation off mid-run.
 fn Model::any_conversation_busy(self : Model) -> Bool {
   self.conversations.any(conv => {
-    conv.is_running() || !(conv.compaction is NotCompacting)
+    conv.is_running() || !(conv.controls.compaction is NotCompacting)
   })
 }

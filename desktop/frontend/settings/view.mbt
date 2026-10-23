@@ -4,6 +4,29 @@
 // used to keep its own copy, so the shape had to be changed three times.
 
 ///|
+/// A controlled on/off switch shared by preference rows and skill enablement.
+pub fn switch_control(
+  enabled~ : Bool,
+  label~ : String,
+  on_click~ : @cmd.Cmd,
+  disabled~ : Bool = false,
+  title? : String,
+) -> @html.Html {
+  @html.button(
+    class="setting-switch",
+    type_="button",
+    title=title.unwrap_or(label),
+    disabled~,
+    on_click~,
+    attrs=@html.Attrs::build()
+      .role("switch")
+      .aria_label(label)
+      .aria_checked(enabled.to_string()),
+    @html.span(class="setting-switch-track", ""),
+  )
+}
+
+///|
 /// One settings row: name and optional description on the left, the control
 /// on the right. `stack=true` drops the control below the text at full
 /// width instead, for free-form fields (URLs, keys) that a narrow right

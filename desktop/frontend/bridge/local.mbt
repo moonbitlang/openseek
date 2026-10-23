@@ -157,7 +157,7 @@ fn LocalBridgeSub::wire(
     }
     scheduler.add((self.dispatch)(MenuCommand(command_id~)))
   })
-  // The notification extension stamps the owning run id in `payload`.
+  // The payload is a local run ID or an account-scoped Cloud conversation key.
   self.subscribe(extension_events, "notification.click", event => {
     guard event_payload(event) is Some(payload) &&
       payload.get("payload") is Some(String(run_id)) &&

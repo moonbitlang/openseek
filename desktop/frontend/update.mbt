@@ -1019,97 +1019,14 @@ fn run_slash_command(
     !conv.is_archived_read_only() else {
     return (@cmd.none, model)
   }
-  match command {
-    "compact" =>
-      // One compaction at a time: a repeat while one is queued or in flight
-      // would stack another behind it in the engine's pending queue (the
-      // host rejects it anyway) — swallow it like any settled command.
-      if !(conv.compaction is NotCompacting) {
-        (@cmd.none, { ..model.replace_conversation({ ..conv, task: "", }), })
-      } else {
-        (
-          compact_openseek(
-            dispatch,
-            model.focused,
-            session=conv.session_id,
-            model=conv.engine_model,
-            reasoning=model.reasoning_for(conv.engine_model),
-            max_steps=model.max_steps,
-            workspace=conv.project(),
-            approval=model.approval_for(conv.device, conv.session_id),
-          ),
-          {
-            ..model.replace_conversation({
-              ..conv,
-              task: "",
-              // Hold the send gate before the host answers: mid-turn the
-              // command queues behind the open run, and an idle request may
-              // sit in the spawn/write window for seconds (a resumed
-              // conversation gets its engine spawned on demand) — a prompt
-              // sent into either gap would be consumed and rejected instead
-              // of held. compaction_started confirms; CompactRejected clears.
-              compaction: if conv.is_running() {
-                Queued
-              } else {
-                Requested
-              },
-            }),
-          },
-        )
-      }
-    "goal" =>
-      (
-        @cmd.none,
-        {
-          ..model.replace_conversation({
-            ..conv,
-            task: "",
-            goal_edit: Some({ draft: conv.goal_draft_seed(), }),
-          }),
-        },
-      )
-    _ => (@cmd.none, model)
+  guard @engine_session.slash_action(command) is Some(action) else {
+    return (@cmd.none, model)
   }
-}
-
-///|
-/// Send one conversation's goal set (`Some`) or clear (`None`) to its engine.
-/// Everything the command needs — session, workspace, launch mode — comes
-/// from that conversation, so it cannot land on whichever one happens to be
-/// active by the time the request goes out.
-fn send_goal(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  conv : Conversation,
-  command : String,
-  text : String?,
-) -> @cmd.Cmd {
-  if conv.goal_creates_worktree() is Some(workspace) {
-    return set_goal_in_new_worktree(
-      locale=model.locale,
-      dispatch,
-      conv.device,
-      conv.session_id,
-      workspace,
-      conv.engine_model,
-      model.reasoning_for(conv.engine_model),
-      model.max_steps,
-      command,
-      text,
-      approval=model.approval_for(conv.device, conv.session_id),
-    )
-  }
-  goal_openseek(
+  apply_engine_action(
     dispatch,
-    conv.device,
-    session=conv.session_id,
-    model=conv.engine_model,
-    reasoning=model.reasoning_for(conv.engine_model),
-    max_steps=model.max_steps,
-    workspace=conv.project(),
-    approval=model.approval_for(conv.device, conv.session_id),
-    command,
-    text,
+    model.replace_conversation({ ..conv, task: "", }),
+    { ..conv, task: "", },
+    action,
   )
 }
 
@@ -1122,6 +1039,10 @@ fn apply_engine_event(
   event : @transcript.EngineEvent,
   event_run_id : String?,
 ) -> (String?, Conversation) {
+  let conv = {
+    ..conv,
+    turn: { ..conv.turn, live: conv.turn.live.event(event), },
+  }
   // A retry notice lasts until the engine reports progress on the request it
   // is retrying; events about other work in the run leave it in place.
   let conv = if event.ends_retry() {
@@ -1169,71 +1090,10 @@ fn apply_engine_event(
         },
       )
     }
-    AssistantDelta(content) =>
-      if content.is_empty() {
-        (None, conv)
-      } else {
-        let conv = conv.complete_reasoning()
-        let carried = conv.turn.streaming_response.unwrap_or("")
-        (
-          None,
-          {
-            ..conv,
-            turn: { ..conv.turn, streaming_response: Some(carried + content), },
-          },
-        )
-      }
-    ReasoningDelta(content) =>
-      if content.is_empty() ||
-        conv.turn.live_reasoning is Some({ complete: true, .. }) {
-        // A completed semantic event is the boundary. A delayed fragment must
-        // not resurrect or mutate the finished preview.
-        (None, conv)
-      } else {
-        let carried = match conv.turn.live_reasoning {
-          Some(reasoning) => reasoning.content
-          None => ""
-        }
-        (
-          None,
-          {
-            ..conv,
-            turn: {
-              ..conv.turn,
-              live_reasoning: Some({
-                content: carried + content,
-                complete: false,
-              }),
-            },
-          },
-        )
-      }
-    // Full semantic events never append transcript items: the store commit is
-    // the sole durable source. The complete reasoning payload replaces any
-    // accumulated fragments and seals their transient presentation.
-    ReasoningMessage(content) => {
-      let normalized = content.trim()
-      if normalized.is_empty() {
-        // Remote delivery strips the complete payload because the durable
-        // session event carries it. A remote client may have joined midway
-        // through the stream, so its accumulated deltas can be only a suffix;
-        // discard that provisional text at settlement and let the canonical
-        // commit supply the complete Markdown card.
-        (None, { ..conv, turn: { ..conv.turn, live_reasoning: None, }, })
-      } else {
-        (
-          None,
-          {
-            ..conv,
-            turn: {
-              ..conv.turn,
-              live_reasoning: Some({ content, complete: true, }),
-            },
-          },
-        )
-      }
-    }
-    AssistantMessage(_) => (None, conv.complete_reasoning().clear_response())
+    AssistantDelta(_)
+    | ReasoningDelta(_)
+    | ReasoningMessage(_)
+    | AssistantMessage(_) => (None, conv)
     // A background-job completion notice while idle. The durable record owns
     // the transcript card, and the completion is already surfaced to the
     // model as a steer — a toast would double it for an idle reader without
@@ -1405,8 +1265,8 @@ fn apply_engine_event(
         (None, conv)
       }
     AutoCompactionFinished(_) => (None, conv)
-    CompactionStarted => (None, { ..conv, compaction: Compacting, })
-    CompactionFinished(_) => (None, { ..conv, compaction: NotCompacting, })
+    CompactionStarted => (None, conv)
+    CompactionFinished(_) => (None, conv)
     // An idle-time append the engine could not persist. It names what failed
     // but not which command asked for it, so nothing is settled on it — a
     // pending goal keeps waiting, since this may have been some other item's
@@ -1440,7 +1300,7 @@ fn apply_engine_event(
       } else {
         "compaction failed: \{reason}"
       }
-      (Some(content), { ..conv, compaction: NotCompacting, })
+      (Some(content), conv)
     }
   }
 }
@@ -1512,6 +1372,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
     owner: model.dock_owner(),
+    feedback_enabled: model.editor_feedback_enabled(),
     cloud_files: if model.cloud_selected() &&
       model.cloud_identity() is Some(@interop.Cloud(account~, ..)) &&
       model.cloud.user_id == Some(account) {
@@ -1626,6 +1487,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.ssh_ui.editor_open ||
   model.ssh_ui.details is Some(_) ||
   model.export_dialog.is_open() ||
+  model.file_share_dialog.is_open() ||
   model.session_import_dialog.is_open() ||
   model.workspace_settings_dialog is Some(_) ||
   model.archive_confirm is Some(_) ||
@@ -2178,6 +2040,11 @@ fn update(
       quick_open_cmd,
       panel_visibility_cmd,
       panel_cmd,
+      if previous.editor_feedback_enabled() != model.editor_feedback_enabled() {
+        @fileeditor.sync_feedback_permission(file_ctx(model))
+      } else {
+        @cmd.none
+      },
       terminal_cmd,
       jobs_cmd,
       overview_cmd,
@@ -2590,6 +2457,21 @@ fn update_msg(
           return (@cmd.none, model)
         }
         match action {
+          @composer.StopRequested(identity~)
+          | @composer.FollowupSubmitted(identity~, ..)
+          | @composer.QueuedInputEditRequested(identity~, ..)
+          | @composer.QueuedInputSteerRequested(identity~, ..)
+          | @composer.QueuedInputDeleteRequested(identity~, ..)
+          | @composer.SlashCommand(identity~, ..)
+          | @composer.GoalEditStarted(identity~)
+          | @composer.GoalCancelled(identity~)
+          | @composer.GoalCleared(identity~)
+          | @composer.GoalSubmitted(identity~, ..) =>
+            return update_cloud(
+              dispatch,
+              @cloud.ControlAction(identity.owner, action),
+              model,
+            )
           @composer.DraftSubmitted(identity~, draft~) =>
             return update_cloud(
               dispatch,
@@ -2607,13 +2489,21 @@ fn update_msg(
               model.cloud_identity() == Some(identity.owner) {
               return open_semantic_selection(dispatch, model)
             }
-            guard mention.ref_ is File(path~) else { return (@cmd.none, model) }
+            guard mention.ref_
+              is (File(..) | Annotation(side=WorkingRevision, ..)) &&
+              @mention_context.target(mention.ref_) is Some(target) else {
+              return (@cmd.none, model)
+            }
             return open_cloud_file(
               dispatch,
               model,
               identity.owner,
-              path,
-              mention.range,
+              target.file,
+              match mention.range {
+                Some(_) => mention.range
+                None => target.range
+              },
+              annotation?=target.annotation,
             )
           }
           @composer.FileIndexEnsured(identity~) => {
@@ -3017,7 +2907,7 @@ fn update_msg(
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
-          (@cmd.none, model.replace_conversation({ ..conv, goal_edit: None, }))
+          apply_engine_action(dispatch, model, conv, @engine_session.CloseGoal)
         }
         @composer.GoalEditStarted(identity~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
@@ -3059,11 +2949,11 @@ fn update_msg(
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
-          guard conv.goal_edit is Some(_) else { return (@cmd.none, model) }
+          guard conv.controls.edit is Some(_) else { return (@cmd.none, model) }
           let target = {
             ..model.replace_conversation({
               ..conv,
-              goal_edit: Some({ draft, }),
+              controls: { ..conv.controls, edit: Some({ draft, }), },
               composer_draft_present: prompt_present,
             }),
             focused: conv.device,
@@ -3200,80 +3090,12 @@ fn update_msg(
       )
     }
     FileEditor(
-      EditorCommentAdded(
-        resource~,
-        file~,
-        range~,
-        quote~,
-        comment~,
-        feedback_id~
-      )
-    ) => {
-      if model.screen is Codex {
-        // Codex owns a separate wire model, but the visible editor annotation
-        // is the same structured chip as OpenSeek's. Keep it in Codex's shared
-        // composer tray; never leak it into the hidden OpenSeek conversation.
-        return (
-          @fileeditor.remove_editor_feedback(resource, feedback_id),
-          {
-            ..model,
-            codex: model.codex.with_editor_comment(
-              file.0,
-              range,
-              comment,
-              quote,
-            ),
-          },
-        )
-      }
-      guard model.active_conversation() is Some(conv) else {
-        return (@cmd.none, model)
-      }
-      let mentions = @composer.Draft::{
-          images: conv.images,
-          task: conv.task,
-          mentions: conv.mentions,
-        }.with_mention({
-          ref_: Annotation(
-            file=file.0,
-            start_line=range.start_line_number,
-            end_line=range.end_line_number,
-            quote~,
-            comment~,
-            side=@mention_context.WorkingRevision,
-          ),
-          range: Some(range),
-        }).mentions
-      // The chip is the comment's carrier from here on; clearing the editor's
-      // own bubble keeps the two from drifting apart (and from double-sending
-      // if the user comments again).
-      (
-        @fileeditor.remove_editor_feedback(resource, feedback_id),
-        model.replace_conversation({ ..conv, mentions, }),
-      )
-    }
-    // The feedback service queues this after the comment-added message above,
-    // so the new annotation is already in the visible composer batch. Reuse
-    // each agent's normal submit path: an idle task starts, while a running
-    // task receives the batch through its existing steer/message queue.
-    FileEditor(@fileeditor.ApplyAllFeedback) =>
-      match model.screen {
-        Chat => update_msg(dispatch, Send, model)
-        Codex => {
-          let input = model.codex_composer_input()
-          update_msg(
-            dispatch,
-            CodexComposerAction(
-              @composer.DraftSubmitted(
-                identity=input.identity,
-                draft=input.draft,
-              ),
-            ),
-            model,
-          )
-        }
-        Skills | Schedules | Settings => (@cmd.none, model)
-      }
+      EditorCommentAdded(..)
+      | ApplyAllFeedback
+      | ApplyEditorFeedback(_) as feedback
+    ) => update_editor_feedback(dispatch, feedback, model)
+    // Delivered to the component by boot, alongside the other component inputs.
+    ComposerReply(_) => (@cmd.none, model)
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a
@@ -3311,11 +3133,11 @@ fn update_msg(
             _ => return (clear_feedback, model)
           }
       }
+      let end_column = if quote.is_empty() { 1 } else { quote.length() + 1 }
+      let comment_range = range.unwrap_or(
+        @common.Range(line_number, 1, line_number, end_column),
+      )
       if model.screen is Codex {
-        let end_column = if quote.is_empty() { 1 } else { quote.length() + 1 }
-        let comment_range = range.unwrap_or(
-          @common.Range(line_number, 1, line_number, end_column),
-        )
         return (
           clear_feedback,
           {
@@ -3337,17 +3159,15 @@ fn update_msg(
           images: conv.images,
           task: conv.task,
           mentions: conv.mentions,
-        }.with_mention({
-          ref_: Annotation(
-            file=file.0,
-            start_line=line_number,
-            end_line=line_number,
-            quote~,
-            comment~,
+        }.with_mention(
+          @composer.Mention::editor_annotation(
+            file.0,
+            comment_range,
+            quote,
+            comment,
             side~,
           ),
-          range,
-        }).mentions
+        ).mentions
       (clear_feedback, model.replace_conversation({ ..conv, mentions, }))
     }
     // Search rows use the same ordinary positioned-open path as definition,
@@ -3950,6 +3770,7 @@ fn update_msg(
                 session,
                 workspace,
                 model=engine_model,
+                moonbit_guide=model.default_moonbit_guide,
               ),
               task: draft.task,
               mentions: draft.mentions,
@@ -4025,8 +3846,8 @@ fn update_msg(
           } else {
             guard model.composing_new_chat() &&
               model.active_conversation() is Some(conv) &&
-              conv.goal_edit is None &&
-              conv.goal_pending is None &&
+              conv.controls.edit is None &&
+              conv.controls.pending is None &&
               conv.pending_semantic_submission is None &&
               @resource.path_for(conv.project(), model.focused) is Some(cwd) else {
               return (@cmd.none, model)
@@ -4056,12 +3877,14 @@ fn update_msg(
                   item.device != conv.device ||
                   item.session_id != conv.session_id
                 }),
-                composer_entry_retirements: [
-                  ..model.composer_entry_retirements,
-                  @interop.Host({
-                    channel: conv.device,
-                    session: conv.session_id,
-                  }),
+                composer_entry_changes: [
+                  ..model.composer_entry_changes,
+                  @composer.Retire(
+                    @interop.Host({
+                      channel: conv.device,
+                      session: conv.session_id,
+                    }),
+                  ),
                 ],
                 sidebar_open: model.sidebar_open && !model.narrow,
               },
@@ -4109,6 +3932,13 @@ fn update_msg(
         )
       }
     }
+    MoonBitGuideDefaultLoaded(enabled) =>
+      (@cmd.none, { ..model, default_moonbit_guide: enabled, })
+    MoonBitGuideDefaultChanged(enabled) =>
+      (
+        save_default_moonbit_guide(enabled),
+        { ..model, default_moonbit_guide: enabled, },
+      )
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value, })
     SetupApiKeyChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
@@ -4877,7 +4707,7 @@ fn update_msg(
         } else {
           (@cmd.none, model)
         }
-      } else if !(conv.compaction is NotCompacting) {
+      } else if !(conv.controls.compaction is NotCompacting) {
         // A prompt submitted mid-compaction would sit in the serve engine's
         // queue behind it, where Stop (which cancels only the compaction)
         // cannot reach it — the user's cancel would not stop the submitted
@@ -4937,6 +4767,7 @@ fn update_msg(
             conv.session_id,
             workspace,
             approval=model.approval_for(conv.device, conv.session_id),
+            moonbit_guide=conv.moonbit_guide,
             images=conv.images.map(image => image.url),
           )
         } else {
@@ -4951,6 +4782,7 @@ fn update_msg(
             conv.session_id,
             workspace=conv.project(),
             approval=model.approval_for(conv.device, conv.session_id),
+            moonbit_guide=conv.moonbit_guide,
             images=conv.images.map(image => image.url),
           )
         }
@@ -5771,7 +5603,29 @@ fn update_msg(
         _ => (@cmd.none, model)
       }
     NotificationClicked(run_id~) => {
-      // Proton notifications are emitted only for the embedded local host. A
+      // Cloud payloads reuse the existing account-scoped conversation key.
+      // A notification from a signed-out account cannot open another account.
+      if model.account.map(account => account.user.user_id) ==
+        model.cloud.user_id &&
+        model.cloud.user_id is Some(account) {
+        for session in model.cloud.sessions {
+          let owner : @interop.ConversationIdentity = Cloud(
+            account~,
+            session=session.id,
+          )
+          if owner.key() == run_id && !session.archived {
+            return update_msg(
+              dispatch,
+              OpenCloudConversation(account~, session=session.id),
+              {
+                ..model,
+                chat_navigation_generation: model.chat_navigation_generation + 1,
+              },
+            )
+          }
+        }
+      }
+      // Local payloads retain their owning run ID. A
       // finished run usually matches by last run id; a permission request
       // still owns the active run while its tool waits for the answer.
       let conv = if model.conversation_by_last_run(Local, run_id) is Some(conv) {
@@ -6089,23 +5943,7 @@ fn update_msg(
       if conv.is_archived_read_only() {
         return (@cmd.none, model)
       }
-      // Opening goal mode touches only this conversation, so an unsaved edit
-      // waiting on another one is untouched — the reason the draft lives here
-      // rather than in a single model-wide slot.
-      //
-      // A menu left open over the prompt does not survive the switch: it was
-      // computed from the prompt draft, and a goal draft has no slash
-      // commands to offer. Accepting one of its stale rows would replace the
-      // goal being written, or run something else entirely.
-      (
-        @cmd.none,
-        {
-          ..model.replace_conversation({
-            ..conv,
-            goal_edit: Some({ draft: conv.goal_draft_seed(), }),
-          }),
-        },
-      )
+      apply_engine_action(dispatch, model, conv, @engine_session.EditGoal)
     }
     GoalDraftEdited(draft) => {
       guard model.active_conversation() is Some(conv) else {
@@ -6114,10 +5952,13 @@ fn update_msg(
       if conv.is_archived_read_only() {
         return (@cmd.none, model)
       }
-      if conv.goal_edit is Some(_) {
+      if conv.controls.edit is Some(_) {
         (
           @cmd.none,
-          model.replace_conversation({ ..conv, goal_edit: Some({ draft, }), }),
+          model.replace_conversation({
+            ..conv,
+            controls: { ..conv.controls, edit: Some({ draft, }), },
+          }),
         )
       } else {
         (@cmd.none, model)
@@ -6130,27 +5971,12 @@ fn update_msg(
       if conv.is_archived_read_only() || model.scheduled_session_read_only(conv) {
         return (@cmd.none, model)
       }
-      guard conv.goal_edit is Some(edit) else { return (@cmd.none, model) }
-      let text = edit.draft.trim().to_owned()
-      // A blank draft has nothing to set (the button is disabled; this also
-      // catches Enter); goal mode stays open for the user to finish.
-      guard !text.is_empty() else { return (@cmd.none, model) }
-      // Goal mode closes, but the text stays as `goal_pending` until the
-      // durable marker lands. `agent.goal` returning only means the command
-      // reached the engine's stdin — the append behind it can still fail, and
-      // then nothing would carry the user's writing.
-      let (model, command) = model.allocate_submission_id()
-      (
-        send_goal(dispatch, model, conv, command, Some(text)),
-        model.replace_conversation({
-          ..conv,
-          goal_edit: None,
-          goal_pending: Some({
-            id: command,
-            request: Setting(text),
-            since: conv.durable_frontier(),
-          }),
-        }),
+      guard conv.controls.edit is Some(edit) else { return (@cmd.none, model) }
+      apply_engine_action(
+        dispatch,
+        model,
+        conv,
+        @engine_session.SetGoal(edit.draft),
       )
     }
     ClearGoal => {
@@ -6167,26 +5993,13 @@ fn update_msg(
       if conv.is_archived_read_only() {
         return (@cmd.none, model)
       }
-      let (model, command) = model.allocate_submission_id()
-      (
-        send_goal(dispatch, model, conv, command, None),
-        model.replace_conversation({
-          ..conv,
-          goal_edit: None,
-          // Supersedes a set still awaiting its marker.
-          goal_pending: Some({
-            id: command,
-            request: Clearing,
-            since: conv.durable_frontier(),
-          }),
-        }),
-      )
+      apply_engine_action(dispatch, model, conv, @engine_session.ClearGoal)
     }
     CloseGoalEditor => {
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      (@cmd.none, model.replace_conversation({ ..conv, goal_edit: None, }))
+      apply_engine_action(dispatch, model, conv, @engine_session.CloseGoal)
     }
     FileEditor(@fileeditor.GithubReview(CheckAvailability)) =>
       update_msg(dispatch, Github(@github.RefreshCurrent), model)
@@ -6919,6 +6732,7 @@ fn update_msg(
       (cmd, { ..model, terminal, })
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
+    ShareFile(path) => model.share_file(dispatch, path)
     OpenExport(channel, source) => {
       let (cmd, export_dialog) = model.export_dialog.open(source, channel~)
       (cmd, { ..model, export_dialog, })
@@ -7007,23 +6821,39 @@ fn update_msg(
         },
       )
     }
-    ExportDialog(msg) => {
-      let (login, model) = if msg is @export_dialog.SignIn {
+    ExportDialog(message) | FileShareDialog(message) => {
+      let file = msg is FileShareDialog(_)
+      let (login, model) = if message is @export_dialog.SignIn {
         // Leave the dialog retryable while the rejected account is clearing.
         guard !model.remote_connecting else { return (@cmd.none, model) }
         begin_account_login(dispatch, model, create=false)
       } else {
         (@cmd.none, model)
       }
-      let expired = model.export_dialog.account_expired(msg)
-      let (cmd, export_dialog) = model.export_dialog.update(
-        dispatch.map(next => ExportDialog(next)),
-        msg,
+      let dialog = if file {
+        model.file_share_dialog
+      } else {
+        model.export_dialog
+      }
+      let expired = dialog.account_expired(message)
+      let (cmd, dialog) = dialog.update(
+        dispatch.map(next => {
+          if file {
+            FileShareDialog(next)
+          } else {
+            ExportDialog(next)
+          }
+        }),
+        message,
         account?=model.account,
         desktop=model.is_desktop,
         sign_in=login,
       )
-      let next = { ..model, export_dialog, }
+      let next = if file {
+        { ..model, file_share_dialog: dialog, }
+      } else {
+        { ..model, export_dialog: dialog, }
+      }
       if expired && model.account is Some(_) {
         let (logout, next) = expire_account(dispatch, next)
         return (@cmd.batch([cmd, logout]), next)
@@ -7410,9 +7240,14 @@ fn update_device_msg(
       // visible local failure.
       let conversations = model.conversations.map(conv => {
         if conv.device == channel {
+          let conv = conv.clear_streams().forget_awaiting_inputs()
           {
-            ..conv.clear_streams().forget_awaiting_inputs(),
-            compaction: NotCompacting,
+            ..conv,
+            controls: conv.controls.observe_compaction(
+              queued=false,
+              compacting=false,
+              baseline=true,
+            ),
             pending_approval: None,
           }
         } else {
@@ -9684,19 +9519,38 @@ fn update_device_msg(
       }
     }
     Engine(run_id, event, session~) => {
+      // Native command events share one reducer with Cloud. Host lifecycle
+      // and durable-commit synchronization stay on their existing paths.
+      let next = if model.find_conversation(channel, session) is Some(conv) &&
+        (
+          run_id is None ||
+          conv.last_run_id == run_id ||
+          @engine_session.is_idle_event(event)
+        ) {
+        model.replace_conversation({
+          ..conv,
+          controls: conv.controls.event(event),
+        })
+      } else {
+        model
+      }
+      let model = next
+      guard @transcript.decode_engine_event(event) is Some(event) else {
+        return (@cmd.none, model)
+      }
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
       // `active_run_id` — or with no run id at all (an engine spawned just
       // to compact). The host stamps them with their session, which covers
       // that case too; the conversation that last held the id remains the
-      // fallback for unstamped events.
+      // owner of a trailing steer receipt.
       let conv = if run_id is Some(id) &&
         model.conversation_by_run(channel, id) is Some(conv) {
         Some(conv)
       } else if is_steer_receipt(event) && run_id is Some(id) {
         // Host settling receipts may intentionally trail the terminal event;
         // an even newer Started can already have replaced last_run_id. Prefer
-        // the exact pending-steer match before the legacy run fallback.
+        // the exact pending-steer match before falling back to the last run owner.
         let exact = match event {
           SteerApplied(submission_id=Some(submission_id), ..) =>
             model.conversation_by_pending_steer(channel, submission_id, id)
@@ -9710,14 +9564,7 @@ fn update_device_msg(
           model.conversation_by_last_run(channel, id)
         }
       } else if is_idle_event(event) {
-        if session is Some(session) &&
-          model.find_conversation(channel, session) is Some(conv) {
-          Some(conv)
-        } else if run_id is Some(id) {
-          model.conversation_by_last_run(channel, id)
-        } else {
-          None
-        }
+        model.find_conversation(channel, session)
       } else {
         None
       }
@@ -9976,88 +9823,41 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     }
-    CompactRejected(session~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) {
-        model
-        .replace_conversation({ ..conv, compaction: NotCompacting, })
-        .notify_error(dispatch, message)
-      } else {
-        (@cmd.none, model)
+    SessionCommandDelivered(session~, id~, command~, delivery~, message~) => {
+      guard model.find_conversation(channel, session) is Some(conv) else {
+        return (@cmd.none, model)
       }
-    GoalRejected(session~, command~, draft~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) {
-        // A rejection acts only on the send it answers, and only while that
-        // send is still the one in flight. The row keeps its actions while a
-        // command is out, so the user can send a second over the first — and
-        // the second may be the same text, or Clear again, so only the id
-        // separates them.
-        //
-        // Anything else is a reply that arrived too late to mean what it
-        // says. Either a newer send replaced this one, or the record already
-        // settled whatever was outstanding — including by carrying this very
-        // text, set from somewhere else. In every such case the durable goal
-        // has already been decided, so retiring the slot would drop a live
-        // successor and reopening the editor would claim a failure that is
-        // not what this conversation now stands at. The toast still reports
-        // it; nothing here is silent.
-        let restored = if !(conv.goal_pending is Some(pending) &&
-          pending.id == command) {
-          conv
-        } else if draft is Some(draft) && conv.goal_edit is None {
-          // Hand the goal text back, the way a rejected prompt restores its
-          // draft: nothing durable will ever carry it, so losing it here
-          // loses it for good. Only when this conversation has not claimed
-          // goal mode since — a newer edit is the user's, not this dead
-          // request's.
-          { ..conv, goal_edit: Some({ draft, }), goal_pending: None, }
-        } else {
-          { ..conv, goal_pending: None, }
-        }
-        model.replace_conversation(restored).notify_error(dispatch, message)
-      } else {
-        (@cmd.none, model)
+      let relevant = conv.controls.awaits(command, id)
+      let next = model.replace_conversation({
+        ..conv,
+        controls: conv.controls.delivered(command, id, delivery),
+      })
+      guard message is Some(message) &&
+        (relevant || delivery is @engine_session.Rejected) else {
+        return (@cmd.none, next)
       }
-    GoalUndelivered(session~, command~, draft~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) &&
-        conv.goal_pending is Some(pending) &&
-        pending.id == command {
-        // Only while this send is still the one in flight. It retires
-        // nothing, but "the fate of this text is unknown" is still a claim
-        // about the world, and it stops being true the moment the record
-        // settles the send — the socket can die after the commit arrives and
-        // before the reply does — or a newer send replaces it.
-        //
-        // While it is true, the request stays in flight: a marker, or the
-        // reload that follows the reconnect, is what settles it. So the text
-        // cannot come back to the editor — it would claim the goal is unset,
-        // and a resend over a command the host may already hold only earns a
-        // refusal. Nothing is lost by leaving it there: the request in flight
-        // still carries it, and that is what the goal row shows and what
-        // reopening the editor seeds from.
-        ignore(draft)
-        let detail = if conv.goal_pending is Some({ request: Clearing, .. }) {
+      let message = if delivery is @engine_session.Unknown &&
+        command is (@wire.GoalSet(..) | @wire.GoalClear) {
+        let detail = if conv.controls.pending is Some({ request: Clearing, .. }) {
           " — check the goal row before clearing it again"
         } else {
           " — check the goal row before setting it again"
         }
-        model
-        .replace_conversation(conv)
-        .notify_error(
-          dispatch,
-          (match model.locale {
-            SimplifiedChinese => "无法确认目标是否已送达（"
-            TraditionalChinese => "無法確認目標是否已送達（"
-            Japanese => "目標が届いたか確認できません（"
-            English => "Goal delivery could not be confirmed ("
-            Spanish => "No se pudo confirmar la entrega del objetivo ("
-          }) +
-          message +
-          ")" +
-          detail,
-        )
+        (match model.locale {
+          SimplifiedChinese => "无法确认目标是否已送达（"
+          TraditionalChinese => "無法確認目標是否已送達（"
+          Japanese => "目標が届いたか確認できません（"
+          English => "Goal delivery could not be confirmed ("
+          Spanish => "No se pudo confirmar la entrega del objetivo ("
+        }) +
+        message +
+        ")" +
+        detail
       } else {
-        (@cmd.none, model)
+        message
       }
+      next.notify_error(dispatch, message)
+    }
     Finished(run_id~, status~, answer~) =>
       if (if model.conversation_by_run(channel, run_id) is Some(conv) {
           Some(conv)
@@ -10141,7 +9941,7 @@ fn update_device_msg(
         // the same Finished boundary must not post a second notification.
         if first_finish && channel is Local {
           commands.push(
-            FinishedSystemNotification::{ run_id, status, answer, }.command(
+            FinishedSystemNotification::{ payload: run_id, status, answer, }.command(
               locale=next.locale,
             ),
           )
@@ -10310,7 +10110,7 @@ fn large_semantic_reference_for_test() -> @mention_context.SemanticSearchReferen
     matches.push({
       rule_id: "rule",
       description: Some("test rule"),
-      file: "src/file-" + index.to_string() + ".mbt",
+      file: "src/file-\{index}.mbt",
       start_line: 1,
       start_column: 1,
       end_line: 1,
@@ -10580,6 +10380,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
     "test-submission",
     workspace=conv.project(),
     approval=ApprovalAsk,
+    moonbit_guide=conv.moonbit_guide,
   )
   let json = payload.to_json()
   guard json is Object(fields) else { return None }
@@ -10652,7 +10453,7 @@ fn with_pending_steers(
   let mut next = conv
   for index, text in texts {
     next = next.enqueue_steer(
-      "test-steer-" + index.to_string(),
+      "test-steer-\{index}",
       Some(run_id),
       text,
       text,
@@ -10813,15 +10614,23 @@ test "assistant deltas accumulate into the streaming response" {
   let dispatch = test_dispatch()
   let (_, first) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("Hello"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="Hello"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, second) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta(", world"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content=", world"),
+      session="desktop-test",
+    ),
     first,
   )
-  assert_eq(second.active().turn.streaming_response, Some("Hello, world"))
+  assert_eq(second.active().turn.live.response, Some("Hello, world"))
   inspect(second.active().messages.length(), content="0")
 }
 
@@ -10832,21 +10641,29 @@ test "update is pure: replaying a delta on the same model is idempotent" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("partial"),
+      live: { ..running_conversation().turn.live, response: Some("partial"), },
     },
   })
   let (_, once) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("!"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="!"),
+      session="desktop-test",
+    ),
     model,
   )
   let (_, twice) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("!"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="!"),
+      session="desktop-test",
+    ),
     model,
   )
-  assert_eq(once.active().turn.streaming_response, Some("partial!"))
-  assert_eq(twice.active().turn.streaming_response, Some("partial!"))
+  assert_eq(once.active().turn.live.response, Some("partial!"))
+  assert_eq(twice.active().turn.live.response, Some("partial!"))
 }
 
 ///|
@@ -10854,10 +10671,14 @@ test "deltas from an unknown run are dropped" {
   let dispatch = test_dispatch()
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r99"), AssistantDelta("stale"), session=None),
+    Engine(
+      Some("r99"),
+      @wire.AssistantDelta(content="stale"),
+      session="desktop-test",
+    ),
     running_model(),
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
 }
 
 ///|
@@ -10866,12 +10687,16 @@ test "reasoning message waits for its durable commit" {
   let model = running_model()
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("full thought"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="full thought"),
+      session="desktop-test",
+    ),
     model,
   )
   inspect(next.active().messages.length(), content="0")
   assert_eq(
-    next.active().turn.live_reasoning,
+    next.active().turn.live.reasoning,
     Some({ content: "full thought", complete: true, }),
   )
 }
@@ -10881,37 +10706,53 @@ test "reasoning deltas accumulate and answer output closes the live stream" {
   let dispatch = test_dispatch()
   let (_, first) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("first"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="first"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, second) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta(" line"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content=" line"),
+      session="desktop-test",
+    ),
     first,
   )
   assert_eq(
-    second.active().turn.live_reasoning,
+    second.active().turn.live.reasoning,
     Some({ content: "first line", complete: false, }),
   )
   let (_, answered) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("answer"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="answer"),
+      session="desktop-test",
+    ),
     second,
   )
   assert_eq(
-    answered.active().turn.live_reasoning,
+    answered.active().turn.live.reasoning,
     Some({ content: "first line", complete: true, }),
   )
   // Once the stream is semantically complete, a delayed delta cannot revive
   // or extend it.
   let (_, late) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta(" late"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content=" late"),
+      session="desktop-test",
+    ),
     answered,
   )
   assert_eq(
-    late.active().turn.live_reasoning,
-    answered.active().turn.live_reasoning,
+    late.active().turn.live.reasoning,
+    answered.active().turn.live.reasoning,
   )
 }
 
@@ -10920,15 +10761,23 @@ test "an empty remote reasoning settlement clears the partial preview" {
   let dispatch = test_dispatch()
   let (_, partial) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("first line"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="first line"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, settled) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage(""), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content=""),
+      session="desktop-test",
+    ),
     partial,
   )
-  assert_eq(settled.active().turn.live_reasoning, None)
+  assert_eq(settled.active().turn.live.reasoning, None)
   assert_eq(settled.active().reasoning_for_render(), (None, false))
 }
 
@@ -10939,7 +10788,10 @@ test "a matching durable commit de-duplicates without mutating the preview" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      live_reasoning: Some({ content: "think", complete: true, }),
+      live: {
+        ..running_conversation().turn.live,
+        reasoning: Some({ content: "think", complete: true, }),
+      },
     },
   })
   let (_, committed) = update_dev(
@@ -10959,7 +10811,7 @@ test "a matching durable commit de-duplicates without mutating the preview" {
     live,
   )
   assert_eq(
-    committed.active().turn.live_reasoning,
+    committed.active().turn.live.reasoning,
     Some({ content: "think", complete: true, }),
   )
   assert_eq(committed.active().reasoning_for_render(), (None, true))
@@ -10988,17 +10840,25 @@ test "commit-first reasoning keeps late prefixes and de-duplicates when sealed" 
   let (_, committed) = update_dev(dispatch, commit, running_model())
   let (_, partial) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("complete"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="complete"),
+      session="desktop-test",
+    ),
     committed,
   )
   assert_eq(partial.active().reasoning_for_render(), (Some("complete"), false))
   let (_, completed) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("complete thought"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="complete thought"),
+      session="desktop-test",
+    ),
     partial,
   )
   assert_eq(
-    completed.active().turn.live_reasoning,
+    completed.active().turn.live.reasoning,
     Some({ content: "complete thought", complete: true, }),
   )
   assert_eq(completed.active().reasoning_for_render(), (None, true))
@@ -11009,7 +10869,11 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
   let dispatch = test_dispatch()
   let (_, partial) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("shared"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="shared"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, committed) = update_dev(
@@ -11029,17 +10893,21 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
     partial,
   )
   assert_eq(
-    committed.active().turn.live_reasoning,
+    committed.active().turn.live.reasoning,
     Some({ content: "shared", complete: false, }),
   )
   assert_eq(committed.active().reasoning_for_render(), (Some("shared"), false))
   let (_, continued) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta(" future"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content=" future"),
+      session="desktop-test",
+    ),
     committed,
   )
   assert_eq(
-    continued.active().turn.live_reasoning,
+    continued.active().turn.live.reasoning,
     Some({ content: "shared future", complete: false, }),
   )
 }
@@ -11069,7 +10937,11 @@ test "a later run does not confuse identical historical reasoning for its commit
   let model = running_model().replace_conversation(historical)
   let (_, partial) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("shared opening"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="shared opening"),
+      session="desktop-test",
+    ),
     model,
   )
   assert_eq(
@@ -11078,11 +10950,15 @@ test "a later run does not confuse identical historical reasoning for its commit
   )
   let (_, complete) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("shared opening"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="shared opening"),
+      session="desktop-test",
+    ),
     partial,
   )
   assert_eq(
-    complete.active().turn.live_reasoning,
+    complete.active().turn.live.reasoning,
     Some({ content: "shared opening", complete: true, }),
   )
 }
@@ -11108,7 +10984,10 @@ test "a new model step advances past identical reasoning from the prior step" {
     watermark: 2,
     turn: {
       ..RunState::for_run(0),
-      live_reasoning: Some({ content: "old live", complete: true, }),
+      live: {
+        ..RunState::for_run(0).live,
+        reasoning: Some({ content: "old live", complete: true, }),
+      },
     },
   }
   let (_, next_step) = apply_engine_event(
@@ -11116,7 +10995,7 @@ test "a new model step advances past identical reasoning from the prior step" {
     AgentStep(Some(2)),
     Some("r7"),
   )
-  assert_eq(next_step.turn.live_reasoning, None)
+  assert_eq(next_step.turn.live.reasoning, None)
   assert_eq(next_step.turn.reasoning_frontier, 2)
   let (_, live) = apply_engine_event(
     next_step,
@@ -11233,7 +11112,7 @@ test "a step event is what moves the heartbeat's stage" {
   )
   let (_, stepped) = update_dev(
     test_dispatch(),
-    Engine(Some("r7"), AgentStep(Some(2)), session=None),
+    Engine(Some("r7"), @wire.AgentStep(step=2), session="desktop-test"),
     running,
   )
   assert_eq(
@@ -11247,14 +11126,21 @@ test "assistant message only settles the transient response" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    turn: { ..running_conversation().turn, streaming_response: Some("answ"), },
+    turn: {
+      ..running_conversation().turn,
+      live: { ..running_conversation().turn.live, response: Some("answ"), },
+    },
   })
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantMessage("answer"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantMessage(content="answer"),
+      session="desktop-test",
+    ),
     model,
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().messages.length(), content="0")
 }
 
@@ -11265,15 +11151,22 @@ test "agent setup failure is lifecycle-only until its durable terminal" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("partial answer"),
+      live: {
+        ..running_conversation().turn.live,
+        response: Some("partial answer"),
+      },
     },
   })
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), AgentSetupFailed("could not initialize"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AgentSetupFailed(error="could not initialize"),
+      session="desktop-test",
+    ),
     model,
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().messages.length(), content="0")
 }
 
@@ -11282,14 +11175,17 @@ test "a new agent step clears the live stream" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    turn: { ..running_conversation().turn, streaming_response: Some("left"), },
+    turn: {
+      ..running_conversation().turn,
+      live: { ..running_conversation().turn.live, response: Some("left"), },
+    },
   })
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), AgentStep(Some(2)), session=None),
+    Engine(Some("r7"), @wire.AgentStep(step=2), session="desktop-test"),
     model,
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
 }
 
 ///|
@@ -11300,26 +11196,28 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
     run: Open(run_id="r7", stage=AtStep(Some(2))),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("left"),
-      live_reasoning: Some({ content: "old thought", complete: false, }),
+      live: {
+        response: Some("left"),
+        reasoning: Some({ content: "old thought", complete: false, }),
+      },
     },
   })
   let (_, retrying) = update_dev(
     dispatch,
     Engine(
       Some("r7"),
-      StreamRetry(
+      @wire.StreamRetry(
         attempt=2,
         max_attempts=5,
         reason="Stream ended before [DONE]",
       ),
-      session=None,
+      session="desktop-test",
     ),
     model,
   )
   let conv = retrying.active()
-  assert_eq(conv.turn.streaming_response, None)
-  assert_eq(conv.turn.live_reasoning, None)
+  assert_eq(conv.turn.live.response, None)
+  assert_eq(conv.turn.live.reasoning, None)
   assert_true(conv.run is Open(run_id="r7", stage=AtStep(Some(2))))
   assert_true(
     conv.run_heartbeat()
@@ -11337,10 +11235,14 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
   // The replacement attempt's first delta ends the notice.
   let (_, streaming) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("again"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="again"),
+      session="desktop-test",
+    ),
     retrying,
   )
-  assert_eq(streaming.active().turn.streaming_response, Some("again"))
+  assert_eq(streaming.active().turn.live.response, Some("again"))
   assert_true(
     streaming.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
   )
@@ -11357,8 +11259,8 @@ test "a retry notice ends at the model's next progress, not at unrelated events"
     dispatch,
     Engine(
       Some("r7"),
-      StreamRetry(attempt=2, max_attempts=5, reason="connection reset"),
-      session=None,
+      @wire.StreamRetry(attempt=2, max_attempts=5, reason="connection reset"),
+      session="desktop-test",
     ),
     model,
   )
@@ -11366,7 +11268,11 @@ test "a retry notice ends at the model's next progress, not at unrelated events"
   // the request being retried.
   let (_, still) = update_dev(
     dispatch,
-    Engine(Some("r7"), BackgroundNotice("job done"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.BackgroundNotice(content="job done"),
+      session="desktop-test",
+    ),
     retrying,
   )
   assert_true(
@@ -11379,8 +11285,14 @@ test "a retry notice ends at the model's next progress, not at unrelated events"
     dispatch,
     Engine(
       Some("r7"),
-      Usage(prompt_tokens=10, completion_tokens=5),
-      session=None,
+      @wire.Usage(usage={
+        prompt_tokens: 10,
+        completion_tokens: 5,
+        total_tokens: 15,
+        prompt_cache_hit_tokens: 0,
+        prompt_cache_miss_tokens: 0,
+      }),
+      session="desktop-test",
     ),
     still,
   )
@@ -11396,7 +11308,7 @@ test "finished run clears any leftover stream" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("leftover"),
+      live: { ..running_conversation().turn.live, response: Some("leftover"), },
     },
   })
   let (_, next) = update_dev(
@@ -11404,7 +11316,7 @@ test "finished run clears any leftover stream" {
     Finished(run_id="r7", status="finished", answer=Some("done")),
     model,
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().is_running(), content="false")
 }
 
@@ -11591,8 +11503,8 @@ test "an idle background notice is absorbed without a toast" {
     dispatch,
     Engine(
       Some("r7"),
-      BackgroundNotice("background job bg-1 finished (exit=0)"),
-      session=None,
+      @wire.BackgroundNotice(content="background job bg-1 finished (exit=0)"),
+      session="desktop-test",
     ),
     model,
   )
@@ -12253,7 +12165,14 @@ test "open session keeps live state on screen while re-reading the store" {
         "desktop-bg",
         @interop.ChannelId::Local.test_project(),
       ).turn,
-      streaming_response: Some("mid-stream"),
+      live: {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "desktop-bg",
+          @interop.ChannelId::Local.test_project(),
+        ).turn.live,
+        response: Some("mid-stream"),
+      },
     },
   }
   let model = running_model().replace_conversation(background)
@@ -12270,7 +12189,7 @@ test "open session keeps live state on screen while re-reading the store" {
   inspect(once.active_session, content="desktop-bg")
   // The live state stays on screen; the store re-read happens behind it
   // (this client may have been absent for part of this conversation).
-  assert_eq(once.active().turn.streaming_response, Some("mid-stream"))
+  assert_eq(once.active().turn.live.response, Some("mid-stream"))
   inspect(once.active().is_running(), content="true")
   assert_true(
     once.loading_conversation
@@ -12327,10 +12246,10 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
   let dispatch = test_dispatch()
   let active = {
     ..test_conversation(),
-    compaction: Queued,
+    controls: { ..test_conversation().controls, compaction: Queued, },
     turn: {
       ..test_conversation().turn,
-      streaming_response: Some("old answer"),
+      live: { ..test_conversation().turn.live, response: Some("old answer"), },
     },
   }
   let background = {
@@ -12339,14 +12258,28 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
       "desktop-bg",
       @interop.ChannelId::Local.test_project(),
     ),
-    compaction: Compacting,
+    controls: {
+      ..empty_conversation(
+        @interop.ChannelId::Local,
+        "desktop-bg",
+        @interop.ChannelId::Local.test_project(),
+      ).controls,
+      compaction: Compacting,
+    },
     turn: {
       ..empty_conversation(
         @interop.ChannelId::Local,
         "desktop-bg",
         @interop.ChannelId::Local.test_project(),
       ).turn,
-      streaming_response: Some("background answer"),
+      live: {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "desktop-bg",
+          @interop.ChannelId::Local.test_project(),
+        ).turn.live,
+        response: Some("background answer"),
+      },
     },
   }
   let model = test_model()
@@ -12354,8 +12287,8 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
     .replace_conversation(background)
   let (_, next) = update_dev(dispatch, BridgeReady, model)
   for conv in next.conversations {
-    assert_eq(conv.turn.streaming_response, None)
-    assert_true(conv.compaction is NotCompacting)
+    assert_eq(conv.turn.live.response, None)
+    assert_true(conv.controls.compaction is NotCompacting)
   }
 }
 
@@ -12506,22 +12439,42 @@ test "BridgeReady resets only conversations owned by its channel" {
       "shared",
       @interop.ChannelId::Local.test_project(),
     ),
-    compaction: Queued,
+    controls: {
+      ..empty_conversation(
+        @interop.ChannelId::Local,
+        "shared",
+        @interop.ChannelId::Local.test_project(),
+      ).controls,
+      compaction: Queued,
+    },
     turn: {
       ..empty_conversation(
         @interop.ChannelId::Local,
         "shared",
         @interop.ChannelId::Local.test_project(),
       ).turn,
-      streaming_response: Some("local answer"),
+      live: {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "shared",
+          @interop.ChannelId::Local.test_project(),
+        ).turn.live,
+        response: Some("local answer"),
+      },
     },
   }
   let remote = {
     ..empty_conversation(background, "shared", background.test_project()),
-    compaction: Compacting,
+    controls: {
+      ..empty_conversation(background, "shared", background.test_project()).controls,
+      compaction: Compacting,
+    },
     turn: {
       ..empty_conversation(background, "shared", background.test_project()).turn,
-      streaming_response: Some("remote answer"),
+      live: {
+        ..empty_conversation(background, "shared", background.test_project()).turn.live,
+        response: Some("remote answer"),
+      },
     },
   }
   let model = {
@@ -12539,10 +12492,10 @@ test "BridgeReady resets only conversations owned by its channel" {
     next.find_conversation(background, "shared") is Some(reset) else {
     fail("same-id conversations were not preserved")
   }
-  assert_eq(kept.turn.streaming_response, Some("local answer"))
-  assert_true(kept.compaction is Queued)
-  assert_eq(reset.turn.streaming_response, None)
-  assert_true(reset.compaction is NotCompacting)
+  assert_eq(kept.turn.live.response, Some("local answer"))
+  assert_true(kept.controls.compaction is Queued)
+  assert_eq(reset.turn.live.response, None)
+  assert_true(reset.controls.compaction is NotCompacting)
 }
 
 ///|
@@ -13419,7 +13372,7 @@ test "session loaded swaps the active conversation onto the stored session" {
       turn: {
         ..test_conversation().turn,
         usage_tokens: 42,
-        streaming_response: Some("leftover"),
+        live: { ..test_conversation().turn.live, response: Some("leftover"), },
       },
     })
     // The stored session is opened from its sidebar row, which is what
@@ -13489,7 +13442,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   inspect(once.active_session, content="desktop-stored")
   inspect(once.active().messages.length(), content="2")
   assert_eq(once.active().messages[0].text(), Some("stored question"))
-  assert_eq(once.active().turn.streaming_response, None)
+  assert_eq(once.active().turn.live.response, None)
   inspect(once.active().turn.usage_tokens, content="0")
   assert_eq(
     once.active().workspace,
@@ -13538,7 +13491,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("mid-step"),
+      live: { ..running_conversation().turn.live, response: Some("mid-step"), },
     },
   })
   let loading_same = {
@@ -13564,7 +13517,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   inspect(same.active().messages.length(), content="1")
   assert_eq(same.active().messages[0].text(), Some("stored"))
   inspect(same.active().is_running(), content="true")
-  assert_eq(same.active().turn.streaming_response, Some("mid-step"))
+  assert_eq(same.active().turn.live.response, Some("mid-step"))
 }
 
 ///|
@@ -13764,8 +13717,7 @@ test "a run boundary discards the previous turn's live state whole" {
     ..running_conversation(),
     run: Open(run_id="r-old", stage=AtStep(Some(3))),
     turn: {
-      streaming_response: Some("old answer fragment"),
-      live_reasoning: None,
+      live: { response: Some("old answer fragment"), reasoning: None, },
       retrying: None,
       reasoning_frontier: 0,
       subruns: [lane],
@@ -13789,7 +13741,7 @@ test "a run boundary discards the previous turn's live state whole" {
   guard next.active().run is Open(run_id="r-new", ..) else {
     fail("expected the new run to replace the old id")
   }
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().turn.subruns.length(), content="0")
   inspect(next.active().turn.usage_tokens, content="0")
 }
@@ -13803,7 +13755,10 @@ test "a distinct started id replaces a stale open run as foreign" {
       run: Open(run_id="r-old", stage=AtStep(Some(3))),
       turn: {
         ..running_conversation().turn,
-        streaming_response: Some("old answer fragment"),
+        live: {
+          ..running_conversation().turn.live,
+          response: Some("old answer fragment"),
+        },
       },
       run_started_ms: Some(1_000.0),
     },
@@ -13826,7 +13781,7 @@ test "a distinct started id replaces a stale open run as foreign" {
   guard next.active().run is Open(run_id="r-new", stage=Opened) else {
     fail("expected the new run to replace the stale id")
   }
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().pending_steers.length(), content="0")
   // The replaced run took its pending input with it and left no placeholder:
   // what the turn actually recorded is in the transcript.
@@ -13847,7 +13802,10 @@ test "a repeated started id is idempotent" {
       run: Open(run_id="r7", stage=AtStep(Some(4))),
       turn: {
         ..running_conversation().turn,
-        streaming_response: Some("current fragment"),
+        live: {
+          ..running_conversation().turn.live,
+          response: Some("current fragment"),
+        },
       },
     },
     ["current steer"],
@@ -13868,7 +13826,7 @@ test "a repeated started id is idempotent" {
   guard next.active().run is Open(run_id="r7", stage=AtStep(Some(4))) else {
     fail("a repeated start reset the live run stage")
   }
-  assert_eq(next.active().turn.streaming_response, Some("current fragment"))
+  assert_eq(next.active().turn.live.response, Some("current fragment"))
   inspect(next.active().pending_steers.length(), content="1")
   assert_eq(next.active().pending_steers[0].content, "current steer")
   inspect(next.transcript_request_generation, content="0")
@@ -13902,7 +13860,10 @@ test "a start failure cannot close a run opened by a winning push" {
         ..opened.active(),
         turn: {
           ..opened.active().turn,
-          streaming_response: Some("foreign fragment"),
+          live: {
+            ..opened.active().turn.live,
+            response: Some("foreign fragment"),
+          },
         },
       },
       ["steer for foreign run"],
@@ -13921,7 +13882,7 @@ test "a start failure cannot close a run opened by a winning push" {
   guard failed.active().run is Open(run_id="r-foreign", stage=Opened) else {
     fail("the local failure closed the already-open run")
   }
-  assert_eq(failed.active().turn.streaming_response, Some("foreign fragment"))
+  assert_eq(failed.active().turn.live.response, Some("foreign fragment"))
   inspect(failed.active().pending_steers.length(), content="1")
   inspect(
     failed.active().pending_steers[0].content,
@@ -13942,7 +13903,10 @@ test "a start failure closes only a still-starting run" {
     {
       ..test_conversation(),
       run: Starting(submission_id="prompt-id"),
-      turn: { ..test_conversation().turn, streaming_response: Some("partial"), },
+      turn: {
+        ..test_conversation().turn,
+        live: { ..test_conversation().turn.live, response: Some("partial"), },
+      },
     },
     "prompt-id",
     "prompt",
@@ -13958,7 +13922,7 @@ test "a start failure closes only a still-starting run" {
     model,
   )
   assert_true(failed.active().run is NoRun(ended=Some(RunFailed)))
-  assert_eq(failed.active().turn.streaming_response, None)
+  assert_eq(failed.active().turn.live.response, None)
   inspect(failed.notifications.length(), content="1")
   inspect(failed.active().task, content="prompt")
   inspect(failed.transcript_request_generation, content="0")
@@ -14186,7 +14150,14 @@ test "runs settled closes runs the host no longer has, sparing live and starting
         "desktop-stale",
         @interop.ChannelId::Local.test_project(),
       ).turn,
-      streaming_response: Some("mid-step"),
+      live: {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "desktop-stale",
+          @interop.ChannelId::Local.test_project(),
+        ).turn.live,
+        response: Some("mid-step"),
+      },
     },
   }
   // A send still in flight has no run id yet; its own `started` (or
@@ -14225,7 +14196,7 @@ test "runs settled closes runs the host no longer has, sparing live and starting
     fail("expected the stale conversation")
   }
   inspect(settled.is_running(), content="false")
-  assert_eq(settled.turn.streaming_response, None)
+  assert_eq(settled.turn.live.response, None)
   guard settled.run is NoRun(ended=None) else {
     fail("expected the stale run to settle without a verdict")
   }
@@ -14687,16 +14658,20 @@ test "concurrent conversations keep their streams apart" {
   let model = running_model().replace_conversation(second)
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r8"), AssistantDelta("for B"), session=None),
+    Engine(
+      Some("r8"),
+      @wire.AssistantDelta(content="for B"),
+      session="desktop-second",
+    ),
     model,
   )
   // Run 8 belongs to the background conversation; the active one is untouched.
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-second")
     is Some(bg) else {
     fail("expected the background conversation")
   }
-  assert_eq(bg.turn.streaming_response, Some("for B"))
+  assert_eq(bg.turn.live.response, Some("for B"))
 }
 
 ///|
@@ -14822,11 +14797,12 @@ test "steer_applied only settles pending UI until its commit" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("go left")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     model,
   )
@@ -14844,8 +14820,12 @@ test "a legacy text-only steer receipt cannot claim local ownership" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content=Content([Text("go left")]), submission_id=None),
-      session=None,
+      @wire.SteerApplied(
+        kind="prompt",
+        content=Content([Text("go left")]),
+        submission_id=None,
+      ),
+      session="desktop-test",
     ),
     model,
   )
@@ -14973,11 +14953,11 @@ test "steer_dropped settles the pending steer with a visible notice" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(
+      @wire.SteerDropped(
         content=Content([Text("go left")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     model,
   )
@@ -14997,11 +14977,12 @@ test "an identical-text settle removes exactly one pending entry" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("again")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     model,
   )
@@ -15025,11 +15006,12 @@ test "a late exact applied receipt retracts a run-end unconfirmed notice" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("lost")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     finished,
   )
@@ -15046,11 +15028,12 @@ test "a trailing applied receipt for run A settles after run B Started" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("late steer")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     started,
   )
@@ -15070,11 +15053,11 @@ test "a trailing dropped receipt for run A cannot close run B" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(
+      @wire.SteerDropped(
         content=Content([Text("late steer")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     started,
   )
@@ -15332,11 +15315,12 @@ test "a trailing applied receipt settles after an empty runs snapshot" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("late applied")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     settled,
   )
@@ -15359,11 +15343,11 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(
+      @wire.SteerDropped(
         content=Content([Text("late dropped")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     settled,
   )
@@ -15706,11 +15690,11 @@ test "model switches transfer one draft and retire the old owner actions" {
   assert_true(switched.codex_composer_input().draft == draft)
   assert_true(switched.codex == repeated.codex)
   assert_true(
-    switched.composer_entry_retirements == repeated.composer_entry_retirements,
+    switched.composer_entry_changes == repeated.composer_entry_changes,
   )
   assert_true(switched.codex.draft_worktree_mode())
   assert_true(before.active_conversation() is Some(_))
-  assert_true(before.composer_entry_retirements.is_empty())
+  assert_true(before.composer_entry_changes.is_empty())
   let codex_identity = switched.codex_composer_input().identity
   let edited = { ..draft, task: "Edited in Codex", }
   let back_action = CodexComposerAction(
@@ -15777,10 +15761,10 @@ test "Codex composer retirements stay monotonic across device focus" {
     Codex(channel=source, @codex.Msg::abandon_draft()),
     started,
   )
-  let old_retirements = retired.codex_composer_input().retirements
+  let old_retirements = retired.codex_composer_input().entry_changes
   assert_eq(old_retirements.length(), 1)
   let (_, focused) = focus_channel(dispatch, retired, remote)
-  assert_true(focused.codex_composer_input().retirements == old_retirements)
+  assert_true(focused.codex_composer_input().entry_changes == old_retirements)
   assert_true(!focused.codex.has_active())
   let (_, remote_started) = update(
     dispatch,
@@ -15792,12 +15776,14 @@ test "Codex composer retirements stay monotonic across device focus" {
     Codex(channel=remote, @codex.Msg::abandon_draft()),
     remote_started,
   )
-  let retirements = remote_retired.codex_composer_input().retirements
+  let retirements = remote_retired.codex_composer_input().entry_changes
   assert_eq(retirements.length(), 2)
   assert_true(retirements[0] == old_retirements[0])
   assert_true(
     retirements[1] ==
-    @interop.Host({ channel: remote, session: "remote-draft", }),
+    @composer.Retire(
+      @interop.Host({ channel: remote, session: "remote-draft", }),
+    ),
   )
   let (_, returned) = focus_channel(dispatch, remote_retired, source)
   let (_, reopened) = update(
@@ -15805,16 +15791,19 @@ test "Codex composer retirements stay monotonic across device focus" {
     Codex(channel=source, @codex.Msg::start_draft("local-draft", "/local")),
     returned,
   )
-  assert_true(reopened.codex_composer_input().retirements == retirements)
+  assert_true(reopened.codex_composer_input().entry_changes == retirements)
   assert_true(!reopened.codex.accepts_composer_identity(old_identity, source))
-  assert_true(retired.codex_composer_input().retirements == old_retirements)
+  assert_true(retired.codex_composer_input().entry_changes == old_retirements)
 }
 
 ///|
 test "a goal editor cannot lose its draft through an agent switch" {
   let before = test_model().replace_conversation({
     ..test_conversation(),
-    goal_edit: Some({ draft: "Keep this goal", }),
+    controls: {
+      ..test_conversation().controls,
+      edit: Some({ draft: "Keep this goal", }),
+    },
   })
   assert_true(before.openseek_model_chip(before.active()).disabled)
   let (_, after) = update(
@@ -15827,8 +15816,8 @@ test "a goal editor cannot lose its draft through an agent switch" {
     before,
   )
   assert_true(after.screen is Chat)
-  assert_true(after.active().goal_edit == before.active().goal_edit)
-  assert_true(after.composer_entry_retirements.is_empty())
+  assert_true(after.active().controls.edit == before.active().controls.edit)
+  assert_true(after.composer_entry_changes.is_empty())
 }
 
 ///|
@@ -15839,10 +15828,13 @@ test "an agent switch cannot discard a pending goal write" {
     SubmitGoal,
     test_model().replace_conversation({
       ..test_conversation(),
-      goal_edit: Some({ draft: "Keep this goal", }),
+      controls: {
+        ..test_conversation().controls,
+        edit: Some({ draft: "Keep this goal", }),
+      },
     }),
   )
-  assert_true(pending.active().goal_edit is None)
+  assert_true(pending.active().controls.edit is None)
   assert_true(pending.openseek_model_chip(pending.active()).disabled)
   let (_, after) = update(
     dispatch,
@@ -15854,22 +15846,27 @@ test "an agent switch cannot discard a pending goal write" {
     pending,
   )
   assert_true(after.screen is Chat)
-  assert_true(after.active().goal_pending == pending.active().goal_pending)
-  guard after.active().goal_pending is Some(command) else {
+  assert_true(
+    after.active().controls.pending == pending.active().controls.pending,
+  )
+  guard after.active().controls.pending is Some(command) else {
     fail("pending goal must remain recoverable")
   }
   let (_, rejected) = update_dev(
     dispatch,
-    GoalRejected(
+    SessionCommandDelivered(
       session="desktop-test",
-      command=command.id,
-      draft=Some("Keep this goal"),
-      message="disk full",
+      id=command.id,
+      message=Some("disk full"),
+      command=@wire.GoalClear,
+      delivery=@engine_session.Rejected,
     ),
     after,
   )
-  assert_true(rejected.active().goal_edit is Some({ draft: "Keep this goal", }))
-  assert_true(rejected.active().goal_pending is None)
+  assert_true(
+    rejected.active().controls.edit is Some({ draft: "Keep this goal", }),
+  )
+  assert_true(rejected.active().controls.pending is None)
 }
 
 ///|
@@ -15900,7 +15897,7 @@ test "an agent switch cannot discard a pending semantic submission" {
     after.active().pending_semantic_submission ==
     before.active().pending_semantic_submission,
   )
-  assert_true(after.composer_entry_retirements.is_empty())
+  assert_true(after.composer_entry_changes.is_empty())
 }
 
 ///|
@@ -17671,17 +17668,20 @@ test "archived transcripts reject record-changing actions in update" {
     ..test_conversation(),
     record: ArchivedRecord,
     task: "must stay unsent",
-    goal_edit: Some({ draft: "must stay unset", }),
+    controls: {
+      ..test_conversation().controls,
+      edit: Some({ draft: "must stay unset", }),
+    },
   }
   let model = test_model().replace_conversation(archived)
   let (_, sent) = update(dispatch, Send, model)
   assert_true(sent.active().run is NoRun(ended=None))
   inspect(sent.active().task, content="must stay unsent")
   let (_, goal) = update(dispatch, SubmitGoal, model)
-  assert_true(goal.active().goal_pending is None)
-  assert_true(goal.active().goal_edit is Some(_))
+  assert_true(goal.active().controls.pending is None)
+  assert_true(goal.active().controls.edit is Some(_))
   let (_, compacted) = run_slash_command(dispatch, model, "compact")
-  assert_true(compacted.active().compaction is NotCompacting)
+  assert_true(compacted.active().controls.compaction is NotCompacting)
   inspect(compacted.active().task, content="must stay unsent")
 }
 
@@ -20077,32 +20077,38 @@ test "ApplyAllFeedback queues the attached annotation on a running task" {
     model,
   )
   assert_eq(batched.active().mentions.length(), 1)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
-  assert_true(applied.active().mentions.is_empty())
-  assert_eq(applied.active().pending_steers.length(), 1)
-  let steer = applied.active().pending_steers[0]
-  assert_eq(steer.mentions.length(), 1)
-  // Clearing the active composer preserves the selection in the queued draft.
-  assert_eq(batched.active().mentions, steer.mentions)
-  assert_eq(
-    steer.content,
-    (
-      #|<user_mentions>
-      #|<annotation file="README.md" lines="3-6">
-      #|<quote>
-      #|DeepSeek, Kimi, and Z.AI GLM models
-      #|</quote>
-      #|<user_comment>
-      #|make this clearer
-      #|</user_comment>
-      #|</annotation>
-      #|</user_mentions>
-    ),
-  )
+  for
+    feedback in [
+      @fileeditor.ApplyAllFeedback,
+      @fileeditor.ApplyEditorFeedback(
+        @fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/README.md"),
+        ),
+      ),
+    ] {
+    let (_, applied) = update(dispatch, FileEditor(feedback), batched)
+    assert_true(applied.active().mentions.is_empty())
+    assert_eq(applied.active().pending_steers.length(), 1)
+    let steer = applied.active().pending_steers[0]
+    assert_eq(steer.mentions.length(), 1)
+    // Clearing the active composer preserves the selection in the queued draft.
+    assert_eq(batched.active().mentions, steer.mentions)
+    assert_eq(
+      steer.content,
+      (
+        #|<user_mentions>
+        #|<annotation file="README.md" lines="3-6">
+        #|<quote>
+        #|DeepSeek, Kimi, and Z.AI GLM models
+        #|</quote>
+        #|<user_comment>
+        #|make this clearer
+        #|</user_comment>
+        #|</annotation>
+        #|</user_mentions>
+      ),
+    )
+  }
 }
 
 ///|
@@ -20349,35 +20355,41 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
   )
   let before = batched.codex_composer_input()
   assert_eq(before.draft.mentions.length(), 1)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
-  assert_eq(
-    before.draft.mentions,
-    batched.codex_composer_input().draft.mentions,
-  )
-  let queued = applied.codex.transcript_items()
-  assert_eq(queued.length(), 1)
-  guard queued[0].kind is @transcript.User(content=prompt) else {
-    fail("expected the queued comment as a user prompt")
+  for
+    feedback in [
+      @fileeditor.ApplyAllFeedback,
+      @fileeditor.ApplyEditorFeedback(
+        @fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/README.md"),
+        ),
+      ),
+    ] {
+    let (_, applied) = update(dispatch, FileEditor(feedback), batched)
+    assert_eq(
+      before.draft.mentions,
+      batched.codex_composer_input().draft.mentions,
+    )
+    let queued = applied.codex.transcript_items()
+    assert_eq(queued.length(), 1)
+    guard queued[0].kind is @transcript.User(content=prompt) else {
+      fail("expected the queued comment as a user prompt")
+    }
+    assert_eq(
+      prompt.text(),
+      (
+        #|<user_mentions>
+        #|<annotation file="README.md" lines="3-6">
+        #|<quote>
+        #|DeepSeek, Kimi, and Z.AI GLM models
+        #|</quote>
+        #|<user_comment>
+        #|make this clearer
+        #|</user_comment>
+        #|</annotation>
+        #|</user_mentions>
+      ),
+    )
   }
-  assert_eq(
-    prompt.text(),
-    (
-      #|<user_mentions>
-      #|<annotation file="README.md" lines="3-6">
-      #|<quote>
-      #|DeepSeek, Kimi, and Z.AI GLM models
-      #|</quote>
-      #|<user_comment>
-      #|make this clearer
-      #|</user_comment>
-      #|</annotation>
-      #|</user_mentions>
-    ),
-  )
 }
 
 ///|
@@ -20570,7 +20582,7 @@ test "a prompt submitted during compaction stays in the composer" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    compaction: Compacting,
+    controls: { ..test_conversation().controls, compaction: Compacting, },
     task: "do the thing",
   })
   let (_, next) = update(dispatch, Send, model)
@@ -20590,10 +20602,10 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
     last_run_id: Some("r7"),
   })
   let (_, queued) = run_slash_command(dispatch, model, "compact")
-  assert_true(queued.active().compaction is Queued)
+  assert_true(queued.active().controls.compaction is Queued)
   // One compaction at a time: the repeat is swallowed, not re-sent.
   let (_, again) = run_slash_command(dispatch, queued, "compact")
-  assert_true(again.active().compaction is Queued)
+  assert_true(again.active().controls.compaction is Queued)
   // The turn ends before compaction_started arrives; a prompt sent into
   // that gap would queue behind the compaction, out of Stop's reach.
   let (_, ended) = update_dev(
@@ -20601,7 +20613,7 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
     Finished(run_id="r7", status="completed", answer=None),
     again,
   )
-  assert_true(ended.active().compaction is Queued)
+  assert_true(ended.active().controls.compaction is Queued)
   let drafted = ended.replace_conversation({
     ..ended.active(),
     task: "next prompt",
@@ -20611,10 +20623,14 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
   // The engine reaches the queued compaction: queued flips into compacting.
   let (_, started) = update_dev(
     dispatch,
-    Engine(Some("r7"), CompactionStarted, session=None),
+    Engine(
+      Some("r7"),
+      @wire.CompactionStarted(from_sequence=1, to_sequence=2),
+      session="desktop-test",
+    ),
     held,
   )
-  assert_true(started.active().compaction is Compacting)
+  assert_true(started.active().controls.compaction is Compacting)
 }
 
 ///|
@@ -20626,10 +20642,10 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
 test "an idle /compact holds the send gate until the engine confirms" {
   let dispatch = test_dispatch()
   let (_, requested) = run_slash_command(dispatch, test_model(), "compact")
-  assert_true(requested.active().compaction is Requested)
+  assert_true(requested.active().controls.compaction is Requested)
   // A repeat while the request is in flight is swallowed, not re-sent.
   let (_, again) = run_slash_command(dispatch, requested, "compact")
-  assert_true(again.active().compaction is Requested)
+  assert_true(again.active().controls.compaction is Requested)
   // A draft sent during the spawn/write window stays in the composer.
   let drafted = again.replace_conversation({
     ..again.active(),
@@ -20641,10 +20657,14 @@ test "an idle /compact holds the send gate until the engine confirms" {
   // The engine confirms; the session stamp routes it (no run id exists yet).
   let (_, started) = update_dev(
     dispatch,
-    Engine(None, CompactionStarted, session=Some("desktop-test")),
+    Engine(
+      None,
+      @wire.CompactionStarted(from_sequence=1, to_sequence=2),
+      session="desktop-test",
+    ),
     held,
   )
-  assert_true(started.active().compaction is Compacting)
+  assert_true(started.active().controls.compaction is Compacting)
 }
 
 ///|
@@ -20656,24 +20676,40 @@ test "update is pure: automatic checkpoint waits for its commit" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("partial"),
+      live: { ..running_conversation().turn.live, response: Some("partial"), },
     },
   })
   let (_, once) = update_dev(
     dispatch,
-    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AutoCompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="checkpoint recap",
+      ),
+      session="desktop-test",
+    ),
     model,
   )
   let (_, twice) = update_dev(
     dispatch,
-    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AutoCompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="checkpoint recap",
+      ),
+      session="desktop-test",
+    ),
     model,
   )
-  assert_eq(once.active().turn.streaming_response, Some("partial"))
-  assert_eq(twice.active().turn.streaming_response, Some("partial"))
+  assert_eq(once.active().turn.live.response, Some("partial"))
+  assert_eq(twice.active().turn.live.response, Some("partial"))
   assert_true(
-    once.active().compaction is NotCompacting &&
-    twice.active().compaction is NotCompacting,
+    once.active().controls.compaction is NotCompacting &&
+    twice.active().controls.compaction is NotCompacting,
   )
 }
 
@@ -20688,21 +20724,29 @@ test "update is pure: context yield waits for its commit" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("partial"),
+      live: { ..running_conversation().turn.live, response: Some("partial"), },
     },
   })
   let (_, once) = update_dev(
     dispatch,
-    Engine(Some("r7"), ContextYield(answer), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ContextYield(to_sequence=2, answer~),
+      session="desktop-test",
+    ),
     model,
   )
   let (_, twice) = update_dev(
     dispatch,
-    Engine(Some("r7"), ContextYield(answer), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ContextYield(to_sequence=2, answer~),
+      session="desktop-test",
+    ),
     model,
   )
-  assert_eq(once.active().turn.streaming_response, None)
-  assert_eq(twice.active().turn.streaming_response, None)
+  assert_eq(once.active().turn.live.response, None)
+  assert_eq(twice.active().turn.live.response, None)
   assert_true(once.active().is_running() && twice.active().is_running())
 }
 
@@ -20714,12 +20758,24 @@ test "context yield settles after its automatic checkpoint" {
   let answer = "[context ceiling] continue in a new turn"
   let (_, checkpointed) = update_dev(
     dispatch,
-    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AutoCompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="checkpoint recap",
+      ),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, yielded) = update_dev(
     dispatch,
-    Engine(Some("r7"), ContextYield(answer), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ContextYield(to_sequence=2, answer~),
+      session="desktop-test",
+    ),
     checkpointed,
   )
   assert_true(yielded.active().is_running())
@@ -20728,7 +20784,7 @@ test "context yield settles after its automatic checkpoint" {
     Finished(run_id="r7", status="context_yield", answer=Some(answer)),
     yielded,
   )
-  assert_true(settled.active().compaction is NotCompacting)
+  assert_true(settled.active().controls.compaction is NotCompacting)
   assert_false(settled.active().is_running())
   guard settled.display_status() is Finished(outcome) else {
     fail("expected a finished status")
@@ -20744,19 +20800,23 @@ test "compaction_finished waits for its durable summary" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    compaction: Compacting,
+    controls: { ..test_conversation().controls, compaction: Compacting, },
     last_run_id: Some("r7"),
   })
   let (_, next) = update_dev(
     dispatch,
     Engine(
       Some("r7"),
-      CompactionFinished("earlier turns compacted"),
-      session=None,
+      @wire.CompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="earlier turns compacted",
+      ),
+      session="desktop-test",
     ),
     model,
   )
-  assert_true(next.active().compaction is NotCompacting)
+  assert_true(next.active().controls.compaction is NotCompacting)
 }
 
 ///|
@@ -20772,20 +20832,28 @@ test "compaction events route by session when no run id matches" {
   })
   let (_, started) = update_dev(
     dispatch,
-    Engine(None, CompactionStarted, session=Some("desktop-test")),
+    Engine(
+      None,
+      @wire.CompactionStarted(from_sequence=1, to_sequence=2),
+      session="desktop-test",
+    ),
     model,
   )
-  assert_true(started.active().compaction is Compacting)
+  assert_true(started.active().controls.compaction is Compacting)
   let (_, next) = update_dev(
     dispatch,
     Engine(
       None,
-      CompactionFinished("earlier turns compacted"),
-      session=Some("desktop-test"),
+      @wire.CompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="earlier turns compacted",
+      ),
+      session="desktop-test",
     ),
     started,
   )
-  assert_true(next.active().compaction is NotCompacting)
+  assert_true(next.active().controls.compaction is NotCompacting)
 }
 
 ///|
@@ -20796,15 +20864,19 @@ test "compaction_failed settles a still-queued compaction" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    compaction: Queued,
+    controls: { ..test_conversation().controls, compaction: Queued, },
     last_run_id: Some("r7"),
   })
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), CompactionFailed("engine exited"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.CompactionFailed(error="engine exited"),
+      session="desktop-test",
+    ),
     model,
   )
-  assert_true(next.active().compaction is NotCompacting)
+  assert_true(next.active().controls.compaction is NotCompacting)
   inspect(next.notifications.length(), content="1")
 }
 
@@ -20812,18 +20884,22 @@ test "compaction_failed settles a still-queued compaction" {
 /// A rejected compact request (no engine, host error) never produces
 /// compaction events, so the rejection itself clears the queued notice and
 /// reports the error.
-test "CompactRejected clears the queued notice and reports the error" {
+test "rejected compact delivery clears the queued notice and reports the error" {
   let dispatch = test_dispatch()
-  let model = test_model().replace_conversation({
-    ..test_conversation(),
-    compaction: Queued,
-  })
+  let (_, model) = run_slash_command(dispatch, running_model(), "compact")
+  let id = model.active().controls.compact_request.unwrap()
   let (_, next) = update_dev(
     dispatch,
-    CompactRejected(session="desktop-test", message="no engine"),
+    SessionCommandDelivered(
+      session="desktop-test",
+      id~,
+      command=@wire.Compact,
+      delivery=@engine_session.Rejected,
+      message=Some("no engine"),
+    ),
     model,
   )
-  assert_true(next.active().compaction is NotCompacting)
+  assert_true(next.active().controls.compaction is NotCompacting)
   inspect(next.notifications.length(), content="1")
   inspect(next.notifications[0].message, content="no engine")
 }
@@ -21673,8 +21749,12 @@ test "tool decode semantics wait for their durable error tool result" {
   let dispatch = test_dispatch()
   let semantic = Engine(
     Some("r7"),
-    ToolCallDecodeError(tool_name="edit", reason="invalid arguments"),
-    session=None,
+    @wire.ToolCallDecodeError(
+      tool_call_id="call",
+      tool_name="edit",
+      error="invalid arguments",
+    ),
+    session="desktop-test",
   )
   // The engine records the response with its undecodable call, then the
   // error result that closes it; the semantic event is only news.
@@ -21727,12 +21807,20 @@ test "assistant semantic events wait for their durable commit" {
   let dispatch = test_dispatch()
   let (_, thought) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("think"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="think"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, answered) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantMessage("answer"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantMessage(content="answer"),
+      session="desktop-test",
+    ),
     thought,
   )
   inspect(answered.active().messages.length(), content="0")
@@ -21809,11 +21897,13 @@ test "a delayed assistant commit never clears a newer live delta" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("newer turn fragment"),
-      live_reasoning: Some({
-        content: "newer reasoning fragment",
-        complete: false,
-      }),
+      live: {
+        response: Some("newer turn fragment"),
+        reasoning: Some({
+          content: "newer reasoning fragment",
+          complete: false,
+        }),
+      },
     },
   })
   let (_, committed) = update_dev(
@@ -21832,12 +21922,9 @@ test "a delayed assistant commit never clears a newer live delta" {
     ),
     model,
   )
+  assert_eq(committed.active().turn.live.response, Some("newer turn fragment"))
   assert_eq(
-    committed.active().turn.streaming_response,
-    Some("newer turn fragment"),
-  )
-  assert_eq(
-    committed.active().turn.live_reasoning,
+    committed.active().turn.live.reasoning,
     Some({ content: "newer reasoning fragment", complete: false, }),
   )
 }
@@ -21857,7 +21944,10 @@ test "a delayed terminal commit never clears a newer live delta" {
     watermark: 1,
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("next turn fragment"),
+      live: {
+        ..running_conversation().turn.live,
+        response: Some("next turn fragment"),
+      },
     },
   })
   let (_, committed) = update_dev(
@@ -21871,10 +21961,7 @@ test "a delayed terminal commit never clears a newer live delta" {
     ),
     model,
   )
-  assert_eq(
-    committed.active().turn.streaming_response,
-    Some("next turn fragment"),
-  )
+  assert_eq(committed.active().turn.live.response, Some("next turn fragment"))
 }
 
 ///|
@@ -21882,7 +21969,10 @@ test "commit-first assistant semantics do not append again" {
   let dispatch = test_dispatch()
   let streaming = running_model().replace_conversation({
     ..running_conversation(),
-    turn: { ..running_conversation().turn, streaming_response: Some("answer"), },
+    turn: {
+      ..running_conversation().turn,
+      live: { ..running_conversation().turn.live, response: Some("answer"), },
+    },
   })
   let (_, committed) = update_dev(
     dispatch,
@@ -21902,17 +21992,25 @@ test "commit-first assistant semantics do not append again" {
   )
   let (_, thought) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("think"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="think"),
+      session="desktop-test",
+    ),
     committed,
   )
   let (_, answered) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantMessage("answer"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantMessage(content="answer"),
+      session="desktop-test",
+    ),
     thought,
   )
   inspect(answered.active().messages.length(), content="1")
   inspect(answered.active().watermark, content="1")
-  assert_eq(answered.active().turn.streaming_response, None)
+  assert_eq(answered.active().turn.live.response, None)
 }
 
 ///|
@@ -23397,14 +23495,15 @@ test "a sub-run's finish refreshes the child transcript one last time" {
     test_dispatch(),
     Engine(
       Some("r7"),
-      SubrunClosed(
+      @wire.SubrunFinished(
         id="sr-1",
         status="captured",
         steps=7,
-        tokens=30,
+        prompt_tokens=30,
         unaccounted=None,
+        completion_tokens=0,
       ),
-      session=None,
+      session="desktop-test",
     ),
     page,
   )

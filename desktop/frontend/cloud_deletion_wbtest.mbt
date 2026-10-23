@@ -44,8 +44,10 @@ test "Cloud deletion falls back within Cloud regardless of the sidebar mode" {
   assert_true(removed.cloud_identity() is None)
   assert_true(removed.cloud_selected())
   assert_true(
-    removed.composer_entry_retirements.contains(
-      @interop.Cloud(account="fixture-user", session="cloud-a"),
+    removed.composer_entry_changes.contains(
+      @composer.Retire(
+        @interop.Cloud(account="fixture-user", session="cloud-a"),
+      ),
     ),
   )
   assert_false(removed.cloud.conversations.contains("cloud-a"))
@@ -116,7 +118,9 @@ test "Cloud deletion keeps a failed creation in Cloud and allows the normal new 
   assert_true(failed.chat_column() is CloudTranscript(..))
   assert_true(failed.host_selection() is None)
   let (_, retried) = update(test_dispatch(), CloudAction(@cloud.Create), failed)
-  assert_true(retried.cloud.creation is Some({ submission: None, .. }))
+  assert_true(
+    retried.cloud.creation is Some(_) && !retried.cloud.creating_session(),
+  )
   assert_true(retried.chat_column() is CloudTranscript(..))
 }
 

@@ -10,7 +10,7 @@ fn review_source_version(original : String, modified : String) -> String {
     new == modified {
     return version
   }
-  let input = original.length().to_string() + ":" + original + modified
+  let input = "\{original.length()}:\{original}\{modified}"
   let version = @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(input)))
   review_context_digest.val = Some((original, modified, version))
   version

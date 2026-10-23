@@ -75,7 +75,7 @@ class ExportHarness extends DesktopBrowserHarness {
           get: (_, method) => async params => {
             if (method === 'host.connect') {
               for (const callback of listeners.get('openseek.agent.connected') || []) {
-                callback({ payload: { protocol: 1 } });
+                callback({ payload: { protocol: 2 } });
               }
             }
             return window.desktopRequest({ method, params });
@@ -91,7 +91,7 @@ class ExportHarness extends DesktopBrowserHarness {
   }
 
   async replyFor(request) {
-    if (request.method === 'session.share') {
+    if (request.method === 'session.share' || request.method === 'fs.share_file') {
       this.hostShares.push(request.params);
       if (this.pendingShare) await this.pendingShare;
       return this.shareReply;
@@ -427,3 +427,69 @@ test('one header menu contains export and import, dismisses with Escape, and res
   await expect(trigger).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });
+
+
+for (const browser of [false, true]) {
+  test(`${browser ? 'remote Host' : 'Local'} file share reuses account authority and stays pending across dismissal`, async ({ page }, testInfo) => {
+    const app = new ExportHarness(page);
+    if (!browser) app.accountSignedIn = false;
+    app.directoryEntries['/workspace'] = [{ name: 'src', is_dir: true }, { name: 'artifact.bin', is_dir: false }];
+    app.workingFiles['artifact.bin'] = 'original file';
+    let finish;
+    app.pendingShare = new Promise(resolve => { finish = resolve; });
+    await app.openDesktop({ browser });
+    await app.openReview();
+    await page.getByRole('tab', { name: 'Files', exact: true }).click();
+    const tree = page.getByRole('tree', { name: 'Workspace files', exact: true });
+    await tree.getByRole('treeitem', { name: 'src', exact: true }).click({ button: 'right' });
+    await expect(page.getByRole('menu', { name: 'Context menu', exact: true })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Share', exact: true })).toHaveCount(0);
+    await page.getByRole('menu', { name: 'Context menu', exact: true }).press('Escape');
+    const row = tree.getByRole('treeitem', { name: 'artifact.bin', exact: true });
+    await row.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Share file', exact: true });
+    if (!browser) {
+      await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
+      await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+      expect(app.count('auth.connect')).toBe(1);
+      expect(app.count('fs.share_file')).toBe(0);
+      await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+    }
+    await expect.poll(() => app.count('fs.share_file')).toBe(1);
+    expect(app.hostShares[0]).toEqual({ source: { root: '/workspace', path: 'artifact.bin' }, idempotency_key: expect.any(String), authorization: browser ? { kind: 'upload_grant', upload_token: 'sug_fixture' } : { kind: 'local_account', user_id: '123' } });
+    if (browser) expect(app.grantRequests[0].body).toEqual({ device_id: 'device-a', idempotency_key: app.hostShares[0].idempotency_key });
+    expect(app.requests.filter(request => request.method === 'fs.read_file' && request.params?.path.endsWith('artifact.bin'))).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    // A hidden file upload must not occupy the conversation export instance.
+    const conversation = await app.openExport();
+    await expect(conversation.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+    if (browser) {
+      const download = page.waitForEvent('download');
+      await conversation.getByRole('button', { name: 'Download', exact: true }).click();
+      expect((await download).suggestedFilename()).toBe('conversation.html');
+    } else {
+      await conversation.getByRole('button', { name: 'Download', exact: true }).click();
+      await expect.poll(() => app.count('session.export')).toBe(1);
+    }
+    await expect(conversation.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await expect(conversation).toBeHidden();
+    await row.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: 'Sharing…', exact: true })).toBeDisabled();
+    expect(app.count('fs.share_file')).toBe(1);
+    finish(); app.pendingShare = null;
+    await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(app.shareReply.url);
+    if (!browser) await page.screenshot({ path: testInfo.outputPath('local-file-share.png') });
+    await page.keyboard.press('Escape');
+    await row.click();
+    await page.locator('.viewer-breadcrumb').getByRole('button', { name: 'Share', exact: true }).click();
+    await expect.poll(() => app.count('fs.share_file')).toBe(2);
+    expect(app.hostShares[1].idempotency_key).not.toBe(app.hostShares[0].idempotency_key);
+    expect(app.clientUploads).toEqual([]);
+    expect(app.count('session.share')).toBe(0);
+    expect(app.pageErrors).toEqual([]);
+  });
+}

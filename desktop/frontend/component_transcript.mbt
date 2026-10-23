@@ -75,7 +75,8 @@ fn Model::chat_column(self : Model) -> ChatColumn {
         Loading
       }
     }
-    if conversation.loading && conversation.records.is_empty() {
+    if conversation.loading &&
+      conversation.document.events.map_or(true, events => events.is_empty()) {
       return Loading
     }
     if conversation.history_required && conversation.notice is Some(message) {
@@ -204,7 +205,7 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
       .conversation_placement(conversation)
       .bind(value => value.checkout_root()),
       items: conversation.visible_transcript_rows(),
-      streaming_response: conversation.turn.streaming_response,
+      streaming_response: conversation.turn.live.response,
       streaming_reasoning,
       reasoning_complete,
       streaming_identity: conversation.streaming_render_identity(),
@@ -264,14 +265,14 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       project_query="",
       root=None,
       items=@transcript_component.VisibleRow::history(conversation.items()),
-      streaming_response=conversation.streaming_response,
-      streaming_reasoning?=conversation.streaming_reasoning,
-      reasoning_complete=conversation.reasoning_complete,
+      streaming_response=conversation.live.response,
+      streaming_reasoning?=conversation.live.reasoning.map(r => r.content),
+      reasoning_complete=conversation.live.reasoning.map_or(false, r => {
+        r.complete
+      }),
       // Deltas do not change the committed-event count, so the live bubble
       // keeps one identity until a semantic response/step boundary.
-      streaming_identity=conversation.task.unwrap_or("idle") +
-        ":" +
-        conversation.events.length().to_string(),
+      streaming_identity="\{conversation.task.unwrap_or("idle")}:\{conversation.document.events.unwrap_or([]).length()}",
     )
   }
   let content = self.transcript_content()

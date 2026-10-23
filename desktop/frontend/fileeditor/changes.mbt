@@ -292,7 +292,7 @@ fn ChangedFile::unselectable_title(
       Spanish => "no se puede previsualizar el cambio"
     }
   }
-  self.status_title() + " — " + reason
+  "\{self.status_title()} — \{reason}"
 }
 
 ///|

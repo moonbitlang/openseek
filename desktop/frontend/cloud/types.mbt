@@ -13,10 +13,13 @@ pub(all) struct Record {
   kind : String
   data : Json
   created_at : Double
+  // Native User sequence; absent for service-only submissions.
+  engine_sequence : Int32?
 } derive(Eq)
 
 ///|
 pub(all) struct History {
+  session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
 }
@@ -39,31 +42,59 @@ pub struct Submission {
 } derive(Eq)
 
 ///|
+/// Recovery includes the fresh stream's history synchronization. Definitive
+/// errors disconnect until the conversation is explicitly opened again.
+pub(all) enum WatchStatus {
+  Watching
+  Reconnecting
+  Disconnected
+} derive(Eq)
+
+///|
+pub extend WatchStatus with Eq::{equal, not_equal}
+
+///|
 pub(all) struct Conversation {
   records : Array[Record]
+  // Last task lifecycle event supplies status while canonical history reloads.
   events : Array[Event]
+  document : @protocol.SessionDocument
   request : Int32
+  send_request : Int32
   loading : Bool
   sending : Bool
   generating : Bool
+  unseen_finish : Bool
+  // Retain the current native reply for completion notifications while history loads.
+  notification_answer : String?
+  // Last live completion handled, independent of history replacement.
+  last_finished_task : String?
+  // Keep observing a known run through its idle snapshot until the terminal
+  // event arrives. An idle snapshot alone is not a completion notification.
+  observed_task : String?
   history_required : Bool
   submission_sequence : Int32
-  // Seed the shared composer after creation assigns a remote ID. Clear only
-  // when the first prompt is admitted, not when its send fails.
+  // Seed the shared composer when recovering input or editing a queued item.
+  // Clear only when that input is admitted, not when its send fails.
   initial_submission : @composer.Draft?
   initial_attachments : Array[@protocol.AttachmentSource]
   uploads : Array[UploadedAttachment]
   pending : Submission?
+  // One command waiting for session creation or the first SSE snapshot.
+  outgoing : PendingCommand?
   stream : StreamLease?
+  control : ControlState?
+  control_inputs : Array[ControlInput]
+  queue_edit : String?
+  watch_request : Int32
+  watch_status : WatchStatus
   task : String?
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
-  streaming_response : String?
-  streaming_reasoning : String?
-  reasoning_complete : Bool
+  live : @engine_session.Stream
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
-  compacting : Bool
+  controls : @engine_session.State
   notice : String?
 } derive(Eq)
 
@@ -72,25 +103,40 @@ fn Conversation::empty() -> Conversation {
   {
     records: [],
     events: [],
+    document: {
+      version: None,
+      id: None,
+      system_prompt: None,
+      events: Some([]),
+    },
     request: 0,
+    send_request: 0,
     loading: true,
     sending: false,
     generating: false,
+    unseen_finish: false,
+    notification_answer: None,
+    last_finished_task: None,
+    observed_task: None,
     history_required: true,
     submission_sequence: 0,
     initial_submission: None,
     initial_attachments: [],
     uploads: [],
     pending: None,
+    outgoing: None,
     stream: None,
+    control: None,
+    control_inputs: [],
+    queue_edit: None,
+    watch_request: 0,
+    watch_status: Watching,
     task: None,
     last_seq: None,
-    streaming_response: None,
-    streaming_reasoning: None,
-    reasoning_complete: false,
+    live: @engine_session.Stream::empty(),
     heartbeat: None,
     retrying: None,
-    compacting: false,
+    controls: @engine_session.State::empty(),
     notice: None,
   }
 }
@@ -101,8 +147,23 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
-  submission : @composer.Draft?
-  attachments : Array[@protocol.AttachmentSource]
+} derive(Eq)
+
+///|
+/// One unsent submission, retained on the conversation until its HTTP handoff.
+pub struct PendingCommand {
+  request : Int32
+  input : CommandInput
+} derive(Eq)
+
+///|
+pub(all) enum CommandInput {
+  Native(@wire.Command)
+  Prompt(
+    content~ : @wire.Content,
+    draft~ : @composer.Draft,
+    attachments~ : Array[@protocol.AttachmentSource]
+  )
 } derive(Eq)
 
 ///|
@@ -193,8 +254,27 @@ pub(all) enum Msg {
   CreateFailed(Int32, Int32, Failure)
   Loaded(Int32, String, Int32, History)
   LoadFailed(Int32, String, Int32, Failure)
+  WatchOpened(Int32, String, StreamLease)
+  WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
+  WatchEnded(Int32, String, StreamLease, Failure?)
+  ControlAction(@interop.ConversationIdentity, @composer.Action)
+  CommandFinished(Int32, String, String, @wire.Command, ControlResult)
+  CommandFailed(Int32, String, String, @wire.Command, Failure)
+  ControlAttachmentStored(
+    Int32,
+    String,
+    String,
+    String,
+    @protocol.AttachmentSource,
+    String
+  )
+  ControlPrepared(Int32, String, String, String, @composer.Draft, @wire.Content)
+  ControlChecked(Int32, String, String, ControlSnapshot)
+  ControlFinished(Int32, String, String, String, ControlResult)
+  ControlFailed(Int32, String, String, String, Failure)
+  ControlPreparationFailed(Int32, String, String, String, Failure)
   StreamEvent(Int32, String, Int32, Event)
-  StreamEnded(Int32, String, Int32)
+  SendAccepted(Int32, String, Int32)
   SendFailed(Int32, String, Int32, Failure)
   AttachmentStored(Int32, String, Int32, @protocol.AttachmentSource, String)
   MessagePrepared(Int32, String, Int32, @composer.Draft, @wire.Content)
@@ -268,12 +348,28 @@ fn decode_history(json : Json) -> History raise RequestError {
     raise @cloud_client.RequestError(Malformed)
   }
   let messages = items.map(item => {
-    task_id: required_string(item, "task_id"),
-    kind: required_string(item, "kind"),
-    data: required_data(item),
-    created_at: required_number(item, "created_at"),
+    let engine_sequence = match item {
+      { "engine_sequence": Null, .. } => None
+      { "engine_sequence": Number(sequence, ..), .. } if sequence > 0 &&
+        sequence == sequence.to_int().to_double() => Some(sequence.to_int())
+      Object(fields) if !fields.contains("engine_sequence") => None
+      _ => raise @cloud_client.RequestError(Malformed)
+    }
+    {
+      task_id: required_string(item, "task_id"),
+      kind: required_string(item, "kind"),
+      data: required_data(item),
+      created_at: required_number(item, "created_at"),
+      engine_sequence,
+    }
   })
-  { messages, generating: required_bool(json, "generating"), }
+  guard json is { "session": document, .. } else {
+    raise @cloud_client.RequestError(Malformed)
+  }
+  let session : @protocol.SessionDocument = @json.from_json(document) catch {
+    _ => raise @cloud_client.RequestError(Malformed)
+  }
+  { session, messages, generating: required_bool(json, "generating"), }
 }
 
 ///|
@@ -320,3 +416,9 @@ pub fn State::draft_identity(self : State) -> @interop.ConversationIdentity? {
     None
   }
 }
+
+///|
+pub extend PendingCommand with Eq::{equal, not_equal}
+
+///|
+pub extend CommandInput with Eq::{equal, not_equal}

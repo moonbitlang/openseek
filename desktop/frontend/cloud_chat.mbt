@@ -80,12 +80,12 @@ fn Model::accepts_composer_action(
   self : Model,
   identity : @composer.Identity,
 ) -> Bool {
-  guard identity.archive_generation <= self.composer_entry_retirements.length() else {
+  guard identity.archive_generation <= self.composer_entry_changes.length() else {
     return false
   }
   for
-    index in identity.archive_generation..<self.composer_entry_retirements.length() {
-    if self.composer_entry_retirements[index] == identity.owner {
+    index in identity.archive_generation..<self.composer_entry_changes.length() {
+    if self.composer_entry_changes[index].retires(identity.owner) {
       return false
     }
   }
@@ -109,8 +109,25 @@ fn update_cloud(
     token?=model.account.map(account => account.token),
     navigation=model.chat_navigation_generation,
   )
+  let completion = if model.account.map(account => account.user.user_id) ==
+    before.user_id {
+    cloud_finished_notification(before, cloud, message)
+  } else {
+    None
+  }
+  let cloud = if completion is Some((id, _)) {
+    let conversations = cloud.conversations.copy()
+    conversations[id] = {
+      ..conversations[id],
+      unseen_finish: true,
+      last_finished_task: conversations[id].task,
+    }
+    { ..cloud, conversations, }
+  } else {
+    cloud
+  }
   let switched = before.user_id is Some(_) && before.user_id != cloud.user_id
-  let retirements = model.composer_entry_retirements.copy()
+  let retirements = model.composer_entry_changes.copy()
   let created = match message {
     @cloud.Created(epoch, request, session) if epoch == before.epoch &&
       before.creation is Some(creation) &&
@@ -118,13 +135,14 @@ fn update_cloud(
       cloud.creation is None => Some(session)
     _ => None
   }
-  if created is Some(_) && before.draft_identity() is Some(owner) {
-    retirements.push(owner)
+  if created is Some(session) &&
+    before.draft_identity() is Some(owner) &&
+    cloud.user_id is Some(account) {
+    retirements.push(
+      @composer.Move(from=owner, to=@interop.Cloud(account~, session~)),
+    )
   }
   if switched && before.user_id is Some(account) {
-    if before.draft_identity() is Some(owner) {
-      retirements.push(owner)
-    }
     let sessions = before.sessions.map(item => item.id)
     for session in before.conversations.keys() {
       if !sessions.contains(session) {
@@ -132,7 +150,7 @@ fn update_cloud(
       }
     }
     for session in sessions {
-      retirements.push(@interop.Cloud(account~, session~))
+      retirements.push(@composer.Retire(@interop.Cloud(account~, session~)))
     }
   }
   let removed = if before.user_id == cloud.user_id {
@@ -146,7 +164,7 @@ fn update_cloud(
   let mut navigation = model.navigation
   if before.user_id is Some(account) {
     for session in removed {
-      retirements.push(@interop.Cloud(account~, session~))
+      retirements.push(@composer.Retire(@interop.Cloud(account~, session~)))
       let location : @routes.Location = {
         device: None,
         target: CloudSession(account=Some(account), session~),
@@ -259,7 +277,7 @@ fn update_cloud(
         ) => None
       other => other
     },
-    composer_entry_retirements: retirements,
+    composer_entry_changes: retirements,
     selected_conversation: if message is @cloud.Create &&
       cloud.draft_identity() is Some(@interop.Cloud(account~, session=id)) {
       Some(CloudDraftSelection(account~, id~))
@@ -301,7 +319,13 @@ fn update_cloud(
     }
   }
   let next = { ..next, file_panel, }
-  let command = @cmd.batch([command, ..file_commands])
+  let command = @cmd.batch(
+    [
+      command,
+      ..file_commands,
+      completion.map_or(@cmd.none, value => value.1.command(locale=next.locale)),
+    ],
+  )
   if ((deleted && removed_selection) || archived_selection) &&
     model.screen is Chat {
     let next = {
@@ -339,6 +363,29 @@ fn update_cloud(
     }
     return (@cmd.batch([command, finish]), next)
   }
+  if message is @cloud.WatchEvent(epoch, session, _, @cloud.NativeEvent(frame)) &&
+    epoch == before.epoch &&
+    before.conversations.get(session) is Some(previous) &&
+    previous.last_seq.map_or(false, seq => frame.seq > seq) &&
+    next.cloud.conversations.get(session) is Some(current) &&
+    current.last_seq == Some(frame.seq) &&
+    (frame.task_id is None || frame.task_id == previous.task) {
+    let error = match @wire.parse(frame.data) {
+      Some(
+        @wire.CommandError(error~)
+        | @wire.SessionError(error~)
+        | @wire.CompactionFailed(error~)
+        | @wire.AutoCompactionFailed(error~)
+      ) => Some(error)
+      _ => None
+    }
+    if error is Some(error) {
+      // A command diagnostic is not a chatting task failure. Use the same
+      // transient error reporting as Local instead of changing run status.
+      let (report, next) = next.notify_error(dispatch, error)
+      return (@cmd.batch([command, report]), next)
+    }
+  }
   (command, next)
 }
 
@@ -350,26 +397,23 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     None => self.cloud_identity()
   }
   guard owner is Some(owner) else { return None }
-  let conversation = self.cloud_conversation()
-  let creating = self.cloud_draft_identity() is Some(_)
-  guard creating || conversation is Some(_) else { return None }
-  let pending = creating &&
-    self.cloud.creation is Some({ submission: Some(_), .. })
+  guard self.cloud.conversations.get(owner.session()) is Some(conversation) else {
+    return None
+  }
+  let pending = self.cloud.draft_identity() == Some(owner) &&
+    self.cloud.creating_session()
   let history : Array[String] = []
-  if conversation is Some(conversation) {
-    for record in conversation.records {
-      if record.kind == "user" &&
-        record.data is { "content": String(content), .. } {
-        history.push(content)
-      }
+  for record in conversation.records {
+    if record.kind == "user" &&
+      record.data is { "content": String(content), .. } {
+      history.push(content)
     }
   }
   let input = self.dormant_composer_input()
   Some({
     ..input,
     identity: { ..input.identity, owner, },
-    draft: conversation
-    .bind(value => value.initial_submission)
+    draft: conversation.initial_submission
     .unwrap_or(input.draft)
     .with_semantic_selection(
       if self.file_panel.owner == Some(owner) {
@@ -380,32 +424,34 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         None
       },
     ),
-    run: if conversation is Some(value) && (value.sending || value.generating) {
+    run: if conversation.sending || conversation.generating {
       Some(
         conversation
-        .bind(value => value.run_heartbeat())
+        .run_heartbeat()
         .unwrap_or({ stage: @composer.Working, started_ms: None, tokens: 0, }),
       )
     } else {
       None
     },
-    turn_id: conversation.bind(value => value.task),
+    turn_id: conversation.task,
+    goal: conversation.controls.input(),
+    slash_commands: if !self.cloud.can_compose(owner.session()) {
+      []
+    } else {
+      self.openseek_commands()
+    },
     history,
     root: file_ctx(self).root(),
     cloud_access: self.account.map(account => {
       token: account.token,
       epoch: self.cloud.epoch,
     }),
-    staged_attachments: conversation.map_or([], value => {
-      value.initial_attachments
-    }),
+    staged_attachments: conversation.initial_attachments,
     file_candidates: self.file_search().candidates,
     open_files: self.live_editor_files(),
     active_file: self.active_workspace_file(),
     installed_skills: [],
-    submission_sequence: conversation.map_or(0, value => {
-      value.submission_sequence
-    }),
+    submission_sequence: conversation.submission_sequence,
     file_index: if self.file_panel.owner == Some(owner) {
       self.composer_file_index()
     } else {
@@ -413,10 +459,20 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     },
     presentation: {
       images_enabled: true,
-      context: if conversation is Some({ compacting: true, .. }) {
-        [@composer.CompactionNotice(queued=false)]
-      } else {
-        input.presentation.context
+      context: {
+        let context = conversation.control_context()
+        if conversation.watch_status == Reconnecting {
+          context.push(@composer.ConnectionBanner(device_name=Some("Cloud")))
+        }
+        if conversation.controls.is_compacting() ||
+          conversation.controls.is_compact_queued() {
+          context.push(
+            @composer.CompactionNotice(
+              queued=!conversation.controls.is_compacting(),
+            ),
+          )
+        }
+        context
       },
       status: [
         @composer.ModelStatus({
@@ -434,16 +490,23 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         }),
       ],
       placeholder: shell_text(self.locale, AskPlaceholder),
-      disabled: pending ||
-      (!creating && !self.cloud.can_compose(owner.session())),
-      primary_action: @composer.Send(
-        available=self.account is Some(_) &&
-          (if creating {
-            !pending
+      disabled: pending || !self.cloud.can_compose(owner.session()),
+      primary_action: if conversation.generating ||
+        conversation.sending ||
+        conversation.queue_edit is Some(_) {
+        conversation.control_primary_action(
+          if self.followup_behavior is FollowupQueue {
+            @composer.Queue
           } else {
-            self.cloud.can_send(owner.session())
-          }),
-      ),
+            @composer.Steer
+          },
+        )
+      } else {
+        @composer.Send(
+          available=self.account is Some(_) &&
+            self.cloud.can_send(owner.session()),
+        )
+      },
     },
   })
 }
@@ -505,7 +568,19 @@ fn Model::cloud_chat_rows(
               conversation.sending || conversation.generating
             }),
           needs_input=false,
-          unseen_outcome=None,
+          unseen_outcome=if !archived &&
+            conversation is Some({ unseen_finish: true, .. } as conversation) {
+            Some(
+              match cloud_recorded_status(conversation) {
+                Finished(Completed) => @conversation.Completed
+                Failed | Errored => @conversation.Failed
+                Finished(Aborted) => @conversation.Stopped
+                _ => @conversation.Ended
+              },
+            )
+          } else {
+            None
+          },
         ),
       },
     )

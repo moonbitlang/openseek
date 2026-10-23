@@ -211,6 +211,7 @@ async test "a bound session routes every start through its checkout" {
   stage_worktree_placements(ws, [("wt", "openseek/wt", Some("s-bind"), None)])
   let manager = new_engine_manager("openseek")
   let first = run_config(manager, {
+    moonbit_guide: None,
     images: [],
     task: "go",
     submission_id: None,
@@ -233,6 +234,7 @@ async test "a bound session routes every start through its checkout" {
   // A hint-less resume goes through the durable record and the mapping.
   @fsx.ensure_dir(ws.join(".openseek/sessions/s-bind").to_path())
   let resumed = run_config(manager, {
+    moonbit_guide: None,
     images: [],
     task: "resume",
     submission_id: None,
@@ -411,6 +413,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
   let hinted_refusal = try {
     ignore(
       run_config(manager, {
+        moonbit_guide: None,
         images: [],
         task: "continue",
         submission_id: None,
@@ -431,6 +434,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
   let resumed_refusal = try {
     ignore(
       run_config(manager, {
+        moonbit_guide: None,
         images: [],
         task: "resume",
         submission_id: None,

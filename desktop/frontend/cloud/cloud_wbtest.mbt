@@ -1,6 +1,7 @@
 ///|
 test "Cloud history reads message metadata without unused IDs or outcomes" {
   let history = decode_history({
+    "session": { "events": [] },
     "messages": [
       {
         "task_id": "task-a",
@@ -24,7 +25,12 @@ test "Cloud history reads message metadata without unused IDs or outcomes" {
   assert_eq(event.task_id, "task-b")
   let invalid = try {
     ignore(
-      decode_history({ "messages": [], "generating": "false", "outcome": null }),
+      decode_history({
+        "session": { "events": [] },
+        "messages": [],
+        "generating": "false",
+        "outcome": null,
+      }),
     )
     false
   } catch {
@@ -95,7 +101,11 @@ test "Busy cannot allow another send before authoritative history recovers" {
   let request = opened.conversations["session"].request
   let (loaded, _, _) = update(
     opened,
-    Loaded(1, "session", request, { messages: [], generating: false, }),
+    Loaded(1, "session", request, {
+      session: native_document([]),
+      messages: [],
+      generating: false,
+    }),
     emit,
     token="ts_fixture",
     navigation=0,
@@ -135,7 +145,11 @@ test "Busy cannot allow another send before authoritative history recovers" {
   assert_eq(blocked.sequence, failed.sequence)
   let (recovered, _, _) = update(
     blocked,
-    Loaded(1, "session", blocked.sequence, { messages: [], generating: false, }),
+    Loaded(1, "session", blocked.sequence, {
+      session: native_document([]),
+      messages: [],
+      generating: false,
+    }),
     emit,
     token="ts_fixture",
     navigation=0,
@@ -189,12 +203,14 @@ test "history recovery clears a send error only when the pending submission was 
         navigation=0,
       )
       let history : History = {
+        session: native_document([]),
         messages: if admitted {
           [
             {
               task_id: "new-task",
               kind: "user",
               data: { "content": "hello" },
+              engine_sequence: None,
               created_at: 100,
             },
           ]
@@ -262,38 +278,49 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     token="ts_fixture",
     navigation=0,
   )
-  let request = sending.conversations["session"].request
   let advance = (state : State, seq : Int32, kind : String, data : Json) => {
-    update(
-      state,
-      StreamEvent(1, "session", request, {
-        session_id: "session",
-        task_id: "task",
-        seq,
-        kind,
-        data,
-      }),
-      emit,
-      token="ts_fixture",
-      navigation=0,
-    ).0
+    state.progress_test_event(seq, kind, data)
   }
+
   let started = advance(sending, 1, "task_started", {})
   let first = advance(started, 2, "assistant_delta", { "content": "你" })
   let second = advance(first, 3, "assistant_delta", { "content": "好 🌙" })
-  assert_eq(first.conversations["session"].streaming_response, Some("你"))
+  assert_eq(first.conversations["session"].live.response, Some("你"))
+  assert_eq(second.conversations["session"].live.response, Some("你好 🌙"))
   assert_eq(
-    second.conversations["session"].streaming_response,
-    Some("你好 🌙"),
-  )
-  assert_eq(
-    first.conversations["session"].events.length(),
-    second.conversations["session"].events.length(),
+    first.conversations["session"].document.events.unwrap_or([]).length(),
+    second.conversations["session"].document.events.unwrap_or([]).length(),
   )
   let full = advance(second, 4, "assistant_message", {
     "content": "你好 🌙",
   })
-  assert_true(full.conversations["session"].streaming_response is None)
+  assert_true(full.conversations["session"].live.response is None)
+  let full = metadata_update(
+    full,
+    Loaded(1, "session", full.conversations["session"].request, {
+      generating: true,
+      session: native_document([
+        { "kind": "user", "payload": { "content": "hello" } },
+        { "kind": "assistant", "payload": { "content": "你好 🌙" } },
+      ]),
+      messages: [
+        {
+          task_id: "task",
+          kind: "user",
+          data: { "content": "hello" },
+          engine_sequence: Some(1),
+          created_at: 1,
+        },
+        {
+          task_id: "task",
+          kind: "assistant_message",
+          data: { "content": "你好 🌙" },
+          engine_sequence: None,
+          created_at: 2,
+        },
+      ],
+    }),
+  )
   assert_true(
     full.conversations["session"].items()[1].kind
     is Assistant(prose=Some("你好 🌙"), ..),
@@ -313,10 +340,10 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     "content": "unfinished step",
   })
   let step = advance(unfinished, 8, "step", { "step": 2 })
-  assert_true(step.conversations["session"].streaming_response is None)
+  assert_true(step.conversations["session"].live.response is None)
   assert_eq(
-    step.conversations["session"].events.length(),
-    unfinished.conversations["session"].events.length(),
+    step.conversations["session"].document.events.unwrap_or([]).length(),
+    unfinished.conversations["session"].document.events.unwrap_or([]).length(),
   )
   let failed_attempt = advance(step, 9, "assistant_delta", {
     "content": "discarded",
@@ -326,12 +353,12 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     "max_attempts": 3,
     "reason": "fixture",
   })
-  assert_true(retry.conversations["session"].streaming_response is None)
+  assert_true(retry.conversations["session"].live.response is None)
   let replacement = advance(retry, 11, "assistant_delta", {
     "content": "replacement",
   })
   assert_eq(
-    replacement.conversations["session"].streaming_response,
+    replacement.conversations["session"].live.response,
     Some("replacement"),
   )
   let completed = advance(replacement, 12, "assistant_message", {
@@ -341,16 +368,21 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     "status": "completed",
     "result": { "output": { "answer": "replacement" } },
   })
-  assert_true(ended.conversations["session"].streaming_response is None)
-  assert_true(
-    advance(ended, 14, "assistant_delta", { "content": "late" }) == ended,
-  )
+  assert_true(ended.conversations["session"].live.response is None)
+  let late = advance(ended, 14, "assistant_delta", { "content": "late" })
+  assert_false(late.conversations["session"].generating)
+  assert_true(late.conversations["session"].live.response is None)
+  let stream = StreamLease::new()
+  let observing = replacement.replace("session", {
+    ..replacement.conversations["session"],
+    stream: Some(stream),
+  })
   let (disconnected, _, _) = update(
-    replacement,
-    StreamEnded(1, "session", request),
+    observing,
+    WatchEnded(1, "session", stream, Some(Unreachable)),
     emit,
     token="ts_fixture",
     navigation=0,
   )
-  assert_true(disconnected.conversations["session"].streaming_response is None)
+  assert_true(disconnected.conversations["session"].live.response is None)
 }

@@ -1,6 +1,6 @@
 ///|
-#cfg(not(platform="windows"))
 async test "encode follows shell tool output fields on Unix" {
+  guard !(@async.platform is Windows) else { return }
   let output = @command_context.collect_shell_output("printf %s 'abc'")
   let expected =
     #|<user_shell_command>
@@ -38,8 +38,8 @@ async test "encode follows shell tool output fields on Unix" {
 }
 
 ///|
-#cfg(platform="windows")
 async test "encode follows shell tool output fields on Windows" {
+  guard @async.platform is Windows else { return }
   let output = @command_context.collect_shell_output(
     "[Console]::Out.Write('abc')",
   )

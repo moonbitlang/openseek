@@ -34,6 +34,15 @@ struct BrowserViews {
   // Tabs the page has been asked to open and has not answered for yet, by
   // request: where the id it gives the tab is delivered.
   opening : Map[String, @async.Queue[Int32]]
+  // Tabs whose view says it is loading: from the moment a navigation
+  // starts, before the page it goes to has answered. The page's own account
+  // of its document cannot say so, as the document it holds is still there.
+  loading : Set[Int32]
+  // The document each tab's latest snapshot read, by its time origin. A ref
+  // is the browser's id for a node, which another renderer, after the tab
+  // has gone to another site, may give a node of its own: refs are acted on
+  // only while the tab still shows the document that gave them.
+  snapshotted : Map[Int32, Double]
 }
 
 ///|
@@ -50,6 +59,8 @@ pub async fn BrowserViews::BrowserViews() -> BrowserViews {
     navigating: Map([]),
     page_connected: false,
     opening: Map([]),
+    loading: Set([]),
+    snapshotted: Map([]),
   }
 }
 
@@ -92,6 +103,8 @@ fn BrowserViews::close_all(self : BrowserViews) -> Unit {
   self.cancel_pick()
   self.owners.clear()
   self.navigating.clear()
+  self.loading.clear()
+  self.snapshotted.clear()
   guard self.window is Some(window) else { return }
   for view in window.views() {
     if browser_view_id(view.id()) is Some(_) {
@@ -116,6 +129,20 @@ pub fn browser_view_id(name : String) -> Int32? {
   }
   Some(@string.parse_int(digits, base=10)) catch {
     _ => None
+  }
+}
+
+///|
+/// Take note of what the view of tab `id` says of itself.
+pub fn BrowserViews::view_event(
+  self : BrowserViews,
+  id : Int32,
+  event : @proton.WebContentsEvent,
+) -> Unit {
+  match event {
+    LoadingChanged(is_loading=true) => self.loading.add(id)
+    LoadingChanged(is_loading=false) | Closed => self.loading.remove(id)
+    _ => ()
   }
 }
 
@@ -459,6 +486,8 @@ fn BrowserViews::close(
   }
   self.owners.remove(payload.id)
   self.navigating.remove(payload.id)
+  self.loading.remove(payload.id)
+  self.snapshotted.remove(payload.id)
   // Closing a view that is already gone is not an error: the close raced a
   // page reload's `close_all`.
   guard self.window is Some(window) else { return Acknowledged }

@@ -124,7 +124,7 @@ pub fn RegionFeedbackPreview::image_name(
   let name = @common.basename_or_authority(self.path())
   match self {
     Pdf(_) => name + "-capture.png"
-    Office(p) => name + "-region-" + p.request.id.to_string() + ".png"
+    Office(p) => "\{name}-region-\{p.request.id}.png"
   }
 }
 

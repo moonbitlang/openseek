@@ -77,6 +77,7 @@ pub(all) struct Actions {
   browser_reload : @cmd.Cmd
   browser_open_external : @cmd.Cmd
   reveal_file : (String) -> @cmd.Cmd
+  share_file : (String) -> @cmd.Cmd
   toggle_menu : @cmd.Cmd
   toggle_expanded : @cmd.Cmd
   close_tabs : @cmd.Emit[@dock.CloseSelection]

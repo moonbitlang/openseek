@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/frontend/engine_session",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/cloud_client",
   "moonbit-community/rabbita/cmd",
@@ -14,6 +15,7 @@ import {
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/protocol",
   "openseek_desktop/uri",
+  "openseek_desktop/frontend/internal/uuid/browser" @uuid,
 }
 
 supported_targets = "js"
@@ -21,3 +23,7 @@ supported_targets = "js"
 import {
   "moonbitlang/async",
 } for "test"
+
+import {
+  "moonbitlang/async",
+} for "wbtest"

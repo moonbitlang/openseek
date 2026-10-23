@@ -7,6 +7,7 @@ test "agent start preserves all engine settings" {
     "model": "deepseek-v4-pro",
     "thinking": "max",
     "approval": "review",
+    "moonbit_guide": false,
     "max_steps": 42,
     "session": "session-1",
     "workspace": "/work/project",
@@ -14,6 +15,7 @@ test "agent start preserves all engine settings" {
   })
   assert_eq(payload.thinking, Some(ThinkingMax))
   assert_eq(payload.approval, Some(ApprovalReview))
+  assert_eq(payload.moonbit_guide, Some(false))
   @debug.assert_eq(payload.to_json(), {
     "task": "inspect",
     "images": [],
@@ -21,6 +23,7 @@ test "agent start preserves all engine settings" {
     "model": "deepseek-v4-pro",
     "thinking": "max",
     "approval": "review",
+    "moonbit_guide": false,
     "max_steps": 42,
     "session": "session-1",
     "workspace": "/work/project",
@@ -86,7 +89,7 @@ test "OpenSeek thinking values round-trip through their closed codec" {
 
 ///|
 test "agent payload optional fields accept null and encode absence by omission" {
-  let compact : @protocol.CompactPayload = @json.from_json({
+  let compact : @protocol.SessionCommandSettings = @json.from_json({
     "session": "session-1",
     "model": null,
     "thinking": null,
@@ -95,12 +98,6 @@ test "agent payload optional fields accept null and encode absence by omission" 
     "workspace": null,
   })
   @debug.assert_eq(compact.to_json(), { "session": "session-1" })
-  let goal : @protocol.GoalPayload = @json.from_json({
-    "session": "session-1",
-    "text": null,
-    "auto": null,
-  })
-  @debug.assert_eq(goal.to_json(), { "session": "session-1" })
 }
 
 ///|
@@ -116,13 +113,7 @@ test "agent payload codecs reject malformed known and missing required fields" {
     _ => None
   }
   assert_true(malformed_thinking is None)
-  let malformed_auto : @protocol.GoalPayload? = Some(
-    @json.from_json({ "session": "session-1", "auto": "yes" }),
-  ) catch {
-    _ => None
-  }
-  assert_true(malformed_auto is None)
-  let missing_session : @protocol.CompactPayload? = Some(
+  let missing_session : @protocol.SessionCommandSettings? = Some(
     @json.from_json({ "thinking": "high" }),
   ) catch {
     _ => None
@@ -143,18 +134,12 @@ test "agent payload codecs reject unsupported thinking values uniformly" {
     _ => None
   }
   assert_true(start is None)
-  let compact : @protocol.CompactPayload? = Some(
+  let compact : @protocol.SessionCommandSettings? = Some(
     @json.from_json({ "session": "session-1", "thinking": "invalid" }),
   ) catch {
     _ => None
   }
   assert_true(compact is None)
-  let goal : @protocol.GoalPayload? = Some(
-    @json.from_json({ "session": "session-1", "thinking": "invalid" }),
-  ) catch {
-    _ => None
-  }
-  assert_true(goal is None)
   let padded : @protocol.StartPayload? = Some(
     @json.from_json({
       "task": "inspect",
@@ -463,11 +448,5 @@ test "agent payload codecs reject unsupported approval values" {
       _ => None
     }
     assert_true(start is None)
-    let goal : @protocol.GoalPayload? = Some(
-      @json.from_json({ "session": "session-1", "approval": value }),
-    ) catch {
-      _ => None
-    }
-    assert_true(goal is None)
   }
 }

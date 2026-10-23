@@ -150,7 +150,7 @@ test "a background retirement expires old actions without poisoning a reopened i
   }
   let model = {
     ..test_model(),
-    composer_entry_retirements: [@interop.Host(owner)],
+    composer_entry_changes: [@composer.Retire(@interop.Host(owner))],
   }
   assert_true(
     model.conversation_for_composer_action({
@@ -184,6 +184,7 @@ test "composer follow-up overrides route the message without changing the defaul
         @composer.FollowupSubmitted(
           identity~,
           draft={ images: [], task: "one message", mentions: [], },
+          attachments=[],
           choice~,
         ),
       ),

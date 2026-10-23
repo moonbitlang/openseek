@@ -34,7 +34,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   }
   let identity : @composer.Identity = {
     owner: @interop.Host(owner),
-    archive_generation: self.composer_entry_retirements.length(),
+    archive_generation: self.composer_entry_changes.length(),
   }
   let checkout_ready = checkout is Some(value) && value.is_ready()
   let queue_save_pending = conv.saving_queue_edit()
@@ -66,7 +66,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       available=root_ready &&
         !semantic_selection_pending &&
         !queue_save_pending &&
-        conv.compaction is NotCompacting,
+        conv.controls.compaction is NotCompacting,
     )
   }
   let status : Array[@composer.StatusComponent] = [
@@ -170,6 +170,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         @composer.Queued(
           editing=conv.queue_edit is Some(edit) && edit.id() == item.id,
           interactive~,
+          steer_available=true,
         )
       },
     })
@@ -189,7 +190,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       ),
     )
   }
-  match conv.compaction {
+  match conv.controls.compaction {
     Requested | Compacting =>
       context.push(@composer.CompactionNotice(queued=false))
     Queued => context.push(@composer.CompactionNotice(queued=true))
@@ -206,12 +207,6 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       )
     Some(_) => ()
   }
-  let pending : @composer.GoalPending? = conv.goal_pending.map(command => {
-    match command.request {
-      Setting(text) => @composer.GoalSetting(text)
-      Clearing => @composer.GoalClearing
-    }
-  })
   let file_index = self.composer_file_index()
   {
     identity,
@@ -220,37 +215,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // rendered by the composer above the draft rather than persisted into the
     // transcript.
     run: conv.run_heartbeat(),
-    goal: {
-      draft: conv.goal_edit.map(edit => edit.draft),
-      standing: conv.goal,
-      pending,
-    },
-    slash_commands: [
-      {
-        label: "/compact",
-        detail: shell_text(self.locale, CompactContext),
-        command: "compact",
-        prompt: None,
-      },
-      {
-        label: "/goal",
-        detail: shell_text(self.locale, SetGoal),
-        command: "goal",
-        prompt: None,
-      },
-      {
-        label: "/ultrareview",
-        detail: shell_text(self.locale, UltraReview),
-        command: "ultrareview",
-        prompt: Some(UltrareviewPrompt),
-      },
-      {
-        label: "/simplify",
-        detail: shell_text(self.locale, SimplifyProject),
-        command: "simplify",
-        prompt: Some(SimplifyPrompt),
-      },
-    ],
+    goal: conv.controls.input(),
+    slash_commands: self.openseek_commands(),
     // Editing a queued message rewrites that message; it never runs one.
     shell_available: conv.queue_edit is None,
     history: conv.sent_prompts(shell=conv.queue_edit is None),
@@ -264,7 +230,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       _ => None
     },
     submission_sequence: self.submission_sequence,
-    retirements: self.composer_entry_retirements,
+    entry_changes: self.composer_entry_changes,
     prediction: conv.prediction,
     prediction_source: if self.screen is Chat &&
       root_ready &&
@@ -276,11 +242,11 @@ fn Model::composer_input(self : Model) -> @composer.Input {
           record.source_sequence == conv.watermark
         )
       ) &&
-      conv.compaction is NotCompacting &&
+      conv.controls.compaction is NotCompacting &&
       conv.queued_inputs.is_empty() &&
       conv.pending_steers.is_empty() &&
       conv.shell_commands.is_empty() &&
-      conv.goal_edit is None &&
+      conv.controls.edit is None &&
       conv.queue_edit is None &&
       conv.watermark > 0 {
       Some(conv.watermark)
@@ -296,7 +262,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       self.api_provider is (Deepseek | Custom),
       context,
       status,
-      placeholder: if conv.goal_edit is Some(_) {
+      placeholder: if conv.controls.edit is Some(_) {
         shell_text(self.locale, GoalPlaceholder)
       } else if conv.queue_edit is Some(_) {
         shell_text(self.locale, EditQueuePlaceholder)
@@ -386,6 +352,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
       } else {
         match input.presentation.primary_action {
           Send(..) => @composer.Send(available=false)
+          SaveQueuedInput(..) => @composer.SaveQueuedInput(available=false)
           Running(submit~, ..) =>
             @composer.Running(
               submit~,
@@ -421,7 +388,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
         channel: self.focused,
         session: self.active_session,
       }),
-      archive_generation: self.composer_entry_retirements.length(),
+      archive_generation: self.composer_entry_changes.length(),
     },
     draft: { images: [], task: "", mentions: [], },
     run: None,
@@ -436,7 +403,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
     context_generation: self.composer_context_generation,
     turn_id: None,
     submission_sequence: self.submission_sequence,
-    retirements: self.composer_entry_retirements,
+    entry_changes: self.composer_entry_changes,
     prediction_source: None,
     prediction: None,
     file_candidates: [],
@@ -512,3 +479,33 @@ const SimplifyPrompt : String =
   #|3. Report the pull requests it opened, the changes the reviewers rejected, and the packages it skipped and why.
   #|
   #|Focus:
+
+///|
+fn Model::openseek_commands(self : Model) -> Array[@composer.SlashCommand] {
+  [
+    {
+      label: "/compact",
+      detail: shell_text(self.locale, CompactContext),
+      command: "compact",
+      prompt: None,
+    },
+    {
+      label: "/goal",
+      detail: shell_text(self.locale, SetGoal),
+      command: "goal",
+      prompt: None,
+    },
+    {
+      label: "/ultrareview",
+      detail: shell_text(self.locale, UltraReview),
+      command: "ultrareview",
+      prompt: Some(UltrareviewPrompt),
+    },
+    {
+      label: "/simplify",
+      detail: shell_text(self.locale, SimplifyProject),
+      command: "simplify",
+      prompt: Some(SimplifyPrompt),
+    },
+  ]
+}

@@ -248,6 +248,7 @@ test "a completed archive wins over an earlier history response's running flag" 
     Edit(account="fixture", session="a", edit=Archive(true)),
   )
   let old_history = Loaded(2, "a", pending.conversations["a"].request, {
+    session: native_document([]),
     messages: [],
     generating: true,
   })
@@ -261,7 +262,7 @@ test "a completed archive wins over an earlier history response's running flag" 
   )
   let recovering = metadata_update(
     sending,
-    StreamEnded(2, "a", sending.conversations["a"].request),
+    SendFailed(2, "a", sending.conversations["a"].request, Unreachable),
   )
   let pending_recovery = metadata_update(
     recovering,
@@ -270,6 +271,7 @@ test "a completed archive wins over an earlier history response's running flag" 
   for
     state in [pending, metadata_update(pending, old_history), pending_recovery] {
     let old_history = Loaded(2, "a", state.conversations["a"].request, {
+      session: native_document([]),
       messages: [],
       generating: true,
     })
@@ -303,11 +305,13 @@ test "a completed archive wins over an earlier history response's running flag" 
     let ready = metadata_update(
       late,
       Loaded(2, "a", late.conversations["a"].request, {
+        session: native_document([]),
         messages: [
           {
             task_id: "finished",
             kind: "assistant_message",
             data: { "content": "Final answer" },
+            engine_sequence: None,
             created_at: 5,
           },
         ],
@@ -350,6 +354,7 @@ test "externally archived inventory fences pending history through restoration" 
     Listed(2, created.list_request, sessions),
   )
   let old_history = Loaded(2, "a", old_request, {
+    session: native_document([]),
     messages: [],
     generating: true,
   })
@@ -370,6 +375,7 @@ test "externally archived inventory fences pending history through restoration" 
   let ready = metadata_update(
     restored,
     Loaded(2, "a", restored.conversations["a"].request, {
+      session: native_document([]),
       messages: [],
       generating: false,
     }),
@@ -405,7 +411,7 @@ test "externally archived inventory fences pending history through restoration" 
   )
   let ended = metadata_update(
     listed,
-    StreamEnded(2, "a", sending.conversations["a"].request),
+    SendFailed(2, "a", sending.conversations["a"].request, Unreachable),
   )
   assert_false(ended.conversations["a"].sending)
   assert_true(ended.can_edit("a", Archive(false)))

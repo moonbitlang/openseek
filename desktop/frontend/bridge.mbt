@@ -805,13 +805,7 @@ fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
   if payload.event is @wire.McpStatus(..) {
     return Some(McpChanged(payload.session))
   }
-  guard @transcript.decode_engine_event(payload.event) is Some(event) else {
-    return None
-  }
-  // `run_id` is absent for events the engine emits before any run of its
-  // process lifetime (a compaction on a freshly spawned engine); those still
-  // route by `session`.
-  Some(Engine(payload.run_id, event, session=Some(payload.session)))
+  Some(Engine(payload.run_id, payload.event, session=payload.session))
 }
 
 ///|
@@ -877,6 +871,7 @@ fn start_openseek(
   session : String,
   workspace~ : @common.Uri,
   approval~ : @protocol.OpenSeekApproval,
+  moonbit_guide~ : Bool,
   images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
@@ -889,6 +884,7 @@ fn start_openseek(
     submission_id,
     workspace~,
     approval~,
+    moonbit_guide~,
     images~,
   )
   @cmd.custom_cmd(scheduler => {
@@ -998,6 +994,7 @@ fn start_payload(
   submission_id : String,
   workspace~ : @common.Uri,
   approval~ : @protocol.OpenSeekApproval,
+  moonbit_guide~ : Bool,
   images~ : Array[String] = [],
 ) -> @protocol.StartPayload {
   let session = session.trim().to_owned()
@@ -1008,6 +1005,7 @@ fn start_payload(
     model: Some(selected_model.wire()),
     thinking: selected_model.thinking(reasoning),
     approval: Some(approval),
+    moonbit_guide: Some(moonbit_guide),
     max_steps: parsed_max_steps(max_steps),
     session,
     workspace: Some(workspace.path),
@@ -1405,182 +1403,6 @@ fn queue_openseek(
     })
     |> ignore
   })
-}
-
-///|
-/// Ask a conversation's engine to compact (summarize and shrink) its history,
-/// carrying the same engine settings as a start: a conversation with no live
-/// serve process (resumed after a restart) gets one spawned on the durable
-/// session first. The engine reports the real progress through `compaction_*`
-/// events; this command only surfaces the immediate failure — the spawn
-/// failing, or the bridge call itself rejecting — as an error in the
-/// conversation on screen.
-fn compact_openseek(
-  dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  session~ : String,
-  model~ : EngineModel,
-  reasoning~ : OpenSeekReasoning,
-  max_steps~ : String,
-  workspace~ : @common.Uri,
-  approval~ : @protocol.OpenSeekApproval,
-) -> @cmd.Cmd {
-  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
-  let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      // Compaction claims the same per-session slot as start and goal, so it
-      // waits behind them rather than colliding.
-      ignore(
-        @interop.bridge_request_in_order(
-          channel,
-          @commands.agent_compact,
-          {
-            session,
-            model: Some(model.wire()),
-            thinking: model.thinking(reasoning),
-            approval: Some(approval),
-            max_steps: parsed_max_steps(max_steps),
-            workspace: Some(workspace.path),
-          },
-          lane=@interop.session_command_lane(channel, session),
-        ) catch {
-          error => {
-            // Routed by session, not as a generic Error: the rejection must
-            // also clear the conversation's queued/compacting notice, which
-            // no compaction event will ever settle now.
-            scheduler.add(
-              dispatch(
-                CompactRejected(
-                  session~,
-                  message=@interop.bridge_error_text(error),
-                ),
-              ),
-            )
-            return
-          }
-        },
-      )
-    })
-    |> ignore
-  })
-}
-
-///|
-/// Set or clear a conversation's standing goal, carrying the same engine
-/// settings as a start: a conversation with no live serve process (resumed
-/// after a restart) gets one spawned on the durable session first. The
-/// durable `[goal]` marker commit is the confirmation that moves the UI;
-/// this command only surfaces the immediate failure — the spawn failing, or
-/// the bridge call rejecting — as an error in the conversation on screen.
-fn goal_openseek(
-  dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  session~ : String,
-  model~ : EngineModel,
-  reasoning~ : OpenSeekReasoning,
-  max_steps~ : String,
-  workspace~ : @common.Uri,
-  approval~ : @protocol.OpenSeekApproval,
-  command : String,
-  text : String?,
-) -> @cmd.Cmd {
-  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
-  let payload = goal_payload(
-    session,
-    model,
-    reasoning,
-    max_steps,
-    workspace,
-    text,
-    approval~,
-  )
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      @interop.in_ordered_lane(
-        @interop.session_command_lane(channel, session),
-        () => {
-          request_agent_goal(
-            scheduler, dispatch, channel, payload, session, command, text,
-          )
-        },
-      ) catch {
-        // Unreachable: the lane only ever wakes its waiters, never fails
-        // them, and the work it runs is `noraise`. The type cannot say so.
-        _ => ()
-      }
-    })
-    |> ignore
-  })
-}
-
-///|
-/// The `agent.goal` payload. `auto` is sent only when arming: an absent field
-/// is the manual default every host understands, including one that predates
-/// the toggle.
-fn goal_payload(
-  session : String,
-  model : EngineModel,
-  reasoning : OpenSeekReasoning,
-  max_steps : String,
-  workspace : @common.Uri,
-  text : String?,
-  approval~ : @protocol.OpenSeekApproval,
-) -> @protocol.GoalPayload {
-  {
-    session,
-    text,
-    // Always manual. `auto` arms the engine's autonomous continuation, and
-    // the desktop cannot yet see the turns that continuation starts: serve
-    // announces them with `GoalContinue`, which this client drops, so the
-    // composer would offer Send during an autonomous turn and a prompt sent
-    // then would be settled by that turn's terminal event. Arming waits for
-    // the lifecycle work.
-    auto: None,
-    model: Some(model.wire()),
-    thinking: model.thinking(reasoning),
-    approval: Some(approval),
-    max_steps: parsed_max_steps(max_steps),
-    workspace: Some(workspace.path),
-  }
-}
-
-///|
-/// Send one `agent.goal`. A refusal and a call that never left both mean
-/// nothing landed, so both come back as `GoalRejected` carrying the text for
-/// the composer to hand back; only a command that went out unanswered is
-/// `GoalUndelivered`, which cannot say that.
-async fn request_agent_goal(
-  scheduler : &@cmd.Scheduler,
-  dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  payload : @protocol.GoalPayload,
-  session : String,
-  command : String,
-  text : String?,
-) -> Unit noraise {
-  let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
-  // The caller holds this session's goal lane across the whole chain, so the
-  // request goes out plainly here — see `set_goal_in_new_worktree`, where the
-  // ordering has to cover the worktree preflight too.
-  ignore(
-    @interop.bridge_request(channel, @commands.agent_goal, payload) catch {
-      error => {
-        let message = @interop.bridge_error_text(error)
-        scheduler.add(
-          dispatch(
-            match @interop.bridge_failure(error) {
-              Refused | Unsent =>
-                GoalRejected(session~, command~, draft=text, message~)
-              Unknown =>
-                GoalUndelivered(session~, command~, draft=text, message~)
-            },
-          ),
-        )
-        return
-      }
-    },
-  )
 }
 
 ///|

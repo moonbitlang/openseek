@@ -1,0 +1,7 @@
+import {
+  "moonbitlang/openseek_protocol" @wire,
+  "openseek_desktop/frontend/composer",
+  "openseek_desktop/frontend/transcript",
+}
+
+supported_targets = "js"

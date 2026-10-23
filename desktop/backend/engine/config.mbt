@@ -26,6 +26,7 @@ priv struct RunConfig {
   api_url : String?
   model : String
   thinking : @protocol.OpenSeekThinking
+  moonbit_guide : Bool
   // Who answers the engine's permission questions: its `--approval`.
   approval : @protocol.OpenSeekApproval
   max_steps : Int32
@@ -171,6 +172,7 @@ async fn run_config(
     manager,
     model?=payload.model,
     thinking?=payload.thinking,
+    moonbit_guide?=payload.moonbit_guide,
     approval?=payload.approval,
     max_steps?=payload.max_steps,
     session~,
@@ -184,73 +186,27 @@ async fn run_config(
 }
 
 ///|
-/// The config a compaction spawns an engine with when its conversation has
-/// none live (resumed after a restart, or the process died between turns):
-/// the same settings a start carries, pinned to the compacted session. The
-/// blank task is never sent — `compact_run` writes only the compact command,
-/// and the fingerprint deliberately excludes the task.
-async fn compact_config(
-  manager : EngineManager,
-  payload : @protocol.CompactPayload,
-  mcp_config? : McpConfig,
-) -> RunConfig {
-  session_command_config(
-    manager,
-    payload.session,
-    model?=payload.model,
-    thinking?=payload.thinking,
-    approval?=payload.approval,
-    max_steps?=payload.max_steps,
-    workspace?=payload.workspace,
-    mcp_config?,
-  )
-}
-
-///|
-/// The config a goal update spawns an engine with when its conversation has
-/// none live — the same taskless shape as `compact_config`, pinned to the
-/// goal's session.
-async fn goal_config(
-  manager : EngineManager,
-  payload : @protocol.GoalPayload,
-  mcp_config? : McpConfig,
-) -> RunConfig {
-  session_command_config(
-    manager,
-    payload.session,
-    model?=payload.model,
-    thinking?=payload.thinking,
-    approval?=payload.approval,
-    max_steps?=payload.max_steps,
-    workspace?=payload.workspace,
-    mcp_config?,
-  )
-}
-
-///|
+/// Restore a session's engine without submitting a prompt. The task is not
+/// part of the engine fingerprint and is never sent for these commands.
 async fn session_command_config(
   manager : EngineManager,
-  session : String,
-  model? : String,
-  thinking? : @protocol.OpenSeekThinking,
-  approval? : @protocol.OpenSeekApproval,
-  max_steps? : Int32,
-  workspace? : String,
+  settings : @protocol.SessionCommandSettings,
   mcp_config? : McpConfig,
 ) -> RunConfig {
-  let session = session.trim().to_owned()
+  let session = settings.session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
   }
   serve_config(
     "",
     manager,
-    model?,
-    thinking?,
-    approval?,
-    max_steps?,
+    model?=settings.model,
+    thinking?=settings.thinking,
+    moonbit_guide?=settings.moonbit_guide,
+    approval?=settings.approval,
+    max_steps?=settings.max_steps,
     session~,
-    workspace?,
+    workspace?=settings.workspace,
     mcp_config?,
   )
 }
@@ -269,6 +225,7 @@ async fn serve_config(
   manager : EngineManager,
   model? : String,
   thinking? : @protocol.OpenSeekThinking,
+  moonbit_guide? : Bool,
   approval? : @protocol.OpenSeekApproval,
   max_steps? : Int32,
   session~ : String,
@@ -322,6 +279,7 @@ async fn serve_config(
     api_url: endpoint.api_url,
     model,
     thinking: RunConfig::configured_thinking(thinking),
+    moonbit_guide: moonbit_guide.unwrap_or(true),
     // Absent is ask: what every request meant before the field existed.
     approval: approval.unwrap_or(ApprovalAsk),
     max_steps: configured_max_steps(max_steps),
@@ -367,6 +325,7 @@ fn engine_fingerprint(config : RunConfig) -> String {
 ///|
 test "a different endpoint cannot reuse a live engine process" {
   let base : RunConfig = {
+    moonbit_guide: true,
     content: Content([Text("t")]),
     api_key: "k",
     key_env: "DEEPSEEK",
@@ -500,6 +459,7 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     custom_api_key: None,
   })
   let config = run_config(manager, {
+    moonbit_guide: None,
     images: [],
     task: "hello",
     submission_id: None,
@@ -514,7 +474,9 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   assert_eq(config.api_key, "sk-official")
   // A request without an approval choice keeps the person answering.
   assert_true(config.approval is ApprovalAsk)
+  assert_true(config.moonbit_guide)
   let reviewed = run_config(manager, {
+    moonbit_guide: Some(false),
     images: [],
     task: "hello",
     submission_id: None,
@@ -526,6 +488,8 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     workspace: Some(workspace),
   })
   assert_true(reviewed.approval is ApprovalReview)
+  assert_false(reviewed.moonbit_guide)
+  assert_true(engine_process_args(reviewed).contains("--moonbit-guide=off"))
 }
 
 ///|
@@ -535,6 +499,7 @@ async test "run config rejects a blank session" {
     let detail = try {
       ignore(
         run_config(manager, {
+          moonbit_guide: None,
           images: [],
           task: "hello",
           submission_id: None,
@@ -593,6 +558,7 @@ async test "host chooses durable placement from workspace state" {
   )
   let manager = new_engine_manager("openseek")
   let config = run_config(manager, {
+    moonbit_guide: None,
     images: [],
     task: "resume",
     submission_id: None,
@@ -614,6 +580,7 @@ async test "host chooses durable placement from workspace state" {
   let unclaimed = try {
     ignore(
       run_config(manager, {
+        moonbit_guide: None,
         images: [],
         task: "fresh",
         submission_id: None,
@@ -632,6 +599,7 @@ async test "host chooses durable placement from workspace state" {
   }
   assert_true(unclaimed.contains("has no workspace"))
   let attached = run_config(manager, {
+    moonbit_guide: None,
     images: [],
     task: "attached",
     submission_id: None,

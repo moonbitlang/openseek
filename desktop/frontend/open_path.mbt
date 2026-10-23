@@ -7,6 +7,7 @@ fn open_cloud_file(
   owner : @interop.ConversationIdentity,
   path : String,
   range : @common.Range?,
+  annotation? : String,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)
   guard model.cloud_identity() == Some(owner) &&
@@ -29,6 +30,7 @@ fn open_cloud_file(
     model,
     resource,
     range,
+    annotation?,
     file_link_generation=model.file_panel.file_link_generation,
   )
 }

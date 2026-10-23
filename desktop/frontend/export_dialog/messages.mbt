@@ -3,6 +3,10 @@
 ///|
 priv enum UiMessage {
   ExportConversation
+  ShareFile
+  FileShareDescription
+  FileSignInDescription
+  OpenShareLink
   CloseLabel
   CloseDialog
   ExportDescription
@@ -30,6 +34,33 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, FileSignInDescription) => "Sign in to share this file."
+    (Spanish, FileSignInDescription) =>
+      "Inicia sesión para compartir este archivo."
+    (SimplifiedChinese, FileSignInDescription) => "登录以分享此文件。"
+    (TraditionalChinese, FileSignInDescription) => "登入以分享此檔案。"
+    (Japanese, FileSignInDescription) =>
+      "このファイルを共有するにはログインしてください。"
+    (English, ShareFile) => "Share file"
+    (Spanish, ShareFile) => "Compartir archivo"
+    (SimplifiedChinese, ShareFile) => "分享文件"
+    (TraditionalChinese, ShareFile) => "分享檔案"
+    (Japanese, ShareFile) => "ファイルを共有"
+    (English, FileShareDescription) =>
+      "Share a snapshot of the original file. Anyone with the link can access it."
+    (Spanish, FileShareDescription) =>
+      "Comparte una instantánea del archivo original. Cualquier persona con el enlace puede acceder a él."
+    (SimplifiedChinese, FileShareDescription) =>
+      "分享原文件的快照。任何获得链接的人都可以访问。"
+    (TraditionalChinese, FileShareDescription) =>
+      "分享原始檔案的快照。任何取得連結的人都可以存取。"
+    (Japanese, FileShareDescription) =>
+      "元ファイルのスナップショットを共有します。リンクを知っている人は誰でもアクセスできます。"
+    (English, OpenShareLink) => "Open link"
+    (Spanish, OpenShareLink) => "Abrir enlace"
+    (SimplifiedChinese, OpenShareLink) => "打开链接"
+    (TraditionalChinese, OpenShareLink) => "開啟連結"
+    (Japanese, OpenShareLink) => "リンクを開く"
     (English, PreparingConversation) => "Preparing conversation…"
     (Spanish, PreparingConversation) => "Preparando conversación…"
     (SimplifiedChinese, PreparingConversation) => "正在准备对话…"

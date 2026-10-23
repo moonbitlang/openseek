@@ -156,10 +156,7 @@ fn resolve_pending_response(packet : @remote_protocol.ServerPacket) -> Bool {
 /// providers resolve instead of leaking.
 fn fail_pending_requests(message : String) -> Unit {
   cancelled_request_ids.clear()
-  let ids : Array[String] = []
-  for id, _pending in pending_requests {
-    ids.push(id)
-  }
+  let ids : Array[String] = [ for id, _ in pending_requests => id ]
   for id in ids {
     match pending_requests.get(id) {
       Some(pending) => {

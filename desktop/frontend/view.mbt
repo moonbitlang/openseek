@@ -1559,6 +1559,19 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
     @settings.row(
+      @settings.text(locale, MoonBitGuide),
+      [
+        @settings.switch_control(
+          enabled=model.default_moonbit_guide,
+          label=@settings.text(locale, MoonBitGuide),
+          on_click=dispatch(
+            MoonBitGuideDefaultChanged(!model.default_moonbit_guide),
+          ),
+        ),
+      ],
+      desc=@settings.text(locale, MoonBitGuideDescription),
+    ),
+    @settings.row(
       @settings.text(locale, MaxSteps),
       [
         @html.input(
@@ -2639,6 +2652,10 @@ fn view(
       locale=model.locale,
       dispatch.map(msg => ExportDialog(msg)),
     ),
+    model.file_share_dialog.view(
+      locale=model.locale,
+      dispatch.map(msg => FileShareDialog(msg)),
+    ),
     // Authentication input is deliberately DOM-only. Keep this slot before
     // conditional overlays so resize/toasts cannot replace its input node.
     if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {
@@ -2907,7 +2924,7 @@ test "archived families collapse while a live orphan child stays archivable" {
 test "project component receives the complete conversation list" {
   let project = @interop.ChannelId::Local.test_resource("/work/alpha")
   let sessions : Array[@transcript.SessionListItem] = []
-  for number = 1; number <= 6; number = number + 1 {
+  for number in 1..<=6 {
     sessions.push({
       id: "chat-\{number}",
       title: Some("Project chat \{number}"),
@@ -3039,7 +3056,7 @@ fn Model::cloud_chat_section(self : Model, channel : String) -> @section.Input {
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
       title: @sidebar_messages.text(self.locale, NewChat),
-      disabled: self.cloud.creation is Some({ submission: Some(_), .. }),
+      disabled: self.cloud.creating_session(),
     }),
     entries,
   }

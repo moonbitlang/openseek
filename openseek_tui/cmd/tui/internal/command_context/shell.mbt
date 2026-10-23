@@ -15,33 +15,29 @@ pub(all) struct ShellOutput {
 
 ///|
 /// The platform shell that interprets command text: `powershell.exe` on
-/// Windows — always installed, unlike `pwsh` — and `sh` elsewhere.
-#cfg(platform="windows")
-let shell_program : String = "powershell.exe"
-
-///|
-#cfg(not(platform="windows"))
-let shell_program : String = "sh"
+/// Windows — always installed, unlike `pwsh` — and `sh` elsewhere. Select at
+/// runtime so a wasm build follows the host running it.
+let shell_program : String = match @async.platform {
+  Windows => "powershell.exe"
+  Linux | MacOS => "sh"
+}
 
 ///|
 /// Arguments that make `shell_program` run `cmd` as shell text. PowerShell is
 /// switched to UTF-8 output so non-ASCII text arrives as valid UTF-8 rather
 /// than the active code page.
-#cfg(platform="windows")
 fn shell_args(cmd : String) -> Array[String] {
-  [
-    "-NoProfile",
-    "-NonInteractive",
-    "-Command",
-    "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001 > $null;" +
-    cmd,
-  ]
-}
-
-///|
-#cfg(not(platform="windows"))
-fn shell_args(cmd : String) -> Array[String] {
-  ["-c", cmd]
+  match @async.platform {
+    Windows =>
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001 > $null;" +
+        cmd,
+      ]
+    Linux | MacOS => ["-c", cmd]
+  }
 }
 
 ///|

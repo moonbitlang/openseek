@@ -9,6 +9,6 @@ import {
 
 warnings = "+unnecessary_annotation"
 
-supported_targets = "+native"
+supported_targets = "+native+wasm"
 
 pkgtype(kind: "executable")

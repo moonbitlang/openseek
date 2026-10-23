@@ -66,7 +66,7 @@ test "a result that cannot be sent yet waits in the composer" {
   let dispatch = test_dispatch()
   let model = with_running_shell(test_model(), {
     ..test_model().active(),
-    compaction: Compacting,
+    controls: { ..test_model().active().controls, compaction: Compacting, },
   })
   let (_, held) = shell_command_finished(
     dispatch,

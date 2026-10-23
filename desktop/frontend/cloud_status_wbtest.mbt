@@ -112,6 +112,7 @@ test "Cloud status uses the authoritative result and clears it for the next task
   for
     (outer, wire, label, css) in [
       ("completed", "completed", "Finished", "ok"),
+      ("completed", "ok", "Finished", "ok"),
       ("incomplete", "context_yield", "Context limit reached", "warn"),
       ("failed", "max_steps_exhausted", "Max steps exhausted", "warn"),
       ("failed", "aborted", "Aborted", "warn"),
@@ -124,6 +125,7 @@ test "Cloud status uses the authoritative result and clears it for the next task
           task_id: "previous-task",
           kind: "task_finished",
           data: { "status": Json(outer), "result": { "status": Json(wire) } },
+          engine_sequence: None,
           created_at: 100,
         },
       ],
@@ -167,6 +169,7 @@ test "Cloud status uses the authoritative result and clears it for the next task
         task_id: "task",
         kind: "task_finished",
         data: { "status": "failed", "reason": "host failure" },
+        engine_sequence: None,
         created_at: 100,
       },
     ],

@@ -45,7 +45,7 @@ fn Model::message_edit_busy(self : Model, source : Conversation) -> Bool {
       return false
     }
     conv.is_running() ||
-    !(conv.compaction is NotCompacting) ||
+    !(conv.controls.compaction is NotCompacting) ||
     !conv.shell_commands.is_empty() ||
     !conv.queued_inputs.is_empty() ||
     !conv.pending_steers.is_empty() ||
@@ -120,8 +120,11 @@ test "message editing is blocked by active work in its own conversation family" 
   let model = test_model()
   let source = model.active()
   assert_false(model.message_edit_busy(source))
-  for phase in [Requested, Queued, Compacting] {
-    let busy = model.replace_conversation({ ..source, compaction: phase, })
+  for phase in ([Requested, Queued, Compacting] : Array[CompactionPhase]) {
+    let busy = model.replace_conversation({
+      ..source,
+      controls: { ..source.controls, compaction: phase, },
+    })
     assert_true(busy.message_edit_busy(source))
   }
   let busy = model.replace_conversation({

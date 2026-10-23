@@ -24,7 +24,8 @@ continues to negotiate `2025-11-25` and earlier supported revisions.
 
 - `tool.mbt` — the contract a contributing package implements: `Tool` (name,
   description, input schema, handler) and `ToolCall` (the calling conversation
-  and the arguments). A handler returns the text the agent reads; raising makes
+  and the arguments). A handler returns the `Content` blocks the agent reads,
+  text or base64 images, sent as the result's `content` in order; raising makes
   the call a tool-level failure the agent also reads.
 - `protocol.mbt` — JSON-RPC dispatch for `initialize`, `ping`, `tools/list`,
   and `tools/call`. Nothing else is offered.

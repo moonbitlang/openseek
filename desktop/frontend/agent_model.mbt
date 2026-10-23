@@ -213,8 +213,8 @@ fn Model::openseek_model_chip(
     id: "openseek-model-picker",
     groups,
     selected: ModelChoice::OpenSeekModel(conv.engine_model).wire(),
-    disabled: conv.goal_edit is Some(_) ||
-    conv.goal_pending is Some(_) ||
+    disabled: conv.controls.edit is Some(_) ||
+    conv.controls.pending is Some(_) ||
     conv.pending_semantic_submission is Some(_),
     open: self.select_menu is Some(OpenSeekModelMenu),
     title: (match self.locale {

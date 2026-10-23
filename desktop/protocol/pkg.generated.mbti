@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
-pub const HostProtocolRevision : Int32 = 1
+pub const HostProtocolRevision : Int32 = 2
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -956,33 +956,6 @@ pub fn CodexTurnSteerPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexTurnSteerPayload
 pub impl @json.FromJson for CodexTurnSteerPayload
 
-pub(all) struct CompactPayload {
-  session : String
-  model : String?
-  thinking : OpenSeekThinking?
-  approval : OpenSeekApproval?
-  max_steps : Int32?
-  workspace : String?
-} derive(Eq, @debug.Debug)
-pub fn CompactPayload::equal(Self, Self) -> Bool
-pub fn CompactPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn CompactPayload::not_equal(Self, Self) -> Bool
-pub fn CompactPayload::to_json(Self) -> Json
-pub fn CompactPayload::to_repr(Self) -> @debug.Repr
-pub impl ToJson for CompactPayload
-pub impl @json.FromJson for CompactPayload
-
-pub(all) struct CompactReply {
-  compacting : Bool
-} derive(Eq, @debug.Debug)
-pub fn CompactReply::equal(Self, Self) -> Bool
-pub fn CompactReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn CompactReply::not_equal(Self, Self) -> Bool
-pub fn CompactReply::to_json(Self) -> Json
-pub fn CompactReply::to_repr(Self) -> @debug.Repr
-pub impl ToJson for CompactReply
-pub impl @json.FromJson for CompactReply
-
 pub(all) struct ConnectedPayload {
   protocol : Int32?
 } derive(Eq, @debug.Debug)
@@ -1074,6 +1047,19 @@ pub fn ExternalLinkPayload::to_json(Self) -> Json
 pub fn ExternalLinkPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ExternalLinkPayload
 pub impl @json.FromJson for ExternalLinkPayload
+
+pub(all) struct FileSharePayload {
+  source : ReadFilePayload
+  idempotency_key : String
+  authorization : ShareAuthorization
+} derive(Eq, @debug.Debug)
+pub fn FileSharePayload::equal(Self, Self) -> Bool
+pub fn FileSharePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FileSharePayload::not_equal(Self, Self) -> Bool
+pub fn FileSharePayload::to_json(Self) -> Json
+pub fn FileSharePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for FileSharePayload
+pub impl @json.FromJson for FileSharePayload
 
 pub(all) enum FileSignature {
   Missing
@@ -1849,35 +1835,6 @@ pub fn GithubWorkspacePayload::to_json(Self) -> Json
 pub fn GithubWorkspacePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GithubWorkspacePayload
 pub impl @json.FromJson for GithubWorkspacePayload
-
-pub(all) struct GoalPayload {
-  session : String
-  text : String?
-  auto : Bool?
-  model : String?
-  thinking : OpenSeekThinking?
-  approval : OpenSeekApproval?
-  max_steps : Int32?
-  workspace : String?
-} derive(Eq, @debug.Debug)
-pub fn GoalPayload::equal(Self, Self) -> Bool
-pub fn GoalPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn GoalPayload::not_equal(Self, Self) -> Bool
-pub fn GoalPayload::to_json(Self) -> Json
-pub fn GoalPayload::to_repr(Self) -> @debug.Repr
-pub impl ToJson for GoalPayload
-pub impl @json.FromJson for GoalPayload
-
-pub(all) struct GoalReply {
-  delivered : Bool
-} derive(Eq, @debug.Debug)
-pub fn GoalReply::equal(Self, Self) -> Bool
-pub fn GoalReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn GoalReply::not_equal(Self, Self) -> Bool
-pub fn GoalReply::to_json(Self) -> Json
-pub fn GoalReply::to_repr(Self) -> @debug.Repr
-pub impl ToJson for GoalReply
-pub impl @json.FromJson for GoalReply
 
 pub(all) struct ImportAttachmentReply {
   path : String
@@ -3213,6 +3170,47 @@ pub fn SessionChangedPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionChangedPayload
 pub impl @json.FromJson for SessionChangedPayload
 
+pub(all) struct SessionCommandPayload {
+  command : @openseek_protocol.Command
+  settings : SessionCommandSettings
+  run_id : String?
+} derive(Eq, @debug.Debug)
+pub fn SessionCommandPayload::equal(Self, Self) -> Bool
+pub fn SessionCommandPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionCommandPayload::not_equal(Self, Self) -> Bool
+pub fn SessionCommandPayload::to_json(Self) -> Json
+pub fn SessionCommandPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionCommandPayload
+pub impl @json.FromJson for SessionCommandPayload
+
+pub(all) struct SessionCommandReply {
+  accepted : Bool
+} derive(Eq, @debug.Debug)
+pub fn SessionCommandReply::equal(Self, Self) -> Bool
+pub fn SessionCommandReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionCommandReply::not_equal(Self, Self) -> Bool
+pub fn SessionCommandReply::to_json(Self) -> Json
+pub fn SessionCommandReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionCommandReply
+pub impl @json.FromJson for SessionCommandReply
+
+pub(all) struct SessionCommandSettings {
+  moonbit_guide : Bool?
+  session : String
+  model : String?
+  thinking : OpenSeekThinking?
+  approval : OpenSeekApproval?
+  max_steps : Int32?
+  workspace : String?
+} derive(Eq, @debug.Debug)
+pub fn SessionCommandSettings::equal(Self, Self) -> Bool
+pub fn SessionCommandSettings::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionCommandSettings::not_equal(Self, Self) -> Bool
+pub fn SessionCommandSettings::to_json(Self) -> Json
+pub fn SessionCommandSettings::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionCommandSettings
+pub impl @json.FromJson for SessionCommandSettings
+
 pub(all) struct SessionCommitPayload {
   session : String
   sequence : Int32
@@ -3932,6 +3930,7 @@ pub impl ToJson for StageAttachmentsPayload
 pub impl @json.FromJson for StageAttachmentsPayload
 
 pub(all) struct StartPayload {
+  moonbit_guide : Bool?
   images : Array[String]
   task : String
   submission_id : String?

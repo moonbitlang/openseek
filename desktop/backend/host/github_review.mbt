@@ -287,10 +287,9 @@ async fn github_review_load(
     head,
   )
   let (nodes, first_cursor) = github_review_page(page)
-  let threads : Array[@protocol.GithubReviewThread] = []
-  for raw in nodes {
-    threads.push(github_review_thread(gh, dir, identity, raw))
-  }
+  let threads = [
+    for raw in nodes => github_review_thread(gh, dir, identity, raw)
+  ]
   let mut cursor = first_cursor
   let seen : Array[String] = []
   while cursor is Some(after) {
@@ -438,9 +437,7 @@ fn github_review_mutation_args(
 
 ///|
 fn github_review_valid_id(id : String) -> Bool {
-  !id.is_empty() &&
-  id.iter().all(c => c is ('0'..<='9')) &&
-  id.iter().any(c => c != '0')
+  !id.is_empty() && id.all(c => c is ('0'..<='9')) && id.any(c => c != '0')
 }
 
 ///|

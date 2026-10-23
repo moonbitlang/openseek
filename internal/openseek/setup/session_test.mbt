@@ -5,6 +5,77 @@ test "session_root defaults to .openseek beside the workspace" {
 }
 
 ///|
+async test "MoonBit guide defaults affect new prompts and leave saved sessions unchanged" {
+  @vfs.with_tmpdir(prefix="openseek-guide-", root => {
+    let store = @store.SessionStore("\{root}/store")
+    @fs.write_file(
+      "\{root}/AGENTS.md",
+      "project rule",
+      create_mode=CreateOrTruncate,
+    )
+    for enabled in [true, false] {
+      let value = if enabled { "on" } else { "off" }
+      let parsed = @testkit.run_matches(
+        argv=[
+          "--moonbit-guide",
+          value,
+          "--global-skills-dir",
+          "\{root}/skills",
+          "hello",
+        ],
+        env=Map([]),
+      )
+      let id = @agent_session.SessionId("guide-\{value}")
+      let session = @setup.load_or_new_session(
+        store,
+        id,
+        parsed,
+        Deepseek(V4Pro),
+        workspace_root=root,
+      )
+      assert_true(
+        session
+        .system_prompt()
+        .has_prefix(
+          @prompt.system_prompt_for_model(
+            Deepseek(V4Pro),
+            moonbit_guide=enabled,
+          ) +
+          "\n\n## Environment",
+        ),
+      )
+      assert_true(session.system_prompt().contains("project rule"))
+      ignore(store.append(session, User(UserMessage(Content([Text("hello")])))))
+      let record = @fs.read_file(store.session_file(id)).text()
+      let header = record.split_once("\n").unwrap().0
+      assert_false(header.contains("\"moonbit_guide\":"))
+      let current_default = @testkit.run_matches(
+        argv=[
+          "--moonbit-guide",
+          if enabled {
+            "off"
+          } else {
+            "on"
+          },
+          "--global-skills-dir",
+          "\{root}/skills",
+          "hello",
+        ],
+        env=Map([]),
+      )
+      let resumed = @setup.load_or_new_session(
+        store,
+        id,
+        current_default,
+        Deepseek(V4Pro),
+        workspace_root=root,
+      )
+      assert_eq(resumed.system_prompt(), session.system_prompt())
+    }
+  })
+}
+
+///|
 async test "one-shot runs record to a generated salted cli session by default" {
   let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",

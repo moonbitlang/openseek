@@ -116,12 +116,12 @@ pub fn SshProfile::connection_label(self : SshProfile) -> String {
     }
   }
   let address = if !destination.contains("@") && user is Some(user) {
-    user + "@" + destination
+    "\{user}@\{destination}"
   } else {
     destination
   }
   match port {
-    Some(port) => address + " · Port " + port
+    Some(port) => "\{address} · Port \{port}"
     None => address
   }
 }
