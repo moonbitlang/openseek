@@ -518,17 +518,12 @@ fn installed_actions(
   let enablement_locked = state.pending_enabled(channel, item.id) ||
     pending.map_or(false, action => action.blocks_enablement())
   let buttons : Array[@html.Html] = [
-    @html.button(
-      class="skill-enable-switch",
-      type_="button",
+    @settings.switch_control(
+      enabled~,
+      label="\{item.name}: \{label}",
       title=label,
       disabled=enablement_locked,
       on_click=emit(ToggleEnabled(item.id)),
-      attrs=@html.Attrs::build()
-        .role("switch")
-        .aria_label("\{item.name}: \{label}")
-        .aria_checked(enabled.to_string()),
-      @html.span(class="skill-switch-track", ""),
     ),
   ]
   if identity is Some(_) {

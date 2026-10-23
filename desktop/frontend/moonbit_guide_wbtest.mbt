@@ -8,7 +8,7 @@ test "MoonBit guide default is copied into new chats without changing existing d
   let model = test_model().replace_conversation(original)
   let (_, changed) = update(
     test_dispatch(),
-    MoonBitGuideDefaultChanged("off"),
+    MoonBitGuideDefaultChanged(false),
     model,
   )
   assert_false(changed.default_moonbit_guide)
@@ -21,7 +21,7 @@ test "MoonBit guide default is copied into new chats without changing existing d
   assert_eq(fresh.active().moonbit_guide, Some(false))
   let (_, changed_again) = update(
     test_dispatch(),
-    MoonBitGuideDefaultChanged("on"),
+    MoonBitGuideDefaultChanged(true),
     fresh,
   )
   assert_eq(changed_again.active().moonbit_guide, Some(false))

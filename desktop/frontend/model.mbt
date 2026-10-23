@@ -1209,7 +1209,6 @@ type ComposerActionIdentity = @composer.Identity
 priv enum SelectMenu {
   OpenSeekModelMenu
   OpenSeekReasoningMenu
-  MoonBitGuideMenu
   CodexModelMenu
   CodexReasoningMenu
   ApiProviderMenu
@@ -1746,7 +1745,7 @@ priv enum Msg {
   // with Codex but remains a separate typed value at the request boundary.
   OpenSeekEffortPicked(String)
   MoonBitGuideDefaultLoaded(Bool)
-  MoonBitGuideDefaultChanged(String)
+  MoonBitGuideDefaultChanged(Bool)
   MaxStepsChanged(String)
   SetupApiKeyChanged(String)
   ProviderChanged(String)

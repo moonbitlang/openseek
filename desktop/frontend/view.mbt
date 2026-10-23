@@ -1553,17 +1553,12 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @settings.row(
       @settings.text(locale, MoonBitGuide),
       [
-        MoonBitGuideMenu.setting_control(
-          dispatch,
-          model,
-          id="moonbit-guide-select",
-          options=[
-            { value: "on", label: @settings.text(locale, On), },
-            { value: "off", label: @settings.text(locale, Off), },
-          ],
-          selected=if model.default_moonbit_guide { "on" } else { "off" },
-          aria_label=@settings.text(locale, MoonBitGuide),
-          change=dispatch.map(value => MoonBitGuideDefaultChanged(value)),
+        @settings.switch_control(
+          enabled=model.default_moonbit_guide,
+          label=@settings.text(locale, MoonBitGuide),
+          on_click=dispatch(
+            MoonBitGuideDefaultChanged(!model.default_moonbit_guide),
+          ),
         ),
       ],
       desc=@settings.text(locale, MoonBitGuideDescription),

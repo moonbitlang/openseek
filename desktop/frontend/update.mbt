@@ -3934,17 +3934,11 @@ fn update_msg(
     }
     MoonBitGuideDefaultLoaded(enabled) =>
       (@cmd.none, { ..model, default_moonbit_guide: enabled, })
-    MoonBitGuideDefaultChanged(value) => {
-      let enabled = match value {
-        "on" => true
-        "off" => false
-        _ => return (@cmd.none, model)
-      }
+    MoonBitGuideDefaultChanged(enabled) =>
       (
         save_default_moonbit_guide(enabled),
         { ..model, default_moonbit_guide: enabled, select_menu: None, },
       )
-    }
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value, })
     SetupApiKeyChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }

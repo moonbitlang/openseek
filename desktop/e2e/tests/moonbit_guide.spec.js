@@ -25,14 +25,13 @@ class GuideHarness extends DesktopBrowserHarness {
 async function settings(page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  return page.getByRole('button', { name: 'MoonBit guide', exact: true });
+  return page.getByRole('switch', { name: 'MoonBit guide', exact: true });
 }
 
-async function chooseDefault(page, value) {
+async function chooseDefault(page, enabled) {
   const control = await settings(page);
-  await control.click();
-  await page.getByRole('option', { name: value, exact: true }).click();
-  await expect(control).toHaveText(value);
+  if (await control.getAttribute('aria-checked') !== String(enabled)) await control.click();
+  await expect(control).toHaveAttribute('aria-checked', String(enabled));
 }
 
 async function newChat(page) {
@@ -55,22 +54,22 @@ test('Settings default persists, applies to new chats and preserves saved sessio
   await app.goto();
   await app.openSession();
   const control = await settings(page);
-  await expect(control).toHaveText('On');
-  await chooseDefault(page, 'Off');
+  await expect(control).toHaveAttribute('aria-checked', 'true');
+  await chooseDefault(page, false);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.moonbit_guide'))).toBe('false');
-  await page.screenshot({ path: testInfo.outputPath('guide-settings-off.png') });
+  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('guide-settings-off.png') });
   await app.openSession();
   expect((await send(page, app, 'Continue the saved session')).moonbit_guide).toBe(true);
   await newChat(page);
   expect((await send(page, app, 'Create without the guide')).moonbit_guide).toBe(false);
   const saved = new URL(page.url()).pathname;
-  await chooseDefault(page, 'On');
+  await chooseDefault(page, true);
   await page.goto(saved);
   await expect(page.locator('#task')).toBeVisible();
   expect((await send(page, app, 'Continue without the guide')).moonbit_guide).toBe(false);
-  await chooseDefault(page, 'Off');
+  await chooseDefault(page, false);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'MoonBit guide', exact: true })).toHaveText('Off');
+  await expect(page.getByRole('switch', { name: 'MoonBit guide', exact: true })).toHaveAttribute('aria-checked', 'false');
   await newChat(page);
   expect((await send(page, app, 'Use the restored default')).moonbit_guide).toBe(false);
   expect(app.pageErrors).toEqual([]);
@@ -82,7 +81,7 @@ test('changing the default preserves an existing unsent draft', async ({ page })
   await app.goto();
   await page.locator('#task').fill('Keep this draft');
   const draft = new URL(page.url()).pathname;
-  await chooseDefault(page, 'Off');
+  await chooseDefault(page, false);
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(draft);
   await expect(page.locator('#task')).toBeVisible();
@@ -98,13 +97,13 @@ test('MoonBit default remains usable in narrow dark Settings', async ({ page }, 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect.poll(() => page.locator('.app > aside').evaluate(el => el.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
-  const control = page.getByRole('button', { name: 'MoonBit guide', exact: true });
-  await control.click();
-  await page.getByRole('option', { name: 'Off', exact: true }).click();
-  await expect(control).toHaveText('Off');
+  const control = page.getByRole('switch', { name: 'MoonBit guide', exact: true });
+  await control.focus();
+  await page.keyboard.press('Space');
+  await expect(control).toHaveAttribute('aria-checked', 'false');
   const bounds = await control.boundingBox();
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-  await page.screenshot({ path: testInfo.outputPath('guide-settings-narrow-dark.png') });
+  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('guide-settings-narrow-dark.png') });
   expect(app.pageErrors).toEqual([]);
 });
