@@ -242,6 +242,9 @@ pub fn update(
   token? : String,
   navigation~ : Int32,
 ) -> (State, @cmd.Cmd, String?) {
+  if state.update_compact(msg, emit, token) is Some((next, command)) {
+    return (next, command, None)
+  }
   if state.update_goal(msg, emit, token) is Some((next, command)) {
     return (next, command, None)
   }

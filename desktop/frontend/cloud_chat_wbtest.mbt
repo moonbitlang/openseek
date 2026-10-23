@@ -321,7 +321,7 @@ test "Cloud uses the existing composer and transcript without a host workspace" 
   assert_false(input.shell_available)
   assert_true(input.presentation.images_enabled)
   assert_eq(input.slash_commands.map(command => command.command), [
-    "goal",
+    "compact", "goal",
   ])
   assert_true(input.installed_skills.is_empty())
   assert_true(model.transcript_slot() is Some(CloudTranscriptSlot(_)))

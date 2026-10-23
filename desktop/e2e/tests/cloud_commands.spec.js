@@ -58,6 +58,64 @@ test('Cloud blank does not expose engine-only commands or create a session for t
   expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
 });
 
+async function compact(page) {
+  await page.locator('#task').fill('/compact');
+  await expect(page.locator('.completion-item').filter({ hasText: '/compact' })).toBeVisible();
+  await page.locator('#task').press('Enter');
+}
+
+test('Cloud queues native compaction during a turn and restores it across navigation and reconnect', async ({ page }, testInfo) => {
+  const app = await open(page);
+  app.manualTasks = true;
+  await page.locator('#task').fill('Start work');
+  await page.locator('#send').click();
+  await expect(page.locator('#stop')).toBeEnabled();
+  const task = app.controlState(sessionA).task_id;
+  await compact(page);
+  await expect.poll(() => commands(app).filter(value => value.command.command === 'compact')).toEqual([
+    { command: { command: 'compact' }, task_id: task },
+  ]);
+  const notice = page.locator('.composer-notice-text');
+  await expect(notice).toContainText('queued');
+  await page.locator('#task').fill('Keep editing this draft');
+  await app.emitSessionEvent(sessionA, 'auto_compaction_started', { from_sequence: 1, to_sequence: 2 });
+  await expect(notice).toContainText('Compacting context');
+  await app.emitSessionEvent(sessionA, 'auto_compaction_finished', { from_sequence: 1, to_sequence: 2, summary: 'Automatic context' });
+  await expect(notice).toContainText('queued');
+  await app.emitSessionEvent(sessionA, 'task_finished', { status: 'completed' });
+  await expect(page.locator('#stop')).toHaveCount(0);
+  await expect(notice).toContainText('queued');
+  await app.open(sessionB);
+  await app.open(sessionA);
+  await expect(notice).toContainText('queued');
+  await app.disconnectSession(sessionA);
+  await expect.poll(() => app.requests.filter(value => value.path.endsWith('/events') && !value.path.endsWith('/files/events')).length).toBeGreaterThan(3);
+  await expect(notice).toContainText('queued');
+  await expect(page.locator('#task')).toHaveValue('Keep editing this draft');
+  await page.screenshot({ path: testInfo.outputPath('cloud-compaction-queued.png') });
+  await app.emitSessionEvent(sessionA, 'compaction_started', { from_sequence: 1, to_sequence: 2 }, { task: null });
+  await expect(notice).toContainText('Compacting context');
+  await app.emitSessionEvent(sessionA, 'compaction_finished', { from_sequence: 1, to_sequence: 2, summary: 'Manual context' }, { task: null });
+  await expect(notice).toHaveCount(0);
+  await expect(page.locator('#task')).toHaveValue('Keep editing this draft');
+  expect(commands(app).filter(value => value.command.command === 'compact')).toHaveLength(1);
+  expect(app.device.pageErrors).toEqual([]);
+});
+
+test('Cloud idle compaction settles without an assistant or a task and reports failure', async ({ page }) => {
+  const app = await open(page);
+  await compact(page);
+  await expect.poll(() => commands(app)).toEqual([{ command: { command: 'compact' } }]);
+  await expect(page.locator('.composer-notice-text')).toContainText('queued');
+  await expect(page.locator('#stop')).toHaveCount(0);
+  await app.emitSessionEvent(sessionA, 'compaction_started', { from_sequence: 1, to_sequence: 2 }, { task: null });
+  await app.emitSessionEvent(sessionA, 'compaction_failed', { error: 'Fixture compaction failed' }, { task: null });
+  await expect(page.locator('.composer-notice-text')).toHaveCount(0);
+  await expect(page.getByText('Fixture compaction failed', { exact: true })).toBeVisible();
+  expect(app.controlState(sessionA).data.active_task_id).toBeNull();
+  expect(app.postCount).toBe(0);
+});
+
 test('Cloud reload restores the goal and summary from the native session document', async ({ page }) => {
   const app = new CloudHarness(page);
   app.histories.set(sessionA, {

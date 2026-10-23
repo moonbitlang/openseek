@@ -440,7 +440,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     slash_commands: if creating || !self.cloud.can_compose(owner.session()) {
       []
     } else {
-      self.engine_commands().filter(command => command.command == "goal")
+      self.engine_commands()
     },
     history,
     root: file_ctx(self).root(),
