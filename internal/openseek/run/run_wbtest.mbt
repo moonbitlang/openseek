@@ -13,7 +13,10 @@ test "a kind's step ceiling: explicit flag, then request, then environment, then
 
 ///|
 test "kind names are the registered presets and nothing else" {
-  for name in ["explore", "review", "worker", "pattern-repair", "echo"] {
+  for
+    name in [
+      "explore", "review", "approval", "worker", "pattern-repair", "echo",
+    ] {
     assert_true(Kind::parse(name) is Some(_))
   }
   // No fallback: an unknown name, including the general agent's, is not a kind.
@@ -53,10 +56,24 @@ test "a review takes exactly one of a goal or a base" {
 }
 
 ///|
+/// A miswired caller learns the defect before any model is contacted.
+test "an approval review needs the ask it is deciding" {
+  assert_eq(
+    Kind::Approval.check_input({
+      "tool_name": "remove",
+      "detail": "notes/ (deletion requires approval)",
+      "intent": ["delete the notes directory"],
+    }),
+    None,
+  )
+  assert_true(Kind::Approval.check_input({ "query": "may I?" }) is Some(_))
+}
+
+///|
 test "only a scout takes instructions from its launcher" {
   assert_true(Kind::Explore.takes_instructions())
   // A reviewer has no ingress: the agent it audits would be the one posting.
-  for kind in [Kind::Review, Worker, PatternRepair, Echo] {
+  for kind in [Kind::Review, Approval, Worker, PatternRepair, Echo] {
     assert_false(kind.takes_instructions())
   }
 }

@@ -109,7 +109,7 @@ pub fn root_command() -> @argparse.Command {
           OptionArg(
             "kind",
             long="kind",
-            about="Run a preset instead of the general agent: explore, review, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.",
+            about="Run a preset instead of the general agent: explore, review, approval, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.",
           ),
           // No env binding: a token is for exactly one launch.
           OptionArg(
