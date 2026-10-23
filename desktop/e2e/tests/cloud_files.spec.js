@@ -199,8 +199,8 @@ test('Cloud Office selections reuse the existing feedback composer and send rela
   await expect(page.locator('#task')).toHaveValue('Existing Cloud draft');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => cloud.postCount).toBe(1);
-  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
-  const content = JSON.parse(send.body).content;
+  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
+  const content = JSON.parse(send.body).command.content;
   const selection = JSON.parse(content.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
   expect(selection.source.file).toBe('book1.xlsx');
   if (selection.source.reference?.file) expect(selection.source.reference.file).toBe('book1.xlsx');
@@ -251,8 +251,8 @@ test('Cloud PDF text and region feedback reuse the current PDF surface, capture 
   await page.screenshot({ path: testInfo.outputPath('cloud-pdf-capture.png'), fullPage: true });
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => cloud.postCount).toBe(1);
-  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
-  const content = JSON.parse(send.body).content;
+  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
+  const content = JSON.parse(send.body).command.content;
   expect(content[1]).toMatchObject({ type: 'image', media_type: 'image/png' });
   const selections = [...content[0].text.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)].map(match => JSON.parse(match[1]));
   expect(selections).toHaveLength(2);
@@ -310,8 +310,8 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   await input.fill('Update the heading');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => cloud.postCount).toBe(1);
-  const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
-  expect(JSON.parse(request.body).content).toBe('Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>');
+  const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
+  expect(JSON.parse(request.body).command.content).toBe('Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeVisible();
   await input.press('ArrowUp');
   await expect(input).toHaveValue('Update the heading');
@@ -971,7 +971,7 @@ for (const count of [1, 101]) {
       await page.getByRole('button', { name: 'Send', exact: true }).click();
     }
     await expect.poll(() => cloud.postCount).toBe(1);
-    const sent = JSON.parse(cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages')).body).content;
+    const sent = JSON.parse(cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands')).body).command.content;
     expect(sent).toContain('Explain these matches');
     if (count > 100) {
       expect(materializations).toHaveLength(2);
@@ -1265,9 +1265,9 @@ test('Cloud code feedback preserves the owning draft, sends Annotation and reope
   await page.screenshot({ path: testInfo.outputPath('cloud-code-annotation.png') });
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => cloud.postCount).toBe(1);
-  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
+  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
   expect(send.path).toContain(sessionA);
-  const content = JSON.parse(send.body).content;
+  const content = JSON.parse(send.body).command.content;
   expect(content).toContain('Existing Cloud draft');
   expect(content).toContain('<annotation file="src/hello #.mbt" lines="2-2">');
   expect(content).toContain('fn hello() -> String { "Cloud text" }');
@@ -1287,7 +1287,7 @@ for (const batch of [true, false]) {
       data: { active_task_id: task, status: 'running', paused: false, queue: [], steers: [] },
     });
     cloud.archived.add(sessionB);
-    const submissions = () => cloud.requests.filter(request => request.method === 'POST' && /\/(messages|steer|queue|stop)$/.test(request.path));
+    const submissions = () => cloud.requests.filter(request => request.method === 'POST' && /\/(commands|queue)$/.test(request.path));
     await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
     await expect(page.locator('#stop')).toBeEnabled();
     await page.locator('#task').fill('Existing Cloud draft');
@@ -1298,7 +1298,7 @@ for (const batch of [true, false]) {
     const feedback = await selectCloudCode(page);
     await feedback.fill('Keep this in my draft');
     await page.getByRole('checkbox', { name: 'Batch', exact: true }).setChecked(batch);
-    const accepted = batch ? null : page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/steer`);
+    const accepted = batch ? null : page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/commands`);
     await feedback.press('Enter');
     if (batch) {
       await expect(page.locator('.composer .mention-chip')).toContainText('hello #.mbt');
@@ -1310,14 +1310,14 @@ for (const batch of [true, false]) {
       await expect(page.locator('.pending-steer-row')).toContainText('Keep this in my draft');
       const requests = submissions();
       expect(requests).toHaveLength(1);
-      expect(requests[0].path).toBe(`/v1/sessions/${sessionA}/steer`);
+      expect(requests[0].path).toBe(`/v1/sessions/${sessionA}/commands`);
       const request = JSON.parse(requests[0].body);
       expect(request.task_id).toBe(task);
-      expect(request.submission_id).toBeTruthy();
-      expect(request.content).toContain('Existing Cloud draft');
-      expect(request.content).toContain('<annotation file="src/hello #.mbt" lines="2-2">');
-      expect(request.content).toContain('fn hello() -> String { "Cloud text" }');
-      expect(request.content).toContain('Keep this in my draft');
+      expect(request.command.submission_id).toBeTruthy();
+      expect(request.command.content).toContain('Existing Cloud draft');
+      expect(request.command.content).toContain('<annotation file="src/hello #.mbt" lines="2-2">');
+      expect(request.command.content).toContain('fn hello() -> String { "Cloud text" }');
+      expect(request.command.content).toContain('Keep this in my draft');
     }
     expect(cloud.postCount).toBe(0);
     const archived = page.getByRole('button', { name: /^Archived chats \(/ });
@@ -1345,8 +1345,8 @@ test('Cloud code feedback applies through the existing submit action when idle',
   await feedback.fill('Why does this return a string?');
   await feedback.press('Enter');
   await expect.poll(() => cloud.postCount).toBe(1);
-  const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
-  const content = JSON.parse(request.body).content;
+  const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
+  const content = JSON.parse(request.body).command.content;
   expect(content).toContain('Explain the selection');
   expect(content).toContain('<annotation file="src/hello #.mbt" lines="2-2">');
   expect(content).toContain('Why does this return a string?');

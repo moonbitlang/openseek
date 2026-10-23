@@ -59,37 +59,44 @@ async fn edit_session(
 }
 
 ///|
-/// The session subscription owns UI events. Closing this request's response
-/// after admission does not cancel the server task.
-async fn send_message(
+/// The response acknowledges delivery only. The existing session subscription
+/// owns engine receipts and task lifecycle; this request never retries.
+async fn send_command(
   token : String,
   session : String,
-  content : @wire.Content,
-) -> Unit {
-  let client = @http.Client(CloudOrigin, headers={
-    "Authorization": "Bearer " + token,
-    "Content-Type": "application/json",
-    "Accept": "text/event-stream",
-  }) catch {
-    _ => raise @cloud_client.RequestError(Unreachable)
-  }
-  defer client.close()
-  let body : Json = { "content": content.to_json() }
-  let response = client.post(
-    "/v1/sessions/\{@uri.encode_component(session)}/messages",
-    body.stringify(),
+  command : @wire.Command,
+  task_id? : String,
+  api_key? : String,
+) -> ControlResult {
+  let body : CommandRequest = { command, task_id, api_key, }
+  let (response, data) = @http.request(
+    CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}/commands",
+    Post,
+    { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    ToJson::to_json(body).stringify(),
   ) catch {
     _ => raise @cloud_client.RequestError(Unreachable)
   }
   if response.code == 503 {
-    let message = client.read_all().text() catch {
-        _ => raise @cloud_client.RequestError(Unreachable)
-      }
+    let message = data.text()
     if message.trim() == "server model credentials are not configured" {
       raise @cloud_client.RequestError(ServiceNotConfigured)
     }
   }
-  check_status(response.code)
+  if !(response.code is (202 | 409)) {
+    check_status(response.code)
+  }
+  let json = data.json() catch {
+    _ => raise @cloud_client.RequestError(Malformed)
+  }
+  if response.code == 202 && json is { "accepted": True, .. } {
+    Accepted
+  } else if response.code == 409 &&
+    json is { "accepted": False, "error": String(error), .. } {
+    Rejected(error)
+  } else {
+    raise @cloud_client.RequestError(Malformed)
+  }
 }
 
 ///|

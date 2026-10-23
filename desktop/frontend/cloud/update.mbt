@@ -1159,7 +1159,15 @@ fn State::submit(
           scheduler.add(
             emit(MessagePrepared(state.epoch, id, request, prepared, prompt)),
           )
-          send_message(token, id, prompt)
+          match
+            send_command(
+              token,
+              id,
+              @wire.Prompt(content=prompt, submission_id=None),
+            ) {
+            Accepted => ()
+            Rejected(_) => raise @cloud_client.RequestError(Busy)
+          }
           SendAccepted(state.epoch, id, request)
         } catch {
           @cloud_client.RequestError(error) =>

@@ -34,8 +34,8 @@ for (const desktop of [false, true]) {
     await expect(page.locator('main h1')).toHaveText('Calculate 1 + 1');
     await expect(page.locator('#task')).toHaveValue('');
     expect(cloud.exchangeCount).toBe(0);
-    const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
-    expect(JSON.parse(send.body)).toEqual({ content: 'Calculate 1 + 1' });
+    const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
+    expect(JSON.parse(send.body)).toEqual({ command: { command: 'prompt', content: 'Calculate 1 + 1' } });
     expect(cloud.hostRequests.filter(request => request.method === 'cloud.key')).toEqual([]);
     expect(send.headers.cookie).toBeUndefined();
     expect(send.headers.authorization).toMatch(/^Bearer ts_fixture-/);
@@ -166,7 +166,7 @@ test('missing service credentials show a server configuration error without aski
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Set API key', exact: true })).toHaveCount(0);
-  cloud.sendStatus = 200;
+  cloud.sendStatus = 202;
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('#task')).toHaveValue('');
   await expect(notice).toHaveCount(0);
@@ -194,8 +194,8 @@ test('Cloud selection replies use the shared composer without a device or accoun
   const content = await task.inputValue();
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => cloud.postCount).toBe(1);
-  const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
-  expect(JSON.parse(request.body).content).toBe(content);
+  const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
+  expect(JSON.parse(request.body).command.content).toBe(content);
   await expect(task).toHaveValue('');
   expect(cloud.device.pageErrors).toEqual([]);
 });

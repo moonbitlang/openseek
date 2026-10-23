@@ -154,7 +154,7 @@ test('Cloud title status covers loading, service failure and first-send startup 
     await expect(status).toHaveText('Ready');
     expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
     await page.screenshot({ path: testInfo.outputPath('cloud-title-ready.png'), fullPage: true });
-    cloud.sendStatus = 200;
+    cloud.sendStatus = 202;
     await page.locator('#task').fill('First message');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(status).toHaveText('Starting');

@@ -149,36 +149,43 @@ pub(all) enum ControlOperation {
 } derive(Eq)
 
 ///|
-priv struct ControlRequest {
-  task_id : String
-  operation : ControlOperation
+priv struct CommandRequest {
+  command : @wire.Command
+  task_id : String?
+  api_key : String?
 }
 
 ///|
-impl ToJson for ControlRequest with fn to_json(self) {
-  let task_id = self.task_id
-  match self.operation {
-    Stop => { "task_id": task_id }
-    Steer(submission_id~, content~) =>
-      {
-        "task_id": task_id,
-        "submission_id": submission_id,
-        "content": content.to_json(),
-      }
-    QueueAdd(id~, content~) | QueueEdit(id~, content~) =>
-      {
-        "task_id": task_id,
-        "action": self.operation.queue_action().unwrap(),
-        "id": id,
-        "content": content.to_json(),
-      }
-    QueueWithdraw(id~) | QueueSteer(id~) =>
-      {
-        "task_id": task_id,
-        "action": self.operation.queue_action().unwrap(),
-        "id": id,
-      }
+impl ToJson for CommandRequest with fn to_json(self) {
+  let fields : Map[String, Json] = { "command": self.command.to_json() }
+  if self.task_id is Some(task) {
+    fields["task_id"] = Json(task)
   }
+  if self.api_key is Some(key) {
+    fields["api_key"] = Json(key)
+  }
+  Json(fields)
+}
+
+///|
+priv struct QueueRequest {
+  task_id : String
+  action : String
+  id : String
+  content : @wire.Content?
+}
+
+///|
+impl ToJson for QueueRequest with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "task_id": Json(self.task_id),
+    "action": Json(self.action),
+    "id": Json(self.id),
+  }
+  if self.content is Some(content) {
+    fields["content"] = content.to_json()
+  }
+  Json(fields)
 }
 
 ///|
@@ -223,11 +230,7 @@ fn ControlOperation::decode_reply(
     raise @cloud_client.RequestError(Malformed)
   }
   let valid = match self {
-    Stop => status == 202
-    Steer(submission_id~, ..) =>
-      status == 202 &&
-      json is { "submission_id": String(id), .. } &&
-      id == submission_id
+    Stop | Steer(..) => false
     QueueAdd(id~, ..)
     | QueueEdit(id~, ..)
     | QueueWithdraw(id~)

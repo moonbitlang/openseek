@@ -26,7 +26,7 @@ export class CloudHarness {
     this.listStatus = 200;
     this.historyStatus = 200;
     this.createStatus = 201;
-    this.sendStatus = 200;
+    this.sendStatus = 202;
     this.shareStatus = 200;
     this.exportStatus = 200;
     this.exportSnapshots = new Map();
@@ -274,17 +274,22 @@ export class CloudHarness {
     if (/^\/v1\/sessions\/[^/]+\/files\/events$/.test(path)) {
       return route.fulfill({ status: this.fileEventStatus, headers, contentType: 'text/event-stream', body: 'event: workspace_invalidated\ndata: {}\n\n' });
     }
-    const control = path.match(/^\/v1\/sessions\/([^/]+)\/(control|events|stop|steer|queue)$/);
+    const control = path.match(/^\/v1\/sessions\/([^/]+)\/(control|events|commands|queue)$/);
     if (control) {
       const session = decodeURIComponent(control[1]);
-      const operation = control[2];
+      let operation = control[2];
       const snapshot = this.controlState(session);
       if (operation === 'control') return json(snapshot);
       if (operation === 'events') {
         if (this.pauseSessionEvents) await this.pauseSessionEvents;
         return route.fulfill({ status: this.sessionEventStatus, headers, contentType: 'text/event-stream', body: this.sseFrame('control_state', this.controlState(session)) });
       }
-      const body = request.postDataJSON();
+      const envelope = request.postDataJSON();
+      if (operation === 'commands' && envelope.command.command === 'prompt') {
+        return this.promptCommand(route, json, headers, session, envelope.command);
+      }
+      const body = operation === 'commands' ? { task_id: envelope.task_id, ...envelope.command } : envelope;
+      if (operation === 'commands') operation = body.command === 'cancel' ? 'stop' : body.command;
       if (this.pauseControl) await this.pauseControl;
       if (this.controlOffline) return route.abort('failed');
       const current = this.controlState(session);
@@ -297,13 +302,13 @@ export class CloudHarness {
       if (rejected) return json({ accepted: false, error: rejected, task_id: body.task_id }, 409);
       if (operation === 'stop') {
         await this.publishControl(session, { status: 'stopping' });
-        return json({ accepted: true, task_id: body.task_id }, 202);
+        return json({ accepted: true }, 202);
       }
       if (operation === 'steer') {
         if (!current.data.steers.some(item => item.submission_id === body.submission_id)) {
           await this.publishControl(session, { steers: [...current.data.steers, { submission_id: body.submission_id, status: 'pending' }] });
         }
-        return json({ accepted: true, task_id: body.task_id, submission_id: body.submission_id }, 202);
+        return json({ accepted: true }, 202);
       }
       const index = current.data.queue.findIndex(item => item.id === body.id);
       if (body.action !== 'add' && index < 0) return json({ accepted: false, error: 'queue_item_missing', task_id: body.task_id }, 409);
@@ -373,10 +378,12 @@ export class CloudHarness {
       if (this.pauseHistory) await this.pauseHistory;
       return json(history, this.historyStatus);
     }
+    throw new Error('Messages are read-only; use the native commands endpoint');
+  }
+
+  async promptCommand(route, json, headers, session, body) {
     this.postCount++;
-    const body = request.postDataJSON();
-    if (Object.keys(body).join(',') !== 'content') throw new Error('Cloud must send content without a model key');
-    if (this.sendStatus !== 200) return this.sendErrorBody ? route.fulfill({ status: this.sendStatus, headers, contentType: 'text/plain', body: this.sendErrorBody }) : json({}, this.sendStatus);
+    if (this.sendStatus !== 202) return this.sendErrorBody ? route.fulfill({ status: this.sendStatus, headers, contentType: 'text/plain', body: this.sendErrorBody }) : json({}, this.sendStatus);
     const text = typeof body.content === 'string' ? body.content : body.content.filter(part => part.type === 'text').map(part => part.text).join('');
     if (!this.titles.get(session) && text.trim()) this.titles.set(session, text.trim().split('\n')[0].trim());
     const task = `fixture-task-${++this.taskCount}`;
@@ -392,14 +399,7 @@ export class CloudHarness {
     this.histories.set(session, { messages, generating: true, outcome: null });
     if (this.pauseSend) await this.pauseSend;
     if (this.disconnectSend) return route.abort('failed');
-    const chunks = data.map(([kind, value], i) => `event: ${kind}\r\ndata: ${JSON.stringify({ session_id: session, task_id: task, seq: i + 1, kind, data: value })}\r\n\r\n`);
-    let bytes = 0;
-    const boundaries = chunks.map(chunk => bytes += Buffer.byteLength(chunk));
-    const streamHeaders = { ...headers, 'x-fixture-admission-bytes': String(boundaries[0]), 'x-fixture-event-boundaries': JSON.stringify(boundaries) };
-    if (this.disconnectStreamAfter !== undefined) streamHeaders['x-fixture-disconnect-after'] = String(this.disconnectStreamAfter);
-    await route.fulfill({ headers: streamHeaders, contentType: 'text/event-stream', body: chunks.join('') });
-    // The session subscription is the source of live UI events. Keep the old
-    // POST body realistic too, so consuming both streams would duplicate data.
+    await json({ accepted: true }, 202);
     await this.publishTaskStream(session, task, data);
   }
 

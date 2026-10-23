@@ -184,20 +184,23 @@ async fn check_control_requests() -> Unit {
     (operation, endpoint, status, reply, expected) in [
       (
         Stop,
-        "stop",
+        "commands",
         202,
-        ({ "accepted": true, "task_id": "task" } : Json),
-        ({ "task_id": "task" } : Json),
+        ({ "accepted": true } : Json),
+        ({ "task_id": "task", "command": { "command": "cancel" } } : Json),
       ),
       (
         Steer(submission_id="s", content~),
-        "steer",
+        "commands",
         202,
-        { "accepted": true, "task_id": "task", "submission_id": "s" },
+        { "accepted": true },
         {
           "task_id": "task",
-          "submission_id": "s",
-          "content": content.to_json(),
+          "command": {
+            "command": "steer",
+            "submission_id": "s",
+            "content": content.to_json(),
+          },
         },
       ),
       (
@@ -258,6 +261,46 @@ async fn check_control_requests() -> Unit {
 }
 
 ///|
+async fn check_native_command_requests() -> Unit {
+  let content = @wire.Content([Text("Keep\noriginal input")])
+  for
+    command in [
+      @wire.Prompt(content~, submission_id=Some("prompt-1")),
+      @wire.Steer(content~, submission_id=Some("steer-1")),
+      @wire.Cancel,
+      @wire.GoalSet(text="Ship the change", auto=false),
+      @wire.GoalClear,
+      @wire.Compact,
+    ] {
+    let requests = []
+    let restore = mock_control_http(202, "{\"accepted\":true}", (
+      url,
+      method_,
+      auth,
+      body,
+    ) => requests.push((url, method_, auth, body)))
+    defer restore()
+    assert_true(send_command("token", "session/?", command) is Accepted)
+    assert_true(
+      send_command("token", "session/?", command, task_id="task", api_key="key")
+      is Accepted,
+    )
+    assert_eq(requests.length(), 2)
+    for request in requests {
+      assert_eq(request.0, CloudOrigin + "/v1/sessions/session%2F%3F/commands")
+      assert_eq(request.1, "POST")
+      assert_eq(request.2, "Bearer token")
+    }
+    assert_eq(@json.parse(requests[0].3), { "command": command.to_json() })
+    assert_eq(@json.parse(requests[1].3), {
+      "command": command.to_json(),
+      "task_id": "task",
+      "api_key": "key",
+    })
+  }
+}
+
+///|
 async fn check_control_failures() -> Unit {
   for
     (status, body, expected) in [
@@ -266,15 +309,9 @@ async fn check_control_failures() -> Unit {
         "{\"accepted\":false,\"error\":\"task_not_running\",\"task_id\":\"task\"}",
         Some(Rejected("task_not_running")),
       ),
-      (202, "{\"accepted\":true,\"task_id\":\"task\"}", Some(Accepted)),
-      (202, "{\"accepted\":true,\"task_id\":\"other-task\"}", None),
+      (202, "{\"accepted\":true}", Some(Accepted)),
       (202, "{\"accepted\":false,\"task_id\":\"task\"}", None),
       (409, "{}", None),
-      (
-        409,
-        "{\"accepted\":false,\"error\":\"closed\",\"task_id\":\"other\"}",
-        None,
-      ),
       (202, "not JSON", None),
       (401, "{}", None),
       (500, "{}", None),
@@ -301,21 +338,15 @@ async fn check_control_failures() -> Unit {
   for
     (operation, status, reply) in [
       (
-        Steer(submission_id="s", content=@wire.Content([Text("hello")])),
-        202,
-        (
-          { "accepted": true, "task_id": "task", "submission_id": "other" } :
-          Json),
-      ),
-      (
         QueueWithdraw(id="q"),
         200,
-        {
-          "accepted": true,
-          "task_id": "task",
-          "action": "withdraw",
-          "id": "other",
-        },
+        (
+          {
+            "accepted": true,
+            "task_id": "task",
+            "action": "withdraw",
+            "id": "other",
+          } : Json),
       ),
       (
         QueueSteer(id="q"),
@@ -407,6 +438,7 @@ async fn check_control_state_requests() -> Unit {
 ///|
 async test "Cloud control HTTP and SSE preserve operation and ownership contracts" {
   // All fetch substitutions stay sequential within one async test.
+  check_native_command_requests()
   check_control_requests()
   check_control_failures()
   check_control_state_requests()

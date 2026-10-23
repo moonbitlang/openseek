@@ -35,8 +35,8 @@ test('first Cloud creation locks duplicate submissions and sends the captured me
   expect(creations(cloud)).toHaveLength(1);
   expect(cloud.postCount).toBe(1);
   const actions = cloud.requests.filter(request => request.method === 'POST');
-  expect(actions.map(request => request.path)).toEqual(['/v1/sessions', `/v1/sessions/${sessionC}/messages`]);
-  expect(JSON.parse(actions[1].body)).toEqual({ content: 'Create then send' });
+  expect(actions.map(request => request.path)).toEqual(['/v1/sessions', `/v1/sessions/${sessionC}/commands`]);
+  expect(JSON.parse(actions[1].body)).toEqual({ command: { command: 'prompt', content: 'Create then send' } });
 });
 
 test('a first-send rejection preserves the input and retries the existing Cloud session', async ({ page }) => {
@@ -55,7 +55,7 @@ test('a first-send rejection preserves the input and retries the existing Cloud 
   await expect(page.getByRole('main')).toContainText('Cloud model credentials are not configured');
   await expect(page.locator('#task')).toHaveValue('Keep this initial input');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  cloud.sendStatus = 200;
+  cloud.sendStatus = 202;
   await page.locator('#task').fill('Edited retry');
   await page.locator('#task').press('Enter');
   await expect(page.locator('#transcript').getByText('Edited retry', { exact: true })).toBeVisible();

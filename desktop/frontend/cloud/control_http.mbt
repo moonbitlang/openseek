@@ -6,22 +6,35 @@ async fn control(
   task_id : String,
   operation : ControlOperation,
 ) -> ControlResult {
-  let endpoint = match operation {
-    Stop => "stop"
-    Steer(..) => "steer"
-    _ => "queue"
+  let body : QueueRequest = match operation {
+    Stop => return send_command(token, session, @wire.Cancel, task_id~)
+    Steer(submission_id~, content~) =>
+      return send_command(
+        token,
+        session,
+        @wire.Steer(content~, submission_id=Some(submission_id)),
+        task_id~,
+      )
+    QueueAdd(id~, content~) | QueueEdit(id~, content~) =>
+      {
+        task_id,
+        action: operation.queue_action().unwrap(),
+        id,
+        content: Some(content),
+      }
+    QueueWithdraw(id~) | QueueSteer(id~) =>
+      { task_id, action: operation.queue_action().unwrap(), id, content: None, }
   }
-  let body : ControlRequest = { task_id, operation, }
   let (response, data) = @http.request(
-    CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}/" + endpoint,
+    CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}/queue",
     Post,
     { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
     ToJson::to_json(body).stringify(),
   ) catch {
     _ => raise @cloud_client.RequestError(Unreachable)
   }
-  // 202 is control acceptance, and a structured 409 is a definite refusal.
-  if !(response.code is (202 | 409)) {
+  // Queue mutations are synchronous; a structured 409 is a definite refusal.
+  if response.code != 409 {
     check_status(response.code)
   }
   let json = data.json() catch {
