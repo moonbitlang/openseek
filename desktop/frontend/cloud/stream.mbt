@@ -52,7 +52,8 @@ pub fn subscriptions(
   }
   let subscriptions = []
   for id, conversation in state.conversations {
-    if (selected == Some(id) || conversation.needs_observation()) &&
+    if !state.is_draft(id) &&
+      (selected == Some(id) || conversation.needs_observation()) &&
       !state.is_archived(id) &&
       !state.retired.contains(id) &&
       !state.deletions.contains(id) &&

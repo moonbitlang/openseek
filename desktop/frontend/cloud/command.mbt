@@ -66,20 +66,11 @@ fn State::update_command(
     self.user_id == Some(account) else {
     return Some((self, @cmd.none))
   }
-  let creating = self.draft_identity() == Some(owner)
-  let conversation = if creating &&
-    self.creation is Some(creation) &&
-    creation.pending is None {
-    Some(creation.conversation)
-  } else if !creating &&
-    self.can_compose(session) &&
+  guard self.can_compose(session) &&
     !self.deletions.contains(session) &&
-    !(self.metadata_saves.get(session) is Some({ edit: Archive(true), .. })) {
-    self.conversations.get(session)
-  } else {
-    None
-  }
-  guard conversation is Some(conversation) else {
+    !(self.metadata_saves.get(session) is Some({ edit: Archive(true), .. })) &&
+    self.conversations.get(session) is Some(conversation) &&
+    conversation.outgoing is None else {
     return Some((self, @cmd.none))
   }
   let local_edit = action
@@ -88,10 +79,9 @@ fn State::update_command(
     (
       token is Some(_) &&
       (
-        creating ||
+        self.is_draft(session) ||
         (
           !conversation.loading &&
-          conversation.outgoing is None &&
           conversation.watch_status == Watching &&
           conversation.stream is Some({ active: true, .. }) &&
           conversation.last_seq is Some(_)
@@ -123,10 +113,10 @@ fn State::update_command(
     self
     .replace(session, conversation)
     .submit_command(
-      owner,
-      { request: sequence, command, prompt: None, },
+      session,
+      { request: sequence, input: Native(command), },
       emit,
-      Some(token),
+      token,
       navigation,
     ),
   )

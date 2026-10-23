@@ -21,23 +21,22 @@ test "all native commands share deferred session creation and observation readin
     ] {
     let blank = command_draft()
     let owner = blank.draft_identity().unwrap()
-    let submission : CommandSubmission = {
+    let submission : PendingCommand = {
       request: blank.sequence + 1,
-      command,
-      prompt: None,
+      input: Native(command),
     }
     let (pending, _) = blank.submit_command(
-      owner,
+      owner.session(),
       submission,
       _ => @cmd.none,
-      Some("fixture"),
+      "fixture",
       0,
     )
     let (duplicate, _) = pending.submit_command(
-      owner,
+      owner.session(),
       submission,
       _ => @cmd.none,
-      Some("fixture"),
+      "fixture",
       0,
     )
     assert_true(duplicate == pending)
@@ -45,9 +44,13 @@ test "all native commands share deferred session creation and observation readin
       pending,
       Created(1, submission.request, "session"),
     )
-    assert_eq(
-      created.conversations["session"].outgoing.unwrap().command,
-      command,
+    assert_true(
+      created.conversations["session"].outgoing.unwrap().input ==
+      Native(command),
+    )
+    assert_false(created.conversations.contains(owner.session()))
+    assert_true(
+      created.conversations["session"] == pending.conversations[owner.session()],
     )
     assert_false(created.conversations["session"].generating)
     assert_false(created.can_send("session"))
@@ -90,9 +93,9 @@ test "first goal creation failures restore the shared editor and retry only on e
     archive_generation: 0,
   }
   let editing = draft_action(blank, @composer.GoalEditStarted(identity~))
-  assert_true(editing.creation.unwrap().pending is None)
+  assert_false(editing.creating_session())
   assert_eq(
-    editing.creation.unwrap().conversation.controls.input().draft,
+    editing.conversations[identity.owner.session()].controls.input().draft,
     Some(""),
   )
   let action = @composer.GoalSubmitted(
@@ -104,9 +107,9 @@ test "first goal creation failures restore the shared editor and retry only on e
   let request = pending.creation.unwrap().request
   assert_true(draft_action(pending, action) == pending)
   let failed = metadata_update(pending, CreateFailed(1, request, Http(503)))
-  assert_true(failed.creation.unwrap().pending is None)
+  assert_false(failed.creating_session())
   assert_eq(
-    failed.creation.unwrap().conversation.controls.input().draft,
+    failed.conversations[identity.owner.session()].controls.input().draft,
     Some("Keep this goal"),
   )
   let retried = draft_action(failed, action)
@@ -155,9 +158,10 @@ test "first compact remains pending through its pre-command snapshot and definit
     CreateFailed(1, creation.request, Http(503)),
   )
   assert_true(
-    failed.creation.unwrap().conversation.controls.compact_request is None,
+    failed.conversations[identity.owner.session()].controls.compact_request
+    is None,
   )
-  assert_true(failed.creation.unwrap().pending is None)
+  assert_false(failed.creating_session())
   let created = metadata_update(
     pending,
     Created(1, creation.request, "session"),
@@ -197,10 +201,10 @@ test "a first command waits for a new observer after a definitive observation fa
   let owner = blank.draft_identity().unwrap()
   let request = blank.sequence + 1
   let (pending, _) = blank.submit_command(
-    owner,
-    { request, command: @wire.Compact, prompt: None, },
+    owner.session(),
+    { request, input: Native(@wire.Compact), },
     _ => @cmd.none,
-    Some("fixture"),
+    "fixture",
     0,
   )
   let created = metadata_update(pending, Created(1, request, "session"))

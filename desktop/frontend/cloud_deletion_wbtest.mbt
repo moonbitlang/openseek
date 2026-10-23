@@ -118,7 +118,9 @@ test "Cloud deletion keeps a failed creation in Cloud and allows the normal new 
   assert_true(failed.chat_column() is CloudTranscript(..))
   assert_true(failed.host_selection() is None)
   let (_, retried) = update(test_dispatch(), CloudAction(@cloud.Create), failed)
-  assert_true(retried.cloud.creation is Some({ pending: None, .. }))
+  assert_true(
+    retried.cloud.creation is Some(_) && !retried.cloud.creating_session(),
+  )
   assert_true(retried.chat_column() is CloudTranscript(..))
 }
 

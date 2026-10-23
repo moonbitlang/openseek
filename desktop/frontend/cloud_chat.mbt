@@ -143,9 +143,6 @@ fn update_cloud(
     )
   }
   if switched && before.user_id is Some(account) {
-    if before.draft_identity() is Some(owner) {
-      retirements.push(@composer.Retire(owner))
-    }
     let sessions = before.sessions.map(item => item.id)
     for session in before.conversations.keys() {
       if !sessions.contains(session) {
@@ -400,30 +397,23 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     None => self.cloud_identity()
   }
   guard owner is Some(owner) else { return None }
-  let creating = self.cloud_draft_identity() is Some(_)
-  let conversation = if creating {
-    self.cloud.creation.map(creation => creation.conversation)
-  } else {
-    self.cloud_conversation()
+  guard self.cloud.conversations.get(owner.session()) is Some(conversation) else {
+    return None
   }
-  guard creating || conversation is Some(_) else { return None }
-  let pending = creating &&
-    self.cloud.creation is Some({ pending: Some(_), .. })
+  let pending = self.cloud.draft_identity() == Some(owner) &&
+    self.cloud.creating_session()
   let history : Array[String] = []
-  if conversation is Some(conversation) {
-    for record in conversation.records {
-      if record.kind == "user" &&
-        record.data is { "content": String(content), .. } {
-        history.push(content)
-      }
+  for record in conversation.records {
+    if record.kind == "user" &&
+      record.data is { "content": String(content), .. } {
+      history.push(content)
     }
   }
   let input = self.dormant_composer_input()
   Some({
     ..input,
     identity: { ..input.identity, owner, },
-    draft: conversation
-    .bind(value => value.initial_submission)
+    draft: conversation.initial_submission
     .unwrap_or(input.draft)
     .with_semantic_selection(
       if self.file_panel.owner == Some(owner) {
@@ -434,18 +424,18 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         None
       },
     ),
-    run: if conversation is Some(value) && (value.sending || value.generating) {
+    run: if conversation.sending || conversation.generating {
       Some(
         conversation
-        .bind(value => value.run_heartbeat())
+        .run_heartbeat()
         .unwrap_or({ stage: @composer.Working, started_ms: None, tokens: 0, }),
       )
     } else {
       None
     },
-    turn_id: conversation.bind(value => value.task),
-    goal: conversation.map_or(input.goal, value => value.controls.input()),
-    slash_commands: if !creating && !self.cloud.can_compose(owner.session()) {
+    turn_id: conversation.task,
+    goal: conversation.controls.input(),
+    slash_commands: if !self.cloud.can_compose(owner.session()) {
       []
     } else {
       self.openseek_commands()
@@ -456,16 +446,12 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       token: account.token,
       epoch: self.cloud.epoch,
     }),
-    staged_attachments: conversation.map_or([], value => {
-      value.initial_attachments
-    }),
+    staged_attachments: conversation.initial_attachments,
     file_candidates: self.file_search().candidates,
     open_files: self.live_editor_files(),
     active_file: self.active_workspace_file(),
     installed_skills: [],
-    submission_sequence: conversation.map_or(0, value => {
-      value.submission_sequence
-    }),
+    submission_sequence: conversation.submission_sequence,
     file_index: if self.file_panel.owner == Some(owner) {
       self.composer_file_index()
     } else {
@@ -474,16 +460,16 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     presentation: {
       images_enabled: true,
       context: {
-        let context = conversation.map_or(input.presentation.context, value => {
-          value.control_context()
-        })
-        if conversation is Some({ watch_status: Reconnecting, .. }) {
+        let context = conversation.control_context()
+        if conversation.watch_status == Reconnecting {
           context.push(@composer.ConnectionBanner(device_name=Some("Cloud")))
         }
-        if conversation is Some(value) &&
-          (value.controls.is_compacting() || value.controls.is_compact_queued()) {
+        if conversation.controls.is_compacting() ||
+          conversation.controls.is_compact_queued() {
           context.push(
-            @composer.CompactionNotice(queued=!value.controls.is_compacting()),
+            @composer.CompactionNotice(
+              queued=!conversation.controls.is_compacting(),
+            ),
           )
         }
         context
@@ -504,11 +490,11 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         }),
       ],
       placeholder: shell_text(self.locale, AskPlaceholder),
-      disabled: pending ||
-      (!creating && !self.cloud.can_compose(owner.session())),
-      primary_action: if conversation is Some(value) &&
-        (value.generating || value.sending || value.queue_edit is Some(_)) {
-        value.control_primary_action(
+      disabled: pending || !self.cloud.can_compose(owner.session()),
+      primary_action: if conversation.generating ||
+        conversation.sending ||
+        conversation.queue_edit is Some(_) {
+        conversation.control_primary_action(
           if self.followup_behavior is FollowupQueue {
             @composer.Queue
           } else {
@@ -518,11 +504,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       } else {
         @composer.Send(
           available=self.account is Some(_) &&
-            (if creating {
-              !pending
-            } else {
-              self.cloud.can_send(owner.session())
-            }),
+            self.cloud.can_send(owner.session()),
         )
       },
     },

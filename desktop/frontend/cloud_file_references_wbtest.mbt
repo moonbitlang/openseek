@@ -33,9 +33,9 @@ test "Cloud prepares file mentions in the same command before and after creation
     creating,
   )
   let submission = created.cloud.conversations["new-cloud"].outgoing.unwrap()
-  assert_true(submission.prompt is Some((source, _)) && source == draft)
   assert_true(
-    submission.command is @wire.Prompt(content~, ..) &&
+    submission.input is @cloud.Prompt(content~, draft=source, ..) &&
+    source == draft &&
     content.text() == draft.prompt(),
   )
 }

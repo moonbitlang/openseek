@@ -24,7 +24,9 @@ test "new Cloud is an editable empty composer without a remote session" {
   assert_true(blank.cloud_identity() is None)
   assert_eq(blank.cloud_title(), "New chat")
   assert_true(blank.cloud_chat_section("local").activation is None)
-  assert_true(blank.cloud.creation is Some({ pending: None, .. }))
+  assert_true(
+    blank.cloud.creation is Some(_) && !blank.cloud.creating_session(),
+  )
   assert_true(blank.cloud.sessions == initial.cloud.sessions)
   assert_true(blank.chat_column() is CloudTranscript(..))
   assert_true(blank.cloud_conversation() is None)
@@ -54,7 +56,7 @@ test "first Cloud submit creates once and sends its snapshot after creation" {
   let sending = submit_blank_cloud(blank)
   let request = sending.cloud.creation.unwrap().request
   assert_true(sending.composer_input().presentation.disabled)
-  assert_true(sending.cloud.creation is Some({ pending: Some(_), .. }))
+  assert_true(sending.cloud.creating_session())
   assert_true(submit_blank_cloud(sending).cloud == sending.cloud)
   let (_, repeated) = update(
     test_dispatch(),
@@ -75,7 +77,7 @@ test "first Cloud submit creates once and sends its snapshot after creation" {
   assert_false(conversation.sending)
   assert_false(conversation.loading)
   assert_true(
-    conversation.outgoing is Some({ command: @wire.Prompt(content~, ..), .. }) &&
+    conversation.outgoing is Some({ input: @cloud.Prompt(content~, ..), .. }) &&
     content.text() == "First Cloud message",
   )
   assert_true(
@@ -112,7 +114,9 @@ test "failed Cloud creation retains the composer owner and retries only on submi
     CloudAction(@cloud.CreateFailed(3, request, Http(503))),
     pending,
   )
-  assert_true(failed.cloud.creation is Some({ pending: None, .. }))
+  assert_true(
+    failed.cloud.creation is Some(_) && !failed.cloud.creating_session(),
+  )
   assert_true(failed.cloud.notice is Some(_))
   assert_true(
     failed.composer_input().identity == blank.composer_input().identity,
@@ -145,7 +149,9 @@ test "signing in for new Cloud returns to an empty page without creating a sessi
     login,
   )
   assert_true(blank.screen is Chat && blank.cloud_selected())
-  assert_true(blank.cloud.creation is Some({ pending: None, .. }))
+  assert_true(
+    blank.cloud.creation is Some(_) && !blank.cloud.creating_session(),
+  )
   assert_true(blank.cloud.sessions.is_empty())
   assert_true(blank.navigation.location == blank.navigation_location())
   assert_true(blank.cloud_identity() is None)
@@ -178,7 +184,9 @@ test "Cloud blank selection survives sidebar browsing and Settings over a Work p
   let (_, repeated) = update(test_dispatch(), NewChatRequested, settings)
   assert_true(repeated.screen is Chat && repeated.cloud_selected())
   assert_eq(repeated.composer_input().identity.owner, identity)
-  assert_true(repeated.cloud.creation is Some({ pending: None, .. }))
+  assert_true(
+    repeated.cloud.creation is Some(_) && !repeated.cloud.creating_session(),
+  )
 }
 
 ///|
@@ -194,7 +202,7 @@ test "Cloud creation behind Settings promotes its navigation without leaving Set
     blank,
   )
   let pending = submit_blank_cloud(browsed)
-  assert_true(pending.cloud.creation is Some({ pending: Some(_), .. }))
+  assert_true(pending.cloud.creating_session())
   let (_, settings) = update(test_dispatch(), OpenSetup, pending)
   let (_, created) = update(
     test_dispatch(),

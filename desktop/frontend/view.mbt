@@ -3031,7 +3031,7 @@ fn Model::cloud_chat_section(self : Model, channel : String) -> @section.Input {
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
       title: @sidebar_messages.text(self.locale, NewChat),
-      disabled: self.cloud.creation is Some({ pending: Some(_), .. }),
+      disabled: self.cloud.creating_session(),
     }),
     entries,
   }

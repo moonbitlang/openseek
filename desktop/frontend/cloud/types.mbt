@@ -80,8 +80,8 @@ pub(all) struct Conversation {
   initial_attachments : Array[@protocol.AttachmentSource]
   uploads : Array[UploadedAttachment]
   pending : Submission?
-  // A command waiting for its newly created session's first SSE snapshot.
-  outgoing : CommandSubmission?
+  // One command waiting for session creation or the first SSE snapshot.
+  outgoing : PendingCommand?
   stream : StreamLease?
   control : ControlState?
   control_inputs : Array[ControlInput]
@@ -147,16 +147,23 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
-  conversation : Conversation
-  pending : CommandSubmission?
 } derive(Eq)
 
 ///|
-/// One native command, optionally carrying the existing prompt preparation input.
-pub struct CommandSubmission {
+/// One unsent submission, retained on the conversation until its HTTP handoff.
+pub struct PendingCommand {
   request : Int32
-  command : @wire.Command
-  prompt : (@composer.Draft, Array[@protocol.AttachmentSource])?
+  input : CommandInput
+} derive(Eq)
+
+///|
+pub(all) enum CommandInput {
+  Native(@wire.Command)
+  Prompt(
+    content~ : @wire.Content,
+    draft~ : @composer.Draft,
+    attachments~ : Array[@protocol.AttachmentSource]
+  )
 } derive(Eq)
 
 ///|
@@ -411,4 +418,7 @@ pub fn State::draft_identity(self : State) -> @interop.ConversationIdentity? {
 }
 
 ///|
-pub extend CommandSubmission with Eq::{equal, not_equal}
+pub extend PendingCommand with Eq::{equal, not_equal}
+
+///|
+pub extend CommandInput with Eq::{equal, not_equal}

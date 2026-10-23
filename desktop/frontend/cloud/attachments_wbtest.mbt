@@ -53,8 +53,8 @@ test "first Cloud file-only submission creates once and admits the prepared file
     navigation=0,
   )
   assert_true(
-    creating.creation
-    is Some({ pending: Some({ prompt: Some((_, [_])), .. }), .. }),
+    creating.conversations[owner.session()].outgoing
+    is Some({ input: Prompt(attachments=[_], ..), .. }),
   )
   let (created, _, selected) = update(
     creating,
@@ -66,7 +66,8 @@ test "first Cloud file-only submission creates once and admits the prepared file
   assert_eq(selected, Some("new-session"))
   let conversation = created.conversations["new-session"]
   assert_true(
-    conversation.outgoing is Some({ prompt: Some((_, sources)), .. }) &&
+    conversation.outgoing
+    is Some({ input: Prompt(attachments=sources, ..), .. }) &&
     sources == attachments,
   )
   let stream = StreamLease::new()

@@ -11,9 +11,6 @@ fn State::replace(
   id : String,
   conversation : Conversation,
 ) -> State {
-  if self.creation is Some(creation) && creation.id == id {
-    return { ..self, creation: Some({ ..creation, conversation, }), }
-  }
   let conversations = self.conversations.copy()
   conversations[id] = conversation
   { ..self, conversations, }
@@ -116,34 +113,6 @@ fn State::failed(self : State, error : Failure) -> (State, @cmd.Cmd) {
 }
 
 ///|
-fn State::create(
-  self : State,
-  token : String?,
-  emit : @cmd.Emit[Msg],
-) -> (State, @cmd.Cmd) {
-  guard token is Some(token) && self.creation is Some(creation) else {
-    return (self, @cmd.none)
-  }
-  (
-    self,
-    run(emit, () => {
-      Created(
-        self.epoch,
-        creation.request,
-        required_string(
-          request(CloudOrigin, "/v1/sessions", Post, token~),
-          "id",
-        ),
-      ) catch {
-        @cloud_client.RequestError(error) =>
-          CreateFailed(self.epoch, creation.request, error)
-        _ => CreateFailed(self.epoch, creation.request, Unreachable)
-      }
-    }),
-  )
-}
-
-///|
 fn poll(
   epoch : Int32,
   id : String,
@@ -157,6 +126,18 @@ fn poll(
     )
     |> ignore
   })
+}
+
+///|
+fn State::is_draft(self : State, id : String) -> Bool {
+  self.creation.map_or(false, creation => creation.id == id)
+}
+
+///|
+pub fn State::creating_session(self : State) -> Bool {
+  self.creation
+  .bind(creation => self.conversations.get(creation.id))
+  .map_or(false, conversation => conversation.outgoing is Some(_))
 }
 
 ///|
@@ -197,6 +178,7 @@ pub fn State::is_archived(self : State, id : String) -> Bool {
 ///|
 /// Direct links can load history before the catalog confirms editability.
 pub fn State::can_compose(self : State, id : String) -> Bool {
+  self.is_draft(id) ||
   self.sessions.any(session => session.id == id && !session.archived)
 }
 
@@ -313,29 +295,25 @@ pub fn update(
         )
       }
       let request = state.sequence + 1
+      let id = "draft:\{request}"
       let next = {
         ..state,
         sequence: request,
-        creation: Some({
-          id: "draft:\{request}",
-          request,
-          navigation,
-          conversation: {
-            ..Conversation::empty(),
-            loading: false,
-            history_required: false,
-          },
-          pending: None,
-        }),
+        creation: Some({ id, request, navigation, }),
         notice: None,
-      }
+      }.replace(id, {
+        ..Conversation::empty(),
+        loading: false,
+        history_required: false,
+      })
       (next, @cmd.none, None)
     }
     Created(epoch, request, id) => {
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
         creation.request == request &&
-        creation.pending is Some(submission) &&
+        state.conversations.get(creation.id) is Some(conversation) &&
+        conversation.outgoing is Some(_) &&
         state.user_id is Some(_) else {
         return (state, @cmd.none, None)
       }
@@ -349,10 +327,15 @@ pub fn update(
         },
         ..state.sessions.filter(session => session.id != id),
       ]
-      let ready = { ..creation.conversation, outgoing: Some(submission), }
-      let (next, command) = { ..state, sessions, creation: None, }
-        .replace(id, ready)
-        .list(token, emit)
+      let conversations = state.conversations.copy()
+      conversations.remove(creation.id)
+      conversations[id] = conversation
+      let (next, command) = {
+        ..state,
+        sessions,
+        conversations,
+        creation: None,
+      }.list(token, emit)
       (
         next,
         command,
@@ -367,24 +350,22 @@ pub fn update(
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
         creation.request == request &&
-        creation.pending is Some(submission) else {
+        state.conversations.get(creation.id) is Some(conversation) &&
+        conversation.outgoing is Some(submission) else {
         return (state, @cmd.none, None)
       }
-      let (next, command) = {
-        ..state,
-        creation: Some({
-          ..creation,
-          pending: None,
-          conversation: {
-            ..creation.conversation,
-            controls: creation.conversation.controls.delivered(
-              submission.command,
-              submission.request.to_string(),
-              @engine_session.Rejected,
-            ),
-          },
-        }),
-      }.failed(error)
+      let controls = match submission.input {
+        Native(command) =>
+          conversation.controls.delivered(
+            command,
+            submission.request.to_string(),
+            @engine_session.Rejected,
+          )
+        Prompt(..) => conversation.controls
+      }
+      let (next, command) = state
+        .replace(creation.id, { ..conversation, outgoing: None, controls, })
+        .failed(error)
       (next, command, None)
     }
     Edit(account~, session=id, edit~) => {
@@ -609,15 +590,8 @@ pub fn update(
               conversation.uploads
             },
           })
-          if baseline && next.conversations[id].outgoing is Some(submission) {
-            let next = next.replace(id, {
-              ..next.conversations[id],
-              outgoing: None,
-              watch_status: Watching,
-            })
-            let (next, command) = next.dispatch_command(
-              id, submission, token, emit,
-            )
+          if baseline && conversation.outgoing is Some(_) {
+            let (next, command) = next.send_pending(id, token, emit)
             return (next, command, None)
           }
           if admitted || (baseline && conversation.watch_status == Reconnecting) {
@@ -721,12 +695,11 @@ pub fn update(
       let conversation = state.conversations
         .get(id)
         .unwrap_or(Conversation::empty())
-      if conversation.outgoing is Some(_) &&
-        conversation.watch_status != Disconnected {
-        let (next, command) = state.load(id, token, emit)
-        return (next, command, None)
-      }
-      let next = if conversation.sending ||
+      let next = if (
+          conversation.outgoing is Some(_) &&
+          conversation.watch_status != Disconnected
+        ) ||
+        conversation.sending ||
         conversation.stream is Some({ active: true, .. }) {
         state
       } else {
@@ -1151,8 +1124,8 @@ fn State::submit(
   let state = self
   guard owner is @interop.Cloud(account~, session=id) &&
     state.user_id == Some(account) &&
-    token is Some(_) &&
-    (state.draft_identity() == Some(owner) || state.can_send(id)) &&
+    token is Some(token) &&
+    state.can_send(id) &&
     (!draft.is_blank() || !attachments.is_empty()) &&
     draft.mentions.all(mention => {
       mention.ref_
@@ -1180,11 +1153,10 @@ fn State::submit(
       )
   }
   let (next, command) = state.submit_command(
-    owner,
+    id,
     {
       request: state.sequence + 1,
-      command: @wire.Prompt(content~, submission_id=None),
-      prompt: Some((draft, attachments)),
+      input: Prompt(content~, draft~, attachments~),
     },
     emit,
     token,
