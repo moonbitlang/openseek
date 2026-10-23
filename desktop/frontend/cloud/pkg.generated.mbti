@@ -256,6 +256,7 @@ pub(all) struct Record {
   kind : String
   data : Json
   created_at : Double
+  engine_sequence : Int32?
 } derive(Eq)
 pub fn Record::equal(Self, Self) -> Bool
 pub fn Record::not_equal(Self, Self) -> Bool

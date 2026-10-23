@@ -56,6 +56,7 @@ fn integrated_cloud_model() -> Model {
             task_id: "finished-task",
             kind: "assistant_message",
             data: { "content": "Cloud answer" },
+            engine_sequence: None,
             created_at: 100,
           },
         ],

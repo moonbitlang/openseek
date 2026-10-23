@@ -264,7 +264,13 @@ test "Cloud steer receipts settle input without duplicating the durable user mes
       { "kind": "user", "payload": { "content": "Follow up" } },
     ]),
     messages: [
-      { task_id: "task", kind: "user", data: content, created_at: 10, },
+      {
+        task_id: "task",
+        kind: "user",
+        data: content,
+        engine_sequence: Some(1),
+        created_at: 10,
+      },
     ],
   }
   let loaded = metadata_update(

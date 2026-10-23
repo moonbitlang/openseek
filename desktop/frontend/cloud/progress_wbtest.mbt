@@ -102,6 +102,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
           task_id: "task",
           kind: "user",
           data: { "content": "question" },
+          engine_sequence: Some(1),
           created_at: 1,
         },
         {
@@ -111,6 +112,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
             "content": "Answer",
             "reasoning_content": "Complete reasoning",
           },
+          engine_sequence: None,
           created_at: 2,
         },
       ],

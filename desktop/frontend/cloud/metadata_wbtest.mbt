@@ -311,6 +311,7 @@ test "a completed archive wins over an earlier history response's running flag" 
             task_id: "finished",
             kind: "assistant_message",
             data: { "content": "Final answer" },
+            engine_sequence: None,
             created_at: 5,
           },
         ],

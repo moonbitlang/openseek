@@ -146,12 +146,14 @@ test "Cloud preserves submitted input and startup failure when the native log is
         task_id: "failed-start",
         kind: "user",
         data: { "content": "Please check this" },
+        engine_sequence: None,
         created_at: 100,
       },
       {
         task_id: "failed-start",
         kind: "task_finished",
         data: { "status": "failed", "reason": "Engine could not start" },
+        engine_sequence: None,
         created_at: 101,
       },
     ],
@@ -191,18 +193,21 @@ test "Cloud supplements a failed service turn after native history and removes t
       task_id: "old",
       kind: "user",
       data: { "content": "Earlier" },
+      engine_sequence: Some(1),
       created_at: 100,
     },
     {
       task_id: "failed",
       kind: "user",
       data: { "content": "Check the build", "submission_id": "input-2" },
+      engine_sequence: None,
       created_at: 101,
     },
     {
       task_id: "failed",
       kind: "task_finished",
       data: { "status": "failed", "reason": "Engine could not start" },
+      engine_sequence: None,
       created_at: 102,
     },
   ]
@@ -236,7 +241,17 @@ test "Cloud supplements a failed service turn after native history and removes t
       "payload": { "kind": "failed", "message": "Engine could not start" },
     },
   ])
-  let caught_up = { ..conversation, document, }
+  let caught_up = {
+    ..conversation,
+    document,
+    records: records.map(record => {
+      if record.task_id == "failed" && record.kind == "user" {
+        { ..record, engine_sequence: Some(4), }
+      } else {
+        record
+      }
+    }),
+  }
   let shared = caught_up.session_view().items
   assert_true(caught_up.items() == shared)
 }
@@ -265,18 +280,21 @@ test "Cloud service supplements preserve repeated and rich inputs without dedupl
         task_id: "first-task",
         kind: "user",
         data: { "content": content, "submission_id": "first" },
+        engine_sequence: Some(1),
         created_at: 100,
       },
       {
         task_id: "second-task",
         kind: "user",
         data: { "content": content, "submission_id": "second" },
+        engine_sequence: None,
         created_at: 101,
       },
       {
         task_id: "second-task",
         kind: "task_finished",
         data: { "status": "failed", "error": "Spawn failed" },
+        engine_sequence: None,
         created_at: 102,
       },
     ],
@@ -292,7 +310,7 @@ test "Cloud service supplements preserve repeated and rich inputs without dedupl
     ),
   )
   assert_true(items[3].kind is Failure("Spawn failed"))
-  // Untagged older prompts are matched by occurrence, never by a text set.
+  // Unmapped service submissions remain independent of equal native text.
   let repeated = {
     ..Conversation::empty(),
     document: native_document([
@@ -303,17 +321,19 @@ test "Cloud service supplements preserve repeated and rich inputs without dedupl
         task_id: "a",
         kind: "user",
         data: { "content": "Same" },
+        engine_sequence: None,
         created_at: 100,
       },
       {
         task_id: "b",
         kind: "user",
         data: { "content": "Same" },
+        engine_sequence: None,
         created_at: 101,
       },
     ],
   }
-  assert_eq(repeated.items().filter(item => item.kind is User(..)).length(), 2)
+  assert_eq(repeated.items().filter(item => item.kind is User(..)).length(), 3)
 }
 
 ///|
@@ -325,6 +345,7 @@ test "Cloud shows a live service failure before the next history read without du
         task_id: "task",
         kind: "user",
         data: { "content": "Start" },
+        engine_sequence: None,
         created_at: 100,
       },
     ],
@@ -350,6 +371,7 @@ test "Cloud shows a live service failure before the next history read without du
         task_id: "task",
         kind: "task_finished",
         data: { "status": "failed", "reason": "Start failed" },
+        engine_sequence: None,
         created_at: 101,
       },
     ],
@@ -364,6 +386,178 @@ test "Cloud shows a live service failure before the next history read without du
       } else {
         item
       }
+    }),
+  )
+}
+
+///|
+test "Cloud maps repeated prompts by engine sequence after a failed startup" {
+  let history = decode_history({
+    "generating": false,
+    "messages": [
+      {
+        "task_id": "failed-start",
+        "kind": "user",
+        "data": { "content": "Same question" },
+        "created_at": 100,
+      },
+      {
+        "task_id": "failed-start",
+        "kind": "task_finished",
+        "data": { "status": "failed", "reason": "Engine could not start" },
+        "created_at": 101,
+      },
+      {
+        "task_id": "successful-retry",
+        "kind": "user",
+        "data": { "content": "Same question" },
+        "created_at": 102,
+        "engine_sequence": 1,
+      },
+      {
+        "task_id": "successful-retry",
+        "kind": "task_finished",
+        "data": { "status": "completed" },
+        "created_at": 105,
+      },
+    ],
+    "session": {
+      "events": [
+        {
+          "sequence": 1,
+          "item": { "kind": "user", "payload": { "content": "Same question" } },
+        },
+        {
+          "sequence": 2,
+          "item": {
+            "kind": "assistant",
+            "payload": { "content": "Successful answer" },
+          },
+        },
+        {
+          "sequence": 3,
+          "item": {
+            "kind": "terminal",
+            "payload": { "kind": "finished", "message": "Successful answer" },
+          },
+        },
+      ],
+    },
+  })
+  let expected = (items : Array[@transcript.TranscriptItem]) => {
+    assert_true(
+      items
+      is [
+        {
+          kind: User(content=Content([Text("Same question")])),
+          sequence: None,
+          ..
+        },
+        { kind: Failure("Engine could not start"), .. },
+        {
+          kind: User(content=Content([Text("Same question")])),
+          sequence: Some(1),
+          ..
+        },
+        { kind: Assistant(prose=Some("Successful answer"), ..), .. },
+      ],
+    )
+  }
+  let base = controls_fixture()
+  let loaded = metadata_update(base, Loaded(1, "session", 0, history))
+  expected(loaded.conversations["session"].items())
+  // A fresh model loading the same persisted response has the same order.
+  let reopened = metadata_update(
+    controls_fixture(),
+    Loaded(1, "session", 0, history),
+  )
+  expected(reopened.conversations["session"].items())
+}
+
+///|
+test "Cloud engine sequence is optional and only identifies a native User" {
+  for
+    (sequence, expected) in (
+      [(null, None), (Json(1), Some(1))] : Array[(Json, Int32?)]) {
+    let history = decode_history({
+      "generating": false,
+      "messages": [
+        {
+          "task_id": "task",
+          "kind": "user",
+          "data": { "content": "Service text" },
+          "created_at": 100,
+          "engine_sequence": sequence,
+        },
+      ],
+      "session": {
+        "events": [
+          {
+            "sequence": 1,
+            "item": { "kind": "user", "payload": { "content": "Native text" } },
+          },
+        ],
+      },
+    })
+    assert_eq(history.messages[0].engine_sequence, expected)
+    let conversation = {
+      ..Conversation::empty(),
+      records: history.messages,
+      document: history.session,
+    }
+    assert_eq(
+      conversation.items().length(),
+      if expected is Some(_) {
+        1
+      } else {
+        2
+      },
+    )
+  }
+  for value in ([Json(0), Json(-1), Json(1.5), Json("1")] : Array[Json]) {
+    let rejected = try {
+      ignore(
+        decode_history({
+          "generating": false,
+          "messages": [
+            {
+              "task_id": "task",
+              "kind": "user",
+              "data": { "content": "Prompt" },
+              "created_at": 100,
+              "engine_sequence": value,
+            },
+          ],
+          "session": { "events": [] },
+        }),
+      )
+      false
+    } catch {
+      @cloud_client.RequestError(Malformed) => true
+      _ => false
+    }
+    assert_true(rejected)
+  }
+  let conversation = {
+    ..Conversation::empty(),
+    records: [
+      {
+        task_id: "task",
+        kind: "user",
+        data: { "content": "Unrepresented prompt" },
+        engine_sequence: Some(1),
+        created_at: 100,
+      },
+    ],
+    document: native_document([
+      { "kind": "assistant", "payload": { "content": "Other history" } },
+    ]),
+  }
+  assert_true(
+    conversation
+    .items()
+    .any(item => {
+      item.kind is User(content=Content([Text("Unrepresented prompt")]))
     }),
   )
 }

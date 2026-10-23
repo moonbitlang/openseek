@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 const commands = app => app.requests.filter(request => request.method === 'POST' && request.path.endsWith('/commands')).map(request => JSON.parse(request.body));
 
@@ -162,6 +162,7 @@ test('Cloud preserves a service-only prompt and startup failure across reopen an
   await app.open();
   await check();
   // The same saved native items arriving later replace the supplements.
+  app.histories.get(sessionA).messages[0].engine_sequence = 1;
   app.histories.get(sessionA).session.events = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Please check the build' } } },
     { sequence: 2, item: { kind: 'terminal', payload: { kind: 'failed', message: 'Fixture engine could not start' } } },
@@ -212,3 +213,57 @@ for (const { status, body, notice, label } of [
     });
   }
 }
+
+
+test('Cloud keeps failed and successful identical prompts in task order live and after reload', async ({ page }) => {
+  const app = new CloudHarness(page);
+  app.manualTasks = true;
+  let successfulTask = null;
+  let nativeUserSaved = false;
+  await app.install();
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/messages`, async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const history = app.histories.get(sessionA) || { messages: [], generating: false };
+    const current = history.messages.filter(record => record.task_id === successfulTask);
+    const items = [];
+    const user = current.find(record => record.kind === 'user');
+    if (nativeUserSaved && user) items.push({ kind: 'user', payload: user.data });
+    const assistant = current.find(record => record.kind === 'assistant_message');
+    if (assistant) items.push({ kind: 'assistant', payload: assistant.data });
+    if (current.some(record => record.kind === 'task_finished')) items.push({ kind: 'terminal', payload: { kind: 'finished', message: 'Successful answer' } });
+    const messages = history.messages.map(record => nativeUserSaved && record.task_id === successfulTask && record.kind === 'user' ? { ...record, engine_sequence: 1 } : record);
+    await route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'application/json', body: JSON.stringify({ ...history, messages, session: { events: items.map((item, index) => ({ sequence: index + 1, item })) } }) });
+  });
+  await app.goto();
+  await app.open();
+  const transcript = page.locator('#transcript');
+  await page.locator('#task').fill('Same question');
+  await page.locator('#send').click();
+  await expect(page.locator('#stop')).toBeEnabled();
+  await app.emitSessionEvent(sessionA, 'task_finished', { status: 'failed', reason: 'Engine could not start' });
+  await expect(transcript).toContainText('Engine could not start');
+  await expect(page.locator('#stop')).toHaveCount(0);
+  await page.locator('#task').fill('Same question');
+  await page.locator('#send').click();
+  await expect(page.locator('#stop')).toBeEnabled();
+  successfulTask = app.controlState(sessionA).task_id;
+  await expect(transcript.getByText('Same question', { exact: true })).toHaveCount(2);
+  await expect(transcript).toContainText(/Same question[\s\S]*Engine could not start[\s\S]*Same question/);
+  nativeUserSaved = true;
+  await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Successful answer' });
+  await app.emitSessionEvent(sessionA, 'task_finished', { status: 'completed', result: { output: { answer: 'Successful answer' } } });
+  const check = async () => {
+    await expect(transcript.getByText('Same question', { exact: true })).toHaveCount(2);
+    await expect(transcript.getByText('Successful answer', { exact: true })).toHaveCount(1);
+    await expect(transcript).toContainText(/Same question[\s\S]*Engine could not start[\s\S]*Same question[\s\S]*Successful answer/);
+  };
+  await check();
+  await app.open(sessionB);
+  await app.open(sessionA);
+  await check();
+  await page.reload();
+  await app.open();
+  await check();
+  expect(app.postCount).toBe(2);
+  expect(app.device.pageErrors).toEqual([]);
+});

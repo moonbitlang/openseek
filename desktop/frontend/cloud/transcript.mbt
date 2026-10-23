@@ -67,43 +67,44 @@ pub fn Conversation::items(
   let native = self.document.events.unwrap_or([])
   let items : Array[@transcript.TranscriptItem] = []
   let service = self.records.map(record => {
-    (record.task_id, record.kind, record.data, Some(record.created_at))
+    (
+      record.task_id,
+      record.kind,
+      record.data,
+      Some(record.created_at),
+      record.engine_sequence,
+    )
   })
   for event in self.events {
     if !self.records.any(record => {
         record.task_id == event.task_id && record.kind == event.kind
       }) {
-      service.push((event.task_id, event.kind, event.data, None))
+      service.push((event.task_id, event.kind, event.data, None, None))
     }
   }
   let mut cursor = 0
   let mut task : String? = None
   let mut native_failure = false
-  for (task_id, kind, data, ts) in service {
+  for (task_id, kind, data, ts, engine_sequence) in service {
     guard service_item(kind, data) is Some(item) else { continue }
     if task != Some(task_id) {
       native_failure = false
       task = Some(task_id)
     }
-    if item is @protocol.User(user) {
-      let mut matched : Int32? = None
-      for index in cursor..<native.length() {
-        guard native[index].item is @protocol.User(saved) else { continue }
-        let same = match (user.submission_id, saved.submission_id) {
-          (Some(id), Some(saved_id)) => id == saved_id
-          _ => user.content == saved.content
-        }
-        if same {
-          matched = Some(index)
-          break
-        }
-      }
-      if matched is Some(index) {
+    if item is @protocol.User(_) &&
+      engine_sequence is Some(sequence) &&
+      native.search_by(event => {
+        event.sequence == sequence && event.item is @protocol.User(_)
+      })
+      is Some(index) {
+      // Only the explicit native sequence establishes that this service
+      // submission is already represented. Equal text is not ownership.
+      if index >= cursor {
         ignore(append_native(items, native, cursor, index + 1))
         cursor = index + 1
         native_failure = false
-        continue
       }
+      continue
     }
     // Keep the current native turn ahead of its service result, and place
     // missing service turns before the next native User anchor.

@@ -210,6 +210,7 @@ test "history recovery clears a send error only when the pending submission was 
               task_id: "new-task",
               kind: "user",
               data: { "content": "hello" },
+              engine_sequence: None,
               created_at: 100,
             },
           ]
@@ -310,12 +311,14 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
           task_id: "task",
           kind: "user",
           data: { "content": "hello" },
+          engine_sequence: Some(1),
           created_at: 1,
         },
         {
           task_id: "task",
           kind: "assistant_message",
           data: { "content": "你好 🌙" },
+          engine_sequence: None,
           created_at: 2,
         },
       ],

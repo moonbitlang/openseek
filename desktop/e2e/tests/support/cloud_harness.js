@@ -390,7 +390,7 @@ export class CloudHarness {
     if (request.method() === 'GET') {
       const history = this.histories.get(session) || { messages: [], generating: false, outcome: null };
       if (this.pauseHistory) await this.pauseHistory;
-      return json({ ...history, session: history.session || this.nativeSession(session, history) }, this.historyStatus);
+      return json(history.session ? history : { ...history, ...this.nativeHistory(session, history) }, this.historyStatus);
     }
     throw new Error('Messages are read-only; use the native commands endpoint');
   }
@@ -419,11 +419,16 @@ export class CloudHarness {
 
   // Fixtures retain their compact message builders; the wire response is the
   // native document used by the Local projector, including non-message records.
-  nativeSession(session, history) {
+  nativeHistory(session, history) {
     const items = [];
-    for (const record of history.messages) {
+    const messages = history.messages.map(record => {
+      if (record.kind === 'user') {
+        const mapped = { ...record, engine_sequence: items.length + 1 };
+        items.push({ kind: record.kind, payload: record.data });
+        return mapped;
+      }
       const payload = record.data;
-      if (['user', 'tool_result', 'runtime_notice', 'summary'].includes(record.kind)) items.push({ kind: record.kind, payload });
+      if (['tool_result', 'runtime_notice', 'summary'].includes(record.kind)) items.push({ kind: record.kind, payload });
       if (record.kind === 'assistant_message') items.push({ kind: 'assistant', payload });
       if (record.kind === 'tool_call') {
         const call = payload.function ? { id: payload.id, name: payload.function.name, arguments: payload.function.arguments } : payload;
@@ -435,9 +440,10 @@ export class CloudHarness {
         const kinds = { completed: 'finished', aborted: 'aborted', interrupted: 'interrupted', context_yield: 'context_yield', max_steps_exhausted: 'max_steps_exhausted' };
         items.push({ kind: 'terminal', payload: { kind: kinds[status] || 'failed', message: result.output?.answer || result.reason || '' } });
       }
-    }
+      return record;
+    });
     items.push(...(this.nativeNotices.get(session) || []));
-    return { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) };
+    return { messages, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
   }
 
   controlState(session) {

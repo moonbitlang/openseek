@@ -13,6 +13,8 @@ pub(all) struct Record {
   kind : String
   data : Json
   created_at : Double
+  // Native User sequence; absent for service-only submissions.
+  engine_sequence : Int32?
 } derive(Eq)
 
 ///|
@@ -341,10 +343,20 @@ fn decode_history(json : Json) -> History raise RequestError {
     raise @cloud_client.RequestError(Malformed)
   }
   let messages = items.map(item => {
-    task_id: required_string(item, "task_id"),
-    kind: required_string(item, "kind"),
-    data: required_data(item),
-    created_at: required_number(item, "created_at"),
+    let engine_sequence = match item {
+      { "engine_sequence": Null, .. } => None
+      { "engine_sequence": Number(sequence, ..), .. } if sequence > 0 &&
+        sequence == sequence.to_int().to_double() => Some(sequence.to_int())
+      Object(fields) if !fields.contains("engine_sequence") => None
+      _ => raise @cloud_client.RequestError(Malformed)
+    }
+    {
+      task_id: required_string(item, "task_id"),
+      kind: required_string(item, "kind"),
+      data: required_data(item),
+      created_at: required_number(item, "created_at"),
+      engine_sequence,
+    }
   })
   guard json is { "session": document, .. } else {
     raise @cloud_client.RequestError(Malformed)
