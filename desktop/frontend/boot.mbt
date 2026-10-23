@@ -129,7 +129,15 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
     placement.checkout_root() is Some(_)
   let open_web_links_in_app = self.is_desktop &&
     (self.screen is Chat || self.screen is Codex)
-  { platform, open_web_links_in_app, reveal_files, }
+  let ctx = file_ctx(self)
+  {
+    platform,
+    open_web_links_in_app,
+    reveal_files,
+    share_files: ctx.root() is Some(_),
+    download_files: ctx.owner is @interop.Cloud(..) && ctx.root() is Some(_),
+    downloading: self.file_panel.download is Some(_),
+  }
 }
 
 ///|
@@ -763,6 +771,7 @@ fn main {
         open_file: path => emit(OpenFile(path)),
         reveal_file: path => emit(RevealFile(path)),
         share_file: path => emit(ShareFile(path)),
+        download_file: path => emit(DownloadFile(path)),
       },
     )
     let transfer_menu_html = @action_menu.component(

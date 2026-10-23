@@ -2603,7 +2603,8 @@ fn update_inner(
     }
   }
   match msg {
-    DownloadFile(desktop~) => start_download(dispatch, state, ctx, desktop~)
+    DownloadFile(desktop~, path~) =>
+      start_download(dispatch, state, ctx, path, desktop~)
     // The application checks the current account before the browser handoff.
     FileDownloadReady(..) => (@cmd.none, state)
     FileDownloaded(owner~, auth_epoch~, generation~, path~, ..) => {

@@ -435,6 +435,7 @@ for (const browser of [false, true]) {
     if (!browser) app.accountSignedIn = false;
     app.directoryEntries['/workspace'] = [{ name: 'src', is_dir: true }, { name: 'artifact.bin', is_dir: false }];
     app.workingFiles['artifact.bin'] = 'original file';
+    app.sessionEvents[1].item.payload.content += '\n\n[Artifact](./artifact.bin:7)';
     let finish;
     app.pendingShare = new Promise(resolve => { finish = resolve; });
     await app.openDesktop({ browser });
@@ -490,6 +491,15 @@ for (const browser of [false, true]) {
     expect(app.hostShares[1].idempotency_key).not.toBe(app.hostShares[0].idempotency_key);
     expect(app.clientUploads).toEqual([]);
     expect(app.count('session.share')).toBe(0);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(app.shareReply.url);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await page.getByTitle('Open ./artifact.bin:7', { exact: true }).click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Download to local', exact: true })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+    await expect.poll(() => app.count('fs.share_file')).toBe(3);
+    expect(app.hostShares[2].source).toEqual({ root: '/workspace', path: 'artifact.bin' });
     expect(app.pageErrors).toEqual([]);
   });
 }

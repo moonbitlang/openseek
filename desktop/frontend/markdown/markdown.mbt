@@ -254,6 +254,7 @@ fn workspace_file_card(
     .aria_label(title)
     .data_set("workspace-file-reference", reference.path)
     .data_set("context-file", reference.path)
+    .data_set("context-workspace-file", reference.path)
   let children = [
     @html.span(
       class="workspace-file-glyph \{kind_class}",
@@ -866,7 +867,9 @@ fn file_link_node(
       English => "Open \{path}"
       Spanish => "Abrir \{path}"
     },
-    attrs=@html.Attrs::build().data_set("context-file", path),
+    attrs=@html.Attrs::build()
+      .data_set("context-file", path)
+      .data_set("context-workspace-file", FileReference(path).path()),
     on_click=open(path),
     children,
   )

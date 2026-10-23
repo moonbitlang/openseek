@@ -2402,8 +2402,8 @@ pub fn breadcrumb_view(
       },
     ),
   )
-  if ctx.owner is @interop.Cloud(..) && ctx.active_file is Some(_) {
-    path_row.push(download_button(locale~, dispatch, state, desktop~))
+  if ctx.owner is @interop.Cloud(..) && ctx.active_file is Some(path) {
+    path_row.push(download_button(locale~, dispatch, state, path, desktop~))
   } else if reveal is Some((label, command)) {
     path_row.push(
       @html.button(
@@ -3715,7 +3715,7 @@ fn tree_row(
     attrs.aria_expanded(expanded.to_string())
   } else if ctx.root() is Some(root) {
     attrs.data_set(
-      "context-share-file",
+      "context-workspace-file",
       @resource.join_relative(root, entry.path).to_string(),
     )
   } else {

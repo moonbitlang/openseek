@@ -1933,6 +1933,7 @@ priv enum Msg {
   // not be opened. The saved path remains useful in the transient toast.
   SessionSearch(@session_search.Msg)
   ShareFile(String)
+  DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
   OpenSessionImport

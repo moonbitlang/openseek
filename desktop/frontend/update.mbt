@@ -6723,6 +6723,18 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     ShareFile(path) => model.share_file(dispatch, path)
+    DownloadFile(path) => {
+      guard model.workspace_file(path) is Some(file) else {
+        return (@cmd.none, model)
+      }
+      update_msg(
+        dispatch,
+        FileEditor(
+          @fileeditor.DownloadFile(desktop=model.is_desktop, path=file),
+        ),
+        model,
+      )
+    }
     OpenExport(channel, source) => {
       let (cmd, export_dialog) = model.export_dialog.open(source, channel~)
       (cmd, { ..model, export_dialog, })
