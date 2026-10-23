@@ -301,17 +301,36 @@ async fn check_native_command_requests() -> Unit {
 }
 
 ///|
+async fn check_plain_command_refusals() -> Unit {
+  for
+    command in [
+      @wire.GoalSet(text="Keep the goal", auto=false),
+      @wire.GoalClear,
+      @wire.Compact,
+    ] {
+    let mut calls = 0
+    let restore = mock_control_http(
+      409,
+      "Cannot accept this command while compaction is pending.\n",
+      (_, _, _, _) => calls += 1,
+    )
+    defer restore()
+    assert_true(
+      send_command("token", "session", command)
+      is Rejected("Cannot accept this command while compaction is pending."),
+    )
+    assert_eq(calls, 1)
+  }
+}
+
+///|
 async fn check_control_failures() -> Unit {
   for
     (status, body, expected) in [
-      (
-        409,
-        "{\"accepted\":false,\"error\":\"task_not_running\",\"task_id\":\"task\"}",
-        Some(Rejected("task_not_running")),
-      ),
+      (409, "task_not_running", Some(Rejected("task_not_running"))),
       (202, "{\"accepted\":true}", Some(Accepted)),
       (202, "{\"accepted\":false,\"task_id\":\"task\"}", None),
-      (409, "{}", None),
+      (409, "", Some(Rejected("HTTP 409"))),
       (202, "not JSON", None),
       (401, "{}", None),
       (500, "{}", None),
@@ -325,7 +344,7 @@ async fn check_control_failures() -> Unit {
         assert_true(
           match (status, failure) {
             (401, Unauthorized) | (500, Http(500)) | (-1, Unreachable) => true
-            (_, Malformed) => status is (202 | 409)
+            (_, Malformed) => status == 202
             _ => false
           },
         )
@@ -439,6 +458,7 @@ async fn check_control_state_requests() -> Unit {
 async test "Cloud control HTTP and SSE preserve operation and ownership contracts" {
   // All fetch substitutions stay sequential within one async test.
   check_native_command_requests()
+  check_plain_command_refusals()
   check_control_requests()
   check_control_failures()
   check_control_state_requests()

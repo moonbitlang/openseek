@@ -293,9 +293,9 @@ export class CloudHarness {
         if (this.pauseControl) await this.pauseControl;
         if (this.controlOffline) return route.abort('failed');
         const rejected = this.controlRejected || (envelope.task_id !== undefined && envelope.task_id !== snapshot.data.active_task_id ? 'task_mismatch' : null);
-        if (rejected) return json({ accepted: false, error: rejected }, 409);
+        if (rejected) return route.fulfill({ status: 409, headers, contentType: 'text/plain', body: rejected });
         if (envelope.command.command === 'compact') {
-          if (snapshot.data.compact_queued || snapshot.data.compacting) return json({ accepted: false, error: 'compaction_busy' }, 409);
+          if (snapshot.data.compact_queued || snapshot.data.compacting) return route.fulfill({ status: 409, headers, contentType: 'text/plain', body: 'compaction_busy' });
           await this.publishControl(session, { compact_queued: true });
         }
         return json({ accepted: true }, 202);
@@ -311,7 +311,9 @@ export class CloudHarness {
         || (current.task_id !== body.task_id ? 'task_mismatch' : null)
         || (!current.data.active_task_id && !idleQueueEdit ? 'task_not_running' : null)
         || (operation !== 'stop' && current.data.status === 'stopping' ? 'task_stopping' : null);
-      if (rejected) return json({ accepted: false, error: rejected, task_id: body.task_id }, 409);
+      if (rejected) return control[2] === 'commands'
+        ? route.fulfill({ status: 409, headers, contentType: 'text/plain', body: rejected })
+        : json({ accepted: false, error: rejected, task_id: body.task_id }, 409);
       if (operation === 'stop') {
         await this.publishControl(session, { status: 'stopping' });
         return json({ accepted: true }, 202);

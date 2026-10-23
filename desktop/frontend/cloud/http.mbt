@@ -83,7 +83,19 @@ async fn send_command(
       raise @cloud_client.RequestError(ServiceNotConfigured)
     }
   }
-  if !(response.code is (202 | 409)) {
+  if response.code == 409 {
+    // Commands reject with plain text; the status is definitive even when
+    // the body is empty. Do not turn a refusal into an unknown outcome.
+    let reason = data.text().trim()
+    return Rejected(
+      if reason.is_empty() {
+        "HTTP 409"
+      } else {
+        reason.to_owned()
+      },
+    )
+  }
+  if response.code != 202 {
     check_status(response.code)
   }
   let json = data.json() catch {
@@ -91,9 +103,6 @@ async fn send_command(
   }
   if response.code == 202 && json is { "accepted": True, .. } {
     Accepted
-  } else if response.code == 409 &&
-    json is { "accepted": False, "error": String(error), .. } {
-    Rejected(error)
   } else {
     raise @cloud_client.RequestError(Malformed)
   }
