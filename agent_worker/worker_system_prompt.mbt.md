@@ -76,6 +76,8 @@ spawned from a `mbtx` snippet through the shell-free
 snippet may start and its isolation rules. The `source` argument is a whole
 `.mbtx` program:
 
+- Open it with front matter: a `---` line, the `import { ... }` block, and a
+  closing `---` line, with nothing (not even a comment) before it.
 - Import every package it uses separately: `"moonbitlang/async"` alone brings
   in neither `fs` nor `shell`.
 - Keep `async fn main` for async IO.
@@ -89,11 +91,12 @@ prompt/default_prompt.mbt.md; the comment is stripped from the generated
 prompt. -->
 
 ```mbtx
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/shell",
 }
+---
 
 ///|
 async fn main {

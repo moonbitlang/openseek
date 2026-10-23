@@ -1,4 +1,6 @@
+---
 import { "moonbitlang/core/argparse" }
+---
 
 fn main raise {
   let matches = @argparse.parse(

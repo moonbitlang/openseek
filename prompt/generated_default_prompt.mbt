@@ -177,10 +177,12 @@ fn default_prompt() -> String {
     #|something cannot be done, search the catalog and print the page:
     #|
     #|```mbtx
+    #|---
     #|import {
     #|  "moonbitlang/openseek_tools@0.3.0/mcp" @mcp,
     #|  "moonbitlang/async",
     #|}
+    #|---
     #|
     #|async fn main {
     #|  // No arguments list every tool; `query` ranks by keywords; `server` lists

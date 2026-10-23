@@ -1,11 +1,12 @@
-///|
-/// Arguments: [--stdin] [<input>].
+---
+// Arguments: [--stdin] [<input>].
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/stdio",
   "moonbitlang/core/argparse",
 }
+---
 
 ///|
 /// Reading a path or stdin is async IO, so `main` is `async fn main`.

@@ -159,7 +159,9 @@ async test "cache: a build stopped mid-way retires its generation" {
     // does within tens of milliseconds of a cold build of a script importing
     // `moonbitlang/async` that takes several hundred.
     let slow =
+      #|---
       #|import { "moonbitlang/async" }
+      #|---
       #|
       #|async fn main {
       #|  println(1)
@@ -263,7 +265,9 @@ async test "cache: a detached job's cleanup keeps the cache and its own run" {
         auto_background_after_ms=1,
       )
       let source =
+        #|---
         #|import { "moonbitlang/async" }
+        #|---
         #|
         #|async fn main {
         #|  @async.sleep(300)

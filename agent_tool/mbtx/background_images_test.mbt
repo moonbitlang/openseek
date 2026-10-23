@@ -27,7 +27,9 @@ async test "background PTC images survive source removal job completion repeat r
         )
         let output = dispatch(definition, {
           "source": (
+            #|---
             #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+            #|---
             #|async fn main {
             #|  @async.sleep(150)
             #|  let result = @tools.call("read_image", { "path": "picture" })
@@ -115,7 +117,9 @@ async test "foreground PTC retires image files and trace paths on success failur
             _ => "()"
           }
           let source =
+            $|---
             $|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+            $|---
             $|async fn main {
             $|  let result = @tools.call("read_image", { "path": "picture" })
             $|  if result.is_error { fail(result.content) }

@@ -7,12 +7,13 @@ fn bundled_workflow(name : StringView) -> String? {
     "change-review.mbtx" =>
       Some(
         (
-          #|///|
+          #|---
           #|import {
           #|  "moonbitlang/openseek_tools@0.2.0" @tools,
           #|  "moonbitlang/async",
           #|  "moonbitlang/core/json",
           #|}
+          #|---
           #|
           #|///|
           #|/// Run with mbtx(description="Review working-tree changes", filename="@builtin/change-review.mbtx").
@@ -192,10 +193,12 @@ fn bundled_workflow(name : StringView) -> String? {
     "check-json.mbtx" =>
       Some(
         (
+          #|---
           #|import {
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/shell",
           #|}
+          #|---
           #|
           #|async fn main {
           #|  let code = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => println(line))
@@ -207,10 +210,12 @@ fn bundled_workflow(name : StringView) -> String? {
     "check-test.mbtx" =>
       Some(
         (
+          #|---
           #|import {
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/shell",
           #|}
+          #|---
           #|
           #|async fn main {
           #|  for command in ["check", "test"] {
@@ -224,11 +229,13 @@ fn bundled_workflow(name : StringView) -> String? {
     "check.mbtx" =>
       Some(
         (
+          #|---
           #|import {
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/shell",
           #|  "moonbitlang/core/env",
           #|}
+          #|---
           #|
           #|async fn main {
           #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
@@ -240,13 +247,14 @@ fn bundled_workflow(name : StringView) -> String? {
     "ci-watch.mbtx" =>
       Some(
         (
-          #|///|
+          #|---
           #|import {
           #|  "moonbitlang/async@0.22.4",
           #|  "moonbitlang/async@0.22.4/shell",
           #|  "moonbitlang/core/argparse",
           #|  "moonbitlang/core/json",
           #|}
+          #|---
           #|
           #|///|
           #|fn seconds(value : String, maximum : Int) -> Int raise {
@@ -531,23 +539,23 @@ fn bundled_workflow(name : StringView) -> String? {
     "fix-deprecations.mbtx" =>
       Some(
         (
-          #|///|
-          #|/// Fix deprecation warnings mechanically, one guarded edit per site.
-          #|///
-          #|/// Runs `moon check --output-json` in the current directory, keeps the
-          #|/// deprecation warnings whose message names a plain replacement identifier
-          #|/// ("use `len` instead"), and for each site — bottom-up per file, right to
-          #|/// left per line, so an earlier edit never shifts a later span — asks the
-          #|/// host to replace exactly the diagnosed span through `edit` with
-          #|/// revert_if_error_delta_greater_or_equal=1 and revert_if_warning_delta_greater_or_equal=0. Then it
-          #|/// reports what was fixed,
-          #|/// what the host reverted (and why), and what needs a human, and checks once
-          #|/// more for the remaining counts.
-          #|///
-          #|/// Run through the mbtx tool with ptc on, from the module to fix:
-          #|///   {"filename":"@builtin/fix-deprecations.mbtx","cwd":"<module>"}
-          #|/// Arguments: --dry-run   plan only, write nothing
-          #|///            --limit N   stop after N fixes (default 500)
+          #|---
+          #|// Fix deprecation warnings mechanically, one guarded edit per site.
+          #|//
+          #|// Runs `moon check --output-json` in the current directory, keeps the
+          #|// deprecation warnings whose message names a plain replacement identifier
+          #|// ("use `len` instead"), and for each site — bottom-up per file, right to
+          #|// left per line, so an earlier edit never shifts a later span — asks the
+          #|// host to replace exactly the diagnosed span through `edit` with
+          #|// revert_if_error_delta_greater_or_equal=1 and revert_if_warning_delta_greater_or_equal=0. Then it
+          #|// reports what was fixed,
+          #|// what the host reverted (and why), and what needs a human, and checks once
+          #|// more for the remaining counts.
+          #|//
+          #|// Run through the mbtx tool with ptc on, from the module to fix:
+          #|//   {"filename":"@builtin/fix-deprecations.mbtx","cwd":"<module>"}
+          #|// Arguments: --dry-run   plan only, write nothing
+          #|//            --limit N   stop after N fixes (default 500)
           #|import {
           #|  "moonbitlang/openseek_tools@0.2.0" @tools,
           #|  "moonbitlang/async",
@@ -556,6 +564,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
           #|}
+          #|---
           #|
           #|///|
           #|/// One deprecation site the script knows how to fix.
@@ -933,10 +942,12 @@ fn bundled_workflow(name : StringView) -> String? {
     "info-fmt.mbtx" =>
       Some(
         (
+          #|---
           #|import {
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/shell",
           #|}
+          #|---
           #|
           #|async fn main {
           #|  for command in ["info", "fmt"] {
@@ -950,6 +961,7 @@ fn bundled_workflow(name : StringView) -> String? {
     "read.mbtx" =>
       Some(
         (
+          #|---
           #|import {
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/fs",
@@ -958,6 +970,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/core/json",
           #|  "moonbitlang/x/sys",
           #|}
+          #|---
           #|
           #|///|
           #|/// Leave room below mbtx's 48,000-byte transport limit for run diagnostics.
@@ -1204,13 +1217,14 @@ fn bundled_workflow(name : StringView) -> String? {
     "repo-map.mbtx" =>
       Some(
         (
-          #|///|
+          #|---
           #|import {
           #|  "moonbitlang/openseek_tools@0.2.0" @tools,
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/fs",
           #|  "moonbitlang/core/json",
           #|}
+          #|---
           #|
           #|///|
           #|/// Run with mbtx(description="Map repository architecture", filename="@builtin/repo-map.mbtx").
@@ -1592,13 +1606,14 @@ fn bundled_workflow(name : StringView) -> String? {
     "review.mbtx" =>
       Some(
         (
-          #|///|
+          #|---
           #|import {
           #|  "moonbitlang/openseek_tools@0.2.0" @tools,
           #|  "moonbitlang/async",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
           #|}
+          #|---
           #|
           #|///|
           #|/// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["What to audit against"]).
@@ -2491,7 +2506,7 @@ fn bundled_workflow(name : StringView) -> String? {
     "rg.mbtx" =>
       Some(
         (
-          #|///|
+          #|---
           #|import {
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/shell",
@@ -2499,6 +2514,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/core/encoding/utf8",
           #|  "moonbitlang/x/sys",
           #|}
+          #|---
           #|
           #|///|
           #|/// Leave room below mbtx's 48,000-byte transport limit, as read.mbtx does.
@@ -2581,7 +2597,7 @@ fn bundled_workflow(name : StringView) -> String? {
     "simplify.mbtx" =>
       Some(
         (
-          #|///|
+          #|---
           #|import {
           #|  "moonbitlang/openseek_tools@0.2.0" @tools,
           #|  "moonbitlang/async",
@@ -2590,6 +2606,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
           #|}
+          #|---
           #|
           #|///|
           #|/// Run with mbtx(description="Simplify the project", filename="@builtin/simplify.mbtx", args=["--", "optional focus"]).
@@ -3730,10 +3747,12 @@ fn bundled_workflow(name : StringView) -> String? {
     "test.mbtx" =>
       Some(
         (
+          #|---
           #|import {
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/shell",
           #|}
+          #|---
           #|
           #|async fn main {
           #|  let code = @shell.Cmd("moon", ["test"]).each_line(line => println(line))

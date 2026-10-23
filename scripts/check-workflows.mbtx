@@ -1,10 +1,11 @@
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/shell",
   "moonbitlang/x/sys",
 }
+---
 
 ///|
 /// Type-check bundled workflows and the verified examples without executing

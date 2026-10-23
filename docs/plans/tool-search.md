@@ -15,10 +15,12 @@ the `AgentToolDefinition` registry, and become a catalog that mbtx scripts
 search and call through the tools SDK's `mcp` package:
 
 ```mbtx
+---
 import {
   "moonbitlang/openseek_tools@0.3.0/mcp" @mcp,
   "moonbitlang/async",
 }
+---
 
 async fn main {
   let page = @mcp.search(query="list issues")

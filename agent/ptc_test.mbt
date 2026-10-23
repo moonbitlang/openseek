@@ -9,7 +9,9 @@ async test "agent PTC stores nested calls while only selected output reaches the
   @async.with_task_group(group => {
     let bodies : Array[String] = []
     let source =
+      #|---
       #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+      #|---
       #|async fn main {
       #|  let result = @tools.call("web_search", { "query": "documentation" })
       #|  if result.is_error { fail(result.content) }
@@ -83,7 +85,7 @@ async fn cancel_after_picture(
     let bodies : Array[String] = []
     guard goal_check_test_server(group, bodies, [
         ptc_payload(
-          "import { \"moonbitlang/openseek_tools@0.2.0\" @tools, \"moonbitlang/async\" }\nasync fn main { ignore(@tools.call(\"picture\", {})); @tools.call(\"block\", {}).content |> println }",
+          "---\nimport { \"moonbitlang/openseek_tools@0.2.0\" @tools, \"moonbitlang/async\" }\n---\nasync fn main { ignore(@tools.call(\"picture\", {})); @tools.call(\"block\", {}).content |> println }",
         ),
         // A build failure (for example, an unpublished SDK) can lead to one
         // more model request. End it without exhausting the mock responses.

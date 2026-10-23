@@ -3,9 +3,12 @@
 Import `moonbitlang/openseek/env` to locate the running program:
 
 ```moonbit
+---
 import {
   "moonbitlang/openseek/env" @exe,
 }
+---
+
 ```
 
 Both `@exe.current_exe()` and `@exe.current_exe_dir()` return `String` and

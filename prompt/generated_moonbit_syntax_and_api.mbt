@@ -10,8 +10,12 @@ fn moonbit_syntax_and_api() -> String {
     #|
     #|## Writing mbtx programs
     #|
-    #|A script is a whole program — imports plus vanilla MoonBit
+    #|A script is a whole program: front matter holding its imports, then vanilla
+    #|MoonBit.
     #|
+    #|- The file opens with the front matter: a `---` line, the `import { ... }`
+    #|  block in `moon.pkg` syntax, and a closing `---` line. Nothing, not even a
+    #|  comment, comes before the opening `---`.
     #|- Import every package it uses separately, core packages included and by
     #|  their real path: `moonbitlang/core/encoding/base64`, not
     #|  `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
@@ -25,11 +29,13 @@ fn moonbit_syntax_and_api() -> String {
     #|A minimal `moon check` script:
     #|
     #|```mbtx
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/shell",
     #|  "moonbitlang/core/env",
     #|}
+    #|---
     #|
     #|async fn main {
     #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
@@ -48,14 +54,15 @@ fn moonbit_syntax_and_api() -> String {
     #|Below is a complete example of CLI parsing using argparse:
     #|
     #|```mbtx
-    #|///|
-    #|/// Arguments: [--stdin] [<input>].
+    #|---
+    #|// Arguments: [--stdin] [<input>].
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/fs",
     #|  "moonbitlang/async/stdio",
     #|  "moonbitlang/core/argparse",
     #|}
+    #|---
     #|
     #|///|
     #|/// Reading a path or stdin is async IO, so `main` is `async fn main`.
@@ -123,11 +130,12 @@ fn moonbit_syntax_and_api() -> String {
     #|An example of using rg in `mbtx`:
     #|
     #|```mbtx
-    #|///|
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/shell",
     #|}
+    #|---
     #|
     #|///|
     #|async fn main {
@@ -161,12 +169,13 @@ fn moonbit_syntax_and_api() -> String {
     #|rather than collecting it and parsing it afterward:
     #|
     #|```mbtx
-    #|///|
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/shell",
     #|  "moonbitlang/core/json",
     #|}
+    #|---
     #|
     #|///|
     #|async fn main {
@@ -203,19 +212,20 @@ fn moonbit_syntax_and_api() -> String {
     #|A script may run `moon check --output-json` itself to find its targets:
     #|
     #|```mbtx
-    #|///|
-    #|/// One guarded edit from a script. The host checks the tree before and
-    #|/// after the write and restores the file unless the warning total decreases
-    #|/// without increasing the reported error total; the script reads the
-    #|/// outcome from `result.data` instead of parsing prose. Arguments:
-    #|/// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
-    #|/// a host-backed test that runs it through the real sandbox and host.
+    #|---
+    #|// One guarded edit from a script. The host checks the tree before and
+    #|// after the write and restores the file unless the warning total decreases
+    #|// without increasing the reported error total; the script reads the
+    #|// outcome from `result.data` instead of parsing prose. Arguments:
+    #|// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
+    #|// a host-backed test that runs it through the real sandbox and host.
     #|import {
     #|  "moonbitlang/openseek_tools@0.2.0",
     #|  "moonbitlang/async",
     #|  "moonbitlang/core/env",
     #|  "moonbitlang/core/string",
     #|}
+    #|---
     #|
     #|///|
     #|async fn main {
@@ -272,12 +282,13 @@ fn moonbit_syntax_and_api() -> String {
     #|The following example starts child agents through the host-tool SDK:
     #|
     #|```mbtx
-    #|///|
+    #|---
     #|import {
     #|  "moonbitlang/openseek_tools@0.2.0" @tools,
     #|  "moonbitlang/async",
     #|  "moonbitlang/core/json",
     #|}
+    #|---
     #|
     #|///|
     #|/// Start one explore subagent; its job id.
@@ -356,10 +367,12 @@ fn moonbit_syntax_and_api() -> String {
     #|checks, then gives late workflows one settle interval to appear:
     #|
     #|```mbtx
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/shell",
     #|}
+    #|---
     #|
     #|async fn main {
     #|  @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
@@ -584,14 +597,15 @@ fn moonbit_syntax_and_api() -> String {
     #|fail the test. The verified example, compiled and run by CI:
     #|
     #|```mbtx
-    #|///|
-    #|/// Checked errors are an effect on a function, not a value it returns: a
-    #|/// parser returns its result directly and failures travel in `raise`. This
-    #|/// file is verified by CI (type-checked under deny-warn and run), so what it
-    #|/// shows is what the compiler accepts today.
+    #|---
+    #|// Checked errors are an effect on a function, not a value it returns: a
+    #|// parser returns its result directly and failures travel in `raise`. This
+    #|// file is verified by CI (type-checked under deny-warn and run), so what it
+    #|// shows is what the compiler accepts today.
     #|import {
     #|  "moonbitlang/core/string",
     #|}
+    #|---
     #|
     #|///|
     #|/// A custom error is a `suberror`, never `type Error` or a trait. Match its
@@ -684,12 +698,13 @@ fn moonbit_syntax_and_api() -> String {
     #|The verified example, compiled and run by CI:
     #|
     #|```mbtx
-    #|///|
-    #|/// Strings, views, collections, and JSON values as the compiler accepts them
-    #|/// today: this file is verified by CI (type-checked under deny-warn and run).
+    #|---
+    #|// Strings, views, collections, and JSON values as the compiler accepts them
+    #|// today: this file is verified by CI (type-checked under deny-warn and run).
     #|import {
     #|  "moonbitlang/core/string",
     #|}
+    #|---
     #|
     #|///|
     #|fn main raise {
