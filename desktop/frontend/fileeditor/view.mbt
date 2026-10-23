@@ -2277,6 +2277,7 @@ pub fn breadcrumb_view(
   state : State,
   ctx : Ctx,
   reveal~ : (String, @cmd.Cmd)? = None,
+  share~ : @cmd.Cmd? = None,
 ) -> @html.Html {
   if ctx.active_history_diff is Some(diff) {
     return @html.div(
@@ -2380,6 +2381,27 @@ pub fn breadcrumb_view(
   if moon_mod_view_available(state, ctx) {
     path_row.push(moon_mod_view_toolbar(locale~, dispatch, state, ctx))
   }
+  // Keep a fixed slot so opening the first file cannot reuse the tree toggle
+  // DOM node as a share button while a pointer action is in flight.
+  path_row.push(
+    @html.span(
+      if share is Some(command) &&
+        ctx.active_file is Some(_) &&
+        ctx.root() is Some(_) {
+        let label = ui(locale, ShareFile)
+        @html.button(
+          type_="button",
+          class="file-reveal-button",
+          title=label,
+          attrs=@html.Attrs::build().aria_label(label),
+          on_click=command,
+          [@icons.icon_link_external(), @html.text(label)],
+        )
+      } else {
+        @html.nothing
+      },
+    ),
+  )
   if ctx.owner is @interop.Cloud(..) && ctx.active_file is Some(_) {
     path_row.push(download_button(locale~, dispatch, state, desktop~))
   } else if reveal is Some((label, command)) {
@@ -3691,6 +3713,11 @@ fn tree_row(
   }
   let attrs = if entry.is_dir {
     attrs.aria_expanded(expanded.to_string())
+  } else if ctx.root() is Some(root) {
+    attrs.data_set(
+      "context-share-file",
+      @resource.join_relative(root, entry.path).to_string(),
+    )
   } else {
     attrs
   }

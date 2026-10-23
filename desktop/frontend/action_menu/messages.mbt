@@ -2,6 +2,7 @@
 
 ///|
 priv enum UiMessage {
+  ShareFile
   ShowFinder
   ShowExplorer
   ShowFolder
@@ -36,6 +37,11 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, ShareFile) => "Share"
+    (Spanish, ShareFile) => "Compartir"
+    (SimplifiedChinese, ShareFile) => "分享"
+    (TraditionalChinese, ShareFile) => "分享"
+    (Japanese, ShareFile) => "共有"
     (English, ShowFinder) => "Show in Finder"
     (Spanish, ShowFinder) => "Mostrar en Finder"
     (SimplifiedChinese, ShowFinder) => "在访达中显示"

@@ -1346,6 +1346,7 @@ priv struct Model {
   session_search : @session_search.Model
   session_import_dialog : @session_import.Model
   export_dialog : @export_dialog.Model
+  file_share_dialog : @export_dialog.Model
   workspace_settings_dialog : WorkspaceSettingsDialog?
   // The user answered "Not now" to the setup modal. Held until a usable
   // endpoint re-arms the announcement, and deliberately not part of the
@@ -1922,11 +1923,13 @@ priv enum Msg {
   // The export is already durable, but its default system application could
   // not be opened. The saved path remains useful in the transient toast.
   SessionSearch(@session_search.Msg)
+  ShareFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
   OpenSessionImport
   SessionImport(@session_import.Msg)
   ExportDialog(@export_dialog.Msg)
+  FileShareDialog(@export_dialog.Msg)
   // A safe external anchor was clicked in the Proton page. The document-level
   // capture listener emits this for both Rabbita transcript links and the
   // editor hover's foreign DOM; browser pages keep native new-tab behavior.
@@ -2774,6 +2777,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     session_search: @session_search.Model(),
     session_import_dialog: @session_import.Model(),
     export_dialog: @export_dialog.Model(),
+    file_share_dialog: @export_dialog.Model(id_prefix="file-share"),
     workspace_settings_dialog: None,
     api_setup_dismissed: false,
     account: None,

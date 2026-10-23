@@ -1037,3 +1037,9 @@ pub let cloud_file_download : Command[
   @protocol.CloudFileDownloadPayload,
   @protocol.CloudFileDownloadReply,
 ] = Command("cloud.file_download")
+
+///|
+pub let fs_share_file : Command[
+  @protocol.FileSharePayload,
+  @protocol.SessionShareReply,
+] = Command("fs.share_file")

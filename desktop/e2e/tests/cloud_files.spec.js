@@ -18,6 +18,7 @@ class CloudFilesHarness extends CloudHarness {
     this.downloads = new Map();
     this.downloadStatus = 200;
     this.holdDownload = null;
+    this.holdFileShare = null;
     for (const session of [sessionA, sessionB]) {
       this.indexes.set(session, ['src/hello #.mbt']);
       this.directories.set(`${session}:`, [{ name: 'src', is_dir: true }]);
@@ -31,11 +32,17 @@ class CloudFilesHarness extends CloudHarness {
 
   async cloudRequest(route) {
     const url = new URL(route.request().url());
-    const match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/files(\/content|\/index|\/download)?$/);
+    const match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/files(\/content|\/index|\/download|\/share)?$/);
     if (!match) return super.cloudRequest(route);
-    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, If-None-Match', 'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS', 'Access-Control-Expose-Headers': 'ETag', 'Cache-Control': 'no-store' };
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, If-None-Match', 'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS', 'Access-Control-Expose-Headers': 'ETag', 'Cache-Control': 'no-store' };
     const method = route.request().method();
     if (method === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    if (match[2] === '/share' && method === 'POST') {
+      const body = route.request().postDataJSON();
+      this.fileRequests.push({ share: true, body, method, headers: await route.request().allHeaders() });
+      if (this.holdFileShare) await this.holdFileShare;
+      return route.fulfill({ status: this.shareStatus, headers, contentType: 'application/json', body: JSON.stringify({ url: `${authOrigin}/v1/shares/file-fixture` }) });
+    }
     const session = decodeURIComponent(match[1]);
     const path = url.searchParams.get('path') || '';
     const contentPath = match[2] === '/content';
@@ -1350,5 +1357,71 @@ test('Cloud code feedback applies through the existing submit action when idle',
   expect(content).toContain('Explain the selection');
   expect(content).toContain('<annotation file="src/hello #.mbt" lines="2-2">');
   expect(content).toContain('Why does this return a string?');
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+
+test('Cloud file sharing works before preview and from an unpreviewable file path bar', async ({ page, context }, testInfo) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const cloud = new CloudFilesHarness(page);
+  cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'oversized' });
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+  await file(page, 'src').click({ button: 'right' });
+  await expect(page.getByRole('menu', { name: 'Context menu', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Share', exact: true })).toHaveCount(0);
+  await page.getByRole('menu', { name: 'Context menu', exact: true }).press('Escape');
+  await file(page, 'src').click();
+  let finish;
+  cloud.holdFileShare = new Promise(resolve => { finish = resolve; });
+  await file(page, 'hello #.mbt').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share file', exact: true });
+  await expect(dialog).toBeVisible();
+  const shares = () => cloud.fileRequests.filter(request => request.share);
+  await expect.poll(() => shares().length).toBe(1);
+  expect(shares()[0]).toMatchObject({ method: 'POST', headers: { authorization: 'Bearer ts_fixture-123' }, body: { path: 'src/hello #.mbt', idempotency_key: expect.any(String) } });
+  expect(cloud.fileRequests.filter(request => request.content || request.download || request.head)).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  finish(); cloud.holdFileShare = null;
+  await file(page, 'hello #.mbt').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(`${authOrigin}/v1/shares/file-fixture`);
+  expect(shares()).toHaveLength(1);
+  await dialog.getByRole('button', { name: 'Copy share link' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${authOrigin}/v1/shares/file-fixture`);
+  await expect(dialog.getByRole('link', { name: 'Open link', exact: true })).toHaveAttribute('href', `${authOrigin}/v1/shares/file-fixture`);
+  await context.route(`${authOrigin}/v1/shares/file-fixture`, route => route.fulfill({ contentType: 'text/html', body: '<title>Shared file</title>Public share page' }));
+  const [publicPage] = await Promise.all([page.waitForEvent('popup'), dialog.getByRole('link', { name: 'Open link', exact: true }).click()]);
+  await expect(publicPage).toHaveURL(`${authOrigin}/v1/shares/file-fixture`);
+  await publicPage.close();
+  await page.screenshot({ path: testInfo.outputPath('cloud-file-share.png') });
+  await page.keyboard.press('Escape');
+  await file(page, 'hello #.mbt').click();
+  await expect(page.locator('.viewer-notice')).toContainText('too large');
+  const reads = cloud.fileRequests.filter(request => request.content || request.head || request.download).length;
+  await page.locator('.viewer-breadcrumb').getByRole('button', { name: 'Share', exact: true }).click();
+  await expect.poll(() => shares().length).toBe(2);
+  expect(shares()[1].body.idempotency_key).not.toBe(shares()[0].body.idempotency_key);
+  expect(cloud.fileRequests.filter(request => request.content || request.head || request.download)).toHaveLength(reads);
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud file share failure permits explicit retry without an automatic resend', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  cloud.shareStatus = 503;
+  await page.locator('.viewer-breadcrumb').getByRole('button', { name: 'Share', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share file', exact: true });
+  await expect(dialog).toContainText('HTTP 503');
+  const shares = () => cloud.fileRequests.filter(request => request.share);
+  expect(shares()).toHaveLength(1);
+  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+  cloud.shareStatus = 201;
+  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
+  expect(shares()).toHaveLength(2);
+  expect(shares()[1].body.idempotency_key).not.toBe(shares()[0].body.idempotency_key);
   expect(cloud.device.pageErrors).toEqual([]);
 });

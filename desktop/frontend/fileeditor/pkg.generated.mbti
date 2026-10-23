@@ -40,7 +40,7 @@ pub fn basename(@pathx.Relative) -> String
 
 pub fn body_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, semantic_review? : @html.Html) -> @html.Html
 
-pub fn breadcrumb_view(desktop? : Bool, locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?) -> @html.Html
+pub fn breadcrumb_view(desktop? : Bool, locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?, share? : @cmd.Cmd?) -> @html.Html
 
 pub fn browser_download(@cmd.Emit[Msg], @interop.ConversationIdentity, Int32, Int32, @common.Uri, Bytes) -> @cmd.Cmd
 

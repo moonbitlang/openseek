@@ -1487,6 +1487,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.ssh_ui.editor_open ||
   model.ssh_ui.details is Some(_) ||
   model.export_dialog.is_open() ||
+  model.file_share_dialog.is_open() ||
   model.session_import_dialog.is_open() ||
   model.workspace_settings_dialog is Some(_) ||
   model.archive_confirm is Some(_) ||
@@ -6711,6 +6712,7 @@ fn update_msg(
       (cmd, { ..model, terminal, })
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
+    ShareFile(path) => model.share_file(dispatch, path)
     OpenExport(channel, source) => {
       let (cmd, export_dialog) = model.export_dialog.open(source, channel~)
       (cmd, { ..model, export_dialog, })
@@ -6799,23 +6801,39 @@ fn update_msg(
         },
       )
     }
-    ExportDialog(msg) => {
-      let (login, model) = if msg is @export_dialog.SignIn {
+    ExportDialog(message) | FileShareDialog(message) => {
+      let file = msg is FileShareDialog(_)
+      let (login, model) = if message is @export_dialog.SignIn {
         // Leave the dialog retryable while the rejected account is clearing.
         guard !model.remote_connecting else { return (@cmd.none, model) }
         begin_account_login(dispatch, model, create=false)
       } else {
         (@cmd.none, model)
       }
-      let expired = model.export_dialog.account_expired(msg)
-      let (cmd, export_dialog) = model.export_dialog.update(
-        dispatch.map(next => ExportDialog(next)),
-        msg,
+      let dialog = if file {
+        model.file_share_dialog
+      } else {
+        model.export_dialog
+      }
+      let expired = dialog.account_expired(message)
+      let (cmd, dialog) = dialog.update(
+        dispatch.map(next => {
+          if file {
+            FileShareDialog(next)
+          } else {
+            ExportDialog(next)
+          }
+        }),
+        message,
         account?=model.account,
         desktop=model.is_desktop,
         sign_in=login,
       )
-      let next = { ..model, export_dialog, }
+      let next = if file {
+        { ..model, file_share_dialog: dialog, }
+      } else {
+        { ..model, export_dialog: dialog, }
+      }
       if expired && model.account is Some(_) {
         let (logout, next) = expire_account(dispatch, next)
         return (@cmd.batch([cmd, logout]), next)

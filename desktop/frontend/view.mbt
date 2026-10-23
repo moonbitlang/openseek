@@ -2631,6 +2631,10 @@ fn view(
       locale=model.locale,
       dispatch.map(msg => ExportDialog(msg)),
     ),
+    model.file_share_dialog.view(
+      locale=model.locale,
+      dispatch.map(msg => FileShareDialog(msg)),
+    ),
     // Authentication input is deliberately DOM-only. Keep this slot before
     // conditional overlays so resize/toasts cannot replace its input node.
     if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {

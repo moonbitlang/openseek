@@ -15,6 +15,8 @@ import {
 // Values
 pub fn app_bundle_path(String) -> String?
 
+pub async fn capture_file(@protocol.ReadFilePayload) -> (String, Bytes)
+
 pub async fn chat_workspace_root() -> @protocol.ChatWorkspaceRoot
 
 pub async fn desktop_resources(@resources.Resources) -> HostResources

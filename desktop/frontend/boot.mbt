@@ -664,6 +664,7 @@ fn main {
         browser_reload: emit(BrowserReload),
         browser_open_external: emit(BrowserOpenExternal),
         reveal_file: path => emit(RevealFile(path)),
+        share_file: path => emit(ShareFile(path)),
         toggle_menu: emit(ToggleRightPanelMenu),
         toggle_expanded: emit(ToggleRightPanelExpanded),
         close_tabs: emit.map(selection => CloseDockTabs(selection)),
@@ -761,6 +762,7 @@ fn main {
         open_external_link: url => open_external_link(emit, url),
         open_file: path => emit(OpenFile(path)),
         reveal_file: path => emit(RevealFile(path)),
+        share_file: path => emit(ShareFile(path)),
       },
     )
     let transfer_menu_html = @action_menu.component(

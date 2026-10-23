@@ -1048,6 +1048,19 @@ pub fn ExternalLinkPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ExternalLinkPayload
 pub impl @json.FromJson for ExternalLinkPayload
 
+pub(all) struct FileSharePayload {
+  source : ReadFilePayload
+  idempotency_key : String
+  authorization : ShareAuthorization
+} derive(Eq, @debug.Debug)
+pub fn FileSharePayload::equal(Self, Self) -> Bool
+pub fn FileSharePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FileSharePayload::not_equal(Self, Self) -> Bool
+pub fn FileSharePayload::to_json(Self) -> Json
+pub fn FileSharePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for FileSharePayload
+pub impl @json.FromJson for FileSharePayload
+
 pub(all) enum FileSignature {
   Missing
   Present(String)

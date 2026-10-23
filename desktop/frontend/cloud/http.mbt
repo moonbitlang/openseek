@@ -134,20 +134,25 @@ pub async fn export_snapshot(
 }
 
 ///|
-/// Publish server-captured engine records; never download them for an upload.
+/// Publish a service-captured conversation or file; never download it for an upload.
 pub async fn share(
   token : String,
   session : String,
   idempotency_key : String,
+  path? : String,
 ) -> String {
   let response = request(
     CloudOrigin,
-    "/v1/sessions/\{@uri.encode_component(session)}/share",
+    "/v1/sessions/\{@uri.encode_component(session)}/" +
+    (if path is Some(_) { "files/share" } else { "share" }),
     Post,
     token~,
-    body={ "idempotency_key": idempotency_key },
+    body=match path {
+      Some(path) => { "path": path, "idempotency_key": idempotency_key }
+      None => { "idempotency_key": idempotency_key }
+    },
   ) catch {
-    @cloud_client.RequestError(Busy) =>
+    @cloud_client.RequestError(Busy) if path is None =>
       raise @cloud_client.RequestError(ExportUnavailable)
     error => raise error
   }

@@ -232,3 +232,48 @@ pub extend SessionSharePayload with FromJson::{from_json}
 
 ///|
 pub extend SessionSharePayload with ToJson::{to_json}
+
+///|
+/// The owning host reads the original file; no preview data crosses this request.
+pub(all) struct FileSharePayload {
+  source : ReadFilePayload
+  idempotency_key : String
+  authorization : ShareAuthorization
+} derive(Eq, Debug)
+
+///|
+pub impl FromJson for FileSharePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "file share request")
+  {
+    source: @json.from_json(
+      object.required_json("source"),
+      path=path.add_key("source"),
+    ),
+    idempotency_key: object.required_string("idempotency_key"),
+    authorization: @json.from_json(
+      object.required_json("authorization"),
+      path=path.add_key("authorization"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for FileSharePayload with fn to_json(self) {
+  {
+    "source": self.source.to_json(),
+    "idempotency_key": self.idempotency_key,
+    "authorization": self.authorization.to_json(),
+  }
+}
+
+///|
+pub extend FileSharePayload with Eq::{equal, not_equal}
+
+///|
+pub extend FileSharePayload with Debug::{to_repr}
+
+///|
+pub extend FileSharePayload with FromJson::{from_json}
+
+///|
+pub extend FileSharePayload with ToJson::{to_json}

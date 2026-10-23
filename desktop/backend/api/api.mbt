@@ -406,6 +406,9 @@ pub fn endpoints(
         error => Failed(error.to_string())
       }
     }),
+    Endpoint(@commands.fs_share_file, payload => {
+      state.share_file(payload, local_account=local_share)
+    }),
     Endpoint(@commands.session_share, payload => {
       SessionShare::{ state, payload, local_account: local_share, }.publish(on_progress=progress => {
         on_share_progress({ generation: payload.generation, progress, }) catch {

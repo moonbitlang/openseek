@@ -245,11 +245,12 @@ dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
   font: inherit;
   line-height: var(--line-height-normal);
 }
-.export-link-row button {
+.export-link-row .button {
   flex: none;
   display: grid;
   place-items: center;
   padding: 0 8px;
+  text-decoration: none;
 }
 .export-link-row .export-copy-success { --button-color: var(--color-success); }
 .export-error { color: var(--color-danger); }

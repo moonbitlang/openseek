@@ -2,6 +2,7 @@
 
 ///|
 priv enum UiMessage {
+  ShareFile
   DownloadToLocal
   DownloadingFile
   ExcelCopyTable
@@ -209,6 +210,11 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, ShareFile) => "Share"
+    (Spanish, ShareFile) => "Compartir"
+    (SimplifiedChinese, ShareFile) => "分享"
+    (TraditionalChinese, ShareFile) => "分享"
+    (Japanese, ShareFile) => "共有"
     (English, DownloadToLocal) => "Download to local"
     (SimplifiedChinese, DownloadToLocal) => "下载到本地"
     (TraditionalChinese, DownloadToLocal) => "下載到本機"

@@ -149,6 +149,9 @@ fn panel_view(
         actions.file_editor,
         input.file_panel,
         input.file_ctx,
+        share=input.file_ctx.active_file.map(path => {
+          (actions.share_file)(path.to_string())
+        }),
         reveal=match (input.reveal_label, input.file_ctx.active_file) {
           (Some(label), Some(path)) =>
             Some((label, (actions.reveal_file)(path.path)))

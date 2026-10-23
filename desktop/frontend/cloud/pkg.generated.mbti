@@ -30,7 +30,7 @@ pub async fn read_file(String, String, String, allow_large? : Bool) -> @protocol
 
 pub async fn read_file_index(String, String) -> Array[String]
 
-pub async fn share(String, String, String) -> String
+pub async fn share(String, String, String, path? : String) -> String
 
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 

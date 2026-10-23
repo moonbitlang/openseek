@@ -13,8 +13,8 @@ impl Show for ExportError with fn output(self, logger) {
 }
 
 ///|
-/// The caller captures its account and source once. Hosts publish Work files;
-/// Cloud captures its engine records. The client never uploads snapshots.
+/// Capture the account and source once. The owning Host or Cloud service
+/// publishes the snapshot; the client sends only source metadata.
 fn Model::share(
   self : Model,
   emit : @cmd.Emit[Msg],
@@ -36,13 +36,20 @@ fn Model::share(
           ([] : FixedArray[@js.Value]),
         )
         let idempotency_key = (first + second).replace_all(old="-", new="")
+        if source is File(CloudFile(account=owner, ..)) &&
+          owner != account.user.user_id {
+          raise ExportError(
+            "Sign-in changed before sharing. Try sharing again.",
+          )
+        }
         match source {
           Host(channel, payload) => {
-            let authorization : @protocol.ShareAuthorization = match channel {
-              Local => LocalAccount(user_id=account.user.user_id)
-              Remote(device) =>
-                upload_grant(device, idempotency_key, account.token, desktop~)
-            }
+            let authorization = share_authorization(
+              channel,
+              idempotency_key,
+              account,
+              desktop~,
+            )
             @interop.bridge_request(channel, @commands.session_share, {
               generation,
               source: payload,
@@ -50,11 +57,32 @@ fn Model::share(
               authorization,
             })
           }
-          Cloud(session~) => {
+          File(HostFile(channel, payload)) => {
+            let authorization = share_authorization(
+              channel,
+              idempotency_key,
+              account,
+              desktop~,
+            )
+            @interop.bridge_request(channel, @commands.fs_share_file, {
+              source: payload,
+              idempotency_key,
+              authorization,
+            })
+          }
+          Cloud(session~) | File(CloudFile(session~, ..)) => {
             scheduler.add(
               emit(Progress({ generation, progress: Waiting(attempt=1), })),
             )
-            let url = @cloud.share(account.token, session, idempotency_key) catch {
+            let url = @cloud.share(
+              account.token,
+              session,
+              idempotency_key,
+              path?=match source {
+                File(CloudFile(path~, ..)) => Some(path)
+                _ => None
+              },
+            ) catch {
               @cloud.RequestError::RequestError(@cloud.Failure::Unauthorized) =>
                 raise AccountUnauthorized
               @cloud.RequestError::RequestError(error) =>
@@ -129,6 +157,7 @@ async fn capture(
   match source {
     Host(channel, payload) =>
       @interop.bridge_request(channel, @commands.session_snapshot, payload)
+    File(_) => raise ExportError("Download files from the file panel.")
     Cloud(session~) => {
       guard account is Some(account) else {
         raise ExportError("Sign in to export Cloud history.")
@@ -165,6 +194,8 @@ fn Model::download(
               session: match source {
                 Host(_, payload) => payload.session
                 Cloud(session~) => session
+                File(_) =>
+                  raise ExportError("Download files from the file panel.")
               },
               html: files.html,
             })
@@ -227,4 +258,17 @@ fn cancel_sign_in() -> @cmd.Cmd {
     })
     |> ignore
   })
+}
+
+///|
+async fn share_authorization(
+  channel : @interop.ChannelId,
+  key : String,
+  account : @protocol.AccountSession,
+  desktop~ : Bool,
+) -> @protocol.ShareAuthorization {
+  match channel {
+    Local => LocalAccount(user_id=account.user.user_id)
+    Remote(device) => upload_grant(device, key, account.token, desktop~)
+  }
 }
