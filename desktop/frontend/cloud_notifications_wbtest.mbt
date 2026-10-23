@@ -21,9 +21,46 @@ fn cloud_notification_event(
 fn cloud_notification_model() -> Model {
   let model = { ..integrated_cloud_model(), window_focused: true, }
   let (_, running) = cloud_notification_event(model, 1, "task_started", {})
-  cloud_notification_event(running, 2, "assistant_message", {
-    "content": "Cloud final answer",
-  }).1
+  let document = {
+    ..running.cloud.conversations["cloud-a"].document,
+    events: Some([
+      {
+        sequence: 1,
+        ts: Some(100),
+        item: @protocol.Assistant({
+          content: "Cloud final answer",
+          reasoning_content: None,
+          tool_calls: None,
+          is_replay: None,
+        }),
+      },
+    ]),
+  }
+  let history : @cloud.History = {
+    session: document,
+    generating: true,
+    messages: [
+      {
+        task_id: "cloud-run",
+        kind: "assistant_message",
+        data: { "content": "Cloud final answer" },
+        engine_sequence: None,
+        created_at: 100,
+      },
+    ],
+  }
+  update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.Loaded(
+        running.cloud.epoch,
+        "cloud-a",
+        running.cloud.conversations["cloud-a"].request,
+        history,
+      ),
+    ),
+    running,
+  ).1
 }
 
 ///|
@@ -114,10 +151,12 @@ test "Cloud completion notifications ignore duplicate terminals and history repl
     model.cloud.conversations["cloud-a"].request,
     {
       generating: false,
+      session: model.cloud.conversations["cloud-a"].document,
       messages: [
         {
           task_id: "cloud-run",
           kind: "task_finished",
+          engine_sequence: None,
           data: { "status": "completed" },
           created_at: 100,
         },
@@ -150,10 +189,12 @@ test "Cloud live completion is notified when its history reply arrives first" {
         model.cloud.conversations["cloud-a"].request,
         {
           generating: false,
+          session: model.cloud.conversations["cloud-a"].document,
           messages: [
             {
               task_id: "cloud-run",
               kind: "task_finished",
+              engine_sequence: None,
               data: { "status": "completed" },
               created_at: 100,
             },

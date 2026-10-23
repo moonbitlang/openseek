@@ -124,6 +124,7 @@ pub(all) struct Conversation {
   sending : Bool
   generating : Bool
   unseen_finish : Bool
+  notification_answer : String?
   last_finished_task : String?
   observed_task : String?
   history_required : Bool

@@ -553,6 +553,11 @@ pub fn update(
               snapshot.data.queue.any(item => item.id == id)
             }),
             task: snapshot.task_id,
+            notification_answer: if snapshot.task_id == conversation.task {
+              conversation.notification_answer
+            } else {
+              None
+            },
             events: if snapshot.task_id != conversation.task {
               []
             } else {
@@ -933,6 +938,7 @@ pub fn update(
       let conversation = if event.kind == "task_started" {
         {
           ..conversation.clear_streams(),
+          notification_answer: None,
           heartbeat: Some({
             stage: @composer.Thinking,
             started_ms: None,

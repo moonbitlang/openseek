@@ -19,6 +19,8 @@ async function running(page, { desktop = true } = {}) {
 test('Cloud background completion uses the shared notification, badge and click navigation', async ({ page }, testInfo) => {
   const app = await running(page);
   await app.open(sessionB);
+  let releaseHistory;
+  app.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
   await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'The Cloud task is done.' });
   await app.finishTask();
   await expect.poll(() => shown(app).length).toBe(1);
@@ -27,6 +29,8 @@ test('Cloud background completion uses the shared notification, badge and click 
   await expect(app.row(sessionA).locator('..').getByRole('status')).toBeVisible();
   await expect.poll(() => page.evaluate(session => window.cloudSessionStreams.get(session)?.size || 0, sessionA)).toBe(0);
   await page.screenshot({ path: testInfo.outputPath('cloud-unread-completion.png') });
+  app.pauseHistory = null;
+  releaseHistory();
   const payload = shown(app)[0].params.payload;
   await page.evaluate(payload => window.desktopEvent('notification.click', { payload }), payload);
   await expect(page.locator('main .topbar-title')).toHaveText('Cloud fixture A');
@@ -69,7 +73,7 @@ test('Cloud keeps observing a background queued turn and counts conversations ra
   const previous = app.controlState(sessionA).task_id;
   await app.finishTask();
   await expect.poll(() => shown(app).length).toBe(1);
-  await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: previous, submission_id: 'next-input' }, { task: 'second-task', seq: 1 });
+  await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: previous, submission_id: 'next-input' }, { task: 'second-task' });
   await app.finishTask();
   await expect.poll(() => shown(app).length).toBe(2);
   await expect.poll(() => badge(app)).toBe(1);

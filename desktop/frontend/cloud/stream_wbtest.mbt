@@ -455,10 +455,12 @@ test "Cloud recovered history can release an observed task without replaying its
   let loaded = metadata_update(
     idle,
     Loaded(1, "session", idle.conversations["session"].request, {
+      session: native_document([]),
       messages: [
         {
           task_id: "task",
           kind: "task_finished",
+          engine_sequence: None,
           data: { "status": "completed" },
           created_at: 100,
         },

@@ -40,10 +40,10 @@ fn Conversation::live_progress(
   } else {
     self
   }
-  if wire is @wire.AssistantMessage(..) {
+  if wire is @wire.AssistantMessage(content~) {
     // As in Local, semantic events settle transient text; history supplies
     // the canonical assistant, including reasoning and structured tool calls.
-    return self.clear_streams()
+    return { ..self.clear_streams(), notification_answer: Some(content), }
   }
   if wire is @wire.ToolResult(..) {
     return { ..self, live: { ..self.live, response: None, }, }

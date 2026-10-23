@@ -269,3 +269,45 @@ test "Cloud host failure settles idle commands without closing observation" {
     settled,
   )
 }
+
+///|
+test "Cloud retains native notification text until completion and fences it by task" {
+  let (state, stream) = watch_fixture(controls_fixture())
+  let state = watch_snapshot(
+    state,
+    stream,
+    Some("task"),
+    1,
+    state.conversations["session"].control.unwrap(),
+  )
+  let replied = native_event(
+    state,
+    stream,
+    Some("task"),
+    2,
+    @wire.AssistantMessage(content="Native answer"),
+  )
+  assert_eq(
+    replied.conversations["session"].notification_answer,
+    Some("Native answer"),
+  )
+  assert_true(replied.conversations["session"].records.is_empty())
+  let finished = watch_event(replied, stream, "task", 3, "task_finished", {
+    "status": "completed",
+  })
+  assert_eq(
+    finished.conversations["session"].notification_answer,
+    Some("Native answer"),
+  )
+  let next = watch_event(finished, stream, "next", 4, "task_started", {
+    "previous_task_id": "task",
+  })
+  let late = native_event(
+    next,
+    stream,
+    Some("task"),
+    5,
+    @wire.AssistantMessage(content="Late answer"),
+  )
+  assert_true(late.conversations["session"].notification_answer is None)
+}

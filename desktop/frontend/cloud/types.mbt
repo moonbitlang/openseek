@@ -65,6 +65,8 @@ pub(all) struct Conversation {
   sending : Bool
   generating : Bool
   unseen_finish : Bool
+  // Retain the current native reply for completion notifications while history loads.
+  notification_answer : String?
   // Last live completion handled, independent of history replacement.
   last_finished_task : String?
   // Keep observing a known run through its idle snapshot until the terminal
@@ -111,6 +113,7 @@ fn Conversation::empty() -> Conversation {
     sending: false,
     generating: false,
     unseen_finish: false,
+    notification_answer: None,
     last_finished_task: None,
     observed_task: None,
     history_required: true,

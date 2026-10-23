@@ -250,12 +250,8 @@ fn cloud_finished_notification(
       answer = Some(text)
     }
   }
-  for item in after.events {
-    if item.task_id == event.task_id &&
-      item.kind == "assistant_message" &&
-      item.data is { "content": String(text), .. } {
-      answer = Some(text)
-    }
+  if after.notification_answer is Some(text) {
+    answer = Some(text)
   }
   if event.data
     is { "result": { "output": { "answer": String(text), .. }, .. }, .. } {
