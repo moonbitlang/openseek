@@ -167,6 +167,7 @@ test('skill enablement comes from the host and survives list/detail navigation a
   const toggle = page.getByRole('switch');
   const contentReads = app.requests.filter(r => r.method === 'skills.installed_content').length;
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(toggle.locator('.setting-switch-track')).toHaveCSS('background-color', 'rgb(49, 95, 213)');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect(page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');

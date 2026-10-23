@@ -585,7 +585,7 @@ h2 {
 }
 
 .setting-switch[aria-checked="true"] .setting-switch-track {
-  background: var(--color-text-primary);
+  background: var(--color-switch-on);
 }
 
 .setting-switch[aria-checked="true"] .setting-switch-track::after {

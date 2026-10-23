@@ -55,6 +55,8 @@ test('Settings default persists, applies to new chats and preserves saved sessio
   await app.openSession();
   const control = await settings(page);
   await expect(control).toHaveAttribute('aria-checked', 'true');
+  await expect(control.locator('.setting-switch-track')).toHaveCSS('background-color', 'rgb(49, 95, 213)');
+  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('guide-settings-on.png') });
   await chooseDefault(page, false);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.moonbit_guide'))).toBe('false');
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('guide-settings-off.png') });
@@ -101,6 +103,9 @@ test('MoonBit default remains usable in narrow dark Settings', async ({ page }, 
   await control.focus();
   await page.keyboard.press('Space');
   await expect(control).toHaveAttribute('aria-checked', 'false');
+  await page.keyboard.press('Space');
+  await expect(control).toHaveAttribute('aria-checked', 'true');
+  await expect(control.locator('.setting-switch-track')).toHaveCSS('background-color', 'rgb(49, 95, 213)');
   const bounds = await control.boundingBox();
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
