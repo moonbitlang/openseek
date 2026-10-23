@@ -267,3 +267,32 @@ test('Cloud keeps failed and successful identical prompts in task order live and
   expect(app.postCount).toBe(2);
   expect(app.device.pageErrors).toEqual([]);
 });
+
+for (const command of ['goal', 'compact']) {
+  test(`Cloud ${command} recovers from host failure and keeps observing`, async ({ page }) => {
+    const app = await open(page);
+    if (command === 'compact') await compact(page);
+    else {
+      await page.locator('#task').fill('/goal');
+      await expect(page.locator('.completion-item').filter({hasText: '/goal'})).toBeVisible();
+      await page.locator('#task').press('Enter');
+      await expect(page.locator('#goal-set')).toBeVisible();
+      await page.locator('#task').fill('Recover this goal');
+      await page.locator('#goal-set').click();
+    }
+    await expect.poll(() => commands(app).length).toBe(1);
+    await app.emitSessionEvent(sessionA, 'engine_failed', {error: 'Fixture host could not start'}, {task: null});
+    await app.publishControl(sessionA, {active_task_id: null, status: 'idle', compacting: false, compact_queued: false, paused: true});
+    await expect(page.locator('#transcript')).toContainText('Fixture host could not start');
+    await expect(page.locator('.composer-notice-text')).toHaveCount(0);
+    if (command === 'goal') {
+      await expect(page.locator('#goal-set')).toBeVisible();
+      await expect(page.locator('#task')).toHaveValue('Recover this goal');
+      await page.locator('#goal-cancel').click();
+    }
+    await app.emitSessionEvent(sessionA, 'goal_updated', {goal: 'Observation still works'}, {task: null});
+    await expect(page.locator('.composer-goal')).toContainText('Observation still works');
+    expect(commands(app)).toHaveLength(1);
+    expect(app.device.pageErrors).toEqual([]);
+  });
+}

@@ -108,6 +108,7 @@ pub(all) enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
   NativeEvent(EngineFrame)
+  EngineFailed(session~ : String, seq~ : Int32, error~ : String)
 } derive(Eq)
 pub fn ControlStreamEvent::equal(Self, Self) -> Bool
 pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool

@@ -214,3 +214,56 @@ test "Cloud compacting snapshots default absent state and recover actual compres
   }
   assert_true(invalid)
 }
+
+///|
+test "Cloud host failure settles idle commands without closing observation" {
+  let initial = request_compact(
+    goal_action(
+      controls_fixture(),
+      @composer.GoalEditStarted(identity=goal_identity()),
+    ),
+  )
+  let pending = goal_action(
+    initial,
+    @composer.GoalSubmitted(
+      identity=goal_identity(),
+      draft="Keep this goal",
+      prompt_present=false,
+    ),
+  )
+  let conversation = pending.conversations["session"]
+  let stream = conversation.stream.unwrap()
+  let failure = decode_control_event("engine_failed", {
+    "kind": "engine_failed",
+    "session_id": "session",
+    "task_id": null,
+    "seq": 3,
+    "data": { "error": "Engine could not start" },
+  })
+  let failed = metadata_update(
+    pending,
+    WatchEvent(1, "session", stream, failure),
+  )
+  let restored = failed.conversations["session"]
+  assert_eq(restored.goal.draft, Some("Keep this goal"))
+  assert_true(restored.goal.pending is None)
+  assert_false(restored.compacting || restored.compact_queued)
+  assert_true(restored.compact_request is None)
+  assert_eq(restored.notice, Some("Engine could not start"))
+  assert_true(stream.active && restored.watch_status == Watching)
+  assert_eq(restored.generating, conversation.generating)
+  let settled = watch_snapshot(failed, stream, Some("task"), 4, {
+    ..conversation.control.unwrap(),
+    active_task_id: None,
+    status: Idle,
+    compacting: false,
+    compact_queued: false,
+    paused: true,
+  })
+  assert_eq(settled.conversations["session"].last_seq, Some(4))
+  assert_true(settled.can_send("session"))
+  assert_true(
+    metadata_update(settled, WatchEvent(1, "session", stream, failure)) ==
+    settled,
+  )
+}

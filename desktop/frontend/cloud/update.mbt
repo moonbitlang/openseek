@@ -625,6 +625,23 @@ pub fn update(
             navigation~,
           )
         }
+        EngineFailed(session~, seq~, error~) => {
+          guard session == id && conversation.last_seq is Some(last) && seq > last else {
+            return (state, @cmd.none, None)
+          }
+          let goal = conversation.goal
+          let draft = if goal.draft is Some(_) { goal.draft } else {
+            match goal.pending {
+              Some(@composer.GoalSetting(text)) => Some(text)
+              _ => None
+            }
+          }
+          (state.replace(id, {
+            ..conversation, last_seq: Some(seq), goal: { ..goal, draft, pending: None, },
+            compact_request: None, compact_queued: false, compacting: false,
+            notice: Some(error),
+          }), @cmd.none, None)
+        }
         NativeEvent(frame) => {
           guard conversation.last_seq is Some(seq) && frame.seq > seq else {
             return (state, @cmd.none, None)

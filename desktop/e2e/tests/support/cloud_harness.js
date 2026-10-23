@@ -518,7 +518,7 @@ export class CloudHarness {
       this.controlSnapshots.set(session, { ...snapshot, data: { ...snapshot.data, compacting: false } });
     }
     const history = this.histories.get(session) || { messages: [], generating: false };
-    const transient = ['task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error'];
+    const transient = ['task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error', 'engine_failed'];
     if (!transient.includes(kind)) {
       this.histories.set(session, { ...history,
         messages: [...history.messages, { task_id: task, kind, data, created_at: 1000 + event.seq }],
@@ -528,7 +528,7 @@ export class CloudHarness {
       this.controlSnapshots.set(session, { ...this.controlState(session), seq: event.seq });
     }
     if (!silent && !['user', 'tool_call'].includes(kind)) {
-      const lifecycle = ['task_started', 'task_finished'].includes(kind);
+      const lifecycle = ['task_started', 'task_finished', 'engine_failed'].includes(kind);
       const frame = lifecycle ? event : { ...event, kind: 'engine_event', data: { ...data, event: kind === 'step' ? 'agent_step' : kind } };
       await this.page.evaluate(({ session, frame }) => window.cloudSessionEvent(session, frame), { session, frame: this.sseFrame(frame.kind, frame) });
       if (queueAdvanced) await this.publishControl(session);

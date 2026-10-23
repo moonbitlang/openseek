@@ -328,7 +328,11 @@ async fn check_control_failures() -> Unit {
   for
     (status, body, expected) in [
       (409, "task_not_running", Some(Rejected("task_not_running"))),
-      (409, "{\"accepted\":false,\"error\":\"compaction_busy\"}", Some(Rejected("compaction_busy"))),
+      (
+        409,
+        "{\"accepted\":false,\"error\":\"compaction_busy\"}",
+        Some(Rejected("compaction_busy")),
+      ),
       (202, "{\"accepted\":true}", Some(Accepted)),
       (202, "{\"accepted\":false,\"task_id\":\"task\"}", None),
       (409, "", Some(Rejected("HTTP 409"))),
@@ -417,6 +421,8 @@ async fn check_control_state_requests() -> Unit {
   }
   let body = "event: control_state\ndata: " +
     fixture.stringify() +
+    "\n\nevent: engine_failed\ndata: {\"session_id\":\"session\",\"task_id\":null,\"seq\":4,\"kind\":\"engine_failed\",\"data\":{\"error\":\"Engine could not start\"}}\n\nevent: control_state\ndata: " +
+    fixture.stringify() +
     "\n\nevent: task_finished\ndata: {\"session_id\":\"session\",\"task_id\":\"task\",\"seq\":4,\"kind\":\"task_finished\",\"data\":{}}\n\n"
   let requests = []
   let restore = mock_control_http(200, body, (url, method_, auth, _) => {
@@ -427,7 +433,13 @@ async fn check_control_state_requests() -> Unit {
   let events = []
   watch_control("fixture", "session", stream, event => events.push(event))
   assert_true(
-    events is [Snapshot(snapshot), EngineEvent({ kind: "task_finished", .. })] &&
+    events
+    is [
+      Snapshot(snapshot),
+      _,
+      Snapshot(_),
+      EngineEvent({ kind: "task_finished", .. }),
+    ] &&
     snapshot == expected,
   )
   assert_eq(requests, [

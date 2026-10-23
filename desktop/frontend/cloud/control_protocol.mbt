@@ -266,6 +266,7 @@ pub(all) enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
   NativeEvent(EngineFrame)
+  EngineFailed(session~ : String, seq~ : Int32, error~ : String)
 } derive(Eq)
 
 ///|
@@ -312,6 +313,20 @@ fn decode_control_event(
       _ => raise @cloud_client.RequestError(Malformed)
     }
     Snapshot(snapshot)
+  } else if json is { "kind": "engine_failed", .. } {
+    guard json
+      is {
+        "session_id": String(session),
+        "task_id": Null,
+        "seq": Number(seq, ..),
+        "data": { "error": String(error), .. },
+        ..
+      } &&
+      seq > 0 &&
+      seq == seq.to_int().to_double() else {
+      raise @cloud_client.RequestError(Malformed)
+    }
+    EngineFailed(session~, seq=seq.to_int(), error~)
   } else if json is { "kind": "engine_event", .. } {
     NativeEvent(
       @json.from_json(json) catch {
