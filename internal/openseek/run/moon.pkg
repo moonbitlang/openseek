@@ -1,5 +1,6 @@
 import {
   "moonbitlang/openseek/agent",
+  "moonbitlang/openseek/agent_approval",
   "moonbitlang/openseek/agent_explore",
   "moonbitlang/openseek/agent_pattern_repair",
   "moonbitlang/openseek/agent_review",
