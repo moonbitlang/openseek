@@ -60,6 +60,12 @@ pub let agent_queue : Command[@protocol.QueuePayload, @protocol.QueueReply] = Co
 )
 
 ///|
+pub let agent_command : Command[
+  @protocol.SessionCommandPayload,
+  @protocol.SessionCommandReply,
+] = Command("agent.command")
+
+///|
 pub let agent_compact : Command[
   @protocol.CompactPayload,
   @protocol.CompactReply,

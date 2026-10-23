@@ -38,7 +38,7 @@ export class SshBrowserHarness extends DesktopBrowserHarness {
       window.__MoonBit__ = { events, app: events, openseek: new Proxy({}, {
         get: (_, method) => async params => {
           if (method === 'host.connect') {
-            window.sshFixtureEmit('openseek.agent.connected', { protocol: 1 });
+            window.sshFixtureEmit('openseek.agent.connected', { protocol: 2 });
           }
           return window.sshFixtureRpc(method, params);
         },

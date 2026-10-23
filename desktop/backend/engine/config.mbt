@@ -207,27 +207,6 @@ async fn compact_config(
 }
 
 ///|
-/// The config a goal update spawns an engine with when its conversation has
-/// none live — the same taskless shape as `compact_config`, pinned to the
-/// goal's session.
-async fn goal_config(
-  manager : EngineManager,
-  payload : @protocol.GoalPayload,
-  mcp_config? : McpConfig,
-) -> RunConfig {
-  session_command_config(
-    manager,
-    payload.session,
-    model?=payload.model,
-    thinking?=payload.thinking,
-    approval?=payload.approval,
-    max_steps?=payload.max_steps,
-    workspace?=payload.workspace,
-    mcp_config?,
-  )
-}
-
-///|
 async fn session_command_config(
   manager : EngineManager,
   session : String,

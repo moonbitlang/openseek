@@ -10,7 +10,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 1;
+    this.hostProtocol = 2;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -747,6 +747,8 @@ export class DesktopBrowserHarness {
         skill.enabled = request.params.enabled;
         return { ok: true };
       }
+      case 'agent.command':
+        return {accepted: true};
       case 'agent.start':
         return { run_id: 'run-e2e', status: 'accepted', exit_code: 0 };
       case 'agent.queue':

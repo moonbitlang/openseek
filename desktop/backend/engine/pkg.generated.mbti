@@ -78,6 +78,8 @@ pub async fn session_artifacts_list(EngineManager, String) -> @protocol.SessionA
 
 pub async fn session_artifacts_update(EngineManager, String, (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts, () -> Unit) -> @protocol.SessionArtifacts
 
+pub async fn session_command(EventSink, EngineManager, @protocol.SessionCommandPayload) -> @protocol.SessionCommandReply
+
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
 pub async fn ssh_model_credentials(EngineManager) -> Map[String, String]

@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
-pub const HostProtocolRevision : Int32 = 1
+pub const HostProtocolRevision : Int32 = 2
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -3212,6 +3212,30 @@ pub fn SessionChangedPayload::to_json(Self) -> Json
 pub fn SessionChangedPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionChangedPayload
 pub impl @json.FromJson for SessionChangedPayload
+
+pub(all) struct SessionCommandPayload {
+  command : @openseek_protocol.Command
+  settings : CompactPayload
+  run_id : String?
+} derive(Eq, @debug.Debug)
+pub fn SessionCommandPayload::equal(Self, Self) -> Bool
+pub fn SessionCommandPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionCommandPayload::not_equal(Self, Self) -> Bool
+pub fn SessionCommandPayload::to_json(Self) -> Json
+pub fn SessionCommandPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionCommandPayload
+pub impl @json.FromJson for SessionCommandPayload
+
+pub(all) struct SessionCommandReply {
+  accepted : Bool
+} derive(Eq, @debug.Debug)
+pub fn SessionCommandReply::equal(Self, Self) -> Bool
+pub fn SessionCommandReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionCommandReply::not_equal(Self, Self) -> Bool
+pub fn SessionCommandReply::to_json(Self) -> Json
+pub fn SessionCommandReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionCommandReply
+pub impl @json.FromJson for SessionCommandReply
 
 pub(all) struct SessionCommitPayload {
   session : String
