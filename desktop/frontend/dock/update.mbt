@@ -125,3 +125,48 @@ pub fn open_jobs(state : DockState) -> DockState {
 pub fn open_github(state : DockState) -> DockState {
   open_tab(state, Github)
 }
+
+///|
+/// Open side chat `chat` in this conversation's strip and make it active.
+/// The root chooses the conversation's dock before calling this function.
+pub fn open_side_chat(
+  state : DockState,
+  chat : @interop.ConversationKey,
+) -> DockState {
+  open_tab(state, DockTab::SideChat(owner=chat))
+}
+
+///|
+/// Add side chat `chat`'s tab without taking the screen from the tab on it.
+/// An empty strip has no tab on screen, so there the side chat takes it.
+pub fn add_side_chat(
+  state : DockState,
+  chat : @interop.ConversationKey,
+) -> DockState {
+  let tab = DockTab::SideChat(owner=chat)
+  guard !state.tabs.contains(tab) else { return state }
+  {
+    tabs: [..state.tabs, tab],
+    active: if state.active is Some(_) {
+      state.active
+    } else {
+      Some(tab)
+    },
+  }
+}
+
+///|
+/// Close the side-chat tabs of this strip whose side chat no longer exists
+/// — deleted elsewhere, or archived with its conversation — the way their
+/// close buttons would. `chats` are the strip's conversation's side chats
+/// that exist; other tabs are left alone.
+///
+/// The root chooses which conversation's strip this is.
+pub fn close_gone_side_chats(
+  state : DockState,
+  chats : Array[@interop.ConversationKey],
+) -> DockState {
+  state.tabs
+  .filter(tab => tab is SideChat(owner~) && !chats.contains(owner))
+  .fold(init=state, (state, tab) => update(TabClosed(tab), state))
+}

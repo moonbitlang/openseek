@@ -17,7 +17,7 @@ pub fn context_attrs(String) -> @html.Attrs
 
 pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextActions) -> @rabbita.Val[@html.Html]
 
-pub fn[T : Eq] selection_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[T?], (QuoteReply[T]) -> @cmd.Cmd) -> @rabbita.Val[@html.Html]
+pub fn[T : Eq] selection_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Array[SelectionTarget[T]]], (QuoteReply[T]) -> @cmd.Cmd, side_chat? : (T, String) -> @cmd.Cmd) -> @rabbita.Val[@html.Html]
 
 // Errors
 
@@ -73,6 +73,14 @@ pub(all) struct QuoteReply[T] {
   accepted : @cmd.Cmd
   declined : @cmd.Cmd
 }
+
+pub(all) struct SelectionTarget[T] {
+  source : String
+  target : T
+  side_chat : Bool
+} derive(Eq)
+pub fn[T : Eq] SelectionTarget::equal(Self[T], Self[T]) -> Bool
+pub fn[T : Eq] SelectionTarget::not_equal(Self[T], Self[T]) -> Bool
 
 // Type aliases
 

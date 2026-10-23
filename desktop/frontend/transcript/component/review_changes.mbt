@@ -16,11 +16,17 @@ priv enum MessageChangesMsg {
 
 ///|
 fn Block::changes_id(self : Block) -> String? {
-  if self.content is Item(item~, anchor=Some(anchor), ..) &&
+  if self.content is Item(item~, anchor=Some(anchor), surface~, ..) &&
     item.kind is User(content~) &&
     @mention_context.parse(content.text()) is Some(parsed) &&
     parsed.mentions.any(mention => mention is @mention_context.ReviewChanges(_)) {
-    Some(anchor + "-changes")
+    // Its popup and focus are found by id across the document, and a side
+    // chat's copied history repeats its conversation's anchors.
+    let scope = match surface {
+      Column => ""
+      Dock => "side-chat-"
+    }
+    Some(scope + anchor + "-changes")
   } else {
     None
   }

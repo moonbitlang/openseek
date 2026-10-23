@@ -346,3 +346,72 @@ test "historical diffs deduplicate exact commits and distinguish revisions" {
   assert_true(@dock.file_paths(state).is_empty())
   assert_true(@dock.active_file(state) is None)
 }
+
+///|
+fn side_chat_key(session : String) -> @interop.ConversationKey {
+  { channel: @interop.ChannelId::Local, session, }
+}
+
+///|
+fn side_chat(session : String) -> @dock.DockTab {
+  @dock.DockTab::SideChat(owner=side_chat_key(session))
+}
+
+///|
+test "a side chat's tab closes when its side chat is gone" {
+  let state = @dock.DockState::empty()
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_side_chat(side_chat_key("chat-sc-1"))
+    |> @dock.open_side_chat(side_chat_key("chat-sc-2"))
+  // Every side chat still exists: nothing changes.
+  assert_true(
+    @dock.close_gone_side_chats(state, [
+      side_chat_key("chat-sc-1"),
+      side_chat_key("chat-sc-2"),
+    ]) ==
+    state,
+  )
+  // A record that went away (deleted, or archived with its conversation)
+  // takes its tab along, the way closing it would. A side chat that exists
+  // but has no tab gets none.
+  let closed = @dock.close_gone_side_chats(state, [
+    side_chat_key("chat-sc-1"),
+    side_chat_key("chat-sc-3"),
+  ])
+  assert_true(closed.tabs == [file_tab("a.mbt"), side_chat("chat-sc-1")])
+  assert_true(closed.active == Some(side_chat("chat-sc-1")))
+}
+
+///|
+test "opening a side chat appends it and reactivates an existing tab" {
+  let state = @dock.DockState::empty() |> @dock.open_file(work_file("a.mbt"))
+  let opened = @dock.open_side_chat(state, side_chat_key("chat-sc-1"))
+  assert_true(opened.tabs == [file_tab("a.mbt"), side_chat("chat-sc-1")])
+  assert_true(opened.active == Some(side_chat("chat-sc-1")))
+  let another = @dock.open_side_chat(opened, side_chat_key("chat-sc-2"))
+  assert_true(another.active == Some(side_chat("chat-sc-2")))
+  let again = @dock.open_side_chat(another, side_chat_key("chat-sc-1"))
+  assert_true(again.tabs == another.tabs)
+  assert_true(again.active == Some(side_chat("chat-sc-1")))
+}
+
+///|
+test "adding a side chat keeps the tab on screen and every other side chat" {
+  let opened = @dock.DockState::empty()
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_side_chat(side_chat_key("chat-sc-1"))
+  let state = @dock.update(TabActivated(file_tab("a.mbt")), opened)
+  let added = @dock.add_side_chat(state, side_chat_key("chat-sc-2"))
+  assert_true(
+    added.tabs ==
+    [file_tab("a.mbt"), side_chat("chat-sc-1"), side_chat("chat-sc-2")],
+  )
+  assert_true(added.active == Some(file_tab("a.mbt")))
+  assert_true(@dock.add_side_chat(added, side_chat_key("chat-sc-1")) == added)
+  // An empty strip has no tab on screen to keep.
+  let first = @dock.add_side_chat(
+    @dock.DockState::empty(),
+    side_chat_key("chat-sc-1"),
+  )
+  assert_true(first.active == Some(side_chat("chat-sc-1")))
+}

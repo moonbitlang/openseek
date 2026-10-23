@@ -147,6 +147,14 @@ priv enum QuoteTarget {
 } derive(Eq)
 
 ///|
+/// Where text selected in a transcript goes: the column's composer, or the
+/// composer of the side chat in the dock.
+priv enum SelectionComposer {
+  ColumnComposer(QuoteTarget)
+  DockComposer(@composer.Identity)
+} derive(Eq)
+
+///|
 /// Which composer, if any, is shown with a transcript right now. A read-only
 /// conversation shows its transcript without one.
 fn Model::quote_screen(self : Model) -> QuoteScreen? {
@@ -638,39 +646,6 @@ fn main {
         @sub.batch(subs)
       },
     )
-    let right_panel_input = state.map(model => model.right_panel_input())
-    let right_panel_html = @right_panel.component(
-      state.map(model => model.locale),
-      right_panel_input,
-      {
-        dock: emit.map(msg => Dock(msg)),
-        file_editor: emit.map(msg => FileEditor(msg)),
-        browser_tab: emit(BrowserTabRequested),
-        search: emit(ExplorerRequested(ExplorerSearch)),
-        files: emit(ExplorerRequested(ExplorerFiles)),
-        review: emit(ExplorerRequested(ExplorerChanges)),
-        workflows: emit(WorkflowsRequested),
-        jobs: emit(JobsRequested),
-        github: emit(GithubRequested),
-        github_events: emit.map(msg => Github(msg)),
-        open_link: url => emit(ExternalLinkClicked(url)),
-        job_events: emit.map(msg => Jobs(msg)),
-        open_child: child => emit(OpenSessionHere(child)),
-        browser_annotation: emit.map(msg => BrowserAnnotation(msg)),
-        browser_input: emit.map(value => BrowserAddressEdited(value)),
-        browser_submit: emit(BrowserNavigateSubmitted),
-        browser_back: emit(BrowserBack),
-        browser_forward: emit(BrowserForward),
-        browser_reload: emit(BrowserReload),
-        browser_open_external: emit(BrowserOpenExternal),
-        reveal_file: path => emit(RevealFile(path)),
-        toggle_menu: emit(ToggleRightPanelMenu),
-        toggle_expanded: emit(ToggleRightPanelExpanded),
-        close_tabs: emit.map(selection => CloseDockTabs(selection)),
-        tab_menu_changed: emit.map(open => DockTabMenuChanged(open)),
-        close_menu: emit(CloseRightPanelMenu),
-      },
-    )
     let terminal_input = state.map(model => model.terminal_input())
     let terminal_state = state.map(model => model.terminal)
     let terminal_emit = emit.map(msg => Terminal(msg))
@@ -742,6 +717,86 @@ fn main {
       state.map(model => model.locale),
       codex_composer_input,
       emit.map(action => CodexComposerAction(action)),
+    )
+    // A side chat in the dock gets a transcript and a composer of its own.
+    // The transcript is built per side chat like the column's and disposed
+    // when its tab stops being the one on screen. The composer lives as long
+    // as the page, like the column's: its drafts are kept per side chat in the
+    // component, so hiding the dock or switching tabs loses no typing.
+    let (side_chat_composer, side_chat_quote) = @composer.component(
+      state.map(model => model.locale),
+      state.map(model => model.dock_composer_input()),
+      emit.map(action => ComposerAction(action)),
+      surface=Dock,
+    )
+    let side_chat_quote_target = state.map(model => {
+      model
+      .mounted_side_chat_owner()
+      .bind(owner => model.side_chat_composer_input(owner).quote_target())
+    })
+    let side_chat_transcript = state
+      .map(model => model.mounted_side_chat_owner())
+      .switch_by(
+        owner => {
+          guard owner is Some(owner) else {
+            return @rabbita.Val::constant(@html.nothing)
+          }
+          @transcript_component.component(
+            state.map(model => model.side_chat_transcript_input(owner)),
+            transcript_actions(side_chat_slot_key(owner)),
+          )
+        },
+        by=owner => owner.map_or("", side_chat_slot_key),
+      )
+    // A question its agent asks sits between them, as in the column.
+    let side_chat_html = state
+      .map(model => {
+        model.mounted_side_chat().map(conv => model.question_region(emit, conv))
+      })
+      .map3(side_chat_transcript, side_chat_composer, (
+        questions,
+        transcript,
+        composer,
+      ) => {
+        match questions {
+          Some(questions) =>
+            @html.div(class="side-chat", [transcript, questions, composer])
+          None => @html.nothing
+        }
+      })
+    let right_panel_input = state.map(model => model.right_panel_input())
+    let right_panel_html = @right_panel.component(
+      state.map(model => model.locale),
+      right_panel_input,
+      side_chat=side_chat_html,
+      {
+        dock: emit.map(msg => Dock(msg)),
+        file_editor: emit.map(msg => FileEditor(msg)),
+        browser_tab: emit(BrowserTabRequested),
+        search: emit(ExplorerRequested(ExplorerSearch)),
+        files: emit(ExplorerRequested(ExplorerFiles)),
+        review: emit(ExplorerRequested(ExplorerChanges)),
+        workflows: emit(WorkflowsRequested),
+        jobs: emit(JobsRequested),
+        github: emit(GithubRequested),
+        github_events: emit.map(msg => Github(msg)),
+        open_link: url => emit(ExternalLinkClicked(url)),
+        job_events: emit.map(msg => Jobs(msg)),
+        open_child: child => emit(OpenSessionHere(child)),
+        browser_annotation: emit.map(msg => BrowserAnnotation(msg)),
+        browser_input: emit.map(value => BrowserAddressEdited(value)),
+        browser_submit: emit(BrowserNavigateSubmitted),
+        browser_back: emit(BrowserBack),
+        browser_forward: emit(BrowserForward),
+        browser_reload: emit(BrowserReload),
+        browser_open_external: emit(BrowserOpenExternal),
+        reveal_file: path => emit(RevealFile(path)),
+        toggle_menu: emit(ToggleRightPanelMenu),
+        toggle_expanded: emit(ToggleRightPanelExpanded),
+        close_tabs: emit.map(selection => CloseDockTabs(selection)),
+        tab_menu_changed: emit.map(open => DockTabMenuChanged(open)),
+        close_menu: emit(CloseRightPanelMenu),
+      },
     )
     let sidebar_input = state.map(model => model.sidebar_component_input())
     let sidebar_html = @sidebar.component(
@@ -929,23 +984,58 @@ fn main {
       file_feedback,
       @action_menu.selection_component(
         state.map(model => model.locale),
-        quote_target,
+        state
+        .map(model => {
+          (model.can_open_side_chat(), model.mounted_side_chat_owner())
+        })
+        .map3(quote_target, side_chat_quote_target, (screen, column, dock) => {
+          let (side_chat, _) = screen
+          let targets : Array[@action_menu.SelectionTarget[SelectionComposer]] = []
+          if column is Some(target) {
+            targets.push({
+              source: @interop.ChatSurface::Column.quote_source(),
+              target: ColumnComposer(target),
+              side_chat: side_chat && target is ChatComposer(_),
+            })
+          }
+          if dock is Some(identity) {
+            targets.push({
+              source: @interop.ChatSurface::Dock.quote_source(),
+              target: DockComposer(identity),
+              side_chat: false,
+            })
+          }
+          targets
+        }),
         reply => {
+          let content = @composer.Text(
+            quote=Some(reply.quote),
+            comment=reply.comment,
+          )
           let (quote, identity) = match reply.target {
-            ChatComposer(identity) => (composer_quote, identity)
-            CodexComposer(identity) => (codex_composer_quote, identity)
+            ColumnComposer(ChatComposer(identity)) => (composer_quote, identity)
+            ColumnComposer(CodexComposer(identity)) =>
+              (codex_composer_quote, identity)
+            DockComposer(identity) => (side_chat_quote, identity)
           }
           quote({
             identity,
-            content: @composer.Text(
-              quote=Some(reply.quote),
-              comment=reply.comment,
-            ),
+            content,
             images: [],
             send: reply.send,
             accepted: reply.accepted,
             declined: reply.declined,
           })
+        },
+        side_chat=(target, quote) => {
+          match target {
+            ColumnComposer(ChatComposer(identity)) =>
+              match identity.owner.host() {
+                Some(owner) => emit(SideChatRequested(owner~, quote~))
+                None => @cmd.none
+              }
+            _ => @cmd.none
+          }
         },
       ),
       (context_menu, _, selection_actions) => {

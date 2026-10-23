@@ -19,6 +19,11 @@ pub async fn search_sessions(
         continue
       }
       for entry in group.sessions {
+        // A side chat carries its conversation's title and is reached
+        // through that conversation; it is never a result of its own.
+        if @protocol.side_chat_parent(entry.id) is Some(_) {
+          continue
+        }
         let title = entry.title.unwrap_or("")
         if title.to_lower().contains(query) {
           hits.push({

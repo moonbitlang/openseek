@@ -51,5 +51,23 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
       .active_conversation()
       .map(conv => conv.workflows)
       .unwrap_or([]),
+    // Numbered by their place among the strip's side-chat tabs.
+    side_chats=self.dock_state().tabs
+      .filter_map(tab => {
+        if tab is SideChat(owner~) {
+          Some(owner)
+        } else {
+          None
+        }
+      })
+      .mapi((index, owner) => {
+        let mark : @dock.TabMark = match
+          self.find_conversation(owner.channel, owner.session) {
+          Some(conv) if conv.is_running() => Running
+          Some(conv) if conv.unseen_finish => Unread
+          _ => Unmarked
+        }
+        ({ owner, number: index + 1, mark, } : @right_panel.SideChatTab)
+      }),
   )
 }

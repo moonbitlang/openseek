@@ -4,7 +4,14 @@
 // sender.
 
 ///|
-const MessageInputId : String = "task"
+/// The message textarea's id on `surface`: two composers can be on screen at
+/// once, one in the conversation column and one in a side chat.
+fn message_input_id(surface : @interop.ChatSurface) -> String {
+  match surface {
+    Column => "task"
+    Dock => "side-chat-task"
+  }
+}
 
 ///|
 /// A reply with selected text or captured images, addressed to one composer.
@@ -49,6 +56,12 @@ extern "js" fn reveal_message_end(id : String) -> Unit =
   #|   input.setSelectionRange(input.value.length, input.value.length)
   #|   input.scrollTop = input.scrollHeight
   #| }
+
+///|
+/// A fresh draft that opens with `text` quoted, ready for a question about it.
+pub fn quoted_draft(text : String) -> String {
+  quote_insertion("", text, "")
+}
 
 ///|
 /// What replying to `text` with `comment` writes after a draft holding
@@ -141,14 +154,22 @@ fn Model::quote_replied(
   } else {
     (model, @cmd.none)
   }
-  (model, @cmd.batch([changed, submitted, reply.accepted, focus_message_end()]))
+  (
+    model,
+    @cmd.batch([
+      changed,
+      submitted,
+      reply.accepted,
+      focus_message_end(surface=self.surface),
+    ]),
+  )
 }
 
 ///|
 /// Focus the message composer after its draft has rendered, preserving text.
-pub fn focus_message_end() -> @cmd.Cmd {
+pub fn focus_message_end(surface~ : @interop.ChatSurface = Column) -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _ => reveal_message_end(MessageInputId),
+    _ => reveal_message_end(message_input_id(surface)),
     kind=@cmd.after_render,
   )
 }

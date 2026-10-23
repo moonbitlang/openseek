@@ -3715,3 +3715,45 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .browser-annotation { flex: 0 0 auto; padding: 12px; border-bottom: 1px solid var(--color-separator); display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
 .browser-annotation.hidden { display: none; }
 .browser-annotation button { padding: 5px 10px; border: 1px solid var(--color-separator); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+
+/* A side chat: a fork of the conversation, with its own transcript and
+   composer, read beside the conversation in the dock. The body slot is
+   always mounted and stays empty unless a side-chat tab is active. */
+.editor .side-chat-pane { display: none; }
+.editor.mode-side-chat .viewer-breadcrumb,
+.editor.mode-side-chat .editor-body,
+.editor.mode-side-chat .browser-chrome { display: none; }
+.editor.mode-side-chat .side-chat-pane {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.side-chat-pane .side-chat {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  /* A conversation's ground, as in the column: the dock's surface would
+     leave the composer's canvas band showing around it. */
+  background: var(--color-bg-canvas);
+}
+/* The dock is narrow: give the transcript and composer the gutters a panel
+   has, not the column's. */
+.side-chat-pane .transcript { padding: 16px 14px 12px; }
+.side-chat-pane .composer { padding: 6px 12px 12px; }
+
+/* A side chat's tab says when its turn is running, or finished unseen. */
+.editor-tab .tab-mark { display: none; }
+.editor-tab.running .tab-mark,
+.editor-tab.unread .tab-mark {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+.editor-tab.running .tab-mark { animation: lane-pulse 1.4s ease-in-out infinite; }

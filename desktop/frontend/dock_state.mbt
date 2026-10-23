@@ -17,11 +17,59 @@ fn Model::dock_owner(self : Model) -> @interop.ConversationIdentity {
 }
 
 ///|
+/// The conversation whose strip holds `owner`'s tabs. A side chat is read in
+/// its conversation's dock and has no strip of its own, so a tab opened for
+/// it — a file, a browser page — lands in that dock.
+fn dock_home(
+  owner : @interop.ConversationIdentity,
+) -> @interop.ConversationIdentity {
+  match owner {
+    Host(key) => Host(dock_home_key(key))
+    Cloud(..) => owner
+  }
+}
+
+///|
+/// Bring side chat `chat` on screen. A side chat is not a conversation the
+/// column can select — like a file, it is read in its conversation's dock —
+/// so the two ways a session is chosen, selecting it (`OpenSession`) and
+/// navigating to its address, select its conversation and then call this to
+/// put the side chat's tab on screen there. A side chat lives only in the
+/// page that opened it; one this page does not hold, left from before a
+/// restart, gets no tab, and its conversation alone is what opens.
+fn Model::reveal_side_chat(
+  self : Model,
+  chat : @interop.ConversationKey,
+) -> Model {
+  guard self.find_conversation(chat.channel, chat.session) is Some(_) else {
+    return self
+  }
+  let owner = dock_home(@interop.Host(chat))
+  {
+    ..self.with_dock_state_for(
+      owner,
+      @dock.open_side_chat(self.dock_state_for(owner), chat),
+    ),
+    right_panel_open: true,
+    right_panel_menu_open: false,
+  }
+}
+
+///|
+/// `dock_home` for a Host conversation.
+fn dock_home_key(key : @interop.ConversationKey) -> @interop.ConversationKey {
+  match @protocol.split_side_chat_id(key.session) {
+    Some(parent) => { ..key, session: parent, }
+    None => key
+  }
+}
+
+///|
 fn Model::dock_state_for(
   self : Model,
   owner : @interop.ConversationIdentity,
 ) -> @dock.DockState {
-  self.docks.get(owner).unwrap_or_else(@dock.DockState::empty)
+  self.docks.get(dock_home(owner)).unwrap_or_else(@dock.DockState::empty)
 }
 
 ///|
@@ -38,7 +86,7 @@ fn Model::with_dock_state_for(
   dock : @dock.DockState,
 ) -> Model {
   let docks = self.docks.copy()
-  docks[owner] = dock
+  docks[dock_home(owner)] = dock
   { ..self, docks, }
 }
 

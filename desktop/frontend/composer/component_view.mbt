@@ -37,6 +37,7 @@ fn Entry::mention_chips(
   self : Entry,
   emit : @cmd.Emit[Msg],
   disabled~ : Bool,
+  surface~ : @interop.ChatSurface,
 ) -> Array[@html.Html] {
   let chips : Array[@html.Html] = []
   for index, mention in self.draft.mentions {
@@ -95,7 +96,7 @@ fn Entry::mention_chips(
     }
   }
   if self.review_changes().length() > 0 {
-    chips.push(self.changes_chip(locale~, emit, disabled~))
+    chips.push(self.changes_chip(locale~, emit, disabled~, surface~))
   }
   chips
 }
@@ -117,6 +118,7 @@ fn GoalInput::view(
   self : GoalInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html {
   ignore(locale)
   if self.draft is Some(_) {
@@ -124,7 +126,10 @@ fn GoalInput::view(
       @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_target)),
       @html.span(class="composer-goal-text", ui(locale, EditingGoal)),
       @html.button(
-        id="goal-cancel",
+        id=match surface {
+          Column => "goal-cancel"
+          Dock => "side-chat-goal-cancel"
+        },
         class="composer-goal-action",
         type_="button",
         title=ui(locale, CancelGoalEditing),
@@ -295,6 +300,7 @@ fn Entry::view(
   action_emit : @cmd.Emit[Action],
   input : Input,
   clock_ms~ : Double,
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html {
   ignore(locale)
   let goal_mode = input.goal.draft is Some(_)
@@ -323,7 +329,12 @@ fn Entry::view(
   // waiting is watching for, and the wait is spent looking here rather than
   // at the top bar.
   context["running"] = running_row(locale~, input.run, clock_ms~)
-  context["goal"] = input.goal.view(locale~, self.identity(), action_emit)
+  context["goal"] = input.goal.view(
+    locale~,
+    self.identity(),
+    action_emit,
+    surface~,
+  )
   let image_emit = emit.map(event => {
     ImageRead(self.identity(), self.root, event)
   })
@@ -385,6 +396,7 @@ fn Entry::view(
     context["attachment-\{index}"] = confirmation
   }
   View::{
+    input_id: message_input_id(surface),
     allow_images: input.presentation.images_enabled,
     images: if can_attach {
       Some(image_emit)
@@ -393,7 +405,12 @@ fn Entry::view(
     },
     before_inner: context,
     mentions: [
-      ..self.mention_chips(locale~, emit, disabled=input.presentation.disabled),
+      ..self.mention_chips(
+        locale~,
+        emit,
+        disabled=input.presentation.disabled,
+        surface~,
+      ),
       ..self.draft.image_previews(
         locale~,
         emit,
@@ -447,7 +464,7 @@ fn Entry::view(
     followup_menu: if shell_command is Some(_) {
       None
     } else {
-      self.followup_menu(locale~, input, emit)
+      self.followup_menu(locale~, input, emit, surface~)
     },
     overlay: if goal_mode {
       None
@@ -491,6 +508,7 @@ fn Entry::followup_menu(
   self : Entry,
   input : Input,
   emit : @cmd.Emit[Msg],
+  surface~ : @interop.ChatSurface,
 ) -> @html.Html? {
   guard input.goal.draft is None &&
     input.presentation.primary_action is Running(steer_available~, ..) &&
@@ -499,7 +517,12 @@ fn Entry::followup_menu(
   }
   Some(
     @select_control.Control::{
-      id: "composer-followup-select",
+      // Its trigger, root, and option ids derive from this one; the column's
+      // and the dock's composers can both be running.
+      id: match surface {
+        Column => "composer-followup-select"
+        Dock => "side-chat-followup-select"
+      },
       groups: [
         {
           label: ui(locale, ThisMessage),

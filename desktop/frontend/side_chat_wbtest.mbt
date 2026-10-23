@@ -1,0 +1,1053 @@
+// A side chat beside the fixture conversation: its tab follows its record,
+// it never takes a sidebar row, and what its composer does in the dock lands
+// on it and never on the conversation in the column.
+
+///|
+const SideChatId : String = "desktop-test-sc-0a1b2c3d"
+
+///|
+test "a side chat file mention opens in the visible parent dock" {
+  let model = { ..side_chat_model(), is_desktop: true, }
+  let parent = model.dock_owner().host().unwrap()
+  let target = model.test_file("src/main.mbt")
+  let action = ComposerAction(
+    @composer.MentionOpened(identity=side_chat_identity(model), mention={
+      ref_: File(path="src/main.mbt"),
+      range: None,
+    }),
+  )
+  let (_, pending) = update(test_dispatch(), action, model)
+  let (_, repeated) = update(test_dispatch(), action, model)
+  assert_eq(
+    pending.file_panel.file_link_generation,
+    repeated.file_panel.file_link_generation,
+  )
+  let context = FileOpenContext::new(
+    side_chat_owner(),
+    pending.file_panel.file_link_generation,
+    return_to=parent,
+  )
+  // Its tab belongs in the parent's dock.
+  assert_true(context.destination == parent)
+  let replies : Array[@protocol.OpenPathReply] = [
+    Editor({ path: target.path, line: None, column: None, }),
+    Directory({ path: "src", }),
+    Browser(target.path),
+  ]
+  for reply in replies {
+    let response = OpenPathResolved(context, reply)
+    let (_, opened) = update(test_dispatch(), response, pending)
+    let (_, replayed) = update(test_dispatch(), response, pending)
+    assert_true(opened.docks == replayed.docks)
+    assert_eq(opened.active_session, parent.session)
+    match reply {
+      Editor(_) =>
+        assert_eq(@dock.active_file(opened.dock_state()), Some(target))
+      Directory(_) => {
+        assert_true(opened.dock_state().active is Some(FilePicker))
+        assert_true(opened.file_panel.expanded.contains(Relative("src")))
+      }
+      Browser(_) => {
+        guard @dock.active_browser(opened.dock_state()) is Some(page) else {
+          fail("the preview must be on screen")
+        }
+        assert_eq(opened.preview.pages.length(), 1)
+        assert_eq(replayed.preview.pages.length(), 1)
+        // The preview is the side chat's, whose tools reach it there.
+        assert_true(opened.browser_page_owner(page) == Some(side_chat_owner()))
+      }
+      _ => fail("the fixture must resolve to an in-app dock tab")
+    }
+    assert_true(
+      opened.dock_state().tabs.contains(SideChat(owner=side_chat_owner())),
+    )
+    // A side chat has no strip of its own.
+    assert_true(opened.docks.get(@interop.Host(side_chat_owner())) is None)
+  }
+  assert_true(
+    pending.dock_state().active == Some(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(model.dock_state() == pending.dock_state())
+}
+
+///|
+fn side_chat_owner() -> @interop.ConversationKey {
+  { channel: @interop.ChannelId::Local, session: SideChatId, }
+}
+
+///|
+/// The fixture conversation in the column, its side chat listed, held, and
+/// running with a question waiting, and on screen in the open dock. One
+/// message through `update` lets the post-dispatch sync settle.
+fn side_chat_model() -> Model raise {
+  let side = fold_engine(
+    {
+      ..empty_conversation(
+        @interop.ChannelId::Local,
+        SideChatId,
+        @interop.ChannelId::Local.test_project(),
+      ),
+      run: Open(run_id="r7", stage=Opened),
+    },
+    ApprovalRequested(
+      id="ap-side",
+      tool_name="mbtx",
+      detail="escalate",
+      body=None,
+    ),
+  )
+  let model = {
+    ..test_model().with_listed(["desktop-test", SideChatId]),
+    right_panel_open: true,
+    window_focused: true,
+  }.replace_conversation(side)
+  let model = model.with_dock_state(
+    @dock.open_side_chat(model.dock_state(), side_chat_owner()),
+  )
+  let (_, synced) = update(test_dispatch(), CloseSelectMenu, model)
+  synced
+}
+
+///|
+fn side_chat_identity(model : Model) -> @composer.Identity {
+  {
+    owner: @interop.Host(side_chat_owner()),
+    archive_generation: model.composer_entry_changes.length(),
+  }
+}
+
+///|
+test "a side chat is a tab in its conversation's dock while its record lasts" {
+  let model = side_chat_model()
+  assert_true(model.dock_state().tabs == [SideChat(owner=side_chat_owner())])
+  assert_true(model.mounted_side_chat_owner() == Some(side_chat_owner()))
+  assert_true(
+    model.side_chats_of({
+      channel: @interop.ChannelId::Local,
+      session: "desktop-test",
+    }) ==
+    [side_chat_owner()],
+  )
+  // Its finish is watched there.
+  assert_true(
+    model.conversation_is_visible(@interop.ChannelId::Local, SideChatId),
+  )
+  // The record going away takes the tab along.
+  let (_, gone) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    model.with_listed(["desktop-test"]),
+  )
+  assert_true(gone.dock_state().tabs.is_empty())
+  assert_true(gone.mounted_side_chat_owner() is None)
+}
+
+///|
+test "a side chat never takes a sidebar row" {
+  let model = side_chat_model()
+  guard model.focused_device() is Some(dev) else { fail("no device") }
+  let rows : Array[(RowStamp, @conversation.Input)] = []
+  model.push_group_component_inputs(
+    rows,
+    dev,
+    @interop.ChannelId::Local.test_project(),
+    listed=id => id == "desktop-test" || id == SideChatId,
+    archived=_ => false,
+  )
+  assert_true(rows.any(row => row.1.id().conversation() == "desktop-test"))
+  assert_false(
+    rows.any(row => {
+      row.1.id().conversation() == SideChatId ||
+      row.1.children.any(child => child.id().conversation() == SideChatId)
+    }),
+  )
+}
+
+///|
+test "an approval answered in the dock settles the side chat's question" {
+  let model = side_chat_model()
+  let (_, answered) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.ApprovalAnswered(identity=side_chat_identity(model), allow=true),
+    ),
+    model,
+  )
+  guard answered.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) &&
+    side.pending_approval is Some(pending) else {
+    fail("the side chat's question must still be held")
+  }
+  assert_true(pending.answered)
+  // The column is where it was, and its conversation is untouched.
+  assert_eq(answered.active_session, "desktop-test")
+  assert_true(answered.active().pending_approval is None)
+}
+
+///|
+test "a column control sent from the dock is dropped" {
+  let model = side_chat_model()
+  let (_, toggled) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.ModelMenuToggled(identity=side_chat_identity(model)),
+    ),
+    model,
+  )
+  assert_true(toggled.select_menu is None)
+  // Nor does the side chat answer anything once its tab is not on screen.
+  let hidden = { ..model, right_panel_open: false, }
+  let (_, ignored) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.ApprovalAnswered(
+        identity=side_chat_identity(hidden),
+        allow=true,
+      ),
+    ),
+    hidden,
+  )
+  guard ignored.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) &&
+    side.pending_approval is Some(pending) else {
+    fail("the side chat's question must still be held")
+  }
+  assert_false(pending.answered)
+}
+
+///|
+test "switching conversations keeps the side chat's state" {
+  let model = side_chat_model()
+  let other = model.activate(
+    @interop.ChannelId::Local,
+    "desktop-other",
+    @interop.ChannelId::Local.test_project(),
+  )
+  assert_true(
+    other.find_conversation(@interop.ChannelId::Local, SideChatId) is Some(_),
+  )
+}
+
+///|
+test "opening a background side chat changes only its parent's dock" {
+  let initial = side_chat_model()
+  let parent = initial.dock_owner()
+  let file = initial.test_file("a.mbt")
+  let initial = initial.with_dock_state(
+    @dock.open_file(@dock.DockState::empty(), file),
+  )
+  let other = initial.activate(
+    Local,
+    "desktop-other",
+    initial.active().project(),
+  )
+  let visible = other.dock_state()
+  let opened = other.with_dock_state_for(
+    parent,
+    @dock.open_side_chat(other.dock_state_for(parent), side_chat_owner()),
+  )
+  assert_true(opened.dock_state() == visible)
+  assert_true(other.dock_state_for(parent).tabs == [File(path=file)])
+  let returned = opened.activate(
+    Local,
+    "desktop-test",
+    initial.active().project(),
+  )
+  assert_true(
+    returned.dock_state().tabs ==
+    [File(path=file), SideChat(owner=side_chat_owner())],
+  )
+  assert_true(
+    returned.dock_state().active == Some(SideChat(owner=side_chat_owner())),
+  )
+}
+
+///|
+test "the side chat's file completions index its conversation's checkout" {
+  let model = side_chat_model()
+  assert_true(model.file_panel.index is IndexEmpty)
+  let (_, indexed) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.FileIndexEnsured(identity=side_chat_identity(model)),
+    ),
+    model,
+  )
+  assert_true(indexed.file_panel.index is IndexLoading(..))
+  assert_eq(indexed.active_session, "desktop-test")
+}
+
+///|
+test "the dock's composer stays with the side-chat tab while the dock is hidden" {
+  let model = side_chat_model()
+  let shown = model.dock_composer_input()
+  assert_true(shown.identity.owner == @interop.Host(side_chat_owner()))
+  // Hiding the dock keeps the composer on the side chat, so the component
+  // still holds what was typed when the dock comes back.
+  let hidden = { ..model, right_panel_open: false, }
+  assert_true(hidden.mounted_side_chat_owner() is None)
+  assert_true(
+    hidden.dock_composer_input().identity.owner ==
+    @interop.Host(side_chat_owner()),
+  )
+}
+
+///|
+/// The fixture conversation in the column with one finished turn, ending at
+/// sequence 4, and nothing beside it yet.
+fn side_chat_source_model() -> Model {
+  test_model().replace_conversation({
+    ..test_conversation(),
+    sync: Synced,
+    task: "",
+    messages: [
+      { kind: @transcript.Answer("done"), sequence: Some(4), ts: None, },
+    ],
+  })
+}
+
+///|
+test "a side chat opens beside its conversation with the quote in its draft" {
+  let model = side_chat_source_model()
+  assert_true(model.can_open_side_chat())
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  let (_, requested) = update(
+    test_dispatch(),
+    SideChatRequested(owner~, quote="the parser"),
+    model,
+  )
+  guard requested.conversation_fork is Some(pending) &&
+    pending.kind is SideChat(through=4, quote="the parser") else {
+    fail("a side chat forks through the last finished turn")
+  }
+  // One fork at a time: the selection bar offers no second side chat.
+  assert_false(requested.can_open_side_chat())
+  let (_, opened) = update(
+    test_dispatch(),
+    ForkCompleted(
+      pending,
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    requested,
+  )
+  // Nothing navigates: the conversation stays in the column, and the side
+  // chat is on screen in the dock with the quote waiting in its draft.
+  assert_eq(opened.active_session, "desktop-test")
+  assert_true(opened.right_panel_open)
+  assert_true(
+    opened.dock_state().active == Some(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(opened.mounted_side_chat_owner() == Some(side_chat_owner()))
+  guard opened.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_eq(side.task, "> the parser\n\n")
+  assert_true(opened.conversation_fork is None)
+}
+
+///|
+test "a side chat fork completed behind Cloud preserves its files and dock" {
+  let dispatch = test_dispatch()
+  let cloud = integrated_cloud_model()
+  let initial = {
+    ..side_chat_source_model().with_listed(["desktop-test"]),
+    cloud: cloud.cloud,
+    account: cloud.account,
+    is_desktop: true,
+  }
+  let parent = initial.dock_owner()
+  let host_file = initial.test_file("host-source.txt")
+  let parent_dock = @dock.open_file(@dock.DockState::empty(), host_file)
+  let initial = initial.with_dock_state(parent_dock)
+  let (_, requested) = update(
+    dispatch,
+    SideChatRequested(owner=parent.host().unwrap(), quote="the parser"),
+    initial,
+  )
+  guard requested.conversation_fork is Some(pending) else {
+    fail("the Host conversation must start its side chat")
+  }
+  let (_, selected) = update(
+    dispatch,
+    OpenCloudConversation(account="fixture-user", session="cloud-a"),
+    requested,
+  )
+  let cloud_file = @resource.join_relative(
+    file_ctx(selected).root().unwrap(),
+    Relative("cloud-notes.txt"),
+  )
+  let (_, shown) = show_editor_resource(
+    dispatch,
+    selected,
+    cloud_file,
+    None,
+    file_link_generation=selected.file_panel.file_link_generation,
+  )
+  let foreground = {
+    ..shown,
+    right_panel_open: false,
+    right_panel_menu_open: true,
+  }
+  let cloud_owner = foreground.dock_owner()
+  let visible_dock = foreground.dock_state()
+  let visible_ctx = file_ctx(foreground)
+  assert_true(cloud_owner is @interop.Cloud(..))
+  assert_true(visible_dock.tabs == [File(path=cloud_file)])
+  let completed = ForkCompleted(
+    pending,
+    Ok({ session: SideChatId, title: "Title", }),
+    fresh_session="desktop-unused",
+  )
+  let (_, opened) = update(dispatch, completed, foreground)
+  let (_, repeated) = update(dispatch, completed, foreground)
+  assert_true(opened.docks == repeated.docks)
+  assert_true(opened.cloud_identity() == foreground.cloud_identity())
+  assert_true(opened.selected_conversation == foreground.selected_conversation)
+  assert_true(opened.dock_owner() == cloud_owner)
+  assert_true(opened.dock_state() == visible_dock)
+  assert_true(file_ctx(opened) == visible_ctx)
+  assert_true(opened.navigation == foreground.navigation)
+  assert_eq(
+    opened.chat_navigation_generation,
+    foreground.chat_navigation_generation,
+  )
+  assert_eq(
+    opened.file_panel.file_link_generation,
+    foreground.file_panel.file_link_generation,
+  )
+  assert_false(opened.right_panel_open)
+  assert_true(opened.right_panel_menu_open)
+  assert_true(
+    opened.dock_state_for(parent).tabs ==
+    [File(path=host_file), SideChat(owner=side_chat_owner())],
+  )
+  assert_true(
+    opened.dock_state_for(parent).active ==
+    Some(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(opened.conversation_fork is None)
+  // Completing the background request must not mutate an earlier snapshot.
+  assert_true(initial.dock_state_for(parent) == parent_dock)
+  assert_true(requested.dock_state_for(parent) == parent_dock)
+  assert_true(foreground.dock_state_for(parent) == parent_dock)
+  assert_true(foreground.dock_state() == visible_dock)
+  assert_true(file_ctx(foreground) == visible_ctx)
+  assert_true(foreground.conversation_fork == Some(pending))
+  assert_true(foreground.find_conversation(Local, SideChatId) is None)
+}
+
+///|
+test "a side chat fork completed behind another Host preserves the foreground dock" {
+  let dispatch = test_dispatch()
+  let initial = side_chat_source_model().with_listed([
+    "desktop-test", "desktop-other",
+  ])
+  let parent = initial.dock_owner()
+  let source_file = initial.test_file("host-source.txt")
+  let parent_dock = @dock.open_file(@dock.DockState::empty(), source_file)
+  let initial = initial.with_dock_state(parent_dock)
+  let (_, requested) = update(
+    dispatch,
+    SideChatRequested(owner=parent.host().unwrap(), quote="the parser"),
+    initial,
+  )
+  guard requested.conversation_fork is Some(pending) else {
+    fail("the source conversation must start its side chat")
+  }
+  let selected = requested.test_open_dock_conversation("desktop-other")
+  let other_file = selected.test_file("host-other.txt")
+  let (_, shown) = show_editor_resource(
+    dispatch,
+    selected,
+    other_file,
+    None,
+    file_link_generation=selected.file_panel.file_link_generation,
+  )
+  let foreground = { ..shown, right_panel_menu_open: true, }
+  let visible_owner = foreground.dock_owner()
+  let visible_dock = foreground.dock_state()
+  let visible_ctx = file_ctx(foreground)
+  assert_true(visible_owner != parent)
+  assert_true(visible_dock.tabs == [File(path=other_file)])
+  let completed = ForkCompleted(
+    pending,
+    Ok({ session: SideChatId, title: "Title", }),
+    fresh_session="desktop-unused",
+  )
+  let (_, opened) = update(dispatch, completed, foreground)
+  let (_, repeated) = update(dispatch, completed, foreground)
+  assert_true(opened.docks == repeated.docks)
+  assert_eq(opened.active_session, "desktop-other")
+  assert_true(opened.selected_conversation == foreground.selected_conversation)
+  assert_true(opened.dock_owner() == visible_owner)
+  assert_true(opened.dock_state() == visible_dock)
+  assert_true(file_ctx(opened) == visible_ctx)
+  assert_true(opened.navigation == foreground.navigation)
+  assert_eq(
+    opened.chat_navigation_generation,
+    foreground.chat_navigation_generation,
+  )
+  assert_eq(
+    opened.file_panel.file_link_generation,
+    foreground.file_panel.file_link_generation,
+  )
+  assert_true(opened.right_panel_open)
+  assert_true(opened.right_panel_menu_open)
+  assert_true(
+    opened.dock_state_for(parent).tabs ==
+    [File(path=source_file), SideChat(owner=side_chat_owner())],
+  )
+  assert_true(
+    opened.dock_state_for(parent).active ==
+    Some(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(opened.conversation_fork is None)
+  // Both the parent strip and the visible strip retain their old snapshots.
+  assert_true(initial.dock_state_for(parent) == parent_dock)
+  assert_true(requested.dock_state_for(parent) == parent_dock)
+  assert_true(foreground.dock_state_for(parent) == parent_dock)
+  assert_true(foreground.dock_state() == visible_dock)
+  assert_true(file_ctx(foreground) == visible_ctx)
+  assert_true(foreground.conversation_fork == Some(pending))
+  assert_true(foreground.find_conversation(Local, SideChatId) is None)
+}
+
+///|
+test "closing an idle side chat's tab deletes it, and a failed delete brings it back" {
+  let model = side_chat_model()
+  let idle = model.replace_conversation({
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      SideChatId,
+      @interop.ChannelId::Local.test_project(),
+    ),
+  })
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    idle,
+  )
+  // The tab is gone at once, though the listing still has the record.
+  assert_true(closed.dock_state().tabs.is_empty())
+  assert_true(
+    closed.closing_side_chats == [{ chat: side_chat_owner(), stage: Deleting, }],
+  )
+  let (_, failed) = update(
+    test_dispatch(),
+    SideChatCloseFailed(chat=side_chat_owner(), message="kept"),
+    closed,
+  )
+  assert_true(failed.closing_side_chats.is_empty())
+  assert_true(failed.dock_state().tabs == [SideChat(owner=side_chat_owner())])
+  // A deleted record leaves the listing, and the closing entry with it.
+  let (_, deleted) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    closed.with_listed(["desktop-test"]),
+  )
+  assert_true(deleted.closing_side_chats.is_empty())
+  assert_true(deleted.dock_state().tabs.is_empty())
+}
+
+///|
+test "a running side chat is stopped before it is deleted" {
+  let model = side_chat_model()
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    model,
+  )
+  assert_true(
+    closed.closing_side_chats == [{ chat: side_chat_owner(), stage: Stopping, }],
+  )
+  guard closed.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_true(side.run is Open(stage=Cancelling, ..))
+  // Its turn ends: now it is deleted.
+  let (_, ended) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    closed.replace_conversation({ ..side, run: NoRun(ended=None), }),
+  )
+  assert_true(
+    ended.closing_side_chats == [{ chat: side_chat_owner(), stage: Deleting, }],
+  )
+  assert_true(ended.dock_state().tabs.is_empty())
+}
+
+///|
+test "a side chat closed while its turn starts is stopped once the run opens" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  let starting = model.replace_conversation({
+    ..side,
+    run: Starting(submission_id="s1"),
+  })
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    starting,
+  )
+  assert_true(
+    closed.closing_side_chats == [{ chat: side_chat_owner(), stage: Stopping, }],
+  )
+  // Its run opens: now it can be, and is, stopped.
+  let (_, opened) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    closed.replace_conversation({
+      ..side,
+      run: Open(run_id="r9", stage=Opened),
+    }),
+  )
+  guard opened.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(stopping) else {
+    fail("the side chat must be held")
+  }
+  assert_true(stopping.run is Open(run_id="r9", stage=Cancelling))
+  assert_true(opened.dock_state().tabs.is_empty())
+}
+
+///|
+test "a side chat whose stop failed gets its tab back" {
+  let model = side_chat_model()
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    model,
+  )
+  assert_true(closed.dock_state().tabs.is_empty())
+  let (_, failed) = update_dev(
+    test_dispatch(),
+    CancelFailed(run_id="r7", message="cancel transport failed"),
+    closed,
+  )
+  assert_true(failed.closing_side_chats.is_empty())
+  assert_true(failed.dock_state().tabs == [SideChat(owner=side_chat_owner())])
+  guard failed.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_true(side.run is Open(run_id="r7", stage=AtStep(None)))
+}
+
+///|
+/// `model` with the side chat's tab still in the strip but another tab on
+/// screen, and the side chat's transcript in sync state `sync`.
+fn side_chat_behind_another_tab(model : Model, sync : TranscriptSync) -> Model {
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    abort("the side chat must be held")
+  }
+  let model = model
+    .replace_conversation({ ..side, sync, })
+    .with_dock_state({
+      tabs: [SideChat(owner=side_chat_owner()), FilePicker],
+      active: Some(SideChat(owner=side_chat_owner())),
+    })
+  update(test_dispatch(), Dock(TabActivated(FilePicker)), model).1
+}
+
+///|
+fn side_chat_sync(model : Model) -> TranscriptSync? {
+  model
+  .find_conversation(@interop.ChannelId::Local, SideChatId)
+  .map(side => side.sync)
+}
+
+///|
+test "choosing a side chat's tab re-reads it, and retries a read that gave up" {
+  let chosen = @dock.SideChat(owner=side_chat_owner())
+  let synced = side_chat_behind_another_tab(side_chat_model(), Synced)
+  let (_, reread) = update(test_dispatch(), Dock(TabActivated(chosen)), synced)
+  assert_true(side_chat_sync(reread) is Some(Reloading(attempt=1, ..)))
+  let failed = side_chat_behind_another_tab(
+    side_chat_model(),
+    ReloadFailed(generation=1, buffered=[]),
+  )
+  let (_, retried) = update(test_dispatch(), Dock(TabActivated(chosen)), failed)
+  assert_true(side_chat_sync(retried) is Some(Reloading(attempt=1, ..)))
+  // A read in flight stays the only one.
+  let reading = side_chat_behind_another_tab(
+    reread,
+    side_chat_sync(reread).unwrap(),
+  )
+  let (_, again) = update(test_dispatch(), Dock(TabActivated(chosen)), reading)
+  assert_eq(
+    again.transcript_request_generation,
+    reread.transcript_request_generation,
+  )
+}
+
+///|
+test "a reconnect re-reads the side chat in the dock" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  let shown = model.replace_conversation({ ..side, sync: Synced, })
+  assert_true(shown.mounted_side_chat_owner() == Some(side_chat_owner()))
+  let (_, reconnected) = update_dev(test_dispatch(), BridgeReady, shown)
+  assert_true(side_chat_sync(reconnected) is Some(Reloading(..)))
+}
+
+///|
+test "a page the side chat's agent opens is a tab in its conversation's dock" {
+  let model = side_chat_model()
+  let (_, opened) = update(
+    test_dispatch(),
+    BrowserOpenRequested(
+      request="browser-1",
+      session=SideChatId,
+      url="https://example.com/",
+    ),
+    model,
+  )
+  // The tab joins the strip on screen, beside the side chat's own tab, and
+  // nothing keeps a strip under the side chat.
+  assert_true(@dock.active_browser(opened.dock_state()) is Some(_))
+  assert_true(
+    opened.dock_state().tabs.contains(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(opened.docks.get(@interop.Host(side_chat_owner())) is None)
+  assert_true(opened.right_panel_open)
+}
+
+///|
+test "a side chat shown again after the dock was hidden is re-read" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  let (_, hidden) = update(
+    test_dispatch(),
+    ToggleRightPanel,
+    model.replace_conversation({ ..side, sync: Synced, }),
+  )
+  assert_true(hidden.mounted_side_chat_owner() is None)
+  assert_true(side_chat_sync(hidden) is Some(Synced))
+  let (_, shown) = update(test_dispatch(), ToggleRightPanel, hidden)
+  assert_true(shown.mounted_side_chat_owner() == Some(side_chat_owner()))
+  assert_true(side_chat_sync(shown) is Some(Reloading(..)))
+}
+
+///|
+test "a side chat's notification opens its conversation with the side chat on screen" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  // The reader is elsewhere in the strip when the notice is clicked.
+  let away = {
+    ..model.replace_conversation({ ..side, last_run_id: Some("r7"), }),
+    right_panel_open: false,
+  }
+  let (_, opened) = update(
+    test_dispatch(),
+    NotificationClicked(run_id="r7"),
+    away,
+  )
+  // The column keeps the conversation; the side chat is its dock's tab.
+  assert_eq(opened.active_session, "desktop-test")
+  assert_true(opened.right_panel_open)
+  assert_true(
+    opened.dock_state().active == Some(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(opened.mounted_side_chat_owner() == Some(side_chat_owner()))
+  // The strip keeps its side chats through the next reconcile.
+  let (_, settled) = update(test_dispatch(), CloseSelectMenu, opened)
+  assert_true(settled.dock_state().tabs == [SideChat(owner=side_chat_owner())])
+}
+
+///|
+test "an archived conversation's side chats are not rows of their own" {
+  let project = @interop.ChannelId::Local.test_project()
+  let archived = (id : String) => {
+    (
+      {
+        id,
+        title: Some("Archived"),
+        workspace: project,
+        workspace_name: "work",
+        updated_at_ms: Some(1),
+      } : @transcript.SessionListItem)
+  }
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    archived: [archived("desktop-gone"), archived("desktop-gone-sc-0a1b2c3d")],
+  })
+  guard model
+    .sidebar_component_sections(model.dev())
+    .iter()
+    .find_first(section => section.label.has_prefix("Archived"))
+    is Some(section) else {
+    fail("the archived section must be listed")
+  }
+  assert_eq(section.entries.length(), 1)
+}
+
+///|
+test "a side chat's address leads to its conversation, never to a route of its own" {
+  let model = side_chat_model()
+  guard (
+      { device: Some("local"), target: Session(SideChatId), } : @routes.Location).path()
+    is Some(path) else {
+    fail("a host session has an address")
+  }
+  let snapshot : @navigation_browser.Snapshot = {
+    path,
+    settings: false,
+    can_back: true,
+    can_forward: false,
+  }
+  // The side chat is already held, as after reading it in the dock.
+  let away = { ..model, right_panel_open: false, }
+  let (_, arrived) = update(
+    test_dispatch(),
+    Navigation(Browser(snapshot)),
+    away,
+  )
+  assert_eq(arrived.active_session, "desktop-test")
+  assert_true(
+    arrived.navigation.location is Some({ target: Session("desktop-test"), .. }),
+  )
+  assert_true(arrived.right_panel_open)
+  assert_true(arrived.mounted_side_chat_owner() == Some(side_chat_owner()))
+}
+
+///|
+test "a reconnect re-reads the side chat while its conversation still loads" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  // The column's conversation was reselected and its read is still out.
+  let loading = {
+    ..model.replace_conversation({ ..side, sync: Synced, }),
+    loading_conversation: Some({
+      channel: @interop.ChannelId::Local,
+      session: "desktop-test",
+    }),
+  }
+  let (_, reconnected) = update_dev(test_dispatch(), BridgeReady, loading)
+  assert_true(side_chat_sync(reconnected) is Some(Reloading(..)))
+}
+
+///|
+test "a page the side chat's agent opened stays the side chat's in its conversation's dock" {
+  let (_, opened) = update(
+    test_dispatch(),
+    BrowserOpenRequested(
+      request="browser-1",
+      session=SideChatId,
+      url="https://example.com/",
+    ),
+    side_chat_model(),
+  )
+  guard @dock.active_browser(opened.dock_state()) is Some(id) else {
+    fail("the page must be on screen")
+  }
+  // Shown in the conversation's dock, it is still the side chat's page, so
+  // its browser tools keep reaching it after the reader navigates it.
+  assert_true(opened.browser_page_owner(id) == Some(side_chat_owner()))
+  let (_, edited) = update(
+    test_dispatch(),
+    BrowserAddressEdited("https://example.org/"),
+    opened,
+  )
+  let (_, navigated) = update(test_dispatch(), BrowserNavigateSubmitted, edited)
+  assert_true(
+    @preview.page(navigated.preview, id)
+    is Some({ url: Some("https://example.org/"), .. }),
+  )
+  assert_true(navigated.browser_page_owner(id) == Some(side_chat_owner()))
+  // A tab the reader opens belongs to the dock's conversation.
+  let (_, blank) = update(test_dispatch(), BrowserTabRequested, navigated)
+  guard @dock.active_browser(blank.dock_state()) is Some(own) else {
+    fail("the blank tab must be on screen")
+  }
+  assert_true(
+    blank.browser_page_owner(own) ==
+    Some({ channel: @interop.ChannelId::Local, session: "desktop-test", }),
+  )
+}
+
+///|
+test "a side chat completed after choosing another conversation stays in the background" {
+  let model = {
+    ..side_chat_source_model().with_listed(["desktop-test", "second"]),
+    right_panel_open: false,
+  }
+  // The same completion over an open panel showing another tab.
+  let open = { ..model, right_panel_open: true, }.with_dock_state({
+    tabs: [FilePicker],
+    active: Some(FilePicker),
+  })
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  let (_, requested) = update(
+    test_dispatch(),
+    SideChatRequested(owner~, quote="the parser"),
+    model,
+  )
+  guard requested.conversation_fork is Some(pending) else {
+    fail("a side chat must be forking")
+  }
+  // The other conversation is still loading, so the column has not moved yet.
+  let (_, choosing) = update(
+    test_dispatch(),
+    OpenSession(Local, "second"),
+    requested,
+  )
+  assert_eq(choosing.active_session, "desktop-test")
+  let (_, completed) = update(
+    test_dispatch(),
+    ForkCompleted(
+      pending,
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    choosing,
+  )
+  // The tab waits in its conversation's strip; the panel stays hidden.
+  assert_false(completed.right_panel_open)
+  assert_true(
+    completed.dock_state_for(@interop.Host(owner)).tabs.contains(
+      SideChat(owner=side_chat_owner()),
+    ),
+  )
+  assert_true(completed.navigation == choosing.navigation)
+  let (_, requested) = update(
+    test_dispatch(),
+    SideChatRequested(owner~, quote="the parser"),
+    open,
+  )
+  guard requested.conversation_fork is Some(pending) else {
+    fail("a side chat must be forking")
+  }
+  let (_, choosing) = update(
+    test_dispatch(),
+    OpenSession(Local, "second"),
+    requested,
+  )
+  let (_, completed) = update(
+    test_dispatch(),
+    ForkCompleted(
+      pending,
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    choosing,
+  )
+  // The tab on screen stays; the side chat's tab joins beside it.
+  let dock = completed.dock_state_for(@interop.Host(owner))
+  assert_true(dock.active == Some(FilePicker))
+  assert_true(dock.tabs == [FilePicker, SideChat(owner=side_chat_owner())])
+}
+
+///|
+test "a side chat another client started before the fork reply keeps its run" {
+  let model = side_chat_source_model()
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  let (_, requested) = update(
+    test_dispatch(),
+    SideChatRequested(owner~, quote="the parser"),
+    model,
+  )
+  guard requested.conversation_fork is Some(pending) else {
+    fail("a side chat must be forking")
+  }
+  // The announced side chat is already running here when the reply lands.
+  let running = requested.replace_conversation({
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      SideChatId,
+      @interop.ChannelId::Local.test_project(),
+    ),
+    run: Open(run_id="r-elsewhere", stage=Opened),
+  })
+  let (_, completed) = update(
+    test_dispatch(),
+    ForkCompleted(
+      pending,
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    running,
+  )
+  guard completed.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_true(side.run is Open(run_id="r-elsewhere", ..))
+  assert_eq(side.task, "> the parser\n\n")
+  // Read from the listing first, it still takes the model it was forked
+  // with, not the page's default.
+  let listed = requested.replace_conversation({
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      SideChatId,
+      @interop.ChannelId::Local.test_project(),
+      model=DsFlash,
+    ),
+  })
+  let (_, adopted) = update(
+    test_dispatch(),
+    ForkCompleted(
+      { ..pending, engine_model: DsPro, },
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    { ..listed, conversation_fork: Some({ ..pending, engine_model: DsPro, }), },
+  )
+  guard adopted.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_true(side.engine_model == DsPro)
+}
+
+///|
+test "a failed close of the strip's last tab shows the side chat again" {
+  let model = side_chat_model()
+  let idle = model.replace_conversation({
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      SideChatId,
+      @interop.ChannelId::Local.test_project(),
+    ),
+  })
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    idle,
+  )
+  // Its strip's last tab, closing it hid the panel.
+  assert_false(closed.right_panel_open)
+  let (_, failed) = update(
+    test_dispatch(),
+    SideChatCloseFailed(chat=side_chat_owner(), message="kept"),
+    closed,
+  )
+  assert_true(failed.right_panel_open)
+  assert_true(failed.mounted_side_chat_owner() == Some(side_chat_owner()))
+}

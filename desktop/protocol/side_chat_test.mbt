@@ -26,3 +26,15 @@ test "only a trailing well-formed suffix makes a side chat" {
   ]
   assert_eq(cases.filter(id => @protocol.split_side_chat_id(id) is Some(_)), [])
 }
+
+///|
+test "a side chat and its sub-runs sit beside the conversation" {
+  assert_eq(@protocol.side_chat_parent("chat-sc-0a1b2c3d"), Some("chat"))
+  assert_eq(@protocol.side_chat_parent("chat-sc-0a1b2c3d-sr-2"), Some("chat"))
+  assert_eq(
+    @protocol.side_chat_parent("chat-sr-1-sc-0a1b2c3d"),
+    Some("chat-sr-1"),
+  )
+  assert_eq(@protocol.side_chat_parent("chat"), None)
+  assert_eq(@protocol.side_chat_parent("chat-sr-1"), None)
+}

@@ -19,6 +19,10 @@ pub fn active_file(DockState) -> @common.Uri?
 
 pub fn active_history_diff(DockState) -> GitHistoryDiff?
 
+pub fn add_side_chat(DockState, @interop.ConversationKey) -> DockState
+
+pub fn close_gone_side_chats(DockState, Array[@interop.ConversationKey]) -> DockState
+
 pub fn file_paths(DockState) -> Array[@common.Uri]
 
 pub fn history_diffs(DockState) -> Array[GitHistoryDiff]
@@ -36,6 +40,8 @@ pub fn open_history_diff(DockState, GitHistoryDiff) -> DockState
 pub fn open_jobs(DockState) -> DockState
 
 pub fn open_picker(DockState) -> DockState
+
+pub fn open_side_chat(DockState, @interop.ConversationKey) -> DockState
 
 pub fn open_workflows(DockState) -> DockState
 
@@ -75,6 +81,7 @@ pub(all) enum DockTab {
   Workflows
   Github
   Jobs
+  SideChat(owner~ : @interop.ConversationKey)
 } derive(Eq)
 pub fn DockTab::equal(Self, Self) -> Bool
 pub fn DockTab::not_equal(Self, Self) -> Bool
@@ -112,7 +119,16 @@ pub(all) struct TabChip {
   label : String
   title : String
   missing : Bool
+  mark : TabMark
 }
+
+pub(all) enum TabMark {
+  Unmarked
+  Running
+  Unread
+} derive(Eq)
+pub fn TabMark::equal(Self, Self) -> Bool
+pub fn TabMark::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

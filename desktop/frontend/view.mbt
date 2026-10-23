@@ -220,7 +220,8 @@ fn Model::push_group_component_inputs(
     if conv.device != dev.channel ||
       conv.project() != workspace ||
       listed(conv.session_id) ||
-      archived(conv.session_id) {
+      archived(conv.session_id) ||
+      conv.is_side_chat() {
       continue
     }
     let worth_keeping = conv.worth_keeping()
@@ -264,8 +265,11 @@ fn Model::push_group_component_inputs(
   // A child opened from Workflows may not be in the host inventory yet.
   // Fold live and listed sessions together so either source can own a parent
   // or child without creating a second top-level conversation.
+  // A side chat is shown in its conversation's dock, never as a row.
   for item in dev.sessions {
-    if item.workspace == workspace && !archived(item.id) {
+    if item.workspace == workspace &&
+      !archived(item.id) &&
+      @protocol.side_chat_parent(item.id) is None {
       items.push(item)
     }
   }
@@ -578,8 +582,13 @@ fn Model::sidebar_component_sections(
   // A parent and its archived sub-run records are one conversation: restore
   // or delete the root row and the host moves the complete family together.
   // An old orphan child still owns a row and can therefore be restored.
+  // Side chats are archived with their conversation and come back with it,
+  // so they are not rows here either.
   let archived_entries : Array[@section.Entry] = []
-  for tree in @transcript.session_tree(dev.archived) {
+  let archived_rows = dev.archived.filter(item => {
+    @protocol.side_chat_parent(item.id) is None
+  })
+  for tree in @transcript.session_tree(archived_rows) {
     let item = tree.item
     let active = self.focused == dev.channel &&
       self.active_session == item.id &&
@@ -2290,6 +2299,32 @@ fn conversation_load_failed_view(
 }
 
 ///|
+/// The questions an agent asked in `conv`, answered beside its transcript —
+/// the column's conversation, or the side chat in the dock.
+fn Model::question_region(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  conv : Conversation,
+) -> @html.Html {
+  guard self.device_state(conv.device) is Some(device) &&
+    !conv.is_archived_read_only() else {
+    return @html.div(class="user-question-region", @html.nothing)
+  }
+  device.questions.view(
+    conv.session_id,
+    self.locale,
+    device.bridge is Connected,
+    dispatch.map(msg => {
+      UserQuestions(
+        channel=conv.device,
+        connection_generation=device.connection_generation,
+        msg,
+      )
+    }),
+  )
+}
+
+///|
 fn view(
   dispatch : @cmd.Emit[Msg],
   toggle_terminal : @cmd.Cmd,
@@ -2446,23 +2481,7 @@ fn view(
           Transcript(conversation=conv, ..) =>
             [
               transcript_html,
-              if model.device_state(conv.device) is Some(device) &&
-                !conv.is_archived_read_only() {
-                device.questions.view(
-                  conv.session_id,
-                  model.locale,
-                  device.bridge is Connected,
-                  dispatch.map(msg => {
-                    UserQuestions(
-                      channel=conv.device,
-                      connection_generation=device.connection_generation,
-                      msg,
-                    )
-                  }),
-                )
-              } else {
-                @html.div(class="user-question-region", @html.nothing)
-              },
+              model.question_region(dispatch, conv),
               if conv.is_archived_read_only() {
                 archived_read_only_view(
                   locale=model.locale,

@@ -9,13 +9,14 @@ import {
   "openseek_desktop/frontend/fileeditor",
   "openseek_desktop/frontend/github",
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/jobs",
   "openseek_desktop/frontend/preview",
   "openseek_desktop/frontend/workflow",
 }
 
 // Values
-pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], side_chat~ : @rabbita.Val[@html.Html], Actions) -> @rabbita.Val[@html.Html]
 
 // Errors
 
@@ -50,9 +51,17 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(dock~ : @dock.DockState, file_panel~ : @fileeditor.State, preview~ : @preview.State, annotation~ : @preview.Annotation, file_ctx~ : @fileeditor.Ctx, is_desktop~ : Bool, menu_open~ : Bool, expanded~ : Bool, reveal_label~ : String?, github~ : @github.State, jobs~ : @jobs.State, workflows~ : Array[@workflow.Run]) -> Self
+pub fn Input::Input(dock~ : @dock.DockState, file_panel~ : @fileeditor.State, preview~ : @preview.State, annotation~ : @preview.Annotation, file_ctx~ : @fileeditor.Ctx, is_desktop~ : Bool, menu_open~ : Bool, expanded~ : Bool, reveal_label~ : String?, github~ : @github.State, jobs~ : @jobs.State, workflows~ : Array[@workflow.Run], side_chats? : Array[SideChatTab]) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
+
+pub(all) struct SideChatTab {
+  owner : @interop.ConversationKey
+  number : Int32
+  mark : @dock.TabMark
+} derive(Eq)
+pub fn SideChatTab::equal(Self, Self) -> Bool
+pub fn SideChatTab::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

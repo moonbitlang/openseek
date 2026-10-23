@@ -17,6 +17,17 @@ struct Input {
   // The workflows the active conversation's snippets announced, for the
   // Workflows tab. Live-only state projected from the root's conversation.
   workflows : Array[@workflow.Run]
+  // The strip's side chats, numbered as their tabs are labelled.
+  side_chats : Array[SideChatTab]
+} derive(Eq)
+
+///|
+/// One side chat in the strip. A side chat carries its conversation's title,
+/// so its tab is named by its place among the strip's side-chat tabs.
+pub(all) struct SideChatTab {
+  owner : @interop.ConversationKey
+  number : Int32
+  mark : @dock.TabMark
 } derive(Eq)
 
 ///|
@@ -33,6 +44,7 @@ pub fn Input::Input(
   github~ : @github.State,
   jobs~ : @jobs.State,
   workflows~ : Array[@workflow.Run],
+  side_chats~ : Array[SideChatTab] = [],
 ) -> Input {
   {
     dock,
@@ -47,6 +59,7 @@ pub fn Input::Input(
     workflows,
     jobs,
     github,
+    side_chats,
   }
 }
 
@@ -90,6 +103,7 @@ pub(all) struct Actions {
 pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
+  side_chat~ : @rabbita.Val[@html.Html],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
   let semantic_review = input.map2(locale, (input, locale) => {
@@ -115,15 +129,19 @@ pub fn component(
     },
     on_open_change=actions.tab_menu_changed,
   )
-  localized_input.view3(semantic_review, tab_menu, (
+  localized_input.view4(semantic_review, tab_menu, side_chat, (
     localized,
     semantic_review,
     tab_menu,
+    side_chat,
   ) => {
     let (input, locale) = localized
-    panel_view(locale~, input, actions, semantic_review~, tab_menu~)
+    panel_view(locale~, input, actions, semantic_review~, tab_menu~, side_chat~)
   })
 }
 
 ///|
 pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend SideChatTab with Eq::{equal, not_equal}

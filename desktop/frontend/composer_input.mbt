@@ -27,9 +27,23 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   guard self.active_conversation() is Some(conv) else {
     return self.dormant_composer_input()
   }
+  self.composer_input_for(conv, surface=Column)
+}
+
+///|
+/// The composer for `conv` on `surface`. A side chat's composer in the dock
+/// drafts and sends like the column's, but carries no model, reasoning,
+/// approval, Git, or worktree chips: a side chat keeps the model it was
+/// forked with, works in its conversation's checkout, and those controls are
+/// the column's.
+fn Model::composer_input_for(
+  self : Model,
+  conv : Conversation,
+  surface~ : @interop.ChatSurface,
+) -> @composer.Input {
   let checkout = self.conversation_placement(conv)
   let owner : @interop.ConversationKey = {
-    channel: self.focused,
+    channel: conv.device,
     session: conv.session_id,
   }
   let identity : @composer.Identity = {
@@ -69,25 +83,26 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         conv.controls.compaction is NotCompacting,
     )
   }
-  let status : Array[@composer.StatusComponent] = [
-    @composer.ModelStatus(self.openseek_model_chip(conv)),
-  ]
-  if self.openseek_reasoning_chip(conv) is Some(control) {
-    status.push(@composer.ReasoningStatus(control))
-  }
-  status.push(
-    @composer.ApprovalStatus({
-      on: self.approval_for(conv.device, conv.session_id) is ApprovalReview,
-      enabled: !conv.is_running(),
-    }),
-  )
-  if conv.git_presentation() is Some(presentation) {
+  let status : Array[@composer.StatusComponent] = []
+  if surface is Column {
+    status.push(@composer.ModelStatus(self.openseek_model_chip(conv)))
+    if self.openseek_reasoning_chip(conv) is Some(control) {
+      status.push(@composer.ReasoningStatus(control))
+    }
     status.push(
-      @composer.GitStatus({ presentation, open: self.git_details_open, }),
+      @composer.ApprovalStatus({
+        on: self.approval_for(conv.device, conv.session_id) is ApprovalReview,
+        enabled: !conv.is_running(),
+      }),
     )
-  }
-  if self.worktree_control(conv) is Some(control) {
-    status.push(@composer.WorktreeStatus(control))
+    if conv.git_presentation() is Some(presentation) {
+      status.push(
+        @composer.GitStatus({ presentation, open: self.git_details_open, }),
+      )
+    }
+    if self.worktree_control(conv) is Some(control) {
+      status.push(@composer.WorktreeStatus(control))
+    }
   }
   // The composer owns the stable container and every context view. The root
   // projects only typed state, so no caller-owned DOM or command can alter
@@ -103,8 +118,11 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   // The BYOK reminder: readiness is otherwise folded silently into Send's
   // availability, and the top-bar status is owned by the run state — without
   // this notice a dismissed setup modal leaves a greyed Send with no
-  // explanation and no way back to the form.
-  if self.api_setup_banner_visible() {
+  // explanation and no way back to the form. Like the checkout notices
+  // below, it is the column's: its controls act on the window and on the
+  // conversation's checkout, which a side chat shares, so the dock does not
+  // repeat it.
+  if surface is Column && self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
       shell_text(self.locale, NoEndpoint)
     } else if self.api_provider is Glm {
@@ -197,6 +215,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     NotCompacting => ()
   }
   match checkout {
+    _ if surface is Dock => ()
     None => context.push(@composer.WorktreePlacementNotice)
     Some(@interop.MissingWorktree(name~, ..)) =>
       context.push(
@@ -382,12 +401,45 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
 /// and no way to send. Every action it could still emit carries the owner
 /// identity below, which resolves to no conversation and is dropped.
 fn Model::dormant_composer_input(self : Model) -> @composer.Input {
+  self.dormant_composer_input_for({
+    channel: self.focused,
+    session: self.active_session,
+  })
+}
+
+///|
+/// The dock's composer: the active side-chat tab's, shown or not, so a draft
+/// typed there is still in the composer when its tab comes back. With no
+/// side-chat tab active it is dormant, like the column's with no conversation.
+fn Model::dock_composer_input(self : Model) -> @composer.Input {
+  match self.dock_state().active {
+    Some(SideChat(owner~)) => self.side_chat_composer_input(owner)
+    _ => self.dormant_composer_input()
+  }
+}
+
+///|
+/// The composer of side chat `owner` in the dock. While its branch is being
+/// disposed the conversation may already be gone; the composer is then
+/// dormant under that owner, which no longer names a conversation.
+fn Model::side_chat_composer_input(
+  self : Model,
+  owner : @interop.ConversationKey,
+) -> @composer.Input {
+  match self.find_conversation(owner.channel, owner.session) {
+    Some(conv) => self.composer_input_for(conv, surface=Dock)
+    None => self.dormant_composer_input_for(owner)
+  }
+}
+
+///|
+fn Model::dormant_composer_input_for(
+  self : Model,
+  owner : @interop.ConversationKey,
+) -> @composer.Input {
   {
     identity: {
-      owner: @interop.Host({
-        channel: self.focused,
-        session: self.active_session,
-      }),
+      owner: @interop.Host(owner),
       archive_generation: self.composer_entry_changes.length(),
     },
     draft: { images: [], task: "", mentions: [], },

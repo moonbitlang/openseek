@@ -383,6 +383,8 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
 
 ///|
 priv struct Model {
+  // Where this composer is on screen; fixed for the component's lifetime.
+  surface : @interop.ChatSurface
   entries : Array[Entry]
   applied_changes : Int32
   // The clock the running row's elapsed span is measured against, advanced by
@@ -394,8 +396,12 @@ priv struct Model {
 } derive(Eq)
 
 ///|
-fn Model::Model(input : Input) -> Model {
+fn Model::Model(
+  input : Input,
+  surface~ : @interop.ChatSurface = Column,
+) -> Model {
   {
+    surface,
     entries: [Entry(input)],
     applied_changes: input.entry_changes.length(),
     clock_ms: @interop.now_ms(),
@@ -1038,7 +1044,7 @@ fn Model::update(
       } else {
         entry
       }
-      (self.with_entry(next), reveal_completion_selection())
+      (self.with_entry(next), reveal_completion_selection(self.surface))
     }
     CompletionDismiss =>
       (self.with_entry({ ..entry, completion: None, }), @cmd.none)
@@ -1070,9 +1076,8 @@ fn Model::update(
         if restore_focus {
           @cmd.custom_cmd(
             _ => {
-              if @dom.document()
-                .query_selector(".composer-changes .mention-jump")
-                .to_option()
+              if composer_root(self.surface) is Some(composer) &&
+                composer.query_selector(".composer-changes .mention-jump")
                 is Some(button) {
                 @base_browser.focus_prevent_scroll(button)
               }
@@ -1368,7 +1373,7 @@ fn Model::subscriptions(
   @sub.batch([
     @sub.every(1000, emit(ClockTicked)),
     self.editing_subscriptions(input, emit),
-    changes_dismiss_subscription(self.active(input), emit),
+    changes_dismiss_subscription(self.active(input), emit, surface=self.surface),
   ])
 }
 
@@ -1440,10 +1445,11 @@ pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   action_emit : @cmd.Emit[Action],
+  surface~ : @interop.ChatSurface = Column,
 ) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply]) {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, input) => (Model(input), @cmd.none),
+    init=(_, input) => (Model(input, surface~), @cmd.none),
     update=(state, input, msg, emit) => {
       state.update(input, msg, emit, action_emit)
     },
@@ -1452,7 +1458,14 @@ pub fn component(
   let html = state.view3(input, locale, (state, input, locale) => {
     state
     .active(input)
-    .view(locale~, emit, action_emit, input, clock_ms=state.clock_ms)
+    .view(
+      locale~,
+      emit,
+      action_emit,
+      input,
+      clock_ms=state.clock_ms,
+      surface=state.surface,
+    )
   })
   (html, emit.map(reply => QuoteReplied(reply)))
 }

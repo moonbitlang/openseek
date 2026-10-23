@@ -41,6 +41,10 @@ pub(all) enum DockTab {
   Workflows
   Github
   Jobs
+  // A side chat of the conversation that owns this strip: a fork of it,
+  // shown here with its own transcript and composer. Its tab exists exactly
+  // while its record does (see `reconcile_side_chats`).
+  SideChat(owner~ : @interop.ConversationKey)
 } derive(Eq)
 
 ///|

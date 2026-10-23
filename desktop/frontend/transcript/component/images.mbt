@@ -93,13 +93,18 @@ fn ImageCache::begin_read(
 /// renderer intentionally keeps local image paths out of `src`; this command
 /// fills a recognized data URL or settles the node as alt text. Reapplying is
 /// cheap and repairs nodes replaced by a later streaming render.
-fn ImageCache::apply_after_render(self : ImageCache) -> @cmd.Cmd {
+fn ImageCache::apply_after_render(
+  self : ImageCache,
+  surface : @interop.ChatSurface,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
+      guard transcript_root(surface) is Some(transcript) else { return }
       for path, state in self.0 {
         match state {
-          ImageReady(source) => settle_transcript_image(path, Some(source))
-          ImageUnavailable => settle_transcript_image(path, None)
+          ImageReady(source) =>
+            settle_transcript_image(transcript, path, Some(source))
+          ImageUnavailable => settle_transcript_image(transcript, path, None)
           ImageLoading => ()
         }
       }
@@ -110,9 +115,15 @@ fn ImageCache::apply_after_render(self : ImageCache) -> @cmd.Cmd {
 
 ///|
 /// Remove the pending marker after either a successful read or a failure so
-/// the viewport observer does not keep retrying an unavailable image.
-fn settle_transcript_image(path : String, source : String?) -> Unit {
-  for image in @dom.document().query_selector_all("img[data-transcript-image]") {
+/// the viewport observer does not keep retrying an unavailable image. Only
+/// this transcript's images: the other one on screen may show the same path
+/// under a different root.
+fn settle_transcript_image(
+  transcript : @dom.Element,
+  path : String,
+  source : String?,
+) -> Unit {
+  for image in transcript.query_selector_all("img[data-transcript-image]") {
     if image.get_attribute("data-transcript-image") != Some(path) {
       continue
     }

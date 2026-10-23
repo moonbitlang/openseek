@@ -2,6 +2,9 @@
 priv enum ConversationForkKind {
   AfterAnswer(through~ : Int32)
   EditedMessage(@protocol.SessionEditPayload)
+  // A side chat through the conversation's last finished turn, opened in its
+  // dock with `quote` waiting in its draft.
+  SideChat(through~ : Int32, quote~ : String)
 } derive(Eq)
 
 ///|
@@ -106,6 +109,15 @@ fn Model::finish_fork(
           pending.engine_model,
         )
         .with_approval(pending.source.channel, reply.session, pending.approval)
+      if pending.kind is SideChat(quote~, ..) {
+        return model.open_new_side_chat(
+          emit,
+          pending,
+          reply.session,
+          quote,
+          foreground=should_open,
+        )
+      }
       if pending.is_edit() {
         let conv = model
           .find_conversation(pending.source.channel, reply.session)
@@ -157,6 +169,165 @@ fn Model::finish_fork(
       )
     }
   }
+}
+
+///|
+/// Whether the conversation in the column can start a side chat now: one
+/// that can be forked, is not itself a side chat, and has a finished turn to
+/// fork through, while no other fork is being made.
+fn Model::can_open_side_chat(self : Model) -> Bool {
+  self.screen is Chat &&
+  !self.cloud_selected() &&
+  self.conversation_fork is None &&
+  self.active_conversation() is Some(conv) &&
+  conv.can_fork() &&
+  !conv.is_side_chat() &&
+  conv.latest_fork_through() is Some(_)
+}
+
+///|
+/// The end of the conversation's last finished turn: where a side chat of it
+/// forks, leaving any turn still in flight with the conversation.
+fn Conversation::latest_fork_through(self : Conversation) -> Int32? {
+  for item in self.messages.rev_iter() {
+    if item.fork_through() is Some(through) {
+      return Some(through)
+    }
+  }
+  None
+}
+
+///|
+/// Fork the conversation in the column into a side chat, to open beside it
+/// with `quote` in its draft. The request is the ordinary fork's, through the
+/// last finished turn.
+fn Model::request_side_chat(
+  self : Model,
+  emit : @cmd.Emit[Msg],
+  owner : @interop.ConversationKey,
+  quote : String,
+) -> (@cmd.Cmd, Model) {
+  guard self.can_open_side_chat() &&
+    self.active_conversation() is Some(conv) &&
+    conv.device == owner.channel &&
+    conv.session_id == owner.session &&
+    conv.latest_fork_through() is Some(through) &&
+    self.conversation_selection() is Some(source) else {
+    return (@cmd.none, self)
+  }
+  let pending : ConversationFork = {
+    source,
+    source_title: self.selected_conversation_title(),
+    source_sequence: conv.durable_frontier(),
+    kind: SideChat(through~, quote~),
+    engine_model: conv.engine_model,
+    approval: self.approval_for(conv.device, conv.session_id),
+    connection_generation: self.focused_connection_generation(),
+  }
+  (
+    fork_conversation(emit, pending),
+    { ..self, conversation_fork: Some(pending), },
+  )
+}
+
+///|
+/// A side chat was made: hold it, read its copied history, and open its tab
+/// in its conversation's dock with the quote waiting in its draft. Nothing
+/// navigates — the conversation stays in the column. When that conversation
+/// is still the one the page is showing (`foreground`, as an ordinary fork
+/// decides it), the dock opens on the side chat and its composer takes the
+/// focus; otherwise the tab waits in that conversation's strip.
+fn Model::open_new_side_chat(
+  self : Model,
+  emit : @cmd.Emit[Msg],
+  pending : ConversationFork,
+  session : String,
+  quote : String,
+  foreground~ : Bool,
+) -> (@cmd.Cmd, Model) {
+  let channel = pending.source.channel
+  let chat : @interop.ConversationKey = { channel, session, }
+  let parent : @interop.ConversationKey = {
+    channel,
+    session: pending.source.session,
+  }
+  // The host announces the side chat before this reply lands, so the page
+  // may hold it already: read from the listing with the default model, or
+  // running a turn another client started. That conversation and its run are
+  // kept; it takes the model it was forked with, and the quote.
+  let placed = match self.find_conversation(channel, session) {
+    Some(held) => { ..held, engine_model: pending.engine_model, }
+    None =>
+      empty_conversation(
+        channel,
+        session,
+        pending.source.workspace,
+        model=pending.engine_model,
+      )
+  }
+  let workspace = match self.device_state(channel) {
+    Some(dev) =>
+      dev.conversation_workspace(
+        pending.source.workspace,
+        session,
+        placed.workspace,
+      )
+    None => placed.workspace
+  }
+  let conv = if placed.task.is_empty() {
+    {
+      ..placed,
+      workspace,
+      task: @composer.quoted_draft(quote),
+      composer_draft_present: true,
+    }
+  } else {
+    { ..placed, workspace, }
+  }
+  let (model, generation) = self
+    .replace_conversation(conv)
+    .begin_transcript_reload(conv)
+  let owner = @interop.Host(parent)
+  // A parked strip comes back showing the new side chat. A strip still on
+  // screen while the page moves elsewhere keeps the tab it shows; the side
+  // chat's tab joins beside it.
+  let dock = if foreground || model.dock_owner() != owner {
+    @dock.open_side_chat(model.dock_state_for(owner), chat)
+  } else {
+    @dock.add_side_chat(model.dock_state_for(owner), chat)
+  }
+  let model = model.with_dock_state_for(owner, dock)
+  let on_screen = foreground && model.dock_owner() == owner
+  let model = if on_screen {
+    // Like opening any dock tab from the column: the panel shows it, and a
+    // pending editor navigation is no longer the newest.
+    {
+      ..model.begin_editor_navigation(),
+      right_panel_open: true,
+      right_panel_menu_open: false,
+    }
+  } else {
+    model
+  }
+  let commands = [
+    save_conversation_model(
+      conversation_model_key(channel, session),
+      pending.engine_model,
+    ),
+    save_conversation_approval(
+      conversation_model_key(channel, session),
+      pending.approval,
+    ),
+  ]
+  if generation is Some(generation) {
+    commands.push(
+      session_snapshot_command(emit, channel, model, session, generation, false),
+    )
+  }
+  if on_screen {
+    commands.push(@composer.focus_message_end(surface=Dock))
+  }
+  (@cmd.batch(commands), model)
 }
 
 ///|
@@ -221,6 +392,19 @@ fn fork_conversation(
                 model: pending.engine_model.wire(),
                 source_title: pending.source_title,
                 side_chat: None,
+              },
+            )
+          SideChat(through~, ..) =>
+            @interop.bridge_request(
+              pending.source.channel,
+              @commands.session_fork,
+              {
+                session: pending.source.session,
+                workspace: pending.source.workspace.path,
+                through,
+                model: pending.engine_model.wire(),
+                source_title: pending.source_title,
+                side_chat: Some(true),
               },
             )
         }
