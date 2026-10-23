@@ -5,8 +5,14 @@ Register a slash action in `slash_action`, add its menu entry in the shared
 `Model::engine_commands`, and implement any new UI state in this package once.
 A native command without extra interaction uses `Send(command)`.
 
+- Each Local and Cloud conversation stores `State` directly. Goal drafts, pending
+  identities and compaction phases are not mirrored in host-specific fields.
 - `State::act` edits or submits command input and returns a native command effect.
-- `State::reject` handles definite refusal; transport uncertainty leaves input pending.
+- Adapters normalize transport responses to `Delivery`. `State::delivered` handles
+  acceptance, definite refusal and unknown delivery, fencing late callbacks by
+  request identity. Acceptance alone never completes goal or compaction.
+- `State::observe_compaction` restores control snapshots without erasing a newer
+  in-flight request on the same observation connection.
 - `State::event`, `State::restore_goal`, and `Stream::event` handle native receipts,
   durable confirmation, and provisional text. They do not append a second transcript.
 - Local's adapter resolves placement and launch settings, then calls `agent.command`.

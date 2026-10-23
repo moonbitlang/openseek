@@ -1,28 +1,4 @@
 ///|
-fn Conversation::engine_controls(self : Conversation) -> @engine_session.State {
-  {
-    goal: self.goal,
-    edit: self.goal_edit.map(edit => edit.draft),
-    pending: self.goal_pending,
-    compaction: self.compaction,
-  }
-}
-
-///|
-fn Conversation::with_engine_controls(
-  self : Conversation,
-  controls : @engine_session.State,
-) -> Conversation {
-  {
-    ..self,
-    goal: controls.goal,
-    goal_edit: controls.edit.map(draft => { draft, }),
-    goal_pending: controls.pending,
-    compaction: controls.compaction,
-  }
-}
-
-///|
 /// Both hosts use engine_session to interpret composer actions. Only this
 /// adapter needs Local placement, launch settings and the Desktop bridge.
 fn apply_engine_action(
@@ -32,21 +8,16 @@ fn apply_engine_action(
   action : @engine_session.Action,
 ) -> (@cmd.Cmd, Model) {
   let id = "\{model.page_namespace}-submission-\{model.submission_sequence + 1}"
-  let (controls, command) = conv
-    .engine_controls()
-    .act(action, id, conv.durable_frontier(), running=conv.is_running())
-  let next = model.replace_conversation(conv.with_engine_controls(controls))
+  let (controls, command) = conv.controls.act(
+    action,
+    id,
+    conv.durable_frontier(),
+    running=conv.is_running(),
+  )
+  let next = model.replace_conversation({ ..conv, controls, })
   guard command is Some(command) else { return (@cmd.none, next) }
   let (next, _) = next.allocate_submission_id()
-  if command is (@wire.GoalSet(..) | @wire.GoalClear) {
-    let text = match command {
-      @wire.GoalSet(text~, ..) => Some(text)
-      _ => None
-    }
-    (send_goal(dispatch, next, conv, id, text), next)
-  } else {
-    (send_session_command(dispatch, next, conv, id, command), next)
-  }
+  (send_session_command(dispatch, next, conv, id, command), next)
 }
 
 ///|
@@ -76,6 +47,17 @@ fn send_session_command(
       approval: Some(model.approval_for(conv.device, conv.session_id)),
     },
   }
+  if command is (@wire.GoalSet(..) | @wire.GoalClear) &&
+    conv.goal_creates_worktree() is Some(workspace) {
+    return send_command_in_new_worktree(
+      model.locale,
+      dispatch,
+      conv.device,
+      workspace,
+      payload,
+      id,
+    )
+  }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       @interop.in_ordered_lane(
@@ -99,36 +81,53 @@ async fn request_session_command(
   payload : @protocol.SessionCommandPayload,
   id : String,
 ) -> Unit noraise {
-  ignore(
-    @interop.bridge_request(channel, @commands.agent_command, payload) catch {
-      error => {
-        let command = payload.command
-        let refused = @interop.bridge_failure(error) is (Refused | Unsent)
-        let message = @interop.bridge_error_text(error)
-        let session = payload.settings.session
-        let failure = if command is (@wire.GoalSet(..) | @wire.GoalClear) {
-          let draft = match command {
-            @wire.GoalSet(text~, ..) => Some(text)
-            _ => None
-          }
-          if refused {
-            GoalRejected(session~, command=id, draft~, message~)
+  let result = @interop.bridge_request(
+    channel, @commands.agent_command, payload,
+  ) catch {
+    error => {
+      let refused = @interop.bridge_failure(error) is (Refused | Unsent)
+      scheduler.add(
+        dispatch(
+          FromDevice(
+            channel,
+            SessionCommandDelivered(
+              session=payload.settings.session,
+              id~,
+              command=payload.command,
+              // Preserve Local's existing compact transport-failure presentation.
+              delivery=if refused || payload.command is @wire.Compact {
+                @engine_session.Rejected
+              } else {
+                @engine_session.Unknown
+              },
+              message=Some(@interop.bridge_error_text(error)),
+            ),
+          ),
+        ),
+      )
+      return
+    }
+  }
+  scheduler.add(
+    dispatch(
+      FromDevice(
+        channel,
+        SessionCommandDelivered(
+          session=payload.settings.session,
+          id~,
+          command=payload.command,
+          delivery=if result.accepted {
+            @engine_session.Accepted
           } else {
-            GoalUndelivered(session~, command=id, draft~, message~)
-          }
-        } else {
-          // Preserve Local's existing compact failure behavior.
-          SessionCommandFailed(
-            session~,
-            id~,
-            command~,
-            refused=refused || command is @wire.Compact,
-            message~,
-          )
-        }
-        scheduler.add(dispatch(FromDevice(channel, failure)))
-        return
-      }
-    },
+            @engine_session.Rejected
+          },
+          message=if result.accepted {
+            None
+          } else {
+            Some("The host did not accept the command")
+          },
+        ),
+      ),
+    ),
   )
 }

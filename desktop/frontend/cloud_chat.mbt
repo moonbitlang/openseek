@@ -436,7 +436,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       None
     },
     turn_id: conversation.bind(value => value.task),
-    goal: conversation.map_or(input.goal, value => value.goal),
+    goal: conversation.map_or(input.goal, value => value.controls.input()),
     slash_commands: if creating || !self.cloud.can_compose(owner.session()) {
       []
     } else {
@@ -473,8 +473,10 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
           context.push(@composer.ConnectionBanner(device_name=Some("Cloud")))
         }
         if conversation is Some(value) &&
-          (value.compacting || value.compact_queued) {
-          context.push(@composer.CompactionNotice(queued=!value.compacting))
+          (value.controls.is_compacting() || value.controls.is_compact_queued()) {
+          context.push(
+            @composer.CompactionNotice(queued=!value.controls.is_compacting()),
+          )
         }
         context
       },

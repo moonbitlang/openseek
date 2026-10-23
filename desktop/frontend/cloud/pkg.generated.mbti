@@ -9,6 +9,7 @@ import {
   "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/composer",
+  "openseek_desktop/frontend/engine_session",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/protocol",
@@ -144,12 +145,7 @@ pub(all) struct Conversation {
   reasoning_complete : Bool
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
-  compact_queued : Bool
-  compact_request : Int32?
-  compacting : Bool
-  goal : @composer.GoalInput
-  goal_since : Int32
-  goal_request : Int32
+  controls : @engine_session.State
   notice : String?
 } derive(Eq)
 pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
@@ -225,8 +221,8 @@ pub(all) enum Msg {
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
   WatchEnded(Int32, String, StreamLease, @cloud_client.Failure?)
   ControlAction(@interop.ConversationIdentity, @composer.Action)
-  CommandFinished(Int32, String, Int32, @openseek_protocol.Command, ControlResult)
-  CommandFailed(Int32, String, Int32, @openseek_protocol.Command, @cloud_client.Failure)
+  CommandFinished(Int32, String, String, @openseek_protocol.Command, ControlResult)
+  CommandFailed(Int32, String, String, @openseek_protocol.Command, @cloud_client.Failure)
   ControlAttachmentStored(Int32, String, String, String, @protocol.AttachmentSource, String)
   ControlPrepared(Int32, String, String, String, @composer.Draft, @openseek_protocol.Content)
   ControlChecked(Int32, String, String, ControlSnapshot)

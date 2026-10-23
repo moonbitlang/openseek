@@ -70,7 +70,7 @@ test "Cloud renders native history through the Local projector including goals a
     conversation.items().any(item => item.kind is Summary("Earlier context")),
   )
   assert_true(
-    conversation.restore_goal(document).goal.standing
+    conversation.restore_goal(document).controls.goal
     is Some({ text: "Ship it", .. }),
   )
   // Repeated snapshots replace canonical history; they never append equal text.

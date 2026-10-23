@@ -53,12 +53,6 @@ fn Conversation::live_progress(
   if wire is @wire.ToolResult(..) {
     return { ..self, streaming_response: None, }
   }
-  match wire {
-    AutoCompactionStarted(..) => return { ..self, compacting: true, }
-    AutoCompactionFinished(..) => return { ..self, compacting: false, }
-    AutoCompactionFailed(..) => return { ..self, compacting: false, }
-    _ => ()
-  }
   guard progress is Some(progress) else { return self }
   let stream : @engine_session.Stream = {
     response: self.streaming_response,

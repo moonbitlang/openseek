@@ -1,53 +1,6 @@
 ///|
-/// Views over the existing conversation storage keep transport bookkeeping
-/// separate from the shared command reducer.
-fn Conversation::engine_controls(self : Conversation) -> @engine_session.State {
-  {
-    goal: self.goal.standing,
-    edit: self.goal.draft,
-    pending: self.goal.pending.map(pending => {
-      id: self.goal_request.to_string(),
-      since: self.goal_since,
-      request: match pending {
-        @composer.GoalSetting(text) => @engine_session.Setting(text)
-        @composer.GoalClearing => @engine_session.Clearing
-      },
-    }),
-    compaction: if self.compact_queued {
-      @engine_session.Queued
-    } else if self.compacting {
-      @engine_session.Compacting
-    } else {
-      @engine_session.NotCompacting
-    },
-  }
-}
-
-///|
-fn Conversation::with_engine_controls(
-  self : Conversation,
-  state : @engine_session.State,
-) -> Conversation {
-  let same_phase = state.compaction == self.engine_controls().compaction
-  {
-    ..self,
-    goal: state.input(),
-    compact_queued: if same_phase {
-      self.compact_queued
-    } else {
-      state.compaction is (@engine_session.Queued | @engine_session.Requested)
-    },
-    compacting: if same_phase {
-      self.compacting
-    } else {
-      state.compaction is @engine_session.Compacting
-    },
-  }
-}
-
-///|
-/// The adapter owns only Cloud identity, readiness, HTTP and callback fencing.
-/// Command-specific interaction and settlement live in engine_session.
+/// Cloud owns identity, observation readiness and HTTP transport. Command
+/// interaction and delivery settlement use the same state as Local.
 fn State::update_command(
   self : State,
   message : Msg,
@@ -64,51 +17,34 @@ fn State::update_command(
   if callback is Some((epoch, session, request, command, result)) {
     guard epoch == self.epoch &&
       self.conversations.get(session) is Some(conversation) &&
-      (match command {
-        @wire.Compact => conversation.compact_request == Some(request)
-        @wire.GoalSet(..) | @wire.GoalClear =>
-          conversation.goal_request == request &&
-          conversation.goal.pending is Some(_)
-        _ => true
-      }) else {
+      conversation.controls.awaits(command, request) else {
       return Some((self, @cmd.none))
     }
-    let notice = match result {
-      Ok(Accepted) =>
-        return Some(
-          (
-            self.replace(session, {
-              ..conversation,
-              compact_request: if command is @wire.Compact {
-                None
-              } else {
-                conversation.compact_request
-              },
-            }),
-            @cmd.none,
-          ),
+    let (delivery, notice) = match result {
+      Ok(Accepted) => (@engine_session.Accepted, None)
+      Ok(Rejected(reason)) =>
+        (
+          @engine_session.Rejected,
+          Some("Cloud rejected the operation: " + reason),
         )
-      Ok(Rejected(reason)) => "Cloud rejected the operation: " + reason
-      Err(failure) => failure.label()
+      Err(failure) =>
+        (
+          if failure is (ServiceNotConfigured | Unauthorized | Http(400 | 404)) {
+            @engine_session.Rejected
+          } else {
+            @engine_session.Unknown
+          },
+          Some(failure.label()),
+        )
     }
-    let definite = result
-      is (Ok(Rejected(_))
-      | Err(ServiceNotConfigured | Unauthorized | Http(400 | 404)))
-    let controls = conversation.engine_controls()
     let next = self.replace(session, {
-      ..conversation.with_engine_controls(
-        if definite {
-          controls.reject(command, request.to_string())
-        } else {
-          controls
-        },
-      ),
-      compact_request: if definite && command is @wire.Compact {
-        None
+      ..conversation,
+      controls: conversation.controls.delivered(command, request, delivery),
+      notice: if notice is Some(_) {
+        notice
       } else {
-        conversation.compact_request
+        conversation.notice
       },
-      notice: Some(notice),
     })
     return Some(
       (
@@ -145,39 +81,28 @@ fn State::update_command(
     ) else {
     return Some((self, @cmd.none))
   }
-  let request = self.sequence + 1
-  let (controls, command) = conversation
-    .engine_controls()
-    .act(
-      action,
-      request.to_string(),
-      conversation.session_view().watermark,
-      running=conversation.generating,
-    )
-  let conversation = conversation.with_engine_controls(controls)
+  let sequence = self.sequence + 1
+  let request = sequence.to_string()
+  let (controls, command) = conversation.controls.act(
+    action,
+    request,
+    conversation.session_view().watermark,
+    running=conversation.generating,
+  )
+  let consumes_draft = controls.pending != conversation.controls.pending
+  let conversation = { ..conversation, controls, }
   guard command is Some(command) && token is Some(token) else {
     return Some((self.replace(session, conversation), @cmd.none))
   }
   let conversation = {
     ..conversation,
-    goal_request: if command is (@wire.GoalSet(..) | @wire.GoalClear) {
-      request
-    } else {
-      conversation.goal_request
-    },
-    goal_since: controls.pending.map_or(conversation.goal_since, p => p.since),
-    compact_request: if command is @wire.Compact {
-      Some(request)
-    } else {
-      conversation.compact_request
-    },
     submission_sequence: conversation.submission_sequence +
-    (if command is (@wire.GoalSet(..) | @wire.GoalClear) { 1 } else { 0 }),
+    (if consumes_draft { 1 } else { 0 }),
     notice: None,
   }
   Some(
     (
-      { ..self.replace(session, conversation), sequence: request, },
+      { ..self.replace(session, conversation), sequence, },
       run(emit, () => {
         CommandFinished(
           self.epoch,
@@ -205,17 +130,7 @@ fn Conversation::command_event(
   self : Conversation,
   event : @wire.Event,
 ) -> Conversation {
-  // Automatic compaction is a turn activity, independent of manual commands.
-  let controls = self.engine_controls()
-  let next = controls.event(event, live_goal=true)
-  if event
-    is (@wire.CompactionStarted(..)
-    | @wire.CompactionFinished(..)
-    | @wire.CompactionFailed(..)) {
-    { ..self.with_engine_controls(next), compact_request: None, }
-  } else {
-    { ..self, goal: next.input(), }
-  }
+  { ..self, controls: self.controls.event(event, live_goal=true), }
 }
 
 ///|
@@ -230,9 +145,6 @@ fn Conversation::restore_goal(
   })
   {
     ..self,
-    goal: self
-    .engine_controls()
-    .restore_goal(view.goal, view.goal_markers)
-    .input(),
+    controls: self.controls.restore_goal(view.goal, view.goal_markers),
   }
 }

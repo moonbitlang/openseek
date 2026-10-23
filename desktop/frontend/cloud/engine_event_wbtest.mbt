@@ -107,7 +107,7 @@ test "Cloud native idle events and new tasks share the snapshot sequence" {
     22,
     @wire.CompactionStarted(from_sequence=1, to_sequence=4),
   )
-  assert_true(compacting.conversations["session"].compacting)
+  assert_true(compacting.conversations["session"].controls.is_compacting())
   assert_false(compacting.conversations["session"].generating)
   let snapshot = watch_snapshot(compacting, stream, Some("task"), 23, {
     ..control,
@@ -127,7 +127,7 @@ test "Cloud native idle events and new tasks share the snapshot sequence" {
       summary="Earlier work",
     ),
   )
-  assert_false(finished.conversations["session"].compacting)
+  assert_false(finished.conversations["session"].controls.is_compacting())
   assert_true(
     native_event(
       finished,
@@ -202,7 +202,7 @@ test "Cloud compacting snapshots default absent state and recover actual compres
     active_task_id: None,
     status: Idle,
   })
-  assert_true(recovered.conversations["session"].compacting)
+  assert_true(recovered.conversations["session"].controls.is_compacting())
   assert_false(recovered.conversations["session"].generating)
   data["compacting"] = null
   fields["data"] = Json(data)
@@ -245,10 +245,12 @@ test "Cloud host failure settles idle commands without closing observation" {
     WatchEvent(1, "session", stream, failure),
   )
   let restored = failed.conversations["session"]
-  assert_eq(restored.goal.draft, Some("Keep this goal"))
-  assert_true(restored.goal.pending is None)
-  assert_false(restored.compacting || restored.compact_queued)
-  assert_true(restored.compact_request is None)
+  assert_eq(restored.controls.input().draft, Some("Keep this goal"))
+  assert_true(restored.controls.input().pending is None)
+  assert_false(
+    restored.controls.is_compacting() || restored.controls.is_compact_queued(),
+  )
+  assert_true(restored.controls.compact_request is None)
   assert_eq(restored.notice, Some("Engine could not start"))
   assert_true(stream.active && restored.watch_status == Watching)
   assert_eq(restored.generating, conversation.generating)

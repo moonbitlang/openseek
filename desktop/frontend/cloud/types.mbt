@@ -92,12 +92,7 @@ pub(all) struct Conversation {
   reasoning_complete : Bool
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
-  compact_queued : Bool
-  compact_request : Int32?
-  compacting : Bool
-  goal : @composer.GoalInput
-  goal_since : Int32
-  goal_request : Int32
+  controls : @engine_session.State
   notice : String?
 } derive(Eq)
 
@@ -139,12 +134,7 @@ fn Conversation::empty() -> Conversation {
     reasoning_complete: false,
     heartbeat: None,
     retrying: None,
-    compact_queued: false,
-    compact_request: None,
-    compacting: false,
-    goal: { draft: None, standing: None, pending: None, },
-    goal_since: 0,
-    goal_request: 0,
+    controls: @engine_session.State::empty(),
     notice: None,
   }
 }
@@ -251,8 +241,8 @@ pub(all) enum Msg {
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
   WatchEnded(Int32, String, StreamLease, Failure?)
   ControlAction(@interop.ConversationIdentity, @composer.Action)
-  CommandFinished(Int32, String, Int32, @wire.Command, ControlResult)
-  CommandFailed(Int32, String, Int32, @wire.Command, Failure)
+  CommandFinished(Int32, String, String, @wire.Command, ControlResult)
+  CommandFailed(Int32, String, String, @wire.Command, Failure)
   ControlAttachmentStored(
     Int32,
     String,

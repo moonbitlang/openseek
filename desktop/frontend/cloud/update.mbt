@@ -204,8 +204,8 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   !conversation.loading &&
   !conversation.sending &&
   !conversation.generating &&
-  !conversation.compacting &&
-  !conversation.compact_queued &&
+  !conversation.controls.is_compacting() &&
+  !conversation.controls.is_compact_queued() &&
   conversation.watch_status == Watching &&
   !conversation.history_required
 }
@@ -564,20 +564,11 @@ pub fn update(
               Some(task) => Some(task)
               None => conversation.observed_task
             },
-            compacting: snapshot.data.compacting,
-            compact_queued: snapshot.data.compact_queued ||
-            (
-              !baseline &&
-              conversation.compact_request is Some(_) &&
-              !snapshot.data.compacting
+            controls: conversation.controls.observe_compaction(
+              queued=snapshot.data.compact_queued,
+              compacting=snapshot.data.compacting,
+              baseline~,
             ),
-            compact_request: if baseline ||
-              snapshot.data.compact_queued ||
-              snapshot.data.compacting {
-              None
-            } else {
-              conversation.compact_request
-            },
             sending: conversation.sending && !admitted,
             pending: if admitted {
               None
@@ -631,13 +622,9 @@ pub fn update(
 
           (
             state.replace(id, {
-              ..conversation.with_engine_controls(
-                conversation.engine_controls().host_failed(),
-              ),
+              ..conversation,
+              controls: conversation.controls.host_failed(),
               last_seq: Some(seq),
-              compact_request: None,
-              compact_queued: false,
-              compacting: false,
               notice: Some(error),
             }),
             @cmd.none,

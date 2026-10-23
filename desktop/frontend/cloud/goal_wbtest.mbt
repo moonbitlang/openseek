@@ -21,7 +21,7 @@ test "Cloud goals reuse shared input and wait for a saved goal rather than an as
     state,
     @composer.SlashCommand(identity=goal_identity(), command="goal"),
   )
-  assert_eq(editing.conversations["session"].goal.draft, Some(""))
+  assert_eq(editing.conversations["session"].controls.input().draft, Some(""))
   let sent = goal_action(
     editing,
     @composer.GoalSubmitted(
@@ -33,15 +33,16 @@ test "Cloud goals reuse shared input and wait for a saved goal rather than an as
   let conversation = sent.conversations["session"]
   assert_true(conversation.generating)
   assert_true(
-    conversation.goal.pending is Some(@composer.GoalSetting("Ship it")),
+    conversation.controls.input().pending
+    is Some(@composer.GoalSetting("Ship it")),
   )
-  assert_true(conversation.goal.draft is None)
+  assert_true(conversation.controls.input().draft is None)
   let accepted = metadata_update(
     sent,
     CommandFinished(
       1,
       "session",
-      conversation.goal_request,
+      conversation.controls.pending.unwrap().id,
       @wire.GoalClear,
       Accepted,
     ),
@@ -51,9 +52,9 @@ test "Cloud goals reuse shared input and wait for a saved goal rather than an as
     "session",
     conversation.command_event(@wire.GoalUpdated(goal=Some("Ship it"))),
   )
-  assert_true(saved.conversations["session"].goal.pending is None)
+  assert_true(saved.conversations["session"].controls.input().pending is None)
   assert_true(
-    saved.conversations["session"].goal.standing
+    saved.conversations["session"].controls.goal
     is Some({ text: "Ship it", blocked: None, }),
   )
   assert_true(saved.conversations["session"].generating)
@@ -63,7 +64,7 @@ test "Cloud goals reuse shared input and wait for a saved goal rather than an as
       CommandFailed(
         1,
         "session",
-        conversation.goal_request,
+        conversation.controls.pending.unwrap().id,
         @wire.GoalClear,
         Unreachable,
       ),
@@ -75,13 +76,16 @@ test "Cloud goals reuse shared input and wait for a saved goal rather than an as
     @composer.GoalCleared(identity=goal_identity()),
   )
   assert_true(
-    cleared.conversations["session"].goal.pending
+    cleared.conversations["session"].controls.input().pending
     is Some(@composer.GoalClearing),
   )
   let confirmed = cleared.conversations["session"].command_event(
     @wire.GoalUpdated(goal=None),
   )
-  assert_true(confirmed.goal.standing is None && confirmed.goal.pending is None)
+  assert_true(
+    confirmed.controls.goal is None &&
+    confirmed.controls.input().pending is None,
+  )
 }
 
 ///|
@@ -95,17 +99,20 @@ test "Cloud goal failures retain recoverable input and fence earlier HTTP callba
     editing,
     @composer.GoalSubmitted(identity~, draft="First", prompt_present=false),
   )
-  let first_request = first.conversations["session"].goal_request
+  let first_request = first.conversations["session"].controls.pending.unwrap().id
   let unknown = metadata_update(
     first,
     CommandFailed(1, "session", first_request, @wire.GoalClear, Unreachable),
   )
   assert_true(
-    unknown.conversations["session"].goal.pending
+    unknown.conversations["session"].controls.input().pending
     is Some(@composer.GoalSetting("First")),
   )
   let reopened = goal_action(unknown, @composer.GoalEditStarted(identity~))
-  assert_eq(reopened.conversations["session"].goal.draft, Some("First"))
+  assert_eq(
+    reopened.conversations["session"].controls.input().draft,
+    Some("First"),
+  )
   let second = goal_action(
     reopened,
     @composer.GoalSubmitted(identity~, draft="Second", prompt_present=false),
@@ -122,13 +129,18 @@ test "Cloud goal failures retain recoverable input and fence earlier HTTP callba
     CommandFinished(
       1,
       "session",
-      second.conversations["session"].goal_request,
+      second.conversations["session"].controls.pending.unwrap().id,
       @wire.GoalClear,
       Rejected("task_mismatch"),
     ),
   )
-  assert_eq(rejected.conversations["session"].goal.draft, Some("Second"))
-  assert_true(rejected.conversations["session"].goal.pending is None)
+  assert_eq(
+    rejected.conversations["session"].controls.input().draft,
+    Some("Second"),
+  )
+  assert_true(
+    rejected.conversations["session"].controls.input().pending is None,
+  )
 }
 
 ///|
@@ -140,9 +152,9 @@ test "Cloud goal editing does not require an observer and cannot create or mutat
     watch_status: Reconnecting,
   })
   let edited = goal_action(offline, @composer.GoalEditStarted(identity~))
-  assert_eq(edited.conversations["session"].goal.draft, Some(""))
+  assert_eq(edited.conversations["session"].controls.input().draft, Some(""))
   let closed = goal_action(edited, @composer.GoalCancelled(identity~))
-  assert_true(closed.conversations["session"].goal.draft is None)
+  assert_true(closed.conversations["session"].controls.input().draft is None)
   let archived = {
     ..state,
     sessions: state.sessions.map(session => { ..session, archived: true, }),
@@ -180,19 +192,20 @@ test "Cloud restores goals from native records without settling against old iden
     ),
   )
   assert_true(
-    sent.conversations["session"].restore_goal(old).goal.pending is Some(_),
+    sent.conversations["session"].restore_goal(old).controls.input().pending
+    is Some(_),
   )
   let recorded = native_document([
     { "kind": "runtime_notice", "payload": { "content": "[goal]\nShip it" } },
     { "kind": "runtime_notice", "payload": { "content": "[goal]\nShip it" } },
   ])
   let settled = sent.conversations["session"].restore_goal(recorded)
-  assert_true(settled.goal.pending is None)
-  assert_true(settled.goal.standing is Some({ text: "Ship it", .. }))
+  assert_true(settled.controls.input().pending is None)
+  assert_true(settled.controls.goal is Some({ text: "Ship it", .. }))
   let cleared = native_document([
     { "kind": "runtime_notice", "payload": { "content": "[goal cleared]" } },
   ])
-  assert_true(settled.restore_goal(cleared).goal.standing is None)
+  assert_true(settled.restore_goal(cleared).controls.goal is None)
 }
 
 ///|
@@ -209,19 +222,22 @@ test "Cloud goal rejection preserves a reopened editor" {
   let conversation = sent.conversations["session"]
   let reopened = sent.replace("session", {
     ..conversation,
-    goal: { ..conversation.goal, draft: Some("New edit"), },
+    controls: { ..conversation.controls, edit: Some({ draft: "New edit", }), },
   })
   let rejected = metadata_update(
     reopened,
     CommandFinished(
       1,
       "session",
-      conversation.goal_request,
+      conversation.controls.pending.unwrap().id,
       @wire.GoalClear,
       Rejected("task_mismatch"),
     ),
   )
-  assert_eq(rejected.conversations["session"].goal.draft, Some("New edit"))
+  assert_eq(
+    rejected.conversations["session"].controls.input().draft,
+    Some("New edit"),
+  )
 }
 
 ///|
@@ -238,13 +254,16 @@ test "Cloud missing model credentials reject goal and restore the submitted edit
       prompt_present=true,
     ),
   )
-  let request = requested.conversations["session"].goal_request
+  let request = requested.conversations["session"].controls.pending.unwrap().id
   let refused = metadata_update(
     requested,
     CommandFailed(1, "session", request, @wire.GoalClear, ServiceNotConfigured),
   )
-  assert_true(refused.conversations["session"].goal.pending is None)
-  assert_eq(refused.conversations["session"].goal.draft, Some("Ship it"))
+  assert_true(refused.conversations["session"].controls.input().pending is None)
+  assert_eq(
+    refused.conversations["session"].controls.input().draft,
+    Some("Ship it"),
+  )
   assert_eq(
     refused.conversations["session"].notice,
     Some(Failure::ServiceNotConfigured.label()),
@@ -255,7 +274,7 @@ test "Cloud missing model credentials reject goal and restore the submitted edit
       CommandFailed(1, "session", request, @wire.GoalClear, failure),
     )
     assert_true(
-      unknown.conversations["session"].goal.pending
+      unknown.conversations["session"].controls.input().pending
       is Some(@composer.GoalSetting("Ship it")),
     )
   }

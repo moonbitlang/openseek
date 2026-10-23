@@ -36,6 +36,14 @@ pub(all) enum CompactionPhase {
 pub fn CompactionPhase::equal(Self, Self) -> Bool
 pub fn CompactionPhase::not_equal(Self, Self) -> Bool
 
+pub(all) enum Delivery {
+  Accepted
+  Rejected
+  Unknown
+} derive(Eq)
+pub fn Delivery::equal(Self, Self) -> Bool
+pub fn Delivery::not_equal(Self, Self) -> Bool
+
 pub(all) struct GoalCommand {
   id : String
   request : GoalRequest
@@ -44,14 +52,18 @@ pub(all) struct GoalCommand {
 pub fn GoalCommand::equal(Self, Self) -> Bool
 pub fn GoalCommand::not_equal(Self, Self) -> Bool
 
+pub(all) struct GoalEdit {
+  draft : String
+} derive(Eq)
+pub fn GoalEdit::equal(Self, Self) -> Bool
+pub fn GoalEdit::not_equal(Self, Self) -> Bool
+
 pub(all) enum GoalRequest {
   Setting(String)
   Clearing
 } derive(Eq)
 pub fn GoalRequest::equal(Self, Self) -> Bool
-pub fn GoalRequest::matches(Self, @transcript.GoalMarker) -> Bool
 pub fn GoalRequest::not_equal(Self, Self) -> Bool
-pub fn GoalRequest::settled_by(Self, Int32, Array[(Int32, @transcript.GoalMarker)]) -> Bool
 
 pub(all) struct Reasoning {
   content : String
@@ -62,18 +74,25 @@ pub fn Reasoning::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
   goal : @transcript.GoalStanding?
-  edit : String?
+  edit : GoalEdit?
   pending : GoalCommand?
   compaction : CompactionPhase
+  compact_request : String?
+  automatic_compacting : Bool
 } derive(Eq)
 pub fn State::act(Self, Action, String, Int32, running~ : Bool) -> (Self, @openseek_protocol.Command?)
+pub fn State::awaits(Self, @openseek_protocol.Command, String) -> Bool
+pub fn State::delivered(Self, @openseek_protocol.Command, String, Delivery) -> Self
+pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::event(Self, @openseek_protocol.Event, live_goal? : Bool) -> Self
 pub fn State::host_failed(Self) -> Self
 pub fn State::input(Self) -> @composer.GoalInput
+pub fn State::is_compact_queued(Self) -> Bool
+pub fn State::is_compacting(Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::observe_compaction(Self, queued~ : Bool, compacting~ : Bool, baseline~ : Bool) -> Self
 pub fn State::progress(Self, @transcript.EngineEvent) -> Self
-pub fn State::reject(Self, @openseek_protocol.Command, String) -> Self
 pub fn State::restore_goal(Self, @transcript.GoalStanding?, Array[(Int32, @transcript.GoalMarker)]) -> Self
 pub fn State::seed(Self) -> String
 

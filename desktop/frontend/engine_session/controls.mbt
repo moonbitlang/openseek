@@ -36,7 +36,7 @@ pub(all) enum GoalRequest {
 } derive(Eq)
 
 ///|
-pub fn GoalRequest::settled_by(
+fn GoalRequest::settled_by(
   self : GoalRequest,
   since : Int32,
   markers : Array[(Int32, @transcript.GoalMarker)],
@@ -53,9 +53,11 @@ pub fn GoalRequest::settled_by(
 /// Command UI state is independent of the host transport and chatting task.
 pub(all) struct State {
   goal : @transcript.GoalStanding?
-  edit : String?
+  edit : GoalEdit?
   pending : GoalCommand?
   compaction : CompactionPhase
+  compact_request : String?
+  automatic_compacting : Bool
 } derive(Eq)
 
 ///|
@@ -94,7 +96,7 @@ pub fn slash_action(command : String) -> Action? {
 pub fn State::input(self : State) -> @composer.GoalInput {
   {
     standing: self.goal,
-    draft: self.edit,
+    draft: self.edit.map(edit => edit.draft),
     pending: self.pending.map(command => {
       match command.request {
         Setting(text) => @composer.GoalSetting(text)
@@ -124,7 +126,7 @@ pub fn State::act(
   running~ : Bool,
 ) -> (State, @wire.Command?) {
   let command = match action {
-    EditGoal => return ({ ..self, edit: Some(self.seed()), }, None)
+    EditGoal => return ({ ..self, edit: Some({ draft: self.seed(), }), }, None)
     CloseGoal => return ({ ..self, edit: None, }, None)
     SetGoal(text) => {
       guard self.edit is Some(_) && !text.trim().is_empty() else {
@@ -146,7 +148,15 @@ pub fn State::act(
       { ..self, edit: None, pending: Some({ id, request: Clearing, since, }), }
     @wire.Compact => {
       guard self.compaction is NotCompacting else { return (self, None) }
-      { ..self, compaction: if running { Queued } else { Requested }, }
+      {
+        ..self,
+        compaction: if running {
+          Queued
+        } else {
+          Requested
+        },
+        compact_request: Some(id),
+      }
     }
     _ => self
   }
@@ -156,11 +166,7 @@ pub fn State::act(
 ///|
 /// A definite refusal restores only the goal send it answers. Uncertain
 /// transport failures do not call this reducer.
-pub fn State::reject(
-  self : State,
-  command : @wire.Command,
-  id : String,
-) -> State {
+fn State::reject(self : State, command : @wire.Command, id : String) -> State {
   match command {
     @wire.GoalSet(..) | @wire.GoalClear if self.pending is Some(pending) &&
       pending.id == id =>
@@ -171,12 +177,13 @@ pub fn State::reject(
           self.edit
         } else {
           match pending.request {
-            Setting(text) => Some(text)
+            Setting(text) => Some({ draft: text, })
             Clearing => None
           }
         },
       }
-    @wire.Compact => { ..self, compaction: NotCompacting, }
+    @wire.Compact if self.compact_request == Some(id) =>
+      { ..self, compaction: NotCompacting, compact_request: None, }
     _ => self
   }
 }
@@ -188,7 +195,12 @@ pub fn State::host_failed(self : State) -> State {
   } else {
     self
   }
-  { ..next, compaction: NotCompacting, }
+  {
+    ..next,
+    compaction: NotCompacting,
+    compact_request: None,
+    automatic_compacting: false,
+  }
 }
 
 ///|
@@ -217,6 +229,12 @@ pub fn State::event(
   event : @wire.Event,
   live_goal~ : Bool = false,
 ) -> State {
+  let self = match event {
+    @wire.AutoCompactionStarted(..) => { ..self, automatic_compacting: true, }
+    @wire.AutoCompactionFinished(..) | @wire.AutoCompactionFailed(..) =>
+      { ..self, automatic_compacting: false, }
+    _ => self
+  }
   let self = match @transcript.decode_engine_event(event) {
     Some(event) => self.progress(event)
     None => self
@@ -241,7 +259,7 @@ pub fn State::event(
 }
 
 ///|
-pub fn GoalRequest::matches(
+fn GoalRequest::matches(
   self : GoalRequest,
   marker : @transcript.GoalMarker,
 ) -> Bool {
@@ -255,9 +273,10 @@ pub fn GoalRequest::matches(
 ///|
 pub fn State::progress(self : State, event : @transcript.EngineEvent) -> State {
   match event {
-    @transcript.CompactionStarted => { ..self, compaction: Compacting, }
+    @transcript.CompactionStarted =>
+      { ..self, compaction: Compacting, compact_request: None, }
     @transcript.CompactionFinished(_) | @transcript.CompactionFailed(_) =>
-      { ..self, compaction: NotCompacting, }
+      { ..self, compaction: NotCompacting, compact_request: None, }
     _ => self
   }
 }
@@ -304,3 +323,107 @@ pub fn refreshes_history(event : @wire.Event) -> Bool {
   | @wire.GoalBlocked(..)
   | @wire.GoalUnblocked)
 }
+
+///|
+pub(all) struct GoalEdit {
+  draft : String
+} derive(Eq)
+
+///|
+pub(all) enum Delivery {
+  Accepted
+  Rejected
+  Unknown
+} derive(Eq)
+
+///|
+pub fn State::empty() -> State {
+  {
+    goal: None,
+    edit: None,
+    pending: None,
+    compaction: NotCompacting,
+    compact_request: None,
+    automatic_compacting: false,
+  }
+}
+
+///|
+pub fn State::awaits(
+  self : State,
+  command : @wire.Command,
+  id : String,
+) -> Bool {
+  match command {
+    @wire.GoalSet(..) | @wire.GoalClear =>
+      self.pending is Some(pending) && pending.id == id
+    @wire.Compact => self.compact_request == Some(id)
+    _ => true
+  }
+}
+
+///|
+/// Transport acceptance never completes a native command. Unknown delivery
+/// keeps its recoverable input; a stale response cannot settle a newer send.
+pub fn State::delivered(
+  self : State,
+  command : @wire.Command,
+  id : String,
+  delivery : Delivery,
+) -> State {
+  guard self.awaits(command, id) else { return self }
+  match delivery {
+    Rejected => self.reject(command, id)
+    Accepted if command is @wire.Compact => { ..self, compact_request: None, }
+    _ => self
+  }
+}
+
+///|
+pub fn State::is_compacting(self : State) -> Bool {
+  self.compaction is Compacting || self.automatic_compacting
+}
+
+///|
+pub fn State::is_compact_queued(self : State) -> Bool {
+  self.compaction is (Queued | Requested)
+}
+
+///|
+/// A new observation baseline is authoritative. On a live connection an older
+/// idle snapshot cannot erase a request whose HTTP result is still unknown.
+pub fn State::observe_compaction(
+  self : State,
+  queued~ : Bool,
+  compacting~ : Bool,
+  baseline~ : Bool,
+) -> State {
+  let pending = !baseline &&
+    self.compact_request is Some(_) &&
+    !queued &&
+    !compacting
+  {
+    ..self,
+    compaction: if queued {
+      Queued
+    } else if compacting {
+      Compacting
+    } else if pending {
+      self.compaction
+    } else {
+      NotCompacting
+    },
+    compact_request: if pending {
+      self.compact_request
+    } else {
+      None
+    },
+    automatic_compacting: queued && compacting,
+  }
+}
+
+///|
+pub extend GoalEdit with Eq::{equal, not_equal}
+
+///|
+pub extend Delivery with Eq::{equal, not_equal}

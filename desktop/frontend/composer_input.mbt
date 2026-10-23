@@ -66,7 +66,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       available=root_ready &&
         !semantic_selection_pending &&
         !queue_save_pending &&
-        conv.compaction is NotCompacting,
+        conv.controls.compaction is NotCompacting,
     )
   }
   let status : Array[@composer.StatusComponent] = [
@@ -190,7 +190,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       ),
     )
   }
-  match conv.compaction {
+  match conv.controls.compaction {
     Requested | Compacting =>
       context.push(@composer.CompactionNotice(queued=false))
     Queued => context.push(@composer.CompactionNotice(queued=true))
@@ -215,7 +215,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // rendered by the composer above the draft rather than persisted into the
     // transcript.
     run: conv.run_heartbeat(),
-    goal: conv.engine_controls().input(),
+    goal: conv.controls.input(),
     slash_commands: [
       ..self.engine_commands(),
       {
@@ -256,11 +256,11 @@ fn Model::composer_input(self : Model) -> @composer.Input {
           record.source_sequence == conv.watermark
         )
       ) &&
-      conv.compaction is NotCompacting &&
+      conv.controls.compaction is NotCompacting &&
       conv.queued_inputs.is_empty() &&
       conv.pending_steers.is_empty() &&
       conv.shell_commands.is_empty() &&
-      conv.goal_edit is None &&
+      conv.controls.edit is None &&
       conv.queue_edit is None &&
       conv.watermark > 0 {
       Some(conv.watermark)
@@ -276,7 +276,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       self.api_provider is (Deepseek | Custom),
       context,
       status,
-      placeholder: if conv.goal_edit is Some(_) {
+      placeholder: if conv.controls.edit is Some(_) {
         shell_text(self.locale, GoalPlaceholder)
       } else if conv.queue_edit is Some(_) {
         shell_text(self.locale, EditQueuePlaceholder)

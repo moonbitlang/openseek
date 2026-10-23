@@ -1031,46 +1031,6 @@ fn run_slash_command(
 }
 
 ///|
-/// Send one conversation's goal set (`Some`) or clear (`None`) to its engine.
-/// Everything the command needs — session, workspace, launch mode — comes
-/// from that conversation, so it cannot land on whichever one happens to be
-/// active by the time the request goes out.
-fn send_goal(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  conv : Conversation,
-  command : String,
-  text : String?,
-) -> @cmd.Cmd {
-  if conv.goal_creates_worktree() is Some(workspace) {
-    return set_goal_in_new_worktree(
-      locale=model.locale,
-      dispatch,
-      conv.device,
-      conv.session_id,
-      workspace,
-      conv.engine_model,
-      model.reasoning_for(conv.engine_model),
-      model.max_steps,
-      command,
-      text,
-      approval=model.approval_for(conv.device, conv.session_id),
-    )
-  }
-  send_session_command(
-    dispatch,
-    model,
-    conv,
-    command,
-    if text is Some(text) {
-      @wire.GoalSet(text~, auto=false)
-    } else {
-      @wire.GoalClear
-    },
-  )
-}
-
-///|
 /// Fold one engine event into its conversation. Returns the new conversation
 /// and, when the event reported a failure the durable record will never carry,
 /// the text to raise as a toast — the caller owns the dispatch a toast needs.
@@ -1079,7 +1039,7 @@ fn apply_engine_event(
   event : @transcript.EngineEvent,
   event_run_id : String?,
 ) -> (String?, Conversation) {
-  let conv = conv.with_engine_controls(conv.engine_controls().progress(event))
+  let conv = { ..conv, controls: conv.controls.progress(event), }
   let stream : @engine_session.Stream = {
     response: conv.turn.streaming_response,
     reasoning: conv.turn.live_reasoning.map(r => {
@@ -3004,11 +2964,11 @@ fn update_msg(
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
-          guard conv.goal_edit is Some(_) else { return (@cmd.none, model) }
+          guard conv.controls.edit is Some(_) else { return (@cmd.none, model) }
           let target = {
             ..model.replace_conversation({
               ..conv,
-              goal_edit: Some({ draft, }),
+              controls: { ..conv.controls, edit: Some({ draft, }), },
               composer_draft_present: prompt_present,
             }),
             focused: conv.device,
@@ -3900,8 +3860,8 @@ fn update_msg(
           } else {
             guard model.composing_new_chat() &&
               model.active_conversation() is Some(conv) &&
-              conv.goal_edit is None &&
-              conv.goal_pending is None &&
+              conv.controls.edit is None &&
+              conv.controls.pending is None &&
               conv.pending_semantic_submission is None &&
               @resource.path_for(conv.project(), model.focused) is Some(cwd) else {
               return (@cmd.none, model)
@@ -4742,7 +4702,7 @@ fn update_msg(
         } else {
           (@cmd.none, model)
         }
-      } else if !(conv.compaction is NotCompacting) {
+      } else if !(conv.controls.compaction is NotCompacting) {
         // A prompt submitted mid-compaction would sit in the serve engine's
         // queue behind it, where Stop (which cancels only the compaction)
         // cannot reach it — the user's cancel would not stop the submitted
@@ -5985,10 +5945,13 @@ fn update_msg(
       if conv.is_archived_read_only() {
         return (@cmd.none, model)
       }
-      if conv.goal_edit is Some(_) {
+      if conv.controls.edit is Some(_) {
         (
           @cmd.none,
-          model.replace_conversation({ ..conv, goal_edit: Some({ draft, }), }),
+          model.replace_conversation({
+            ..conv,
+            controls: { ..conv.controls, edit: Some({ draft, }), },
+          }),
         )
       } else {
         (@cmd.none, model)
@@ -6001,7 +5964,7 @@ fn update_msg(
       if conv.is_archived_read_only() || model.scheduled_session_read_only(conv) {
         return (@cmd.none, model)
       }
-      guard conv.goal_edit is Some(edit) else { return (@cmd.none, model) }
+      guard conv.controls.edit is Some(edit) else { return (@cmd.none, model) }
       apply_engine_action(
         dispatch,
         model,
@@ -7253,9 +7216,14 @@ fn update_device_msg(
       // visible local failure.
       let conversations = model.conversations.map(conv => {
         if conv.device == channel {
+          let conv = conv.clear_streams().forget_awaiting_inputs()
           {
-            ..conv.clear_streams().forget_awaiting_inputs(),
-            compaction: NotCompacting,
+            ..conv,
+            controls: conv.controls.observe_compaction(
+              queued=false,
+              compacting=false,
+              baseline=true,
+            ),
             pending_approval: None,
           }
         } else {
@@ -9535,9 +9503,10 @@ fn update_device_msg(
           conv.last_run_id == run_id ||
           @engine_session.is_idle_event(event)
         ) {
-        model.replace_conversation(
-          conv.with_engine_controls(conv.engine_controls().event(event)),
-        )
+        model.replace_conversation({
+          ..conv,
+          controls: conv.controls.event(event),
+        })
       } else {
         model
       }
@@ -9845,94 +9814,41 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     }
-    SessionCommandFailed(session~, id~, command~, refused~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) {
-        let next = if refused {
-          model.replace_conversation(
-            conv.with_engine_controls(
-              conv.engine_controls().reject(command, id),
-            ),
-          )
-        } else {
-          model
-        }
-        next.notify_error(dispatch, message)
-      } else {
-        (@cmd.none, model)
+    SessionCommandDelivered(session~, id~, command~, delivery~, message~) => {
+      guard model.find_conversation(channel, session) is Some(conv) else {
+        return (@cmd.none, model)
       }
-    CompactRejected(session~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) {
-        model
-        .replace_conversation({ ..conv, compaction: NotCompacting, })
-        .notify_error(dispatch, message)
-      } else {
-        (@cmd.none, model)
+      let relevant = conv.controls.awaits(command, id)
+      let next = model.replace_conversation({
+        ..conv,
+        controls: conv.controls.delivered(command, id, delivery),
+      })
+      guard message is Some(message) &&
+        (relevant || delivery is @engine_session.Rejected) else {
+        return (@cmd.none, next)
       }
-    GoalRejected(session~, command~, draft~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) {
-        // A rejection acts only on the send it answers, and only while that
-        // send is still the one in flight. The row keeps its actions while a
-        // command is out, so the user can send a second over the first — and
-        // the second may be the same text, or Clear again, so only the id
-        // separates them.
-        //
-        // Anything else is a reply that arrived too late to mean what it
-        // says. Either a newer send replaced this one, or the record already
-        // settled whatever was outstanding — including by carrying this very
-        // text, set from somewhere else. In every such case the durable goal
-        // has already been decided, so retiring the slot would drop a live
-        // successor and reopening the editor would claim a failure that is
-        // not what this conversation now stands at. The toast still reports
-        // it; nothing here is silent.
-        ignore(draft)
-        let restored = conv.with_engine_controls(
-          conv.engine_controls().reject(@wire.GoalClear, command),
-        )
-        model.replace_conversation(restored).notify_error(dispatch, message)
-      } else {
-        (@cmd.none, model)
-      }
-    GoalUndelivered(session~, command~, draft~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) &&
-        conv.goal_pending is Some(pending) &&
-        pending.id == command {
-        // Only while this send is still the one in flight. It retires
-        // nothing, but "the fate of this text is unknown" is still a claim
-        // about the world, and it stops being true the moment the record
-        // settles the send — the socket can die after the commit arrives and
-        // before the reply does — or a newer send replaces it.
-        //
-        // While it is true, the request stays in flight: a marker, or the
-        // reload that follows the reconnect, is what settles it. So the text
-        // cannot come back to the editor — it would claim the goal is unset,
-        // and a resend over a command the host may already hold only earns a
-        // refusal. Nothing is lost by leaving it there: the request in flight
-        // still carries it, and that is what the goal row shows and what
-        // reopening the editor seeds from.
-        ignore(draft)
-        let detail = if conv.goal_pending is Some({ request: Clearing, .. }) {
+      let message = if delivery is @engine_session.Unknown &&
+        command is (@wire.GoalSet(..) | @wire.GoalClear) {
+        let detail = if conv.controls.pending is Some({ request: Clearing, .. }) {
           " — check the goal row before clearing it again"
         } else {
           " — check the goal row before setting it again"
         }
-        model
-        .replace_conversation(conv)
-        .notify_error(
-          dispatch,
-          (match model.locale {
-            SimplifiedChinese => "无法确认目标是否已送达（"
-            TraditionalChinese => "無法確認目標是否已送達（"
-            Japanese => "目標が届いたか確認できません（"
-            English => "Goal delivery could not be confirmed ("
-            Spanish => "No se pudo confirmar la entrega del objetivo ("
-          }) +
-          message +
-          ")" +
-          detail,
-        )
+        (match model.locale {
+          SimplifiedChinese => "无法确认目标是否已送达（"
+          TraditionalChinese => "無法確認目標是否已送達（"
+          Japanese => "目標が届いたか確認できません（"
+          English => "Goal delivery could not be confirmed ("
+          Spanish => "No se pudo confirmar la entrega del objetivo ("
+        }) +
+        message +
+        ")" +
+        detail
       } else {
-        (@cmd.none, model)
+        message
       }
+      next.notify_error(dispatch, message)
+    }
     Finished(run_id~, status~, answer~) =>
       if (if model.conversation_by_run(channel, run_id) is Some(conv) {
           Some(conv)
@@ -12202,7 +12118,7 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
   let dispatch = test_dispatch()
   let active = {
     ..test_conversation(),
-    compaction: Queued,
+    controls: { ..test_conversation().controls, compaction: Queued, },
     turn: {
       ..test_conversation().turn,
       streaming_response: Some("old answer"),
@@ -12214,7 +12130,14 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
       "desktop-bg",
       @interop.ChannelId::Local.test_project(),
     ),
-    compaction: Compacting,
+    controls: {
+      ..empty_conversation(
+        @interop.ChannelId::Local,
+        "desktop-bg",
+        @interop.ChannelId::Local.test_project(),
+      ).controls,
+      compaction: Compacting,
+    },
     turn: {
       ..empty_conversation(
         @interop.ChannelId::Local,
@@ -12230,7 +12153,7 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
   let (_, next) = update_dev(dispatch, BridgeReady, model)
   for conv in next.conversations {
     assert_eq(conv.turn.streaming_response, None)
-    assert_true(conv.compaction is NotCompacting)
+    assert_true(conv.controls.compaction is NotCompacting)
   }
 }
 
@@ -12381,7 +12304,14 @@ test "BridgeReady resets only conversations owned by its channel" {
       "shared",
       @interop.ChannelId::Local.test_project(),
     ),
-    compaction: Queued,
+    controls: {
+      ..empty_conversation(
+        @interop.ChannelId::Local,
+        "shared",
+        @interop.ChannelId::Local.test_project(),
+      ).controls,
+      compaction: Queued,
+    },
     turn: {
       ..empty_conversation(
         @interop.ChannelId::Local,
@@ -12393,7 +12323,10 @@ test "BridgeReady resets only conversations owned by its channel" {
   }
   let remote = {
     ..empty_conversation(background, "shared", background.test_project()),
-    compaction: Compacting,
+    controls: {
+      ..empty_conversation(background, "shared", background.test_project()).controls,
+      compaction: Compacting,
+    },
     turn: {
       ..empty_conversation(background, "shared", background.test_project()).turn,
       streaming_response: Some("remote answer"),
@@ -12415,9 +12348,9 @@ test "BridgeReady resets only conversations owned by its channel" {
     fail("same-id conversations were not preserved")
   }
   assert_eq(kept.turn.streaming_response, Some("local answer"))
-  assert_true(kept.compaction is Queued)
+  assert_true(kept.controls.compaction is Queued)
   assert_eq(reset.turn.streaming_response, None)
-  assert_true(reset.compaction is NotCompacting)
+  assert_true(reset.controls.compaction is NotCompacting)
 }
 
 ///|
@@ -15689,7 +15622,10 @@ test "Codex composer retirements stay monotonic across device focus" {
 test "a goal editor cannot lose its draft through an agent switch" {
   let before = test_model().replace_conversation({
     ..test_conversation(),
-    goal_edit: Some({ draft: "Keep this goal", }),
+    controls: {
+      ..test_conversation().controls,
+      edit: Some({ draft: "Keep this goal", }),
+    },
   })
   assert_true(before.openseek_model_chip(before.active()).disabled)
   let (_, after) = update(
@@ -15702,7 +15638,7 @@ test "a goal editor cannot lose its draft through an agent switch" {
     before,
   )
   assert_true(after.screen is Chat)
-  assert_true(after.active().goal_edit == before.active().goal_edit)
+  assert_true(after.active().controls.edit == before.active().controls.edit)
   assert_true(after.composer_entry_retirements.is_empty())
 }
 
@@ -15714,10 +15650,13 @@ test "an agent switch cannot discard a pending goal write" {
     SubmitGoal,
     test_model().replace_conversation({
       ..test_conversation(),
-      goal_edit: Some({ draft: "Keep this goal", }),
+      controls: {
+        ..test_conversation().controls,
+        edit: Some({ draft: "Keep this goal", }),
+      },
     }),
   )
-  assert_true(pending.active().goal_edit is None)
+  assert_true(pending.active().controls.edit is None)
   assert_true(pending.openseek_model_chip(pending.active()).disabled)
   let (_, after) = update(
     dispatch,
@@ -15729,22 +15668,27 @@ test "an agent switch cannot discard a pending goal write" {
     pending,
   )
   assert_true(after.screen is Chat)
-  assert_true(after.active().goal_pending == pending.active().goal_pending)
-  guard after.active().goal_pending is Some(command) else {
+  assert_true(
+    after.active().controls.pending == pending.active().controls.pending,
+  )
+  guard after.active().controls.pending is Some(command) else {
     fail("pending goal must remain recoverable")
   }
   let (_, rejected) = update_dev(
     dispatch,
-    GoalRejected(
+    SessionCommandDelivered(
       session="desktop-test",
-      command=command.id,
-      draft=Some("Keep this goal"),
-      message="disk full",
+      id=command.id,
+      message=Some("disk full"),
+      command=@wire.GoalClear,
+      delivery=@engine_session.Rejected,
     ),
     after,
   )
-  assert_true(rejected.active().goal_edit is Some({ draft: "Keep this goal", }))
-  assert_true(rejected.active().goal_pending is None)
+  assert_true(
+    rejected.active().controls.edit is Some({ draft: "Keep this goal", }),
+  )
+  assert_true(rejected.active().controls.pending is None)
 }
 
 ///|
@@ -17546,17 +17490,20 @@ test "archived transcripts reject record-changing actions in update" {
     ..test_conversation(),
     record: ArchivedRecord,
     task: "must stay unsent",
-    goal_edit: Some({ draft: "must stay unset", }),
+    controls: {
+      ..test_conversation().controls,
+      edit: Some({ draft: "must stay unset", }),
+    },
   }
   let model = test_model().replace_conversation(archived)
   let (_, sent) = update(dispatch, Send, model)
   assert_true(sent.active().run is NoRun(ended=None))
   inspect(sent.active().task, content="must stay unsent")
   let (_, goal) = update(dispatch, SubmitGoal, model)
-  assert_true(goal.active().goal_pending is None)
-  assert_true(goal.active().goal_edit is Some(_))
+  assert_true(goal.active().controls.pending is None)
+  assert_true(goal.active().controls.edit is Some(_))
   let (_, compacted) = run_slash_command(dispatch, model, "compact")
-  assert_true(compacted.active().compaction is NotCompacting)
+  assert_true(compacted.active().controls.compaction is NotCompacting)
   inspect(compacted.active().task, content="must stay unsent")
 }
 
@@ -20457,7 +20404,7 @@ test "a prompt submitted during compaction stays in the composer" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    compaction: Compacting,
+    controls: { ..test_conversation().controls, compaction: Compacting, },
     task: "do the thing",
   })
   let (_, next) = update(dispatch, Send, model)
@@ -20477,10 +20424,10 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
     last_run_id: Some("r7"),
   })
   let (_, queued) = run_slash_command(dispatch, model, "compact")
-  assert_true(queued.active().compaction is Queued)
+  assert_true(queued.active().controls.compaction is Queued)
   // One compaction at a time: the repeat is swallowed, not re-sent.
   let (_, again) = run_slash_command(dispatch, queued, "compact")
-  assert_true(again.active().compaction is Queued)
+  assert_true(again.active().controls.compaction is Queued)
   // The turn ends before compaction_started arrives; a prompt sent into
   // that gap would queue behind the compaction, out of Stop's reach.
   let (_, ended) = update_dev(
@@ -20488,7 +20435,7 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
     Finished(run_id="r7", status="completed", answer=None),
     again,
   )
-  assert_true(ended.active().compaction is Queued)
+  assert_true(ended.active().controls.compaction is Queued)
   let drafted = ended.replace_conversation({
     ..ended.active(),
     task: "next prompt",
@@ -20501,7 +20448,7 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
     Engine(Some("r7"), CompactionStarted, session=None),
     held,
   )
-  assert_true(started.active().compaction is Compacting)
+  assert_true(started.active().controls.compaction is Compacting)
 }
 
 ///|
@@ -20513,10 +20460,10 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
 test "an idle /compact holds the send gate until the engine confirms" {
   let dispatch = test_dispatch()
   let (_, requested) = run_slash_command(dispatch, test_model(), "compact")
-  assert_true(requested.active().compaction is Requested)
+  assert_true(requested.active().controls.compaction is Requested)
   // A repeat while the request is in flight is swallowed, not re-sent.
   let (_, again) = run_slash_command(dispatch, requested, "compact")
-  assert_true(again.active().compaction is Requested)
+  assert_true(again.active().controls.compaction is Requested)
   // A draft sent during the spawn/write window stays in the composer.
   let drafted = again.replace_conversation({
     ..again.active(),
@@ -20531,7 +20478,7 @@ test "an idle /compact holds the send gate until the engine confirms" {
     Engine(None, CompactionStarted, session=Some("desktop-test")),
     held,
   )
-  assert_true(started.active().compaction is Compacting)
+  assert_true(started.active().controls.compaction is Compacting)
 }
 
 ///|
@@ -20559,8 +20506,8 @@ test "update is pure: automatic checkpoint waits for its commit" {
   assert_eq(once.active().turn.streaming_response, Some("partial"))
   assert_eq(twice.active().turn.streaming_response, Some("partial"))
   assert_true(
-    once.active().compaction is NotCompacting &&
-    twice.active().compaction is NotCompacting,
+    once.active().controls.compaction is NotCompacting &&
+    twice.active().controls.compaction is NotCompacting,
   )
 }
 
@@ -20615,7 +20562,7 @@ test "context yield settles after its automatic checkpoint" {
     Finished(run_id="r7", status="context_yield", answer=Some(answer)),
     yielded,
   )
-  assert_true(settled.active().compaction is NotCompacting)
+  assert_true(settled.active().controls.compaction is NotCompacting)
   assert_false(settled.active().is_running())
   guard settled.display_status() is Finished(outcome) else {
     fail("expected a finished status")
@@ -20631,7 +20578,7 @@ test "compaction_finished waits for its durable summary" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    compaction: Compacting,
+    controls: { ..test_conversation().controls, compaction: Compacting, },
     last_run_id: Some("r7"),
   })
   let (_, next) = update_dev(
@@ -20643,7 +20590,7 @@ test "compaction_finished waits for its durable summary" {
     ),
     model,
   )
-  assert_true(next.active().compaction is NotCompacting)
+  assert_true(next.active().controls.compaction is NotCompacting)
 }
 
 ///|
@@ -20662,7 +20609,7 @@ test "compaction events route by session when no run id matches" {
     Engine(None, CompactionStarted, session=Some("desktop-test")),
     model,
   )
-  assert_true(started.active().compaction is Compacting)
+  assert_true(started.active().controls.compaction is Compacting)
   let (_, next) = update_dev(
     dispatch,
     Engine(
@@ -20672,7 +20619,7 @@ test "compaction events route by session when no run id matches" {
     ),
     started,
   )
-  assert_true(next.active().compaction is NotCompacting)
+  assert_true(next.active().controls.compaction is NotCompacting)
 }
 
 ///|
@@ -20683,7 +20630,7 @@ test "compaction_failed settles a still-queued compaction" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    compaction: Queued,
+    controls: { ..test_conversation().controls, compaction: Queued, },
     last_run_id: Some("r7"),
   })
   let (_, next) = update_dev(
@@ -20691,7 +20638,7 @@ test "compaction_failed settles a still-queued compaction" {
     Engine(Some("r7"), CompactionFailed("engine exited"), session=None),
     model,
   )
-  assert_true(next.active().compaction is NotCompacting)
+  assert_true(next.active().controls.compaction is NotCompacting)
   inspect(next.notifications.length(), content="1")
 }
 
@@ -20699,18 +20646,22 @@ test "compaction_failed settles a still-queued compaction" {
 /// A rejected compact request (no engine, host error) never produces
 /// compaction events, so the rejection itself clears the queued notice and
 /// reports the error.
-test "CompactRejected clears the queued notice and reports the error" {
+test "rejected compact delivery clears the queued notice and reports the error" {
   let dispatch = test_dispatch()
-  let model = test_model().replace_conversation({
-    ..test_conversation(),
-    compaction: Queued,
-  })
+  let (_, model) = run_slash_command(dispatch, running_model(), "compact")
+  let id = model.active().controls.compact_request.unwrap()
   let (_, next) = update_dev(
     dispatch,
-    CompactRejected(session="desktop-test", message="no engine"),
+    SessionCommandDelivered(
+      session="desktop-test",
+      id~,
+      command=@wire.Compact,
+      delivery=@engine_session.Rejected,
+      message=Some("no engine"),
+    ),
     model,
   )
-  assert_true(next.active().compaction is NotCompacting)
+  assert_true(next.active().controls.compaction is NotCompacting)
   inspect(next.notifications.length(), content="1")
   inspect(next.notifications[0].message, content="no engine")
 }

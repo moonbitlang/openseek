@@ -1402,37 +1402,6 @@ fn queue_openseek(
 }
 
 ///|
-/// The `agent.command` payload. `auto` is sent only when arming: an absent field
-/// is the manual default every host understands, including one that predates
-/// the toggle.
-fn goal_payload(
-  session : String,
-  model : EngineModel,
-  reasoning : OpenSeekReasoning,
-  max_steps : String,
-  workspace : @common.Uri,
-  text : String?,
-  approval~ : @protocol.OpenSeekApproval,
-) -> @protocol.GoalPayload {
-  {
-    session,
-    text,
-    // Always manual. `auto` arms the engine's autonomous continuation, and
-    // the desktop cannot yet see the turns that continuation starts: serve
-    // announces them with `GoalContinue`, which this client drops, so the
-    // composer would offer Send during an autonomous turn and a prompt sent
-    // then would be settled by that turn's terminal event. Arming waits for
-    // the lifecycle work.
-    auto: None,
-    model: Some(model.wire()),
-    thinking: model.thinking(reasoning),
-    approval: Some(approval),
-    max_steps: parsed_max_steps(max_steps),
-    workspace: Some(workspace.path),
-  }
-}
-
-///|
 /// Ask the host to cancel `run_id`. A matching reply leaves the run in
 /// Cancelling until its `agent.finished`. An empty reply means the turn had
 /// already ended; report that boundary explicitly because the Finished push

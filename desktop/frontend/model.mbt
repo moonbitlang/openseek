@@ -795,8 +795,6 @@ priv struct Conversation {
   // transcripts in the store are the record, and a reload rebuilds nothing
   // here until the next bracket or entry arrives.
   workflows : Array[@workflow.Run]
-  // Where this conversation's compaction stands; see `CompactionPhase`.
-  compaction : CompactionPhase
   // A run finished while this conversation was off screen and the user has
   // not looked since: the sidebar's running pulse settles into a solid dot
   // (accent for success, warn otherwise) until the conversation is opened.
@@ -882,34 +880,8 @@ priv struct Conversation {
   // Where the durable transcript stands relative to the store; see
   // `TranscriptSync`.
   sync : TranscriptSync
-  // The standing goal mirrored from the durable record's `[goal]` markers:
-  // seeded by each snapshot's reduction and folded forward by marker
-  // commits in `apply_commit`. Nothing local writes it — goal mode only
-  // sends `agent.command`, and the engine's durable append is what lands here,
-  // so the row never claims a goal that was not persisted.
-  goal : @transcript.GoalStanding?
-  // The goal this conversation is composing, while `/goal` (or the row's
-  // Edit) holds its composer. Per-conversation because goal mode survives a
-  // switch — the composer hides it rather than discarding it — so a single
-  // model-wide slot would let opening goal mode anywhere destroy the draft
-  // waiting somewhere else.
-  goal_edit : GoalEdit?
-  // A goal command sent but not yet durably confirmed. `agent.command` returns
-  // once the command reaches the engine's stdin, which is not persistence:
-  // the engine's own append can still fail, or the process can die with the
-  // command queued, and then no `[goal]` marker ever commits.
-  //
-  // Holding the request until the record says so does two things. A set
-  // keeps the user's writing recoverable across that window, and either kind
-  // takes the row's Edit and ✕ away while it is in flight — a second command
-  // sent over the first only earns the host's `GoalPending` refusal.
-  //
-  // Any durable observation that already shows what was asked for settles it
-  // — a marker commit through `apply_commit`, a recovery snapshot through
-  // `adopt_snapshot`; see `GoalRequest::settled_by`. Only a definite host
-  // refusal retires it unsatisfied, handing a set's text back; a transport
-  // failure leaves it standing, because the command may have landed anyway.
-  goal_pending : GoalCommand?
+  // Shared command interaction state; durable commits confirm Local goals.
+  controls : @engine_session.State
   // `!` commands submitted from this conversation's composer that are still
   // running in a terminal tab, oldest first. A command leaves the list when
   // its tab reports; its output is then sent as a message.
@@ -1671,15 +1643,6 @@ priv struct BrowserGeometry {
   terminal_open : Bool
   right_panel_expanded : Bool
   tree_layout : @fileeditor.TreeLayout
-} derive(Eq)
-
-///|
-/// A conversation's open goal edit. It carries no identity of its own: the
-/// conversation holding it is the conversation being edited, which is what
-/// keeps two open edits from overwriting each other. The draft starts as the
-/// mirrored standing goal (editing in place) or empty.
-priv struct GoalEdit {
-  draft : String
 } derive(Eq)
 
 ///|
@@ -2588,47 +2551,13 @@ priv enum DeviceMsg {
     diagnostics~ : String?,
     exit_code~ : Int32?
   )
-  // A native session command failed on the Local host or transport.
-  SessionCommandFailed(
+  // Transport delivery is separate from native command completion.
+  SessionCommandDelivered(
     session~ : String,
     id~ : String,
     command~ : @wire.Command,
-    refused~ : Bool,
-    message~ : String
-  )
-  // The `compact` bridge request itself was rejected (no engine, host error):
-  // nothing will report compaction events, so the conversation's queued /
-  // in-flight compaction notice must be cleared here, not by the stream.
-  CompactRejected(session~ : String, message~ : String)
-  // The `agent.command` bridge request was rejected (no engine, host error):
-  // no `[goal]` marker will commit, so the failure is reported here. `draft`
-  // is the text that never landed — carried back so the composer can return
-  // it to the user, the way a rejected prompt restores its own draft. `None`
-  // was a clear, which has nothing to restore. `command` names which send
-  // this answers, so a late reply cannot retire the one that replaced it.
-  GoalRejected(
-    session~ : String,
-    command~ : String,
-    draft~ : String?,
-    message~ : String
-  )
-  // The `agent.command` call failed on the transport rather than being refused,
-  // so whether the host took it is unknown: the socket can drop after the
-  // command reached the engine and before the reply came back, and the
-  // `[goal]` marker still commits. The request therefore stays in flight —
-  // handing the draft back here would say the goal is unset while the record
-  // may already carry it, and inviting a resend races the marker. `draft` is
-  // reported in the notice so the writing survives even if nothing landed.
-  //
-  // It names its send like `GoalRejected` does. It retires nothing, but it
-  // still makes a claim — that this text's fate is unknown — and that claim
-  // goes stale the moment the record settles the send or a newer one
-  // replaces it.
-  GoalUndelivered(
-    session~ : String,
-    command~ : String,
-    draft~ : String?,
-    message~ : String
+    delivery~ : @engine_session.Delivery,
+    message~ : String?
   )
   // `answer` accompanies normal success and context yield (where it is
   // continuation guidance); other terminal statuses carry none.
@@ -2665,7 +2594,7 @@ fn empty_conversation(
     workflows: [],
     run: NoRun(ended=None),
     last_run_id: None,
-    compaction: NotCompacting,
+    controls: @engine_session.State::empty(),
     unseen_finish: false,
     run_started_ms: None,
     branch: None,
@@ -2685,9 +2614,6 @@ fn empty_conversation(
     watermark: 0,
     prediction: None,
     sync: Synced,
-    goal: None,
-    goal_edit: None,
-    goal_pending: None,
     shell_commands: [],
   }
 }
@@ -4000,8 +3926,8 @@ fn Conversation::draft_empty(self : Conversation) -> Bool {
   self.images.is_empty() &&
   !self.composer_draft_present &&
   self.pending_semantic_submission is None &&
-  !(self.goal_edit is Some(edit) && !edit.draft.is_blank()) &&
-  self.goal_pending is None &&
+  !(self.controls.edit is Some(edit) && !edit.draft.is_blank()) &&
+  self.controls.pending is None &&
   self.shell_commands.is_empty()
 }
 
@@ -4217,7 +4143,7 @@ fn Conversation::remove_queued_input(
 /// that window continues what was sent rather than reverting to what it was
 /// about to replace.
 fn Conversation::goal_draft_seed(self : Conversation) -> String {
-  self.engine_controls().seed()
+  self.controls.seed()
 }
 
 ///|
@@ -4227,7 +4153,7 @@ fn Conversation::goal_draft_seed(self : Conversation) -> String {
 /// outcome appears. Prompts are not here — a prompt is sent once and the
 /// transcript shows what became of it.
 fn Conversation::awaits_durable_proof(self : Conversation) -> Bool {
-  self.goal_pending is Some(_)
+  self.controls.pending is Some(_)
 }
 
 ///|
@@ -4410,15 +4336,14 @@ fn Conversation::apply_commit(
     None
   }
   let controls = if goal_marker is Some(marker) {
-    self
-    .engine_controls()
-    .restore_goal(@transcript.apply_goal_marker(self.goal, marker), [
-      (sequence, marker),
-    ])
+    self.controls.restore_goal(
+      @transcript.apply_goal_marker(self.controls.goal, marker),
+      [(sequence, marker)],
+    )
   } else {
-    self.engine_controls()
+    self.controls
   }
-  let conv = { ..self.with_engine_controls(controls), messages, }
+  let conv = { ..self, controls, messages, }
   (changed, conv)
 }
 
@@ -4549,9 +4474,10 @@ fn Conversation::adopt_snapshot(
   }
   // Sequence order, whatever the arrival order was.
   pending.sort_by((a, b) => a.sequence - b.sequence)
-  let reconciled = self.with_engine_controls(
-    self.engine_controls().restore_goal(goal, goal_markers),
-  )
+  let reconciled = {
+    ..self,
+    controls: self.controls.restore_goal(goal, goal_markers),
+  }
   let mut conv : Conversation = {
     ..reconciled,
     messages: items,

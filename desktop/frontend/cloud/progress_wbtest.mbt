@@ -276,24 +276,24 @@ test "Cloud compaction follows native lifecycle without treating failure as a ta
     ..started.conversations["session"],
     history_required: false,
   })
-  assert_false(started.conversations["session"].compacting)
+  assert_false(started.conversations["session"].controls.is_compacting())
   for prefix in ["compaction", "auto_compaction"] {
     let compacting = started.progress_test_event(2, prefix + "_started", {
       "from_sequence": 1,
       "to_sequence": 10,
     })
-    assert_true(compacting.conversations["session"].compacting)
+    assert_true(compacting.conversations["session"].controls.is_compacting())
     let finished = compacting.progress_test_event(3, prefix + "_finished", {
       "from_sequence": 1,
       "to_sequence": 10,
       "summary": "Earlier work",
     })
-    assert_false(finished.conversations["session"].compacting)
+    assert_false(finished.conversations["session"].controls.is_compacting())
     assert_true(finished.conversations["session"].items().is_empty())
     let failed = compacting.progress_test_event(3, prefix + "_failed", {
       "error": "Compaction failed",
     })
-    assert_false(failed.conversations["session"].compacting)
+    assert_false(failed.conversations["session"].controls.is_compacting())
     assert_true(failed.conversations["session"].notice is None)
     assert_true(failed.conversations["session"].generating)
     assert_true(failed.conversations["session"].items().is_empty())
