@@ -127,3 +127,25 @@ async test "a lock can be retaken after release" {
   }
   assert_eq(@fsx.read_text(file), "held")
 }
+
+///|
+async test "try acquire reports a live owner immediately and can recover after release" {
+  let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-fsx-trylock-"))
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  let file = root.join("operation")
+  {
+    let first = @fsx.FileLock::acquire(file)
+    defer first.release()
+    @async.with_timeout(1000, () => {
+      let second = @fsx.FileLock::try_acquire(file)
+      if second is Some(lock) {
+        lock.release()
+        fail("try acquire did not respect the current owner")
+      }
+    })
+  }
+  guard @fsx.FileLock::try_acquire(file) is Some(recovered) else {
+    fail("try acquire did not recover the released operation")
+  }
+  defer recovered.release()
+}

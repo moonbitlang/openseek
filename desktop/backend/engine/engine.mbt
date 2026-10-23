@@ -81,6 +81,9 @@ priv struct ServeEngine {
 
 ///|
 priv struct QueuedRun {
+  // Transcript-owned input has no composer row to resume after a stopped
+  // predecessor. Its waiting owner must receive a definite dropped outcome.
+  host_owned : Bool
   id : String
   run_id : String
   content : @wire.Content
@@ -2151,6 +2154,8 @@ async fn ServeEngine::consume(
                     }),
                   }),
                 )
+              } else {
+                engine.drop_unpromoted_host_inputs()
               }
             }
           }

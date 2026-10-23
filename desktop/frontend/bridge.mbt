@@ -187,6 +187,7 @@ fn device_msg(
       @protocol.HostProtocolRevision => Some(BridgeReady)
     AgentConnected(_) => Some(HostMismatched)
     UserQuestions(payload) => Some(QuestionsChanged(payload))
+    SessionStartsChanged(payload) => Some(SessionStartsChanged(payload))
     AgentApprovals(payload) =>
       Some(
         ApprovalsChanged({

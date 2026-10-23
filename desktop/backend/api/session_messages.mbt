@@ -28,6 +28,7 @@ async fn ApiState::run_session_messages(self : ApiState) -> Unit {
 
 ///|
 priv enum SessionToolRequest {
+  Start(@protocol.SessionStartRequest)
   List(@session_catalog.ListPage)
   Read(String)
   Send(target~ : String, text~ : String, request_id~ : String)
@@ -48,6 +49,7 @@ fn message_string(args : Json, key : String) -> String raise @mcp.ToolError {
 ///|
 fn session_tool_request(args : Json) -> SessionToolRequest raise {
   match message_string(args, "action") {
+    "start" => Start(@json.from_json(args))
     "list" => List(@json.from_json(args))
     "read" => Read(message_string(args, "session").trim().to_owned())
     "send" =>
@@ -67,13 +69,13 @@ fn ApiState::session_tools(self : ApiState) -> Array[@mcp.Tool] {
   [
     {
       name: "session",
-      description: "Find/read OpenSeek chats on this host and request user-approved cross-chat messages. list returns flat sessions (id, title, workspace) and next_offset. It accepts offset (default 0) and limit (default 20, maximum 50); follow next_offset until null to finish listing. No title search is supported. If the intended chat is absent after all pages, ask the user to select or create it. read needs session. send needs target, text, and a unique request_id (reuse it for retries of the identical message). The user reviews the exact target and text. Waits up to 30 seconds for approval. Timely approval waits up to 30 more seconds for confirmed delivery; otherwise returns delivering. Unanswered approval returns pending_approval. Pending results continue in the host after the tool returns or times out. Only sent confirms delivery. Final background results are actively delivered to this chat. status/cancel need the returned id; cancel only withdraws an unapproved request. Reading/listing is read-only. Requests last for this host process; they survive tool/turn completion, not app shutdown.",
+      description: "Propose a new user-started session with action=start, task, title, workspace (registered project path), and request_id; optional model, thinking (no/high/max), max_steps, workspace_mode (local default or worktree). start returns a durable suggestion immediately and does not create a session or worktree. Continue this conversation; the user chooses Start, Work here, or dismiss in the transcript. Reuse request_id only for identical arguments. Find/read OpenSeek chats on this host and request user-approved cross-chat messages. list returns flat sessions (id, title, workspace) and next_offset. It accepts offset (default 0) and limit (default 20, maximum 50); follow next_offset until null to finish listing. No title search is supported. If the intended chat is absent after all pages, ask the user to select or create it. read needs session. send needs target, text, and a unique request_id (reuse it for retries of the identical message). The user reviews the exact target and text. Waits up to 30 seconds for approval. Timely approval waits up to 30 more seconds for confirmed delivery; otherwise returns delivering. Unanswered approval returns pending_approval. Pending results continue in the host after the tool returns or times out. Only sent confirms delivery. Final background results are actively delivered to this chat. status/cancel need the returned id; cancel only withdraws an unapproved request. Reading/listing is read-only. Message approval requests last for this host process; they survive tool/turn completion, not app shutdown. Session-start suggestions are durable.",
       input_schema: {
         "type": "object",
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["list", "read", "send", "status", "cancel"],
+            "enum": ["list", "read", "send", "status", "cancel", "start"],
           },
           "offset": { "type": "integer", "minimum": 0 },
           "limit": { "type": "integer", "minimum": 1, "maximum": 50 },
@@ -82,6 +84,16 @@ fn ApiState::session_tools(self : ApiState) -> Array[@mcp.Tool] {
           "text": { "type": "string" },
           "request_id": { "type": "string" },
           "id": { "type": "string" },
+          "task": { "type": "string" },
+          "title": { "type": "string" },
+          "workspace": {
+            "type": "string",
+            "description": "Registered project path.",
+          },
+          "model": { "type": "string" },
+          "thinking": { "type": "string", "enum": ["no", "high", "max"] },
+          "max_steps": { "type": "integer", "minimum": 1 },
+          "workspace_mode": { "type": "string", "enum": ["local", "worktree"] },
         },
         "required": ["action"],
         "additionalProperties": false,
@@ -97,6 +109,8 @@ async fn ApiState::call_session_tool(
   call : @mcp.ToolCall,
 ) -> Json {
   match session_tool_request(call.arguments) {
+    Start(request) =>
+      self.propose_session_start(call.session, request).to_json()
     List(page) => page.page(@engine.list_sessions())
     Read(session) =>
       @engine.load_session(self.manager, { session, workspace: None, }).to_json()

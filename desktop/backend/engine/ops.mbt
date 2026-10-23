@@ -508,7 +508,12 @@ pub fn queue_run(
       guard !live.queued_runs.any(queued => queued.id == id) else {
         return { accepted: false, }
       }
-      live.queued_runs.push({ id, run_id: mint_run_id(), content, })
+      live.queued_runs.push({
+        id,
+        run_id: mint_run_id(),
+        content,
+        host_owned: false,
+      })
     }
     QueueEdit(text~, images~, ..) => {
       if !images.is_empty() && !live.supports_images {
@@ -531,6 +536,7 @@ pub fn queue_run(
         return { accepted: false, }
       }
       ignore(live.queued_runs.remove(index))
+      live.message_receipts.settle(id, Dropped)
     }
     QueueSteer(..) => {
       guard live.queued_runs.search_by(queued => queued.id == id) is Some(index) else {
@@ -624,6 +630,24 @@ pub async fn rename_session(
   manager : EngineManager,
   payload : @protocol.SessionRenamePayload,
 ) -> Unit {
+  write_session_title(manager, payload, replace=true)
+}
+
+///|
+/// Set the initial display name while preserving an existing user rename.
+pub async fn initialize_session_title(
+  manager : EngineManager,
+  payload : @protocol.SessionRenamePayload,
+) -> Unit {
+  write_session_title(manager, payload, replace=false)
+}
+
+///|
+async fn write_session_title(
+  manager : EngineManager,
+  payload : @protocol.SessionRenamePayload,
+  replace~ : Bool,
+) -> Unit {
   let session = payload.session.trim().to_owned()
   let title = payload.title.trim().to_owned()
   guard !session.is_empty() else {
@@ -643,8 +667,21 @@ pub async fn rename_session(
   manager.workspace_lifecycle_lock.release()
   let store = @store.SessionStore(@workspaces.store_root(workspace).to_string())
   let id : @agent_session.SessionId = SessionId(session)
-  store.set_title(id, title) catch {
-    error => raise EngineError("session rename failed: \{error}")
+  try {
+    if replace {
+      store.set_title(id, title)
+    } else {
+      ignore(store.initialize_title(id, title))
+    }
+  } catch {
+    error =>
+      raise EngineError(
+        if replace {
+          "session rename failed: \{error}"
+        } else {
+          "session title initialization failed: \{error}"
+        },
+      )
   }
 }
 

@@ -1042,3 +1042,15 @@ pub let cloud_file_download : Command[
   @protocol.CloudFileDownloadPayload,
   @protocol.CloudFileDownloadReply,
 ] = Command("cloud.file_download")
+
+///|
+pub let session_starts_list : Command[
+  @protocol.SessionStartsListPayload,
+  @protocol.SessionStartsSnapshot,
+] = Command("session.starts_list")
+
+///|
+pub let session_starts_decide : Command[
+  @protocol.SessionStartDecision,
+  @protocol.SessionStartsSnapshot,
+] = Command("session.starts_decide")

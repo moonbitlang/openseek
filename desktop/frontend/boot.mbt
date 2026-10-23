@@ -547,6 +547,24 @@ fn main {
             ),
           )
         }
+        if model.focused_device() is Some(dev) &&
+          dev.session_starts.has_open_menu() {
+          let channel = model.focused
+          let connection_generation = dev.connection_generation
+          subs.push(
+            @dismiss.on_outside_click(
+              "session-start-select-dismiss",
+              trigger=".session-start-options .custom-select-button",
+              emit.map((_ : Unit) => {
+                SessionStarts(
+                  channel~,
+                  connection_generation~,
+                  @session_start.CloseMenus,
+                )
+              }),
+            ),
+          )
+        }
         match model.select_menu {
           Some(ProjectMenu) =>
             subs.push(
@@ -686,6 +704,7 @@ fn main {
           open: emit.map(path => TranscriptLinkOpened(slot~, path~)),
           jump: emit.map(target => TranscriptLocationOpened(slot~, target)),
           open_session: emit.map(session => OpenSessionHere(session)),
+          session_start: emit.map(msg => TranscriptSessionStart(slot~, msg)),
           fork: emit.map(through => ForkRequested(slot~, through~)),
           edit_user: emit.map(request => {
             let (sequence, draft) = request

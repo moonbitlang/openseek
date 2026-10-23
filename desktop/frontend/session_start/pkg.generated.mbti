@@ -1,0 +1,82 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/session_start"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/select_control",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn fetch(@interop.ChannelId, Source, @cmd.Emit[Msg]) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub(all) enum Action {
+  ToggleOptions
+  ToggleModel
+  ToggleWorkspace
+  CloseMenu
+  ModelChanged(String)
+  WorkspaceChanged(String)
+  Decide(String)
+  Open
+} derive(Eq, @debug.Debug)
+pub fn Action::equal(Self, Self) -> Bool
+pub fn Action::not_equal(Self, Self) -> Bool
+pub fn Action::to_repr(Self) -> @debug.Repr
+
+pub struct Card {
+  source : Source
+  proposal : @protocol.SessionStartProposal
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn Card::equal(Self, Self) -> Bool
+pub fn Card::is_visible(Self) -> Bool
+pub fn Card::not_equal(Self, Self) -> Bool
+pub fn Card::options_open(Self) -> Bool
+pub fn Card::render(Self, @i18n.Locale, Array[@select_control.ViewOption], Bool, @cmd.Emit[Msg], details? : @html.Html, here_available? : Bool) -> @html.Html
+pub fn Card::request_id(Self) -> String
+pub fn Card::to_repr(Self) -> @debug.Repr
+
+type Model derive(Eq, @debug.Debug)
+pub fn Model::Model() -> Self
+pub fn Model::cards(Self, Source) -> Array[Card]
+pub fn Model::close_menus(Self) -> Self
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::has_open_menu(Self) -> Bool
+pub fn Model::load_error(Self, Source) -> String?
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::reconnecting(Self) -> Self
+pub fn Model::to_repr(Self) -> @debug.Repr
+pub fn Model::update(Self, Msg, @interop.ChannelId, @cmd.Emit[Msg], here_options? : @protocol.SessionStartHereOptions) -> (@cmd.Cmd, Self)
+
+pub(all) enum Msg {
+  Snapshot(@protocol.SessionStartsSnapshot)
+  LoadFailed(source~ : Source, error~ : String)
+  Retry(Source)
+  CloseMenus
+  Interact(source~ : Source, request~ : String, Action)
+  Failed(source~ : Source, request~ : String, attempt~ : Int32, error~ : String)
+} derive(Eq, @debug.Debug)
+pub fn Msg::equal(Self, Self) -> Bool
+pub fn Msg::not_equal(Self, Self) -> Bool
+pub fn Msg::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Source {
+  session : String
+  workspace : String?
+  archived : Bool
+} derive(Eq, @debug.Debug)
+pub fn Source::equal(Self, Self) -> Bool
+pub fn Source::not_equal(Self, Self) -> Bool
+pub fn Source::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

@@ -403,6 +403,7 @@ fn Input::empty_content(self : Input) -> EmptyContent {
 ///|
 priv enum BlockContent {
   Minimal(MinimalContent)
+  SessionStart(SessionStartContent)
   /// Nothing to show: no durable items and nothing streaming.
   Empty(EmptyContent)
   /// One transcript item. `step_label` is the ordinal an OpenSeek provider
@@ -478,6 +479,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   // OpenSeek numbers its model steps: every provider response that is not a
   // checkpoint replay is one. Codex and legacy items carry no ordinal.
   let descriptions : Map[String, String] = Map([])
+  let shown_session_starts : Map[String, Bool] = Map([])
   let mut steps = 0
   for index, row in input.items {
     let item = row.item
@@ -493,6 +495,35 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
     } else {
       None
     }
+    let cards : Array[SessionStartContent] = []
+    let item = if item.kind
+      is Assistant(
+        reasoning~,
+        prose~,
+        calls~,
+        replay~,
+        finished~,
+        end_sequence~
+      ) {
+      let calls = calls.filter_map(call => {
+        let (remaining, extracted) = input.extract_session_starts(call)
+        cards.append(extracted)
+        remaining
+      })
+      {
+        ..item,
+        kind: Assistant(
+          reasoning~,
+          prose~,
+          calls~,
+          replay~,
+          finished~,
+          end_sequence~,
+        ),
+      }
+    } else {
+      item
+    }
     blocks.push({
       stream,
       key: TranscriptRenderKey::row(row.identity),
@@ -507,6 +538,17 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
         wait_labels=job_wait_labels(locale=input.locale, item, descriptions),
       ),
     })
+    for card in cards {
+      if shown_session_starts.get(card.request_id()).unwrap_or(false) {
+        continue
+      }
+      shown_session_starts[card.request_id()] = true
+      blocks.push({
+        stream,
+        key: { value: "session-start\u{0}" + card.request_id(), },
+        content: SessionStart(card),
+      })
+    }
   }
   if input.streaming_reasoning is Some(_) || input.streaming_response is Some(_) {
     blocks.push({
@@ -549,6 +591,7 @@ fn Block::render(
   match self.content {
     Empty(empty) => empty.render(locale~, actions)
     Minimal(content) => content.render(locale~, actions)
+    SessionStart(content) => content.render(locale, actions)
     Item(
       item~,
       anchor~,

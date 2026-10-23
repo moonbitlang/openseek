@@ -1,6 +1,15 @@
+// These public MCP tests redirect the process environment to isolated stores.
+// Async tests share one process, so they must not replace each other's HOME.
+
+///|
+#cfg(not(platform="windows"))
+let session_mcp_env_test_lock : @async.Mutex = Mutex()
+
 ///|
 #cfg(not(platform="windows"))
 async test "host MCP attaches only to its caller and preserves concurrent artifacts" {
+  session_mcp_env_test_lock.acquire()
+  defer session_mcp_env_test_lock.release()
   let root = @pathx.Path(
     @fs.realpath(@fs.tmpdir(prefix="seekmoon-pr-artifacts-")),
   ).resolve()

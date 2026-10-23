@@ -802,6 +802,13 @@ fn apply_session_snapshot(
   let conv = conv.with_prediction(prediction)
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
+  commands.push(
+    model.fetch_session_starts(
+      channel,
+      session,
+      model.session_starts_emit(dispatch, channel),
+    ),
+  )
   let owner : @interop.ConversationKey = { channel, session, }
   if activate_on_success &&
     model.loading_conversation is Some(loading_owner) &&
@@ -1661,6 +1668,7 @@ fn desired_browser_view(model : Model) -> Int32? {
     !model.dock_tab_menu_open &&
     !model.conversation_transfer_menu_open &&
     model.select_menu is None &&
+    !model.devices.any(dev => dev.session_starts.has_open_menu()) &&
     !git_details_open &&
     !covering_overlay(model) else {
     return None
@@ -1818,6 +1826,7 @@ fn update(
     | OpenSession(_, _)
     | OpenArchivedSession(_, ..)
     | OpenSessionHere(_)
+    | TranscriptSessionStart(Interact(Open, ..), ..)
     | NewChat
     | NewChatIn(_, _)
     | CloudAction(@cloud.Create)
@@ -1902,6 +1911,19 @@ fn update(
   // layer, so a newly covering surface must retire the root-owned select.
   let model = if !covering_overlay(previous) && covering_overlay(model) {
     { ..model, select_menu: None, }
+  } else {
+    model
+  }
+  let model = if composer_context_changed ||
+    covering_overlay(model) ||
+    model.select_menu is Some(_) {
+    {
+      ..model,
+      devices: model.devices.map(dev => {
+        ..dev,
+        session_starts: dev.session_starts.close_menus(),
+      }),
+    }
   } else {
     model
   }
@@ -4919,6 +4941,91 @@ fn update_msg(
         (@cmd.none, model)
       }
     }
+    TranscriptSessionStart(slot~, msg) => {
+      guard model.transcript_slot().map(value => value.key()) == Some(slot) &&
+        model.active_conversation() is Some(conv) &&
+        model.device_state(conv.device) is Some(dev) else {
+        return (@cmd.none, model)
+      }
+      let action_source = match msg {
+        Interact(_, source~, ..) => Some(source)
+        Retry(source) => Some(source)
+        _ => None
+      }
+      if action_source is Some(source) && source != conv.session_start_source() {
+        return (@cmd.none, model)
+      }
+      if msg is Interact(source~, request~, Open) {
+        guard source == conv.session_start_source() &&
+          dev.session_starts
+          .cards(source)
+          .iter()
+          .find_first(card => card.request_id() == request)
+          is Some(card) &&
+          card.proposal.status == "started" &&
+          card.proposal.target_session is Some(target) else {
+          return (@cmd.none, model)
+        }
+        return open_session_start_target(dispatch, model, target)
+      }
+      if msg is Interact(Decide(_), ..) && conv.record is ArchivedRecord {
+        return (@cmd.none, model)
+      }
+      if msg is Interact(Decide("here"), ..) &&
+        !model.session_start_here_available(conv) {
+        return (@cmd.none, model)
+      }
+      let model = if msg is Interact(ToggleModel | ToggleWorkspace, ..) {
+        { ..model, select_menu: None, }
+      } else {
+        model
+      }
+      update_msg(
+        dispatch,
+        SessionStarts(
+          channel=conv.device,
+          connection_generation=dev.connection_generation,
+          msg,
+        ),
+        model,
+      )
+    }
+    SessionStarts(channel~, connection_generation~, msg) => {
+      guard model.device_state(channel) is Some(device) &&
+        device.connection_generation == connection_generation else {
+        return (@cmd.none, model)
+      }
+      let here_options = if msg is Interact(source~, Decide("here"), ..) &&
+        model.find_conversation(channel, source.session) is Some(conv) &&
+        conv.session_start_source() == source {
+        Some(@protocol.SessionStartHereOptions::{
+          model: Some(conv.engine_model.wire()),
+          thinking: conv.engine_model.thinking(
+            model.reasoning_for(conv.engine_model),
+          ),
+          approval: Some(model.approval_for(channel, source.session)),
+          max_steps: parsed_max_steps(model.max_steps),
+          followup_behavior: model.followup_behavior.wire(),
+        })
+      } else {
+        None
+      }
+      let (command, session_starts) = device.session_starts.update(
+        msg,
+        channel,
+        model.session_starts_emit(dispatch, channel),
+        here_options?,
+      )
+      let command = if here_options is Some(_) &&
+        session_starts != device.session_starts &&
+        channel == model.focused {
+        @cmd.batch([command, @transcript_component.scroll_to_latest()])
+      } else {
+        command
+      }
+      let next = model.replace_device({ ..device, session_starts, })
+      (command, next)
+    }
     UserQuestions(channel~, connection_generation~, msg) => {
       guard model.device_state(channel) is Some(device) &&
         device.connection_generation == connection_generation else {
@@ -7296,6 +7403,13 @@ fn update_device_msg(
       // its reply then wins over both stale positive rows and stale absence.
       let run_frontier = model.run_snapshot_frontier(channel)
       let commands = [
+        model.fetch_session_starts(
+          channel,
+          model.active_session,
+          @cmd.Emit(msg => {
+            dispatch(SessionStarts(channel~, connection_generation~, msg))
+          }),
+        ),
         fetch_sessions(
           dispatch, channel, connection_generation, sessions_request_generation,
         ),
@@ -7370,6 +7484,7 @@ fn update_device_msg(
         connection_generation,
         approval_snapshot: None,
         questions: dev.questions.reconnecting(),
+        session_starts: dev.session_starts.reconnecting(),
         sessions_request_generation,
         archived_request_generation,
         projects_request_generation,
@@ -9486,6 +9601,16 @@ fn update_device_msg(
       })
       (@cmd.batch(commands), seeded)
     }
+    SessionStartsChanged(snapshot) =>
+      update_msg(
+        dispatch,
+        SessionStarts(
+          channel~,
+          connection_generation=dev.connection_generation,
+          @session_start.Snapshot(snapshot),
+        ),
+        model,
+      )
     QuestionsChanged(snapshot) =>
       update_msg(
         dispatch,

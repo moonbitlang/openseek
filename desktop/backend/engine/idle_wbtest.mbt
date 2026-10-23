@@ -227,6 +227,7 @@ async test "a busy, compacting, claimed or queued engine is never stopped" {
     )
     let queued = start_fake_idle_engine(group, manager, sessions, "s-queued")
     queued.queued_runs.push({
+      host_owned: false,
       id: "q-1",
       run_id: "r-2",
       content: Content([Text("next")]),

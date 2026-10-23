@@ -1201,3 +1201,28 @@ async test "image-only conversations have a nonempty listing preview" {
   store.create(session)
   assert_eq(store.listings()[0].first_prompt(), "[Image]")
 }
+
+///|
+async test "initial titles preserve a concurrent or already saved user rename" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id = @agent_session.SessionId("initial-title")
+  store.create(Session(id, system_prompt=""))
+  assert_true(store.initialize_title(id, "  Suggested title  "))
+  assert_eq(store.title(id), Some("Suggested title"))
+  store.set_title(id, "User title")
+  assert_false(store.initialize_title(id, "Recovered suggestion"))
+  assert_eq(store.title(id), Some("User title"))
+  let second = @agent_session.SessionId("concurrent-title")
+  store.create(Session(second, system_prompt=""))
+  let other = @store.SessionStore(store.root())
+  @async.with_task_group(group => {
+    let initial = group.spawn(() => store.initialize_title(second, "Suggestion"))
+    let renamed = group.spawn(() => {
+      other.set_title(second, "Concurrent user title")
+    })
+    ignore(initial.wait())
+    renamed.wait()
+  })
+  assert_eq(store.title(second), Some("Concurrent user title"))
+}

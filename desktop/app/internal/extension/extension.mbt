@@ -81,6 +81,13 @@ let session_artifacts_changed_event : @proton_contract.Event[
 )
 
 ///|
+let session_starts_changed_event : @proton_contract.Event[
+  @protocol.SessionStartsSnapshot,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::SessionStartsChanged.wire_name(),
+)
+
+///|
 let session_changed_event : @proton_contract.Event[
   @protocol.SessionChangedPayload,
 ] = @commands.extension_contract.event(
@@ -288,6 +295,8 @@ async fn PageEventTarget::emit(
       self.events.emit(settings_changed_event, payload)
     Hub(SessionArtifactsChanged(payload)) =>
       self.events.emit(session_artifacts_changed_event, payload)
+    Hub(SessionStartsChanged(payload)) =>
+      self.events.emit(session_starts_changed_event, payload)
     Hub(SkillsChanged) => self.events.emit(skills_changed_event, NoPayload)
     Hub(UpdateDownloadProgress(payload)) =>
       self.events.emit(update_progress_event, payload)

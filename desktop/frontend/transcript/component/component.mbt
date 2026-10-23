@@ -68,6 +68,12 @@ pub(all) enum ScrollPosition {
 /// transcript subtree and its scroll behavior.
 struct Input {
   locale : @i18n.Locale
+  session_starts : Array[@session_start.Card]
+  session_start_source : @session_start.Source?
+  session_start_models : Array[@select_control.ViewOption]
+  session_start_connected : Bool
+  session_start_here_available : Bool
+  session_start_error : String?
   dark_mode : Bool
   minimal : Bool
   source : Source
@@ -115,6 +121,12 @@ struct Input {
 ///|
 pub fn Input::Input(
   locale~ : @i18n.Locale = English,
+  session_starts~ : Array[@session_start.Card] = [],
+  session_start_source~ : @session_start.Source? = None,
+  session_start_models~ : Array[@select_control.ViewOption] = [],
+  session_start_connected~ : Bool = false,
+  session_start_here_available~ : Bool = true,
+  session_start_error~ : String? = None,
   dark_mode~ : Bool = false,
   minimal~ : Bool = false,
   source~ : Source,
@@ -142,6 +154,12 @@ pub fn Input::Input(
 ) -> Input {
   {
     locale,
+    session_starts,
+    session_start_source,
+    session_start_models,
+    session_start_connected,
+    session_start_here_available,
+    session_start_error,
     dark_mode,
     minimal,
     source,
@@ -179,6 +197,7 @@ pub(all) struct Actions {
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
+  session_start : @cmd.Emit[@session_start.Msg]
   fork : @cmd.Emit[Int32]
   edit_user : @cmd.Emit[(Int32, @composer.Draft)]
   /// Start a fresh draft in another registered project.

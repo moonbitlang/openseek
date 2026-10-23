@@ -23,6 +23,8 @@ async fn ApiState::deliver_session_input(
   session : String,
   text : String,
   id : String,
+  here_options? : @protocol.SessionStartHereOptions,
+  workspace? : String,
 ) -> Unit {
   @async.with_task_group(group => {
     let events : @async.Queue[MessageDeliveryInput] = Queue(kind=Blocking(64))
@@ -39,10 +41,7 @@ async fn ApiState::deliver_session_input(
       on_lag=_ => group.spawn_bg(no_wait=true, () => events.put(Resync)),
     )
     defer subscription.close()
-    let loaded = @engine.load_session(self.manager, {
-      session,
-      workspace: None,
-    })
+    let loaded = @engine.load_session(self.manager, { session, workspace, })
     if message_committed(loaded.session, id) {
       return
     }
@@ -56,6 +55,8 @@ async fn ApiState::deliver_session_input(
       text,
       id,
       result => group.spawn_bg(no_wait=true, () => events.put(Receipt(result))),
+      here_options?,
+      workspace?,
     )
     defer submitted.close()
     for ;; {
@@ -66,7 +67,7 @@ async fn ApiState::deliver_session_input(
           }
           let loaded = @engine.load_session(self.manager, {
             session,
-            workspace: None,
+            workspace,
           })
           if message_committed(loaded.session, id) {
             return
@@ -79,7 +80,7 @@ async fn ApiState::deliver_session_input(
           subscription.resume_delivery()
           let loaded = @engine.load_session(self.manager, {
             session,
-            workspace: None,
+            workspace,
           })
           if message_committed(loaded.session, id) {
             return
@@ -92,6 +93,7 @@ async fn ApiState::deliver_session_input(
           if submitted.result() is None &&
             (
               submitted.steering ||
+              submitted.queued ||
               self.hub.active_starts.contains(submitted.run_id)
             ) {
             continue
@@ -110,7 +112,7 @@ async fn ApiState::deliver_session_input(
             AgentFinished(finished) if submitted.run_id == finished.run_id => {
               let loaded = @engine.load_session(self.manager, {
                 session,
-                workspace: None,
+                workspace,
               })
               if message_committed(loaded.session, id) {
                 return
@@ -131,7 +133,7 @@ async fn ApiState::deliver_session_input(
             AgentConnected(_) => {
               let loaded = @engine.load_session(self.manager, {
                 session,
-                workspace: None,
+                workspace,
               })
               if message_committed(loaded.session, id) {
                 return
