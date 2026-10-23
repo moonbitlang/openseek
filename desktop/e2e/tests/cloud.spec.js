@@ -212,6 +212,7 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
   await local.click();
   await expect(local).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('main > .topbar h1')).toHaveText('Rabbita browser fixture');
+  await expect(page.locator('#transcript').getByText('Browser result', { exact: true })).toBeVisible();
   await page.locator('#task').fill('Local draft');
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await cloud.open();
@@ -323,37 +324,25 @@ test('Cloud sign-out closes the local reader even when stream cancellation rejec
   }
 });
 
-{
-  const desktop = false;
-
-  for (const target of ['existing session', 'project new chat']) {
-    test(`${desktop ? 'desktop' : 'browser'} returns from Cloud to Work ${target}`, async ({ page }) => {
-      const cloud = new CloudHarness(page, { desktop });
-      cloud.meStatus = 200;
-      await cloud.install();
-      await cloud.goto();
-      await cloud.open();
-      await page.locator('#task').fill('Retain Cloud draft');
-      await page.getByRole('button', { name: 'Work', exact: true }).click();
-      if (target === 'existing session') {
-        await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
-        await expect(page.locator('main > .topbar h1')).toHaveText('Rabbita browser fixture');
-        await expect(page.locator('#transcript').getByText('Browser result', { exact: true })).toBeVisible();
-      } else {
-        await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-        await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
-        await expect(page.locator('main h1')).toHaveText('New chat');
-        await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
-      }
-      await page.locator('#task').fill('Retain Work draft');
-      await page.getByRole('button', { name: 'Chat', exact: true }).click();
-      await cloud.open();
-      await expect(page.locator('#task')).toHaveValue('Retain Cloud draft');
-      expect(cloud.postCount).toBe(0);
-      expect(cloud.device.pageErrors).toEqual([]);
-    });
-  }
-}
+test('browser returns from Cloud to Work project new chat', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  cloud.meStatus = 200;
+  await cloud.install();
+  await cloud.goto();
+  await cloud.open();
+  await page.locator('#task').fill('Retain Cloud draft');
+  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
+  await expect(page.locator('main h1')).toHaveText('New chat');
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
+  await page.locator('#task').fill('Retain Work draft');
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await cloud.open();
+  await expect(page.locator('#task')).toHaveValue('Retain Cloud draft');
+  expect(cloud.postCount).toBe(0);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
 
 test('device browser history retains Cloud visits across refresh', async ({ page }) => {
   const cloud = new CloudHarness(page);

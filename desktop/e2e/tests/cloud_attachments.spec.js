@@ -131,47 +131,47 @@ test('existing Cloud documents use Upload confirmation and retain bytes after a 
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-for (const method of ['picker', 'paste']) {
-  for (const editText of [false, true]) {
-    test(`Cloud keeps a new ${method} image ${editText ? 'with newer text' : 'without editing text'} through admission without resending the submitted copy`, async ({ page }) => {
-      const cloud = new AttachmentHarness(page);
-      let admit, finish;
-      cloud.pauseSend = new Promise(resolve => admit = resolve);
-      cloud.pauseStream = new Promise(resolve => finish = resolve);
-      try {
-        await cloud.install(); await cloud.goto(); await cloud.open();
+// composer/component_wbtest.mbt covers the full acknowledgement/text-edit state matrix.
+// Keep one browser flow per input event and acknowledgement outcome here.
+for (const [method, editText] of [['picker', false], ['paste', true]]) {
+  test(`Cloud keeps a new ${method} image ${editText ? 'with newer text' : 'without editing text'} through admission without resending the submitted copy`, async ({ page }) => {
+    const cloud = new AttachmentHarness(page);
+    let admit, finish;
+    cloud.pauseSend = new Promise(resolve => admit = resolve);
+    cloud.pauseStream = new Promise(resolve => finish = resolve);
+    try {
+      await cloud.install(); await cloud.goto(); await cloud.open();
+      await select(page, image);
+      await page.locator('#task').fill('Submitted content');
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect.poll(() => messages(cloud).length).toBe(1);
+      if (method === 'picker') {
         await select(page, image);
-        await page.locator('#task').fill('Submitted content');
-        await page.getByRole('button', { name: 'Send', exact: true }).click();
-        await expect.poll(() => messages(cloud).length).toBe(1);
-        if (method === 'picker') {
-          await select(page, image);
-        } else {
-          await page.locator('#task').evaluate((input, { png, name }) => {
-            const transfer = new DataTransfer();
-            transfer.items.add(new File([Uint8Array.from(atob(png), c => c.charCodeAt(0))], name, { type: 'image/png' }));
-            input.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
-          }, { png, name: image.name });
-        }
-        await expect(page.locator('.composer-image')).toHaveCount(2);
-        if (editText) await page.locator('#task').fill('Next draft');
-        admit();
-        await expect(page.locator('#task')).toHaveValue(editText ? 'Next draft' : '');
-        await expect(page.locator('.composer-image')).toHaveCount(1);
-        await expect(page.locator('#transcript .user-image')).toHaveCount(1);
-        finish();
-        await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-        await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-        await page.getByRole('button', { name: 'Send', exact: true }).click();
-        await expect.poll(() => messages(cloud).length).toBe(2);
-        expect(JSON.parse(messages(cloud)[1].body).content).toEqual([
-          { type: 'text', text: editText ? 'Next draft' : '' },
-          { type: 'image', media_type: 'image/png', data: png },
-        ]);
-        expect(cloud.device.pageErrors).toEqual([]);
-      } finally {
-        admit(); finish();
+      } else {
+        await page.locator('#task').evaluate((input, { png, name }) => {
+          const transfer = new DataTransfer();
+          transfer.items.add(new File([Uint8Array.from(atob(png), c => c.charCodeAt(0))], name, { type: 'image/png' }));
+          input.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+        }, { png, name: image.name });
       }
-    });
-  }
+      await expect(page.locator('.composer-image')).toHaveCount(2);
+      if (editText) await page.locator('#task').fill('Next draft');
+      admit();
+      await expect(page.locator('#task')).toHaveValue(editText ? 'Next draft' : '');
+      await expect(page.locator('.composer-image')).toHaveCount(1);
+      await expect(page.locator('#transcript .user-image')).toHaveCount(1);
+      finish();
+      await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+      await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect.poll(() => messages(cloud).length).toBe(2);
+      expect(JSON.parse(messages(cloud)[1].body).content).toEqual([
+        { type: 'text', text: editText ? 'Next draft' : '' },
+        { type: 'image', media_type: 'image/png', data: png },
+      ]);
+      expect(cloud.device.pageErrors).toEqual([]);
+    } finally {
+      admit(); finish();
+    }
+  });
 }

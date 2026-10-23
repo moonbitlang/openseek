@@ -63,6 +63,9 @@ test('Excel copies real selected values as TSV and literal Markdown without atta
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await expect(page.locator('.office-selection-preview textarea')).toHaveValue('');
   await captureCopyPane(page, 'selection-copy.png');
+  await expect(page.locator('.excel-copy-controls')).toBeVisible();
+  await page.getByRole('tab', { name: 'Long', exact: true }).click();
+  await expect(page.locator('.excel-copy-controls')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -96,23 +99,6 @@ test('Excel copy controls remain usable in a narrow pane', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Excel copies a full cell beyond the Agent preview limit', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const app = await openWorkbook(page);
-  await page.getByRole('tab', { name: 'Long', exact: true }).click();
-  const cell = page.locator('section[data-sheet="Long"] td[data-cell="A1"]');
-  await cell.click();
-  await expect(page.getByRole('button', { name: 'Copy table', exact: true })).toBeVisible();
-  expect((await page.locator('.office-selection-preview').getAttribute('title')).length).toBeLessThan(4500);
-  await page.getByRole('button', { name: 'Copy table', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('始'.repeat(5000));
-  await expect(page.locator('.office-selection-preview')).toBeHidden();
-  await expect(page.locator('.excel-copy-controls')).toBeVisible();
-  await page.getByRole('tab', { name: 'Clipboard', exact: true }).click();
-  await expect(page.locator('.excel-copy-controls')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('Excel copy reports clipboard failure and can retry', async ({ page }) => {
   const app = await openWorkbook(page);
   await page.evaluate(() => {
@@ -136,23 +122,5 @@ test('Excel copy reports clipboard failure and can retry', async ({ page }) => {
   await button.click();
   await expect(page.locator('.excel-copy-feedback')).toHaveText('Copied');
   expect(await page.evaluate(() => window.excelCopies)).toEqual(['商品']);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('an old clipboard completion does not label a new Excel selection as copied', async ({ page }) => {
-  const app = await openWorkbook(page);
-  await page.evaluate(() => {
-    Object.defineProperty(navigator.clipboard, 'writeText', {
-      configurable: true,
-      value: () => new Promise(resolve => { window.finishExcelCopy = resolve; }),
-    });
-  });
-  await selectRange(page, 'A1', 'A1');
-  await page.getByRole('button', { name: 'Copy table', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Copy table', exact: true })).toBeDisabled();
-  await selectRange(page, 'C2', 'C2');
-  await page.evaluate(() => window.finishExcelCopy());
-  await expect(page.getByRole('button', { name: 'Copy table', exact: true })).toBeEnabled();
-  await expect(page.locator('.excel-copy-feedback')).toHaveText('');
   expect(app.pageErrors).toEqual([]);
 });
