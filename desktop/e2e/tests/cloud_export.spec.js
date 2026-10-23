@@ -38,7 +38,11 @@ async function setup(page, { desktop = false } = {}) {
     uploads.push(route.request().url());
     return route.abort('failed');
   });
-  await cloud.goto(); await cloud.open();
+  if (desktop) {
+    await cloud.goto(); await cloud.open();
+  } else {
+    await cloud.openDirect();
+  }
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
   await expect(dialog).toBeVisible();

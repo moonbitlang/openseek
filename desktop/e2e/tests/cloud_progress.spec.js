@@ -106,31 +106,7 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
   }
 });
 
-test('Cloud title status uses recorded outcomes and marks archived history read-only', async ({ page }, testInfo) => {
-  const cloud = new CloudHarness(page);
-  cloud.histories.set(sessionA, { messages: [{
-    task_id: 'context-task', kind: 'task_finished', created_at: 100,
-    data: { status: 'incomplete', result: { status: 'context_yield', reason: 'context limit' } },
-  }], generating: false });
-  await cloud.install(); await cloud.goto(); await cloud.open();
-  const status = page.locator('main .run-status');
-  await expect(status).toHaveText('Context limit reached');
-  await expect(status.locator('.run-dot')).toHaveClass('run-dot warn');
-  await page.reload(); await cloud.open();
-  await expect(status).toHaveText('Context limit reached');
-  await page.screenshot({ path: testInfo.outputPath('cloud-title-context-limit.png'), fullPage: true });
-  cloud.archived.add(sessionA);
-  await page.reload();
-  const archived = page.getByRole('button', { name: /^Archived chats \(/ });
-  if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
-  await cloud.row(sessionA).click();
-  await expect(status).toHaveText('Archived conversation · Read only');
-  await expect(status.locator('.run-dot')).not.toHaveClass(/pulse|ok|danger/);
-  await expect(page.locator('#task')).toHaveCount(0);
-  expect(cloud.postCount).toBe(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
+// cloud_status_wbtest.mbt covers the outcome label and status-kind matrix.
 test('Cloud title status covers loading, service failure and first-send startup without local API configuration', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
   cloud.device.hostSettings.has_deepseek_key = false;

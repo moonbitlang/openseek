@@ -192,11 +192,12 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
     await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(1);
     expect(app.requests.filter(r => r.method === 'session.edit').map(r => r.params.through)).toEqual([3]);
     const sent = app.requests.find(r => r.method === 'session.edit');
-    expect(sent.params.session).toBe('session-1');
+    expect(sent.params).toMatchObject({ session: 'session-1', source_sequence: 8 });
     expect(sent.params.task).toBe('Try my revised approach.\nx');
     await expect(original).toHaveCount(0);
+    await expect(page.locator('#transcript')).toContainText('Try my revised approach.\nx');
     await expect(page.locator('#task')).toHaveValue('');
-    expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+    expect(app.requests.filter(r => ['agent.start', 'session.edit_prepare', 'session.edit_commit'].includes(r.method))).toHaveLength(0);
     expect(app.pageErrors).toEqual([]);
   });
 
@@ -211,11 +212,16 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
     await editor.locator('textarea').fill('Start with a different question.');
     await editor.getByRole('button', { name: 'Send', exact: true }).click();
     await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(1);
+    expect(app.requests.find(r => r.method === 'session.edit').params).toMatchObject({ session: 'session-1', source_sequence: 8 });
     expect(app.requests.find(r => r.method === 'session.edit').params.through).toBeUndefined();
     expect(app.requests.find(r => r.method === 'session.edit').params.task).toBe('Start with a different question.');
     expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(0);
     await expect(page.locator('#transcript')).not.toContainText('First answer.');
+    await expect(page.locator('#transcript')).toContainText('Start with a different question.');
+    await expect(page.locator('.conversation-row[title="session-1"]')).toHaveCount(0);
+    await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
     await expect(page).toHaveURL(/\/chat\/session\/fork-session$/);
+    expect(app.requests.filter(r => ['agent.start', 'session.edit_prepare', 'session.edit_commit'].includes(r.method))).toHaveLength(0);
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -383,22 +389,6 @@ test('edit never skips an intervening user input without a forkable answer', asy
   await expect(page.locator('.msg.user').filter({ hasText: 'Continue working.' }).getByRole('button', { name: 'Edit message' })).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
-
-for (const first of [false, true]) {
-  test(`single edit replaces the ${first ? 'first' : 'later'} message without client-side cleanup calls`, async ({ page }) => {
-    const app = await setup(page, true);
-    await page.getByRole('button', { name: 'Edit message', exact: true }).nth(first ? 0 : 1).click();
-    await page.locator('.message-editor textarea').fill('Revised question');
-    await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(page.locator('.conversation-row[title="session-1"]')).toHaveCount(0);
-    await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
-    await expect(page.locator('#transcript')).toContainText('Revised question');
-    expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(1);
-    expect(app.requests.find(r => r.method === 'session.edit').params).toMatchObject({ session: 'session-1', source_sequence: 8 });
-    expect(app.requests.filter(r => ['agent.start', 'session.edit_prepare', 'session.edit_commit'].includes(r.method))).toHaveLength(0);
-    expect(app.pageErrors).toEqual([]);
-  });
-}
 
 test('running and compacting chats disable editing without interrupting the run', async ({ page }, testInfo) => {
   const app = await setup(page, true);

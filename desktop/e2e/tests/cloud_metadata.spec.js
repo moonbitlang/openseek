@@ -119,6 +119,9 @@ for (const status of [401, 404]) {
     await expect(page.locator('main h1')).toHaveText('Cloud fixture A');
     await expect(page.locator('#transcript')).toContainText('Earlier Cloud answer.');
     await expect(page.locator('.archived-read-only')).toHaveText('Archived conversation · Read onlyRestore');
+    const status = page.locator('main .run-status');
+    await expect(status).toHaveText('Archived conversation · Read only');
+    await expect(status.locator('.run-dot')).not.toHaveClass(/pulse|ok|danger/);
     await expect(page.locator('#task')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
     await cloud.row(sessionA).click({ button: 'right' });

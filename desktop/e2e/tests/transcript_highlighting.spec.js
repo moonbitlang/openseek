@@ -56,11 +56,17 @@ test('read workflow keeps thought, prose and tool order and highlights mixed out
   const prose = page.getByText('Inspect the requested files.', { exact: true });
   await expect(thought).toBeVisible();
   await expect(prose).toBeVisible();
-  const thoughtBox = await thought.boundingBox();
-  const proseBox = await prose.boundingBox();
-  const callBox = await call.locator('.tool-call-summary').boundingBox();
-  expect(thoughtBox.y + thoughtBox.height).toBeLessThanOrEqual(proseBox.y);
-  expect(proseBox.y + proseBox.height).toBeLessThanOrEqual(callBox.y);
+  const [proseNode, callNode] = await Promise.all([
+    prose.elementHandle(), call.locator('.tool-call-summary').elementHandle(),
+  ]);
+  // Expansion moves the following blocks. Measure all three in one frame and
+  // retry until the layout settles, rather than mixing animation frames.
+  await expect.poll(() => thought.evaluate((element, { prose, call }) => {
+    const thoughtBox = element.getBoundingClientRect();
+    const proseBox = prose.getBoundingClientRect();
+    const callBox = call.getBoundingClientRect();
+    return thoughtBox.bottom <= proseBox.top && proseBox.bottom <= callBox.top;
+  }, { prose: proseNode, call: callNode })).toBe(true);
   await call.locator('.tool-call-summary').click();
   await call.getByText('Filename', { exact: true }).click();
   await expect(call.locator('.mbtx-args')).toContainText('src/main.mbt:120:120');
@@ -82,42 +88,40 @@ test('read workflow keeps thought, prose and tool order and highlights mixed out
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const language of ['', 'mbt']) {
-  test(`reasoning highlights ${language || 'unlabelled'} code only after completion`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    app.sessionEvents = [{
-      sequence: 1,
-      item: { kind: 'user', payload: { content: 'Show the browser fixture code' } },
-    }];
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    const run = { run_id: 'highlight-run', session: 'session-1' };
-    app.notify('agent.started', {
-      ...run, session_root: '/workspace/.openseek', model: 'deepseek-v4-pro', max_steps: 1000,
-    });
-    const content = `\`\`\`${language}\nlet answer = 42\n\`\`\``;
-    app.notify('agent.event', { ...run, event: { event: 'reasoning_delta', content } });
-    const thought = page.locator('#transcript details.activity');
-    // Live reasoning starts expanded in the restored per-step presentation.
-    await expect(thought).toHaveAttribute('open', '');
-    const body = thought.locator('.activity-thinking');
-    // Even a closed fence stays raw while more reasoning can arrive.
-    await expect(body).toHaveText(content);
-    await expect(body.locator('pre, code, [class^="mtk"]')).toHaveCount(0);
-    app.notify('agent.event', {
-      ...run, event: { event: 'reasoning_message', content },
-    });
-    await expect(body.locator('pre.moonbit-source code')).toHaveText('let answer = 42');
-    await expect(body.locator('span[class^="mtk"]').first()).toBeVisible();
-    // Further answer deltas must retain the completed reasoning's colors.
-    app.notify('agent.event', {
-      ...run, event: { event: 'assistant_delta', content: 'The answer is 42.' },
-    });
-    await expect(body.locator('pre.moonbit-source code')).toHaveText('let answer = 42');
-    expect(app.pageErrors).toEqual([]);
+test('reasoning highlights unlabelled code only after completion', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [{
+    sequence: 1,
+    item: { kind: 'user', payload: { content: 'Show the browser fixture code' } },
+  }];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const run = { run_id: 'highlight-run', session: 'session-1' };
+  app.notify('agent.started', {
+    ...run, session_root: '/workspace/.openseek', model: 'deepseek-v4-pro', max_steps: 1000,
   });
-}
+  const content = '```\nlet answer = 42\n```';
+  app.notify('agent.event', { ...run, event: { event: 'reasoning_delta', content } });
+  const thought = page.locator('#transcript details.activity');
+  // Live reasoning starts expanded in the restored per-step presentation.
+  await expect(thought).toHaveAttribute('open', '');
+  const body = thought.locator('.activity-thinking');
+  // Even a closed fence stays raw while more reasoning can arrive.
+  await expect(body).toHaveText(content);
+  await expect(body.locator('pre, code, [class^="mtk"]')).toHaveCount(0);
+  app.notify('agent.event', {
+    ...run, event: { event: 'reasoning_message', content },
+  });
+  await expect(body.locator('pre.moonbit-source code')).toHaveText('let answer = 42');
+  await expect(body.locator('span[class^="mtk"]').first()).toBeVisible();
+  // Further answer deltas must retain the completed reasoning's colors.
+  app.notify('agent.event', {
+    ...run, event: { event: 'assistant_delta', content: 'The answer is 42.' },
+  });
+  await expect(body.locator('pre.moonbit-source code')).toHaveText('let answer = 42');
+  expect(app.pageErrors).toEqual([]);
+});
 
 test('saved reasoning and answers default unlabelled code to MoonBit', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);

@@ -313,6 +313,13 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
   expect(JSON.parse(request.body).content).toBe('Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeVisible();
+  // The request counter advances before admission clears the submitted draft.
+  await expect(input).toHaveValue('');
+  // Only loaded history records have timestamps; the live echo can precede
+  // the history read that makes this prompt available to ArrowUp.
+  await expect(page.locator('#transcript .msg.user').filter({
+    hasText: 'Update the heading',
+  }).locator('.turn-time')).toHaveCount(1);
   await input.press('ArrowUp');
   await expect(input).toHaveValue('Update the heading');
   await expect(chip).toContainText('index.html');
@@ -1060,7 +1067,9 @@ for (const unchanged of [true, false]) {
   });
 }
 
-for (const preview of ['oversized', 'binary', 'office', 'pending']) {
+// fileeditor/download_wbtest.mbt covers binary/oversized/loading cache rejection.
+// Keep parsed Office and pending-read download integration here.
+for (const preview of ['office', 'pending']) {
   test(`Cloud files download when the preview is ${preview} without saving the preview result`, async ({ page }) => {
     const cloud = new CloudFilesHarness(page);
     const name = preview === 'office' ? 'report.docx' : 'unsupported.bin';
@@ -1069,14 +1078,14 @@ for (const preview of ['oversized', 'binary', 'office', 'pending']) {
     cloud.directories.set(`${sessionA}:`, [{ name, is_dir: false }]);
     cloud.contents.set(key, preview === 'office'
       ? { kind: 'binary_content', ...cloud.device.officeFiles['docs/report.docx'] }
-      : { kind: preview === 'pending' ? 'content' : preview, content: 'preview source', sig: 'v1', absolute: `/${name}` });
+      : { kind: 'content', content: 'preview source', sig: 'v1', absolute: `/${name}` });
     cloud.downloads.set(key, raw);
     let release;
     if (preview === 'pending') cloud.holdRead = new Promise(resolve => { release = resolve; });
     await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
     await file(page, name).click();
     if (preview === 'office') await expect(page.locator('.word-page')).toBeVisible();
-    else await expect(page.locator('.viewer-notice')).toContainText(preview === 'pending' ? 'Loading file' : preview === 'oversized' ? 'too large' : 'binary file');
+    else await expect(page.locator('.viewer-notice')).toContainText('Loading file');
     const before = cloud.fileRequests.length;
     const transfer = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download to local', exact: true }).click();

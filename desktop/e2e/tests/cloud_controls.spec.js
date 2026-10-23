@@ -16,8 +16,7 @@ async function running(page) {
   const app = new CloudHarness(page);
   app.manualTasks = true;
   await app.install();
-  await app.goto();
-  await app.open();
+  await app.openDirect();
   await page.locator('#task').fill('Start a Cloud turn');
   await page.locator('#send').click();
   await expect(page.locator('#stop')).toBeEnabled();
@@ -209,8 +208,7 @@ test('Cloud keeps a pending send and later draft while switching away and back',
   const admission = deferred();
   app.pauseSend = admission.promise;
   await app.install();
-  await app.goto();
-  await app.open();
+  await app.openDirect();
   await page.locator('#task').fill('Submitted before switching');
   await page.locator('#send').click();
   await expect.poll(() => app.postCount).toBe(1);

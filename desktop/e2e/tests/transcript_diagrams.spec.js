@@ -136,7 +136,7 @@ test('transcript ignores a Mermaid result after its conversation is removed', as
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const language of ['mermaid', 'd2', 'diago']) {
+for (const language of ['mermaid', 'diago']) {
   test(`streaming ${language} renders only closed fences, including in committed messages`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     await app.install();

@@ -111,7 +111,7 @@ test('a failed first image send preserves the draft and known session, and expli
 test('existing Cloud documents use Upload confirmation and retain bytes after a failed import', async ({ page }) => {
   const cloud = new AttachmentHarness(page);
   cloud.importStatus = 503;
-  await cloud.install(); await cloud.goto(); await cloud.open(sessionA);
+  await cloud.install(); await cloud.openDirect(sessionA);
   await select(page, document);
   expect(creations(cloud)).toHaveLength(0);
   expect(cloud.imports).toHaveLength(0);
@@ -140,7 +140,7 @@ for (const [method, editText] of [['picker', false], ['paste', true]]) {
     cloud.pauseSend = new Promise(resolve => admit = resolve);
     cloud.pauseStream = new Promise(resolve => finish = resolve);
     try {
-      await cloud.install(); await cloud.goto(); await cloud.open();
+      await cloud.install(); await cloud.openDirect();
       await select(page, image);
       await page.locator('#task').fill('Submitted content');
       await page.getByRole('button', { name: 'Send', exact: true }).click();

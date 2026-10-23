@@ -54,7 +54,7 @@ async function showTerminal(page) {
   await expect(page.locator('.terminal-panel.open')).toBeVisible();
 }
 
-test('a ! command runs in a terminal tab and its output becomes a card', async ({ page }) => {
+test('a ! command runs in a terminal tab, becomes a card and returns from history', async ({ page }) => {
   const app = await open(page);
   const task = page.locator('#task');
   await typeCommand(page, '!ls -la');
@@ -88,6 +88,10 @@ test('a ! command runs in a terminal tab and its output becomes a card', async (
   await expect(card.locator('.user-shell-status')).toHaveText('exit 2');
   await expect(card.locator('.user-shell-output')).toHaveText('total 0\nls: cannot access x');
   await expect(page.locator('.user-bubble', { hasText: '<user_shell_command>' })).toHaveCount(0);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await task.press('ArrowUp');
+  await expect(task).toHaveValue('!ls -la');
+  await expect(page.locator('.composer-mode-chip')).toHaveText(['shell', 'History 2/2']);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -269,24 +273,5 @@ test('output that outruns the terminal scrollback is marked truncated', async ({
   expect(result).toContain('truncated=true');
   expect(result).toContain('last line');
   expect(result).not.toContain('first line');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a ! command that ran comes back from history as the draft that ran it', async ({ page }) => {
-  const app = await open(page);
-  const task = page.locator('#task');
-  await typeCommand(page, '!git status');
-  const id = await commandTerminal(app, 'git status');
-  print(app, id, 'clean\r\n');
-  exit(app, id, 0);
-  await expect.poll(() => sentResult(app)).toBeTruthy();
-  const event = { sequence: 18, item: { kind: 'user', payload: { content: [{ type: 'text', text: sentResult(app) }] } } };
-  app.sessionEvents.push(event);
-  app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 18, event });
-  await expect(page.locator('.user-bubble .user-shell-command')).toBeVisible();
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  await task.press('ArrowUp');
-  await expect(task).toHaveValue('!git status');
-  await expect(page.locator('.composer-mode-chip')).toHaveText(['shell', 'History 2/2']);
   expect(app.pageErrors).toEqual([]);
 });
