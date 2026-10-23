@@ -132,3 +132,33 @@ test "Cloud compaction rejection and lost response preserve their distinct outco
     other,
   )
 }
+
+///|
+test "Cloud missing model credentials reject compact without retaining a queued command" {
+  let base = controls_fixture()
+  let idle = base.replace("session", {
+    ..base.conversations["session"],
+    generating: false,
+  })
+  let requested = request_compact(idle)
+  let request = requested.conversations["session"].compact_request.unwrap()
+  let refused = metadata_update(
+    requested,
+    CompactFailed(1, "session", request, ServiceNotConfigured),
+  )
+  assert_false(refused.conversations["session"].compact_queued)
+  assert_true(refused.conversations["session"].compact_request is None)
+  assert_true(refused.can_send("session"))
+  assert_eq(
+    refused.conversations["session"].notice,
+    Some(Failure::ServiceNotConfigured.label()),
+  )
+  for failure in ([Unreachable, Http(503), Malformed] : Array[Failure]) {
+    let unknown = metadata_update(
+      requested,
+      CompactFailed(1, "session", request, failure),
+    )
+    assert_true(unknown.conversations["session"].compact_queued)
+    assert_eq(unknown.conversations["session"].compact_request, Some(request))
+  }
+}

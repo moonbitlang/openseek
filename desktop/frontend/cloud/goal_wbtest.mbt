@@ -206,3 +206,40 @@ test "Cloud goal rejection preserves a reopened editor" {
   )
   assert_eq(rejected.conversations["session"].goal.draft, Some("New edit"))
 }
+
+///|
+test "Cloud missing model credentials reject goal and restore the submitted editor" {
+  let editing = goal_action(
+    controls_fixture(),
+    @composer.GoalEditStarted(identity=goal_identity()),
+  )
+  let requested = goal_action(
+    editing,
+    @composer.GoalSubmitted(
+      identity=goal_identity(),
+      draft="Ship it",
+      prompt_present=true,
+    ),
+  )
+  let request = requested.conversations["session"].goal_request
+  let refused = metadata_update(
+    requested,
+    GoalFailed(1, "session", request, ServiceNotConfigured),
+  )
+  assert_true(refused.conversations["session"].goal.pending is None)
+  assert_eq(refused.conversations["session"].goal.draft, Some("Ship it"))
+  assert_eq(
+    refused.conversations["session"].notice,
+    Some(Failure::ServiceNotConfigured.label()),
+  )
+  for failure in ([Unreachable, Http(503), Malformed] : Array[Failure]) {
+    let unknown = metadata_update(
+      requested,
+      GoalFailed(1, "session", request, failure),
+    )
+    assert_true(
+      unknown.conversations["session"].goal.pending
+      is Some(@composer.GoalSetting("Ship it")),
+    )
+  }
+}

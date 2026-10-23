@@ -28,7 +28,8 @@ fn State::update_goal(
       Err(failure) => failure.label()
     }
     let definite = result
-      is (Ok(Rejected(_)) | Err(Unauthorized | Http(400 | 404)))
+      is (Ok(Rejected(_))
+      | Err(ServiceNotConfigured | Unauthorized | Http(400 | 404)))
     let goal = if definite {
       {
         ..conversation.goal,

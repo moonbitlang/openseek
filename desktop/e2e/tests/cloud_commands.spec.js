@@ -173,3 +173,37 @@ test('Cloud preserves a service-only prompt and startup failure across reopen an
   expect(app.device.pageErrors).toEqual([]);
 });
 
+for (const command of ['compact', 'goal']) {
+  test(`Cloud ${command} clears pending state when model credentials are explicitly missing`, async ({ page }) => {
+    const app = await open(page);
+    await page.route('**/v1/sessions/*/commands', async route => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      const body = route.request().postDataJSON();
+      if (body.command.command !== command) return route.fallback();
+      await route.fulfill({ status: 503, headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'text/plain', body: 'server model credentials are not configured' });
+    });
+    if (command === 'compact') {
+      await compact(page);
+      await expect(page.locator('.composer-notice-text')).toHaveCount(0);
+      await page.locator('#task').fill('Keep this editable prompt');
+      await expect(page.locator('#send')).toBeEnabled();
+    } else {
+      await page.locator('#task').fill('/goal');
+      await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
+      await page.locator('#task').press('Enter');
+      await expect(page.locator('#goal-set')).toBeVisible();
+      await page.locator('#task').fill('Keep this goal');
+      await page.locator('#goal-set').click();
+      await expect(page.locator('#goal-set')).toBeVisible();
+      await expect(page.locator('#task')).toHaveValue('Keep this goal');
+      await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
+    }
+    await expect(page.locator('#transcript')).toContainText('Cloud model credentials are not configured');
+    if (command === 'goal') {
+      await expect(page.locator('#goal-set')).toBeVisible();
+      await expect(page.locator('#task')).toHaveValue('Keep this goal');
+      await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
+    }
+    expect(app.device.pageErrors).toEqual([]);
+  });
+}

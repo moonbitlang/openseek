@@ -32,7 +32,8 @@ fn State::update_compact(
       Err(failure) => failure.label()
     }
     let definite = result
-      is (Ok(Rejected(_)) | Err(Unauthorized | Http(400 | 404)))
+      is (Ok(Rejected(_))
+      | Err(ServiceNotConfigured | Unauthorized | Http(400 | 404)))
     let next = self.replace(session, {
       ..conversation,
       compact_request: if definite {
