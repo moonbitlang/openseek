@@ -1,8 +1,13 @@
 # Shared OpenSeek command handling
 
 Local and Cloud use this package for command interaction and native event state.
-Register a slash action in `slash_action`, add its menu entry in the shared
-`Model::engine_commands`, and implement any new UI state in this package once.
+Local and Cloud share the full `Model::openseek_commands` catalog, including
+prompt workflows (`/simplify` and `/ultrareview`). The shared composer expands
+prompt commands before normal submission. A Cloud draft without a created session
+only offers prompt commands; submitting one creates the session as usual.
+
+For a native command, register its action in `slash_action`, add its menu entry
+to that shared catalog, and implement any new UI state in this package once.
 A native command without extra interaction uses `Send(command)`.
 
 - Each Local and Cloud conversation stores `State` directly. Goal drafts, pending

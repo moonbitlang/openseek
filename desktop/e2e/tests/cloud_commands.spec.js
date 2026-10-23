@@ -49,6 +49,40 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   expect(app.device.pageErrors).toEqual([]);
 });
 
+for (const [name, workflow] of [['simplify', 'simplify.mbtx'], ['ultrareview', 'review.mbtx']]) {
+  for (const fresh of [false, true]) {
+    test(`Cloud ${name} shares prompt expansion in ${fresh ? 'a new' : 'an existing'} session`, async ({ page }, testInfo) => {
+      const app = await open(page);
+      if (fresh) await app.create();
+      const task = page.locator('#task');
+      await task.fill(`/${name}`);
+      await expect(page.locator('.completion-item').filter({ hasText: `/${name}` })).toBeVisible();
+      if (!fresh && name === 'simplify') {
+        await task.fill('/');
+        await expect(page.locator('.completion-item')).toHaveCount(4);
+        await page.screenshot({ path: testInfo.outputPath('cloud-shared-slash-menu.png') });
+        await task.fill(`/${name}`);
+      }
+      await task.press('Enter');
+      await expect(task).toHaveValue(`/${name} `);
+      await page.keyboard.type('the parser');
+      expect(commands(app)).toEqual([]);
+      expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
+      await page.locator('#send').click();
+      await expect.poll(() => commands(app).length).toBe(1);
+      const command = commands(app)[0].command;
+      expect(command.command).toBe('prompt');
+      const content = typeof command.content === 'string' ? command.content : command.content.filter(part => part.type === 'text').map(part => part.text).join('');
+      expect(content).toContain(`"@builtin/${workflow}"`);
+      expect(content).toContain('Focus: the parser');
+      if (name === 'ultrareview') expect(content).toContain('"--swarm"');
+      await expect(task).toHaveValue('');
+      expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(fresh ? 1 : 0);
+      expect(app.device.pageErrors).toEqual([]);
+    });
+  }
+}
+
 test('Cloud blank does not expose engine-only commands or create a session for them', async ({ page }) => {
   const app = await open(page);
   await page.getByRole('button', { name: 'New chat', exact: true }).click();

@@ -29,6 +29,15 @@ test "new Cloud is an editable empty composer without a remote session" {
   assert_true(blank.chat_column() is CloudTranscript(..))
   assert_true(blank.cloud_conversation() is None)
   assert_false(blank.composer_input().presentation.disabled)
+  assert_eq(
+    blank.composer_input().slash_commands.map(command => command.command),
+    ["ultrareview", "simplify"],
+  )
+  assert_true(
+    blank.composer_input().slash_commands.all(command => {
+      command.prompt is Some(_)
+    }),
+  )
   assert_true(
     blank.composer_input().presentation.primary_action
     is @composer.Send(available=true),

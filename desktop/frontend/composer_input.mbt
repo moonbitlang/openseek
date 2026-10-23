@@ -216,21 +216,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // transcript.
     run: conv.run_heartbeat(),
     goal: conv.controls.input(),
-    slash_commands: [
-      ..self.engine_commands(),
-      {
-        label: "/ultrareview",
-        detail: shell_text(self.locale, UltraReview),
-        command: "ultrareview",
-        prompt: Some(UltrareviewPrompt),
-      },
-      {
-        label: "/simplify",
-        detail: shell_text(self.locale, SimplifyProject),
-        command: "simplify",
-        prompt: Some(SimplifyPrompt),
-      },
-    ],
+    slash_commands: self.openseek_commands(),
     // Editing a queued message rewrites that message; it never runs one.
     shell_available: conv.queue_edit is None,
     history: conv.sent_prompts(shell=conv.queue_edit is None),
@@ -495,8 +481,11 @@ const SimplifyPrompt : String =
   #|Focus:
 
 ///|
-fn Model::engine_commands(self : Model) -> Array[@composer.SlashCommand] {
-  [
+fn Model::openseek_commands(
+  self : Model,
+  session_commands~ : Bool = true,
+) -> Array[@composer.SlashCommand] {
+  let commands : Array[@composer.SlashCommand] = [
     {
       label: "/compact",
       detail: shell_text(self.locale, CompactContext),
@@ -509,5 +498,18 @@ fn Model::engine_commands(self : Model) -> Array[@composer.SlashCommand] {
       command: "goal",
       prompt: None,
     },
+    {
+      label: "/ultrareview",
+      detail: shell_text(self.locale, UltraReview),
+      command: "ultrareview",
+      prompt: Some(UltrareviewPrompt),
+    },
+    {
+      label: "/simplify",
+      detail: shell_text(self.locale, SimplifyProject),
+      command: "simplify",
+      prompt: Some(SimplifyPrompt),
+    },
   ]
+  commands.filter(command => session_commands || command.prompt is Some(_))
 }

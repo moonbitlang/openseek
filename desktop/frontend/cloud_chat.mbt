@@ -437,10 +437,10 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     },
     turn_id: conversation.bind(value => value.task),
     goal: conversation.map_or(input.goal, value => value.controls.input()),
-    slash_commands: if creating || !self.cloud.can_compose(owner.session()) {
+    slash_commands: if !creating && !self.cloud.can_compose(owner.session()) {
       []
     } else {
-      self.engine_commands()
+      self.openseek_commands(session_commands=!creating)
     },
     history,
     root: file_ctx(self).root(),
