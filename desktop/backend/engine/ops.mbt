@@ -336,7 +336,7 @@ pub async fn session_command(
     }
     Prompt(content~, submission_id~) => {
       let reply = start_run(sink, manager, {
-        moonbit_guide: None,
+        moonbit_guide: settings.moonbit_guide,
         session: settings.session,
         task: content.text(),
         images: command_images(content),
@@ -1165,6 +1165,7 @@ async test "native commands share writer delivery and preserve turn ownership" {
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
   let received = root.join("received")
+  let launch_args = root.join("launch-args")
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(
     runtime.join("toolchains/moonbit/macos-arm64"),
@@ -1174,7 +1175,7 @@ async test "native commands share writer delivery and preserve turn ownership" {
   // goal really left the host rather than only that the op returned.
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nprintf '%s\\n' \"$*\" >> '\{launch_args}';\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1191,7 +1192,7 @@ async test "native commands share writer delivery and preserve turn ownership" {
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
     let settings : @protocol.SessionCommandSettings = {
-      moonbit_guide: None,
+      moonbit_guide: Some(false),
       session,
       model: None,
       thinking: None,
@@ -1312,6 +1313,29 @@ async test "native commands share writer delivery and preserve turn ownership" {
     )
     assert_true(lines[5] is { "command": "cancel", .. })
     assert_true(lines[6] is { "command": "compact", .. })
+    // A goal and a first prompt can each create the session's engine. Both
+    // must preserve the draft's creation choice through the shared command API.
+    assert_true(
+      session_command(sink, manager, {
+        settings: { ..settings, session: session + "-prompt", },
+        run_id: None,
+        command: Prompt(
+          content=Content([Text("first native prompt")]),
+          submission_id=Some("first-native-prompt"),
+        ),
+      }).accepted,
+    )
+    @async.with_timeout(3000, () => {
+      while !@fsx.exists(launch_args) ||
+            @fsx.read_text(launch_args).trim().split("\n").count() < 2 {
+        @async.sleep(1)
+      }
+    })
+    let launches = @fsx.read_text(launch_args).trim().split("\n").collect()
+    assert_eq(launches.length(), 2)
+    for args in launches {
+      assert_true(args.contains("--moonbit-guide=off"))
+    }
     group.return_immediately(())
   })
 }

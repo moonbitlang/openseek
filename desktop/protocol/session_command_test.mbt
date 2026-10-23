@@ -11,16 +11,24 @@ test "native session commands reuse launch settings and native command codecs" {
       "session": "s",
       "workspace": "/workspace",
       "model": "custom",
+      "moonbit_guide": false,
       "command": command.to_json(),
       "future": true,
     }
     let payload : @protocol.SessionCommandPayload = @json.from_json(json)
     assert_true(payload.command == command)
     assert_eq(payload.settings.workspace, Some("/workspace"))
+    assert_eq(payload.settings.moonbit_guide, Some(false))
     let encoded = payload.to_json()
     assert_true(
       encoded
-      is { "session": "s", "model": "custom", "workspace": "/workspace", .. },
+      is {
+        "session": "s",
+        "model": "custom",
+        "workspace": "/workspace",
+        "moonbit_guide": false,
+        ..
+      },
     )
     assert_true(
       (@json.from_json(encoded) : @protocol.SessionCommandPayload) == payload,
@@ -44,6 +52,11 @@ test "native session commands reuse launch settings and native command codecs" {
           "session": "s",
           "command": { "command": "compact" },
           "max_steps": "wrong",
+        },
+        {
+          "session": "s",
+          "command": { "command": "compact" },
+          "moonbit_guide": "wrong",
         },
       ] : Array[Json]) {
     let parsed : @protocol.SessionCommandPayload? = Some(@json.from_json(json)) catch {
