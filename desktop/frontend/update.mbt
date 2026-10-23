@@ -1039,7 +1039,6 @@ fn apply_engine_event(
   event : @transcript.EngineEvent,
   event_run_id : String?,
 ) -> (String?, Conversation) {
-  let conv = { ..conv, controls: conv.controls.progress(event), }
   let stream : @engine_session.Stream = {
     response: conv.turn.streaming_response,
     reasoning: conv.turn.live_reasoning.map(r => {
@@ -9494,7 +9493,7 @@ fn update_device_msg(
         (jobs_cmd, model)
       }
     }
-    NativeEngine(run_id, event, session~) => {
+    Engine(run_id, event, session~) => {
       // Native command events share one reducer with Cloud. Host lifecycle
       // and durable-commit synchronization stay on their existing paths.
       let next = if model.find_conversation(channel, session) is Some(conv) &&
@@ -9510,31 +9509,23 @@ fn update_device_msg(
       } else {
         model
       }
-      match @transcript.decode_engine_event(event) {
-        Some(event) =>
-          update_device_msg(
-            dispatch,
-            channel,
-            Engine(run_id, event, session=Some(session)),
-            next,
-          )
-        None => (@cmd.none, next)
+      let model = next
+      guard @transcript.decode_engine_event(event) is Some(event) else {
+        return (@cmd.none, model)
       }
-    }
-    Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
       // `active_run_id` — or with no run id at all (an engine spawned just
       // to compact). The host stamps them with their session, which covers
       // that case too; the conversation that last held the id remains the
-      // fallback for unstamped events.
+      // owner of a trailing steer receipt.
       let conv = if run_id is Some(id) &&
         model.conversation_by_run(channel, id) is Some(conv) {
         Some(conv)
       } else if is_steer_receipt(event) && run_id is Some(id) {
         // Host settling receipts may intentionally trail the terminal event;
         // an even newer Started can already have replaced last_run_id. Prefer
-        // the exact pending-steer match before the legacy run fallback.
+        // the exact pending-steer match before falling back to the last run owner.
         let exact = match event {
           SteerApplied(submission_id=Some(submission_id), ..) =>
             model.conversation_by_pending_steer(channel, submission_id, id)
@@ -9548,14 +9539,7 @@ fn update_device_msg(
           model.conversation_by_last_run(channel, id)
         }
       } else if is_idle_event(event) {
-        if session is Some(session) &&
-          model.find_conversation(channel, session) is Some(conv) {
-          Some(conv)
-        } else if run_id is Some(id) {
-          model.conversation_by_last_run(channel, id)
-        } else {
-          None
-        }
+        model.find_conversation(channel, session)
       } else {
         None
       }
@@ -10604,12 +10588,20 @@ test "assistant deltas accumulate into the streaming response" {
   let dispatch = test_dispatch()
   let (_, first) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("Hello"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="Hello"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, second) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta(", world"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content=", world"),
+      session="desktop-test",
+    ),
     first,
   )
   assert_eq(second.active().turn.streaming_response, Some("Hello, world"))
@@ -10628,12 +10620,20 @@ test "update is pure: replaying a delta on the same model is idempotent" {
   })
   let (_, once) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("!"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="!"),
+      session="desktop-test",
+    ),
     model,
   )
   let (_, twice) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("!"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="!"),
+      session="desktop-test",
+    ),
     model,
   )
   assert_eq(once.active().turn.streaming_response, Some("partial!"))
@@ -10645,7 +10645,11 @@ test "deltas from an unknown run are dropped" {
   let dispatch = test_dispatch()
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r99"), AssistantDelta("stale"), session=None),
+    Engine(
+      Some("r99"),
+      @wire.AssistantDelta(content="stale"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   assert_eq(next.active().turn.streaming_response, None)
@@ -10657,7 +10661,11 @@ test "reasoning message waits for its durable commit" {
   let model = running_model()
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("full thought"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="full thought"),
+      session="desktop-test",
+    ),
     model,
   )
   inspect(next.active().messages.length(), content="0")
@@ -10672,12 +10680,20 @@ test "reasoning deltas accumulate and answer output closes the live stream" {
   let dispatch = test_dispatch()
   let (_, first) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("first"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="first"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, second) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta(" line"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content=" line"),
+      session="desktop-test",
+    ),
     first,
   )
   assert_eq(
@@ -10686,7 +10702,11 @@ test "reasoning deltas accumulate and answer output closes the live stream" {
   )
   let (_, answered) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("answer"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="answer"),
+      session="desktop-test",
+    ),
     second,
   )
   assert_eq(
@@ -10697,7 +10717,11 @@ test "reasoning deltas accumulate and answer output closes the live stream" {
   // or extend it.
   let (_, late) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta(" late"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content=" late"),
+      session="desktop-test",
+    ),
     answered,
   )
   assert_eq(
@@ -10711,12 +10735,20 @@ test "an empty remote reasoning settlement clears the partial preview" {
   let dispatch = test_dispatch()
   let (_, partial) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("first line"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="first line"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, settled) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage(""), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content=""),
+      session="desktop-test",
+    ),
     partial,
   )
   assert_eq(settled.active().turn.live_reasoning, None)
@@ -10779,13 +10811,21 @@ test "commit-first reasoning keeps late prefixes and de-duplicates when sealed" 
   let (_, committed) = update_dev(dispatch, commit, running_model())
   let (_, partial) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("complete"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="complete"),
+      session="desktop-test",
+    ),
     committed,
   )
   assert_eq(partial.active().reasoning_for_render(), (Some("complete"), false))
   let (_, completed) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("complete thought"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="complete thought"),
+      session="desktop-test",
+    ),
     partial,
   )
   assert_eq(
@@ -10800,7 +10840,11 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
   let dispatch = test_dispatch()
   let (_, partial) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("shared"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="shared"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, committed) = update_dev(
@@ -10826,7 +10870,11 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
   assert_eq(committed.active().reasoning_for_render(), (Some("shared"), false))
   let (_, continued) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta(" future"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content=" future"),
+      session="desktop-test",
+    ),
     committed,
   )
   assert_eq(
@@ -10860,7 +10908,11 @@ test "a later run does not confuse identical historical reasoning for its commit
   let model = running_model().replace_conversation(historical)
   let (_, partial) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningDelta("shared opening"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="shared opening"),
+      session="desktop-test",
+    ),
     model,
   )
   assert_eq(
@@ -10869,7 +10921,11 @@ test "a later run does not confuse identical historical reasoning for its commit
   )
   let (_, complete) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("shared opening"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="shared opening"),
+      session="desktop-test",
+    ),
     partial,
   )
   assert_eq(
@@ -11024,7 +11080,7 @@ test "a step event is what moves the heartbeat's stage" {
   )
   let (_, stepped) = update_dev(
     test_dispatch(),
-    Engine(Some("r7"), AgentStep(Some(2)), session=None),
+    Engine(Some("r7"), @wire.AgentStep(step=2), session="desktop-test"),
     running,
   )
   assert_eq(
@@ -11042,7 +11098,11 @@ test "assistant message only settles the transient response" {
   })
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantMessage("answer"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantMessage(content="answer"),
+      session="desktop-test",
+    ),
     model,
   )
   assert_eq(next.active().turn.streaming_response, None)
@@ -11061,7 +11121,11 @@ test "agent setup failure is lifecycle-only until its durable terminal" {
   })
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), AgentSetupFailed("could not initialize"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AgentSetupFailed(error="could not initialize"),
+      session="desktop-test",
+    ),
     model,
   )
   assert_eq(next.active().turn.streaming_response, None)
@@ -11077,7 +11141,7 @@ test "a new agent step clears the live stream" {
   })
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), AgentStep(Some(2)), session=None),
+    Engine(Some("r7"), @wire.AgentStep(step=2), session="desktop-test"),
     model,
   )
   assert_eq(next.active().turn.streaming_response, None)
@@ -11099,12 +11163,12 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
     dispatch,
     Engine(
       Some("r7"),
-      StreamRetry(
+      @wire.StreamRetry(
         attempt=2,
         max_attempts=5,
         reason="Stream ended before [DONE]",
       ),
-      session=None,
+      session="desktop-test",
     ),
     model,
   )
@@ -11128,7 +11192,11 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
   // The replacement attempt's first delta ends the notice.
   let (_, streaming) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantDelta("again"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantDelta(content="again"),
+      session="desktop-test",
+    ),
     retrying,
   )
   assert_eq(streaming.active().turn.streaming_response, Some("again"))
@@ -11148,8 +11216,8 @@ test "a retry notice ends at the model's next progress, not at unrelated events"
     dispatch,
     Engine(
       Some("r7"),
-      StreamRetry(attempt=2, max_attempts=5, reason="connection reset"),
-      session=None,
+      @wire.StreamRetry(attempt=2, max_attempts=5, reason="connection reset"),
+      session="desktop-test",
     ),
     model,
   )
@@ -11157,7 +11225,11 @@ test "a retry notice ends at the model's next progress, not at unrelated events"
   // the request being retried.
   let (_, still) = update_dev(
     dispatch,
-    Engine(Some("r7"), BackgroundNotice("job done"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.BackgroundNotice(content="job done"),
+      session="desktop-test",
+    ),
     retrying,
   )
   assert_true(
@@ -11170,8 +11242,14 @@ test "a retry notice ends at the model's next progress, not at unrelated events"
     dispatch,
     Engine(
       Some("r7"),
-      Usage(prompt_tokens=10, completion_tokens=5),
-      session=None,
+      @wire.Usage(usage={
+        prompt_tokens: 10,
+        completion_tokens: 5,
+        total_tokens: 15,
+        prompt_cache_hit_tokens: 0,
+        prompt_cache_miss_tokens: 0,
+      }),
+      session="desktop-test",
     ),
     still,
   )
@@ -11382,8 +11460,8 @@ test "an idle background notice is absorbed without a toast" {
     dispatch,
     Engine(
       Some("r7"),
-      BackgroundNotice("background job bg-1 finished (exit=0)"),
-      session=None,
+      @wire.BackgroundNotice(content="background job bg-1 finished (exit=0)"),
+      session="desktop-test",
     ),
     model,
   )
@@ -14495,7 +14573,11 @@ test "concurrent conversations keep their streams apart" {
   let model = running_model().replace_conversation(second)
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r8"), AssistantDelta("for B"), session=None),
+    Engine(
+      Some("r8"),
+      @wire.AssistantDelta(content="for B"),
+      session="desktop-second",
+    ),
     model,
   )
   // Run 8 belongs to the background conversation; the active one is untouched.
@@ -14630,11 +14712,12 @@ test "steer_applied only settles pending UI until its commit" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("go left")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     model,
   )
@@ -14652,8 +14735,12 @@ test "a legacy text-only steer receipt cannot claim local ownership" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content=Content([Text("go left")]), submission_id=None),
-      session=None,
+      @wire.SteerApplied(
+        kind="prompt",
+        content=Content([Text("go left")]),
+        submission_id=None,
+      ),
+      session="desktop-test",
     ),
     model,
   )
@@ -14781,11 +14868,11 @@ test "steer_dropped settles the pending steer with a visible notice" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(
+      @wire.SteerDropped(
         content=Content([Text("go left")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     model,
   )
@@ -14805,11 +14892,12 @@ test "an identical-text settle removes exactly one pending entry" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("again")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     model,
   )
@@ -14833,11 +14921,12 @@ test "a late exact applied receipt retracts a run-end unconfirmed notice" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("lost")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     finished,
   )
@@ -14854,11 +14943,12 @@ test "a trailing applied receipt for run A settles after run B Started" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("late steer")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     started,
   )
@@ -14878,11 +14968,11 @@ test "a trailing dropped receipt for run A cannot close run B" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(
+      @wire.SteerDropped(
         content=Content([Text("late steer")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     started,
   )
@@ -15140,11 +15230,12 @@ test "a trailing applied receipt settles after an empty runs snapshot" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(
+      @wire.SteerApplied(
+        kind="prompt",
         content=Content([Text("late applied")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     settled,
   )
@@ -15167,11 +15258,11 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(
+      @wire.SteerDropped(
         content=Content([Text("late dropped")]),
         submission_id=Some("test-steer-0"),
       ),
-      session=None,
+      session="desktop-test",
     ),
     settled,
   )
@@ -20445,7 +20536,11 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
   // The engine reaches the queued compaction: queued flips into compacting.
   let (_, started) = update_dev(
     dispatch,
-    Engine(Some("r7"), CompactionStarted, session=None),
+    Engine(
+      Some("r7"),
+      @wire.CompactionStarted(from_sequence=1, to_sequence=2),
+      session="desktop-test",
+    ),
     held,
   )
   assert_true(started.active().controls.compaction is Compacting)
@@ -20475,7 +20570,11 @@ test "an idle /compact holds the send gate until the engine confirms" {
   // The engine confirms; the session stamp routes it (no run id exists yet).
   let (_, started) = update_dev(
     dispatch,
-    Engine(None, CompactionStarted, session=Some("desktop-test")),
+    Engine(
+      None,
+      @wire.CompactionStarted(from_sequence=1, to_sequence=2),
+      session="desktop-test",
+    ),
     held,
   )
   assert_true(started.active().controls.compaction is Compacting)
@@ -20495,12 +20594,28 @@ test "update is pure: automatic checkpoint waits for its commit" {
   })
   let (_, once) = update_dev(
     dispatch,
-    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AutoCompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="checkpoint recap",
+      ),
+      session="desktop-test",
+    ),
     model,
   )
   let (_, twice) = update_dev(
     dispatch,
-    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AutoCompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="checkpoint recap",
+      ),
+      session="desktop-test",
+    ),
     model,
   )
   assert_eq(once.active().turn.streaming_response, Some("partial"))
@@ -20527,12 +20642,20 @@ test "update is pure: context yield waits for its commit" {
   })
   let (_, once) = update_dev(
     dispatch,
-    Engine(Some("r7"), ContextYield(answer), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ContextYield(to_sequence=2, answer~),
+      session="desktop-test",
+    ),
     model,
   )
   let (_, twice) = update_dev(
     dispatch,
-    Engine(Some("r7"), ContextYield(answer), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ContextYield(to_sequence=2, answer~),
+      session="desktop-test",
+    ),
     model,
   )
   assert_eq(once.active().turn.streaming_response, None)
@@ -20548,12 +20671,24 @@ test "context yield settles after its automatic checkpoint" {
   let answer = "[context ceiling] continue in a new turn"
   let (_, checkpointed) = update_dev(
     dispatch,
-    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AutoCompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="checkpoint recap",
+      ),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, yielded) = update_dev(
     dispatch,
-    Engine(Some("r7"), ContextYield(answer), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ContextYield(to_sequence=2, answer~),
+      session="desktop-test",
+    ),
     checkpointed,
   )
   assert_true(yielded.active().is_running())
@@ -20585,8 +20720,12 @@ test "compaction_finished waits for its durable summary" {
     dispatch,
     Engine(
       Some("r7"),
-      CompactionFinished("earlier turns compacted"),
-      session=None,
+      @wire.CompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="earlier turns compacted",
+      ),
+      session="desktop-test",
     ),
     model,
   )
@@ -20606,7 +20745,11 @@ test "compaction events route by session when no run id matches" {
   })
   let (_, started) = update_dev(
     dispatch,
-    Engine(None, CompactionStarted, session=Some("desktop-test")),
+    Engine(
+      None,
+      @wire.CompactionStarted(from_sequence=1, to_sequence=2),
+      session="desktop-test",
+    ),
     model,
   )
   assert_true(started.active().controls.compaction is Compacting)
@@ -20614,8 +20757,12 @@ test "compaction events route by session when no run id matches" {
     dispatch,
     Engine(
       None,
-      CompactionFinished("earlier turns compacted"),
-      session=Some("desktop-test"),
+      @wire.CompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="earlier turns compacted",
+      ),
+      session="desktop-test",
     ),
     started,
   )
@@ -20635,7 +20782,11 @@ test "compaction_failed settles a still-queued compaction" {
   })
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), CompactionFailed("engine exited"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.CompactionFailed(error="engine exited"),
+      session="desktop-test",
+    ),
     model,
   )
   assert_true(next.active().controls.compaction is NotCompacting)
@@ -21511,8 +21662,12 @@ test "tool decode semantics wait for their durable error tool result" {
   let dispatch = test_dispatch()
   let semantic = Engine(
     Some("r7"),
-    ToolCallDecodeError(tool_name="edit", reason="invalid arguments"),
-    session=None,
+    @wire.ToolCallDecodeError(
+      tool_call_id="call",
+      tool_name="edit",
+      error="invalid arguments",
+    ),
+    session="desktop-test",
   )
   // The engine records the response with its undecodable call, then the
   // error result that closes it; the semantic event is only news.
@@ -21565,12 +21720,20 @@ test "assistant semantic events wait for their durable commit" {
   let dispatch = test_dispatch()
   let (_, thought) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("think"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="think"),
+      session="desktop-test",
+    ),
     running_model(),
   )
   let (_, answered) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantMessage("answer"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantMessage(content="answer"),
+      session="desktop-test",
+    ),
     thought,
   )
   inspect(answered.active().messages.length(), content="0")
@@ -21740,12 +21903,20 @@ test "commit-first assistant semantics do not append again" {
   )
   let (_, thought) = update_dev(
     dispatch,
-    Engine(Some("r7"), ReasoningMessage("think"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningMessage(content="think"),
+      session="desktop-test",
+    ),
     committed,
   )
   let (_, answered) = update_dev(
     dispatch,
-    Engine(Some("r7"), AssistantMessage("answer"), session=None),
+    Engine(
+      Some("r7"),
+      @wire.AssistantMessage(content="answer"),
+      session="desktop-test",
+    ),
     thought,
   )
   inspect(answered.active().messages.length(), content="1")
@@ -23235,14 +23406,15 @@ test "a sub-run's finish refreshes the child transcript one last time" {
     test_dispatch(),
     Engine(
       Some("r7"),
-      SubrunClosed(
+      @wire.SubrunFinished(
         id="sr-1",
         status="captured",
         steps=7,
-        tokens=30,
+        prompt_tokens=30,
         unaccounted=None,
+        completion_tokens=0,
       ),
-      session=None,
+      session="desktop-test",
     ),
     page,
   )

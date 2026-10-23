@@ -805,7 +805,7 @@ fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
   if payload.event is @wire.McpStatus(..) {
     return Some(McpChanged(payload.session))
   }
-  Some(NativeEngine(payload.run_id, payload.event, session=payload.session))
+  Some(Engine(payload.run_id, payload.event, session=payload.session))
 }
 
 ///|

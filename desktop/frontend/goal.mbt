@@ -996,8 +996,8 @@ test "a failed durable append is reported, not inferred from" {
     dispatch,
     Engine(
       None,
-      SessionAppendFailed("failed to append goal update: disk full"),
-      session=Some("desktop-test"),
+      @wire.SessionError(error="failed to append goal update: disk full"),
+      session="desktop-test",
     ),
     model,
   )

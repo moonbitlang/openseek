@@ -3,7 +3,7 @@
 /// host. Turn commands retain the existing host admission and ownership checks.
 pub(all) struct SessionCommandPayload {
   command : @wire.Command
-  settings : CompactPayload
+  settings : SessionCommandSettings
   run_id : String?
 } derive(Eq, Debug)
 

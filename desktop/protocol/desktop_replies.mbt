@@ -130,18 +130,6 @@ pub(all) struct ApprovalReply {
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct CompactReply {
-  compacting : Bool
-} derive(Debug, Eq)
-
-///|
-pub(all) struct GoalReply {
-  // Whether the goal command reached a live engine for this conversation;
-  // the durable `[goal]` marker commit is the real confirmation.
-  delivered : Bool
-} derive(Debug, Eq)
-
-///|
 /// One reconnect-safe completion returned by `agent.runs`. It answers "how
 /// did this run I own end", so the three fields that establish that — the
 /// run, the conversation it belonged to, and its outcome — are required; a
@@ -2343,18 +2331,6 @@ pub extend CheckUpdateReply with Eq::{equal, not_equal}
 pub extend CheckUpdateReply with ToJson::{to_json}
 
 ///|
-pub extend CompactReply with Debug::{to_repr}
-
-///|
-pub extend CompactReply with FromJson::{from_json}
-
-///|
-pub extend CompactReply with Eq::{equal, not_equal}
-
-///|
-pub extend CompactReply with ToJson::{to_json}
-
-///|
 pub extend DirEntry with Debug::{to_repr}
 
 ///|
@@ -2593,18 +2569,6 @@ pub extend GitPullRequestReply with Eq::{equal, not_equal}
 
 ///|
 pub extend GitPullRequestReply with ToJson::{to_json}
-
-///|
-pub extend GoalReply with Debug::{to_repr}
-
-///|
-pub extend GoalReply with FromJson::{from_json}
-
-///|
-pub extend GoalReply with Eq::{equal, not_equal}
-
-///|
-pub extend GoalReply with ToJson::{to_json}
 
 ///|
 pub extend InstallSkillReply with Debug::{to_repr}
@@ -3481,42 +3445,6 @@ pub impl ToJson for SteerReply with fn to_json(self) {
   if self.run_id is Some(value) {
     fields["run_id"] = Json(value)
   }
-  Json(fields)
-}
-
-///|
-pub impl FromJson for CompactReply with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "CompactReply")
-  {
-    compacting: @json.from_json(
-      object.required_json("compacting"),
-      path=path.add_key("compacting"),
-    ),
-  }
-}
-
-///|
-pub impl ToJson for CompactReply with fn to_json(self) {
-  let fields : Map[String, Json] = Map([])
-  fields["compacting"] = Json(self.compacting)
-  Json(fields)
-}
-
-///|
-pub impl FromJson for GoalReply with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "GoalReply")
-  {
-    delivered: @json.from_json(
-      object.required_json("delivered"),
-      path=path.add_key("delivered"),
-    ),
-  }
-}
-
-///|
-pub impl ToJson for GoalReply with fn to_json(self) {
-  let fields : Map[String, Json] = Map([])
-  fields["delivered"] = Json(self.delivered)
   Json(fields)
 }
 

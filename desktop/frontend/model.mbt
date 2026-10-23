@@ -2498,8 +2498,8 @@ priv enum DeviceMsg {
   RunsSettled(live~ : Array[String], frontier~ : Array[RunSnapshotFrontier])
   // A stream event from an engine. The run id is `None` for events emitted
   // before any run of the engine process's lifetime. `session` is the
-  // conversation the host stamped on it (`None` when the payload carries no
-  // stamp): idle events (the compaction lifecycle, background notices) route
+  // conversation the host stamped on it: idle events (the compaction
+  // lifecycle, background notices) route
   // by it, because a conversation compacted before its first prompt of this
   // app-lifetime has no run id to match.
   JobsChanged(String)
@@ -2508,8 +2508,7 @@ priv enum DeviceMsg {
   // The host saved a new list of this session's attached pull requests and
   // branches.
   ArtifactsChanged(String)
-  NativeEngine(String?, @wire.Event, session~ : String)
-  Engine(String?, @transcript.EngineEvent, session~ : String?)
+  Engine(String?, @wire.Event, session~ : String)
   // The exact local start request returned its run result. `accepted` is the
   // prompt's ownership receipt and can recover a Started notification lost on
   // the same connection; any other status leaves delivery unconfirmed. A

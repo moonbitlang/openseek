@@ -92,7 +92,6 @@ pub fn State::is_compact_queued(Self) -> Bool
 pub fn State::is_compacting(Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::observe_compaction(Self, queued~ : Bool, compacting~ : Bool, baseline~ : Bool) -> Self
-pub fn State::progress(Self, @transcript.EngineEvent) -> Self
 pub fn State::restore_goal(Self, @transcript.GoalStanding?, Array[(Int32, @transcript.GoalMarker)]) -> Self
 pub fn State::seed(Self) -> String
 

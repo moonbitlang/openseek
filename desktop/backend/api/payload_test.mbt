@@ -43,7 +43,7 @@ test "client-authored session roots are ignored" {
   })
   assert_eq(start.session, "s-start")
   assert_true(start.workspace is None)
-  let compact : @protocol.CompactPayload = @json.from_json({
+  let compact : @protocol.SessionCommandSettings = @json.from_json({
     "session": "s-compact",
     "session_root": "/client/chosen/store",
   })
@@ -59,19 +59,4 @@ test "start payload requires a session" {
     _ => None
   }
   assert_true(decoded is None)
-}
-
-///|
-test "goal payload distinguishes set from clear by the text field" {
-  let set : @protocol.GoalPayload = @json.from_json({
-    "session": "s-goal",
-    "text": "ship the feature",
-    "model": "deepseek-v4-pro",
-    "thinking": "max",
-  })
-  assert_eq(set.text, Some("ship the feature"))
-  assert_eq(set.model, Some("deepseek-v4-pro"))
-  assert_eq(set.thinking, Some(ThinkingMax))
-  let clear : @protocol.GoalPayload = @json.from_json({ "session": "s-goal" })
-  assert_true(clear.text is None)
 }

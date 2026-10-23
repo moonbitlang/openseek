@@ -418,7 +418,7 @@ priv enum EnginePhase {
   // `compaction_finished` would blindly idle it away.
   Running(run_id~ : String, compact_queued~ : Bool)
   // A `/compact` is rewriting the durable record: no run is open, but
-  // starts and archiving must wait. Entered by `compact_run` (idle send),
+  // starts and archiving must wait. Entered by `submit_compaction` (idle send),
   // a run's terminal event with a compaction queued behind it, or the
   // engine's own `compaction_started`; left on
   // `compaction_finished`/`compaction_failed` — or on engine death, which

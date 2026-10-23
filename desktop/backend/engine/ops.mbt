@@ -221,10 +221,10 @@ async fn request_spawn(
 /// exactly as the next prompt would. The engine reports the real progress
 /// (started/finished/failed) through its event stream; this op only confirms
 /// the command reached a live engine.
-pub async fn compact_run(
+async fn submit_compaction(
   manager : EngineManager,
-  payload : @protocol.CompactPayload,
-) -> CompactReply {
+  payload : @protocol.SessionCommandSettings,
+) -> Unit {
   // Read the user's MCP configuration before the lifecycle lock, never under
   // it: the lock serializes every conversation's placement, and a slow home
   // directory must not hold all of them up.
@@ -254,11 +254,11 @@ pub async fn compact_run(
   // queued command. The next start applies the new fingerprint after both
   // settle.
   let replacement = match slot.live() {
-    None => Some(compact_config(manager, payload, mcp_config?))
+    None => Some(session_command_config(manager, payload, mcp_config?))
     Some(live) =>
       match live.phase {
         Idle(..) => {
-          let config = compact_config(manager, payload, mcp_config?)
+          let config = session_command_config(manager, payload, mcp_config?)
           if live.spec_key != engine_fingerprint(config) {
             Some(config)
           } else {
@@ -305,61 +305,6 @@ pub async fn compact_run(
     raise EngineError("engine changed before compaction was submitted")
   }
   live.phase = compacting_phase
-  { compacting: true, }
-}
-
-///|
-/// Set or clear a conversation's standing goal: durable session state on the
-/// serve engine, addressed by session id like compaction. A conversation with
-/// no live engine (resumed after a restart, or whose process died between
-/// turns) gets one spawned on the durable session first. Unlike compaction
-/// the command is welcome in every phase — the serve engine appends it while
-/// idle, steers it into an open turn at a batch-safe boundary, and holds its
-/// wire-order position behind a queued compaction — so this op never gates on
-/// phase. The engine confirms through the durable `[goal]` marker commit;
-/// this op only confirms the command was accepted by a live engine's writer.
-pub async fn goal_run(
-  manager : EngineManager,
-  payload : @protocol.GoalPayload,
-) -> GoalReply {
-  let goal = if payload.text is Some(text) {
-    let text = text.trim().to_owned()
-    guard !text.is_empty() else {
-      raise EngineError("goal text must not be empty")
-    }
-    Some(text)
-  } else {
-    None
-  }
-  // Arming is not wired end to end. Serve announces the turns autonomous
-  // continuation starts with `GoalContinue`, which this host drops, so its
-  // phase stays Idle through one — and `start_run`, whose only gate is that
-  // phase, would hand the same engine to a prompt the autonomous turn's
-  // terminal event then settles. Refuse the capability here rather than
-  // trusting clients to ask for manual: this endpoint serves the relay, not
-  // only this app's own page.
-  guard !(payload.auto is Some(true)) else {
-    raise EngineError("autonomous goal continuation is not supported yet")
-  }
-  ignore(
-    submit_session_command(
-      manager,
-      {
-        session: payload.session,
-        model: payload.model,
-        thinking: payload.thinking,
-        approval: payload.approval,
-        max_steps: payload.max_steps,
-        workspace: payload.workspace,
-      },
-      if goal is Some(text) {
-        GoalSet(text~, auto=false)
-      } else {
-        GoalClear
-      },
-    ),
-  )
-  { delivered: true, }
 }
 
 ///|
@@ -373,27 +318,21 @@ pub async fn session_command(
   let settings = payload.settings
   match payload.command {
     Compact => {
-      ignore(compact_run(manager, settings))
+      submit_compaction(manager, settings)
       { accepted: true, }
     }
-    GoalSet(..) | GoalClear => {
-      let (text, auto) = match payload.command {
-        GoalSet(text~, auto~) => (Some(text), Some(auto))
-        _ => (None, None)
+    GoalSet(text~, auto~) => {
+      guard !auto else {
+        raise EngineError("autonomous goal continuation is not supported yet")
       }
-      ignore(
-        goal_run(manager, {
-          session: settings.session,
-          text,
-          auto,
-          model: settings.model,
-          thinking: settings.thinking,
-          approval: settings.approval,
-          max_steps: settings.max_steps,
-          workspace: settings.workspace,
-        }),
+      guard !text.trim().is_empty() else {
+        raise EngineError("goal text must not be empty")
+      }
+      submit_session_command(
+        manager,
+        settings,
+        GoalSet(text=text.trim().to_owned(), auto=false),
       )
-      { accepted: true, }
     }
     Prompt(content~, submission_id~) => {
       let reply = start_run(sink, manager, {
@@ -470,7 +409,7 @@ fn require_command_run(
 ///|
 async fn submit_session_command(
   manager : EngineManager,
-  settings : @protocol.CompactPayload,
+  settings : @protocol.SessionCommandSettings,
   command : @wire.Command,
 ) -> @protocol.SessionCommandReply {
   // Read the user's MCP configuration before the lifecycle lock, never under
@@ -482,7 +421,7 @@ async fn submit_session_command(
   defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
   let session = settings.session.trim().to_owned()
   // Checked before the slot lookup, not inside the spawn path: an engine
-  // already accepting on this key skips `compact_config` and its guard. Reject
+  // already accepting on this key skips `session_command_config` and its guard. Reject
   // malformed requests at the public operation boundary as well.
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
@@ -492,7 +431,7 @@ async fn submit_session_command(
   @session_store.ensure_not_archived(session)
   let sessions = manager.serving()
   let slot = slot_for(sessions, session)
-  // Claim before looking at the engine, exactly as compact_run does: this op
+  // Claim before looking at the engine, exactly as submit_compaction does: this op
   // may have to spawn one, and a start accepted during that wait could replace
   // the live process and lose the command in the dying engine's stdin.
   let claim = slot.claim(sessions, session, CommandPending)
@@ -505,11 +444,11 @@ async fn submit_session_command(
   // endpoint settings are therefore not resolved in that active path; the
   // next idle start applies their fingerprint.
   let replacement = match slot.live() {
-    None => Some(compact_config(manager, settings, mcp_config?))
+    None => Some(session_command_config(manager, settings, mcp_config?))
     Some(live) =>
       match live.phase {
         Idle(..) => {
-          let config = compact_config(manager, settings, mcp_config?)
+          let config = session_command_config(manager, settings, mcp_config?)
           if live.spec_key != engine_fingerprint(config) {
             Some(config)
           } else {
@@ -1249,18 +1188,7 @@ async test "native commands share writer delivery and preserve turn ownership" {
   })
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
-    let delivered = goal_run(manager, {
-      session,
-      text: Some("keep the build green"),
-      auto: None,
-      model: None,
-      thinking: None,
-      approval: None,
-      max_steps: None,
-      workspace: Some(workspace),
-    })
-    assert_true(delivered.delivered)
-    let settings : @protocol.CompactPayload = {
+    let settings : @protocol.SessionCommandSettings = {
       session,
       model: None,
       thinking: None,
@@ -1270,8 +1198,11 @@ async test "native commands share writer delivery and preserve turn ownership" {
     }
     for
       command in (
-        [GoalClear, JobsSnapshot(request_id="native-request")] :
-        Array[@wire.Command]) {
+        [
+          GoalSet(text="keep the build green", auto=false),
+          GoalClear,
+          JobsSnapshot(request_id="native-request"),
+        ] : Array[@wire.Command]) {
       assert_true(
         session_command(sink, manager, { settings, command, run_id: None, }).accepted,
       )
@@ -1982,65 +1913,39 @@ async test "workspace detach drains an idle writer and its follower first" {
 /// needed — reaching a live engine is precisely what they must prevent.
 async test "a goal request is refused before it can reach the wrong engine" {
   let manager = new_engine_manager("/nonexistent/engine")
-  async fn refusal(payload : @protocol.GoalPayload) -> String {
+  async fn refusal(command : @wire.Command) -> String {
     try {
-      ignore(goal_run(manager, payload))
+      ignore(
+        session_command(EventSink(_ => ()), manager, {
+          command,
+          run_id: None,
+          settings: {
+            session: "s-goal",
+            model: None,
+            thinking: None,
+            approval: None,
+            max_steps: None,
+            workspace: None,
+          },
+        }),
+      )
       "no error"
     } catch {
       EngineError(detail) => detail
       error => "\{error}"
     }
   }
-
-  // Arming is not wired end to end, and this endpoint serves the relay: a
-  // remote client must not be able to ask for what the app's own page no
-  // longer offers.
   assert_true(
-    refusal({
-      session: "s-armed",
-      text: Some("ship it"),
-      auto: Some(true),
-      model: None,
-      thinking: None,
-      approval: None,
-      max_steps: None,
-      workspace: None,
-    }).contains("autonomous goal continuation is not supported yet"),
+    refusal(GoalSet(text="ship it", auto=true)).contains(
+      "autonomous goal continuation is not supported yet",
+    ),
   )
-  let native_refused = try {
-    ignore(
-      session_command(EventSink(_ => ()), manager, {
-        run_id: None,
-        command: GoalSet(text="ship it", auto=true),
-        settings: {
-          session: "s-native",
-          model: None,
-          thinking: None,
-          approval: None,
-          max_steps: None,
-          workspace: None,
-        },
-      }),
-    )
-    false
-  } catch {
-    EngineError(reason) =>
-      reason.contains("autonomous goal continuation is not supported yet")
-    _ => false
-  }
-  assert_true(native_refused)
-  // Manual, named: past the refusal and on to the engine, which is where a
-  // nonexistent binary makes itself known.
+  assert_true(
+    refusal(GoalSet(text="  ", auto=false)).contains(
+      "goal text must not be empty",
+    ),
+  )
   assert_false(
-    refusal({
-      session: "s-named",
-      text: Some("ship it"),
-      auto: None,
-      model: None,
-      thinking: None,
-      approval: None,
-      max_steps: None,
-      workspace: None,
-    }).contains("not supported yet"),
+    refusal(GoalSet(text="ship it", auto=false)).contains("not supported yet"),
   )
 }

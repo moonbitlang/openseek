@@ -8,8 +8,11 @@ test "an MCP server that failed while the engine started is reported" {
     dispatch,
     Engine(
       None,
-      McpServerFailed(server="playwright", error="npx: command not found"),
-      session=Some("desktop-test"),
+      @wire.McpConnectFailed(
+        server="playwright",
+        error="npx: command not found",
+      ),
+      session="desktop-test",
     ),
     test_model(),
   )
@@ -30,11 +33,11 @@ test "an MCP failure stamped with a run this page has not opened yet still lands
     dispatch,
     Engine(
       Some("r-not-started-here"),
-      McpConfigFailed(
+      @wire.McpConfigInvalid(
         path="/home/.openseek/mcp.json",
         error="configuration is missing an `mcpServers` object",
       ),
-      session=Some("desktop-test"),
+      session="desktop-test",
     ),
     test_model(),
   )
@@ -53,8 +56,8 @@ test "a server cut off by the MCP tool limit is reported" {
     dispatch,
     Engine(
       None,
-      McpToolsDropped(server="playwright", limit=100),
-      session=Some("desktop-test"),
+      @wire.McpToolsCapped(server="playwright", kept=100),
+      session="desktop-test",
     ),
     test_model(),
   )

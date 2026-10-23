@@ -125,8 +125,8 @@ pub impl ToJson for QueuePayload with fn to_json(self) {
 }
 
 ///|
-pub impl FromJson for CompactPayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "agent.compact payload")
+pub impl FromJson for SessionCommandSettings with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session command settings")
   {
     session: object.required_string("session"),
     model: object.optional_string("model"),
@@ -138,50 +138,8 @@ pub impl FromJson for CompactPayload with fn from_json(json, path) {
 }
 
 ///|
-pub impl ToJson for CompactPayload with fn to_json(self) {
+pub impl ToJson for SessionCommandSettings with fn to_json(self) {
   let fields : Map[String, Json] = { "session": Json(self.session) }
-  if self.model is Some(model) {
-    fields["model"] = Json(model)
-  }
-  if self.thinking is Some(thinking) {
-    fields["thinking"] = thinking.to_json()
-  }
-  if self.approval is Some(approval) {
-    fields["approval"] = approval.to_json()
-  }
-  if self.max_steps is Some(max_steps) {
-    fields["max_steps"] = Json(max_steps)
-  }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = Json(workspace)
-  }
-  Json(fields)
-}
-
-///|
-pub impl FromJson for GoalPayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "agent.goal payload")
-  {
-    session: object.required_string("session"),
-    text: object.optional_string("text"),
-    auto: object.optional_bool("auto"),
-    model: object.optional_string("model"),
-    thinking: object.optional_thinking("thinking"),
-    approval: object.optional_approval("approval"),
-    max_steps: object.optional_int("max_steps"),
-    workspace: object.optional_string("workspace"),
-  }
-}
-
-///|
-pub impl ToJson for GoalPayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "session": Json(self.session) }
-  if self.text is Some(text) {
-    fields["text"] = Json(text)
-  }
-  if self.auto is Some(auto) {
-    fields["auto"] = Json(auto)
-  }
   if self.model is Some(model) {
     fields["model"] = Json(model)
   }

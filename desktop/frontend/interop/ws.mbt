@@ -420,14 +420,14 @@ test "a call that never left is not the same as one that went unanswered" {
   // A reply that arrived and could not be decoded went out: the host acted,
   // and it is its answer that was lost.
   assert_true(
-    bridge_failure(BridgeError("Malformed reply from agent.goal")) is Unknown,
+    bridge_failure(BridgeError("Malformed reply from agent.command")) is Unknown,
   )
   // Neither is a refusal, which is what keeps the start and steer paths
   // behaving exactly as before.
   for
     error in [
       BridgeUnsent("SeekMoon bridge unavailable"),
-      BridgeError("Malformed reply from agent.goal"),
+      BridgeError("Malformed reply from agent.command"),
     ] {
     assert_false(bridge_error_is_definite(error))
   }

@@ -271,7 +271,7 @@ fn GoalRequest::matches(
 }
 
 ///|
-pub fn State::progress(self : State, event : @transcript.EngineEvent) -> State {
+fn State::progress(self : State, event : @transcript.EngineEvent) -> State {
   match event {
     @transcript.CompactionStarted =>
       { ..self, compaction: Compacting, compact_request: None, }

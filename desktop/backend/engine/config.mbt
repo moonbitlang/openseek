@@ -184,52 +184,26 @@ async fn run_config(
 }
 
 ///|
-/// The config a compaction spawns an engine with when its conversation has
-/// none live (resumed after a restart, or the process died between turns):
-/// the same settings a start carries, pinned to the compacted session. The
-/// blank task is never sent — `compact_run` writes only the compact command,
-/// and the fingerprint deliberately excludes the task.
-async fn compact_config(
-  manager : EngineManager,
-  payload : @protocol.CompactPayload,
-  mcp_config? : McpConfig,
-) -> RunConfig {
-  session_command_config(
-    manager,
-    payload.session,
-    model?=payload.model,
-    thinking?=payload.thinking,
-    approval?=payload.approval,
-    max_steps?=payload.max_steps,
-    workspace?=payload.workspace,
-    mcp_config?,
-  )
-}
-
-///|
+/// Restore a session's engine without submitting a prompt. The task is not
+/// part of the engine fingerprint and is never sent for these commands.
 async fn session_command_config(
   manager : EngineManager,
-  session : String,
-  model? : String,
-  thinking? : @protocol.OpenSeekThinking,
-  approval? : @protocol.OpenSeekApproval,
-  max_steps? : Int32,
-  workspace? : String,
+  settings : @protocol.SessionCommandSettings,
   mcp_config? : McpConfig,
 ) -> RunConfig {
-  let session = session.trim().to_owned()
+  let session = settings.session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
   }
   serve_config(
     "",
     manager,
-    model?,
-    thinking?,
-    approval?,
-    max_steps?,
+    model?=settings.model,
+    thinking?=settings.thinking,
+    approval?=settings.approval,
+    max_steps?=settings.max_steps,
     session~,
-    workspace?,
+    workspace?=settings.workspace,
     mcp_config?,
   )
 }
