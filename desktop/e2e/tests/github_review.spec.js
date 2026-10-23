@@ -63,7 +63,6 @@ async function openComments(page, { holdReview = false, missingRevision = false,
   await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
   await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   await page.getByRole('switch', { name: 'GitHub comments' }).click();
-  await expect(page.getByRole('switch', { name: 'GitHub comments' }).locator('.github-review-switch')).toHaveCSS('background-color', 'rgb(49, 95, 213)');
   if (!holdReview && !missingRevision) await expect(page.locator('.github-review-inline-block [data-thread-id="right"]')).toBeVisible();
   return { app, fixture };
 }

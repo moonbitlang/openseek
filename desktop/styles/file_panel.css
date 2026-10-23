@@ -3662,7 +3662,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-toggle svg { width: 14px; height: 14px; }
 .github-review-switch { display: inline-block; width: 26px; height: 15px; border-radius: 10px; background: var(--color-text-faint); padding: 2px; box-sizing: border-box; }
 .github-review-switch::after { content: ''; display: block; width: 11px; height: 11px; border-radius: 50%; background: white; }
-.github-review-switch.on { background: var(--color-switch-on); }
+.github-review-switch.on { background: #0969da; }
 .github-review-switch.on::after { margin-left: 11px; }
 .github-review-refresh { font-size: 19px; padding: 0 4px; cursor: pointer; }
 .github-review-status { font-size: 12px; padding: 5px 10px; border-top: 1px solid var(--color-separator); color: var(--color-text-muted); white-space: normal; }
