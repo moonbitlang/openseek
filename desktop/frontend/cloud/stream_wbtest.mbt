@@ -73,7 +73,7 @@ test "Cloud subscription uses its first snapshot as baseline and fences replaced
   let partial = watch_event(running, stream, "first", 2, "assistant_delta", {
     "content": "new",
   })
-  assert_eq(partial.conversations["session"].streaming_response, Some("new"))
+  assert_eq(partial.conversations["session"].live.response, Some("new"))
   assert_true(
     watch_event(partial, stream, "first", 2, "assistant_delta", {
       "content": "duplicate",
@@ -221,7 +221,7 @@ test "Cloud current terminal settles after the idle control snapshot" {
       idle, stream, "task", 5, "task_finished", terminal,
     )
     let after = finished.conversations["session"]
-    assert_true(after.streaming_response is None)
+    assert_true(after.live.response is None)
     assert_true(after.heartbeat is None)
     assert_true(after.request > before.request)
     assert_eq(after.last_seq, Some(5))

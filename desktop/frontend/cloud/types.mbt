@@ -87,9 +87,7 @@ pub(all) struct Conversation {
   task : String?
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
-  streaming_response : String?
-  streaming_reasoning : String?
-  reasoning_complete : Bool
+  live : @engine_session.Stream
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
@@ -129,9 +127,7 @@ fn Conversation::empty() -> Conversation {
     watch_status: Watching,
     task: None,
     last_seq: None,
-    streaming_response: None,
-    streaming_reasoning: None,
-    reasoning_complete: false,
+    live: @engine_session.Stream::empty(),
     heartbeat: None,
     retrying: None,
     controls: @engine_session.State::empty(),

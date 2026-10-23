@@ -7,6 +7,7 @@ A native command without extra interaction uses `Send(command)`.
 
 - Each Local and Cloud conversation stores `State` directly. Goal drafts, pending
   identities and compaction phases are not mirrored in host-specific fields.
+  Each host also stores `Stream` directly for provisional response and reasoning.
 - `State::act` edits or submits command input and returns a native command effect.
 - Adapters normalize transport responses to `Delivery`. `State::delivered` handles
   acceptance, definite refusal and unknown delivery, fencing late callbacks by
@@ -16,7 +17,8 @@ A native command without extra interaction uses `Send(command)`.
 - `State::event`, `State::restore_goal`, and `Stream::event` handle native receipts,
   durable confirmation, and provisional text. They do not append a second transcript.
 - Local's adapter resolves placement and launch settings, then calls `agent.command`.
-  The host reuses its existing command admission and writer. Run-bound operations
+  The host uses native commands with shared launch settings and its existing
+  admission checks and writer. Retired goal/compact endpoints have no adapters. Run-bound operations
   require an exact run ID belonging to the requested session.
 - Cloud's adapter submits HTTP commands and observes the session SSE. HTTP acceptance
   is not native completion. Observation recovery never resubmits commands.

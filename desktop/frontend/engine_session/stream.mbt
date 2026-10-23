@@ -2,7 +2,7 @@
 pub(all) struct Reasoning {
   content : String
   complete : Bool
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Provisional text belongs to an engine turn, never to durable history.
@@ -59,3 +59,11 @@ pub extend Reasoning with Eq::{equal, not_equal}
 
 ///|
 pub extend Stream with Eq::{equal, not_equal}
+
+///|
+pub fn Stream::empty() -> Stream {
+  { response: None, reasoning: None, }
+}
+
+///|
+pub extend Reasoning with Debug::{to_repr}

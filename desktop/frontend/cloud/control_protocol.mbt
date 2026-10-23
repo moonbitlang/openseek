@@ -206,27 +206,15 @@ impl ToJson for QueueRequest with fn to_json(self) {
 }
 
 ///|
-fn ControlOperation::queue_action(self : ControlOperation) -> String? {
-  match self {
-    QueueAdd(..) => Some("add")
-    QueueEdit(..) => Some("edit")
-    QueueWithdraw(..) => Some("withdraw")
-    QueueSteer(..) => Some("steer")
-    Stop | Steer(..) => None
-  }
-}
-
-///|
 pub(all) enum ControlResult {
   Accepted
   Rejected(String)
 } derive(Eq)
 
 ///|
-fn ControlOperation::decode_reply(
-  self : ControlOperation,
+fn QueueRequest::decode_reply(
+  self : QueueRequest,
   status : Int32,
-  task : String,
   json : Json,
 ) -> ControlResult raise RequestError {
   if status == 409 {
@@ -237,26 +225,19 @@ fn ControlOperation::decode_reply(
         "task_id": String(task_id),
         ..
       } &&
-      task_id == task else {
+      task_id == self.task_id else {
       raise @cloud_client.RequestError(Malformed)
     }
     return Rejected(error)
   }
   guard json is { "accepted": True, "task_id": String(task_id), .. } &&
-    task_id == task else {
+    task_id == self.task_id else {
     raise @cloud_client.RequestError(Malformed)
   }
-  let valid = match self {
-    Stop | Steer(..) => false
-    QueueAdd(id~, ..)
-    | QueueEdit(id~, ..)
-    | QueueWithdraw(id~)
-    | QueueSteer(id~) =>
-      status == 200 &&
-      json is { "action": String(action), "id": String(reply_id), .. } &&
-      Some(action) == self.queue_action() &&
-      reply_id == id
-  }
+  let valid = status == 200 &&
+    json is { "action": String(action), "id": String(reply_id), .. } &&
+    action == self.action &&
+    reply_id == self.id
   guard valid else { raise @cloud_client.RequestError(Malformed) }
   Accepted
 }

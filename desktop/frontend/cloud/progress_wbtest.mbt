@@ -65,8 +65,11 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     .progress_test_event(2, "reasoning_delta", { "content": "Consider " })
     .progress_test_event(3, "reasoning_delta", { "content": "the input" })
   let conversation = partial.conversations["session"]
-  assert_eq(conversation.streaming_reasoning, Some("Consider the input"))
-  assert_false(conversation.reasoning_complete)
+  assert_eq(
+    conversation.live.reasoning.map(r => r.content),
+    Some("Consider the input"),
+  )
+  assert_false(conversation.live.reasoning.map_or(false, r => r.complete))
   assert_true(conversation.items().is_empty())
   let settled = partial
     .progress_test_event(4, "reasoning_message", {
@@ -74,10 +77,14 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     })
     .progress_test_event(5, "reasoning_delta", { "content": "late" })
   assert_eq(
-    settled.conversations["session"].streaming_reasoning,
+    settled.conversations["session"].live.reasoning.map(r => r.content),
     Some("Complete reasoning"),
   )
-  assert_true(settled.conversations["session"].reasoning_complete)
+  assert_true(
+    settled.conversations["session"].live.reasoning.map_or(false, r => {
+      r.complete
+    }),
+  )
   let canonical = settled.progress_test_event(6, "assistant_message", {
     "content": "Answer",
     "reasoning_content": "Complete reasoning",
@@ -119,7 +126,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     }),
   )
   let conversation = canonical.conversations["session"]
-  assert_true(conversation.streaming_reasoning is None)
+  assert_true(conversation.live.reasoning.map(r => r.content) is None)
   assert_eq(conversation.items().length(), 2)
   assert_true(
     conversation.items()[1].kind
@@ -131,14 +138,18 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     .progress_test_event(9, "assistant_delta", { "content": "Next answer" })
     .progress_test_event(10, "reasoning_delta", { "content": "late" })
   assert_eq(
-    next.conversations["session"].streaming_reasoning,
+    next.conversations["session"].live.reasoning.map(r => r.content),
     Some("Next step"),
   )
-  assert_true(next.conversations["session"].reasoning_complete)
+  assert_true(
+    next.conversations["session"].live.reasoning.map_or(false, r => r.complete),
+  )
   let blank = next.progress_test_event(11, "reasoning_message", {
     "content": "",
   })
-  assert_true(blank.conversations["session"].streaming_reasoning is None)
+  assert_true(
+    blank.conversations["session"].live.reasoning.map(r => r.content) is None,
+  )
 }
 
 ///|
@@ -328,22 +339,35 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
     token="ts_fixture",
     navigation=0,
   )
-  assert_true(disconnected.conversations["session"].streaming_reasoning is None)
+  assert_true(
+    disconnected.conversations["session"].live.reasoning.map(r => r.content)
+    is None,
+  )
   assert_true(disconnected.conversations["session"].heartbeat is None)
-  assert_false(disconnected.conversations["session"].reasoning_complete)
+  assert_false(
+    disconnected.conversations["session"].live.reasoning.map_or(false, r => {
+      r.complete
+    }),
+  )
   let retry = live.progress_test_event(3, "stream_retry", {
     "attempt": 1,
     "max_attempts": 3,
     "reason": "retry",
   })
-  assert_true(retry.conversations["session"].streaming_reasoning is None)
+  assert_true(
+    retry.conversations["session"].live.reasoning.map(r => r.content) is None,
+  )
   let terminal = live.progress_test_event(3, "task_finished", {
     "status": "failed",
   })
-  assert_true(terminal.conversations["session"].streaming_reasoning is None)
+  assert_true(
+    terminal.conversations["session"].live.reasoning.map(r => r.content) is None,
+  )
   let late = terminal.progress_test_event(4, "reasoning_delta", {
     "content": "late",
   })
-  assert_true(late.conversations["session"].streaming_reasoning is None)
+  assert_true(
+    late.conversations["session"].live.reasoning.map(r => r.content) is None,
+  )
   assert_false(late.conversations["session"].generating)
 }

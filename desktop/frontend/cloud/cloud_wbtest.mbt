@@ -285,11 +285,8 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
   let started = advance(sending, 1, "task_started", {})
   let first = advance(started, 2, "assistant_delta", { "content": "你" })
   let second = advance(first, 3, "assistant_delta", { "content": "好 🌙" })
-  assert_eq(first.conversations["session"].streaming_response, Some("你"))
-  assert_eq(
-    second.conversations["session"].streaming_response,
-    Some("你好 🌙"),
-  )
+  assert_eq(first.conversations["session"].live.response, Some("你"))
+  assert_eq(second.conversations["session"].live.response, Some("你好 🌙"))
   assert_eq(
     first.conversations["session"].document.events.unwrap_or([]).length(),
     second.conversations["session"].document.events.unwrap_or([]).length(),
@@ -297,7 +294,7 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
   let full = advance(second, 4, "assistant_message", {
     "content": "你好 🌙",
   })
-  assert_true(full.conversations["session"].streaming_response is None)
+  assert_true(full.conversations["session"].live.response is None)
   let full = metadata_update(
     full,
     Loaded(1, "session", full.conversations["session"].request, {
@@ -343,7 +340,7 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     "content": "unfinished step",
   })
   let step = advance(unfinished, 8, "step", { "step": 2 })
-  assert_true(step.conversations["session"].streaming_response is None)
+  assert_true(step.conversations["session"].live.response is None)
   assert_eq(
     step.conversations["session"].document.events.unwrap_or([]).length(),
     unfinished.conversations["session"].document.events.unwrap_or([]).length(),
@@ -356,12 +353,12 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     "max_attempts": 3,
     "reason": "fixture",
   })
-  assert_true(retry.conversations["session"].streaming_response is None)
+  assert_true(retry.conversations["session"].live.response is None)
   let replacement = advance(retry, 11, "assistant_delta", {
     "content": "replacement",
   })
   assert_eq(
-    replacement.conversations["session"].streaming_response,
+    replacement.conversations["session"].live.response,
     Some("replacement"),
   )
   let completed = advance(replacement, 12, "assistant_message", {
@@ -371,10 +368,10 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     "status": "completed",
     "result": { "output": { "answer": "replacement" } },
   })
-  assert_true(ended.conversations["session"].streaming_response is None)
+  assert_true(ended.conversations["session"].live.response is None)
   let late = advance(ended, 14, "assistant_delta", { "content": "late" })
   assert_false(late.conversations["session"].generating)
-  assert_true(late.conversations["session"].streaming_response is None)
+  assert_true(late.conversations["session"].live.response is None)
   let stream = StreamLease::new()
   let observing = replacement.replace("session", {
     ..replacement.conversations["session"],
@@ -387,5 +384,5 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     token="ts_fixture",
     navigation=0,
   )
-  assert_true(disconnected.conversations["session"].streaming_response is None)
+  assert_true(disconnected.conversations["session"].live.response is None)
 }

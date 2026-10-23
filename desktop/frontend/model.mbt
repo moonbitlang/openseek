@@ -660,13 +660,6 @@ fn Workspace::worktree_name(self : Workspace) -> String? {
 }
 
 ///|
-/// Reasoning visible before its durable assistant event lands.
-priv struct LiveReasoning {
-  content : String
-  complete : Bool
-} derive(Eq, Debug)
-
-///|
 /// A provider retry the engine announced for the open step: the attempt about
 /// to be made, out of the client's budget, and why the last one failed.
 priv struct RetryNotice {
@@ -685,19 +678,9 @@ priv struct RetryNotice {
 /// mutate it: they carry no run or step identity, so a delayed older commit
 /// cannot safely settle a newer stream.
 priv struct RunState {
-  // Live text of the in-flight assistant turn, accumulated from
-  // `assistant_delta` events and cleared by ordered full semantic, step,
-  // run-lifecycle, or reconnect boundaries. Follower commits are not run/step
-  // tagged and therefore never clear a potentially newer stream. `None` is
-  // not streaming — the one place this client shows text the durable record
-  // has not committed yet, and the only reason it is a separate field from
-  // `messages` rather than a row inside it.
-  streaming_response : String?
-  // Provisional reasoning assembled from `reasoning_delta`. The completed
-  // semantic event seals the buffer. The durable Assistant commit remains the
-  // sole history; rendering de-duplicates an equal completed preview without
-  // letting the untagged commit mutate this run-scoped state.
-  live_reasoning : LiveReasoning?
+  // Provisional response and reasoning share one native stream reducer.
+  // Durable commits never clear a potentially newer, run-scoped stream.
+  live : @engine_session.Stream
   // The retry the engine is waiting out, from `stream_retry` until the
   // replacement attempt produces a delta or the step moves on. Shown in place
   // of the step heartbeat so a backoff does not read as a hang.
@@ -718,8 +701,7 @@ priv struct RunState {
 /// too: every field means "nothing observed".
 fn RunState::empty() -> RunState {
   {
-    streaming_response: None,
-    live_reasoning: None,
+    live: @engine_session.Stream::empty(),
     retrying: None,
     reasoning_frontier: 0,
     subruns: [],
@@ -4038,8 +4020,7 @@ fn Conversation::clear_streams(self : Conversation) -> Conversation {
     ..self,
     turn: {
       ..self.turn,
-      streaming_response: None,
-      live_reasoning: None,
+      live: @engine_session.Stream::empty(),
       retrying: None,
     },
   }

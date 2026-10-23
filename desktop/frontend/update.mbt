@@ -1039,24 +1039,9 @@ fn apply_engine_event(
   event : @transcript.EngineEvent,
   event_run_id : String?,
 ) -> (String?, Conversation) {
-  let stream : @engine_session.Stream = {
-    response: conv.turn.streaming_response,
-    reasoning: conv.turn.live_reasoning.map(r => {
-      content: r.content,
-      complete: r.complete,
-    }),
-  }
-  let stream = stream.event(event)
   let conv = {
     ..conv,
-    turn: {
-      ..conv.turn,
-      streaming_response: stream.response,
-      live_reasoning: stream.reasoning.map(r => {
-        content: r.content,
-        complete: r.complete,
-      }),
-    },
+    turn: { ..conv.turn, live: conv.turn.live.event(event), },
   }
   // A retry notice lasts until the engine reports progress on the request it
   // is retrying; events about other work in the run leave it in place.
@@ -10604,7 +10589,7 @@ test "assistant deltas accumulate into the streaming response" {
     ),
     first,
   )
-  assert_eq(second.active().turn.streaming_response, Some("Hello, world"))
+  assert_eq(second.active().turn.live.response, Some("Hello, world"))
   inspect(second.active().messages.length(), content="0")
 }
 
@@ -10615,7 +10600,7 @@ test "update is pure: replaying a delta on the same model is idempotent" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("partial"),
+      live: { ..running_conversation().turn.live, response: Some("partial"), },
     },
   })
   let (_, once) = update_dev(
@@ -10636,8 +10621,8 @@ test "update is pure: replaying a delta on the same model is idempotent" {
     ),
     model,
   )
-  assert_eq(once.active().turn.streaming_response, Some("partial!"))
-  assert_eq(twice.active().turn.streaming_response, Some("partial!"))
+  assert_eq(once.active().turn.live.response, Some("partial!"))
+  assert_eq(twice.active().turn.live.response, Some("partial!"))
 }
 
 ///|
@@ -10652,7 +10637,7 @@ test "deltas from an unknown run are dropped" {
     ),
     running_model(),
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
 }
 
 ///|
@@ -10670,7 +10655,7 @@ test "reasoning message waits for its durable commit" {
   )
   inspect(next.active().messages.length(), content="0")
   assert_eq(
-    next.active().turn.live_reasoning,
+    next.active().turn.live.reasoning,
     Some({ content: "full thought", complete: true, }),
   )
 }
@@ -10697,7 +10682,7 @@ test "reasoning deltas accumulate and answer output closes the live stream" {
     first,
   )
   assert_eq(
-    second.active().turn.live_reasoning,
+    second.active().turn.live.reasoning,
     Some({ content: "first line", complete: false, }),
   )
   let (_, answered) = update_dev(
@@ -10710,7 +10695,7 @@ test "reasoning deltas accumulate and answer output closes the live stream" {
     second,
   )
   assert_eq(
-    answered.active().turn.live_reasoning,
+    answered.active().turn.live.reasoning,
     Some({ content: "first line", complete: true, }),
   )
   // Once the stream is semantically complete, a delayed delta cannot revive
@@ -10725,8 +10710,8 @@ test "reasoning deltas accumulate and answer output closes the live stream" {
     answered,
   )
   assert_eq(
-    late.active().turn.live_reasoning,
-    answered.active().turn.live_reasoning,
+    late.active().turn.live.reasoning,
+    answered.active().turn.live.reasoning,
   )
 }
 
@@ -10751,7 +10736,7 @@ test "an empty remote reasoning settlement clears the partial preview" {
     ),
     partial,
   )
-  assert_eq(settled.active().turn.live_reasoning, None)
+  assert_eq(settled.active().turn.live.reasoning, None)
   assert_eq(settled.active().reasoning_for_render(), (None, false))
 }
 
@@ -10762,7 +10747,10 @@ test "a matching durable commit de-duplicates without mutating the preview" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      live_reasoning: Some({ content: "think", complete: true, }),
+      live: {
+        ..running_conversation().turn.live,
+        reasoning: Some({ content: "think", complete: true, }),
+      },
     },
   })
   let (_, committed) = update_dev(
@@ -10782,7 +10770,7 @@ test "a matching durable commit de-duplicates without mutating the preview" {
     live,
   )
   assert_eq(
-    committed.active().turn.live_reasoning,
+    committed.active().turn.live.reasoning,
     Some({ content: "think", complete: true, }),
   )
   assert_eq(committed.active().reasoning_for_render(), (None, true))
@@ -10829,7 +10817,7 @@ test "commit-first reasoning keeps late prefixes and de-duplicates when sealed" 
     partial,
   )
   assert_eq(
-    completed.active().turn.live_reasoning,
+    completed.active().turn.live.reasoning,
     Some({ content: "complete thought", complete: true, }),
   )
   assert_eq(completed.active().reasoning_for_render(), (None, true))
@@ -10864,7 +10852,7 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
     partial,
   )
   assert_eq(
-    committed.active().turn.live_reasoning,
+    committed.active().turn.live.reasoning,
     Some({ content: "shared", complete: false, }),
   )
   assert_eq(committed.active().reasoning_for_render(), (Some("shared"), false))
@@ -10878,7 +10866,7 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
     committed,
   )
   assert_eq(
-    continued.active().turn.live_reasoning,
+    continued.active().turn.live.reasoning,
     Some({ content: "shared future", complete: false, }),
   )
 }
@@ -10929,7 +10917,7 @@ test "a later run does not confuse identical historical reasoning for its commit
     partial,
   )
   assert_eq(
-    complete.active().turn.live_reasoning,
+    complete.active().turn.live.reasoning,
     Some({ content: "shared opening", complete: true, }),
   )
 }
@@ -10955,7 +10943,10 @@ test "a new model step advances past identical reasoning from the prior step" {
     watermark: 2,
     turn: {
       ..RunState::for_run(0),
-      live_reasoning: Some({ content: "old live", complete: true, }),
+      live: {
+        ..RunState::for_run(0).live,
+        reasoning: Some({ content: "old live", complete: true, }),
+      },
     },
   }
   let (_, next_step) = apply_engine_event(
@@ -10963,7 +10954,7 @@ test "a new model step advances past identical reasoning from the prior step" {
     AgentStep(Some(2)),
     Some("r7"),
   )
-  assert_eq(next_step.turn.live_reasoning, None)
+  assert_eq(next_step.turn.live.reasoning, None)
   assert_eq(next_step.turn.reasoning_frontier, 2)
   let (_, live) = apply_engine_event(
     next_step,
@@ -11094,7 +11085,10 @@ test "assistant message only settles the transient response" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    turn: { ..running_conversation().turn, streaming_response: Some("answ"), },
+    turn: {
+      ..running_conversation().turn,
+      live: { ..running_conversation().turn.live, response: Some("answ"), },
+    },
   })
   let (_, next) = update_dev(
     dispatch,
@@ -11105,7 +11099,7 @@ test "assistant message only settles the transient response" {
     ),
     model,
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().messages.length(), content="0")
 }
 
@@ -11116,7 +11110,10 @@ test "agent setup failure is lifecycle-only until its durable terminal" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("partial answer"),
+      live: {
+        ..running_conversation().turn.live,
+        response: Some("partial answer"),
+      },
     },
   })
   let (_, next) = update_dev(
@@ -11128,7 +11125,7 @@ test "agent setup failure is lifecycle-only until its durable terminal" {
     ),
     model,
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().messages.length(), content="0")
 }
 
@@ -11137,14 +11134,17 @@ test "a new agent step clears the live stream" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    turn: { ..running_conversation().turn, streaming_response: Some("left"), },
+    turn: {
+      ..running_conversation().turn,
+      live: { ..running_conversation().turn.live, response: Some("left"), },
+    },
   })
   let (_, next) = update_dev(
     dispatch,
     Engine(Some("r7"), @wire.AgentStep(step=2), session="desktop-test"),
     model,
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
 }
 
 ///|
@@ -11155,8 +11155,10 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
     run: Open(run_id="r7", stage=AtStep(Some(2))),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("left"),
-      live_reasoning: Some({ content: "old thought", complete: false, }),
+      live: {
+        response: Some("left"),
+        reasoning: Some({ content: "old thought", complete: false, }),
+      },
     },
   })
   let (_, retrying) = update_dev(
@@ -11173,8 +11175,8 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
     model,
   )
   let conv = retrying.active()
-  assert_eq(conv.turn.streaming_response, None)
-  assert_eq(conv.turn.live_reasoning, None)
+  assert_eq(conv.turn.live.response, None)
+  assert_eq(conv.turn.live.reasoning, None)
   assert_true(conv.run is Open(run_id="r7", stage=AtStep(Some(2))))
   assert_true(
     conv.run_heartbeat()
@@ -11199,7 +11201,7 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
     ),
     retrying,
   )
-  assert_eq(streaming.active().turn.streaming_response, Some("again"))
+  assert_eq(streaming.active().turn.live.response, Some("again"))
   assert_true(
     streaming.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
   )
@@ -11265,7 +11267,7 @@ test "finished run clears any leftover stream" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("leftover"),
+      live: { ..running_conversation().turn.live, response: Some("leftover"), },
     },
   })
   let (_, next) = update_dev(
@@ -11273,7 +11275,7 @@ test "finished run clears any leftover stream" {
     Finished(run_id="r7", status="finished", answer=Some("done")),
     model,
   )
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().is_running(), content="false")
 }
 
@@ -12122,7 +12124,14 @@ test "open session keeps live state on screen while re-reading the store" {
         "desktop-bg",
         @interop.ChannelId::Local.test_project(),
       ).turn,
-      streaming_response: Some("mid-stream"),
+      live: {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "desktop-bg",
+          @interop.ChannelId::Local.test_project(),
+        ).turn.live,
+        response: Some("mid-stream"),
+      },
     },
   }
   let model = running_model().replace_conversation(background)
@@ -12139,7 +12148,7 @@ test "open session keeps live state on screen while re-reading the store" {
   inspect(once.active_session, content="desktop-bg")
   // The live state stays on screen; the store re-read happens behind it
   // (this client may have been absent for part of this conversation).
-  assert_eq(once.active().turn.streaming_response, Some("mid-stream"))
+  assert_eq(once.active().turn.live.response, Some("mid-stream"))
   inspect(once.active().is_running(), content="true")
   assert_true(
     once.loading_conversation
@@ -12199,7 +12208,7 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
     controls: { ..test_conversation().controls, compaction: Queued, },
     turn: {
       ..test_conversation().turn,
-      streaming_response: Some("old answer"),
+      live: { ..test_conversation().turn.live, response: Some("old answer"), },
     },
   }
   let background = {
@@ -12222,7 +12231,14 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
         "desktop-bg",
         @interop.ChannelId::Local.test_project(),
       ).turn,
-      streaming_response: Some("background answer"),
+      live: {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "desktop-bg",
+          @interop.ChannelId::Local.test_project(),
+        ).turn.live,
+        response: Some("background answer"),
+      },
     },
   }
   let model = test_model()
@@ -12230,7 +12246,7 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
     .replace_conversation(background)
   let (_, next) = update_dev(dispatch, BridgeReady, model)
   for conv in next.conversations {
-    assert_eq(conv.turn.streaming_response, None)
+    assert_eq(conv.turn.live.response, None)
     assert_true(conv.controls.compaction is NotCompacting)
   }
 }
@@ -12396,7 +12412,14 @@ test "BridgeReady resets only conversations owned by its channel" {
         "shared",
         @interop.ChannelId::Local.test_project(),
       ).turn,
-      streaming_response: Some("local answer"),
+      live: {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "shared",
+          @interop.ChannelId::Local.test_project(),
+        ).turn.live,
+        response: Some("local answer"),
+      },
     },
   }
   let remote = {
@@ -12407,7 +12430,10 @@ test "BridgeReady resets only conversations owned by its channel" {
     },
     turn: {
       ..empty_conversation(background, "shared", background.test_project()).turn,
-      streaming_response: Some("remote answer"),
+      live: {
+        ..empty_conversation(background, "shared", background.test_project()).turn.live,
+        response: Some("remote answer"),
+      },
     },
   }
   let model = {
@@ -12425,9 +12451,9 @@ test "BridgeReady resets only conversations owned by its channel" {
     next.find_conversation(background, "shared") is Some(reset) else {
     fail("same-id conversations were not preserved")
   }
-  assert_eq(kept.turn.streaming_response, Some("local answer"))
+  assert_eq(kept.turn.live.response, Some("local answer"))
   assert_true(kept.controls.compaction is Queued)
-  assert_eq(reset.turn.streaming_response, None)
+  assert_eq(reset.turn.live.response, None)
   assert_true(reset.controls.compaction is NotCompacting)
 }
 
@@ -13305,7 +13331,7 @@ test "session loaded swaps the active conversation onto the stored session" {
       turn: {
         ..test_conversation().turn,
         usage_tokens: 42,
-        streaming_response: Some("leftover"),
+        live: { ..test_conversation().turn.live, response: Some("leftover"), },
       },
     })
     // The stored session is opened from its sidebar row, which is what
@@ -13375,7 +13401,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   inspect(once.active_session, content="desktop-stored")
   inspect(once.active().messages.length(), content="2")
   assert_eq(once.active().messages[0].text(), Some("stored question"))
-  assert_eq(once.active().turn.streaming_response, None)
+  assert_eq(once.active().turn.live.response, None)
   inspect(once.active().turn.usage_tokens, content="0")
   assert_eq(
     once.active().workspace,
@@ -13424,7 +13450,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("mid-step"),
+      live: { ..running_conversation().turn.live, response: Some("mid-step"), },
     },
   })
   let loading_same = {
@@ -13450,7 +13476,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   inspect(same.active().messages.length(), content="1")
   assert_eq(same.active().messages[0].text(), Some("stored"))
   inspect(same.active().is_running(), content="true")
-  assert_eq(same.active().turn.streaming_response, Some("mid-step"))
+  assert_eq(same.active().turn.live.response, Some("mid-step"))
 }
 
 ///|
@@ -13650,8 +13676,7 @@ test "a run boundary discards the previous turn's live state whole" {
     ..running_conversation(),
     run: Open(run_id="r-old", stage=AtStep(Some(3))),
     turn: {
-      streaming_response: Some("old answer fragment"),
-      live_reasoning: None,
+      live: { response: Some("old answer fragment"), reasoning: None, },
       retrying: None,
       reasoning_frontier: 0,
       subruns: [lane],
@@ -13675,7 +13700,7 @@ test "a run boundary discards the previous turn's live state whole" {
   guard next.active().run is Open(run_id="r-new", ..) else {
     fail("expected the new run to replace the old id")
   }
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().turn.subruns.length(), content="0")
   inspect(next.active().turn.usage_tokens, content="0")
 }
@@ -13689,7 +13714,10 @@ test "a distinct started id replaces a stale open run as foreign" {
       run: Open(run_id="r-old", stage=AtStep(Some(3))),
       turn: {
         ..running_conversation().turn,
-        streaming_response: Some("old answer fragment"),
+        live: {
+          ..running_conversation().turn.live,
+          response: Some("old answer fragment"),
+        },
       },
       run_started_ms: Some(1_000.0),
     },
@@ -13712,7 +13740,7 @@ test "a distinct started id replaces a stale open run as foreign" {
   guard next.active().run is Open(run_id="r-new", stage=Opened) else {
     fail("expected the new run to replace the stale id")
   }
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   inspect(next.active().pending_steers.length(), content="0")
   // The replaced run took its pending input with it and left no placeholder:
   // what the turn actually recorded is in the transcript.
@@ -13733,7 +13761,10 @@ test "a repeated started id is idempotent" {
       run: Open(run_id="r7", stage=AtStep(Some(4))),
       turn: {
         ..running_conversation().turn,
-        streaming_response: Some("current fragment"),
+        live: {
+          ..running_conversation().turn.live,
+          response: Some("current fragment"),
+        },
       },
     },
     ["current steer"],
@@ -13754,7 +13785,7 @@ test "a repeated started id is idempotent" {
   guard next.active().run is Open(run_id="r7", stage=AtStep(Some(4))) else {
     fail("a repeated start reset the live run stage")
   }
-  assert_eq(next.active().turn.streaming_response, Some("current fragment"))
+  assert_eq(next.active().turn.live.response, Some("current fragment"))
   inspect(next.active().pending_steers.length(), content="1")
   assert_eq(next.active().pending_steers[0].content, "current steer")
   inspect(next.transcript_request_generation, content="0")
@@ -13788,7 +13819,10 @@ test "a start failure cannot close a run opened by a winning push" {
         ..opened.active(),
         turn: {
           ..opened.active().turn,
-          streaming_response: Some("foreign fragment"),
+          live: {
+            ..opened.active().turn.live,
+            response: Some("foreign fragment"),
+          },
         },
       },
       ["steer for foreign run"],
@@ -13807,7 +13841,7 @@ test "a start failure cannot close a run opened by a winning push" {
   guard failed.active().run is Open(run_id="r-foreign", stage=Opened) else {
     fail("the local failure closed the already-open run")
   }
-  assert_eq(failed.active().turn.streaming_response, Some("foreign fragment"))
+  assert_eq(failed.active().turn.live.response, Some("foreign fragment"))
   inspect(failed.active().pending_steers.length(), content="1")
   inspect(
     failed.active().pending_steers[0].content,
@@ -13828,7 +13862,10 @@ test "a start failure closes only a still-starting run" {
     {
       ..test_conversation(),
       run: Starting(submission_id="prompt-id"),
-      turn: { ..test_conversation().turn, streaming_response: Some("partial"), },
+      turn: {
+        ..test_conversation().turn,
+        live: { ..test_conversation().turn.live, response: Some("partial"), },
+      },
     },
     "prompt-id",
     "prompt",
@@ -13844,7 +13881,7 @@ test "a start failure closes only a still-starting run" {
     model,
   )
   assert_true(failed.active().run is NoRun(ended=Some(RunFailed)))
-  assert_eq(failed.active().turn.streaming_response, None)
+  assert_eq(failed.active().turn.live.response, None)
   inspect(failed.notifications.length(), content="1")
   inspect(failed.active().task, content="prompt")
   inspect(failed.transcript_request_generation, content="0")
@@ -14072,7 +14109,14 @@ test "runs settled closes runs the host no longer has, sparing live and starting
         "desktop-stale",
         @interop.ChannelId::Local.test_project(),
       ).turn,
-      streaming_response: Some("mid-step"),
+      live: {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "desktop-stale",
+          @interop.ChannelId::Local.test_project(),
+        ).turn.live,
+        response: Some("mid-step"),
+      },
     },
   }
   // A send still in flight has no run id yet; its own `started` (or
@@ -14111,7 +14155,7 @@ test "runs settled closes runs the host no longer has, sparing live and starting
     fail("expected the stale conversation")
   }
   inspect(settled.is_running(), content="false")
-  assert_eq(settled.turn.streaming_response, None)
+  assert_eq(settled.turn.live.response, None)
   guard settled.run is NoRun(ended=None) else {
     fail("expected the stale run to settle without a verdict")
   }
@@ -14581,12 +14625,12 @@ test "concurrent conversations keep their streams apart" {
     model,
   )
   // Run 8 belongs to the background conversation; the active one is untouched.
-  assert_eq(next.active().turn.streaming_response, None)
+  assert_eq(next.active().turn.live.response, None)
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-second")
     is Some(bg) else {
     fail("expected the background conversation")
   }
-  assert_eq(bg.turn.streaming_response, Some("for B"))
+  assert_eq(bg.turn.live.response, Some("for B"))
 }
 
 ///|
@@ -20589,7 +20633,7 @@ test "update is pure: automatic checkpoint waits for its commit" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("partial"),
+      live: { ..running_conversation().turn.live, response: Some("partial"), },
     },
   })
   let (_, once) = update_dev(
@@ -20618,8 +20662,8 @@ test "update is pure: automatic checkpoint waits for its commit" {
     ),
     model,
   )
-  assert_eq(once.active().turn.streaming_response, Some("partial"))
-  assert_eq(twice.active().turn.streaming_response, Some("partial"))
+  assert_eq(once.active().turn.live.response, Some("partial"))
+  assert_eq(twice.active().turn.live.response, Some("partial"))
   assert_true(
     once.active().controls.compaction is NotCompacting &&
     twice.active().controls.compaction is NotCompacting,
@@ -20637,7 +20681,7 @@ test "update is pure: context yield waits for its commit" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("partial"),
+      live: { ..running_conversation().turn.live, response: Some("partial"), },
     },
   })
   let (_, once) = update_dev(
@@ -20658,8 +20702,8 @@ test "update is pure: context yield waits for its commit" {
     ),
     model,
   )
-  assert_eq(once.active().turn.streaming_response, None)
-  assert_eq(twice.active().turn.streaming_response, None)
+  assert_eq(once.active().turn.live.response, None)
+  assert_eq(twice.active().turn.live.response, None)
   assert_true(once.active().is_running() && twice.active().is_running())
 }
 
@@ -21810,11 +21854,13 @@ test "a delayed assistant commit never clears a newer live delta" {
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("newer turn fragment"),
-      live_reasoning: Some({
-        content: "newer reasoning fragment",
-        complete: false,
-      }),
+      live: {
+        response: Some("newer turn fragment"),
+        reasoning: Some({
+          content: "newer reasoning fragment",
+          complete: false,
+        }),
+      },
     },
   })
   let (_, committed) = update_dev(
@@ -21833,12 +21879,9 @@ test "a delayed assistant commit never clears a newer live delta" {
     ),
     model,
   )
+  assert_eq(committed.active().turn.live.response, Some("newer turn fragment"))
   assert_eq(
-    committed.active().turn.streaming_response,
-    Some("newer turn fragment"),
-  )
-  assert_eq(
-    committed.active().turn.live_reasoning,
+    committed.active().turn.live.reasoning,
     Some({ content: "newer reasoning fragment", complete: false, }),
   )
 }
@@ -21858,7 +21901,10 @@ test "a delayed terminal commit never clears a newer live delta" {
     watermark: 1,
     turn: {
       ..running_conversation().turn,
-      streaming_response: Some("next turn fragment"),
+      live: {
+        ..running_conversation().turn.live,
+        response: Some("next turn fragment"),
+      },
     },
   })
   let (_, committed) = update_dev(
@@ -21872,10 +21918,7 @@ test "a delayed terminal commit never clears a newer live delta" {
     ),
     model,
   )
-  assert_eq(
-    committed.active().turn.streaming_response,
-    Some("next turn fragment"),
-  )
+  assert_eq(committed.active().turn.live.response, Some("next turn fragment"))
 }
 
 ///|
@@ -21883,7 +21926,10 @@ test "commit-first assistant semantics do not append again" {
   let dispatch = test_dispatch()
   let streaming = running_model().replace_conversation({
     ..running_conversation(),
-    turn: { ..running_conversation().turn, streaming_response: Some("answer"), },
+    turn: {
+      ..running_conversation().turn,
+      live: { ..running_conversation().turn.live, response: Some("answer"), },
+    },
   })
   let (_, committed) = update_dev(
     dispatch,
@@ -21921,7 +21967,7 @@ test "commit-first assistant semantics do not append again" {
   )
   inspect(answered.active().messages.length(), content="1")
   inspect(answered.active().watermark, content="1")
-  assert_eq(answered.active().turn.streaming_response, None)
+  assert_eq(answered.active().turn.live.response, None)
 }
 
 ///|

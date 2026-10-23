@@ -1,11 +1,6 @@
 ///|
 fn Conversation::clear_streams(self : Conversation) -> Conversation {
-  {
-    ..self,
-    streaming_response: None,
-    streaming_reasoning: None,
-    reasoning_complete: false,
-  }
+  { ..self, live: @engine_session.Stream::empty(), }
 }
 
 ///|
@@ -51,23 +46,10 @@ fn Conversation::live_progress(
     return self.clear_streams()
   }
   if wire is @wire.ToolResult(..) {
-    return { ..self, streaming_response: None, }
+    return { ..self, live: { ..self.live, response: None, }, }
   }
   guard progress is Some(progress) else { return self }
-  let stream : @engine_session.Stream = {
-    response: self.streaming_response,
-    reasoning: self.streaming_reasoning.map(content => {
-      content,
-      complete: self.reasoning_complete,
-    }),
-  }
-  let stream = stream.event(progress)
-  let self = {
-    ..self,
-    streaming_response: stream.response,
-    streaming_reasoning: stream.reasoning.map(r => r.content),
-    reasoning_complete: stream.reasoning.map_or(false, r => r.complete),
-  }
+  let self = { ..self, live: self.live.event(progress), }
   match progress {
     AgentStep(step) =>
       {

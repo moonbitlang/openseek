@@ -140,9 +140,7 @@ pub(all) struct Conversation {
   watch_status : WatchStatus
   task : String?
   last_seq : Int32?
-  streaming_response : String?
-  streaming_reasoning : String?
-  reasoning_complete : Bool
+  live : @engine_session.Stream
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State

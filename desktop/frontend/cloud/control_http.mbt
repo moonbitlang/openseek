@@ -15,15 +15,12 @@ async fn control(
         @wire.Steer(content~, submission_id=Some(submission_id)),
         task_id~,
       )
-    QueueAdd(id~, content~) | QueueEdit(id~, content~) =>
-      {
-        task_id,
-        action: operation.queue_action().unwrap(),
-        id,
-        content: Some(content),
-      }
-    QueueWithdraw(id~) | QueueSteer(id~) =>
-      { task_id, action: operation.queue_action().unwrap(), id, content: None, }
+    QueueAdd(id~, content~) =>
+      { task_id, action: "add", id, content: Some(content), }
+    QueueEdit(id~, content~) =>
+      { task_id, action: "edit", id, content: Some(content), }
+    QueueWithdraw(id~) => { task_id, action: "withdraw", id, content: None, }
+    QueueSteer(id~) => { task_id, action: "steer", id, content: None, }
   }
   let (response, data) = @http.request(
     CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}/queue",
@@ -40,7 +37,7 @@ async fn control(
   let json = data.json() catch {
     _ => raise @cloud_client.RequestError(Malformed)
   }
-  operation.decode_reply(response.code, task_id, json)
+  body.decode_reply(response.code, json)
 }
 
 ///|
