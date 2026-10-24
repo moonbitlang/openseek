@@ -139,7 +139,7 @@ fn directory_input(
   input : Map[String, Json],
   resolved : ResolvedDirectory,
 ) -> Json {
-  let fields = Map::from_iter(input.iter())
+  let fields = input.copy()
   fields["mode"] = "directory"
   fields["worker_root"] = Json(resolved.directory)
   fields["deny_roots"] = Json(resolved.deny_roots)
