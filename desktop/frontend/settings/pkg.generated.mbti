@@ -44,6 +44,10 @@ pub(all) enum Message {
   OpenConfig
   ConfigDescription
   RemoteControl
+  HelpImproveSeekMoon
+  ContentImprovementDescription
+  PreferencesReadFailed(String)
+  PreferencesSaveFailed(String)
   CheckingSignIn
   EnvironmentRelay
   OnlineRelay

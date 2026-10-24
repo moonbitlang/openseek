@@ -1592,6 +1592,7 @@ priv struct Model {
   account : @protocol.AccountSession?
   account_epoch : Int32
   account_login_create : Int32?
+  account_preferences : AccountPreferences
   remote_access : RemoteAccess?
   // An `auth.connect` waiting on the user's browser round-trip.
   remote_connecting : Bool
@@ -1766,6 +1767,8 @@ priv enum Msg {
   // An `auth.status` reply or `auth.changed` broadcast: the host's relay
   // sign-in state moved.
   AccountLoaded(Int32, Result[@protocol.AccountSession?, String])
+  AccountPreferencesChanged(Bool)
+  AccountPreferencesLoaded(Int32, Result[Bool, @cloud_client.Failure])
   DeviceAccountExpired(@interop.ChannelId, Int32, String)
   RemoteAccessSet(Bool)
   RemoteStatusLoaded(RemoteAccess)
@@ -2796,6 +2799,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     account: None,
     account_epoch: 0,
     account_login_create: None,
+    account_preferences: AccountPreferences::empty(),
     remote_access: None,
     remote_connecting: false,
     remote_error: None,

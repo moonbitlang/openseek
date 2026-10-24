@@ -27,6 +27,10 @@ pub(all) enum Message {
   OpenConfig
   ConfigDescription
   RemoteControl
+  HelpImproveSeekMoon
+  ContentImprovementDescription
+  PreferencesReadFailed(String)
+  PreferencesSaveFailed(String)
   CheckingSignIn
   EnvironmentRelay
   OnlineRelay
@@ -132,6 +136,41 @@ pub(all) enum Message {
 /// ```
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, HelpImproveSeekMoon) => "Help improve SeekMoon"
+    (Spanish, HelpImproveSeekMoon) => "Ayudar a mejorar SeekMoon"
+    (SimplifiedChinese, HelpImproveSeekMoon) => "帮助改进 SeekMoon"
+    (TraditionalChinese, HelpImproveSeekMoon) => "協助改進 SeekMoon"
+    (Japanese, HelpImproveSeekMoon) => "SeekMoon の改善に協力する"
+    (English, ContentImprovementDescription) =>
+      "Allow us to use your Cloud chat content (including existing history) to evaluate and improve tools, including training and optimizing models. Turning this off will not affect chat features or history."
+    (Spanish, ContentImprovementDescription) =>
+      "Permítenos usar el contenido de tus chats en la nube (incluido el historial existente) para evaluar y mejorar las herramientas, incluido el entrenamiento y la optimización de modelos. Desactivar esta opción no afectará al chat ni al historial."
+    (SimplifiedChinese, ContentImprovementDescription) =>
+      "允许我们使用你的云端聊天内容（包括已有历史）评估和改进工具，包括训练与优化模型。关闭不会影响聊天功能或历史记录。"
+    (TraditionalChinese, ContentImprovementDescription) =>
+      "允許我們使用你的雲端聊天內容（包括既有歷史）評估和改進工具，包括訓練與最佳化模型。關閉不會影響聊天功能或歷史記錄。"
+    (Japanese, ContentImprovementDescription) =>
+      "既存の履歴を含むクラウドチャットの内容を、モデルの訓練や最適化を含むツールの評価と改善に使用することを許可します。オフにしてもチャット機能や履歴には影響しません。"
+    (English, PreferencesReadFailed(error)) =>
+      "Could not load account preferences: \{error}"
+    (Spanish, PreferencesReadFailed(error)) =>
+      "No se pudieron cargar las preferencias de la cuenta: \{error}"
+    (SimplifiedChinese, PreferencesReadFailed(error)) =>
+      "无法读取账号偏好设置：\{error}"
+    (TraditionalChinese, PreferencesReadFailed(error)) =>
+      "無法讀取帳號偏好設定：\{error}"
+    (Japanese, PreferencesReadFailed(error)) =>
+      "アカウント設定を読み込めませんでした：\{error}"
+    (English, PreferencesSaveFailed(error)) =>
+      "Could not save account preferences: \{error}"
+    (Spanish, PreferencesSaveFailed(error)) =>
+      "No se pudieron guardar las preferencias de la cuenta: \{error}"
+    (SimplifiedChinese, PreferencesSaveFailed(error)) =>
+      "无法保存账号偏好设置：\{error}"
+    (TraditionalChinese, PreferencesSaveFailed(error)) =>
+      "無法儲存帳號偏好設定：\{error}"
+    (Japanese, PreferencesSaveFailed(error)) =>
+      "アカウント設定を保存できませんでした：\{error}"
     (English, DevicePageDescription(name, url)) =>
       "\{name} — open \{url} in a signed-in browser."
     (Spanish, DevicePageDescription(name, url)) =>

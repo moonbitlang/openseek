@@ -1715,6 +1715,9 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
+  let (preferences_cmd, model) = sync_account_preferences(
+    dispatch, previous, model,
+  )
   // The empty composer has no durable conversation. Its temporary tabs do
   // not reappear after leaving it, matching the old strip-switch behavior.
   let previous_owner = previous.dock_owner()
@@ -2035,6 +2038,7 @@ fn update(
     @cmd.batch([
       cmd,
       navigation_cmd,
+      preferences_cmd,
       notification_badge_cmd,
       sidebar_mode_cmd,
       quick_open_cmd,
@@ -4037,6 +4041,10 @@ fn update_msg(
       )
     AccountLoaded(epoch, result) =>
       account_loaded(dispatch, model, epoch, result)
+    AccountPreferencesChanged(enabled) =>
+      change_account_preferences(dispatch, model, enabled)
+    AccountPreferencesLoaded(request, result) =>
+      account_preferences_loaded(dispatch, model, request, result)
     DeviceAccountExpired(channel, epoch, token) => {
       guard model.account.map(account => account.token) == Some(token) &&
         model.device_state(channel) is Some(device) &&

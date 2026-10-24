@@ -339,6 +339,7 @@ export class CloudHarness {
       await this.publishControl(session, { queue, steers });
       return json({ accepted: true, task_id: body.task_id, action: body.action, id: body.id });
     }
+    if (path === '/v1/me/preferences') return json({ allow_content_improvement: false });
     if (path === '/v1/sessions') {
       if (request.method() === 'POST') {
         const finish = this.pauseCreate;

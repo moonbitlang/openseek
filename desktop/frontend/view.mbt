@@ -1134,6 +1134,46 @@ fn remote_access_rows(
     ]
   }
   rows.push(@settings.row(@settings.text(model.locale, Account), controls))
+  if model.account is Some(_) {
+    let preferences = model.account_preferences
+    let controls : Array[@html.Html] = []
+    if preferences.value is Some(enabled) {
+      controls.push(
+        @settings.switch_control(
+          enabled~,
+          label=@settings.text(model.locale, HelpImproveSeekMoon),
+          disabled=preferences.pending ||
+            model.remote_connecting ||
+            model.console.busy,
+          on_click=dispatch(AccountPreferencesChanged(!enabled)),
+        ),
+      )
+    } else if preferences.pending {
+      controls.push(@html.span(@settings.text(model.locale, LoadingSettings)))
+    }
+    if preferences.error is Some(error) {
+      controls.push(
+        @html.span(
+          attrs=@html.Attrs::build().role("alert"),
+          @settings.text(
+            model.locale,
+            if preferences.value is Some(_) {
+              PreferencesSaveFailed(error)
+            } else {
+              PreferencesReadFailed(error)
+            },
+          ),
+        ),
+      )
+    }
+    rows.push(
+      @settings.row(
+        @settings.text(model.locale, HelpImproveSeekMoon),
+        controls,
+        desc=@settings.text(model.locale, ContentImprovementDescription),
+      ),
+    )
+  }
   if model.remote_connecting && model.is_desktop {
     rows.push(
       @settings.row("", [

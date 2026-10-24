@@ -224,7 +224,13 @@ fn sign_out_account(
     guard !model.console.busy else { return (@cmd.none, model) }
     return (
       sign_out(dispatch, token?=model.account.map(account => account.token)),
-      { ..model, console: { ..model.console, busy: true, notice: None, }, },
+      {
+        ..model,
+        console: { ..model.console, busy: true, notice: None, },
+        account_preferences: AccountPreferences::empty(
+          request=model.account_preferences.request + 1,
+        ),
+      },
     )
   }
   let epoch = model.account_epoch + 1

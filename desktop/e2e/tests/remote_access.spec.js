@@ -18,6 +18,8 @@ const signedIn = {
 async function installDesktop(page, { managed = false } = {}) {
   const app = new DesktopBrowserHarness(page);
   await app.install();
+  await page.route('https://cloud.moonbitlang.cn/v1/me/preferences', route =>
+    route.fulfill({ json: { allow_content_improvement: false } }));
   const environment = { ...signedIn, managed_by_env: true };
   const auth = { status: managed ? environment : signedOut, account: null, finishConnect: null, requests: app.requests, app };
   await page.exposeFunction('desktopRequest', request => {
