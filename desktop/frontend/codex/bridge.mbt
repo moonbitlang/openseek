@@ -67,9 +67,7 @@ fn CodexCatalogReplyContext::run(
             return
           }
         }
-        for row in page.data {
-          rows.push(row)
-        }
+        rows.append(page.data[:])
         let next_cursor = match page.next_cursor {
           Some(next) if !next.is_empty() => Some(next)
           _ => None
@@ -1035,15 +1033,12 @@ fn State::respond(
   request_key : String,
   decision : Json,
 ) -> @cmd.Cmd {
-  let mut selected : CodexPendingRequest? = None
-  for request in self.pending_requests {
-    if request.response_token == request_key &&
-      self.active_thread() is Some(active) &&
-      request.thread_id == active.id {
-      selected = Some(request)
-      break
-    }
-  }
+  guard self.active_thread() is Some(active) else { return @cmd.none }
+  let selected = self.pending_requests
+    .iter()
+    .find_first(request => {
+      request.response_token == request_key && request.thread_id == active.id
+    })
   guard selected is Some(request) && request.response(decision) is Some(result) else {
     return @cmd.none
   }

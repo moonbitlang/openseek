@@ -132,15 +132,13 @@ fn State::submit_composer(
       next.start_draft_thread(dispatch, channel),
       next.begin_foreground(CodexDraftThreadReply(draft.id)),
     )
-  } else if ready.active_turn_id() is Some(_) {
+  } else if ready.active_turn_id() is Some(turn_id) {
     guard ready.active_thread() is Some(active) else {
       return (@cmd.none, ready)
     }
-    let next = (if ready.active_turn_id() is Some(turn_id) {
-      ready.with_pending_steer(turn_id)
-    } else {
-      ready
-    }).begin_foreground(CodexTurnSteerReply(active.id))
+    let next = ready
+      .with_pending_steer(turn_id)
+      .begin_foreground(CodexTurnSteerReply(active.id))
     (ready.send(dispatch, channel), next)
   } else {
     guard ready.active_thread() is Some(active) else {

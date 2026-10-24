@@ -551,11 +551,8 @@ fn update_message(
       } else {
         settled
       }
-      let next = if owns_foreground {
-        { ..settled, notice: subject + ": " + message, }
-      } else {
-        { ..state, notice: subject + ": " + message, }
-      }
+      let base = if owns_foreground { settled } else { state }
+      let next = { ..base, notice: "\{subject}: \{message}", }
       (@cmd.none, next)
     }
     StatusChanged(value) => {
