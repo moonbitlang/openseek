@@ -5,12 +5,15 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/action_menu",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
 }
 
 // Values
+pub fn menu(locale? : @i18n.Locale, @interop.ConversationKey, Checkout?, State, @cmd.Emit[Msg], open_link~ : (String) -> @cmd.Cmd, String) -> @action_menu.Definition?
+
 pub fn rows(locale? : @i18n.Locale, @interop.ConversationKey, Checkout?, State, @cmd.Emit[Msg]) -> Array[@html.Html]
 
 pub fn summary(locale? : @i18n.Locale, @interop.ConversationKey, Checkout?, State) -> String?
@@ -24,10 +27,20 @@ pub(all) struct Checkout {
   branch : String
   pull_request : PullRequest?
   diff : Diff?
+  compare_url : String?
 } derive(Eq, @debug.Debug)
 pub fn Checkout::equal(Self, Self) -> Bool
 pub fn Checkout::not_equal(Self, Self) -> Bool
 pub fn Checkout::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Checks {
+  passed : Int32
+  failed : Int32
+  pending : Int32
+} derive(Eq, @debug.Debug)
+pub fn Checks::equal(Self, Self) -> Bool
+pub fn Checks::not_equal(Self, Self) -> Bool
+pub fn Checks::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Diff {
   added : Int32
@@ -52,6 +65,7 @@ pub(all) enum Msg {
   Listed(serial~ : Int32, Result[@protocol.SessionArtifacts, String])
   Remove(@interop.ConversationKey, @protocol.SessionArtifact)
   Removed(@interop.ConversationKey, @protocol.SessionArtifact, Result[@protocol.SessionArtifacts, String])
+  ShowAll(Bool)
   Summarized(url~ : String, generation~ : Int32, Result[@protocol.GitPullRequest?, String])
 }
 
@@ -70,6 +84,9 @@ pub(all) struct PullRequest {
   title : String
   state : PullRequestState
   url : String
+  additions : Int32
+  deletions : Int32
+  checks : Checks?
 } derive(Eq, @debug.Debug)
 pub fn PullRequest::equal(Self, Self) -> Bool
 pub fn PullRequest::not_equal(Self, Self) -> Bool
@@ -93,6 +110,7 @@ pub struct State {
   remove_error : String?
   lookups : Map[String, Lookup]
   generation : Int32
+  expanded : Bool
 } derive(Eq)
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::initial() -> Self

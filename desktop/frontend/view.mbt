@@ -1931,6 +1931,24 @@ fn overview_view(
 }
 
 ///|
+/// What the changes card's row menus resolve against: the overview's
+/// conversation and checkout, while the overview is on screen.
+fn Model::changes_menu_input(
+  self : Model,
+) -> (
+  @i18n.Locale,
+  (@interop.ConversationKey, @session_changes.Checkout?)?,
+  @session_changes.State,
+) {
+  let overview = match self.chat_column() {
+    Transcript(conversation~, ..) if self.overview_conversation() is Some(key) =>
+      Some((key, conversation.overview_checkout()))
+    _ => None
+  }
+  (self.locale, overview, self.changes)
+}
+
+///|
 /// The workspace line appears once the host has reported it via `started`;
 /// before the conversation's first run only the session id is known.
 fn session_tooltip(model : Model, conv : Conversation) -> String {
@@ -2314,10 +2332,18 @@ fn view(
   composer_html : @html.Html,
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
-  quick_open_and_context_menu : (@html.Html, @html.Html, @html.Html),
+  quick_open_and_context_menu : (
+    @html.Html,
+    @html.Html,
+    (@html.Html, @html.Html),
+  ),
   skills_and_workspace_settings : (@html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, context_menu_html, transfer_menu_html) = quick_open_and_context_menu
+  let (
+    quick_open_html,
+    context_menu_html,
+    (transfer_menu_html, changes_menu_html),
+  ) = quick_open_and_context_menu
   let (skills_html, workspace_settings_html) = skills_and_workspace_settings
   // Until the relay session and its device exist, the console frame —
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
@@ -2729,6 +2755,7 @@ fn view(
   children.push(quick_open_html)
   children.push(context_menu_html)
   children.push(transfer_menu_html)
+  children.push(changes_menu_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
   // so an honest dead-end beats a half-broken UI. The console keeps its last
