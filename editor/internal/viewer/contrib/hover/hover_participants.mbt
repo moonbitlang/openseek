@@ -279,13 +279,9 @@ pub fn ContentHoverComputer::create_loading_message(
   anchor : HoverAnchor,
 ) -> HoverPart? {
   for participant in self.participants {
-    match participant.create_loading_message {
-      Some(create_loading_message) =>
-        match create_loading_message(anchor) {
-          Some(message) => return Some(message)
-          None => ()
-        }
-      None => ()
+    if participant.create_loading_message is Some(create_loading_message) &&
+      create_loading_message(anchor) is Some(message) {
+      return Some(message)
     }
   }
   None
@@ -321,18 +317,15 @@ pub async fn ContentHoverComputer::compute_async(
   let ctx : HoverComputeContext = { model, anchor, }
   let parts : Array[HoverPart] = []
   for participant in self.participants {
-    match participant.compute_async {
-      Some(compute_async) => {
-        if token.is_cancellation_requested() || !is_current() {
-          return None
-        }
-        let participant_parts = compute_async(ctx, token)
-        if token.is_cancellation_requested() || !is_current() {
-          return None
-        }
-        parts.append(participant_parts)
+    if participant.compute_async is Some(compute_async) {
+      if token.is_cancellation_requested() || !is_current() {
+        return None
       }
-      None => ()
+      let participant_parts = compute_async(ctx, token)
+      if token.is_cancellation_requested() || !is_current() {
+        return None
+      }
+      parts.append(participant_parts)
     }
   }
   computed_hover_from_parts(anchor.range(), parts)
@@ -362,21 +355,19 @@ pub async fn ContentHoverComputer::compute_async_each(
   // runtimes. Emits therefore follow completion order under the host runner.
   let tasks : Array[async () -> Unit] = []
   for participant in self.participants {
-    match participant.compute_async {
-      Some(compute_async) =>
-        tasks.push(() => {
-          if token.is_cancellation_requested() || !is_current() {
-            return
-          }
-          let parts = compute_async(ctx, token)
-          if token.is_cancellation_requested() || !is_current() {
-            return
-          }
-          if parts.length() > 0 {
-            emit(parts)
-          }
-        })
-      None => ()
+    if participant.compute_async is Some(compute_async) {
+      tasks.push(() => {
+        if token.is_cancellation_requested() || !is_current() {
+          return
+        }
+        let parts = compute_async(ctx, token)
+        if token.is_cancellation_requested() || !is_current() {
+          return
+        }
+        if parts.length() > 0 {
+          emit(parts)
+        }
+      })
     }
   }
   run_tasks(tasks) catch {
@@ -407,11 +398,7 @@ fn computed_hover_from_parts(
     return None
   }
   let sorted = sort_hover_parts_stably(parts)
-  let range = for part in sorted; range = fallback_range {
-    continue union_range(range, hover_part_range(part))
-  } nobreak {
-    range
-  }
+  let range = hover_parts_range(sorted, fallback_range)
   Some({ range, parts: sorted, })
 }
 
@@ -420,10 +407,9 @@ fn computed_hover_from_parts(
 /// Carry the arrival index as the final comparator key so equal participant
 /// ordinal/range-start parts retain provider completion order on every target.
 fn sort_hover_parts_stably(parts : Array[HoverPart]) -> Array[HoverPart] {
-  let indexed : Array[(Int32, HoverPart)] = []
-  for index, part in parts {
-    indexed.push((index, part))
-  }
+  let indexed : Array[(Int32, HoverPart)] = [
+    for index, part in parts => (index, part)
+  ]
   indexed.sort_by((left, right) => {
     let order = compare_hover_parts(left.1, right.1)
     if order != 0 {

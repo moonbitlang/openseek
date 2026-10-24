@@ -34,10 +34,9 @@ fn HoverParticipantRegistry::build_all(
   // MoonBit's Array::sort_by is unstable, while JavaScript's source sort is
   // stable. Carry the registration index as an explicit tie-break so equal
   // ordinals retain registration order on every backend.
-  let indexed : Array[(Int32, HoverParticipantHandle)] = []
-  for index, participant in participants {
-    indexed.push((index, participant))
-  }
+  let indexed : Array[(Int32, HoverParticipantHandle)] = [
+    for index, participant in participants => (index, participant)
+  ]
   indexed.sort_by((left, right) => {
     let by_ordinal = left.1.ordinal - right.1.ordinal
     if by_ordinal != 0 {
