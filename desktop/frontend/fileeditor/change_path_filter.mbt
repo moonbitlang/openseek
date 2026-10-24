@@ -119,16 +119,12 @@ test "path filters match literal paths and rename sources without case sensitivi
 /// A leading dot alone does not give a dotfile an extension.
 fn change_extension(path : @pathx.Relative) -> String? {
   let name = basename(path)
-  let parts = name.split(".").to_array()
-  if parts.length() < 2 || (parts.length() == 2 && parts[0].is_empty()) {
+  guard name.rev_split_once(".") is Some((stem, suffix)) &&
+    !stem.is_empty() &&
+    !suffix.is_empty() else {
     return None
   }
-  let suffix = parts[parts.length() - 1]
-  if suffix.is_empty() {
-    None
-  } else {
-    Some("." + suffix.to_owned().to_lower())
-  }
+  Some(".\{suffix}".to_lower())
 }
 
 ///|

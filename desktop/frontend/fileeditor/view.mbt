@@ -836,10 +836,7 @@ fn tree_pane(
       } else {
         "file-panel-error empty"
       },
-      match visible_error {
-        Some(message) => message
-        None => ""
-      },
+      visible_error.unwrap_or(""),
     ),
   ])
 }
@@ -2074,8 +2071,8 @@ fn path_segments(path : @pathx.Relative) -> Array[String] {
 /// breadcrumb click.
 fn segments_prefix(segments : Array[String], count : Int32) -> @pathx.Relative {
   let mut path = @pathx.Relative::root()
-  for index in 0..<count {
-    path = child_path(path, segments[index])
+  for segment in segments[:count] {
+    path = child_path(path, segment)
   }
   path
 }

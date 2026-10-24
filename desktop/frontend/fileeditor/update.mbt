@@ -40,10 +40,7 @@ fn ReviewBaseline::quick_diff_original(self : ReviewBaseline) -> String? {
 
 ///|
 fn Doc::quick_diff_original(self : Doc) -> String? {
-  match self.review {
-    Some(review) => review.baseline.quick_diff_original()
-    None => None
-  }
+  self.review.bind(review => review.baseline.quick_diff_original())
 }
 
 ///|
@@ -170,10 +167,7 @@ fn delayed_diff_loading(
 /// Ordinary documents carry no token; each review reload advances this token
 /// independently of its HEAD request so out-of-order file replies are fenced.
 fn Doc::review_generation(self : Doc) -> Int32? {
-  match self.review {
-    Some(review) => Some(review.working_generation)
-    None => None
-  }
+  self.review.map(review => review.working_generation)
 }
 
 ///|

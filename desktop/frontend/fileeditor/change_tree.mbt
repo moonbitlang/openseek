@@ -129,8 +129,8 @@ fn change_tree_focus_target(
     }
     // Folding an ancestor or removing a file returns focus to its nearest
     // visible directory, including compact directory chains.
-    for index = rows.length() - 1; index >= 0; index = index - 1 {
-      let candidate = rows[index].node.item
+    for row in rows.rev_iter() {
+      let candidate = row.node.item
       if candidate is ChangeDirectory(path) &&
         item.path().0.has_prefix(path.0 + "/") {
         return Some(candidate)
@@ -196,7 +196,7 @@ fn change_tree_key(
     "ArrowUp" => move_to(rows.get(index - 1).map(row => row.node.item))
     "ArrowDown" => move_to(rows.get(index + 1).map(row => row.node.item))
     "Home" => move_to(rows.get(0).map(row => row.node.item))
-    "End" => move_to(rows.get(rows.length() - 1).map(row => row.node.item))
+    "End" => move_to(rows.last().map(row => row.node.item))
     "ArrowLeft" =>
       match row.node.item {
         ChangeDirectory(path) if row.expanded =>
