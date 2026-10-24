@@ -81,7 +81,7 @@ async function installDesktop(page, { managed = false } = {}) {
   return auth;
 }
 
-test('account sign-in remains independent of the remote access toggle and signs out cleanly', async ({ page }) => {
+test('account sign-in remains independent of the remote access toggle and signs out cleanly', async ({ page }, testInfo) => {
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
@@ -90,11 +90,12 @@ test('account sign-in remains independent of the remote access toggle and signs 
   await expect(connect).toBeEnabled();
   await connect.click();
 
-  // The sign-in is waiting on the browser: the same slot is now a disabled
-  // in-progress button.
-  const waiting = section.getByRole('button', { name: 'Waiting for the browser…' });
-  await expect(waiting).toBeDisabled();
-  await expect(section.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  const waiting = section.getByRole('status');
+  await expect(waiting).toHaveText('Waiting for the browser…');
+  const accountRow = section.locator('.setting-row', { has: page.getByRole('status') });
+  await expect(accountRow.locator('.setting-name')).toHaveText('Account');
+  await expect(accountRow.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+  await section.screenshot({ path: testInfo.outputPath('account-sign-in-waiting.png') });
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
 
   auth.finishConnect();
