@@ -481,7 +481,10 @@ pub fn openseek_capability(
       pick_attachment(context)
     }),
   ]
-  for endpoint in window_endpoints(views) {
+  for endpoint in app_window_endpoints(() => views.attached_window()) {
+    window_only.push(endpoint)
+  }
+  for endpoint in browser_endpoints(views) {
     window_only.push(endpoint)
   }
   @proton_extension.capability(

@@ -405,43 +405,6 @@ fn BrowserViews::set_theme(
 }
 
 ///|
-/// Open Chromium's developer tools for the SeekMoon frontend page itself.
-fn BrowserViews::open_app_devtools(
-  self : BrowserViews,
-) -> @protocol.EmptyReply raise {
-  self.attached_window().web_contents().open_devtools()
-  Acknowledged
-}
-
-///|
-fn BrowserViews::set_app_titlebar_theme(
-  self : BrowserViews,
-  payload : @protocol.AppTitlebarThemePayload,
-) -> @protocol.EmptyReply raise {
-  let window = self.attached_window()
-  if @async.platform is (Windows | MacOS) {
-    window.set_theme(if payload.dark { Dark } else { Light })
-  }
-  Acknowledged
-}
-
-///|
-/// Match the native titlebar's double-click convention. Reading and applying
-/// the state in one window-side command keeps the frontend from mirroring a
-/// value that can also change through the operating system's window controls.
-fn BrowserViews::toggle_app_maximized(
-  self : BrowserViews,
-) -> @protocol.EmptyReply raise {
-  let window = self.attached_window()
-  if window.state().maximized {
-    window.restore()
-  } else {
-    window.maximize()
-  }
-  Acknowledged
-}
-
-///|
 fn BrowserViews::set_bounds(
   self : BrowserViews,
   payload : @protocol.BrowserBoundsPayload,
@@ -515,11 +478,10 @@ fn BrowserViews::focused_browser(
 }
 
 ///|
-/// The desktop-window endpoints, kept beside the window and native-view
-/// handlers they use. A relay browser owns neither, so none of these commands
-/// enters the shared remote catalog. `browser.navigate` deliberately binds
+/// Native browser-tab endpoints. A relay browser owns no native views, so
+/// none enters the shared remote catalog. `browser.navigate` deliberately binds
 /// the same create-if-missing handler as `browser.open`.
-fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
+fn browser_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
   [
     WindowEndpoint(@commands.browser_pick_element, (_, payload) => {
       views.pick_element(payload)
@@ -530,21 +492,6 @@ fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
         pick.request == payload.request {
         views.cancel_pick()
       }
-      Acknowledged
-    }),
-    WindowEndpoint(@commands.app_language_apply, (_, payload) => {
-      if !(@async.platform is Windows) {
-        views
-        .attached_window()
-        .set_menu(Some(localized_menu(payload.language.unwrap_or("en"))))
-      }
-      Acknowledged
-    }),
-    WindowEndpoint(@commands.app_system_appearance, (_, _) => {
-      dark: @proton.system_appearance().color_scheme == Dark,
-    }),
-    WindowEndpoint(@commands.app_close_window, (_, _) => {
-      views.attached_window().close()
       Acknowledged
     }),
     WindowEndpoint(@commands.app_focused_browser, (_, _) => {
@@ -564,15 +511,6 @@ fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
     WindowEndpoint(@commands.browser_set_theme, (_, payload) => {
       views.set_theme(payload)
     }),
-    WindowEndpoint(@commands.app_open_devtools, (_, _) => {
-      views.open_app_devtools()
-    }),
-    WindowEndpoint(@commands.app_set_titlebar_theme, (_, payload) => {
-      views.set_app_titlebar_theme(payload)
-    }),
-    WindowEndpoint(@commands.app_toggle_maximized, (_, _) => {
-      views.toggle_app_maximized()
-    }),
     WindowEndpoint(@commands.browser_set_bounds, (_, payload) => {
       views.set_bounds(payload)
     }),
@@ -581,28 +519,6 @@ fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
     }),
     WindowEndpoint(@commands.browser_close, (_, payload) => views.close(payload)),
   ]
-}
-
-///|
-async test "native window ops are absent from the relay method catalog" {
-  let state = @api.ApiState(engine="unused")
-  let connection = @host.HostConnection()
-  let catalog = @api.endpoints(state, connection)
-  let window_only = window_endpoints(BrowserViews())
-  assert_true(
-    window_only.any(endpoint => {
-      endpoint.name() == @commands.app_toggle_maximized.name()
-    }),
-  )
-  assert_true(
-    window_only.any(endpoint => {
-      endpoint.name() == @commands.app_set_titlebar_theme.name()
-    }),
-  )
-  for endpoint in window_only {
-    let name = endpoint.name()
-    assert_false(catalog.any(shared => shared.name() == name))
-  }
 }
 
 ///|
@@ -630,8 +546,6 @@ async test "browser ops refuse to run without a window; close tolerates it" {
   assert_true(raises(() => views.forward({ id: 1, })))
   assert_true(raises(() => views.reload({ id: 1, })))
   assert_true(raises(() => views.set_theme({ id: 1, dark: true, })))
-  assert_true(raises(() => views.open_app_devtools()))
-  assert_true(raises(() => views.toggle_app_maximized()))
   assert_true(
     raises(() => views.set_bounds({ id: 1, x: 0, y: 0, width: 10, height: 10, })),
   )
