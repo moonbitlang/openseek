@@ -310,10 +310,9 @@ fn prepare_decorations_render(
     decorations, visible_start_line_number, visible_end_line_number, get_line_max_column,
     measure, typical_half_width,
   )
-  let output : Array[String] = []
-  for _ in visible_start_line_number..<=visible_end_line_number {
-    output.push("")
-  }
+  let output : Array[String] = [
+    for _ in visible_start_line_number..<=visible_end_line_number => ""
+  ]
   for piece in pieces {
     if piece.line_index < 0 || piece.line_index >= output.length() {
       continue

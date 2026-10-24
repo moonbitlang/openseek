@@ -30,10 +30,7 @@ fn prepare_lines_decorations_render(
 ) -> Array[String] {
   let output : Array[String] = []
   if decorations_width <= 0.0 {
-    for _ in 0..<class_names_per_line.length() {
-      output.push("")
-    }
-    return output
+    return Array::make(class_names_per_line.length(), "")
   }
   let common = "\" style=\"left:\{decorations_left.to_string()}px;width:\{decorations_width.to_string()}px;\"></div>"
   for class_names in class_names_per_line {
