@@ -181,6 +181,7 @@ test "Cloud observer failure retains the confirmed queue as read-only" {
   let recovered = metadata_update(
     disconnected,
     Loaded(1, "session", conversation.request, {
+      prediction: None,
       session: native_document([]),
       messages: [],
       generating: true,
@@ -259,6 +260,7 @@ test "Cloud steer receipts settle input without duplicating the durable user mes
   })
   assert_true(applied.conversations["session"].control_inputs.is_empty())
   let history : History = {
+    prediction: None,
     generating: true,
     session: native_document([
       { "kind": "user", "payload": { "content": "Follow up" } },
@@ -297,6 +299,7 @@ test "Cloud reconnect fences old history and synchronizes after its new baseline
   let stale = metadata_update(
     ended,
     Loaded(1, "session", old_request, {
+      prediction: None,
       session: native_document([]),
       messages: [],
       generating: false,
@@ -319,6 +322,7 @@ test "Cloud reconnect fences old history and synchronizes after its new baseline
   let loaded = metadata_update(
     event,
     Loaded(1, "session", event.conversations["session"].request, {
+      prediction: None,
       session: native_document([]),
       messages: [],
       generating: false,
@@ -455,6 +459,7 @@ test "Cloud recovered history can release an observed task without replaying its
   let loaded = metadata_update(
     idle,
     Loaded(1, "session", idle.conversations["session"].request, {
+      prediction: None,
       session: native_document([]),
       messages: [
         {

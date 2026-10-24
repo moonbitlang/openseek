@@ -93,6 +93,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
   let canonical = metadata_update(
     canonical,
     Loaded(1, "session", canonical.conversations["session"].request, {
+      prediction: None,
       generating: true,
       session: native_document([
         { "kind": "user", "payload": { "content": "question" } },

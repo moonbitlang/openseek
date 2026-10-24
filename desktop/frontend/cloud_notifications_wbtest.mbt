@@ -37,6 +37,7 @@ fn cloud_notification_model() -> Model {
     ]),
   }
   let history : @cloud.History = {
+    prediction: None,
     session: document,
     generating: true,
     messages: [
@@ -150,6 +151,7 @@ test "Cloud completion notifications ignore duplicate terminals and history repl
     "cloud-a",
     model.cloud.conversations["cloud-a"].request,
     {
+      prediction: None,
       generating: false,
       session: model.cloud.conversations["cloud-a"].document,
       messages: [
@@ -188,6 +190,7 @@ test "Cloud live completion is notified when its history reply arrives first" {
         "cloud-a",
         model.cloud.conversations["cloud-a"].request,
         {
+          prediction: None,
           generating: false,
           session: model.cloud.conversations["cloud-a"].document,
           messages: [

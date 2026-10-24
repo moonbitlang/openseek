@@ -743,7 +743,7 @@ pub fn update(
       } else {
         conversation
       }
-      let next = state.replace(id, {
+      let restored = {
         ..settled.restore_goal(history.session),
         control,
         records: history.messages,
@@ -805,7 +805,8 @@ pub fn update(
         } else {
           conversation.initial_attachments
         },
-      })
+      }
+      let next = state.replace(id, restored.with_prediction(history.prediction))
       let next = {
         ..next,
         sessions: next.sessions.map(session => {

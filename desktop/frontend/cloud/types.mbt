@@ -19,6 +19,7 @@ pub(all) struct Record {
 
 ///|
 pub(all) struct History {
+  prediction : @wire.PredictionRecord?
   session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
@@ -59,6 +60,7 @@ pub(all) struct Conversation {
   // Last task lifecycle event supplies status while canonical history reloads.
   events : Array[Event]
   document : @protocol.SessionDocument
+  prediction : @wire.PredictionRecord?
   request : Int32
   send_request : Int32
   loading : Bool
@@ -109,6 +111,7 @@ fn Conversation::empty() -> Conversation {
       system_prompt: None,
       events: Some([]),
     },
+    prediction: None,
     request: 0,
     send_request: 0,
     loading: true,
@@ -369,7 +372,20 @@ fn decode_history(json : Json) -> History raise RequestError {
   let session : @protocol.SessionDocument = @json.from_json(document) catch {
     _ => raise @cloud_client.RequestError(Malformed)
   }
-  { session, messages, generating: required_bool(json, "generating"), }
+  // Auxiliary prediction metadata must never prevent reading the conversation.
+  let prediction : @wire.PredictionRecord? = match json {
+    { "prediction": value, .. } =>
+      Some(@json.from_json(value)) catch {
+        _ => None
+      }
+    _ => None
+  }
+  {
+    session,
+    messages,
+    prediction,
+    generating: required_bool(json, "generating"),
+  }
 }
 
 ///|
