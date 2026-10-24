@@ -7,6 +7,7 @@ default:
 build-scripts-check:
     moon check package/internal/cli package/macos package/windows package/linux package/browser package/dev --target native
     node --check package/build.mjs
+    node --test pwa/sw.test.mjs
     node --test package/resources.test.mjs
     node --test package/signing.test.mjs
     node --test package/notarization.test.mjs
