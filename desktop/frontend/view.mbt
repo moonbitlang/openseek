@@ -1336,7 +1336,7 @@ fn provider_hint(model : Model, provider : ApiProvider) -> String {
 /// provider, so a key (official) or an endpoint URL (custom) must be
 /// configured first. The steps follow the selected provider.
 fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let provider = model.api_provider
+  let provider = model.api_provider()
   // Account setup belongs in the user's system browser, even while this
   // guide is displayed over Chat. Bypass Rabbita's dock URL routing.
   let provider_link = (url, label) => {
@@ -1460,23 +1460,26 @@ fn api_settings_rows(
             { value: "openrouter", label: "OpenRouter", },
             { value: "custom", label: @settings.text(model.locale, CustomUrl), },
           ],
-          selected=model.api_provider.wire(),
+          selected=model.api_provider().wire(),
           aria_label=@settings.text(model.locale, ApiEndpoint),
           change=dispatch.map(value => ProviderChanged(value)),
           disabled=!settings_loaded,
         ),
       ],
-      desc=provider_hint(model, model.api_provider),
+      desc=provider_hint(model, model.api_provider()),
     ),
   ]
-  if model.api_provider is Custom {
+  if model.api_provider() is Custom {
     rows.push(
       @settings.row(
         @settings.text(model.locale, EndpointUrl),
         [
           @html.input(
             input_type=@html.InputType::Text,
-            value=model.custom_api_url,
+            value=model
+              .host_settings()
+              .map(settings => settings.endpoint.custom_api_url)
+              .unwrap_or(""),
             placeholder="https://host/chat/completions",
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
             attrs=@html.Attrs::build()
@@ -1492,14 +1495,17 @@ fn api_settings_rows(
   // The key lives on the host and is never echoed back — the page only
   // knows one is saved; saving a new one overwrites it.
   {
-    let (key_label, key_saved) = match model.api_provider {
-      Deepseek =>
-        (@settings.text(model.locale, DeepseekApiKey), model.deepseek_key_saved)
-      Glm => (@settings.text(model.locale, GlmApiKey), model.glm_key_saved)
-      OpenRouter =>
-        (@settings.text(model.locale, OpenRouterApiKey), model.custom_key_saved)
-      Custom =>
-        (@settings.text(model.locale, CustomApiKey), model.custom_key_saved)
+    let key_saved = model.host_settings() is Some({ endpoint, .. }) &&
+      (match endpoint.provider {
+        Deepseek => endpoint.deepseek_key_saved
+        Glm => endpoint.glm_key_saved
+        OpenRouter | Custom => endpoint.custom_key_saved
+      })
+    let key_label = match model.api_provider() {
+      Deepseek => @settings.text(model.locale, DeepseekApiKey)
+      Glm => @settings.text(model.locale, GlmApiKey)
+      OpenRouter => @settings.text(model.locale, OpenRouterApiKey)
+      Custom => @settings.text(model.locale, CustomApiKey)
     }
     rows.push(
       @settings.row(
@@ -1636,7 +1642,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               { value: "steer", label: @settings.text(locale, Steer), },
               { value: "queue", label: @settings.text(locale, Queue), },
             ],
-            selected=model.followup_behavior.wire(),
+            selected=model.followup_behavior().wire(),
             aria_label=@settings.text(locale, Followup),
             change=dispatch.map(value => FollowupBehaviorChanged(value)),
             disabled=!settings_loaded,
@@ -1797,7 +1803,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         } else if ready {
           @settings.text(locale, RuntimeSettings)
         } else {
-          match model.api_provider {
+          match model.api_provider() {
             Deepseek => @settings.text(locale, DeepseekKey)
             Glm => @settings.text(locale, GlmKey)
             OpenRouter => @settings.text(locale, OpenRouterKey)
@@ -2804,7 +2810,7 @@ fn update_confirm_modal(
 /// back here — visible. Clicks inside must not bubble to the backdrop, whose
 /// click dismisses.
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let title = match model.api_provider {
+  let title = match model.api_provider() {
     Deepseek => shell_text(model.locale, SetupDeepSeek)
     Glm => shell_text(model.locale, SetupGlm)
     OpenRouter => shell_text(model.locale, SetupOpenRouter)
