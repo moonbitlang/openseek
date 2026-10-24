@@ -385,3 +385,71 @@ async test "UUIDv7 history preserves newest-first bounded pages across terminal 
   assert_eq(errors.length(), 1)
   assert_true(errors[0].contains(ids[0]))
 }
+
+///|
+async test "the first page lists every running job and paging never skips one" {
+  let root = @fs.tmpdir(prefix="job-history-running-")
+  defer @fs.rmdir(root, recursive=true)
+  @fs.mkdir("\{root}/gen-1")
+  @fs.write_file("\{root}/gen-1/owner.lock", "")
+  for index in 1..<=250 {
+    let record = {
+      ..job_record_fixture(),
+      id: "bg-\{index}",
+      state: Exited(0),
+    }
+    @fs.write_file(
+      "\{root}/gen-1/bg-\{index}.json",
+      record.to_json().stringify(),
+    )
+  }
+  // bg-1 and bg-120 still run behind 100 or more newer finished jobs, bg-249
+  // runs among the newest, and bg-250 has finished in the live engine.
+  let live : Map[String, @wire.JobRecord] = Map([])
+  for index in [1, 120, 249] {
+    live["gen-1/bg-\{index}"] = { ..job_record_fixture(), id: "bg-\{index}", }
+  }
+  live["gen-1/bg-250"] = {
+    ..job_record_fixture(),
+    id: "bg-250",
+    state: Exited(0),
+  }
+  let first = job_history_page(root, live, 0, [])
+  assert_eq(first.jobs[:3].to_owned().map(view => view.job.id), [
+    "bg-249", "bg-120", "bg-1",
+  ])
+  assert_true(first.jobs[:3].iter().all(view => view.controllable))
+  assert_eq(first.jobs[3].job.id, "bg-250")
+  assert_eq(first.jobs[4].job.id, "bg-248")
+  assert_eq(first.jobs.length(), 102)
+  assert_eq(first.next_offset, Some(100))
+  let ids = (pages : Array[@protocol.JobsListReply]) => {
+    let ids : Array[String] = []
+    for page in pages {
+      ids.append(page.jobs.map(view => view.job.id))
+    }
+    ids
+  }
+  let second = job_history_page(root, live, 100, [])
+  let third = job_history_page(root, live, 200, [])
+  assert_eq(third.jobs.length(), 49)
+  assert_eq(third.next_offset, None)
+  let seen = ids([first, second, third])
+  assert_eq(seen.length(), 250)
+  assert_eq(Set::from_array(seen).length(), 250)
+  // bg-1 settles before the last page: it lists again there, and no other
+  // job moves out of the page it was due on.
+  live["gen-1/bg-1"] = { ..job_record_fixture(), id: "bg-1", state: Exited(0), }
+  let settled = job_history_page(root, live, 200, [])
+  assert_eq(settled.jobs.length(), 50)
+  let seen = ids([first, second, settled])
+  assert_eq(seen.length(), 251)
+  assert_eq(Set::from_array(seen).length(), 250)
+  // The first page holds every running job, even more than a page of them.
+  for index in 2..<=110 {
+    live["gen-1/bg-\{index}"] = { ..job_record_fixture(), id: "bg-\{index}", }
+  }
+  let crowded = job_history_page(root, live, 0, [])
+  assert_true(crowded.jobs[:111].iter().all(view => view.controllable))
+  assert_eq(crowded.jobs.length(), 111 + 99)
+}

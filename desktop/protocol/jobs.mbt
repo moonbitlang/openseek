@@ -67,6 +67,9 @@ pub extend JobsScope with ToJson::{to_json}
 pub extend JobsScope with FromJson::{from_json}
 
 ///|
+/// Request one page of a conversation's background jobs. `offset` is a
+/// position in the newest-first history: 0 for the first page, then the
+/// previous reply's `next_offset`.
 pub(all) struct JobsListPayload {
   scope : JobsScope
   offset : Int32
@@ -284,6 +287,18 @@ pub extend JobView with ToJson::{to_json}
 pub extend JobView with FromJson::{from_json}
 
 ///|
+/// One page of a conversation's jobs, newest first. Each page covers the next
+/// 100 positions of the history, and `next_offset` is present while more
+/// positions follow. Positions follow creation order alone.
+///
+/// Jobs the live engine still runs are listed on the first page (offset 0),
+/// all of them ahead of its history, instead of at their positions. A client
+/// that reads only the first page therefore sees all running work. A page can
+/// hold fewer than 100 jobs, even none. A job that settles between requests
+/// lists again at its position and moves no other job, so paging never skips
+/// a job but can list one twice; clients merge pages by generation and job id.
+/// Jobs without a live engine, such as an owner outside this Desktop
+/// connection, are not counted as running.
 pub(all) struct JobsListReply {
   jobs : Array[JobView]
   next_offset : Int32?
