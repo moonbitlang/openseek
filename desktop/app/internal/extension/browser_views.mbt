@@ -21,7 +21,7 @@ struct BrowserViews {
   owners : Map[Int32, String]
   // How the page is told something (a `browser.event`), once the bridge
   // that carries it exists.
-  mut notify : (async (Json) -> Unit)?
+  mut notify : (async (@protocol.BrowserEventPayload) -> Unit)?
   // One lock per tab a tool is navigating, so that two navigations of the
   // same tab happen one after the other: each waits for the page to change
   // from what it was, and two waiting at once would both take the first
@@ -77,7 +77,7 @@ pub fn BrowserViews::window_ready(
 /// `browser.event`. Set once the bridge exists, which is after the views do.
 pub fn BrowserViews::page_attached(
   self : BrowserViews,
-  notify : async (Json) -> Unit,
+  notify : async (@protocol.BrowserEventPayload) -> Unit,
 ) -> Unit {
   self.notify = Some(notify)
 }
@@ -147,55 +147,36 @@ pub fn BrowserViews::view_event(
 }
 
 ///|
-/// A view event as the `browser.event` notification payload the frontend
-/// decodes. Lifecycle notifications without a frontend consumer are omitted.
-pub fn view_event_json(id : Int32, event : @proton.WebContentsEvent) -> Json? {
-  let payload : Json = match event {
+/// A view event supported by the window-local frontend contract. Closed tabs
+/// are already removed by the frontend's close command; find results have no
+/// frontend consumer. Neither becomes a notification.
+pub fn view_event_payload(
+  id : Int32,
+  event : @proton.WebContentsEvent,
+) -> @protocol.BrowserEventPayload? {
+  let payload : @protocol.BrowserEventPayload = match event {
     DidStartLoading
     | DidFinishLoad
     | BridgeFailed(_)
     | ResourceResponse(..)
     | ResourceCompleted(..)
-    | ResourceRequested(..) => return None
-    Navigated(url~) => { "id": Json(id), "kind": "navigated", "url": Json(url) }
-    LoadingChanged(is_loading~) =>
-      { "id": Json(id), "kind": "loading", "loading": Json(is_loading) }
-    TitleUpdated(title~) =>
-      { "id": Json(id), "kind": "title", "title": Json(title) }
+    | ResourceRequested(..)
+    | Closed
+    | FoundInPage(..) => return None
+    Navigated(url~) => Navigated(id~, url~)
+    LoadingChanged(is_loading~) => LoadingChanged(id~, loading=is_loading)
+    TitleUpdated(title~) => TitleUpdated(id~, title~)
     LoadFailed(url~, error_code~, error_text~) =>
-      {
-        "id": Json(id),
-        "kind": "load_failed",
-        "url": Json(url),
-        "code": Json(error_code),
-        "text": Json(error_text),
-      }
+      LoadFailed(id~, url~, code=error_code, text=error_text)
     RendererProcessTerminated(url~, status~, error_code~, detail~) =>
       // Use the tab's existing error display and reload action. Proton leaves
       // the view open after termination, so this must not become a Closed event.
-      {
-        "id": Json(id),
-        "kind": "renderer_process_terminated",
-        "url": Json(url),
-        "code": Json(error_code),
-        "text": Json(
-          "Renderer process terminated (status \{status}): \{detail}",
-        ),
-      }
-    FoundInPage(result~) =>
-      {
-        "id": Json(id),
-        "kind": "found_in_page",
-        "request_id": Json(result.request_id),
-        "active_match_ordinal": Json(result.active_match_ordinal),
-        "matches": Json(result.matches),
-        "selection_x": Json(result.selection_x),
-        "selection_y": Json(result.selection_y),
-        "selection_width": Json(result.selection_width),
-        "selection_height": Json(result.selection_height),
-        "final_update": Json(result.final_update),
-      }
-    Closed => { "id": Json(id), "kind": "closed" }
+      RendererProcessTerminated(
+        id~,
+        url~,
+        code=error_code,
+        text="Renderer process terminated (status \{status}): \{detail}",
+      )
   }
   Some(payload)
 }

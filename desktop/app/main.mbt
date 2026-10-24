@@ -227,7 +227,7 @@ async fn main {
       if contents.view_id() is Some(view) &&
         @extension.browser_view_id(view) is Some(id) {
         views.view_event(id, event)
-        if @extension.view_event_json(id, event) is Some(payload) {
+        if @extension.view_event_payload(id, event) is Some(payload) {
           bridge.notify_browser_event(payload) catch {
             // Shutdown leaves no page to notify.
             _ => ()

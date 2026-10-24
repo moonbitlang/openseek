@@ -22703,13 +22703,12 @@ test "user and agent tab creation share placement without sharing navigation pri
 }
 
 ///|
-test "the host's request for a tab is decoded without a page id; a partial one drops" {
-  let asked : Map[String, Json] = {
-    "kind": "open_requested",
-    "request": "r-1",
-    "session": "s-1",
-    "url": "https://example.com/",
-  }
+test "the host's typed request for a tab needs no page id" {
+  let asked : @protocol.BrowserEventPayload = OpenRequested(
+    request="r-1",
+    session="s-1",
+    url="https://example.com/",
+  )
   assert_true(
     browser_event_msg(asked)
     is Some(
@@ -22720,11 +22719,6 @@ test "the host's request for a tab is decoded without a page id; a partial one d
       )
     ),
   )
-  for missing in ["request", "session", "url"] {
-    let partial = asked.copy()
-    partial.remove(missing)
-    assert_true(browser_event_msg(partial) is None)
-  }
 }
 
 ///|

@@ -446,12 +446,7 @@ async fn BrowserViews::open_tab(
   let opened : @async.Queue[Int32] = Queue(kind=Unbounded)
   self.opening[request] = opened
   defer self.opening.remove(request)
-  notify({
-    "kind": "open_requested",
-    "request": Json(request),
-    "session": Json(session),
-    "url": Json(url),
-  })
+  notify(OpenRequested(request~, session~, url~))
   guard @async.with_timeout_opt(OpenTimeoutMs, () => opened.get()) is Some(id) else {
     raise @mcp.ToolError(
       "SeekMoon did not open the tab within \{OpenTimeoutMs / 1000} seconds.",

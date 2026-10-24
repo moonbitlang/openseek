@@ -342,6 +342,22 @@ pub fn BrowserElement::to_repr(Self) -> @debug.Repr
 pub impl ToJson for BrowserElement
 pub impl @json.FromJson for BrowserElement
 
+pub(all) enum BrowserEventPayload {
+  OpenRequested(request~ : String, session~ : String, url~ : String)
+  Navigated(id~ : Int32, url~ : String)
+  LoadingChanged(id~ : Int32, loading~ : Bool)
+  TitleUpdated(id~ : Int32, title~ : String)
+  LoadFailed(id~ : Int32, url~ : String, code~ : Int32, text~ : String)
+  RendererProcessTerminated(id~ : Int32, url~ : String, code~ : Int32, text~ : String)
+} derive(Eq, @debug.Debug)
+pub fn BrowserEventPayload::equal(Self, Self) -> Bool
+pub fn BrowserEventPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BrowserEventPayload::not_equal(Self, Self) -> Bool
+pub fn BrowserEventPayload::to_json(Self) -> Json
+pub fn BrowserEventPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserEventPayload
+pub impl @json.FromJson for BrowserEventPayload
+
 pub(all) struct BrowserIdPayload {
   id : Int32
 } derive(Eq, @debug.Debug)

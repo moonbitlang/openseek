@@ -199,11 +199,12 @@ let semantic_search_progress_event : @proton_contract.Event[
 
 ///|
 /// Window-local native browser view events (navigation,
-/// title, load state), pumped in by `App::on_view_event` through
+/// title, load state), pumped in by `App::on_web_contents_event` for browser
+/// tab WebContents through
 /// `DesktopBridgeActor::notify_browser_event`. It deliberately has no
 /// `NotificationKind` — the shared wire catalog must never carry it to a
 /// relay client, which has no native views.
-let browser_event : @proton_contract.Event[Json] = @commands.extension_contract.event(
+let browser_event : @proton_contract.Event[@protocol.BrowserEventPayload] = @commands.extension_contract.event(
   "browser.event",
 )
 
@@ -245,7 +246,7 @@ priv enum BridgeControl {
 priv enum PageNotification {
   Ssh(Json)
   Hub(@protocol.Notification)
-  BrowserEvent(Json)
+  BrowserEvent(@protocol.BrowserEventPayload)
   WindowChromeChanged
   SystemAppearanceChanged
 }
@@ -374,7 +375,7 @@ pub fn DesktopBridgeActor::DesktopBridgeActor(
 /// notifications.
 pub async fn DesktopBridgeActor::notify_browser_event(
   self : DesktopBridgeActor,
-  params : Json,
+  params : @protocol.BrowserEventPayload,
 ) -> Unit {
   self.inbox.put(Deliver(BrowserEvent(params)))
 }
@@ -765,7 +766,7 @@ async test "a full inbox preserves local events before the hub resync boundary" 
       let subscription = bridge.subscribe(group)
       defer subscription.close()
       for value in 0..<BridgeInboxCapacity {
-        bridge.notify_browser_event(Json(value))
+        bridge.notify_browser_event(LoadingChanged(id=value, loading=true))
       }
       state.publish(
         AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), }),
@@ -777,7 +778,7 @@ async test "a full inbox preserves local events before the hub resync boundary" 
       for value in 0..<BridgeInboxCapacity {
         assert_true(
           bridge.inbox.get() is Deliver(BrowserEvent(actual)) &&
-          actual == Json(value),
+          actual == LoadingChanged(id=value, loading=true),
         )
       }
       guard bridge.inbox.get() is SubscriptionLagged(paused) else {
