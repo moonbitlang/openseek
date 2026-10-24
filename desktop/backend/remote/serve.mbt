@@ -52,11 +52,7 @@ async fn WsClientActor::open_subscription(
   let notifications = self.state.subscribe(
     out,
     map=notification => {
-      if notification_for_client(notification) is Some(notification) {
-        Some(Notify(notification))
-      } else {
-        None
-      }
+      notification_for_client(notification).map(n => Notify(n))
     },
     on_lag=subscription => {
       @xlog.warn(category="transport") <?
@@ -372,11 +368,9 @@ fn notification_for_client(
       // cannot be reconciled with the session transcript and is not part of
       // the supported remote profile.
       guard !payload.session.is_empty() else { return None }
-      if remote_lifecycle(payload.event) is Some(event) {
-        Some(AgentEvent({ ..payload, event, }))
-      } else {
-        None
-      }
+      remote_lifecycle(payload.event).map(event => {
+        AgentEvent({ ..payload, event, })
+      })
     }
     AgentStarted(payload) if !payload.session.is_empty() =>
       Some(AgentStarted(payload))

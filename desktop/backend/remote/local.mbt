@@ -301,8 +301,8 @@ fn session_authorized(
 fn cookie_value(header : String, name : String) -> String? {
   for pair in header.split(";") {
     let pair = pair.trim()
-    if pair.find("=") is Some(index) && pair[:index].to_owned() == name {
-      return Some(pair[index + 1:].to_owned())
+    if pair.split_once("=") is Some((key, value)) && key == name {
+      return Some(value.to_owned())
     }
   }
   None
@@ -391,7 +391,7 @@ async fn respond_redirect(
 ) -> Unit {
   // The route codec owns pathname validity. This HTTP boundary also protects
   // the query text retained in a login return address from header injection.
-  guard !location.iter().any(ch => ch.is_control()) else {
+  guard !location.any(ch => ch.is_control()) else {
     respond_status(conn, 400, "Bad Request")
     return
   }
@@ -440,8 +440,8 @@ fn static_asset_route(path : String, entry~ : String) -> String? {
 
 ///|
 fn content_type(name : String) -> String {
-  let extension = match name.rev_find(".") {
-    Some(index) => name[index + 1:].to_owned()
+  let extension = match name.rev_split_once(".") {
+    Some((_, extension)) => extension.to_owned()
     None => ""
   }
   match extension {
@@ -463,8 +463,8 @@ fn content_type(name : String) -> String {
 
 ///|
 fn split_path_query(path : String) -> (String, String) {
-  match path.find("?") {
-    Some(index) => (path[:index].to_owned(), path[index + 1:].to_owned())
+  match path.split_once("?") {
+    Some((path, query)) => (path.to_owned(), query.to_owned())
     None => (path, "")
   }
 }
@@ -474,8 +474,8 @@ fn split_path_query(path : String) -> (String, String) {
 /// token is plain hex, so nothing needs percent-decoding.
 fn query_param(query : String, name : String) -> String? {
   for pair in query.split("&") {
-    if pair.find("=") is Some(index) && pair[:index].to_owned() == name {
-      return Some(pair[index + 1:].to_owned())
+    if pair.split_once("=") is Some((key, value)) && key == name {
+      return Some(value.to_owned())
     }
   }
   None
