@@ -1119,19 +1119,31 @@ fn remote_access_rows(
         @settings.text(model.locale, SignOut),
       ),
     ]
+  } else if model.remote_connecting {
+    [
+      @html.span(
+        class="setting-desc",
+        attrs=@html.Attrs::build().role("status"),
+        @settings.text(model.locale, WaitingBrowser),
+      ),
+    ]
   } else {
     [
       @html.button(
         class="button primary",
-        attrs=@html.Attrs::build().disabled(model.remote_connecting),
         on_click=dispatch(RemoteConnectClicked),
-        if model.remote_connecting {
-          @settings.text(model.locale, WaitingBrowser)
-        } else {
-          @settings.text(model.locale, SignIn)
-        },
+        @settings.text(model.locale, SignIn),
       ),
     ]
+  }
+  if model.remote_connecting && model.is_desktop {
+    controls.push(
+      @html.button(
+        class="button secondary",
+        on_click=dispatch(RemoteCancelClicked),
+        @settings.text(model.locale, Cancel),
+      ),
+    )
   }
   rows.push(@settings.row(@settings.text(model.locale, Account), controls))
   if model.account is Some(_) {
@@ -1172,17 +1184,6 @@ fn remote_access_rows(
         controls,
         desc=@settings.text(model.locale, ContentImprovementDescription),
       ),
-    )
-  }
-  if model.remote_connecting && model.is_desktop {
-    rows.push(
-      @settings.row("", [
-        @html.button(
-          class="button secondary",
-          on_click=dispatch(RemoteCancelClicked),
-          @settings.text(model.locale, Cancel),
-        ),
-      ]),
     )
   }
   if model.is_desktop {
