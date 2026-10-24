@@ -103,11 +103,12 @@ test('cancelling or failing a document import keeps the editable draft', async (
   expect(app.pageErrors).toEqual([]);
 });
 
-test('DOCX and XLSX drops with empty MIME types use original-file previews', async ({ page }) => {
+test('DOCX, XLSX and PPTX drops with empty MIME types use original-file previews', async ({ page }) => {
   const app = await open(page);
   const documents = [
     { name: 'Report.DOCX', bytes: app.officeFiles['docs/report.docx'].data_base64 },
     { name: 'table.xlsx', bytes: app.officeFiles['docs/book1.xlsx'].data_base64 },
+    { name: 'slides.PPTX', bytes: readFileSync(new URL('../fixtures/office/static-slides.pptx', import.meta.url)).toString('base64') },
   ];
   const prevented = await page.locator('#task').evaluate((target, documents) => {
     const transfer = new DataTransfer();
@@ -119,16 +120,21 @@ test('DOCX and XLSX drops with empty MIME types use original-file previews', asy
     return event.defaultPrevented;
   }, documents);
   expect(prevented).toBe(true);
-  await expect(page.locator('.composer-attachment-confirm')).toHaveCount(2);
+  await expect(page.locator('.composer-attachment-confirm')).toHaveCount(3);
   for (const document of documents) {
     await page.locator('.composer-attachment-confirm').filter({ hasText: document.name })
       .getByRole('button', { name: 'Upload to workspace', exact: true }).click();
   }
-  await expect(page.locator('.mention-chip')).toHaveCount(2);
+  await expect(page.locator('.mention-chip')).toHaveCount(3);
   await page.locator('.mention-chip').filter({ hasText: 'Report.DOCX' }).locator('.mention-jump').click();
   await expect(page.locator('.word-page')).toContainText('Walking on imported air');
+  await page.evaluate(() => { window.testOfficeRoot = document.getElementById('openseek-office-surface'); });
   await page.locator('.mention-chip').filter({ hasText: 'table.xlsx' }).locator('.mention-jump').click();
   await expect(page.locator('.sheet-document table').first()).toBeVisible();
+  await page.locator('.mention-chip').filter({ hasText: 'slides.PPTX' }).locator('.mention-jump').click();
+  await expect(page.locator('.pptx-slide')).toHaveCount(2);
+  await expect(page.locator('.pptx-slide').first()).toContainText('PPTX preview');
+  expect(await page.evaluate(() => window.testOfficeRoot === document.getElementById('openseek-office-surface'))).toBe(true);
   for (const document of documents) {
     expect(imports(app).find(r => r.params.source.name === document.name).params.source.data_base64).toBe(document.bytes);
   }

@@ -72,7 +72,7 @@ async test "browser document bytes import one original file and reject traversal
   defer @fs.rmdir(root.to_string(), recursive=true)
   defer @work_dir.revoke_host_workspace(session)
   let bytes = b"PK office bytes"
-  for name in ["Report.DOCX", "table.xlsx"] {
+  for name in ["Report.DOCX", "table.xlsx", "slides.PPTX"] {
     let payload : @protocol.PrepareAttachmentPayload = {
       session,
       workspace: root.resource_path(),

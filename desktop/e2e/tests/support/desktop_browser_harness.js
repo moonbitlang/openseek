@@ -1015,6 +1015,7 @@ export class DesktopBrowserHarness {
           pdf: 'application/pdf',
           docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         }[extension];
         this.officeFiles[path] = { data_base64: source.data_base64, media_type, sig: `upload:${id}` };
         return { path };

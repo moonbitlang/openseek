@@ -191,9 +191,13 @@ class Build {
     }
   }
 
+  officeViewerSource() {
+    return join(this.repo, ".mooncakes", "Lampese", "office-viewer");
+  }
+
   officeFontSource() {
     return resolveOfficeFontSource(
-      join(this.repo, ".mooncakes", "Lampese", "office-viewer", "public", "fonts"),
+      join(this.officeViewerSource(), "public", "fonts"),
     );
   }
 
@@ -243,12 +247,16 @@ class Build {
         "--external:*.woff2", `--outfile=${join(output, name)}`]);
     }
     await cp(this.officeFontSource(), join(output, "fonts"), { recursive: true });
-    await cp(join(this.repo, ".mooncakes", "Lampese", "office-viewer", "public", "page-thumbnails.js"), join(output, "page-thumbnails.js"));
+    for (const file of ["page-thumbnails.js", "page-thumbnails.css"]) {
+      await cp(join(this.officeViewerSource(), "public", file), join(output, file));
+    }
+    await cp(join(this.officeViewerSource(), "public", "licenses"),
+      join(output, "licenses/office-viewer"), { recursive: true });
     await cp(join(work, "snapdom/dist/snapdom.js"), join(output, "snapdom.js"));
     await cp(join(work, "snapdom/LICENSE"), join(output, "snapdom.LICENSE"));
     await stageOfficePdfAssets(
       join(work, "pdfjs"), output,
-      join(this.repo, ".mooncakes", "Lampese", "office-viewer", "public", "pdf-runtime.js"),
+      join(this.officeViewerSource(), "public", "pdf-runtime.js"),
     );
     await cp(join(this.desktop, "frontend/build/xterm-entry.js"), join(work, "xterm-entry.js"));
     await cp(join(this.desktop, "frontend/build/xterm.css"), join(work, "xterm.css"));
@@ -322,7 +330,7 @@ class Build {
 
   async sharedWeb(output) {
     const generated = join(this.desktop, "target/web");
-    for (const name of ["app.css", "viewer.css", "page-thumbnails.js", "xterm.js", "xterm.css", "relative-time.js", "relative-time.LICENSE", "snapdom.js", "snapdom.LICENSE"]) {
+    for (const name of ["app.css", "viewer.css", "xterm.js", "xterm.css", "relative-time.js", "relative-time.LICENSE", "snapdom.js", "snapdom.LICENSE", "page-thumbnails.js", "page-thumbnails.css"]) {
       await cp(join(generated, name), join(output, name));
     }
     await cp(join(this.repo, "editor/viewer/browser/view/codicon/codicon.ttf"), join(output, "codicon.ttf"));
@@ -331,6 +339,7 @@ class Build {
       throw new Error(`generated Office font assets are missing under ${officeFonts}`);
     }
     await cp(officeFonts, join(output, "fonts"), { recursive: true });
+    await cp(join(generated, "licenses/office-viewer"), join(output, "licenses/office-viewer"), { recursive: true });
     await cp(join(generated, "pdf-runtime.js"), join(output, "pdf-runtime.js"));
     await cp(join(generated, "vendor/pdfjs"), join(output, "vendor/pdfjs"), { recursive: true });
     await cp(join(generated, "mermaid"), join(output, "mermaid"), { recursive: true });

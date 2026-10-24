@@ -357,6 +357,10 @@ fn office_media_type(path : String) -> String? {
     Some(
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+  } else if lower.has_suffix(".pptx") {
+    Some(
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    )
   } else if lower.has_suffix(".xlsx") {
     Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
   } else if lower.has_suffix(".pdf") {

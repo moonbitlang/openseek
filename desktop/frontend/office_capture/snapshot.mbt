@@ -11,7 +11,7 @@ fn describe(
   let cells : Array[String] = []
   let targets = elements(
     host,
-    if format == Word {
+    if format == Word || format == PowerPoint {
       ".word-page"
     } else {
       "section[data-sheet]"
@@ -21,7 +21,11 @@ fn describe(
     let b = bounds(node)
     guard rect.intersection(b) is Some(crop) else { continue }
     let normalized = crop.mapped(from=b, to={ x: 0, y: 0, width: 1, height: 1, })
-    let page = if format == Word { Some(index + 1) } else { None }
+    let page = if format == Word || format == PowerPoint {
+      Some(index + 1)
+    } else {
+      None
+    }
     regions.push({
       index,
       page,
@@ -55,7 +59,7 @@ fn describe(
     for
       text in elements(
         node,
-        if format == Word {
+        if format == Word || format == PowerPoint {
           "text"
         } else {
           "td[data-cell]"
@@ -182,7 +186,7 @@ fn snapshot(
   // unzoomed parent would lose the descendants' zoom and shift the crop.
   let roots = elements(
     host,
-    if format == Word {
+    if format == Word || format == PowerPoint {
       ".word-page"
     } else {
       ".sheet-document"

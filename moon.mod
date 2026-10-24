@@ -9,7 +9,7 @@ import {
   "moonbitlang/jsonl@0.2.1",
   "moonbitlang/openseek_protocol@0.4.1",
   "moonbit-community/rabbita@0.16.4",
-  "Lampese/office-viewer@0.2.3",
+  "Lampese/office-viewer@0.2.6",
   "moonbitlang/editor@0.4.6",
   "moonbitlang/workflow@0.10.0",
   "Yoorkin/multipart@0.1.3",

@@ -30,6 +30,7 @@ pub fn Capture::selection_rects(Self, @dom.Element) -> Array[@dom.DOMRect]
 
 pub(all) enum Format {
   Word
+  PowerPoint
   Excel
   Pdf
 } derive(Eq)

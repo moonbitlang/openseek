@@ -75,6 +75,7 @@ pub fn State::start_office_region(
         sig,
         match document.kind {
           Word => @office_capture.Word
+          PowerPoint => @office_capture.PowerPoint
           Excel => @office_capture.Excel
           Pdf => @office_capture.Pdf
         },

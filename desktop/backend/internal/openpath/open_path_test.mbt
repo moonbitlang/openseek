@@ -65,12 +65,14 @@ async test "existing files win before editor positions" {
     @openpath.Reference(pdf).resolve(),
     EditorPath(path=pdf, line=None, column=None),
   )
-  let office = "\{dir}/document.docx"
-  @fs.write_file(office, b"PK\x03\x04office", create_mode=CreateOrTruncate)
-  @debug.assert_eq(
-    @openpath.Reference(office).resolve(),
-    EditorPath(path=office, line=None, column=None),
-  )
+  for name in ["document.docx", "slides.PPTX"] {
+    let office = "\{dir}/\{name}"
+    @fs.write_file(office, b"PK\x03\x04office", create_mode=CreateOrTruncate)
+    @debug.assert_eq(
+      @openpath.Reference(office).resolve(),
+      EditorPath(path=office, line=None, column=None),
+    )
+  }
   let oversized_office = "\{dir}/large.xlsx"
   @fs.write_file(
     oversized_office,

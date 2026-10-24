@@ -308,6 +308,8 @@ fn is_office_media_type(media_type : String) -> Bool {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
   media_type ==
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+  media_type ==
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
   media_type == "application/pdf"
 }
 

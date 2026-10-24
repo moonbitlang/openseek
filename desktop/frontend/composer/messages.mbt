@@ -235,15 +235,15 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, SaveQueued) => "儲存排隊訊息"
     (Japanese, SaveQueued) => "待機中のメッセージを保存"
     (English, AttachHint) =>
-      "Attach images (5 MiB) or PDF, DOCX, XLSX documents (20 MiB)"
+      "Attach images (5 MiB) or PDF, DOCX, XLSX, PPTX documents (20 MiB)"
     (Spanish, AttachHint) =>
-      "Adjuntar imágenes (5 MiB) o documentos PDF, DOCX, XLSX (20 MiB)"
+      "Adjuntar imágenes (5 MiB) o documentos PDF, DOCX, XLSX, PPTX (20 MiB)"
     (SimplifiedChinese, AttachHint) =>
-      "添加图片（5 MiB）或 PDF、DOCX、XLSX 文档（20 MiB）"
+      "添加图片（5 MiB）或 PDF、DOCX、XLSX、PPTX 文档（20 MiB）"
     (TraditionalChinese, AttachHint) =>
-      "新增圖片（5 MiB）或 PDF、DOCX、XLSX 文件（20 MiB）"
+      "新增圖片（5 MiB）或 PDF、DOCX、XLSX、PPTX 文件（20 MiB）"
     (Japanese, AttachHint) =>
-      "画像（5 MiB）または PDF、DOCX、XLSX 文書（20 MiB）を添付"
+      "画像（5 MiB）または PDF、DOCX、XLSX、PPTX 文書（20 MiB）を添付"
     (English, AttachImages) => "Attach files"
     (Spanish, AttachImages) => "Adjuntar archivos"
     (SimplifiedChinese, AttachImages) => "添加附件"

@@ -884,7 +884,7 @@ fn Model::update(
             {
               ..target.without_attachment(id),
               image_error: Some(
-                "This model does not support images. Choose PDF, DOCX or XLSX documents.",
+                "This model does not support images. Choose PDF, DOCX, XLSX or PPTX documents.",
               ),
             }
           }

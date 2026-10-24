@@ -48,7 +48,7 @@ fn show_pdf_capture_feedback(
       is Some(host) &&
       @dom.document().get_element_by_id(OfficeSurfaceId).to_option()
       is Some(surface) &&
-      surface.get_parent_element() is Some(viewport) &&
+      surface.closest(".viewer-stack") is Some(viewport) &&
       viewer_state.services is Some(services) else {
       return
     }

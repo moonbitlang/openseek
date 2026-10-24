@@ -381,8 +381,8 @@ fn Entry::view(
       message,
     )
   }
-  for index, confirmation in self.attachment_confirmations(locale, emit) {
-    context["attachment-\{index}"] = confirmation
+  for (id, confirmation) in self.attachment_confirmations(locale, emit) {
+    context["attachment-\{id}"] = confirmation
   }
   View::{
     allow_images: input.presentation.images_enabled,

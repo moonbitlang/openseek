@@ -120,6 +120,7 @@ fn is_office_path(path : String) -> Bool {
   let lower = path.to_lower()
   lower.has_suffix(".docx") ||
   lower.has_suffix(".xlsx") ||
+  lower.has_suffix(".pptx") ||
   lower.has_suffix(".pdf")
 }
 

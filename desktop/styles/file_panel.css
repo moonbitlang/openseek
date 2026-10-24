@@ -207,7 +207,8 @@ button.panel-toggle:not(:disabled):hover {
 /* The Office viewer is a Rabbita-owned sibling surface rather than an
    imperative editor widget. Keep its root in the same flex slot and let the
    viewer's own stylesheet provide the page/sheet geometry. */
-.viewer-stack > .office-viewer-surface {
+.viewer-stack > .office-viewer-surface,
+.office-surface-layout > .office-viewer-surface {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;

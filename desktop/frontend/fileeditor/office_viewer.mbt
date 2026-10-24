@@ -6,6 +6,9 @@
 const OfficeSurfaceId = "openseek-office-surface"
 
 ///|
+const OfficeSlideListId = "openseek-office-slide-list"
+
+///|
 /// The XLSX renderer emits its own body/table rules and workbook style classes.
 /// Scope its generated style blocks before either the view or interaction
 /// commands mount them; application fonts and widgets stay owned by the host.
@@ -171,6 +174,7 @@ fn office_fit_command(
     match document.kind {
       Word => Some(@office_viewer.Word)
       Excel => Some(@office_viewer.Excel)
+      PowerPoint => Some(@office_viewer.PowerPoint)
       Pdf => None
     },
     zoom => dispatch(OfficeWidthFitted(owner, state.request_epoch, path, zoom)),
