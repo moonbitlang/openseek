@@ -123,7 +123,7 @@ async fn SessionFamilyMove::refuse_new_members(
   session : String,
 ) -> Unit {
   let members = @session_store.family_in(self.root, session)
-  guard members.iter().all(id => self.members.contains(id)) else {
+  guard members.all(id => self.members.contains(id)) else {
     raise EngineError(
       "a side chat of this conversation was just opened; try again",
     )
@@ -951,7 +951,7 @@ async test "archive and restore move a subagent session family together" {
     is None,
   )
   assert_eq(archived_events.length(), family.length())
-  assert_eq(archived_events[archived_events.length() - 1], "chat")
+  assert_true(archived_events is [.., "chat"])
   for session_id in family {
     assert_true(archived_events.contains(session_id))
   }
@@ -1020,7 +1020,7 @@ async test "permanent deletion removes one archived session family only" {
     (session_id, _) => deleted.push(session_id),
   )
   assert_eq(deleted.length(), family.length())
-  assert_eq(deleted[deleted.length() - 1], "chat")
+  assert_true(deleted is [.., "chat"])
   for session_id in family {
     assert_true(deleted.contains(session_id))
     assert_false(@fsx.exists(Path(archived + session_id)))

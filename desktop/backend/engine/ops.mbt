@@ -871,7 +871,7 @@ async fn follower_snapshot(
     match request_follower_load(follower) {
       LoadOk(document) => return Some(document)
       LoadStopped => continue
-      LoadFailed(detail) => raise EngineError("session load failed: " + detail)
+      LoadFailed(detail) => raise EngineError("session load failed: \{detail}")
     }
   }
 }

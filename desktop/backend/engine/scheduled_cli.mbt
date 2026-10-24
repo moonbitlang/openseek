@@ -55,7 +55,7 @@ async fn Schedules::execute(
   if status is Failed(message) {
     @fs.write_file(
       run.log_path,
-      "\nFailed: " + message + "\n",
+      "\nFailed: \{message}\n",
       create_mode=OpenOrCreate,
       append=true,
       permission=0o600,
