@@ -25,6 +25,7 @@ fn default_prompt_zh() -> String {
     #|```text
     #|.
     #|├── desktop-proton
+    #|├── diagrams
     #|├── doc
     #|│   └── moonbit
     #|│       ├── example
@@ -72,11 +73,13 @@ fn default_prompt_zh() -> String {
     #|例如，调用 `mbtx` 时同时传入 `source`、`filename` 和 `args=["--deny-warn"]`，将以下源码保存为 `scripts/check.mbtx`：
     #|
     #|```mbtx
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/shell",
     #|  "moonbitlang/core/env",
     #|}
+    #|---
     #|
     #|async fn main {
     #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
@@ -89,7 +92,9 @@ fn default_prompt_zh() -> String {
     #|脚本若定义自己的选项，优先使用 `argparse` 并显式声明选项。调用 `@argparse.parse(...)` 时不传 `argv`：它会读取进程参数并处理可执行文件名前缀，无需切片 `@env.args()`。例如，将以下源码保存为 `scripts/greet.mbtx`：
     #|
     #|```mbtx
+    #|---
     #|import { "moonbitlang/core/argparse" }
+    #|---
     #|
     #|fn main raise {
     #|  let matches = @argparse.parse(
@@ -109,8 +114,9 @@ fn default_prompt_zh() -> String {
     #|
     #|调用 `{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}` 输出 `Hello, Ada Lovelace!`；省略 `args` 则输出 `Hello, world!`。`args` 字段提供脚本输入；`argparse` 无需显式接收参数数组，即可处理选项解析、默认值和验证。
     #|
-    #|没有 shell 工具。所有命令，包括 `moon`、`git`，都由 `mbtx` 代码通过不经过 shell 的 `moonbitlang/async/shell` API 启动。`source` 参数是一份完整的 `.mbtx` 程序（导入语句加普通 MoonBit 代码）：
+    #|没有 shell 工具。所有命令，包括 `moon`、`git`，都由 `mbtx` 代码通过不经过 shell 的 `moonbitlang/async/shell` API 启动。`source` 参数是一份完整的 `.mbtx` 程序（开头的 front matter 写导入，之后是普通 MoonBit 代码）：
     #|
+    #|- 文件以 front matter 开头：一行 `---`，`moon.pkg` 语法的 `import { ... }` 块，再一行 `---`。开头的 `---` 之前不能有任何内容，注释也不行。
     #|- 每个用到的包都要单独导入，core 包也一样，并使用真实路径：例如 `moonbitlang/core/encoding/base64`，不是 `moonbitlang/core/base64`；`moon ide doc "@base64"` 会显示路径。
     #|- 异步 IO 使用 `async fn main`。
     #|- 调用异步命令或 IO 的辅助函数也必须是 `async fn`；普通 `fn` 不能调用它们，因此异步会沿调用链传播。
@@ -120,13 +126,14 @@ fn default_prompt_zh() -> String {
     #|无需启动进程，简短的脚本就能检查路径：
     #|
     #|```mbtx
-    #|///|
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/fs",
     #|  "moonbitlang/async/shell",
     #|  "moonbitlang/core/env",
     #|}
+    #|---
     #|
     #|///|
     #|async fn main {
@@ -178,11 +185,12 @@ fn default_prompt_zh() -> String {
     #|基本命令形式捕获 stdout 和 stderr，通过 `Output` 的访问方法读取：`out.stdout()`、`out.stderr()` 和 `out.exit_code()`：
     #|
     #|```mbtx
-    #|///|
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/shell",
     #|}
+    #|---
     #|
     #|///|
     #|async fn main {
@@ -204,12 +212,13 @@ fn default_prompt_zh() -> String {
     #|获取编译器反馈时，流式处理一次 `moon check` 产生的逐行 JSON，不要收集完整输出后再解析：
     #|
     #|```mbtx
-    #|///|
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/shell",
     #|  "moonbitlang/core/json",
     #|}
+    #|---
     #|
     #|///|
     #|async fn main {
@@ -266,11 +275,12 @@ fn default_prompt_zh() -> String {
     #|`moonx` 也能运行 MoonBit 的结构搜索（基于 AST）和 lint 工具 `moongrep`。文本 grep 无法表达所需结构时使用它，例如“所有 `content` 为字面量的 `inspect` 调用”“所有匹配 `Some`/`None` 的 `match`”“嵌套在另一个函数调用中的某函数调用”。无需 `--` 分隔符，包坐标后直接跟 moongrep 参数。
     #|
     #|```mbtx
-    #|///|
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/shell",
     #|}
+    #|---
     #|
     #|///|
     #|async fn main {
@@ -340,11 +350,13 @@ fn default_prompt_zh() -> String {
     #|  一条宽范围追踪默认用一个探索子智能体。若有至少两条独立调查线索，例如入口、运行流程、调用方与测试、API 范围，在亲自追踪前，先在同一个脚本中并行发出 2–3 个不重叠的问题。第二轮问题依赖第一轮答案，或结论只是比较、计数、交叉核对时，在代码中汇总结论。一个 `moon ide doc` 查询或一次聚焦文件读取即可解决时，直接查询。脚本只能访问自己启动的子智能体，停止脚本会停止它们。
     #|
     #|    ```mbtx
+    #|    ---
     #|    import {
     #|      "moonbitlang/openseek_tools@0.2.0" @tools,
     #|      "moonbitlang/async",
     #|      "moonbitlang/core/json",
     #|    }
+    #|    ---
     #|
     #|    /// Start one explore subagent; its job id.
     #|    async fn scout(question : String, label : String) -> String {
@@ -429,10 +441,12 @@ fn default_prompt_zh() -> String {
     #|    以下有界监控脚本找到当前分支的 PR，监控已注册检查，并留一个稳定等待间隔让较晚的工作流出现：
     #|
     #|    ```mbtx
+    #|    ---
     #|    import {
     #|      "moonbitlang/async",
     #|      "moonbitlang/async/shell",
     #|    }
+    #|    ---
     #|
     #|    async fn main {
     #|      @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
@@ -695,13 +709,14 @@ fn default_prompt_zh() -> String {
     #|示例：
     #|
     #|```mbtx
-    #|///|
+    #|---
     #|import {
     #|  "moonbitlang/async",
     #|  "moonbitlang/async/fs",
     #|  "moonbitlang/async/stdio",
     #|  "moonbitlang/core/argparse",
     #|}
+    #|---
     #|
     #|///|
     #|struct Config {

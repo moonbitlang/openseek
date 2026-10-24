@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
+---
 
 ///|
 /// The real CLI with a durable session delegates a change to a worker. One
@@ -75,10 +76,12 @@ fn handed_over(messages : String) -> (String, String)? {
 /// The script the parent takes a worker's change with: plain git.
 fn take(commit : String, branch : String) -> String {
   (
+    $|---
     $|import {
     $|  "moonbitlang/async",
     $|  "moonbitlang/async/shell",
     $|}
+    $|---
     $|
     $|async fn main {
     $|  for args in [["cherry-pick", "\{commit}"], ["branch", "-D", "\{branch}"]] {

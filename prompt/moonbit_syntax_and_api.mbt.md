@@ -5,8 +5,12 @@ Each language section states its rules and links a verified example: a script un
 
 ## Writing mbtx programs
 
-A script is a whole program — imports plus vanilla MoonBit
+A script is a whole program: front matter holding its imports, then vanilla
+MoonBit.
 
+- The file opens with the front matter: a `---` line, the `import { ... }`
+  block in `moon.pkg` syntax, and a closing `---` line. Nothing, not even a
+  comment, comes before the opening `---`.
 - Import every package it uses separately, core packages included and by
   their real path: `moonbitlang/core/encoding/base64`, not
   `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
@@ -92,10 +96,12 @@ This bounded monitor discovers the current branch's PR, watches registered
 checks, then gives late workflows one settle interval to appear:
 
 ```mbtx
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/shell",
 }
+---
 
 async fn main {
   @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()

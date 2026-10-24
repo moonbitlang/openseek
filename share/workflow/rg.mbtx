@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/shell",
@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/sys",
 }
+---
 
 ///|
 /// Leave room below mbtx's 48,000-byte transport limit, as read.mbtx does.

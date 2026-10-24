@@ -116,7 +116,9 @@ async test "a foreground run past its deadline becomes a job instead of dying" {
       auto_background_after_ms=1500,
     )
     let source =
+      #|---
       #|import { "moonbitlang/async" }
+      #|---
       #|
       #|async fn main {
       #|  println("started")
@@ -146,7 +148,9 @@ async test "a handed-off job cleans builds but keeps result files until teardown
       auto_background_after_ms=1,
     )
     let source =
+      #|---
       #|import { "moonbitlang/async", "moonbitlang/async/fs" }
+      #|---
       #|
       #|async fn main {
       #|  @async.sleep(100)
@@ -194,7 +198,9 @@ async test "a handoff carries build warnings and the build-ok label" {
       auto_background_after_ms=1500,
     )
     let source =
+      #|---
       #|import { "moonbitlang/async" }
+      #|---
       #|
       #|async fn main {
       #|  let unused = 1
@@ -230,7 +236,9 @@ async test "a successful wasm handed-off job does not invent a policy refusal" {
       auto_background_after_ms=1,
     )
     let source =
+      #|---
       #|import { "moonbitlang/async" }
+      #|---
       #|
       #|async fn main {
       #|  @async.sleep(100)
@@ -273,7 +281,9 @@ async test "an automatically handed-off snippet reads EOF on stdin" {
       auto_background_after_ms=1500,
     )
     let source =
+      #|---
       #|import { "moonbitlang/async", "moonbitlang/async/stdio" }
+      #|---
       #|
       #|async fn main {
       #|  let line = @stdio.stdin.read_until("\n")
@@ -320,7 +330,9 @@ async test "an escalated handed-off job does not invent a policy refusal" {
       approval=ApprovalChannel(_ => AllowedOnce),
     )
     let source =
+      #|---
       #|import { "moonbitlang/async" }
+      #|---
       #|
       #|async fn main {
       #|  @async.sleep(100)
@@ -347,7 +359,9 @@ async test "binary output does not escape the deadline" {
       auto_background_after_ms=1500,
     )
     let source =
+      #|---
       #|import { "moonbitlang/async", "moonbitlang/async/stdio" }
+      #|---
       #|
       #|async fn main {
       #|  @stdio.stdout.write(b"\xff\xfe")
@@ -377,7 +391,9 @@ async test "binary output waits for the real exit instead of abandoning it" {
     )
     // Emit an invalid UTF-8 byte, then keep working briefly before exiting 3.
     let source =
+      #|---
       #|import { "moonbitlang/async", "moonbitlang/async/stdio", "moonbitlang/x/sys" }
+      #|---
       #|
       #|async fn main {
       #|  @stdio.stdout.write(b"\xff\xfe")

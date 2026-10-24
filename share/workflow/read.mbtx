@@ -1,3 +1,4 @@
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -6,6 +7,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/x/sys",
 }
+---
 
 ///|
 /// Leave room below mbtx's 48,000-byte transport limit for run diagnostics.

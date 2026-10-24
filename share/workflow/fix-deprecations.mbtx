@@ -1,20 +1,20 @@
-///|
-/// Fix deprecation warnings mechanically, one guarded edit per site.
-///
-/// Runs `moon check --output-json` in the current directory, keeps the
-/// deprecation warnings whose message names a plain replacement identifier
-/// ("use `len` instead"), and for each site — bottom-up per file, right to
-/// left per line, so an earlier edit never shifts a later span — asks the
-/// host to replace exactly the diagnosed span through `edit` with
-/// revert_if_error_delta_greater_or_equal=1 and revert_if_warning_delta_greater_or_equal=0. Then it
-/// reports what was fixed,
-/// what the host reverted (and why), and what needs a human, and checks once
-/// more for the remaining counts.
-///
-/// Run through the mbtx tool with ptc on, from the module to fix:
-///   {"filename":"@builtin/fix-deprecations.mbtx","cwd":"<module>"}
-/// Arguments: --dry-run   plan only, write nothing
-///            --limit N   stop after N fixes (default 500)
+---
+// Fix deprecation warnings mechanically, one guarded edit per site.
+//
+// Runs `moon check --output-json` in the current directory, keeps the
+// deprecation warnings whose message names a plain replacement identifier
+// ("use `len` instead"), and for each site — bottom-up per file, right to
+// left per line, so an earlier edit never shifts a later span — asks the
+// host to replace exactly the diagnosed span through `edit` with
+// revert_if_error_delta_greater_or_equal=1 and revert_if_warning_delta_greater_or_equal=0. Then it
+// reports what was fixed,
+// what the host reverted (and why), and what needs a human, and checks once
+// more for the remaining counts.
+//
+// Run through the mbtx tool with ptc on, from the module to fix:
+//   {"filename":"@builtin/fix-deprecations.mbtx","cwd":"<module>"}
+// Arguments: --dry-run   plan only, write nothing
+//            --limit N   stop after N fixes (default 500)
 import {
   "moonbitlang/openseek_tools@0.2.0" @tools,
   "moonbitlang/async",
@@ -23,6 +23,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
+---
 
 ///|
 /// One deprecation site the script knows how to fix.

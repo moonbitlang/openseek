@@ -1,7 +1,9 @@
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/shell",
 }
+---
 
 async fn main {
   for command in ["info", "fmt"] {

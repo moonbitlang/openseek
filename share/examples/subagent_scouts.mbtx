@@ -1,9 +1,10 @@
-///|
+---
 import {
   "moonbitlang/openseek_tools@0.2.0" @tools,
   "moonbitlang/async",
   "moonbitlang/core/json",
 }
+---
 
 ///|
 /// Start one explore subagent; its job id.

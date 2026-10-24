@@ -1,7 +1,9 @@
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
 }
+---
 
 ///|
 async fn runner_exists(build_dir : String) -> Bool {

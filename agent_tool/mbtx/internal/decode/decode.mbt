@@ -36,8 +36,9 @@ pub extend Program with Debug::{to_repr}
 ///|
 /// Decode `mbtx` tool-call arguments. At least one of `source` and `filename`
 /// is required; both means save and run a writable script. `source` is a string
-/// holding a full `.mbtx` program (an optional leading `import { … }` block,
-/// then the program including its own `main`). The backend is fixed to wasm;
+/// holding a full `.mbtx` program (optional leading `---` front matter with
+/// its `import { … }` block, then the program including its own `main`). The
+/// backend is fixed to wasm;
 /// supplying the removed `target` field fails with migration guidance. `cwd`
 /// is an optional working directory for the program (defaults to the workspace
 /// root). Failures name the offending field.

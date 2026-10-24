@@ -1,10 +1,11 @@
-///|
+---
 import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/async@0.22.4/fs",
   "moonbitlang/async@0.22.4/os_error",
   "moonbitlang/core/env",
 }
+---
 
 ///|
 /// Usage: moonx scripts/mbtx_bundle.mbtx OUTPUT INPUT...

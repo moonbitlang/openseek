@@ -6,10 +6,12 @@ implementation. The published SDK `moonbitlang/openseek_tools@0.2.0` speaks
 PTC protocol version 1. Runnable examples use this version explicitly.
 
 ```mbtx
+---
 import {
   "moonbitlang/openseek_tools@0.2.0" @tools,
   "moonbitlang/async",
 }
+---
 
 async fn main {
   let result = @tools.call("edit", {
@@ -68,10 +70,12 @@ beside PTC, whose capability the host provides in `OPENSEEK_MCP` to every
 sandboxed `mbtx` run, with or without `ptc=true`.
 
 ```mbtx
+---
 import {
   "moonbitlang/openseek_tools@0.3.0/mcp" @mcp,
   "moonbitlang/async",
 }
+---
 
 async fn main {
   // Print the page so the next model request sees the tools and schemas.

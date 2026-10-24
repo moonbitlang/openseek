@@ -89,10 +89,10 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   transcript and inherited by any background job. Presentation only; it does
   not affect compilation, execution, sandboxing, or background handoff.
 
-- `source` (string): a full `.mbtx` program. It may open with an
-  inline `import { "pkg", "pkg", … }` block (comma-separated module paths),
-  then the program including its own `main`. Use `async fn main` for
-  filesystem/stdio work.
+- `source` (string): a full `.mbtx` program. It may open with
+  `---` front matter holding an `import { "pkg", "pkg", … }` block
+  (comma-separated module paths), then the program including its own `main`.
+  Use `async fn main` for filesystem/stdio work.
 - `filename` (string): a `.mbtx` script name or path. Ordinary names, including
   `check.mbtx`, resolve from the workspace root. `@builtin/check.mbtx` runs the
   copy of `share/workflow/check.mbtx` embedded in the binary at build time
@@ -278,7 +278,9 @@ async test "mbtx reads a workspace file" {
       create_mode=CreateOrTruncate,
     )
     let source =
+      #|---
       #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+      #|---
       #|
       #|async fn main {
       #|  let text = @fs.read_file("data.txt").text()
@@ -356,16 +358,17 @@ async test "mbtx can show compiler warnings" {
 }
 ```
 
-Reading and transforming a file (what you pass as `source`) — note the inline
-import block, with `moonbitlang/async` present so `async fn main` compiles:
+Reading and transforming a file (what you pass as `source`) — note the import
+front matter, with `moonbitlang/async` present so `async fn main` compiles:
 
 ```mbt nocheck
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/stdio",
 }
+---
 
 ///|
 async fn main {

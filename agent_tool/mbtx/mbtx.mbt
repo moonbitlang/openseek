@@ -66,10 +66,10 @@ fn duration_label(milliseconds : Int32) -> String {
 /// Tool definition for `mbtx`: compile and run a self-contained MoonBit
 /// program and return its merged stdout/stderr and exit status.
 ///
-/// The program is a `.mbtx` single-file script — it may open with an inline
-/// `import { "pkg", … }` block (comma-separated module paths) naming the
-/// standard packages it uses, followed by the program including its own
-/// `main`. It runs via `moon run` with your workspace as the working directory
+/// The program is a `.mbtx` single-file script — it may open with `---` front
+/// matter holding an `import { "pkg", … }` block (comma-separated module
+/// paths) naming the packages it uses, followed by the program including its
+/// own `main`. It runs via `moon run` with your workspace as the working directory
 /// by default — so relative `@fs` paths (e.g. `@fs.read_file("data.json")`)
 /// resolve to workspace files, and any output the program writes lands in the
 /// workspace. Pass `cwd` to run somewhere else. Build artifacts never touch

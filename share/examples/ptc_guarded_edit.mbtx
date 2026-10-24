@@ -1,16 +1,17 @@
-///|
-/// One guarded edit from a script. The host checks the tree before and
-/// after the write and restores the file unless the warning total decreases
-/// without increasing the reported error total; the script reads the
-/// outcome from `result.data` instead of parsing prose. Arguments:
-/// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
-/// a host-backed test that runs it through the real sandbox and host.
+---
+// One guarded edit from a script. The host checks the tree before and
+// after the write and restores the file unless the warning total decreases
+// without increasing the reported error total; the script reads the
+// outcome from `result.data` instead of parsing prose. Arguments:
+// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
+// a host-backed test that runs it through the real sandbox and host.
 import {
   "moonbitlang/openseek_tools@0.2.0",
   "moonbitlang/async",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
 }
+---
 
 ///|
 async fn main {

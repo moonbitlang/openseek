@@ -1,4 +1,4 @@
-///|
+---
 // Best-of-N with `openseek run`: the same task in several separate checkouts,
 // run at once, then which attempts completed. `run` performs one run; fanning
 // out is the script's job.
@@ -10,6 +10,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/process",
 }
+---
 
 ///|
 async fn main {

@@ -25,7 +25,9 @@ async test "PTC real script edits and receives reply without deadlock" {
         dispatch(tool, {
           "ptc": true,
           "source": (
+            #|---
             #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+            #|---
             #|async fn main {
             #|  let result = @tools.call("edit", { "path": "note.txt", "start_line": 1, "old_string": "old", "new_string": "new" })
             #|  if result.is_error { fail(result.content) }
@@ -125,7 +127,9 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
         program_service=service,
       )
       let source =
+        #|---
         #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" @a, "moonbitlang/async/http" @h, "moonbitlang/core/json" @j, "moonbitlang/core/env" @e }
+        #|---
         #|async fn main {
         #|  @a.sleep(50)
         #|  let denied = @tools.call("mbtx", {})
@@ -183,7 +187,7 @@ async test "PTC foreground timeout stops the active host call before returning" 
           ),
           {
             "ptc": true,
-            "source": "import { \"moonbitlang/openseek_tools@0.2.0\" @tools, \"moonbitlang/async\" }\nasync fn main { @tools.call(\"block\", {}).content |> println }",
+            "source": "---\nimport { \"moonbitlang/openseek_tools@0.2.0\" @tools, \"moonbitlang/async\" }\n---\nasync fn main { @tools.call(\"block\", {}).content |> println }",
           },
         )
       })
@@ -287,7 +291,9 @@ async test "PTC write and remove preserve existing permissions and deletion appr
       let out = @async.with_timeout(30000, () => {
         dispatch(tool, {
           "source": (
+            #|---
             #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async", "moonbitlang/async/fs" }
+            #|---
             #|async fn main {
             #|  let made = @tools.call("write", { "path": "allowed/new.txt", "content": "created" })
             #|  if made.is_error { fail(made.content) }
@@ -365,7 +371,9 @@ async test "PTC write and remove approve individual scope escapes without liftin
       let out = @async.with_timeout(30000, () => {
         dispatch(tool, {
           "source": (
+            #|---
             #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async", "moonbitlang/async/fs" }
+            #|---
             #|async fn main {
             #|  let made = @tools.call("write", { "path": "outside.txt", "content": "created" })
             #|  if made.is_error { fail(made.content) }

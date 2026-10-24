@@ -6,10 +6,12 @@ async test "session scratch permits raw file IO and script saving outside the wo
     @fs.mkdir(workspace)
     let tool = @mbtx.definition(workspace_root=workspace, scratch_dir=scratch)
     let source =
+      #|---
       #|import {
       #|  "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/shell",
       #|  "moonbitlang/core/env",
       #|}
+      #|---
       #|async fn main {
       #|  let args = @env.args()
       #|  let dir = args[1]
@@ -39,7 +41,9 @@ async test "session scratch permits raw file IO and script saving outside the wo
     )
     let read = dispatch(reopened, {
       "source": (
+        #|---
         #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
+        #|---
         #|async fn main {
         #|  let dir = @env.args()[1]
         #|  guard @fs.read_file("\{dir}/data/value.bin").binary() == b"\x00\xff" else { fail("lost bytes") }
@@ -86,7 +90,9 @@ async test "session scratch cannot grant writes through an escaping symlink" {
     assert_true(saved.is_error)
     let raw = dispatch(tool, {
       "source": (
+        #|---
         #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
+        #|---
         #|async fn main { @fs.write_file(@env.args()[1], "escaped") }
       ),
       "args": ["\{scratch}/link/escaped.txt"],
