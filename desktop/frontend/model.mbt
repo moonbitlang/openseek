@@ -3968,7 +3968,7 @@ fn Conversation::durable_frontier(self : Conversation) -> Int32 {
 ///|
 fn Conversation::has_begun(self : Conversation) -> Bool {
   self.is_running() ||
-  self.messages.length() > 0 ||
+  !self.messages.is_empty() ||
   !self.pending_steers.is_empty() ||
   // A `!` command in flight is about to become transcript.
   !self.shell_commands.is_empty()

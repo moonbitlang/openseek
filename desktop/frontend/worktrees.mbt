@@ -567,18 +567,17 @@ fn worktree_rows(
   channel : @interop.ChannelId,
   infos : Array[@protocol.WorktreeInfo],
 ) -> Array[WorktreeRow] {
-  let rows : Array[WorktreeRow] = []
-  for info in infos {
-    guard !info.name.is_empty() else { continue }
-    rows.push({
-      name: info.name,
-      sessions: info.sessions.filter(id => !id.is_empty()),
-      path: @resource.of_path(channel, info.path),
-      codex_thread: info.codex_thread.filter(id => !id.is_empty()),
-      present: info.present,
-    })
-  }
-  rows
+  [
+    for info in infos if !info.name.is_empty() => {
+      {
+        name: info.name,
+        sessions: info.sessions.filter(id => !id.is_empty()),
+        path: @resource.of_path(channel, info.path),
+        codex_thread: info.codex_thread.filter(id => !id.is_empty()),
+        present: info.present,
+      }
+    }
+  ]
 }
 
 ///|
@@ -731,7 +730,7 @@ fn DeviceState::worktree_generation(
 fn Conversation::wants_fresh_worktree(self : Conversation) -> Bool {
   self.worktree_mode &&
   self.workspace is Project(..) &&
-  self.messages.length() == 0
+  self.messages.is_empty()
 }
 
 ///|
@@ -753,7 +752,7 @@ fn Model::can_choose_launch_mode(self : Model, conv : Conversation) -> Bool {
     return false
   }
   guard conv.workspace is Project(root~) &&
-    conv.messages.length() == 0 &&
+    conv.messages.is_empty() &&
     conv.run is NoRun(..) &&
     conv.controls.pending is None &&
     conv.shell_commands.is_empty() else {
@@ -781,7 +780,7 @@ fn Model::worktree_control(
   self : Model,
   conv : Conversation,
 ) -> @composer.WorktreeControl? {
-  guard conv.messages.length() == 0 else { return None }
+  guard conv.messages.is_empty() else { return None }
   if self.device_state(conv.device) is Some(dev) &&
     dev.is_chat_workspace(conv.project()) {
     return None

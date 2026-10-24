@@ -5187,7 +5187,7 @@ fn update_msg(
       let conversations = activated.conversations.map(conv => {
         if conv.device == owner.channel &&
           conv.session_id == owner.session &&
-          conv.messages.length() == 0 &&
+          conv.messages.is_empty() &&
           !conv.is_running() {
           {
             ..conv,

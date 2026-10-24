@@ -2676,7 +2676,7 @@ fn view(
   // The toast stack floats over everything (position: fixed), so appending
   // it last never shifts the layout; skipping it entirely while empty keeps
   // the corner clickable.
-  if model.notifications.length() > 0 || model.github.checkout is Some(_) {
+  if !model.notifications.is_empty() || model.github.checkout is Some(_) {
     children.push(notifications_view(dispatch, model))
   }
   children.push(
