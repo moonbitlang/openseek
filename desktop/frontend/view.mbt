@@ -1162,20 +1162,13 @@ fn remote_access_rows(
           []
         } else {
           [
-            @html.button(
-              class="button secondary",
-              attrs=@html.Attrs::build()
-                .role("switch")
-                .aria_checked(enabled.to_string())
-                .disabled(
-                  model.account is None || managed || model.remote_connecting,
-                ),
+            @settings.switch_control(
+              enabled~,
+              label=@settings.text(model.locale, RemoteControl),
+              disabled=model.account is None ||
+                managed ||
+                model.remote_connecting,
               on_click=dispatch(RemoteAccessSet(!enabled)),
-              if enabled {
-                @settings.text(model.locale, On)
-              } else {
-                @settings.text(model.locale, Off)
-              },
             ),
           ]
         },
@@ -1758,18 +1751,10 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @settings.row(
             @settings.text(locale, FpsOverlay),
             [
-              @html.button(
-                class="button secondary",
-                attrs=@html.Attrs::build()
-                  .role("switch")
-                  .aria_label(@settings.text(locale, FpsOverlay))
-                  .aria_checked(model.fps_overlay_enabled.to_string()),
+              @settings.switch_control(
+                enabled=model.fps_overlay_enabled,
+                label=@settings.text(locale, FpsOverlay),
                 on_click=dispatch(FpsOverlayChanged(!model.fps_overlay_enabled)),
-                if model.fps_overlay_enabled {
-                  @settings.text(locale, On)
-                } else {
-                  @settings.text(locale, Off)
-                },
               ),
             ],
             desc=@settings.text(locale, FpsDescription),
