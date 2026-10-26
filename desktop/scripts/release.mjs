@@ -2,6 +2,8 @@
 //
 //   node scripts/release.mjs stamp X.Y.Z       stamp the version every packager builds from
 //   node scripts/release.mjs upload [vX.Y.Z]   upload the checkout's artifacts to OSS and S3
+//   node scripts/release.mjs upload-oss [vX.Y.Z] upload or restore canonical OSS artifacts
+//   node scripts/release.mjs upload-s3 [vX.Y.Z] mirror those artifacts to S3 and stage the Browser
 //   node scripts/release.mjs publish [vX.Y.Z]  make the uploaded version live
 //   node scripts/release.mjs verify [vX.Y.Z]   check the live release through its public URLs
 //   node scripts/release.mjs rollback vX.Y.Z   republish an existing version
@@ -12,14 +14,16 @@
 // about, so a release becomes visible once every file is in place, and
 // rolling back is publishing an older version again.
 //
-// upload, publish, and rollback need OPENSEEK_OSS_BUCKET, OPENSEEK_OSS_REGION,
-// OPENSEEK_API_ORIGIN, and OPENSEEK_DEPLOY_TOKEN, plus ossutil 2.x with its
-// OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET. The standard API origins select
-// their OSS prefixes; other deployments set OPENSEEK_OSS_PREFIX. verify needs
-// only OPENSEEK_API_ORIGIN and the checkout's archives in dist/. S3 uploads
-// and publication also require OPENSEEK_S3_BUCKET, OPENSEEK_S3_REGION and
-// AWS CLI v2 credentials (GitHub OIDC in CI). OPENSEEK_S3_PREFIX overrides
-// the same channel prefix used by OSS.
+// Upload commands, publish, and rollback need OPENSEEK_OSS_BUCKET,
+// OPENSEEK_OSS_REGION, OPENSEEK_API_ORIGIN, and OPENSEEK_DEPLOY_TOKEN, plus
+// ossutil 2.x with its OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET. The standard
+// API origins select their OSS prefixes; other deployments set
+// OPENSEEK_OSS_PREFIX. verify needs only OPENSEEK_API_ORIGIN and the checkout's
+// archives in dist/. upload, upload-s3, publish, and rollback also require
+// OPENSEEK_S3_BUCKET, OPENSEEK_S3_REGION and AWS CLI v2 credentials. CI runs
+// upload-oss first, then acquires fresh GitHub OIDC credentials immediately
+// before upload-s3 and publish. OPENSEEK_S3_PREFIX overrides the channel
+// prefix used by OSS.
 
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -60,6 +64,8 @@ const OssPrefixes = {
 const Usage = `usage:
   node scripts/release.mjs stamp X.Y.Z
   node scripts/release.mjs upload [vX.Y.Z]
+  node scripts/release.mjs upload-oss [vX.Y.Z]
+  node scripts/release.mjs upload-s3 [vX.Y.Z]
   node scripts/release.mjs publish [vX.Y.Z]
   node scripts/release.mjs verify [vX.Y.Z]
   node scripts/release.mjs rollback vX.Y.Z
@@ -117,7 +123,7 @@ export class Release {
     }
   }
 
-  uploadS3(version, artifact, local) {
+  uploadS3Artifact(version, artifact, local) {
     const s3 = this.s3();
     this.commandRun("aws", ["s3", "cp", local.path, `s3://${s3.bucket}/${this.s3Key(version, artifact)}`,
       "--region", s3.region, "--content-type", artifact.contentType,
@@ -274,34 +280,40 @@ export class Release {
   }
 
   async upload(version) {
+    this.s3(); // The combined command still requires both destinations up front.
+    await this.uploadOss(version);
+    await this.uploadS3(version);
+  }
+
+  async isPublished(version) {
+    const sealed = await this.fetch(`/console/releases/${version}/index.html`);
+    await sealed.body?.cancel();
+    if (sealed.status === 200) return true;
+    if (sealed.status === 404) return false;
+    throw new Error(`could not determine whether ${version} is published: HTTP ${sealed.status}`);
+  }
+
+  async uploadOss(version) {
     await this.checkoutVersion(version);
     const oss = this.oss();
-    this.s3(); // Require both destinations before uploading any artifacts.
     // A published Browser directory is the API-owned per-version seal. If a
     // previous attempt reached API publish but the job failed afterwards, its
     // OSS bytes must be reused instead of overwritten by a fresh rebuild.
-    const sealed = await this.fetch(`/console/releases/${version}/index.html`);
-    await sealed.body?.cancel();
-    if (sealed.status === 200) {
+    if (await this.isPublished(version)) {
       console.log(`${version} is already published by the API; reusing its OSS artifacts`);
       for (const artifact of Artifacts) {
         this.commandRun("ossutil", ["cp", "--force", "--region", oss.region,
           this.ossUrl(version, artifact), join(this.dist, artifact.file)]);
         const local = await this.localArtifact(artifact);
         await this.verifyServed(version, artifact, local);
-        this.uploadS3(version, artifact, local);
         console.log(`${artifact.platform} restored: ${this.ossUrl(version, artifact)}`);
       }
       await this.unpackBrowser();
-      console.log(`${version} is ready to publish again`);
+      console.log(`${version} OSS artifacts restored`);
       return;
-    }
-    if (sealed.status !== 404) {
-      throw new Error(`could not determine whether ${version} is published: HTTP ${sealed.status}`);
     }
 
     console.log(`${version} is unpublished; uploading replaceable OSS artifacts`);
-    const digests = {};
     for (const artifact of Artifacts) {
       const local = await this.localArtifact(artifact);
       // Rebuilds are not byte-identical. Until the API publishes this version,
@@ -314,9 +326,29 @@ export class Release {
       // Verify against OSS directly. Accessing the CDN before publication can
       // cache provisional bytes under the immutable version URL.
       await this.verifyServed(version, artifact, local);
-      this.uploadS3(version, artifact, local);
-      digests[artifact.platform] = local.sha256;
       console.log(`${artifact.platform} verified in OSS`);
+    }
+    await this.unpackBrowser();
+    console.log(`${version} OSS artifacts uploaded`);
+  }
+
+  // Run after upload-oss has selected the canonical bytes in dist/. Keeping
+  // every OSS transfer ahead of this stage lets CI acquire AWS credentials
+  // only once the slow transfers have finished.
+  async uploadS3(version) {
+    await this.checkoutVersion(version);
+    this.s3();
+    const published = await this.isPublished(version);
+    const digests = {};
+    for (const artifact of Artifacts) {
+      const local = await this.localArtifact(artifact);
+      await this.verifyServed(version, artifact, local);
+      this.uploadS3Artifact(version, artifact, local);
+      digests[artifact.platform] = local.sha256;
+    }
+    if (published) {
+      console.log(`${version} is ready to publish again`);
+      return;
     }
 
     // `/console/` remains on the API origin, so only the much smaller Browser
@@ -327,7 +359,6 @@ export class Release {
     if (recorded.sha256 !== digests.browser) {
       throw new Error(`DIGEST MISMATCH: API recorded ${recorded.sha256} for Browser`);
     }
-    await this.unpackBrowser();
     console.log(`${version} is ready to publish`);
   }
 
@@ -480,6 +511,8 @@ export class Release {
     switch (command) {
       case "stamp": return await this.stamp(argument ?? "");
       case "upload": return await this.upload(await version());
+      case "upload-oss": return await this.uploadOss(await version());
+      case "upload-s3": return await this.uploadS3(await version());
       case "publish": return await this.publish(await version(), { fromCheckout: true });
       case "verify": return await this.verify(await version());
       case "rollback": return await this.publish(argument ?? "", { fromCheckout: false });

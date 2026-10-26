@@ -406,12 +406,6 @@ jobs:
         shell: bash
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
 
-      - name: Configure S3 credentials
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: ${{ vars.OPENSEEK_RELEASE_AWS_ROLE_ARN }}
-          aws-region: ${{ vars.OPENSEEK_S3_REGION }}
-
       - name: Check AWS CLI
         run: aws --version
 
@@ -448,7 +442,7 @@ jobs:
       # Upload artifacts before publication. Until API publish succeeds, a
       # retry may replace nondeterministic rebuilds; a published Browser
       # version restores the exact OSS bytes instead.
-      - name: Upload release to OSS and S3
+      - name: Upload release to OSS
         shell: bash
         env:
           OPENSEEK_DEPLOY_TOKEN: ${{ secrets.OPENSEEK_DEPLOY_TOKEN }}
@@ -457,7 +451,7 @@ jobs:
           OSS_ACCESS_KEY_ID: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_SECRET }}
         run: |
-          node desktop/scripts/release.mjs upload "v$RELEASE_VERSION"
+          node desktop/scripts/release.mjs upload-oss "v$RELEASE_VERSION"
 
       # A retry of an API-published version replaces this run's nondeterministic
       # rebuilds with the exact OSS objects before reaching here. Keep those
@@ -484,6 +478,26 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+      # OSS transfers can outlast the AWS role's one-hour session. Finish
+      # those transfers and the Actions artifact uploads before acquiring
+      # credentials, then mirror to S3 and publish without another long upload.
+      - name: Configure S3 credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.OPENSEEK_RELEASE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.OPENSEEK_S3_REGION }}
+
+      - name: Upload release to S3
+        shell: bash
+        env:
+          OPENSEEK_DEPLOY_TOKEN: ${{ secrets.OPENSEEK_DEPLOY_TOKEN }}
+          OPENSEEK_OSS_BUCKET: ${{ secrets.OPENSEEK_OSS_BUCKET }}
+          OPENSEEK_OSS_REGION: ${{ secrets.OPENSEEK_OSS_REGION }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_SECRET }}
+        run: |
+          node desktop/scripts/release.mjs upload-s3 "v$RELEASE_VERSION"
 
       # Publish sends filenames and digests to the API. The API selects the
       # staged Browser version and atomically replaces its own latest.json; it

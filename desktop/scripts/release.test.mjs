@@ -284,7 +284,7 @@ test("rollback does not hide OSS failures by falling back to ZIP", async t => {
   assert.equal(head.mock.calls.some(call => call.arguments[1].file === "SeekMoon-windows-x64.zip"), false);
 });
 
-test("upload sends identical Windows installers and metadata to OSS and S3", async t => {
+test("separate upload stages send identical installers without requiring AWS credentials during OSS uploads", async t => {
   const release = new Release();
   release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-upload-"));
   t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
@@ -295,20 +295,34 @@ test("upload sends identical Windows installers and metadata to OSS and S3", asy
   }
   t.mock.method(release, "moduleVersion", async () => "0.1.9");
   t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
-  t.mock.method(release, "s3", () => ({ bucket: "mirror", region: "us-west-2", prefix: "releases" }));
+  let credentialsReady = false;
+  t.mock.method(release, "s3", () => {
+    assert.ok(credentialsReady, "AWS credentials are acquired after OSS uploads finish");
+    return { bucket: "mirror", region: "us-west-2", prefix: "releases" };
+  });
   t.mock.method(release, "headS3Object", () => ({ size: String(bytes.length), sha256 }));
   t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
   t.mock.method(release, "verifyServed", async () => ({ sha256 }));
-  t.mock.method(release, "fetchJson", async () => ({ sha256 }));
+  const stage = t.mock.method(release, "fetchJson", async () => {
+    assert.equal(commands.mock.callCount(), 8, "all artifacts reach S3 before staging the Browser");
+    return { sha256 };
+  });
   t.mock.method(release, "unpackBrowser", async () => {});
   const commands = t.mock.method(release, "commandRun", () => {});
-  await release.upload("v0.1.9");
-  assert.equal(commands.mock.callCount(), 8);
-  const [program, args] = commands.mock.calls.at(-2).arguments;
+  await release.run("upload-oss", "v0.1.9");
+  assert.equal(commands.mock.callCount(), 4);
+  assert.ok(commands.mock.calls.every(call => call.arguments[0] === "ossutil"));
+  assert.equal(stage.mock.callCount(), 0);
+  const [program, args] = commands.mock.calls.at(-1).arguments;
   assert.equal(program, "ossutil");
   assert.equal(args[args.indexOf("--content-type") + 1], "application/octet-stream");
   assert.equal(args.at(-2), join(release.dist, "SeekMoon-windows-x64-setup.exe"));
   assert.equal(args.at(-1), "oss://test/releases/v0.1.9/SeekMoon-windows-x64-setup.exe");
+  credentialsReady = true;
+  await release.run("upload-s3");
+  assert.equal(commands.mock.callCount(), 8);
+  assert.ok(commands.mock.calls.slice(4).every(call => call.arguments[0] === "aws"));
+  assert.equal(stage.mock.callCount(), 1);
   const [s3Program, s3Args] = commands.mock.calls.at(-1).arguments;
   assert.equal(s3Program, "aws");
   assert.equal(s3Args[2], join(release.dist, "SeekMoon-windows-x64-setup.exe"));
@@ -316,6 +330,25 @@ test("upload sends identical Windows installers and metadata to OSS and S3", asy
   assert.equal(s3Args[s3Args.indexOf("--metadata") + 1], `sha256=${sha256}`);
   assert.equal(s3Args[s3Args.indexOf("--content-type") + 1], "application/octet-stream");
   assert.equal(s3Args[s3Args.indexOf("--cache-control") + 1], "public, max-age=31536000, immutable");
+});
+
+test("release CI acquires AWS credentials after every OSS and Actions artifact transfer", async () => {
+  const workflow = await fs.readFile(new URL("../../.github/workflows/desktop-release.yml", import.meta.url), "utf8");
+  const publish = workflow.slice(workflow.indexOf("\n  release-publish:"));
+  const steps = publish.split(/^      - /m).slice(1);
+  const credentials = steps.findIndex(step => step.includes("uses: aws-actions/configure-aws-credentials@"));
+  const oss = steps.findIndex(step => step.includes('release.mjs upload-oss "v$RELEASE_VERSION"'));
+  const s3 = steps.findIndex(step => step.includes('release.mjs upload-s3 "v$RELEASE_VERSION"'));
+  const publication = steps.findIndex(step => step.includes('release.mjs publish "v$RELEASE_VERSION"'));
+  assert.ok(oss >= 0 && oss < credentials);
+  assert.equal(s3, credentials + 1);
+  assert.equal(publication, s3 + 1);
+  for (const [index, step] of steps.entries()) {
+    if (/uses: actions\/(?:upload|download)-artifact@/.test(step)) {
+      assert.ok(index < credentials, "artifact transfers must not consume the AWS session");
+    }
+    assert.ok(!step.includes('release.mjs upload "'), "CI uses the separate storage stages");
+  }
 });
 
 test("publish refuses missing, inaccessible or mismatching S3 objects before API publication", async t => {
@@ -336,7 +369,7 @@ test("publish refuses missing, inaccessible or mismatching S3 objects before API
   assert.equal(request.mock.callCount(), 0);
 });
 
-test("published retry restores OSS bytes before mirroring S3", async t => {
+test("published retry restores all OSS bytes before the separate S3 stage", async t => {
   const release = new Release();
   t.mock.method(release, "moduleVersion", async () => "0.1.9");
   t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
@@ -354,10 +387,15 @@ test("published retry restores OSS bytes before mirroring S3", async t => {
     return canonical;
   });
   t.mock.method(release, "verifyServed", async (_version, _artifact, local) => assert.equal(local, canonical));
-  const mirror = t.mock.method(release, "uploadS3", (_version, _artifact, local) => assert.equal(local, canonical));
+  const mirror = t.mock.method(release, "uploadS3Artifact", (_version, _artifact, local) => {
+    assert.equal(restored.size, 4);
+    assert.equal(local, canonical);
+  });
   t.mock.method(release, "unpackBrowser", async () => {});
   t.mock.method(release, "fetchJson", async () => assert.fail("must not replace the published Browser"));
-  await release.upload("v0.1.9");
+  await release.uploadOss("v0.1.9");
+  assert.equal(mirror.mock.callCount(), 0);
+  await release.uploadS3("v0.1.9");
   assert.equal(mirror.mock.callCount(), 4);
 });
 
@@ -370,9 +408,23 @@ test("S3 upload failure stops before staging the Browser on the API", async t =>
   t.mock.method(release, "commandRun", () => {});
   t.mock.method(release, "localArtifact", async () => ({ size: 123, sha256: "a".repeat(64), path: "fixture" }));
   t.mock.method(release, "verifyServed", async () => {});
-  t.mock.method(release, "uploadS3", () => { throw new Error("S3 unavailable"); });
+  t.mock.method(release, "uploadS3Artifact", () => { throw new Error("S3 unavailable"); });
   const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage Browser"));
-  await assert.rejects(release.upload("v0.1.9"), /S3 unavailable/);
+  await assert.rejects(release.uploadS3("v0.1.9"), /S3 unavailable/);
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("S3 stage refuses local bytes changed since the OSS stage", async t => {
+  const release = new Release();
+  t.mock.method(release, "moduleVersion", async () => "0.1.9");
+  t.mock.method(release, "s3", () => ({}));
+  t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
+  t.mock.method(release, "localArtifact", async () => ({ size: 123, sha256: "b".repeat(64), path: "fixture" }));
+  t.mock.method(release, "headObject", () => ({ size: "123", sha256: "a".repeat(64), crc64: "1" }));
+  const commands = t.mock.method(release, "commandRun", () => assert.fail("must not upload different bytes to S3"));
+  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage Browser"));
+  await assert.rejects(release.run("upload-s3", "v0.1.9"), /OSS object does not match the built artifact/);
+  assert.equal(commands.mock.callCount(), 0);
   assert.equal(request.mock.callCount(), 0);
 });
 
