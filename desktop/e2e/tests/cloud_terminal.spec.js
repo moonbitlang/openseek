@@ -326,3 +326,45 @@ test('signing out while Cloud ! runs clears the operation without submitting it 
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
   expect(terminal.requests('terminal.open')).toHaveLength(1);
 });
+
+test('a delayed Host worktree command stays on its owning Host after switching to Cloud', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  const terminal = new CloudTerminalHarness(page);
+  const replyFor = cloud.device.replyFor.bind(cloud.device);
+  let releaseCreate;
+  const creation = new Promise(resolve => { releaseCreate = resolve; });
+  cloud.device.replyFor = request => request.method === 'worktree.create' ? creation : replyFor(request);
+  await cloud.install();
+  await terminal.install();
+  await cloud.goto();
+  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
+  await page.locator('button.composer-worktree').click();
+  await expect(page.locator('button.composer-worktree')).toHaveText('Worktree');
+  await page.locator('#task').pressSequentially('!pwd');
+  await expect(page.locator('.composer-mode-chip')).toBeVisible();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.locator('#task').press('Enter');
+  await expect.poll(() => cloud.device.requests.filter(request => request.method === 'worktree.create').length).toBe(1);
+  const create = cloud.device.requests.find(request => request.method === 'worktree.create');
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await cloud.open();
+  await page.locator('#task').fill('Keep this Cloud draft');
+  const url = page.url();
+  const worktrees = [{ name: 'shell-background', branch: 'test', base: 'main', path: '/workspace/worktrees/shell-background', present: true, sessions: [create.params.session] }];
+  releaseCreate({ name: 'shell-background', worktrees });
+  // The create callback binds the session before the placement registry arrives.
+  // Keep that gap open long enough for the normal placement retry path.
+  setTimeout(() => cloud.device.notify('worktree.changed', { workspace: '/workspace', worktrees }), 300);
+  await expect.poll(() => ({ host: cloud.device.requests.filter(request => request.method === 'terminal.open').length, cloud: terminal.connections.length })).toEqual({ host: 1, cloud: 0 });
+  const opened = cloud.device.requests.find(request => request.method === 'terminal.open');
+  // The Host resolves the bound worktree from the session and project root.
+  expect(opened.params).toMatchObject({ session: create.params.session, workspace: '/workspace', command: 'pwd' });
+  expect(terminal.connections).toHaveLength(0);
+  await expect(cloud.row(sessionA)).toHaveAttribute('aria-current', 'true');
+  await expect(page).toHaveURL(url);
+  await expect(page.locator('#task')).toHaveValue('Keep this Cloud draft');
+  await expect(page.locator('.terminal-panel.open')).toHaveCount(0);
+  expect(cloud.device.pageErrors).toEqual([]);
+});

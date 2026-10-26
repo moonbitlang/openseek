@@ -84,11 +84,12 @@ fn run_shell_command(
 ) -> (@cmd.Cmd, Model) {
   // The tab belongs to the command's conversation, which need not be the one
   // on screen by now: project that conversation, as a send does.
+  guard model.find_conversation(channel, session) is Some(conv) else {
+    return (@cmd.none, model)
+  }
   let target = {
-    ..model,
+    ..model.activate(channel, session, conv.project()),
     screen: Chat,
-    focused: channel,
-    active_session: session,
   }
   match
     model.terminal.run_command(
@@ -97,8 +98,11 @@ fn run_shell_command(
       shell=id,
       command~,
       on_screen=model.screen is Chat &&
-        model.focused == channel &&
-        model.active_session == session,
+        model
+        .conversation_selection()
+        .map_or(false, selected => {
+          selected.channel == channel && selected.session == session
+        }),
     ) {
     @terminal.CommandStarted(cmd, terminal) => (cmd, { ..model, terminal, })
     // A worktree created a moment ago is bound before its registry row
