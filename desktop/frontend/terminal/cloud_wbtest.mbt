@@ -77,3 +77,26 @@ test "failed Cloud authentication restores an unstarted bang command" {
   assert_true(state.tabs.is_empty())
   assert_true(messages is [CommandNotStarted(shell="submission", ..)])
 }
+
+///|
+test "repeated emulator readiness opens only one PTY while authentication is pending" {
+  let ctx = cloud_ctx("session")
+  let emit = @cmd.Emit(_ => @cmd.none)
+  let (_, state) = update(emit, NewTerminal, State::empty(), ctx)
+  let tab = state.tabs[0]
+  let (_, opening) = update(
+    emit,
+    EmulatorReady(key=tab.key, cols=80, rows=24),
+    state,
+    ctx,
+  )
+  assert_true(opening.tabs[0].status is TabOpening(requested=true))
+  let (_, repeated) = update(
+    emit,
+    EmulatorReady(key=tab.key, cols=80, rows=24),
+    opening,
+    ctx,
+  )
+  assert_true(repeated.tabs == opening.tabs)
+  assert_false(repeated.tabs[0].awaits_session(true))
+}

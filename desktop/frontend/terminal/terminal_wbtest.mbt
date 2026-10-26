@@ -425,7 +425,7 @@ test "a ! command gets its own tab without opening the panel" {
   let state = start_command(State::empty(), emit, input, "s-1", "moon test")
   assert_false(state.open)
   guard state.tabs is [tab] else { fail("expected exactly one tab") }
-  assert_true(tab.status is TabOpening)
+  assert_true(tab.status is TabOpening(..))
   assert_true(tab.command is Some({ shell: "s-1", text: "moon test", }))
   // It is the tab the panel shows once the user opens it.
   let (_, revealed) = update(emit, RevealCommand(shell="s-1"), state, ctx)

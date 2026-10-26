@@ -393,7 +393,7 @@ fn State::sync_host_routes(self : State) -> @cmd.Cmd {
   for tab in self.tabs {
     match tab.id {
       Some(id) => owners[(tab.workspace.channel(), id)] = tab.key
-      None if tab.status is TabOpening => {
+      None if tab.status is TabOpening(..) => {
         let channel = tab.workspace.channel()
         if !opening_channels.contains(channel) {
           opening_channels.push(channel)

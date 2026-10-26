@@ -44,8 +44,8 @@ pub extend Connection with Hash::{hash, hash_combine}
 
 ///|
 priv enum TabStatus {
-  /// `terminal_open` is in flight.
-  TabOpening
+  /// Waiting for the emulator, or for the one dispatched `terminal.open`.
+  TabOpening(requested~ : Bool)
   TabRunning
   /// Opening or driving the session failed.
   TabFailed(message~ : String)

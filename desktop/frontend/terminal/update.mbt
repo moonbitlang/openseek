@@ -49,7 +49,7 @@ fn open_new_tab(
     workspace_label: workspace_label(ctx),
     session: ctx.session,
     workspace_path: ctx.placement.bind(placement => placement.project_root()),
-    status: TabOpening,
+    status: TabOpening(requested=false),
     command,
     input: InputQueue::empty(),
   }
@@ -138,7 +138,7 @@ pub fn State::open_terminal(
 /// about it.
 fn Tab::awaits_session(self : Tab, checkout_ready : Bool) -> Bool {
   (checkout_ready || self.command is Some(_)) &&
-  self.status is TabOpening &&
+  self.status is TabOpening(requested=false) &&
   self.id is None
 }
 
@@ -149,7 +149,7 @@ fn Tab::awaits_session(self : Tab, checkout_ready : Bool) -> Bool {
 /// and for a command tab that already reported.
 fn Tab::abandoned(self : Tab, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd? {
   guard self.command is Some(command) &&
-    self.status is (TabOpening | TabRunning) else {
+    self.status is (TabOpening(..) | TabRunning) else {
     return None
   }
   Some(report_command(dispatch, self.key, command.shell, None))
@@ -340,7 +340,7 @@ fn update(
             rows,
             command?=tab.command.map(command => command.text),
           ),
-          state,
+          state.replace_tab({ ..tab, status: TabOpening(requested=true), }),
         )
       } else {
         (@cmd.none, state)
@@ -362,7 +362,7 @@ fn update(
         }
         guard state.tab_by_key(key) is Some(tab) &&
           tab.workspace.channel() == channel &&
-          tab.status is TabOpening else {
+          tab.status is TabOpening(..) else {
           return (drop_pending(channel, id), state)
         }
         match tab.command {
@@ -385,7 +385,7 @@ fn update(
         }
       } else if state.tab_by_key(key) is Some(tab) &&
         tab.workspace.channel() == channel &&
-        tab.status is TabOpening {
+        tab.status is TabOpening(..) {
         let (send, tab) = start_input(dispatch, {
           ..tab,
           id: Some(id),
@@ -424,7 +424,7 @@ fn update(
     UserInput(key~, data~) | BinaryInput(key~, data~) => {
       guard checkout_ready &&
         state.tab_by_key(key) is Some(tab) &&
-        tab.status is (TabOpening | TabRunning) else {
+        tab.status is (TabOpening(..) | TabRunning) else {
         return (@cmd.none, state)
       }
       let (cmd, tab) = queue_input(dispatch, tab, data, msg is BinaryInput(..))
@@ -501,13 +501,13 @@ fn update(
         }
         None =>
           if state.tabs.any(tab => {
-              tab.workspace.channel() == channel && tab.status is TabOpening
+              tab.workspace.channel() == channel && tab.status is TabOpening(..)
             }) {
             // A command tab may be the one opening: keep the output buffered
             // for it until the reply says whose session this was.
             let commands_opening = state.tabs.any(tab => {
               tab.workspace.channel() == channel &&
-              tab.status is TabOpening &&
+              tab.status is TabOpening(..) &&
               tab.command is Some(_)
             })
             (

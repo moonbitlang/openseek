@@ -16,7 +16,7 @@ fn tab_view(
     None => tab.workspace_label
   }
   let title = match tab.status {
-    TabOpening => "starting…"
+    TabOpening(..) => "starting…"
     TabRunning => label
     TabFailed(message~) => message
     TabExited(code~) => "\{label} (exit \{code})"
@@ -105,7 +105,7 @@ fn panel_view(
     )
   } else if active is Some(tab) {
     match tab.status {
-      TabOpening =>
+      TabOpening(..) =>
         items.push(@html.span(class="terminal-status", "starting…"))
       TabFailed(message~) =>
         items.push(@html.span(class="terminal-status terminal-error", message))

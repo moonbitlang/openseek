@@ -28,8 +28,10 @@ impl Show for CloudTerminalUnavailable with fn output(_, logger) {
 /// command is automatically restored after loss or account replacement.
 fn sync_cloud_account(access : (String, String, Int32)?) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    if cloud_account.val != access {
-      cloud_account.val = access
+    let replaced = cloud_account.val.map(value => (value.0, value.2)) !=
+      access.map(value => (value.0, value.2))
+    cloud_account.val = access
+    if replaced {
       let sockets = cloud_sockets.values().to_array()
       cloud_sockets.clear()
       for socket in sockets {
@@ -48,6 +50,22 @@ fn cloud_socket_is_current(
   cloud_sockets
   .get(connection)
   .map_or(false, current => physical_equal(current, socket))
+}
+
+///|
+fn close_cloud_socket(
+  dispatch : @cmd.Emit[Msg],
+  scheduler : &@cmd.Scheduler,
+  connection : Connection,
+  socket : CloudSocket,
+) -> Unit {
+  guard cloud_socket_is_current(connection, socket) else { return }
+  cloud_sockets.remove(connection)
+  let _ : @js.Value = socket.ready.apply_with_string("resolve", [false])
+  socket.rpc.close()
+  scheduler.add(
+    dispatch(CloudDisconnected(connection~, authenticated=socket.authenticated)),
+  )
 }
 
 ///|
@@ -99,7 +117,7 @@ async fn connect_cloud(
           socket.rpc.authenticated()
           let _ : @js.Value = socket.ready.apply_with_string("resolve", [true])
         } else {
-          socket.rpc.close()
+          close_cloud_socket(dispatch, scheduler, connection, socket)
         }
       } else {
         socket.rpc.receive(event, notification => {
@@ -121,15 +139,7 @@ async fn connect_cloud(
       }
     })
     ws.set_with_string("onclose", (_ : @js.Value) => {
-      guard cloud_socket_is_current(connection, socket) else { return }
-      cloud_sockets.remove(connection)
-      let _ : @js.Value = socket.ready.apply_with_string("resolve", [false])
-      socket.rpc.close()
-      scheduler.add(
-        dispatch(
-          CloudDisconnected(connection~, authenticated=socket.authenticated),
-        ),
-      )
+      close_cloud_socket(dispatch, scheduler, connection, socket)
     })
     socket
   })
