@@ -53,7 +53,15 @@ fn open_new_tab(
     command,
     input: InputQueue::empty(),
   }
-  let state = { ..state, tabs: state.tabs + [tab], }
+  let state = {
+    ..state,
+    tabs: state.tabs + [tab],
+    interrupted_channels: if ctx.channel is Cloud(..) {
+      state.interrupted_channels.filter(connection => connection != ctx.channel)
+    } else {
+      state.interrupted_channels
+    },
+  }
   let mount = @cmd.batch([
     terminal_resizer.mount(),
     mount_tab(dispatch, key, focus=command is None, show=on_screen),
@@ -225,6 +233,8 @@ fn update(
 ) -> (@cmd.Cmd, State) {
   let checkout_ready = ctx.placement is Some(placement) && placement.is_ready()
   match msg {
+    CloudDisconnected(connection~, authenticated~) =>
+      disconnect(dispatch, state, connection, never_started=!authenticated)
     ToggleMaximized =>
       if state.open {
         (@cmd.none, { ..state, maximized: !state.maximized, })
@@ -332,7 +342,7 @@ fn update(
         guard state.tab_by_key(key) is Some(tab) &&
           tab.workspace.channel() == channel &&
           tab.status is TabOpening else {
-          return (drop_pending(id), state)
+          return (drop_pending(channel, id), state)
         }
         match tab.command {
           // A quick command (`true`, `ls`) is exactly this race. Its output
@@ -341,14 +351,14 @@ fn update(
           Some(command) =>
             (
               @cmd.batch([
-                flush_pending(key, id),
+                flush_pending(channel, key, id),
                 report_command(dispatch, key, command.shell, exit_code_of(code)),
               ]),
               state.replace_tab({ ..tab, status: TabExited(code~), }),
             )
           None => {
             let (cmds, state) = drop_tab(state, ctx, key)
-            cmds.push(drop_pending(id))
+            cmds.push(drop_pending(channel, id))
             (@cmd.batch(cmds), state)
           }
         }
@@ -360,12 +370,18 @@ fn update(
           id: Some(id),
           status: TabRunning,
         })
-        (@cmd.batch([flush_pending(key, id), send]), state.replace_tab(tab))
+        (
+          @cmd.batch([flush_pending(channel, key, id), send]),
+          state.replace_tab(tab),
+        )
       } else {
         // The tab was closed while the open was in flight; the session
         // belongs to nobody, so retire it on the host connection that opened
         // it, even if another device is focused now.
-        (@cmd.batch([send_close(channel, id), drop_pending(id)]), state)
+        (
+          @cmd.batch([send_close(channel, id), drop_pending(channel, id)]),
+          state,
+        )
       }
     }
     OpenFailed(key~, message~) =>
@@ -448,7 +464,7 @@ fn update(
       (@cmd.none, { ..state, open: true, })
     }
     SessionExited(channel~, id~, code~) =>
-      match state.tab_by_id(id) {
+      match state.tab_by_id(channel, id) {
         // The command ended, on its own or interrupted. The tab stays, with
         // its session id spent, until the report has read its screen.
         Some({ command: Some(command), .. } as tab) =>
@@ -477,7 +493,7 @@ fn update(
               if commands_opening {
                 @cmd.none
               } else {
-                drop_pending(id)
+                drop_pending(channel, id)
               },
               if state.exited_before_open.any(exited => {
                   exited.0 == channel && exited.1 == id
@@ -492,7 +508,7 @@ fn update(
               },
             )
           } else {
-            (drop_pending(id), state)
+            (drop_pending(channel, id), state)
           }
       }
   }
@@ -505,14 +521,24 @@ fn update(
 fn disconnect(
   dispatch : @cmd.Emit[Msg],
   state : State,
-  channel : @interop.ChannelId,
+  channel : Connection,
+  never_started~ : Bool = false,
 ) -> (@cmd.Cmd, State) {
   let commands : Array[@cmd.Cmd] = [term_host.clear_pending(channel)]
   let retired_keys : Array[String] = []
   for tab in state.tabs {
     if tab.workspace.channel() == channel {
       retired_keys.push(tab.key)
-      if tab.abandoned(dispatch) is Some(report) {
+      if never_started && tab.command is Some(command) {
+        commands.push(
+          dispatch(
+            CommandNotStarted(
+              shell=command.shell,
+              message="Cloud terminal authentication failed.",
+            ),
+          ),
+        )
+      } else if tab.abandoned(dispatch) is Some(report) {
         commands.push(report)
       }
       commands.push(dispose_tab(tab.key))
@@ -600,7 +626,11 @@ fn sync(
       @cmd.batch(commands),
     )
   }
-  if state.open && ctx.connected && state.visible_tabs(ctx).is_empty() {
+  if state.open &&
+    ctx.connected &&
+    state.visible_tabs(ctx).is_empty() &&
+    !(ctx.channel is Cloud(..) &&
+    state.interrupted_channels.contains(ctx.channel)) {
     let (cmd, state) = open_new_tab(dispatch, state, ctx)
     let theme_changed = state.synced_dark_mode != Some(ctx.dark_mode)
     let state = { ..state, synced_dark_mode: Some(ctx.dark_mode), }

@@ -1,4 +1,7 @@
 import {
+  "openseek_desktop/protocol",
+  "openseek_desktop/uri",
+  "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
   "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita/svg",

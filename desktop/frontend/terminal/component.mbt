@@ -8,6 +8,7 @@ struct Input {
   // console closes the panel. `live_channels` separately retires the dead PTY
   // generation.
   has_devices : Bool
+  cloud_access : (String, String, Int32)?
 } derive(Eq)
 
 ///|
@@ -15,8 +16,9 @@ pub fn Input::Input(
   ctx~ : Ctx,
   live_channels~ : Array[@interop.ChannelId],
   has_devices~ : Bool,
+  cloud_access? : (String, String, Int32),
 ) -> Input {
-  { ctx, live_channels, has_devices, }
+  { ctx, live_channels, has_devices, cloud_access, }
 }
 
 ///|
@@ -42,22 +44,37 @@ pub fn State::reconcile(
   input : Input,
 ) -> (State, @cmd.Cmd) {
   let commands : Array[@cmd.Cmd] = []
+  commands.push(sync_cloud_account(input.cloud_access))
+  let live_channels = input.live_channels.map(channel => {
+    Connection::Host(channel)
+  })
+  for tab in self.tabs {
+    let connection = tab.workspace.channel()
+    if connection is Cloud(account~, epoch~, ..) &&
+      input.cloud_access.map(access => (access.0, access.2)) ==
+      Some((account, epoch)) &&
+      !live_channels.contains(connection) {
+      live_channels.push(connection)
+    }
+  }
   let mut state = self
   for channel in self.live_channels {
-    if !input.live_channels.contains(channel) {
+    if !live_channels.contains(channel) {
       let (command, next) = disconnect(dispatch, state, channel)
       commands.push(command)
       state = next
     }
   }
-  state = state.close_without_devices(input.has_devices)
+  state = state.close_without_devices(
+    input.has_devices || input.cloud_access is Some(_),
+  )
   let (state, sync_command) = sync(dispatch, state, input.ctx)
   commands.push(sync_command)
   // Output bypasses Rabbita, so refresh the terminal package's imperative
   // session-to-emulator routing after the low-frequency state transition that
   // can change it. This is a projection of `State`, not a second state owner.
   commands.push(state.sync_host_routes())
-  ({ ..state, live_channels: input.live_channels, }, @cmd.batch(commands))
+  ({ ..state, live_channels, }, @cmd.batch(commands))
 }
 
 ///|

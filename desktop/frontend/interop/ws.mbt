@@ -6,12 +6,63 @@
 
 ///|
 /// One live (or connecting) WebSocket session.
-priv struct RpcSession {
+pub struct RpcSession {
   socket : @js.Value
   // id → the promise/resolve/reject record of the awaiting request.
   pending : Map[Int32, @js.Value]
   mut next_id : Int32
   mut open_ : Bool
+}
+
+///|
+/// A JSON-RPC peer over an existing socket. The owner controls authentication
+/// and connection lifetime; request correlation and notification decoding are shared.
+pub fn RpcSession::RpcSession(socket : @js.Value) -> RpcSession {
+  { socket, pending: Map([]), next_id: 1, open_: false, }
+}
+
+///|
+pub fn RpcSession::authenticated(self : RpcSession) -> Unit {
+  self.open_ = true
+}
+
+///|
+pub fn RpcSession::receive(
+  self : RpcSession,
+  event : @js.Value,
+  notification : (@protocol.Notification) -> Unit,
+) -> Unit {
+  handle_message(self, event, notification)
+}
+
+///|
+pub fn RpcSession::close(self : RpcSession) -> Unit {
+  self.open_ = false
+  reject_all(self, "SeekMoon connection closed")
+  self.socket.set_with_string(
+    "onmessage",
+    (@js.Optional::undefined() : @js.Optional[Unit]),
+  )
+  self.socket.set_with_string(
+    "onopen",
+    (@js.Optional::undefined() : @js.Optional[Unit]),
+  )
+  let _ : @js.Value = self.socket.apply_with_string(
+    "close",
+    ([] : FixedArray[@js.Value]),
+  )
+}
+
+///|
+pub async fn[Payload : ToJson, Reply : @json.FromJson] RpcSession::request(
+  self : RpcSession,
+  command : @commands.Command[Payload, Reply],
+  payload : Payload,
+) -> Reply {
+  decode_reply(
+    command.name(),
+    self.request_raw(command.name(), @js.Value::from_json(payload.to_json())),
+  )
 }
 
 ///|
@@ -24,7 +75,7 @@ let channels : Map[ChannelId, RpcSession] = Map([])
 /// Build a deferred promise without `Promise.withResolvers`, which older
 /// WebKit versions (including mobile Safari before 17.4) do not provide.
 /// The Promise constructor itself is available on every browser we support.
-extern "js" fn new_deferred() -> @js.Value =
+pub extern "js" fn new_deferred() -> @js.Value =
   #| () => {
   #|   let resolve;
   #|   let reject;
@@ -94,12 +145,7 @@ pub fn ws_connect(
   ws_close(channel)
   let ctor : @js.Value = @js.globalThis.get_with_string("WebSocket")
   let socket : @js.Value = ctor.new([url])
-  let session : RpcSession = {
-    socket,
-    pending: Map([]),
-    next_id: 1,
-    open_: false,
-  }
+  let session = RpcSession(socket)
   channels[channel] = session
   socket.set_with_string("onopen", (_event : @js.Value) => session.open_ = true)
   socket.set_with_string("onmessage", (event : @js.Value) => {
@@ -145,6 +191,16 @@ async fn ws_request(
   guard channels.get(channel) is Some(session) && session.open_ else {
     raise BridgeUnsent("SeekMoon connection is down")
   }
+  session.request_raw(op, payload)
+}
+
+///|
+async fn RpcSession::request_raw(
+  session : RpcSession,
+  op : String,
+  payload : @js.Value,
+) -> @js.Value {
+  guard session.open_ else { raise BridgeUnsent("SeekMoon connection is down") }
   let id = session.next_id
   session.next_id += 1
   let frame = @js.Object::new()

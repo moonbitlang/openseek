@@ -17,15 +17,30 @@ priv enum WorkspaceKey {
   Project(@interop.ChannelId, @common.Uri)
   Worktree(@interop.ChannelId, @common.Uri, String)
   Scratch(@interop.ChannelId, String)
+  Cloud(account~ : String, session~ : String, epoch~ : Int32)
 } derive(Eq)
 
 ///|
-fn WorkspaceKey::channel(self : WorkspaceKey) -> @interop.ChannelId {
+fn WorkspaceKey::channel(self : WorkspaceKey) -> Connection {
   match self {
     Project(channel, _) | Worktree(channel, _, _) | Scratch(channel, _) =>
-      channel
+      Host(channel)
+    Cloud(account~, session~, epoch~) => Cloud(account~, session~, epoch~)
   }
 }
+
+///|
+/// Transport ownership, independent of the tab and xterm state machine.
+pub(all) enum Connection {
+  Host(@interop.ChannelId)
+  Cloud(account~ : String, session~ : String, epoch~ : Int32)
+} derive(Eq, Hash)
+
+///|
+pub extend Connection with Eq::{equal, not_equal}
+
+///|
+pub extend Connection with Hash::{hash, hash_combine}
 
 ///|
 priv enum TabStatus {
@@ -86,17 +101,17 @@ struct State {
   /// and the exit code that event carried. The reply is the first event that
   /// identifies the opening tab, so it consumes the entry and retires that
   /// tab instead of reviving an already-dead session.
-  exited_before_open : Array[(@interop.ChannelId, String, Int32)]
+  exited_before_open : Array[(Connection, String, Int32)]
   /// The color scheme last applied to every mounted emulator. Keeping this in
   /// model state lets `sync` refresh existing xterm instances exactly once
   /// when the application switches between light and dark mode.
   synced_dark_mode : Bool?
   /// Root-owned input snapshot used to retire dead channels. Keeping it
   /// beside the tabs makes input reconciliation a normal state transition.
-  live_channels : Array[@interop.ChannelId]
+  live_channels : Array[Connection]
   /// A lost connection had terminals. Warn until new input acknowledges
   /// that recovery creates a fresh shell, without replaying old input.
-  interrupted_channels : Array[@interop.ChannelId]
+  interrupted_channels : Array[Connection]
 } derive(Eq)
 
 ///|
@@ -135,7 +150,7 @@ pub struct Ctx {
   /// None keeps the automatic WebSocket recovery notice for other hosts.
   connection_notice : String?
   /// The host connection that owns every terminal opened from this context.
-  channel : @interop.ChannelId
+  channel : Connection
   session : String
   /// `None` until the host has identified this conversation's placement on
   /// the current connection. The value supplies both the registered project
@@ -160,7 +175,7 @@ pub fn Ctx::Ctx(
   connected~ : Bool,
 ) -> Ctx {
   {
-    channel,
+    channel: Host(channel),
     session,
     placement,
     dark_mode,
@@ -171,17 +186,47 @@ pub fn Ctx::Ctx(
 }
 
 ///|
+pub fn Ctx::cloud(
+  account~ : String,
+  session~ : String,
+  ready~ : Bool,
+  epoch~ : Int32,
+  dark_mode~ : Bool,
+) -> Ctx {
+  {
+    host_name: Some("Cloud"),
+    connection_notice: None,
+    channel: Cloud(account~, session~, epoch~),
+    session,
+    placement: if ready {
+      Some(@interop.Scratch(root=None))
+    } else {
+      None
+    },
+    dark_mode,
+    connected: ready,
+  }
+}
+
+///|
 /// The workspace group the active conversation belongs to, once its placement
 /// has loaded. Returning `None` keeps an unresolved worktree conversation out
 /// of the project-root group.
 fn workspace_key(ctx : Ctx) -> WorkspaceKey? {
   guard ctx.placement is Some(placement) else { return None }
+  guard ctx.channel is Host(channel) else {
+    return match ctx.channel {
+      Cloud(account~, session~, epoch~) =>
+        Some(Cloud(account~, session~, epoch~))
+      Host(_) => None
+    }
+  }
   match placement {
-    @interop.Scratch(..) => Some(Scratch(ctx.channel, ctx.session))
-    @interop.WorkspaceRoot(root~) => Some(Project(ctx.channel, root))
+    @interop.Scratch(..) => Some(Scratch(channel, ctx.session))
+    @interop.WorkspaceRoot(root~) => Some(Project(channel, root))
     @interop.Worktree(project~, name~, ..)
     | @interop.MissingWorktree(project~, name~) =>
-      Some(Worktree(ctx.channel, project, name))
+      Some(Worktree(channel, project, name))
   }
 }
 
@@ -218,8 +263,10 @@ fn State::tab_by_key(self : State, key : String) -> Tab? {
 }
 
 ///|
-fn State::tab_by_id(self : State, id : String) -> Tab? {
-  self.tabs.iter().find_first(tab => tab.id is Some(tab_id) && tab_id == id)
+fn State::tab_by_id(self : State, channel : Connection, id : String) -> Tab? {
+  self.tabs
+  .iter()
+  .find_first(tab => tab.workspace.channel() == channel && tab.id == Some(id))
 }
 
 ///|
@@ -262,11 +309,12 @@ pub(all) enum CommandStart {
 
 ///|
 pub(all) enum Msg {
+  CloudDisconnected(connection~ : Connection, authenticated~ : Bool)
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
   ToggleMaximized
   /// `terminal_exit` event: the shell ended, so its tab retires.
-  SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int32)
+  SessionExited(channel~ : Connection, id~ : String, code~ : Int32)
   /// Open one more terminal in the active conversation's workspace.
   NewTerminal
   /// Close the focused workspace's active terminal, as its close button does.
@@ -278,7 +326,7 @@ pub(all) enum Msg {
   EmulatorReady(key~ : String, cols~ : Int32, rows~ : Int32)
   /// `terminal_open` replied for the tab. The channel is retained because the
   /// tab may have been closed or the UI may have switched devices meanwhile.
-  Opened(channel~ : @interop.ChannelId, key~ : String, id~ : String)
+  Opened(channel~ : Connection, key~ : String, id~ : String)
   OpenFailed(key~ : String, message~ : String)
   /// Keystrokes from one tab's emulator.
   UserInput(key~ : String, data~ : String)

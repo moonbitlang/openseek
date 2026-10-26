@@ -10,11 +10,22 @@ priv enum UiMessage {
   HideTerminal
   MaximizeTerminal
   RestoreTerminal
+  ConnectionClosed
 }
 
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, ConnectionClosed) =>
+      "Terminal connection closed. Open a new terminal to continue."
+    (Spanish, ConnectionClosed) =>
+      "La conexión del terminal se ha cerrado. Abre un nuevo terminal para continuar."
+    (SimplifiedChinese, ConnectionClosed) =>
+      "终端连接已结束。请新建终端以继续。"
+    (TraditionalChinese, ConnectionClosed) =>
+      "終端連線已結束。請建立新終端以繼續。"
+    (Japanese, ConnectionClosed) =>
+      "ターミナル接続が終了しました。続けるには新しいターミナルを開いてください。"
     (English, MaximizeTerminal) => "Maximize terminal"
     (Spanish, MaximizeTerminal) => "Maximizar terminal"
     (SimplifiedChinese, MaximizeTerminal) => "最大化终端"

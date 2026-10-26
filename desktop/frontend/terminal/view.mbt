@@ -89,7 +89,12 @@ fn panel_view(
   }
   // The visible tab's failure detail at the right edge; a failed tab is
   // closed with its ✕ and a fresh one opened with "+".
-  if !ctx.connected {
+  if ctx.channel is Cloud(..) &&
+    state.interrupted_channels.contains(ctx.channel) {
+    items.push(
+      @html.span(class="terminal-status", ui(locale, ConnectionClosed)),
+    )
+  } else if !ctx.connected {
     items.push(
       @html.span(
         class="terminal-status",
