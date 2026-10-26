@@ -276,13 +276,16 @@ fn update(
           // tab once `open` flips.
           Some(_) => (@cmd.none, { ..state, open: true, })
           // First open in this workspace: start its first shell.
-          None if ctx.connected => {
+          None if ctx.connected &&
+            !(ctx.channel is Cloud(..) &&
+            state.interrupted_channels.contains(ctx.channel)) => {
             let (cmd, state) = open_new_tab(dispatch, state, ctx)
             (cmd, { ..state, open: true, })
           }
           // A remote socket can be between attempts. Keep the panel visible
           // with its disconnected status; `sync` starts a fresh PTY only
-          // after this channel reports ready again.
+          // after this channel reports ready again. A disconnected Cloud
+          // terminal stays ended until the user requests a new terminal.
           None => (@cmd.none, { ..state, open: true, })
         }
       }

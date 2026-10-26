@@ -103,6 +103,9 @@ test('Cloud disconnect ends terminals and discards queued input without automati
   await expect(page.locator('.terminal-status')).toHaveText('Terminal connection closed. Open a new terminal to continue.');
   await hide(page).click();
   await show(page).click();
+  await expect(page.locator('.terminal-panel.open')).toBeVisible();
+  await expect(page.locator('.terminal-status')).toHaveText('Terminal connection closed. Open a new terminal to continue.');
+  await expect(page.locator('.terminal-tab')).toHaveCount(0);
   expect(terminal.connections).toHaveLength(1);
   await page.getByTitle('New terminal in this workspace', { exact: true }).click();
   await expect.poll(() => terminal.connections.length).toBe(2);
