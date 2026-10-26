@@ -41,6 +41,7 @@ pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) 
 // Types and methods
 pub(all) enum CommandInput {
   Native(@openseek_protocol.Command)
+  Terminal
   Prompt(content~ : @openseek_protocol.Content, draft~ : @composer.Draft, attachments~ : Array[@protocol.AttachmentSource])
 } derive(Eq)
 pub fn CommandInput::equal(Self, Self) -> Bool
@@ -218,6 +219,8 @@ pub(all) enum Msg {
   Edited(Int32, String, Int32)
   EditFailed(Int32, String, Int32, @cloud_client.Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
+  TerminalRequested(@interop.ConversationIdentity)
+  TerminalReady(Int32, String)
   SubmitAttachments(@interop.ConversationIdentity, @composer.Draft, Array[@protocol.AttachmentSource])
   Listed(Int32, Int32, Array[Session])
   ListFailed(Int32, Int32, @cloud_client.Failure)

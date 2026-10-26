@@ -98,6 +98,27 @@ fn update_cloud(
   message : @cloud.Msg,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
+  if message is @cloud.TerminalReady(epoch, session) {
+    guard epoch == model.cloud.epoch &&
+      model.cloud.user_id is Some(account) &&
+      model.account.map(credentials => credentials.user.user_id) ==
+      Some(account) &&
+      model.cloud.can_compose(session) else {
+      return (@cmd.none, model)
+    }
+    let owner = @interop.Cloud(account~, session~)
+    let target = {
+      ..model,
+      screen: Chat,
+      selected_conversation: Some(CloudSelection(account~, session~)),
+    }
+    let (command, terminal) = model.terminal.open_terminal(
+      dispatch.map(msg => Terminal(msg)),
+      target.terminal_input(),
+      on_screen=model.screen is Chat && model.cloud_identity() == Some(owner),
+    )
+    return (command, { ..model, terminal, })
+  }
   if message is @cloud.Create && model.account is None {
     return begin_account_login(dispatch, model, create=true)
   }

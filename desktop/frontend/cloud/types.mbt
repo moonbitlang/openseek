@@ -162,6 +162,7 @@ pub struct PendingCommand {
 ///|
 pub(all) enum CommandInput {
   Native(@wire.Command)
+  Terminal
   Prompt(
     content~ : @wire.Content,
     draft~ : @composer.Draft,
@@ -246,6 +247,8 @@ pub(all) enum Msg {
   Edited(Int32, String, Int32)
   EditFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
+  TerminalRequested(@interop.ConversationIdentity)
+  TerminalReady(Int32, String)
   SubmitAttachments(
     @interop.ConversationIdentity,
     @composer.Draft,

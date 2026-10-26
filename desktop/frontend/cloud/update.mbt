@@ -308,6 +308,26 @@ pub fn update(
       })
       (next, @cmd.none, None)
     }
+    TerminalRequested(owner) => {
+      guard owner is @interop.Cloud(account~, session=id) &&
+        state.user_id == Some(account) &&
+        token is Some(token) &&
+        state.can_compose(id) &&
+        !state.retired.contains(id) &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.outgoing is None else {
+        return (state, @cmd.none, None)
+      }
+      let (next, command) = state.submit_command(
+        id,
+        { request: state.sequence + 1, input: Terminal, },
+        emit,
+        token,
+        navigation,
+      )
+      (next, command, None)
+    }
+    TerminalReady(_, _) => (state, @cmd.none, None)
     Created(epoch, request, id) => {
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
@@ -336,9 +356,15 @@ pub fn update(
         conversations,
         creation: None,
       }.list(token, emit)
+      let (next, terminal) = if conversation.outgoing
+        is Some({ input: Terminal, .. }) {
+        next.send_pending(id, token, emit)
+      } else {
+        (next, @cmd.none)
+      }
       (
         next,
-        command,
+        @cmd.batch([command, terminal]),
         if creation.navigation == navigation {
           Some(id)
         } else {
@@ -361,7 +387,7 @@ pub fn update(
             submission.request.to_string(),
             @engine_session.Rejected,
           )
-        Prompt(..) => conversation.controls
+        Prompt(..) | Terminal => conversation.controls
       }
       let (next, command) = state
         .replace(creation.id, { ..conversation, outgoing: None, controls, })

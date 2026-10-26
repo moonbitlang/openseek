@@ -7,6 +7,46 @@ fn command_draft() -> State {
 }
 
 ///|
+test "terminal startup shares session creation without sending an engine command" {
+  let blank = command_draft()
+  let owner = blank.draft_identity().unwrap()
+  let emitted : Array[Msg] = []
+  let emit : @cmd.Emit[Msg] = @cmd.Emit(msg => {
+    emitted.push(msg)
+    @cmd.none
+  })
+  let (pending, _, _) = update(
+    blank,
+    TerminalRequested(owner),
+    emit,
+    token="fixture",
+    navigation=0,
+  )
+  assert_true(pending.creating_session())
+  let (duplicate, _, _) = update(
+    pending,
+    TerminalRequested(owner),
+    emit,
+    token="fixture",
+    navigation=0,
+  )
+  assert_true(duplicate == pending)
+  let request = pending.creation.unwrap().request
+  let (created, _, selected) = update(
+    pending,
+    Created(1, request, "new-session"),
+    emit,
+    token="fixture",
+    navigation=0,
+  )
+  assert_eq(selected, Some("new-session"))
+  assert_true(created.conversations["new-session"].outgoing is None)
+  assert_false(created.conversations["new-session"].sending)
+  assert_false(created.conversations["new-session"].generating)
+  assert_true(emitted is [TerminalReady(1, "new-session")])
+}
+
+///|
 fn draft_action(state : State, action : @composer.Action) -> State {
   metadata_update(state, ControlAction(state.draft_identity().unwrap(), action))
 }

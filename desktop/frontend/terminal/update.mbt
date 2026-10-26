@@ -110,6 +110,27 @@ pub fn State::run_command(
 }
 
 ///|
+/// Show a requested terminal after deferred workspace creation. A background
+/// completion may allocate its tab without changing the foreground panel.
+pub fn State::open_terminal(
+  self : State,
+  dispatch : @cmd.Emit[Msg],
+  input : Input,
+  on_screen~ : Bool,
+) -> (@cmd.Cmd, State) {
+  let ctx = input.ctx
+  guard ctx.connected && workspace_key(ctx) is Some(_) else {
+    return (@cmd.none, self)
+  }
+  let (command, state) = if self.active_tab(ctx) is Some(_) {
+    (@cmd.none, self)
+  } else {
+    open_new_tab(dispatch, self, ctx, on_screen~)
+  }
+  (command, { ..state, open: state.open || on_screen, })
+}
+
+///|
 /// Whether a mounted tab should spawn its session now. `checkout_ready` is the
 /// conversation on screen, which a shell tab was opened from; a command tab
 /// was bound to a ready checkout when it was created, for a conversation that

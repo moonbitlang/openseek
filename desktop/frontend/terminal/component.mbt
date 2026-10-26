@@ -48,8 +48,9 @@ pub fn State::reconcile(
   let live_channels = input.live_channels.map(channel => {
     Connection::Host(channel)
   })
-  for tab in self.tabs {
-    let connection = tab.workspace.channel()
+  for
+    connection in self.live_channels +
+    self.tabs.map(tab => tab.workspace.channel()) {
     if connection is Cloud(account~, epoch~, ..) &&
       input.cloud_access.map(access => (access.0, access.2)) ==
       Some((account, epoch)) &&
@@ -60,9 +61,22 @@ pub fn State::reconcile(
   let mut state = self
   for channel in self.live_channels {
     if !live_channels.contains(channel) {
+      let was_shown = state.shown
+        .bind(key => state.tab_by_key(key))
+        .map_or(false, tab => tab.workspace.channel() == channel)
       let (command, next) = disconnect(dispatch, state, channel)
       commands.push(command)
-      state = next
+      state = if channel is Cloud(..) {
+        {
+          ..next,
+          open: next.open && !was_shown,
+          interrupted_channels: next.interrupted_channels.filter(current => {
+            current != channel
+          }),
+        }
+      } else {
+        next
+      }
     }
   }
   state = state.close_without_devices(

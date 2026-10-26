@@ -2005,6 +2005,27 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
 }
 
 ///|
+fn Model::terminal_toggle(self : Model, toggle : @cmd.Cmd) -> @html.Html {
+  @html.button(
+    class=if self.terminal.is_open() {
+      "panel-toggle active"
+    } else {
+      "panel-toggle"
+    },
+    title=shell_text(
+      self.locale,
+      if self.terminal.is_open() {
+        HideTerminal
+      } else {
+        ShowTerminal
+      },
+    ),
+    on_click=toggle,
+    icon(icon_terminal),
+  )
+}
+
+///|
 /// Top bar: conversation identity on the left (session id and workspace in
 /// the tooltip), live run state and conversation controls on the right.
 fn conversation_header(
@@ -2042,22 +2063,7 @@ fn conversation_header(
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
   if !model.narrow {
-    items.push(
-      @html.button(
-        class=if model.terminal.is_open() {
-          "panel-toggle active"
-        } else {
-          "panel-toggle"
-        },
-        title=if model.terminal.is_open() {
-          shell_text(model.locale, HideTerminal)
-        } else {
-          shell_text(model.locale, ShowTerminal)
-        },
-        on_click=toggle_terminal,
-        icon(icon_terminal),
-      ),
-    )
+    items.push(model.terminal_toggle(toggle_terminal))
   }
   // The overview is the only place the conversation's connectors are shown,
   // so the narrow layout keeps it: there it is always the panel over the
@@ -2264,8 +2270,12 @@ fn app_shell_class(sidebar_open : Bool) -> String {
 /// navigation never closes terminal state or PTYs, but non-conversation pages
 /// have no active workspace surface to place the panel under.
 fn Model::terminal_panel_visible(self : Model) -> Bool {
-  !self.cloud_selected() &&
   self.terminal.is_open() &&
+  (
+    !self.cloud_selected() ||
+    self.cloud_identity() is Some(_) ||
+    self.cloud_draft_identity() is Some(_)
+  ) &&
   (
     self.screen is Chat ||
     (
@@ -2394,6 +2404,17 @@ fn view(
           },
           if model.cloud_identity() is Some(_) && !model.narrow {
             model.detail_toggle(dispatch)
+          } else {
+            @html.nothing
+          },
+          if !model.narrow &&
+            model.account is Some(_) &&
+            !model.cloud_archived() &&
+            (
+              model.cloud_identity() is Some(_) ||
+              model.cloud_draft_identity() is Some(_)
+            ) {
+            model.terminal_toggle(toggle_terminal)
           } else {
             @html.nothing
           },
