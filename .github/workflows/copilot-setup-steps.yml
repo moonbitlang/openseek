@@ -7,11 +7,9 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - desktop/.moonbit-version
       - .github/workflows/copilot-setup-steps.yml
   pull_request:
     paths:
-      - desktop/.moonbit-version
       - .github/workflows/copilot-setup-steps.yml
 
 jobs:
@@ -31,12 +29,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Use the same pinned toolchain as CI and Desktop packaging.
+      # Stable, matching CI.
       - name: Set up MoonBit
         run: |
-          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
-          test -n "$version"
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
       - name: Update MoonBit dependencies

@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - "desktop/.moonbit-version"
       - "editor/**"
       - "moon.work"
       - ".gitmodules"
@@ -12,7 +11,6 @@ on:
       - ".github/workflows/editor.yml"
   pull_request:
     paths:
-      - "desktop/.moonbit-version"
       - "editor/**"
       - "moon.work"
       - ".gitmodules"
@@ -46,9 +44,7 @@ jobs:
 
       - name: Install MoonBit (stable)
         run: |
-          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
-          test -n "$version"
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
       - name: Update dependencies
@@ -82,9 +78,7 @@ jobs:
 
       - name: Install MoonBit (stable)
         run: |
-          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
-          test -n "$version"
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
       - name: Update dependencies
