@@ -3,6 +3,7 @@ priv struct CloudSocket {
   rpc : @interop.RpcSession
   ready : @js.Value
   mut authenticated : Bool
+  mut failure : String?
 }
 
 ///|
@@ -13,14 +14,13 @@ let cloud_account : Ref[(String, String, Int32)?] = Ref(None)
 
 ///|
 priv suberror CloudTerminalUnavailable {
-  CloudTerminalUnavailable
+  CloudTerminalUnavailable(String?)
 }
 
 ///|
-impl Show for CloudTerminalUnavailable with fn output(_, logger) {
-  logger.write_string(
-    "Cloud terminal connection closed. Open a new terminal to continue.",
-  )
+impl Show for CloudTerminalUnavailable with fn output(self, logger) {
+  let CloudTerminalUnavailable(reason) = self
+  logger.write_string(reason.unwrap_or(ui(English, ConnectionFailed(None))))
 }
 
 ///|
@@ -64,7 +64,13 @@ fn close_cloud_socket(
   let _ : @js.Value = socket.ready.apply_with_string("resolve", [false])
   socket.rpc.close()
   scheduler.add(
-    dispatch(CloudDisconnected(connection~, authenticated=socket.authenticated)),
+    dispatch(
+      CloudDisconnected(
+        connection~,
+        authenticated=socket.authenticated,
+        reason=socket.failure,
+      ),
+    ),
   )
 }
 
@@ -78,7 +84,7 @@ async fn connect_cloud(
     cloud_account.val is Some((current, token, current_epoch)) &&
     current == account &&
     current_epoch == epoch else {
-    raise CloudTerminalUnavailable
+    raise CloudTerminalUnavailable(None)
   }
   let socket = cloud_sockets.get_or_init(connection, () => {
     let origin = @protocol.CloudOrigin
@@ -94,6 +100,7 @@ async fn connect_cloud(
       rpc: @interop.RpcSession(ws),
       ready: @interop.new_deferred(),
       authenticated: false,
+      failure: None,
     }
     ws.set_with_string("onopen", (_ : @js.Value) => {
       if cloud_socket_is_current(connection, socket) {
@@ -117,6 +124,11 @@ async fn connect_cloud(
           socket.rpc.authenticated()
           let _ : @js.Value = socket.ready.apply_with_string("resolve", [true])
         } else {
+          if frame
+            is { "type": String("error"), "message": String(message), .. } &&
+            !message.is_blank() {
+            socket.failure = Some(message)
+          }
           close_cloud_socket(dispatch, scheduler, connection, socket)
         }
       } else {
@@ -145,7 +157,7 @@ async fn connect_cloud(
   })
   let ready : @js.Promise[Bool] = socket.ready.get_with_string("promise")
   guard ready.wait() && cloud_socket_is_current(connection, socket) else {
-    raise CloudTerminalUnavailable
+    raise CloudTerminalUnavailable(socket.failure)
   }
   socket.rpc
 }
@@ -161,7 +173,7 @@ async fn[Payload : ToJson, Reply : @json.FromJson] terminal_request(
     Cloud(..) => {
       guard cloud_sockets.get(connection) is Some(socket) &&
         socket.authenticated else {
-        raise CloudTerminalUnavailable
+        raise CloudTerminalUnavailable(None)
       }
       socket.rpc.request(command, payload)
     }
@@ -173,6 +185,7 @@ fn connection_lost(connection : Connection, error : Error) -> Bool {
   match connection {
     Host(channel) => @interop.bridge_connection_lost(channel, error)
     Cloud(..) =>
-      !cloud_sockets.contains(connection) || error is CloudTerminalUnavailable
+      !cloud_sockets.contains(connection) ||
+      error is CloudTerminalUnavailable(_)
   }
 }

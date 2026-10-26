@@ -70,6 +70,9 @@ pub fn State::reconcile(
         {
           ..next,
           open: next.open && !was_shown,
+          cloud_failures: next.cloud_failures.filter(failed => {
+            failed.0 != channel
+          }),
           interrupted_channels: next.interrupted_channels.filter(current => {
             current != channel
           }),

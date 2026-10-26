@@ -44,7 +44,7 @@ test "Cloud disconnect never respawns a terminal until an explicit new terminal"
   let (_, state) = update(emit, ToggleTerminal, State::empty(), ctx)
   let (_, state) = update(
     emit,
-    CloudDisconnected(connection=ctx.channel, authenticated=true),
+    CloudDisconnected(connection=ctx.channel, authenticated=true, reason=None),
     state,
     ctx,
   )
@@ -76,12 +76,35 @@ test "failed Cloud authentication restores an unstarted bang command" {
   })
   let (_, state) = update(
     emit,
-    CloudDisconnected(connection=ctx.channel, authenticated=false),
+    CloudDisconnected(
+      connection=ctx.channel,
+      authenticated=false,
+      reason=Some("Shell access is not enabled for this account"),
+    ),
     state,
     ctx,
   )
   assert_true(state.tabs.is_empty())
-  assert_true(messages is [CommandNotStarted(shell="submission", ..)])
+  assert_true(
+    messages
+    is [
+      CommandNotStarted(
+        shell="submission",
+        message="Shell access is not enabled for this account"
+      ),
+    ],
+  )
+  assert_true(
+    state.cloud_failures
+    is [(_, Some("Shell access is not enabled for this account"))],
+  )
+  let (_, retried) = update(emit, NewTerminal, state, ctx)
+  assert_true(retried.cloud_failures.is_empty())
+  let (retired, _) = { ..state, live_channels: [ctx.channel], }.reconcile(
+    emit,
+    Input::Input(ctx~, live_channels=[], has_devices=true),
+  )
+  assert_true(retired.cloud_failures.is_empty())
 }
 
 ///|

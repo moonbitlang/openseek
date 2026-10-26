@@ -11,11 +11,35 @@ priv enum UiMessage {
   MaximizeTerminal
   RestoreTerminal
   ConnectionClosed
+  ConnectionFailed(String?)
 }
 
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, ConnectionFailed(reason)) =>
+      reason.map_or(
+        "Unable to establish a terminal connection. Open a new terminal to retry.",
+        reason => "Terminal connection failed: " + reason,
+      )
+    (Spanish, ConnectionFailed(reason)) =>
+      reason.map_or(
+        "No se pudo establecer la conexión del terminal. Abre un nuevo terminal para volver a intentarlo.",
+        reason => "Error de conexión del terminal: " + reason,
+      )
+    (SimplifiedChinese, ConnectionFailed(reason)) =>
+      reason.map_or("无法建立终端连接。请新建终端重试。", reason => {
+        "终端连接失败：" + reason
+      })
+    (TraditionalChinese, ConnectionFailed(reason)) =>
+      reason.map_or("無法建立終端連線。請建立新終端重試。", reason => {
+        "終端連線失敗：" + reason
+      })
+    (Japanese, ConnectionFailed(reason)) =>
+      reason.map_or(
+        "ターミナルに接続できませんでした。新しいターミナルを開いて再試行してください。",
+        reason => "ターミナル接続に失敗しました: " + reason,
+      )
     (English, ConnectionClosed) =>
       "Terminal connection closed. Open a new terminal to continue."
     (Spanish, ConnectionClosed) =>

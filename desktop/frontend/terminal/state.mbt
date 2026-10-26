@@ -112,6 +112,8 @@ struct State {
   /// A lost connection had terminals. Warn until new input acknowledges
   /// that recovery creates a fresh shell, without replaying old input.
   interrupted_channels : Array[Connection]
+  // A failed handshake, optionally with the server-provided rejection reason.
+  cloud_failures : Array[(Connection, String?)]
 } derive(Eq)
 
 ///|
@@ -126,6 +128,7 @@ pub fn State::empty() -> State {
     synced_dark_mode: None,
     live_channels: [],
     interrupted_channels: [],
+    cloud_failures: [],
   }
 }
 
@@ -309,7 +312,11 @@ pub(all) enum CommandStart {
 
 ///|
 pub(all) enum Msg {
-  CloudDisconnected(connection~ : Connection, authenticated~ : Bool)
+  CloudDisconnected(
+    connection~ : Connection,
+    authenticated~ : Bool,
+    reason~ : String?
+  )
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
   ToggleMaximized

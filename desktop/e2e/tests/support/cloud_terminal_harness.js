@@ -6,6 +6,7 @@ export class CloudTerminalHarness {
     this.connections = [];
     this.authenticate = true;
     this.holdInput = false;
+    this.openError = null;
   }
 
   async install() {
@@ -26,6 +27,10 @@ export class CloudTerminalHarness {
         connection.requests.push(frame);
         let result = {};
         if (frame.method === 'terminal.open') {
+          if (this.openError) {
+            socket.send(JSON.stringify({ jsonrpc: '2.0', id: frame.id, error: { code: -32001, message: this.openError } }));
+            return;
+          }
           const id = `terminal-${connection.terminals.length + 1}`;
           connection.terminals.push({ id, ...frame.params });
           result = { id };

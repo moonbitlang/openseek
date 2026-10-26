@@ -56,6 +56,9 @@ fn open_new_tab(
   let state = {
     ..state,
     tabs: state.tabs + [tab],
+    cloud_failures: state.cloud_failures.filter(failed => {
+      failed.0 != ctx.channel
+    }),
     interrupted_channels: if ctx.channel is Cloud(..) {
       state.interrupted_channels.filter(connection => connection != ctx.channel)
     } else {
@@ -254,8 +257,14 @@ fn update(
 ) -> (@cmd.Cmd, State) {
   let checkout_ready = ctx.placement is Some(placement) && placement.is_ready()
   match msg {
-    CloudDisconnected(connection~, authenticated~) =>
-      disconnect(dispatch, state, connection, never_started=!authenticated)
+    CloudDisconnected(connection~, authenticated~, reason~) =>
+      disconnect(
+        dispatch,
+        state,
+        connection,
+        never_started=!authenticated,
+        reason~,
+      )
     ToggleMaximized =>
       if state.open {
         (@cmd.none, { ..state, maximized: !state.maximized, })
@@ -547,6 +556,7 @@ fn disconnect(
   state : State,
   channel : Connection,
   never_started~ : Bool = false,
+  reason~ : String? = None,
 ) -> (@cmd.Cmd, State) {
   let commands : Array[@cmd.Cmd] = [term_host.clear_pending(channel)]
   let retired_keys : Array[String] = []
@@ -558,7 +568,7 @@ fn disconnect(
           dispatch(
             CommandNotStarted(
               shell=command.shell,
-              message="Cloud terminal authentication failed.",
+              message=reason.unwrap_or(ui(English, ConnectionFailed(None))),
             ),
           ),
         )
@@ -576,6 +586,14 @@ fn disconnect(
     @cmd.batch(commands),
     {
       ..state,
+      cloud_failures: if never_started && !retired_keys.is_empty() {
+        [
+          ..state.cloud_failures.filter(failed => failed.0 != channel),
+          (channel, reason),
+        ]
+      } else {
+        state.cloud_failures
+      },
       interrupted_channels: if !retired_keys.is_empty() &&
         !state.interrupted_channels.contains(channel) {
         state.interrupted_channels + [channel]

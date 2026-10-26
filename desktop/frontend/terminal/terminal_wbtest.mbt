@@ -196,6 +196,7 @@ test "a disconnected channel retires only its terminal tabs" {
     synced_dark_mode: Some(false),
     live_channels: [Host(local_channel), Host(remote)],
     interrupted_channels: [],
+    cloud_failures: [],
   }
   let (_, disconnected) = disconnect(
     @cmd.Emit(_ => @cmd.none),

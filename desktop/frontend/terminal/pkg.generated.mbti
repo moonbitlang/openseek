@@ -63,7 +63,7 @@ pub fn InputWriteFailure::equal(Self, Self) -> Bool
 pub fn InputWriteFailure::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
-  CloudDisconnected(connection~ : Connection, authenticated~ : Bool)
+  CloudDisconnected(connection~ : Connection, authenticated~ : Bool, reason~ : String?)
   ToggleTerminal
   ToggleMaximized
   SessionExited(channel~ : Connection, id~ : String, code~ : Int32)

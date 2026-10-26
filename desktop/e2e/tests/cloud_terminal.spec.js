@@ -148,14 +148,19 @@ test('failed session creation leaves the Cloud draft intact and never starts a t
   expect(cloud.postCount).toBe(0);
 });
 
-test('terminal authentication refusal ends the connection without sending RPC or retrying', async ({ page }) => {
+test('terminal authentication refusal ends the connection without sending RPC or retrying', async ({ page }, testInfo) => {
   const { cloud, terminal } = await setup(page);
   terminal.authenticate = false;
   await cloud.open();
   await show(page).click();
   await expect.poll(() => terminal.connections[0]?.frames.length).toBe(1);
-  terminal.connections[0].socket.send(JSON.stringify({ type: 'error', error: 'Fixture authentication refused' }));
-  await expect(page.locator('.terminal-status')).toHaveText('Terminal connection closed. Open a new terminal to continue.');
+  terminal.connections[0].socket.send(JSON.stringify({ type: 'error', message: 'Shell access is not enabled for this account' }));
+  await expect(page.locator('.terminal-status')).toHaveText('Terminal connection failed: Shell access is not enabled for this account');
+  await expect.poll(() => terminal.connections[0].closed).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('cloud-terminal-refused.png') });
+  await hide(page).click();
+  await show(page).click();
+  await expect(page.locator('.terminal-status')).toHaveText('Terminal connection failed: Shell access is not enabled for this account');
   expect(terminal.connections).toHaveLength(1);
   expect(terminal.requests('terminal.open')).toHaveLength(0);
 });
@@ -289,8 +294,9 @@ test('Cloud ! authentication failure restores the command and never submits a mo
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.locator('#task').press('Enter');
   await expect.poll(() => terminal.connections.length).toBe(1);
-  terminal.connections[0].socket.send(JSON.stringify({ type: 'error', error: 'Fixture refused' }));
+  terminal.connections[0].socket.send(JSON.stringify({ type: 'error', message: 'Shell access is not enabled for this account' }));
   await expect(page.locator('#task')).toHaveValue('!ls');
+  await expect(page.getByText('Shell access is not enabled for this account', { exact: true })).toBeVisible();
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
   expect(cloud.postCount).toBe(0);
   expect(terminal.requests('terminal.open')).toHaveLength(0);
@@ -367,4 +373,32 @@ test('a delayed Host worktree command stays on its owning Host after switching t
   await expect(page.locator('#task')).toHaveValue('Keep this Cloud draft');
   await expect(page.locator('.terminal-panel.open')).toHaveCount(0);
   expect(cloud.device.pageErrors).toEqual([]);
+});
+
+
+test('Cloud terminal reports a connection failure when the socket closes before authentication without a reason', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  terminal.authenticate = false;
+  await cloud.open();
+  await show(page).click();
+  await expect.poll(() => terminal.connections[0]?.frames.length).toBe(1);
+  await terminal.connections[0].socket.close({ code: 1006 });
+  await expect(page.locator('.terminal-status')).toHaveText('Unable to establish a terminal connection. Open a new terminal to retry.');
+  expect(terminal.requests('terminal.open')).toHaveLength(0);
+  await page.getByTitle('New terminal in this workspace', { exact: true }).click();
+  await expect.poll(() => terminal.connections.length).toBe(2);
+  terminal.connections[1].socket.send(JSON.stringify({ type: 'authenticated' }));
+  await expect.poll(() => terminal.requests('terminal.open').length).toBe(1);
+  await expect(page.locator('.terminal-error')).toHaveCount(0);
+});
+
+
+test('Cloud terminal shows the existing RPC error after authentication without calling it a connection failure', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  terminal.openError = 'Shell access is not enabled for this account';
+  await cloud.open();
+  await show(page).click();
+  await expect(page.locator('.terminal-status')).toHaveText('Shell access is not enabled for this account');
+  expect(terminal.requests('terminal.open')).toHaveLength(1);
+  expect(terminal.connections[0].closed).toBe(false);
 });
