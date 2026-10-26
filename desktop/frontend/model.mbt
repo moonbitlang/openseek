@@ -878,10 +878,7 @@ priv struct Conversation {
 ///|
 /// One `!` command in flight. `id` names its terminal tab, so the tab's
 /// report retires exactly this command even when the same text runs twice.
-priv struct ShellCommand {
-  id : String
-  command : String
-} derive(Eq)
+using @composer {type ShellCommand}
 
 ///|
 /// One follow-up submitted into an open run. A queued follow-up waits for its
@@ -1702,6 +1699,7 @@ priv enum Msg {
   OpenCloudConversation(account~ : String, session~ : String)
   ComposerAction(@composer.Action)
   ComposerReply(@composer.QuoteReply)
+  ComposerCommandResult(@composer.CommandResult)
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
   // be mistaken for an OpenSeek conversation owned by the root store.

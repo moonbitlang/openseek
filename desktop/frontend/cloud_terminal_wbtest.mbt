@@ -30,7 +30,7 @@ test "old-account Cloud terminal readiness cannot open a terminal after sign-out
   )
   let (_, ignored) = update(
     dispatch,
-    CloudAction(@cloud.TerminalReady(model.cloud.epoch, "cloud-a")),
+    CloudAction(@cloud.TerminalReady(model.cloud.epoch, "cloud-a", None)),
     signed_out,
   )
   assert_true(ignored.terminal == signed_out.terminal)

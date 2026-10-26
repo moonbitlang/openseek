@@ -17,7 +17,7 @@ test "terminal startup shares session creation without sending an engine command
   })
   let (pending, _, _) = update(
     blank,
-    TerminalRequested(owner),
+    TerminalRequested(owner, None),
     emit,
     token="fixture",
     navigation=0,
@@ -25,7 +25,7 @@ test "terminal startup shares session creation without sending an engine command
   assert_true(pending.creating_session())
   let (duplicate, _, _) = update(
     pending,
-    TerminalRequested(owner),
+    TerminalRequested(owner, None),
     emit,
     token="fixture",
     navigation=0,
@@ -43,7 +43,7 @@ test "terminal startup shares session creation without sending an engine command
   assert_true(created.conversations["new-session"].outgoing is None)
   assert_false(created.conversations["new-session"].sending)
   assert_false(created.conversations["new-session"].generating)
-  assert_true(emitted is [TerminalReady(1, "new-session")])
+  assert_true(emitted is [TerminalReady(1, "new-session", None)])
 }
 
 ///|

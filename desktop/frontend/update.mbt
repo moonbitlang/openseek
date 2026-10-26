@@ -2482,11 +2482,34 @@ fn update_msg(
         }
       }
     ComposerAction(action) => {
+      if action is @composer.CommandResultRecovered(identity~) {
+        return recover_command_result(model, identity)
+      }
+      if action
+        is @composer.CommandResultSubmitted(identity~, id~, text~, choice~) {
+        return submit_command_result(
+          dispatch, model, identity, id, text, choice,
+        )
+      }
       if action.identity().owner is @interop.Cloud(..) {
         guard model.accepts_composer_action(action.identity()) else {
           return (@cmd.none, model)
         }
         match action {
+          @composer.ShellCommandSubmitted(identity~, command~) =>
+            return submit_cloud_shell(dispatch, model, identity.owner, command)
+          @composer.ShellTerminalRequested(identity~, index~) => {
+            guard model.cloud.conversations.get(identity.owner.session())
+              is Some(conv) &&
+              conv.shell_commands.get(index) is Some(pending) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(
+              dispatch,
+              Terminal(@terminal.RevealCommand(shell=pending.id)),
+              model,
+            )
+          }
           @composer.StopRequested(identity~)
           | @composer.FollowupSubmitted(identity~, ..)
           | @composer.QueuedInputEditRequested(identity~, ..)
@@ -2550,7 +2573,9 @@ fn update_msg(
         }
       }
       match action {
-        @composer.DraftAttachmentsSubmitted(..) => (@cmd.none, model)
+        @composer.DraftAttachmentsSubmitted(..)
+        | @composer.CommandResultSubmitted(..)
+        | @composer.CommandResultRecovered(..) => (@cmd.none, model)
         @composer.ModelMenuToggled(..)
         | @composer.ReasoningMenuToggled(..)
         | @composer.SelectMenuDismissed(..)
@@ -3125,7 +3150,7 @@ fn update_msg(
       | ApplyEditorFeedback(_) as feedback
     ) => update_editor_feedback(dispatch, feedback, model)
     // Delivered to the component by boot, alongside the other component inputs.
-    ComposerReply(_) => (@cmd.none, model)
+    ComposerReply(_) | ComposerCommandResult(_) => (@cmd.none, model)
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a
@@ -6739,7 +6764,7 @@ fn update_msg(
             shell,
             message,
           )
-        None => (@cmd.none, model)
+        None => cloud_shell_not_started(dispatch, model, shell, message)
       }
     RunShellCommand(channel~, session~, id~, command~, attempt~) =>
       run_shell_command(dispatch, model, channel, session, id, command, attempt)
@@ -6764,7 +6789,7 @@ fn update_msg(
         }
         let (start, model) = update_cloud(
           dispatch,
-          @cloud.TerminalRequested(owner),
+          @cloud.TerminalRequested(owner, None),
           model,
         )
         return (@cmd.batch([create, start]), model)

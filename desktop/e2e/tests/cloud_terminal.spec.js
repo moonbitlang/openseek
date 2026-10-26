@@ -131,3 +131,195 @@ test('account replacement closes this client sockets and cannot display the old 
   expect(terminal.connections[1].frames[0]).toEqual({ type: 'auth', token: 'ts_fixture-456' });
   await expect(screen(page)).not.toContainText('OLD_ACCOUNT');
 });
+
+test('failed session creation leaves the Cloud draft intact and never starts a terminal or model', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  cloud.createStatus = 500;
+  await cloud.create();
+  await page.locator('#task').fill('Unsent text');
+  await show(page).click();
+  await expect(page.getByText('Cloud answered HTTP 500. Try again.', { exact: true }).last()).toBeVisible();
+  await expect(page.locator('#task')).toHaveValue('Unsent text');
+  await expect(page.locator('#task')).toBeEnabled();
+  expect(terminal.connections).toHaveLength(0);
+  expect(cloud.postCount).toBe(0);
+});
+
+test('terminal authentication refusal ends the connection without sending RPC or retrying', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  terminal.authenticate = false;
+  await cloud.open();
+  await show(page).click();
+  await expect.poll(() => terminal.connections[0]?.frames.length).toBe(1);
+  terminal.connections[0].socket.send(JSON.stringify({ type: 'error', error: 'Fixture authentication refused' }));
+  await expect(page.locator('.terminal-status')).toHaveText('Terminal connection closed. Open a new terminal to continue.');
+  expect(terminal.connections).toHaveLength(1);
+  expect(terminal.requests('terminal.open')).toHaveLength(0);
+});
+
+test('two clients keep independent terminals for the same Cloud workspace', async ({ page, context }) => {
+  const a = await setup(page);
+  await a.cloud.open();
+  await show(page).click();
+  await expect.poll(() => a.terminal.requests('terminal.open').length).toBe(1);
+  const other = await context.newPage();
+  const b = await setup(other);
+  await b.cloud.open();
+  await show(other).click();
+  await expect.poll(() => b.terminal.requests('terminal.open').length).toBe(1);
+  expect(a.terminal.connections[0].session).toBe(b.terminal.connections[0].session);
+  a.terminal.output(a.terminal.connections[0], 'CLIENT_A\r\n');
+  b.terminal.output(b.terminal.connections[0], 'CLIENT_B\r\n');
+  await expect(screen(page)).toContainText('CLIENT_A');
+  await expect(screen(other)).toContainText('CLIENT_B');
+  await expect(screen(other)).not.toContainText('CLIENT_A');
+  await page.getByTitle('Close terminal', { exact: true }).click();
+  await expect.poll(() => a.terminal.requests('terminal.close').length).toBe(1);
+  expect(b.terminal.requests('terminal.close')).toHaveLength(0);
+  b.terminal.output(b.terminal.connections[0], 'STILL_RUNNING\r\n', 2);
+  await expect(screen(other)).toContainText('STILL_RUNNING');
+  await other.close();
+});
+
+async function shell(page, terminal, command) {
+  const count = terminal.requests('terminal.open').length;
+  await page.locator('#task').pressSequentially(`!${command}`);
+  await expect(page.locator('.composer-mode-chip')).toBeVisible();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.locator('#task').press('Enter');
+  await expect.poll(() => terminal.requests('terminal.open').length).toBe(count + 1);
+  const connection = terminal.connections.at(-1);
+  const tab = connection.terminals.at(-1);
+  expect(tab.command).toBe(command);
+  await expect(page.locator('#task')).toHaveValue('');
+  return { connection, id: tab.id };
+}
+
+const commands = (cloud, kind) => cloud.requests.filter(request => request.path.endsWith('/commands') && JSON.parse(request.body).command.command === kind).map(request => JSON.parse(request.body));
+
+function finish(terminal, { connection, id }, output = 'command output', code = 0) {
+  terminal.output(connection, `${output}\r\n`, 1, id);
+  terminal.exit(connection, code, id);
+}
+
+test('Cloud ! lazily creates one session, reuses terminal result encoding, and preserves later text', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  await cloud.create();
+  const tab = await shell(page, terminal, 'printf hello');
+  expect(creations(cloud)).toHaveLength(1);
+  expect(cloud.postCount).toBe(0);
+  await page.locator('#task').fill('Later writing');
+  finish(terminal, tab, 'hello');
+  await expect.poll(() => commands(cloud, 'prompt').length).toBe(1);
+  const sent = commands(cloud, 'prompt')[0].command.content;
+  expect(sent).toBe('<user_shell_command>\n<command>\nprintf hello\n</command>\n<result>\nexit=0\nhello\n</result>\n</user_shell_command>');
+  await expect(page.locator('#task')).toHaveValue('Later writing');
+  await expect(page.locator('.shell-commands-running')).toHaveCount(0);
+  await expect(page.locator('.terminal-tab')).toHaveCount(0);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('a Cloud ! result follows its owning session after navigation without consuming either draft', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  await cloud.open();
+  const tab = await shell(page, terminal, 'ls');
+  await page.locator('#task').fill('Draft A');
+  await cloud.open(sessionB);
+  await page.locator('#task').fill('Draft B');
+  finish(terminal, tab);
+  await expect.poll(() => cloud.postCount).toBe(1);
+  expect(cloud.requests.find(request => request.path.endsWith('/commands')).path).toBe(`/v1/sessions/${sessionA}/commands`);
+  await expect(page.locator('#task')).toHaveValue('Draft B');
+  await cloud.open(sessionA);
+  await expect(page.locator('#task')).toHaveValue('Draft A');
+});
+
+test('a rejected Cloud ! result remains in the composer ahead of newer writing without automatic retry', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  cloud.sendStatus = 409;
+  cloud.sendErrorBody = 'Fixture rejected prompt';
+  await cloud.open();
+  const tab = await shell(page, terminal, 'ls');
+  await page.locator('#task').fill('Newer input');
+  finish(terminal, tab);
+  await expect(page.locator('#task')).toHaveValue(/<user_shell_command>[\s\S]*command output[\s\S]*Newer input/);
+  expect(cloud.postCount).toBe(1);
+  await cloud.open(sessionB);
+  await cloud.open(sessionA);
+  await expect(page.locator('#task')).toHaveValue(/command output[\s\S]*Newer input/);
+  expect(cloud.postCount).toBe(1);
+});
+
+for (const mode of ['steer', 'queue']) {
+  test(`Cloud ! during generation uses existing ${mode} delivery and keeps newer writing`, async ({ page }) => {
+    const { cloud, terminal } = await setup(page);
+    cloud.manualTasks = true;
+    await cloud.open();
+    await page.locator('#task').fill('Start turn');
+    await page.locator('#send').click();
+    await expect(page.locator('#stop')).toBeEnabled();
+    const tab = await shell(page, terminal, 'ls');
+    await page.getByRole('button', { name: 'Follow-up action', exact: true }).click();
+    await page.getByRole('option', { name: mode === 'queue' ? /^Queue next/ : /^Steer now/ }).click();
+    await page.locator('#task').fill('Next draft');
+    finish(terminal, tab);
+    if (mode === 'queue') {
+      await expect.poll(() => cloud.requests.filter(request => request.path.endsWith('/queue')).length).toBe(1);
+      await expect(page.locator('.queued-inputs')).toContainText('command output');
+    } else {
+      await expect.poll(() => commands(cloud, 'steer').length).toBe(1);
+      const request = commands(cloud, 'steer')[0].command;
+      await expect(page.locator('.pending-steer-row')).toContainText('command output');
+      await cloud.emitSessionEvent(sessionA, 'steer_dropped', { submission_id: request.submission_id, content: request.content });
+      await expect(page.locator('#task')).toHaveValue(/command output[\s\S]*Next draft/);
+    }
+    if (mode === 'queue') await expect(page.locator('#task')).toHaveValue('Next draft');
+    expect(cloud.postCount).toBe(1);
+  });
+}
+
+test('Cloud ! authentication failure restores the command and never submits a model prompt', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  terminal.authenticate = false;
+  await cloud.open();
+  await page.locator('#task').pressSequentially('!ls');
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.locator('#task').press('Enter');
+  await expect.poll(() => terminal.connections.length).toBe(1);
+  terminal.connections[0].socket.send(JSON.stringify({ type: 'error', error: 'Fixture refused' }));
+  await expect(page.locator('#task')).toHaveValue('!ls');
+  await expect(page.locator('.shell-commands-running')).toHaveCount(0);
+  expect(cloud.postCount).toBe(0);
+  expect(terminal.requests('terminal.open')).toHaveLength(0);
+});
+
+test('an uncertain Cloud ! steer can later be applied without duplicating the recovered result', async ({ page }) => {
+  const { cloud, terminal } = await setup(page);
+  cloud.manualTasks = true;
+  await cloud.open();
+  await page.locator('#task').fill('Start turn');
+  await page.locator('#send').click();
+  await expect(page.locator('#stop')).toBeEnabled();
+  const tab = await shell(page, terminal, 'ls');
+  await page.locator('#task').fill('Later draft');
+  cloud.controlOffline = true;
+  finish(terminal, tab);
+  await expect.poll(() => commands(cloud, 'steer').length).toBe(1);
+  const request = commands(cloud, 'steer')[0].command;
+  await expect(page.locator('#task')).toHaveValue(/command output[\s\S]*Later draft/);
+  await cloud.emitSessionEvent(sessionA, 'steer_applied', { submission_id: request.submission_id, kind: 'prompt', content: request.content });
+  await expect(page.locator('#task')).toHaveValue('Later draft');
+  expect(commands(cloud, 'steer')).toHaveLength(1);
+});
+
+test('signing out while Cloud ! runs clears the operation without submitting it under the next account', async ({ page }) => {
+  const { cloud, terminal } = await setup(page, { desktop: true });
+  await cloud.open();
+  const tab = await shell(page, terminal, 'ls');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('.settings-group', { hasText: 'Account · Remote access' }).getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect.poll(() => tab.connection.closed).toBe(true);
+  expect(cloud.postCount).toBe(0);
+  await expect(page.locator('.shell-commands-running')).toHaveCount(0);
+  expect(terminal.requests('terminal.open')).toHaveLength(1);
+});

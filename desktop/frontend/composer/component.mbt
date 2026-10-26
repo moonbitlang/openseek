@@ -95,6 +95,7 @@ priv struct Entry {
   attachment_sequence : Int32
   images_enabled : Bool
   pending_submission : PendingSubmission?
+  results : Array[ResultSubmission]
   // How far back in `Input::history` the draft was recalled from (1 is the
   // latest prompt), or `None` while the draft is the user's own.
   history_back : Int32?
@@ -136,6 +137,7 @@ fn Entry::Entry(input : Input) -> Entry {
     attachment_sequence: input.staged_attachments.length(),
     images_enabled: input.presentation.images_enabled,
     pending_submission: None,
+    results: [],
     history_back: None,
   }
 }
@@ -508,6 +510,7 @@ priv enum Msg {
   GoalCancelled
   SubmitRequested
   QuoteReplied(QuoteReply)
+  CommandResultReceived(CommandResult)
   FollowupMenuToggled
   FollowupMenuDismissed
   FollowupSelected(String)
@@ -773,6 +776,7 @@ fn Model::update(
   let entry = self.active(input)
   let self = self.with_entry(entry)
   match msg {
+    CommandResultReceived(result) => self.command_result(result, action_emit)
     PredictionAccepted => {
       guard entry.prediction_text(input) is Some(text) else {
         return (self, @cmd.none)
@@ -1440,7 +1444,7 @@ pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   action_emit : @cmd.Emit[Action],
-) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply]) {
+) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply], @cmd.Emit[CommandResult]) {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, input) => (Model(input), @cmd.none),
@@ -1454,5 +1458,9 @@ pub fn component(
     .active(input)
     .view(locale~, emit, action_emit, input, clock_ms=state.clock_ms)
   })
-  (html, emit.map(reply => QuoteReplied(reply)))
+  (
+    html,
+    emit.map(reply => QuoteReplied(reply)),
+    emit.map(result => CommandResultReceived(result)),
+  )
 }

@@ -488,6 +488,9 @@ fn main {
     let composer_reply : Ref[@cmd.Emit[@composer.QuoteReply]] = Ref(
       @cmd.Emit(_ => @cmd.none),
     )
+    let composer_result : Ref[@cmd.Emit[@composer.CommandResult]] = Ref(
+      @cmd.Emit(_ => @cmd.none),
+    )
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.
@@ -495,6 +498,23 @@ fn main {
       update=(model, msg, emit) => {
         let (cmd, next) = match msg {
           ComposerReply(reply) => ((composer_reply.val)(reply), model)
+          ComposerCommandResult(result) => {
+            let result = match result {
+              @composer.Ready(input, id, text) =>
+                model
+                .command_result_input(input.identity.owner)
+                .map(input => @composer.Ready(input, id, text))
+              @composer.Restore(input, text) =>
+                model
+                .command_result_input(input.identity.owner)
+                .map(input => @composer.Restore(input, text))
+              other => Some(other)
+            }
+            (
+              result.map_or(@cmd.none, result => (composer_result.val)(result)),
+              model,
+            )
+          }
           _ => update(emit, msg, model)
         }
         (next, cmd)
@@ -740,14 +760,15 @@ fn main {
         },
       )
     let composer_input = state.map(model => model.composer_input())
-    let (composer_html, composer_quote) = @composer.component(
+    let (composer_html, composer_quote, command_result) = @composer.component(
       state.map(model => model.locale),
       composer_input,
       emit.map(action => ComposerAction(action)),
     )
     composer_reply.val = composer_quote
+    composer_result.val = command_result
     let codex_composer_input = state.map(model => model.codex_composer_input())
-    let (codex_composer_html, codex_composer_quote) = @composer.component(
+    let (codex_composer_html, codex_composer_quote, _) = @composer.component(
       state.map(model => model.locale),
       codex_composer_input,
       emit.map(action => CodexComposerAction(action)),

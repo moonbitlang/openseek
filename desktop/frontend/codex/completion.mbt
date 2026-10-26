@@ -624,6 +624,8 @@ fn State::apply_composer_action(
     | @composer.GoalCancelled(..)
     | @composer.GoalCleared(..)
     | @composer.GoalSubmitted(..)
+    | @composer.CommandResultRecovered(..)
+    | @composer.CommandResultSubmitted(..)
     | @composer.ShellCommandSubmitted(..)
     | @composer.ShellTerminalRequested(..)
     | @composer.FileIndexEnsured(..)
