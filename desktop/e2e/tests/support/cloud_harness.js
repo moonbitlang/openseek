@@ -596,6 +596,20 @@ export class CloudHarness {
     await this.page.locator('#task').waitFor();
   }
 
+  // Existing browser Cloud sessions can enter without booting a device page.
+  // Keep goto/open for scenarios that exercise that navigation or the native bridge.
+  async openDirect(id = sessionA) {
+    if (this.desktop) throw new Error('openDirect requires a browser Cloud fixture');
+    await this.page.goto(`${authOrigin}/cloud/session/${encodeURIComponent(id)}`);
+    await expect(this.row(id)).toHaveAttribute('aria-current', 'true');
+    await expect(this.page.locator('main .topbar-title')).toHaveText(this.titles.get(id) || 'New chat');
+    await this.page.locator('#task').waitFor();
+    // Control fixtures may publish immediately after entry. Wait for the live
+    // reader rather than letting those events race its stream registration.
+    await this.page.waitForFunction(session =>
+      (window.cloudSessionStreams.get(session)?.size || 0) > 0, id, { timeout: 5000 });
+  }
+
   async create() {
     await this.page.locator('.section-primary-action[aria-label="New chat"]').click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');

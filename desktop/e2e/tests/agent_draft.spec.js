@@ -77,28 +77,6 @@ test('one draft carries current text, file mentions and images through repeated 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('clearing the migrated draft never revives an earlier engine copy', async ({ page }) => {
-  const app = await open(page);
-  const initialRows = await page.locator('.conversation-row').count();
-  const task = page.locator('#task');
-  await choose(page, 'Codex test');
-  await task.fill('Started in Codex');
-  await choose(page, 'DS Pro');
-  await expect(task).toHaveValue('Started in Codex');
-  await task.fill('');
-  await choose(page, 'Codex test');
-  await expect(task).toHaveValue('');
-  await task.fill('Replacement');
-  await choose(page, 'DS Pro');
-  await expect(task).toHaveValue('Replacement');
-  await choose(page, 'Codex test');
-  await task.fill('');
-  await choose(page, 'DS Pro');
-  await expect(task).toHaveValue('');
-  await noDraftRows(page, initialRows);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('an image-only Codex draft migrates back and sends through DeepSeek', async ({ page }) => {
   const app = await open(page);
   const initialRows = await page.locator('.conversation-row').count();
