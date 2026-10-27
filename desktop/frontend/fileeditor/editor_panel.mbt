@@ -146,7 +146,7 @@ priv struct ViewerHost {
   mut theme : String
   // Desired family survives before the Viewer mounts, so startup settings and
   // a later first file open cannot race back to the editor package default.
-  mut font_family : String
+  font_family : String
   // Desired size has the same pre-mount lifetime as the family. The Viewer
   // consumes pixels as a Double and re-measures whenever this value changes.
   mut font_size : Double
@@ -689,20 +689,6 @@ pub fn apply_theme(theme : String) -> @cmd.Cmd {
       markdown_viewer.update_options(
         markdown_viewer.get_options().with_theme(theme),
       )
-    }
-    refresh_diff_pane_options()
-  })
-}
-
-///|
-/// Retain the selected family for future mounts and update an attached Viewer
-/// through its public options API. Updating options re-measures glyph widths
-/// and recomputes wrapping before the next render.
-pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
-    viewer_state.font_family = font_family
-    if viewer_state.viewer is Some(viewer) {
-      viewer.update_options(viewer.get_options().with_font_family(font_family))
     }
     refresh_diff_pane_options()
   })

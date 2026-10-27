@@ -1,5 +1,5 @@
 ///|
-pub(all) struct OfficeCitationNavigation {
+pub struct OfficeCitationNavigation {
   owner : @interop.ConversationIdentity
   epoch : Int32
   generation : Int32

@@ -81,7 +81,7 @@ pub fn State::pending_pdf_capture(self : State, ctx : Ctx) -> PdfCaptureDraft? {
 }
 
 ///|
-pub fn State::dismiss_pdf_capture(
+fn State::dismiss_pdf_capture(
   self : State,
   ctx : Ctx,
   preview : PdfCapturePreview,
@@ -111,7 +111,7 @@ pub extend PdfCaptureDraft with Eq::{equal, not_equal}
 ///|
 /// Use the shared Office mention envelope for screenshot feedback. Region
 /// geometry has no text-range reference that office.read can resolve.
-pub fn PdfCapturePreview::materialized_selection(
+fn PdfCapturePreview::materialized_selection(
   self : PdfCapturePreview,
   comment : String,
 ) -> String {

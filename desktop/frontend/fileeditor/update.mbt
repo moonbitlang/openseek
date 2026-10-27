@@ -409,7 +409,7 @@ fn show_activated_tab(
 /// supplies the generation captured before its host lookup; direct file,
 /// symbol, and mention opens use the current generation. An older reply may
 /// still finish a loading document, but without its position.
-pub fn open_document(
+fn open_document(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,

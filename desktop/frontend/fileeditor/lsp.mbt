@@ -15,11 +15,6 @@
 pub struct ModelUri(String)
 
 ///|
-pub fn ModelUri::of(resource : @common.Uri) -> ModelUri {
-  ModelUri(resource.to_string())
-}
-
-///|
 pub fn ModelUri::resource(self : ModelUri) -> @common.Uri {
   try! @common.Uri::parse(self.0)
 }

@@ -1,6 +1,6 @@
 ///|
 /// A capture request pins both the document identity and its owning chat.
-pub(all) struct OfficeRegionRequest {
+pub struct OfficeRegionRequest {
   id : Int64
   owner : @interop.ConversationIdentity
   epoch : Int32
@@ -141,7 +141,7 @@ fn State::sync_office_region(self : State, ctx : Ctx) -> (@cmd.Cmd, State) {
 }
 
 ///|
-pub fn OfficeRegionPreview::materialized_selection(
+fn OfficeRegionPreview::materialized_selection(
   self : OfficeRegionPreview,
   comment : String,
 ) -> String {

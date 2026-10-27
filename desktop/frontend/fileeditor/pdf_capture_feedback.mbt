@@ -174,18 +174,3 @@ pub fn region_feedback_subscription(
     },
   )
 }
-
-///|
-pub fn pdf_capture_feedback_subscription(
-  emit : @cmd.Emit[Msg],
-  draft : PdfCaptureDraft,
-  batch~ : Bool,
-  submit : (String, Bool) -> @cmd.Cmd,
-) -> @sub.Sub {
-  region_feedback_subscription(
-    emit,
-    { preview: Pdf(draft.preview), comment: draft.comment, },
-    batch~,
-    submit,
-  )
-}

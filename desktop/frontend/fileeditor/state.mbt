@@ -10,7 +10,7 @@
 /// some listed directory. `path` is relative to the conversation's workspace
 /// ("" being the root), the key the host's `read_directory` / `read_file` ops
 /// take.
-pub(all) struct FileEntry {
+pub struct FileEntry {
   name : String
   path : @pathx.Relative
   is_dir : Bool
@@ -108,7 +108,7 @@ pub(all) enum MbtiViewMode {
 /// The presentation selected for an ordinary `moon.mod`. The dependency
 /// graph is the default, while positioned navigation, reviews, and history
 /// keep the source surface.
-pub(all) enum MoonModViewMode {
+pub enum MoonModViewMode {
   MoonModDependencies
   MoonModSource
 } derive(Eq)
@@ -117,7 +117,7 @@ pub(all) enum MoonModViewMode {
 /// One package-graph request cached for an open `moon.mod` tab. Every state
 /// carries the request generation so closing/reopening or invalidating a graph
 /// cannot accept a late Host reply from its predecessor.
-pub(all) enum PackageGraphState {
+pub enum PackageGraphState {
   PackageGraphLoading(Int32)
   PackageGraphReady(Int32, String)
   PackageGraphFailed(Int32, String)
@@ -127,7 +127,7 @@ pub(all) enum PackageGraphState {
 /// The layout shared by Line and sectioned semantic comparison. This
 /// panel-level preference is independent from `ReviewViewMode`: returning to
 /// source keeps it for the next review and the next changed file.
-pub(all) enum ReviewDiffLayout {
+pub enum ReviewDiffLayout {
   ReviewSideBySide
   ReviewInline
 } derive(Eq)
@@ -136,7 +136,7 @@ pub(all) enum ReviewDiffLayout {
 /// Desktop-owned comparison algorithm preference. Line keeps the complete
 /// file DiffEditor; Token and Tree select the sectioned semantic review.
 /// Non-MoonBit comparisons keep using Line without overwriting this preference.
-pub(all) enum ReviewDiffMode {
+pub enum ReviewDiffMode {
   ReviewDiffLine
   ReviewDiffToken
   ReviewDiffTree
@@ -199,7 +199,7 @@ fn Doc::prepare_read(self : Doc) -> Doc {
 /// One file's decoded `fs.stat_files` result: its current mtime signature,
 /// or why the host has none — the file is missing, or it could not be
 /// inspected at all.
-pub(all) struct FileStat {
+pub struct FileStat {
   path : @common.Uri
   signature : @protocol.FileSignature
 }
@@ -207,7 +207,7 @@ pub(all) struct FileStat {
 ///|
 /// Every open file observed by this host, regardless of its viewer. A text tab
 /// and several native previews of the same resource share one stat request.
-pub fn Ctx::observed_files(self : Ctx) -> Array[@common.Uri] {
+fn Ctx::observed_files(self : Ctx) -> Array[@common.Uri] {
   let paths = self.open_files.copy()
   for path in self.preview_files {
     if !paths.contains(path) {
@@ -221,7 +221,7 @@ pub fn Ctx::observed_files(self : Ctx) -> Array[@common.Uri] {
 /// Poll uncovered files with the same subscription. A failed or parked
 /// workspace watcher also falls back here; native previews remain observable
 /// even when the current conversation has no checkout or is on another host.
-pub fn State::polled_files(self : State, ctx : Ctx) -> Array[@common.Uri] {
+fn State::polled_files(self : State, ctx : Ctx) -> Array[@common.Uri] {
   guard ctx.owner is @interop.Host(_) else { return [] }
   ctx
   .observed_files()
@@ -361,7 +361,7 @@ pub(all) enum GitGraphState {
 
 ///|
 /// The inline file expansion for the currently selected commit.
-pub(all) enum GitCommitFiles {
+pub enum GitCommitFiles {
   GitCommitFilesIdle
   GitCommitFilesLoading(commit~ : String)
   GitCommitFilesFailed(commit~ : String, message~ : String)
@@ -373,7 +373,7 @@ pub(all) enum GitCommitFiles {
 } derive(Eq)
 
 ///|
-pub(all) enum HistoryBlob {
+pub enum HistoryBlob {
   HistoryBlobLoading
   HistoryBlobMissing
   HistoryBlobBinary
@@ -383,13 +383,13 @@ pub(all) enum HistoryBlob {
 } derive(Eq)
 
 ///|
-pub(all) enum HistoryDiffSide {
+pub enum HistoryDiffSide {
   HistoryOriginal
   HistoryModified
 } derive(Eq)
 
 ///|
-pub(all) struct HistoryDiffDoc {
+pub struct HistoryDiffDoc {
   diff : @dock.GitHistoryDiff
   generation : Int32
   original : HistoryBlob
@@ -419,36 +419,13 @@ pub(all) enum ReconciledPlacement {
 /// The checkout identity this panel is reconciled against, live or retained
 /// across a gap. Identity comparisons and cache retirement read through this;
 /// a value here does not mean the checkout is currently usable.
-pub fn ReconciledPlacement::identity(
+fn ReconciledPlacement::identity(
   self : ReconciledPlacement,
 ) -> @interop.CheckoutPlacement? {
   match self {
     PlacementUnknown => None
     PlacementLive(value) => Some(value)
     PlacementParked(last_known~) => last_known
-  }
-}
-
-///|
-/// Whether reconciliation has parked this panel.
-pub fn ReconciledPlacement::is_parked(self : ReconciledPlacement) -> Bool {
-  self is PlacementParked(_)
-}
-
-///|
-/// Settle a freshly projected placement against the retained one: a ready
-/// value goes live and anything else parks. An unresolved projection keeps the
-/// retained identity, because a gap must not erase what recovery compares
-/// against. A new incarnation reconciles from `PlacementUnknown` instead, so
-/// the checkout it replaced is not carried into it.
-pub fn ReconciledPlacement::reconcile(
-  self : ReconciledPlacement,
-  current : @interop.CheckoutPlacement?,
-) -> ReconciledPlacement {
-  match current {
-    Some(value) if value.is_ready() => PlacementLive(value)
-    Some(value) => PlacementParked(last_known=Some(value))
-    None => PlacementParked(last_known=self.identity())
   }
 }
 

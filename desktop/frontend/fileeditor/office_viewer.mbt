@@ -142,7 +142,7 @@ fn clear_office_surface() -> @cmd.Cmd {
 }
 
 ///|
-pub(all) struct OfficeZoomPreference {
+pub struct OfficeZoomPreference {
   fit_width : Bool
   zoom : Int32
 } derive(Eq)
