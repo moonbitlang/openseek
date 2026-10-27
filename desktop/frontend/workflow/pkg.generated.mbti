@@ -21,8 +21,6 @@ pub fn opened(Array[Run], id~ : String, session~ : String, first_child~ : Int32,
 
 pub fn panel(locale? : @i18n.Locale, Array[Run], Actions) -> @html.Html
 
-pub fn row_status(locale? : @i18n.Locale, Row, closed~ : Bool) -> (String, String)
-
 // Errors
 
 // Types and methods
@@ -50,7 +48,7 @@ pub fn Entry::equal(Self, Self) -> Bool
 pub fn Entry::not_equal(Self, Self) -> Bool
 pub fn Entry::to_repr(Self) -> @debug.Repr
 
-pub(all) struct Row {
+pub struct Row {
   child : String
   ordinal : Int32
   kind : String
@@ -68,7 +66,7 @@ pub fn Row::equal(Self, Self) -> Bool
 pub fn Row::not_equal(Self, Self) -> Bool
 pub fn Row::to_repr(Self) -> @debug.Repr
 
-pub(all) struct Run {
+pub struct Run {
   id : String
   session : String
   first_child : Int32
@@ -82,8 +80,6 @@ pub fn Run::not_equal(Self, Self) -> Bool
 pub fn Run::ordered_rows(Self) -> Array[Row]
 pub fn Run::running(Self) -> Int32
 pub fn Run::to_repr(Self) -> @debug.Repr
-pub fn Run::tokens(Self) -> Int32
-pub fn Run::unaccounted(Self) -> Int32
 
 // Type aliases
 
