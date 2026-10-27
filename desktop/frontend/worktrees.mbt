@@ -107,18 +107,12 @@ fn start_in_new_worktree(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  task : String,
-  submission_id : String,
-  selected_model : @deepseek.Model,
-  reasoning : OpenSeekReasoning,
-  max_steps : String,
-  session : String,
+  payload : @protocol.StartPayload,
   workspace : @common.Uri,
-  approval~ : @protocol.OpenSeekApproval,
-  moonbit_guide~ : Bool,
-  images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
+  let session = payload.session
+  let submission_id = payload.submission_id.unwrap()
   let device_dispatch = dispatch.map((msg : DeviceMsg) => {
     FromDevice(channel, msg)
   })
@@ -224,21 +218,7 @@ fn start_in_new_worktree(
               WorktreeCreated(workspace~, name=reply.name, session~),
             ),
           )
-          let start = start_payload(
-            images~,
-            task,
-            selected_model,
-            reasoning,
-            max_steps,
-            session,
-            submission_id,
-            workspace~,
-            approval~,
-            moonbit_guide~,
-          )
-          request_agent_start(
-            scheduler, dispatch, channel, start, session, submission_id,
-          )
+          request_agent_start(scheduler, dispatch, channel, payload)
         },
       ) catch {
         // Unreachable: the lane only ever wakes its waiters, never fails
@@ -1924,7 +1904,7 @@ test "a start payload keeps launch choices without naming a worktree" {
     "sub-1",
     workspace~,
     approval=ApprovalReview,
-    moonbit_guide=false,
+    system_prompt="Custom instructions\n中文",
   )
   // The typed wire shape has no worktree field at all; the workspace hint
   // is the only placement the start carries.
@@ -1934,7 +1914,7 @@ test "a start payload keeps launch choices without naming a worktree" {
   assert_eq(payload.workspace, Some("/proj"))
   assert_eq(payload.thinking, Some(ThinkingMax))
   assert_eq(payload.approval, Some(ApprovalReview))
-  assert_eq(payload.moonbit_guide, Some(false))
+  assert_eq(payload.system_prompt, Some("Custom instructions\n中文"))
   let kimi_model = start_payload(
     "go",
     Kimi(K27Code),
@@ -1944,8 +1924,8 @@ test "a start payload keeps launch choices without naming a worktree" {
     "sub-2",
     workspace~,
     approval=ApprovalAsk,
-    moonbit_guide=true,
+    system_prompt="",
   )
   assert_true(kimi_model.thinking is None)
-  assert_eq(kimi_model.moonbit_guide, Some(true))
+  assert_eq(kimi_model.system_prompt, Some(""))
 }

@@ -760,7 +760,7 @@ async test "run config resolves the endpoint from the stored provider" {
       custom_api_key: None,
     })
     let config = run_config(manager, {
-      moonbit_guide: None,
+      system_prompt: None,
       images: [],
       task: "hello",
       submission_id: None,
@@ -791,7 +791,7 @@ async test "run config resolves the endpoint from the stored provider" {
       custom_api_key: None,
     })
     let glm = run_config(manager, {
-      moonbit_guide: None,
+      system_prompt: None,
       images: [],
       task: "hello",
       submission_id: None,
@@ -814,7 +814,7 @@ async test "run config resolves the endpoint from the stored provider" {
       custom_api_key: None,
     })
     let custom = run_config(manager, {
-      moonbit_guide: None,
+      system_prompt: None,
       images: [],
       task: "hello",
       submission_id: None,
@@ -893,7 +893,7 @@ async test "a custom provider without a URL refuses to start" {
     })
     let refused = try
       run_config(manager, {
-        moonbit_guide: None,
+        system_prompt: None,
         images: [],
         task: "hello",
         submission_id: None,

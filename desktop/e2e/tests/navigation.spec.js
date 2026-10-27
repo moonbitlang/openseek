@@ -77,7 +77,7 @@ for (const [target, title] of [
           jsonrpc: '2.0', id: request.id, result: await app.replyFor(request),
         }));
       });
-      socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: 2 } }));
+      socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: 3 } }));
     });
     const destination = `/device/host/${target}`;
     await page.goto(destination);

@@ -1507,8 +1507,16 @@ async fn engine_process_args(
     args.push("--session-root=\{root.to_string()}")
   }
   args.append(engine_mcp_args(config.mcp_config, runtime_dir, env, host_mcp~))
-  if !config.moonbit_guide {
-    args.push("--moonbit-guide=off")
+  if config.session_root is Some(root) {
+    let store = @store.SessionStore(root.to_string())
+    if capture_session_prompt(
+        store,
+        SessionId(config.session),
+        config.system_prompt,
+      )
+      is Some(path) {
+      args.push("--system-prompt-file=\{path.to_string()}")
+    }
   }
   args.append(["--dir", ".", "--approval", config.approval.wire()])
   args
@@ -3061,7 +3069,7 @@ async test "native engine env has one authoritative bundled moon path" {
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(moon_home, version="0.10.0-test")
   let config : RunConfig = {
-    moonbit_guide: true,
+    system_prompt: None,
     content: Content([Text("t")]),
     api_key: "k",
     key_env: "DEEPSEEK",
@@ -3258,7 +3266,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
   let sink = EventSink(_ => ())
   let slot : SessionSlot = { pending: None, engine: None, }
   let config : RunConfig = {
-    moonbit_guide: true,
+    system_prompt: None,
     content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",
@@ -3376,7 +3384,7 @@ async test "record move waits for readers across pump replacement" {
 ///|
 fn pump_test_config(session : String) -> RunConfig {
   {
-    moonbit_guide: true,
+    system_prompt: None,
     content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",

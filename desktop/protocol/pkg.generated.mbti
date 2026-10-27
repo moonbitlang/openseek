@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
-pub const HostProtocolRevision : Int32 = 2
+pub const HostProtocolRevision : Int32 = 3
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -3211,7 +3211,7 @@ pub impl ToJson for SessionCommandReply
 pub impl @json.FromJson for SessionCommandReply
 
 pub(all) struct SessionCommandSettings {
-  moonbit_guide : Bool?
+  system_prompt : String?
   session : String
   model : String?
   thinking : OpenSeekThinking?
@@ -3946,7 +3946,7 @@ pub impl ToJson for StageAttachmentsPayload
 pub impl @json.FromJson for StageAttachmentsPayload
 
 pub(all) struct StartPayload {
-  moonbit_guide : Bool?
+  system_prompt : String?
   images : Array[String]
   task : String
   submission_id : String?

@@ -863,42 +863,18 @@ fn diagnostics_msg(
 fn start_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  task : String,
-  submission_id : String,
-  selected_model : @deepseek.Model,
-  reasoning : OpenSeekReasoning,
-  max_steps : String,
-  session : String,
+  payload : @protocol.StartPayload,
   workspace~ : @common.Uri,
-  approval~ : @protocol.OpenSeekApproval,
-  moonbit_guide~ : Bool,
-  images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
-  let payload = start_payload(
-    task,
-    selected_model,
-    reasoning,
-    max_steps,
-    session,
-    submission_id,
-    workspace~,
-    approval~,
-    moonbit_guide~,
-    images~,
-  )
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       // Behind anything already out for this session: the host serves one
       // command per session, so a prompt issued after a goal must not reach
       // the engine first and start its turn without it.
       @interop.in_ordered_lane(
-        @interop.session_command_lane(channel, session),
-        () => {
-          request_agent_start(
-            scheduler, dispatch, channel, payload, session, submission_id,
-          )
-        },
+        @interop.session_command_lane(channel, payload.session),
+        () => request_agent_start(scheduler, dispatch, channel, payload),
       ) catch {
         // Unreachable: the lane only ever wakes its waiters, never fails
         // them, and the work it runs is `noraise`. The type cannot say so.
@@ -918,9 +894,10 @@ async fn request_agent_start(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   payload : @protocol.StartPayload,
-  session : String,
-  submission_id : String,
 ) -> Unit noraise {
+  let session = payload.session
+  // All frontend starts come from start_payload, which always assigns an id.
+  let submission_id = payload.submission_id.unwrap()
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   try {
     if payload.workspace is Some(workspace) &&
@@ -978,7 +955,8 @@ async fn request_agent_start(
 }
 
 ///|
-/// The start payload. Optional fields are trimmed and omitted when blank.
+/// Construct a start once before routing it through either launch path.
+/// The complete base system prompt is forwarded verbatim, including empty text.
 /// `session` is required: every frontend conversation is minted with a
 /// durable id before it can submit a prompt, and the host rejects a blank id.
 /// It carries no `cwd` (`workspace`, the conversation's attached project,
@@ -994,7 +972,7 @@ fn start_payload(
   submission_id : String,
   workspace~ : @common.Uri,
   approval~ : @protocol.OpenSeekApproval,
-  moonbit_guide~ : Bool,
+  system_prompt~ : String,
   images~ : Array[String] = [],
 ) -> @protocol.StartPayload {
   let session = session.trim().to_owned()
@@ -1005,7 +983,7 @@ fn start_payload(
     model: Some(selected_model.to_string()),
     thinking: selected_model.thinking(reasoning),
     approval: Some(approval),
-    moonbit_guide: Some(moonbit_guide),
+    system_prompt: Some(system_prompt),
     max_steps: parsed_max_steps(max_steps),
     session,
     workspace: Some(workspace.path),

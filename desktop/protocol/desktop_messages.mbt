@@ -72,8 +72,9 @@ pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
 
 ///|
 pub(all) struct StartPayload {
-  // Creation-only choice. None retains the built-in default; saved sessions keep their prompt.
-  moonbit_guide : Bool?
+  // Complete base system prompt for a new session. None uses the engine
+  // default; Some("") supplies an empty base. Saved sessions keep their prompt.
+  system_prompt : String?
   // Original images as data URLs. The engine persists the bytes before upload.
   images : Array[String]
   task : String
@@ -154,7 +155,8 @@ pub(all) struct RunsPayload {
 
 ///|
 pub(all) struct SessionCommandSettings {
-  moonbit_guide : Bool?
+  // Same creation-only base system prompt as StartPayload.system_prompt.
+  system_prompt : String?
   // Native commands address a durable conversation; run-bound commands also carry a run ID.
   session : String
   // A resumed conversation may need a new engine process with these settings.
@@ -1431,7 +1433,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 2
+pub const HostProtocolRevision : Int32 = 3
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads

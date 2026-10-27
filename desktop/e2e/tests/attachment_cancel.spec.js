@@ -25,7 +25,7 @@ async function openNative(page, pick, prepare) {
       openseek: new Proxy({}, { get: (_, method) => async params => {
         if (method === 'host.connect') {
           for (const callback of listeners.get('openseek.agent.connected') || []) {
-            callback({ payload: { protocol: 2 } });
+            callback({ payload: { protocol: 3 } });
           }
         }
         return window.attachmentDesktopRequest({ method, params });

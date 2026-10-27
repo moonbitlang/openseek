@@ -10,7 +10,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 2;
+    this.hostProtocol = 3;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();

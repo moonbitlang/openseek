@@ -37,7 +37,7 @@ fn send_session_command(
       _ => None
     },
     settings: {
-      moonbit_guide: Some(conv.moonbit_guide),
+      system_prompt: Some(conv.system_prompt),
       session: conv.session_id,
       model: Some(conv.engine_model.to_string()),
       thinking: conv.engine_model.thinking(

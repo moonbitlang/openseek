@@ -69,7 +69,7 @@ async function installDesktop(page, { managed = false } = {}) {
       openseek: new Proxy({}, {
         get: (_, method) => async params => {
           if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 2 });
+            window.desktopEvent('openseek.agent.connected', { protocol: 3 });
           }
           return window.desktopRequest({ method, params });
         },

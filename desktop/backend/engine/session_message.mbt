@@ -128,7 +128,7 @@ pub async fn submit_session_message(
     }
   }
   let reply = start_run(sink, manager, {
-    moonbit_guide: None,
+    system_prompt: None,
     task: text,
     images: [],
     submission_id: Some(submission_id),

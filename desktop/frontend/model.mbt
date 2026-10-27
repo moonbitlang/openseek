@@ -238,9 +238,6 @@ const AppFontSizeStorageKey : String = "openseek.font_size"
 const ModelStorageKey : String = "openseek.model"
 
 ///|
-const MoonBitGuideStorageKey : String = "openseek.moonbit_guide"
-
-///|
 /// The agent the next "New chat" starts with — whichever provider group the
 /// unified model chip was last picked from.
 const AgentStorageKey : String = "openseek.agent"
@@ -706,8 +703,8 @@ priv struct Conversation {
   // afterwards: a start is always older than the composer, so echoing one
   // back would undo a choice the user has already made for the next turn.
   engine_model : @deepseek.Model
-  // Creation default for this draft; stored chats keep their saved system prompt.
-  moonbit_guide : Bool
+  // Complete base prompt captured for this draft; stored chats keep their prompt.
+  system_prompt : String
   // Root-authored prompt snapshot for submission and delivery recovery. The
   // live textarea value is component-local and is copied here atomically only
   // when the user submits; a rejection may write recovered text back here.
@@ -1169,6 +1166,7 @@ priv enum SelectMenu {
   CodexModelMenu
   CodexReasoningMenu
   ApiProviderMenu
+  PromptMenu
   FollowupBehaviorMenu
   ThemeMenu
   LanguageMenu
@@ -1253,7 +1251,7 @@ priv struct Model {
   // the device required by its `?device=` query.
   focused : @interop.ChannelId
   // Copied into each new OpenSeek conversation, persisted page-locally.
-  default_moonbit_guide : Bool
+  default_prompt : @prompt.Model
   // The tier a new conversation is born with: whatever was last picked in
   // the composer, persisted page-locally. The model a turn actually runs
   // with is the conversation's own `engine_model`, never this.
@@ -1703,8 +1701,7 @@ priv enum Msg {
   // OpenSeek's fixed `no`/`high`/`max` choice. It shares the composer control
   // with Codex but remains a separate typed value at the request boundary.
   OpenSeekEffortPicked(String)
-  MoonBitGuideDefaultLoaded(Bool)
-  MoonBitGuideDefaultChanged(Bool)
+  Prompt(@prompt.Msg)
   MaxStepsChanged(String)
   SetupApiKeyChanged(String)
   ProviderChanged(String)
@@ -2531,8 +2528,13 @@ fn empty_conversation(
   session_id : String,
   project : @common.Uri,
   model~ : @deepseek.Model = Deepseek(V4Pro),
-  moonbit_guide~ : Bool = true,
+  system_prompt? : String,
 ) -> Conversation {
+  let system_prompt = if system_prompt is Some(text) {
+    text
+  } else {
+    @prompt.Model::new().text(model)
+  }
   {
     device: channel,
     session_id,
@@ -2540,7 +2542,7 @@ fn empty_conversation(
     workspace: Project(root=project),
     worktree_mode: false,
     engine_model: model,
-    moonbit_guide,
+    system_prompt,
     task: "",
     images: [],
     mentions: [],
@@ -2643,7 +2645,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     websocket_epoch: 0,
     focused: @interop.ChannelId::Local,
     default_model: Deepseek(V4Flash),
-    default_moonbit_guide: true,
+    default_prompt: @prompt.Model::new(),
     default_agent: OpenSeekAgent,
     conversation_models: [],
     reviewed_conversations: [],
@@ -3791,15 +3793,16 @@ fn Model::activate(
     }
   }
   if !found {
+    let model = self
+      .remembered_model(channel, session_id)
+      .unwrap_or(self.default_model)
     conversations.push(
       empty_conversation(
         channel,
         session_id,
         project,
-        moonbit_guide=self.default_moonbit_guide,
-        model=self
-          .remembered_model(channel, session_id)
-          .unwrap_or(self.default_model),
+        system_prompt=self.default_prompt.text(model),
+        model~,
       ),
     )
   }

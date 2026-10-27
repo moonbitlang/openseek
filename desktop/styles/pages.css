@@ -250,6 +250,19 @@ h2 {
   align-items: stretch;
 }
 
+.setting-control textarea {
+  width: 100%;
+  min-height: 140px;
+  box-sizing: border-box;
+  padding: 9px;
+  resize: vertical;
+  color: inherit;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font: inherit;
+}
+
 /* The bring-your-own-key guide inside the API group's card: prose plus
    numbered steps, with its own padding since the card's default is
    row-shaped. */

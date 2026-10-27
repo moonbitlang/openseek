@@ -336,7 +336,7 @@ pub async fn session_command(
     }
     Prompt(content~, submission_id~) => {
       let reply = start_run(sink, manager, {
-        moonbit_guide: settings.moonbit_guide,
+        system_prompt: settings.system_prompt,
         session: settings.session,
         task: content.text(),
         images: command_images(content),
@@ -1043,7 +1043,7 @@ fn test_start_payload(
   submission_id? : String,
 ) -> @protocol.StartPayload {
   {
-    moonbit_guide: None,
+    system_prompt: None,
     images: [],
     task,
     submission_id,
@@ -1175,7 +1175,7 @@ async test "native commands share writer delivery and preserve turn ownership" {
   // goal really left the host rather than only that the op returned.
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nprintf '%s\\n' \"$*\" >> '\{launch_args}';\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nfor arg in \"$@\"; do case \"$arg\" in --system-prompt-file=*) printf '%s\\n' \"${arg#--system-prompt-file=}\" >> '\{launch_args}';; esac; done\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1191,8 +1191,9 @@ async test "native commands share writer delivery and preserve turn ownership" {
   })
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
+    let custom_prompt = "  Custom instructions\n中文\n"
     let settings : @protocol.SessionCommandSettings = {
-      moonbit_guide: Some(false),
+      system_prompt: Some(custom_prompt),
       session,
       model: None,
       thinking: None,
@@ -1333,8 +1334,8 @@ async test "native commands share writer delivery and preserve turn ownership" {
     })
     let launches = @fsx.read_text(launch_args).trim().split("\n").collect()
     assert_eq(launches.length(), 2)
-    for args in launches {
-      assert_true(args.contains("--moonbit-guide=off"))
+    for path in launches {
+      assert_eq(@fsx.read_text(Path(path.to_owned())), custom_prompt)
     }
     group.return_immediately(())
   })
@@ -1947,7 +1948,7 @@ async test "a goal request is refused before it can reach the wrong engine" {
           command,
           run_id: None,
           settings: {
-            moonbit_guide: None,
+            system_prompt: None,
             session: "s-goal",
             model: None,
             thinking: None,

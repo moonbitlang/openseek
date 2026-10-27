@@ -1584,18 +1584,12 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // All providers use the composer's model selector; API setup only chooses
   // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
-    @settings.row(
-      @settings.text(locale, MoonBitGuide),
-      [
-        @settings.switch_control(
-          enabled=model.default_moonbit_guide,
-          label=@settings.text(locale, MoonBitGuide),
-          on_click=dispatch(
-            MoonBitGuideDefaultChanged(!model.default_moonbit_guide),
-          ),
-        ),
-      ],
-      desc=@settings.text(locale, MoonBitGuideDescription),
+    ..model.default_prompt.view(
+      locale,
+      dispatch.map(msg => Prompt(msg)),
+      open=model.select_menu is Some(PromptMenu),
+      toggle=dispatch(ToggleSelectMenu(PromptMenu)),
+      dismiss=dispatch(CloseSelectMenu),
     ),
     @settings.row(
       @settings.text(locale, MaxSteps),

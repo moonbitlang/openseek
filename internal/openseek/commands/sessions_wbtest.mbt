@@ -322,12 +322,16 @@ async test "session fork command copies a session offline under the given id" {
         env=Map([]),
       ),
     )
+    let custom = store.load(SessionId("custom"))
     assert_true(
-      store
-      .load(SessionId("custom"))
-      .system_prompt()
-      .has_prefix("custom prompt body"),
+      custom.system_prompt().has_prefix("custom prompt body\n\n## Environment"),
     )
+    assert_true(
+      custom
+      .system_prompt()
+      .contains(Json::Json(store.scratch_dir(SessionId("custom"))).stringify()),
+    )
+    assert_false(custom.system_prompt().contains(origin_scratch))
     // Without --as the new session gets a generated id of its own.
     sessions_fork(
       @testkit.sessions_leaf_matches(

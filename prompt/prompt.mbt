@@ -1,39 +1,57 @@
 ///|
-/// Selects the built-in system prompt for a supported chat model.
-///
-/// Supported DeepSeek, Kimi, and GLM model names currently share the one
-/// built-in prompt: the working instructions in `default_prompt.mbt.md`,
-/// followed by the optional teaching material in `moonbit_syntax_and_api.mbt.md`.
+/// The source of the optional instructions added to the working prompt.
+pub(all) enum Prompt {
+  BuiltinMoonBitGuide
+  Custom(String)
+} derive(Eq)
+
+///|
+#doc(hidden)
+#deprecated
+pub extend Prompt with Eq::{equal, not_equal}
+
+///|
+/// Assemble the complete base system prompt for the selected model.
+/// Supported models currently share the same working and tool instructions.
+/// Empty custom text retains those instructions without optional content.
 pub fn system_prompt_for_model(
   _model : @deepseek.Model,
-  moonbit_guide~ : Bool = true,
+  prompt~ : Prompt = BuiltinMoonBitGuide,
 ) -> String {
-  if moonbit_guide {
-    default_prompt() + "\n\n" + moonbit_syntax_and_api()
-  } else {
+  let additional = match prompt {
+    BuiltinMoonBitGuide => moonbit_syntax_and_api()
+    Custom(text) => text
+  }
+  if additional.is_empty() {
     default_prompt()
+  } else {
+    default_prompt() + "\n\n" + additional
   }
 }
 
 ///|
-/// The built-in system prompt is currently model-independent: every DeepSeek
-/// model receives the default prompt.
-///
 /// Prompt *wording* is authored in the two Markdown sources and its quality is
 /// exercised end-to-end by the `eval/prompt_task` suite. Asserting on
 /// individual phrases of the generated prompt here only mirrors those documents
 /// and breaks on every rewording, so this package pins just the selection
 /// contract.
-test "system_prompt_for_model includes working instructions and language guide for every model" {
+test "model-selected prompts include working instructions and language guide" {
   let expected = default_prompt() + "\n\n" + moonbit_syntax_and_api()
   assert_eq(system_prompt_for_model(Deepseek(V4Flash)), expected)
   assert_eq(system_prompt_for_model(Deepseek(V4Pro)), expected)
 }
 
 ///|
-test "disabling the MoonBit guide preserves the working instructions" {
-  assert_eq(
-    system_prompt_for_model(Deepseek(V4Pro), moonbit_guide=false),
-    default_prompt(),
-  )
+test "custom prompts preserve working instructions and literal text" {
+  for text in ["", "  Project instructions\n中文与 `code`\n"] {
+    let expected = if text.is_empty() {
+      default_prompt()
+    } else {
+      default_prompt() + "\n\n" + text
+    }
+    assert_eq(
+      system_prompt_for_model(Deepseek(V4Pro), prompt=Custom(text)),
+      expected,
+    )
+  }
 }

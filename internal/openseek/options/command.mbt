@@ -35,12 +35,6 @@ fn agent_options() -> Array[@argparse.OptionArg] {
 fn prompt_options() -> Array[@argparse.OptionArg] {
   [
     OptionArg(
-      "moonbit-guide",
-      long="moonbit-guide",
-      default_values=["on"],
-      about="Include the built-in MoonBit syntax and library API guide in a new session (on/off); existing sessions keep their saved prompt.",
-    ),
-    OptionArg(
       "system-prompt-file",
       long="system-prompt-file",
       env="OPENSEEK_SYSTEM_PROMPT_FILE",

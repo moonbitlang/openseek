@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/prompt"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/openseek/deepseek",
+  "openseek_desktop/frontend/i18n",
+}
+
+// Values
+pub fn load(@cmd.Emit[Msg]) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub struct Model {
+  // private fields
+} derive(Eq)
+pub fn Model::new() -> Self
+pub fn Model::text(Self, @deepseek.Model) -> String
+pub fn Model::update(Self, Msg) -> (@cmd.Cmd, Self)
+pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg], open~ : Bool, toggle~ : @cmd.Cmd, dismiss~ : @cmd.Cmd) -> Array[@html.Html]
+
+pub(all) enum Msg {
+  Loaded(Model)
+  Selected(String)
+  Edited(String)
+}
+
+// Type aliases
+
+// Traits

@@ -43,9 +43,11 @@ pub async fn edit_session(
     on_created~,
     on_worktree_changed~,
   )
+  let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
+  let store = @store.SessionStore(selected.root.to_string())
   let submission_id = @uuid.mint()
   start({
-    moonbit_guide: None,
+    system_prompt: saved_session_prompt(store, SessionId(reply.session)),
     session: reply.session,
     workspace: Some(payload.workspace),
     task: payload.task,
@@ -63,7 +65,6 @@ pub async fn edit_session(
     submission_id,
     source_sequence: payload.source_sequence,
   }
-  let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
   // agent.start acknowledges queueing, not persistence. Wait only for this
   // prompt's durable receipt before invoking the existing delete lifecycle.
   @async.with_timeout(10000, () => {
@@ -140,6 +141,7 @@ async fn prepare_session_edit(
   ignore(@session_record.read_document(selected.root, payload.session))
   let session = "desktop-" + @uuid.mint()
   let store = @store.SessionStore(selected.root.to_string())
+  let source_prompt = saved_session_prompt(store, SessionId(payload.session))
   let id : @agent_session.SessionId = SessionId(session)
   {
     errdefer @async.protect_from_cancel(() => {
@@ -156,6 +158,7 @@ async fn prepare_session_edit(
         // layout. The first prompt creates its JSONL through the normal path.
         let directory = selected.root.join("sessions").join(session)
         @fsx.ensure_dir(directory.to_path())
+        ignore(capture_session_prompt(store, id, source_prompt))
         @fsx.write_text_atomic(
           directory.join("session-title").to_path(),
           payload.source_title.trim().to_owned(),

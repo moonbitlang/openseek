@@ -19,4 +19,4 @@ dev_build(
 
 warnings = "+unnecessary_annotation-unused_value-unused_type_declaration-unused_constructor-unused_field-todo-declaration_unimplemented-missing_doc"
 
-supported_targets = "+wasm+native"
+supported_targets = "+wasm+native+js"

@@ -3774,7 +3774,7 @@ fn update_msg(
                 session,
                 workspace,
                 model=engine_model,
-                moonbit_guide=model.default_moonbit_guide,
+                system_prompt=model.default_prompt.text(engine_model),
               ),
               task: draft.task,
               mentions: draft.mentions,
@@ -3936,13 +3936,10 @@ fn update_msg(
         )
       }
     }
-    MoonBitGuideDefaultLoaded(enabled) =>
-      (@cmd.none, { ..model, default_moonbit_guide: enabled, })
-    MoonBitGuideDefaultChanged(enabled) =>
-      (
-        save_default_moonbit_guide(enabled),
-        { ..model, default_moonbit_guide: enabled, },
-      )
+    Prompt(msg) => {
+      let (command, default_prompt) = model.default_prompt.update(msg)
+      (command, { ..model, default_prompt, })
+    }
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value, })
     SetupApiKeyChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
@@ -4751,37 +4748,33 @@ fn update_msg(
         // (the host names it, binds this conversation) and starts inside
         // it, as one command; every other submit is a plain start — a
         // bound session's cwd comes from the host's registry.
+        let payload = start_payload(
+          task,
+          conv.engine_model,
+          model.reasoning_for(conv.engine_model),
+          model.max_steps,
+          conv.session_id,
+          submission_id,
+          workspace=conv.project(),
+          approval=model.approval_for(conv.device, conv.session_id),
+          system_prompt=conv.system_prompt,
+          images=conv.images.map(image => image.url),
+        )
         let start_cmd = if fresh_worktree &&
           conv.workspace is Project(root=workspace) {
           start_in_new_worktree(
             locale=model.locale,
             dispatch,
             model.focused,
-            task,
-            submission_id,
-            conv.engine_model,
-            model.reasoning_for(conv.engine_model),
-            model.max_steps,
-            conv.session_id,
+            payload,
             workspace,
-            approval=model.approval_for(conv.device, conv.session_id),
-            moonbit_guide=conv.moonbit_guide,
-            images=conv.images.map(image => image.url),
           )
         } else {
           start_openseek(
             dispatch,
             model.focused,
-            task,
-            submission_id,
-            conv.engine_model,
-            model.reasoning_for(conv.engine_model),
-            model.max_steps,
-            conv.session_id,
+            payload,
             workspace=conv.project(),
-            approval=model.approval_for(conv.device, conv.session_id),
-            moonbit_guide=conv.moonbit_guide,
-            images=conv.images.map(image => image.url),
           )
         }
         // Re-pin now, before the durable User item arrives, so the early
@@ -10390,7 +10383,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
     "test-submission",
     workspace=conv.project(),
     approval=ApprovalAsk,
-    moonbit_guide=conv.moonbit_guide,
+    system_prompt=conv.system_prompt,
   )
   let json = payload.to_json()
   guard json is Object(fields) else { return None }

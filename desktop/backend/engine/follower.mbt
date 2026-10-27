@@ -655,7 +655,7 @@ fn follower_test_config(
   root : @pathx.Absolute,
 ) -> RunConfig {
   {
-    moonbit_guide: true,
+    system_prompt: None,
     content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",

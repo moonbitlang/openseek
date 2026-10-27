@@ -27,10 +27,7 @@ pub async fn configured_system_prompt(
   // so ordering them first keeps the whole shared text cache-hittable; the
   // end position also gives the grounding instruction recency weight.
   let base = if base_path == "" {
-    @prompt.system_prompt_for_model(
-      model,
-      moonbit_guide=configured_moonbit_guide(matches),
-    )
+    @prompt.system_prompt_for_model(model)
   } else {
     @fs.read_file(@workspace_path.resolve(workspace_root, base_path)).text()
   }
@@ -91,16 +88,6 @@ pub async fn configured_system_prompt(
     prompt <+ "\n\n\{section}"
   }
   prompt.to_string()
-}
-
-///|
-/// Whether new built-in prompts include the MoonBit syntax and API guide.
-fn configured_moonbit_guide(matches : @argparse.Matches) -> Bool raise {
-  match matches.values.get("moonbit-guide") {
-    Some(["off", ..]) => false
-    None | Some(["on", ..]) => true
-    _ => fail("--moonbit-guide must be on or off")
-  }
 }
 
 ///|

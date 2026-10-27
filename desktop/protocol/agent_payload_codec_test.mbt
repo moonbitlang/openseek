@@ -7,7 +7,7 @@ test "agent start preserves all engine settings" {
     "model": "deepseek-v4-pro",
     "thinking": "max",
     "approval": "review",
-    "moonbit_guide": false,
+    "system_prompt": "  Custom instructions\n中文\n",
     "max_steps": 42,
     "session": "session-1",
     "workspace": "/work/project",
@@ -15,7 +15,7 @@ test "agent start preserves all engine settings" {
   })
   assert_eq(payload.thinking, Some(ThinkingMax))
   assert_eq(payload.approval, Some(ApprovalReview))
-  assert_eq(payload.moonbit_guide, Some(false))
+  assert_eq(payload.system_prompt, Some("  Custom instructions\n中文\n"))
   @debug.assert_eq(payload.to_json(), {
     "task": "inspect",
     "images": [],
@@ -23,11 +23,34 @@ test "agent start preserves all engine settings" {
     "model": "deepseek-v4-pro",
     "thinking": "max",
     "approval": "review",
-    "moonbit_guide": false,
+    "system_prompt": "  Custom instructions\n中文\n",
     "max_steps": 42,
     "session": "session-1",
     "workspace": "/work/project",
   })
+}
+
+///|
+test "system prompt distinguishes omission from empty text" {
+  let cases : Array[Json] = [
+    { "task": "inspect", "images": [], "session": "s" },
+    { "task": "inspect", "images": [], "session": "s", "system_prompt": "" },
+  ]
+  for json in cases {
+    let payload : @protocol.StartPayload = @json.from_json(json)
+    assert_true(payload.to_json() == json)
+  }
+  let malformed : @protocol.StartPayload? = Some(
+    @json.from_json({
+      "task": "inspect",
+      "images": [],
+      "session": "s",
+      "system_prompt": false,
+    }),
+  ) catch {
+    _ => None
+  }
+  assert_true(malformed is None)
 }
 
 ///|

@@ -100,8 +100,6 @@ pub(all) enum Message {
   Preferences
   Interface
   Engine
-  MoonBitGuide
-  MoonBitGuideDescription
   MaxSteps
   MaxStepsDescription
   Followup
