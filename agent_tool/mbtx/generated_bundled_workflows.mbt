@@ -3007,7 +3007,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    // Their files are disjoint, so the picks cannot conflict.
           #|    ignore(run("git", ["checkout", "-q", "--detach", base]))
           #|    let picks = accepted.filter_map(work => {
-          #|      work.change.map(change => (change.commit, work.pkg.dir))
+          #|      work.change.map(change => (change.commit, work.pkg.dir, change.summary))
           #|    })
           #|    if combine(picks) is Some(why) {
           #|      failures.push(
@@ -3127,14 +3127,16 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// Cherry-pick each `(commit, package directory)` onto HEAD, in order. Workers
-          #|/// cannot delete files, so the files a commit left without code in its
-          #|/// package are removed in that same commit. On any failure (a nonzero exit,
-          #|/// or an error such as a timeout) the pick is aborted so the checkout can be
-          #|/// restored; the reason, if it failed.
-          #|async fn combine(picks : Array[(String, String)]) -> String? {
+          #|/// Cherry-pick each `(commit, package directory, summary)` onto HEAD, in
+          #|/// order, and amend it into one commit per package that says what it is:
+          #|/// the engine names a worker's commit after its worktree. Workers cannot
+          #|/// delete files, so the files a commit left without code in its package are
+          #|/// removed in that same commit. On any failure (a nonzero exit, or an error
+          #|/// such as a timeout) the pick is aborted so the checkout can be restored;
+          #|/// the reason, if it failed.
+          #|async fn combine(picks : Array[(String, String, String)]) -> String? {
           #|  for pick in picks {
-          #|    let (commit, dir) = pick
+          #|    let (commit, dir, summary) = pick
           #|    let failed = try {
           #|      let picked = @shell.Cmd("git", ["cherry-pick", commit]).output(
           #|        timeout_ms=300000,
@@ -3167,8 +3169,18 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      }
           #|      if emptied is [_, ..] {
           #|        ignore(run("git", ["rm", "-q", "--", ..emptied]))
-          #|        ignore(run("git", ["commit", "-q", "--amend", "--no-edit"]))
           #|      }
+          #|      let title = if dir.is_empty() {
+          #|        "refactor: shrink public API"
+          #|      } else {
+          #|        "refactor(\{dir}): shrink public API"
+          #|      }
+          #|      let message = if summary.trim().is_empty() {
+          #|        ["-m", title]
+          #|      } else {
+          #|        ["-m", title, "-m", summary.trim().to_owned()]
+          #|      }
+          #|      ignore(run("git", ["commit", "-q", "--amend", ..message]))
           #|      Ok(())
           #|    } catch {
           #|      error => Err(error)
@@ -3181,7 +3193,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      ) catch {
           #|        _ => ()
           #|      }
-          #|      return Some("removing the files \{shown(dir)} emptied: \{error}")
+          #|      return Some("amending the commit for \{shown(dir)}: \{error}")
           #|    }
           #|  }
           #|  None
