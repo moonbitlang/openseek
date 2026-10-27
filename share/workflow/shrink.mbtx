@@ -860,12 +860,88 @@ async fn analyze(
       let (parent, base) = parts(file)
       parent == dir && base.has_suffix(".mbt") && !base.has_prefix("generated_")
     })
+    // The analyzer lists a re-exported value as an ordinary declaration,
+    // and does not count the uses that go through the re-export.
+    let reexported : Array[String] = []
+    for file in files {
+      reexported.append(reexports(@fs.read_file(file).text()))
+    }
+    let rows = rows.filter(row => {
+      match declared_name(row.code) {
+        Some(name) =>
+          !reexported.contains(name) &&
+          !(name.split_once("::") is Some((owner, _)) &&
+          reexported.contains(owner.to_owned()))
+        None => true
+      }
+    })
     if files is [_, ..] && rows is [_, ..] {
       packages.push({ dir, files, candidates: rows, })
     }
   }
   packages.sort_by((a, b) => a.dir.lexical_compare(b.dir))
   packages
+}
+
+///|
+/// The names a source file re-exports with `pub using @pkg { a, type T, b as
+/// c }`, as other packages see them.
+fn reexports(text : String) -> Array[String] {
+  let names : Array[String] = []
+  for part in text.split("pub using").drop(1) {
+    guard part.split_once("{") is Some((_, rest)) &&
+      rest.split_once("}") is Some((items, _)) else {
+      continue
+    }
+    for item in items.split(",") {
+      let item = item.trim()
+      let item = item.strip_prefix("type ").unwrap_or(item)
+      let item = item.strip_prefix("trait ").unwrap_or(item).trim()
+      let name = match item.rev_split_once(" as ") {
+        Some((_, renamed)) => renamed.trim()
+        None => item
+      }
+      if !name.is_empty() {
+        names.push(name.to_owned())
+      }
+    }
+  }
+  names
+}
+
+///|
+/// The name an analyzer row declares: `f` in `pub async fn[T : Show] f(…)`,
+/// `T::m` in `pub fn T::m(…)`, `X` in `pub const X : Int = 1`.
+fn declared_name(code : String) -> String? {
+  // Type parameters may hold spaces: drop the first bracketed group after
+  // `fn`.
+  let code = match code.split_once("fn[") {
+    Some((before, after)) =>
+      match after.split_once("] ") {
+        Some((_, rest)) => "\{before}fn \{rest}"
+        None => code
+      }
+    None => code
+  }
+  let keywords = [
+    "pub", "pub(all)", "pub(open)", "async", "fn", "const", "let", "struct", "enum",
+    "suberror", "trait", "type", "typealias", "extern",
+  ]
+  for word in code.split(" ") {
+    let word = word.to_owned()
+    if word.is_empty() || keywords.contains(word) {
+      continue
+    }
+    // `T::m(` keeps its `::`; a type annotation's `:` is its own word.
+    let name = match
+      word.find_by(char => char is ('(' | '[' | '{' | '<' | '=')) {
+      Some(end) => word[:end]
+      None => word[:]
+    }
+    let name = name.trim_end(chars=":")
+    return if name.is_empty() { None } else { Some(name.to_owned()) }
+  }
+  None
 }
 
 ///|
