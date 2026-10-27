@@ -1,10 +1,5 @@
 ///|
-pub(all) suberror SshError {
-  SshError(String)
-}
-
-///|
-pub fn arguments(command : String) -> Array[String] raise {
+fn arguments(command : String) -> Array[String] raise {
   let options = @protocol.ssh_connection_arguments(command) catch {
     @protocol.SshCommandError(message) => raise SshError(message)
     error => raise error
