@@ -87,7 +87,7 @@ test('replayed write approvals decode content and preserve unrecognized bodies',
   const content = 'fn main {\n  println("recovered")\n}\n';
   const replyFor = app.replyFor.bind(app);
   app.replyFor = request => request.method === 'agent.runs' ? {
-    runs: [{ run_id: 'run-e2e', session: 'session-1', model: 'ds-flash', max_steps: 1000 }],
+    runs: [{ run_id: 'run-e2e', session: 'session-1', model: 'deepseek-flash', max_steps: 1000 }],
     settled: [], approval_generation: 1,
     approvals: [{ answered: false, id: 'approval-replay', session: 'session-1', run_id: 'run-e2e',
       tool_name: 'write', detail: '/workspace/src/parser.mbt (overwrite existing source file)',
