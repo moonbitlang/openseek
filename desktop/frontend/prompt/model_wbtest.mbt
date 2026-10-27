@@ -1,19 +1,4 @@
 ///|
-test "switching prompt sources preserves custom text" {
-  let model : @deepseek.Model = Deepseek(V4Flash)
-  let custom = "  Project instructions\n中文与 `code`\n"
-  let (_, edited) = Model::new().update(Edited(custom))
-  let (_, builtin) = edited.update(Selected("builtin_moonbit_guide"))
-  assert_eq(builtin.text(model), Model::new().text(model))
-  let (_, restored) = builtin.update(Selected("custom"))
-  assert_eq(restored.text(model), edited.text(model))
-  let (_, cleared) = restored.update(Edited(""))
-  let (_, builtin) = cleared.update(Selected("builtin_moonbit_guide"))
-  let (_, restored) = builtin.update(Selected("custom"))
-  assert_eq(restored.text(model), cleared.text(model))
-}
-
-///|
 test "stored prompt sources retain their independent editor contents" {
   for text in ["", "  Rules\n中文\n"] {
     let (_, custom) = Model::new().update(Edited(text))

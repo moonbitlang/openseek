@@ -59,13 +59,10 @@ test('custom prompt persists and both sources send complete system prompts', asy
   expect(complete).not.toBe(custom);
   expect(complete.endsWith('\n\n' + custom)).toBe(true);
   await choose(page, 'MoonBit guide');
-  await newChat(page);
-  expect((await send(page, app, 'Use the builtin again')).system_prompt).toBe(builtin);
-  await choose(page, 'Custom prompt');
-  await expect(editor).toHaveValue(custom);
-  await choose(page, 'MoonBit guide');
   await page.reload();
   await expect(page.getByRole('button', { name: 'Additional prompt', exact: true })).toContainText('MoonBit guide');
+  await newChat(page);
+  expect((await send(page, app, 'Use the builtin again')).system_prompt).toBe(builtin);
   await choose(page, 'Custom prompt');
   await expect(editor).toHaveValue(custom);
   await newChat(page);

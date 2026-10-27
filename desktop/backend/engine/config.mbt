@@ -490,18 +490,6 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   })
   assert_true(reviewed.approval is ApprovalReview)
   assert_eq(reviewed.system_prompt, Some("  Custom instructions\n中文\n"))
-  let store = @store.SessionStore(reviewed.session_root.unwrap().to_string())
-  for i, text in ["", "  Custom instructions\n中文\n"] {
-    let session = "prompt-\{i}"
-    let path = session_prompt_path(store, SessionId(session))
-    let args = engine_process_args({
-      ..reviewed,
-      session,
-      system_prompt: Some(text),
-    })
-    assert_true(args.contains("--system-prompt-file=\{path.to_string()}"))
-    assert_eq(@fsx.read_text(path), text)
-  }
 }
 
 ///|

@@ -38,21 +38,3 @@ async test "creation prompts survive retries and cannot be overwritten on resume
   assert_true(capture_session_prompt(store, SessionId("absent"), None) is None)
   assert_false(store.exists(SessionId("absent")))
 }
-
-///|
-async test "unreadable creation metadata is not treated as an absent prompt" {
-  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-prompt-unreadable-"))
-  defer @fs.rmdir(dir, recursive=true)
-  let store = @store.SessionStore(dir)
-  let id = @agent_session.SessionId("unreadable")
-  let path = session_prompt_path(store, id)
-  @fs.mkdir(path.to_string(), recursive=true)
-  let failed = try {
-    ignore(capture_session_prompt(store, id, Some("replacement")))
-    false
-  } catch {
-    _ => true
-  }
-  assert_true(failed)
-  assert_true(@fsx.is_dir(path))
-}

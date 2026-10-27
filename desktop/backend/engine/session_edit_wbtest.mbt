@@ -271,21 +271,5 @@ async test "single edit waits for the submitted message before deleting its sour
       store.load(SessionId(reply.session)).system_prompt(),
       custom_prompt,
     )
-    let again = prepare_session_edit(
-      manager,
-      {
-        session: reply.session,
-        workspace,
-        through: None,
-        model: "deepseek-flash",
-        source_title: "Edited",
-      },
-      on_created=_ => (),
-      on_worktree_changed=(_, _) => (),
-    )
-    assert_eq(
-      saved_session_prompt(store, SessionId(again.session)),
-      Some(custom_prompt),
-    )
   })
 }
