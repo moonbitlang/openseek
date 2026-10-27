@@ -22,12 +22,7 @@ fn submit_verdict_tool(
       },
       "required": ["decision", "reason"],
     }),
-    parse=args => {
-      match Verdict::parse(args) {
-        Ok(verdict) => Ok(verdict)
-        Err(problem) => Err([problem])
-      }
-    },
+    parse=args => Verdict::parse(args).map_err(problem => [problem]),
     captured,
     finished_note=verdict => "verdict submitted: \{verdict.decision.word()}",
   )
