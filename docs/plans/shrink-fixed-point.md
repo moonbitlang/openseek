@@ -154,9 +154,9 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
      other packages use; protocol or round-trip surface; a documented tunable
      or one member of a symmetric family; a consumer the analyzer cannot see,
      named with its file and line. "Might be useful" is not a reason. The
-     last reason includes the analyzer's own misses: a struct literal or a
-     `{ ..x, f }` record update of a `pub(all)` type in another package,
-     which its narrowing hint ignores. Nothing is left in place, since a
+     last reason includes the analyzer's own misses: a `{ ..x, f }` record
+     update of a `pub(all)` type in another package, which its narrowing
+     hint ignores (plain struct literals are counted). Nothing is left in place, since a
      left item would be listed again forever; the one exception is an item
      defined in a generated file.
    - Workers cannot delete files (the remove tool needs an approval they
@@ -354,9 +354,9 @@ The run surfaced six fixes, now in the script:
 
 - **`pub using` re-exports were false candidates.** The analyzer doesn't
   count uses through them, so they are now left out.
-- **Workers left items in place** that other packages build with struct
-  literals or `{ ..x }` updates, or that `desktop/app` builds. The narrowing
-  hint misses all of these, and a left item would be listed forever. Such
+- **Workers left items in place** that other packages build with `{ ..x }`
+  record updates, or that the separate `desktop/app` workspace builds. The
+  narrowing hint misses both, and a left item would be listed forever. Such
   items now go to `exports.mbt` with the consumer named, and nothing is
   left in place.
 - **Workers cannot delete files**, so two left a stub test file holding only

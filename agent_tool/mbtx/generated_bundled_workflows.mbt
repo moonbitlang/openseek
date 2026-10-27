@@ -2699,9 +2699,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  #|    other members are used;
           #|  #|  - a consumer the analyzer cannot see, named with its file and line: a
           #|  #|    `.mbtx` script; a module outside the workspace, such as a separate app
-          #|  #|    workspace; a js-only app; a struct literal or a `{ ..x, f }` record
-          #|  #|    update of a `pub(all)` type in another package (the narrowing hint
-          #|  #|    misses both); or outside users of a published module.
+          #|  #|    workspace; a js-only app; a `{ ..x, f }` record update of a
+          #|  #|    `pub(all)` type in another package (the narrowing hint misses it);
+          #|  #|    or outside users of a published module.
           #|  #|  "Might be useful later" is not a reason: delete it instead.
           #|  #|
           #|  #|Never leave a candidate where it is. If none of the first three ways is
