@@ -5,7 +5,7 @@
 ///|
 /// Every user-actionable failure of the sign-in/sign-out flows. The API
 /// layer translates it into its transport error shape.
-pub(all) suberror AuthError {
+pub suberror AuthError {
   AuthError(String)
 }
 
@@ -15,16 +15,6 @@ pub impl Show for AuthError with fn output(self, logger) {
     AuthError(message) => logger.write_string(message)
   }
 }
-
-///|
-/// What the connector needs to run — one shape for both a signed-in
-/// session (derived) and the `OPENSEEK_RELAY_URL`/`OPENSEEK_DEVICE_TOKEN`
-/// development override (verbatim).
-pub(all) struct ConnectorConfig {
-  relay_url : String
-  device_token : String
-  device_name : String
-} derive(Eq)
 
 ///|
 /// One persisted account and its independently enabled device permission.
@@ -69,33 +59,6 @@ struct AuthStore {
 }
 
 ///|
-/// Load the persisted sign-in (when there is a runtime dir to read from).
-/// The environment override controls only the relay, independently of the
-/// persisted account session. The override itself is never persisted.
-pub async fn AuthStore::load(
-  runtime_dir? : @pathx.Path,
-  env_override? : ConnectorConfig,
-) -> AuthStore {
-  let session = match runtime_dir {
-    Some(dir) => load_session_file(dir)
-    None => None
-  }
-  {
-    runtime_dir,
-    env_override,
-    wakeups: Queue(kind=DiscardOldest(1)),
-    session,
-    connected: false,
-    override_device: None,
-    rejected: false,
-    persist_mutex: Mutex(),
-    remote_generation: 0,
-    sign_in_active: false,
-    sign_in_abort: Queue(kind=DiscardOldest(1)),
-  }
-}
-
-///|
 /// A store with nothing signed in and nothing persisted — the default for
 /// test-constructed API states.
 pub fn AuthStore::empty() -> AuthStore {
@@ -135,7 +98,7 @@ pub fn AuthStore::desired_connector(self : AuthStore) -> ConnectorConfig? {
 /// Wake the supervisor to re-read `desired_connector`. Never blocks; a
 /// poke while one is already pending coalesces. `try_put` can only raise
 /// on a closed queue, and this queue is never closed.
-pub fn AuthStore::poke(self : AuthStore) -> Unit {
+fn AuthStore::poke(self : AuthStore) -> Unit {
   ignore(self.wakeups.try_put(()) catch { _ => false })
 }
 
@@ -222,7 +185,7 @@ pub fn AuthStore::session_server(self : AuthStore) -> String? {
 ///|
 /// Whether the environment override drives the connector. Account login and
 /// logout remain available and do not alter that debug connection.
-pub fn AuthStore::managed_by_env(self : AuthStore) -> Bool {
+fn AuthStore::managed_by_env(self : AuthStore) -> Bool {
   self.env_override is Some(_)
 }
 

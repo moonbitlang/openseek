@@ -10,14 +10,8 @@ import {
 // Values
 pub const AccountOrigin : String = "https://openseek-api.moonbitlang.cn"
 
-pub fn device_url(String, String) -> String
-
-pub fn origin_from_relay_url(String) -> String
-
-pub fn tunnel_url(String) -> String
-
 // Errors
-pub(all) suberror AuthError {
+pub suberror AuthError {
   AuthError(String)
 }
 pub fn AuthError::output(Self, &Logger) -> Unit
@@ -33,10 +27,8 @@ pub fn AuthStore::empty() -> Self
 pub async fn AuthStore::expire_account(Self, String) -> Unit
 pub async fn AuthStore::handle_refusal(Self, expected? : ConnectorConfig) -> Unit
 pub async fn AuthStore::load(runtime_dir? : @pathx.Path, env_override? : ConnectorConfig) -> Self
-pub fn AuthStore::managed_by_env(Self) -> Bool
 pub fn AuthStore::mark_dropped(Self) -> Bool
 pub fn AuthStore::mark_registered(Self, String) -> Bool
-pub fn AuthStore::poke(Self) -> Unit
 pub fn AuthStore::session_server(Self) -> String?
 pub async fn AuthStore::set_remote(Self, Bool) -> Unit
 pub async fn AuthStore::sign_in(Self, server_url~ : String) -> Unit

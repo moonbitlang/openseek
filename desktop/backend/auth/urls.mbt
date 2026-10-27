@@ -6,7 +6,7 @@
 ///|
 /// The control-WebSocket URL a host dials to register with `server_url`'s
 /// relay: `https` becomes `wss` (`http` → `ws` for local development).
-pub fn tunnel_url(server_url : String) -> String {
+fn tunnel_url(server_url : String) -> String {
   let origin = match server_url.strip_suffix("/") {
     Some(origin) => origin.to_owned()
     None => server_url
@@ -25,7 +25,7 @@ pub fn tunnel_url(server_url : String) -> String {
 /// The browser console URL for a device registered at `server_url`: its chat
 /// page, served by the relay's one current frontend. A host built for another
 /// protocol revision is reported there as unavailable.
-pub fn device_url(server_url : String, device : String) -> String {
+fn device_url(server_url : String, device : String) -> String {
   let origin = match server_url.strip_suffix("/") {
     Some(origin) => origin
     None => server_url
@@ -37,7 +37,7 @@ pub fn device_url(server_url : String, device : String) -> String {
 /// The server origin implied by a full tunnel URL — the status shape's
 /// `server_url` when the connector runs from the environment override,
 /// whose `OPENSEEK_RELAY_URL` is the `ws(s)` URL, not the origin.
-pub fn origin_from_relay_url(relay_url : String) -> String {
+fn origin_from_relay_url(relay_url : String) -> String {
   let origin = if relay_url.strip_prefix("wss://") is Some(rest) {
     "https://\{rest}"
   } else if relay_url.strip_prefix("ws://") is Some(rest) {
