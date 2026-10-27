@@ -12,18 +12,6 @@ test "codex home is a codex subdirectory of the runtime dir" {
 }
 
 ///|
-async test "prepared codex home creates the directory" {
-  let root : @pathx.Path = @fs.tmpdir(prefix="openseek-codex-home-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
-  let home = @codex.prepared_home(root)
-  assert_eq(home, @codex.home_dir(root))
-  assert_true(@fs.kind(home.to_string()) is Directory)
-  // Preparing an existing home must succeed too: that is the steady state
-  // of every launch after the first.
-  assert_eq(@codex.prepared_home(root), home)
-}
-
-///|
 #cfg(not(platform="windows"))
 async test "Codex home failure prevents spawning and can recover on a later request" {
   let root = @fs.tmpdir(prefix="openseek-codex-isolation-")

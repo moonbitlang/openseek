@@ -17,23 +17,8 @@
 const HomeDirName : String = "codex"
 
 ///|
-/// The isolated Codex home for this Desktop process: a `codex` subdirectory
-/// of the per-user runtime directory. Pure, so tests and callers can predict
-/// the path without touching the filesystem.
-pub fn home_dir(runtime_dir : @pathx.Path) -> @pathx.Path {
-  runtime_dir.join(HomeDirName).normalize()
-}
-
-///|
 /// Prepare the isolated home before spawning Codex. Failure is explicit:
 /// callers must never fall back to the inherited global CODEX_HOME.
-pub async fn prepared_home(runtime_dir : @pathx.Path) -> @pathx.Path {
-  let home = home_dir(runtime_dir)
-  prepare_home_directory(home)
-  home
-}
-
-///|
 async fn prepare_home_directory(home : @pathx.Path) -> Unit {
   try {
     @fs.mkdir(home.to_string(), recursive=true, permission=0o700) catch {

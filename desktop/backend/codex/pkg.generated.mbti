@@ -2,7 +2,6 @@
 package "openseek_desktop/backend/codex"
 
 import {
-  "moonbitlang/async",
   "moonbitlang/core/debug",
   "moonbitlang/openseek/jsonrpc",
   "openseek_desktop/backend/pathx",
@@ -11,11 +10,7 @@ import {
 // Values
 pub fn command() -> String
 
-pub async fn[X] connect(@async.TaskGroup[X], command~ : String, notification_handler~ : (String, Json) -> Unit, request_handler~ : (@jsonrpc.PeerRequest) -> Bool raise, on_closed~ : () -> Unit, version~ : String, home~ : @pathx.Path?, handshake_timeout_ms? : Int32) -> Connection
-
 pub fn home_dir(@pathx.Path) -> @pathx.Path
-
-pub async fn prepared_home(@pathx.Path) -> @pathx.Path
 
 // Errors
 pub(all) suberror CodexError {
@@ -48,13 +43,6 @@ pub struct CodexSettings {
 }
 pub fn CodexSettings::CodexSettings(command~ : String, home~ : @pathx.Path?, require_home? : Bool) -> Self
 pub fn CodexSettings::default() -> Self
-
-type Connection
-pub fn Connection::is_closed(Self) -> Bool
-pub async fn Connection::request(Self, method_~ : String, params~ : Json) -> Json
-pub async fn Connection::respond(Self, @jsonrpc.PeerRequest, Json) -> Unit
-pub async fn Connection::respond_error(Self, @jsonrpc.PeerRequest, code~ : Int32, message~ : String) -> Unit
-pub fn Connection::shutdown(Self) -> Unit
 
 type ProjectCatalog
 pub fn ProjectCatalog::ProjectCatalog() -> Self
