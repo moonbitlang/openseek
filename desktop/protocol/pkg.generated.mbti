@@ -35,7 +35,7 @@ pub fn ssh_connection_arguments(String) -> Array[String] raise
 pub fn steer(@openseek_protocol.Content, submission_id? : String) -> @openseek_protocol.Command
 
 // Errors
-pub(all) suberror SshCommandError {
+pub suberror SshCommandError {
   SshCommandError(String)
 }
 
@@ -614,7 +614,7 @@ pub fn CodexAccountReadPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexAccountReadPayload
 pub impl @json.FromJson for CodexAccountReadPayload
 
-pub(all) struct CodexAccountReply {
+pub struct CodexAccountReply {
   account : Json?
   requires_openai_auth : Bool
 } derive(Eq, @debug.Debug)
@@ -626,7 +626,7 @@ pub fn CodexAccountReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexAccountReply
 pub impl @json.FromJson for CodexAccountReply
 
-pub(all) struct CodexArchiveReply {
+pub struct CodexArchiveReply {
   value : Json
 }
 pub fn CodexArchiveReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -643,7 +643,7 @@ pub fn[Reply : ToJson] CodexCommandReply::to_json(Self[Reply]) -> Json
 pub impl[Reply : ToJson] ToJson for CodexCommandReply[Reply]
 pub impl[Reply : @json.FromJson] @json.FromJson for CodexCommandReply[Reply]
 
-pub(all) struct CodexDataReply {
+pub struct CodexDataReply {
   data : Array[Json]
   next_cursor : String?
 } derive(Eq, @debug.Debug)
@@ -691,7 +691,7 @@ pub fn CodexDraftOpenReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexDraftOpenReply
 pub impl @json.FromJson for CodexDraftOpenReply
 
-pub(all) struct CodexFileSearchPayload {
+pub struct CodexFileSearchPayload {
   thread_id : String
   cwd : String
   query : String
@@ -712,7 +712,7 @@ pub fn CodexFileSearchReply::to_json(Self) -> Json
 pub impl ToJson for CodexFileSearchReply
 pub impl @json.FromJson for CodexFileSearchReply
 
-pub(all) struct CodexLoginStartReply {
+pub struct CodexLoginStartReply {
   login_id : String
   auth_url : String
 } derive(Eq, @debug.Debug)
@@ -785,7 +785,7 @@ pub fn CodexServerRequestRespondPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexServerRequestRespondPayload
 pub impl @json.FromJson for CodexServerRequestRespondPayload
 
-pub(all) struct CodexServerRequestsReply {
+pub struct CodexServerRequestsReply {
   data : Array[Json]
   generation : Int32
 } derive(Eq, @debug.Debug)
@@ -810,7 +810,7 @@ pub fn CodexSkillsListPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexSkillsListPayload
 pub impl @json.FromJson for CodexSkillsListPayload
 
-pub(all) struct CodexStatusReply {
+pub struct CodexStatusReply {
   status : String
   message : String?
 } derive(Eq, @debug.Debug)
@@ -858,7 +858,7 @@ pub fn CodexThreadPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadPayload
 pub impl @json.FromJson for CodexThreadPayload
 
-pub(all) struct CodexThreadReadPayload {
+pub struct CodexThreadReadPayload {
   thread_id : String
   include_turns : Bool?
 } derive(Eq, @debug.Debug)
@@ -931,7 +931,7 @@ pub fn CodexTurnInterruptPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexTurnInterruptPayload
 pub impl @json.FromJson for CodexTurnInterruptPayload
 
-pub(all) struct CodexTurnReply {
+pub struct CodexTurnReply {
   turn : Json?
   turn_id : String?
 } derive(Eq, @debug.Debug)
@@ -2067,7 +2067,6 @@ pub(all) struct LspDiagnostic {
   severity : Int32?
   tags : Array[Int32]?
 } derive(Eq, @debug.Debug)
-pub fn LspDiagnostic::array_from_wire(Json) -> Array[Self]
 pub fn LspDiagnostic::equal(Self, Self) -> Bool
 pub fn LspDiagnostic::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LspDiagnostic::not_equal(Self, Self) -> Bool
@@ -2390,7 +2389,6 @@ pub(all) enum Notification {
 } derive(Eq, @debug.Debug)
 pub fn Notification::equal(Self, Self) -> Bool
 pub fn Notification::from_wire(String, Json) -> Self?
-pub fn Notification::kind(Self) -> NotificationKind
 pub fn Notification::not_equal(Self, Self) -> Bool
 pub fn Notification::params(Self) -> Json
 pub fn Notification::to_repr(Self) -> @debug.Repr
@@ -2508,7 +2506,6 @@ pub(all) enum OpenSeekApproval {
 pub fn OpenSeekApproval::equal(Self, Self) -> Bool
 pub fn OpenSeekApproval::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn OpenSeekApproval::not_equal(Self, Self) -> Bool
-pub fn OpenSeekApproval::parse(String) -> Self?
 pub fn OpenSeekApproval::to_json(Self) -> Json
 pub fn OpenSeekApproval::to_repr(Self) -> @debug.Repr
 pub fn OpenSeekApproval::wire(Self) -> String
@@ -3122,7 +3119,7 @@ pub fn SessionArtifactRemovePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionArtifactRemovePayload
 pub impl @json.FromJson for SessionArtifactRemovePayload
 
-pub(all) enum SessionArtifactType {
+pub enum SessionArtifactType {
   PullRequest
   Branch
 } derive(Eq, @debug.Debug)
@@ -3454,7 +3451,6 @@ pub(all) enum SessionItem {
 } derive(Eq, @debug.Debug)
 pub fn SessionItem::equal(Self, Self) -> Bool
 pub fn SessionItem::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn SessionItem::is_terminal(Self) -> Bool
 pub fn SessionItem::not_equal(Self, Self) -> Bool
 pub fn SessionItem::to_json(Self) -> Json
 pub fn SessionItem::to_repr(Self) -> @debug.Repr
@@ -3466,7 +3462,6 @@ pub(all) struct SessionListEntry {
   title : String?
   updated_at_ms : Double?
 } derive(Eq, @debug.Debug)
-pub fn SessionListEntry::array_from_wire(Json) -> Array[Self]
 pub fn SessionListEntry::equal(Self, Self) -> Bool
 pub fn SessionListEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionListEntry::not_equal(Self, Self) -> Bool
@@ -3601,7 +3596,7 @@ pub fn SessionSnapshot::to_json(Self) -> Json
 pub impl ToJson for SessionSnapshot
 pub impl @json.FromJson for SessionSnapshot
 
-pub(all) struct SessionSummary {
+pub struct SessionSummary {
   content : String
   from_sequence : Int32
   to_sequence : Int32
@@ -4555,7 +4550,7 @@ pub fn WorktreeListPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for WorktreeListPayload
 pub impl @json.FromJson for WorktreeListPayload
 
-pub(all) struct WorktreeRemovePayload {
+pub struct WorktreeRemovePayload {
   workspace : String
   name : String
   force : Bool?

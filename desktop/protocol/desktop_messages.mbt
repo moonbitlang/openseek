@@ -62,7 +62,7 @@ pub fn OpenSeekApproval::wire(self : OpenSeekApproval) -> String {
 }
 
 ///|
-pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
+fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
   match value {
     "ask" => Some(ApprovalAsk)
     "review" => Some(ApprovalReview)
@@ -364,7 +364,7 @@ pub impl ToJson for WorktreeCreatePayload with fn to_json(self) {
 ///|
 /// `worktree.remove` — `force` discards uncommitted changes in the checkout;
 /// the branch survives either way.
-pub(all) struct WorktreeRemovePayload {
+pub struct WorktreeRemovePayload {
   workspace : String
   name : String
   force : Bool?

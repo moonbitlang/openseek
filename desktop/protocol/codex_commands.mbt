@@ -21,7 +21,7 @@ pub(all) struct CodexServerRequestRespondPayload {
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct CodexFileSearchPayload {
+pub struct CodexFileSearchPayload {
   thread_id : String
   cwd : String
   query : String
@@ -87,7 +87,7 @@ pub(all) struct CodexThreadResumePayload {
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct CodexThreadReadPayload {
+pub struct CodexThreadReadPayload {
   thread_id : String
   include_turns : Bool?
 } derive(Debug, Eq)
@@ -140,7 +140,7 @@ pub(all) struct CodexTurnInterruptPayload {
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct CodexStatusReply {
+pub struct CodexStatusReply {
   status : String
   message : String?
 } derive(Debug, Eq)
@@ -156,7 +156,7 @@ pub(all) struct CodexDraftOpenReply {
 ///|
 /// The list envelope is stable across app-server catalogs. Individual rows
 /// remain JSON because Codex can add fields without changing this Desktop API.
-pub(all) struct CodexDataReply {
+pub struct CodexDataReply {
   data : Array[Json]
   next_cursor : String?
 } derive(Debug, Eq)
@@ -165,19 +165,19 @@ pub(all) struct CodexDataReply {
 /// Reverse-request snapshots carry the actor's ordering generation. Unlike a
 /// catalog cursor, this value orders the snapshot against live request and
 /// resolution notifications delivered on the same app-server connection.
-pub(all) struct CodexServerRequestsReply {
+pub struct CodexServerRequestsReply {
   data : Array[Json]
   generation : Int32
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct CodexAccountReply {
+pub struct CodexAccountReply {
   account : Json?
   requires_openai_auth : Bool
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct CodexLoginStartReply {
+pub struct CodexLoginStartReply {
   login_id : String
   auth_url : String
 } derive(Debug, Eq)
@@ -200,7 +200,7 @@ pub(all) enum CodexCommandReply[Reply] {
 ///|
 /// A start reply may contain the complete turn while a steer reply may contain
 /// only `turnId`. Both are successful deliveries of the same composer action.
-pub(all) struct CodexTurnReply {
+pub struct CodexTurnReply {
   turn : Json?
   turn_id : String?
 } derive(Debug, Eq)
@@ -785,7 +785,7 @@ pub impl FromJson for CodexFileSearchReply with fn from_json(json, path) {
 ///|
 /// Archive has three object-shaped outcomes: archived, needs confirmation,
 /// and archived while retaining a checkout that became dirty concurrently.
-pub(all) struct CodexArchiveReply {
+pub struct CodexArchiveReply {
   value : Json
 }
 

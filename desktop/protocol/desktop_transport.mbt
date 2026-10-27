@@ -261,7 +261,7 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
 
 ///|
 /// The payload-free identity used by transport registration.
-pub fn Notification::kind(self : Notification) -> NotificationKind {
+fn Notification::kind(self : Notification) -> NotificationKind {
   match self {
     UserQuestions(_) => UserQuestions
     AgentApprovals(_) => AgentApprovals

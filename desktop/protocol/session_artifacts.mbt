@@ -1,5 +1,5 @@
 ///|
-pub(all) enum SessionArtifactType {
+pub enum SessionArtifactType {
   PullRequest
   Branch
 } derive(Eq, Debug)

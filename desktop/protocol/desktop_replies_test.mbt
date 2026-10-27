@@ -11,19 +11,6 @@ fn refused(decode : () -> Unit raise) -> Bool {
 }
 
 ///|
-test "session list rows decode activity stamps and tolerate the engine's null" {
-  let rows = @protocol.SessionListEntry::array_from_wire([
-    { "id": "desktop-a", "title": "stamped", "updated_at_ms": 1500.0 },
-    { "id": "desktop-b", "title": "husk", "updated_at_ms": null },
-    { "id": "desktop-c", "title": "old engine without the field" },
-  ])
-  assert_eq(rows.length(), 3)
-  assert_eq(rows[0].updated_at_ms, Some(1500.0))
-  assert_eq(rows[1].updated_at_ms, None)
-  assert_eq(rows[2].updated_at_ms, None)
-}
-
-///|
 test "unknown session items preserve their complete wire object" {
   let raw : Json = {
     "kind": "future_item",
@@ -34,7 +21,6 @@ test "unknown session items preserve their complete wire object" {
   guard item is Unknown(preserved) else {
     fail("expected an unknown session item")
   }
-  assert_false(item.is_terminal())
   @debug.assert_eq(preserved, raw)
   @debug.assert_eq(item.to_json(), raw)
 }
@@ -348,7 +334,6 @@ test "new payload shapes fall back to a raw session item" {
   guard item is UnknownTerminal(preserved) else {
     fail("expected a future terminal boundary to remain raw")
   }
-  assert_true(item.is_terminal())
   @debug.assert_eq(preserved, raw)
   @debug.assert_eq(item.to_json(), raw)
   let missing_payload : Json = { "kind": "terminal", "future_field": true }
@@ -356,7 +341,6 @@ test "new payload shapes fall back to a raw session item" {
   guard missing_item is UnknownTerminal(preserved) else {
     fail("expected a malformed terminal boundary to remain raw")
   }
-  assert_true(missing_item.is_terminal())
   @debug.assert_eq(preserved, missing_payload)
 }
 

@@ -250,25 +250,6 @@ pub impl FromJson for SessionListEntry with fn from_json(json, path) {
 }
 
 ///|
-/// Decode the engine's session-list rows at the process adapter. A malformed
-/// row is skipped without discarding other conversations in the same store.
-pub fn SessionListEntry::array_from_wire(
-  json : Json,
-) -> Array[SessionListEntry] {
-  guard json is Array(items) else { return [] }
-  let sessions : Array[SessionListEntry] = []
-  for item in items {
-    let session : SessionListEntry = @json.from_json(item) catch {
-      _ => continue
-    }
-    if !session.id.is_empty() {
-      sessions.push(session)
-    }
-  }
-  sessions
-}
-
-///|
 pub(all) struct SessionGroup {
   workspace : String
   name : String
@@ -675,7 +656,7 @@ pub impl FromJson for SessionRuntimeNotice with fn from_json(json, path) {
 }
 
 ///|
-pub(all) struct SessionSummary {
+pub struct SessionSummary {
   content : String
   from_sequence : Int32
   to_sequence : Int32
@@ -758,13 +739,6 @@ pub impl ToJson for SessionItem with fn to_json(self) {
     UnknownTerminal(raw) => raw
     Unknown(raw) => raw
   }
-}
-
-///|
-/// Whether this record closes a durable run. A newer terminal payload may not
-/// render a bubble, but its top-level `kind` still settles ordering and notices.
-pub fn SessionItem::is_terminal(self : SessionItem) -> Bool {
-  self is Terminal(_) || self is UnknownTerminal(_)
 }
 
 ///|
@@ -2057,20 +2031,6 @@ pub(all) struct LspDiagnostic {
   severity : Int32?
   tags : Array[Int32]?
 } derive(Debug, Eq)
-
-///|
-/// Decode the LSP's open-ended diagnostics array at the LSP adapter. Unknown
-/// fields are ignored by `FromJson`; malformed rows are skipped independently
-/// so one server extension cannot hide otherwise valid diagnostics.
-pub fn LspDiagnostic::array_from_wire(json : Json) -> Array[LspDiagnostic] {
-  guard json is Array(items) else { return [] }
-  let diagnostics : Array[LspDiagnostic] = []
-  for item in items {
-    let decoded : LspDiagnostic = @json.from_json(item) catch { _ => continue }
-    diagnostics.push(decoded)
-  }
-  diagnostics
-}
 
 ///|
 /// The field is absent when the check itself could not run — "no data", which
