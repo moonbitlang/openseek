@@ -143,13 +143,17 @@ fn FakeHost::shrink_child(
       Ok({
         "schema_version": 1,
         "status": "done",
-        "summary": "dead: deleted; seam: exports.mbt (tests of beta use it); Wide: narrowed",
+        "summary": WorkerSummary,
         "verification": "moon check --deny-warn: pass; moon test: pass",
       })
     }
     _ => fail("unexpected start: \{arguments.stringify()}")
   }
 }
+
+///|
+/// What every scripted worker reports having done.
+const WorkerSummary : String = "dead: deleted; seam: exports.mbt (tests of beta use it); Wide: narrowed"
 
 ///|
 /// The stub `moon` the rounds call: `ide analyze` prints the canned analysis
@@ -400,10 +404,24 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
   // A change that cannot be combined with alpha's: it edits alpha's file.
   let clash = commit("work-clash", head, [("alpha/a.mbt", "clash\n")])
   ignore(git(repo, ["checkout", "-q", "--detach", head]))
+  // Each pick is amended into a commit named for its package, with the
+  // worker's summary as the body.
+  let reword = (dir : String) => {
+    [
+      "commit",
+      "-q",
+      "--amend",
+      "-m",
+      "refactor(\{dir}): shrink public API",
+      "-m",
+      WorkerSummary,
+    ]
+  }
   ignore(pinned_git(repo, ["cherry-pick", alpha1]))
   ignore(pinned_git(repo, ["rm", "-q", "--", "alpha/a_test.mbt"]))
-  ignore(pinned_git(repo, ["commit", "-q", "--amend", "--no-edit"]))
+  ignore(pinned_git(repo, reword("alpha")))
   ignore(pinned_git(repo, ["cherry-pick", gamma1]))
+  ignore(pinned_git(repo, reword("gamma")))
   let tip1 = git(repo, ["rev-parse", "HEAD"]).trim().to_owned()
   ignore(git(repo, ["checkout", "-q", "main"]))
   let alpha2 = commit("work-alpha-2", tip1, [
@@ -411,6 +429,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
   ])
   ignore(git(repo, ["checkout", "-q", "--detach", tip1]))
   ignore(pinned_git(repo, ["cherry-pick", alpha2]))
+  ignore(pinned_git(repo, reword("alpha")))
   let tip2 = git(repo, ["rev-parse", "HEAD"]).trim().to_owned()
   ignore(git(repo, ["checkout", "-q", "main"]))
   let bin = temp + "/shrink-bin"
@@ -625,6 +644,10 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
           "",
         )
         assert_eq(git(repo, ["rev-parse", "\{tip1}~2"]).trim(), head)
+        assert_eq(
+          git(repo, ["log", "--format=%s", "\{head}..\{tip1}"]).trim(),
+          "refactor(gamma): shrink public API\nrefactor(alpha): shrink public API",
+        )
         // Each round keeps a local branch to continue from.
         assert_eq(git(repo, ["rev-parse", branch1]).trim(), tip1)
         assert_eq(git(repo, ["rev-parse", branch2]).trim(), tip2)
