@@ -67,18 +67,22 @@ narrowable types.
 worker `git grep`s the whole repository before any visibility change (`.mbtx`
 scripts use `moonbitlang/openseek_tools`, and `desktop/app` is a separate
 module that imports backend APIs). A module published for outside users is
-left alone with `--skip` (for this repository: `tools_sdk`, `protocol`).
+left alone with `--exclude` (for this repository: `tools_sdk`, `protocol`,
+and `editor`, a Monaco mirror published as its own module).
 
 ## Interface
 
 ```
-@builtin/shrink.mbtx [--path DIR ...] [--skip DIR ...] [--max-packages N]
-                     [--rounds N] [--check-target T ...] [--stack-on BRANCH]
-                     [--no-pr] [--] [FOCUS...]
+@builtin/shrink.mbtx [--path DIR ...] [--exclude DIR ...] [--skip DIR ...]
+                     [--max-packages N] [--rounds N] [--check-target T ...]
+                     [--stack-on BRANCH] [--no-pr] [--] [FOCUS...]
 ```
 
 - `--path DIR` (repeatable): only packages under these directories.
-- `--skip DIR` (repeatable): leave packages under these directories alone.
+- `--exclude DIR` (repeatable): leave every package under these directories
+  alone.
+- `--skip DIR` (repeatable): leave the one package in each directory alone
+  (what a continuation passes for given-up packages).
 - `--max-packages N`: at most N packages per round (default 8, at most 16).
   Each round is one PR, so this keeps a PR reviewable.
 - `--rounds N`: stop after N rounds (default: until the fixed point or the
@@ -115,8 +119,8 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
    be clean (its check could rewrite a stale `pkg.generated.mbti`). Parse the
    candidates and map each package name to its directory by the longest
    tracked module name it falls under (`moon.mod` or `moon.mod.json`). Keep
-   packages under `--path`, not under `--skip`, and not given up earlier in
-   this run (see Progress). With none left, the run has reached the fixed
+   packages under `--path`, not under `--exclude`, not named by `--skip`, and
+   not given up earlier in this run (see Progress). With none left, the run has reached the fixed
    point: "fixed point" when the analyzer reports nothing in scope, else
    "fixed point except <packages>", which is incomplete scope, not a global
    fixed point.
@@ -171,9 +175,9 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
 6. **Combine.** If nothing was accepted, the round publishes nothing and the
    next round starts from the same B. Otherwise:
    - `git checkout --detach B`, then `git cherry-pick` the accepted commits in
-     package order. The files are disjoint, so this cannot conflict; the
-     result is one commit per package. On a failure the pick is aborted and
-     the run stops.
+     package order. The files are disjoint, so this should not conflict; the
+     result is one commit per package. On any failure (a nonzero exit, or an
+     error such as a timeout) the pick is aborted and the run stops.
    - The tip is kept on the local branch `shrink/r<k>-<8 of the tip>`.
    - The accepted workers' branches are deleted.
    - The combination is checked with `moon check --deny-warn --no-mbti` per
@@ -224,8 +228,9 @@ to. Run it in a checkout of its own: a worktree at the default branch.
 - A run that stops short (`--rounds`, the quota) or gives packages up prints
   `continue from <branch>: <arguments>`: check out that branch and run again
   with them. The arguments keep `--path`, `--max-packages`,
-  `--check-target`, `--no-pr` or `--stack-on <branch>`, every skip (given
-  and given-up) and the focus. Desktop shows the line; it never continues by
+  `--check-target`, `--rounds`, `--no-pr` or `--stack-on <branch>`,
+  `--exclude`, every skipped package (given and given-up, as exact
+  `--skip`) and the focus. Desktop shows the line; it never continues by
   itself, so the person decides each further run.
 
 ## Output and exit
@@ -270,18 +275,22 @@ host. The repository is a temporary one with:
 Committers are pinned, so the test predicts each round's cherry-picked tip
 and the scripted workers report commits on it. The modes cover:
 
-- **publish:** two stacked PRs; round 2 analyzed and checked at round 1's
-  tip; base branches; the interface line; the parser (padded rows, `//`
+- **publish:** two stacked PRs; round 1 combining two packages' commits;
+  round 2 analyzed and checked at round 1's tip; `--exclude`; base branches; the interface line; the parser (padded rows, `//`
   inside a value, blessed, used, member, unannotated, impl and derive rows,
   an unmapped package, the test kit); allowed paths; the capture race; a
   rejected change; `no_changes`; the unresolved package; and the
   continuation line;
-- **check-fails**, **rounds**, **none** (nothing accepted);
+- **check-fails**; **conflict** (the pick is aborted, nothing left half
+  done); **rounds**, then **continue**, which runs the exact arguments the
+  bounded run printed from its branch (given-up packages stay out, the limit
+  holds); **none** (nothing accepted);
 - **fixed point**;
 - **preflight:** bad number, subdirectory, dirty, ahead of origin, and a
   `--stack-on` mismatch.
 
-HEAD is back on `main` after every mode. `just check-workflows` type-checks
+After every mode, HEAD is back where it started, the tree is clean and no
+cherry-pick is in progress. `just check-workflows` type-checks
 the script. Desktop: the frontend whitebox tests list the command, and the
 e2e specs send `/shrink` locally and in Cloud.
 
@@ -304,3 +313,12 @@ Design review (Codex, xhigh):
 | MEDIUM: allowed files and validation contradict the work; `moon check` rewrites other packages' `.mbti` | Manifest and one wbtest file allowed; every workspace check uses `--no-mbti` |
 | MEDIUM: empty rounds, `--stack-on` equality, continuation arguments, `--no-pr` continuation | Empty rounds publish nothing; `--stack-on` requires the exact tip; the continuation line keeps every option, local in `--no-pr` mode |
 | LOW: failing checks, real analyzer rows, the capture race in tests | All in the offline modes above |
+
+Implementation review (Codex, xhigh, whole branch):
+
+| Codex finding | Resolution |
+|---|---|
+| MEDIUM: the continuation turns given-up packages into subtree skips (`--skip .` skips everything) | `--skip` names one package; `--exclude` is the subtree form |
+| MEDIUM: the continuation drops `--rounds` | Kept; the continue mode runs the printed arguments and checks the limit holds |
+| MEDIUM: a cherry-pick that raises (a timeout) skips the abort | Raised errors and nonzero exits share one abort path, whose own failure is reported |
+| Tests never combine two commits, nor execute a continuation | A second accepted package in round 1 (a negative control that picks only the first commit fails), a conflict mode, and the continue mode |

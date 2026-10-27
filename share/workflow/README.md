@@ -181,7 +181,8 @@ item with no production use in another package (`usage: N (N in test)`), or a
 type whose `pub(all)`/`pub(open)` can narrow; items in a package's
 `exports.mbt`, trait implementations, rows without a usage count, and a test
 kit's test-only items are not. The packages with the most candidates, at most
-`--max-packages N` (default 8, at most 16), each get one `worker` that must
+`--max-packages N` (default 8, at most 16; `--exclude DIR` leaves a subtree
+out, `--skip DIR` one package), each get one `worker` that must
 resolve every candidate: drop `pub`, delete it, narrow it, or move it to
 `exports.mbt` with a stated reason. Each change passes the same gate and
 `explore` review as in `simplify.mbtx`. The accepted commits are cherry-picked
