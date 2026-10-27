@@ -16,5 +16,8 @@ fn Model::terminal_input(self : Model) -> @terminal.Input {
       })
       .to_array(),
     has_devices=!self.devices.is_empty(),
+    cloud_access?=self.account.map(account => {
+      (account.user.user_id, account.token, self.cloud.epoch)
+    }),
   )
 }

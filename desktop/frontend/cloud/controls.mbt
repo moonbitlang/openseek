@@ -10,6 +10,7 @@ pub struct ControlInput {
   attachments : Array[@protocol.AttachmentSource]
   acknowledged : Bool
   unknown : Bool
+  result_id : String?
 } derive(Eq)
 
 ///|
@@ -168,7 +169,8 @@ fn Conversation::acknowledge_control(
     !input.acknowledged else {
     return self
   }
-  let consumes_draft = input.draft is Some(_) &&
+  let consumes_draft = input.result_id is None &&
+    input.draft is Some(_) &&
     !(input.operation is QueueSteer(..)) &&
     self.task == Some(input.task_id)
   {
@@ -212,7 +214,8 @@ fn Conversation::reject_control(
     is Some(input) else {
     return self
   }
-  let recovered = if input.acknowledged || input.operation is QueueSteer(..) {
+  let recovered = if input.result_id is None &&
+    (input.acknowledged || input.operation is QueueSteer(..)) {
     input.draft
   } else {
     None
@@ -435,6 +438,7 @@ fn State::begin_control(
     attachments,
     acknowledged: false,
     unknown: false,
+    result_id: None,
   }
   let next = self.replace(session, {
     ..conversation,

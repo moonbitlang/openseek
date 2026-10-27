@@ -1422,6 +1422,32 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
 /// is considered unavailable from its first socket loss because its old PTYs
 /// are torn down at that boundary, even before the page escalates to BridgeLost.
 fn terminal_ctx(model : Model) -> @terminal.Ctx {
+  let cloud = match model.cloud_draft_identity() {
+    Some(owner) => Some(owner)
+    None => model.cloud_identity()
+  }
+  if model.cloud_selected() && cloud is Some(@interop.Cloud(account~, session~)) {
+    return @terminal.Ctx::cloud(
+      account~,
+      session~,
+      epoch=model.cloud.epoch,
+      ready=model.cloud_draft_identity() is None &&
+        model.account.map(credentials => credentials.user.user_id) ==
+        Some(account) &&
+        model.cloud.can_compose(session) &&
+        !model.cloud.retired.contains(session),
+      dark_mode=model.theme.is_dark(model.system_dark),
+    )
+  }
+  if model.cloud_selected() {
+    return @terminal.Ctx(
+      channel=model.focused,
+      session="",
+      placement=None,
+      dark_mode=model.theme.is_dark(model.system_dark),
+      connected=false,
+    )
+  }
   let active = model
     .active_checkout()
     .unwrap_or({
@@ -2456,11 +2482,34 @@ fn update_msg(
         }
       }
     ComposerAction(action) => {
+      if action is @composer.CommandResultRecovered(identity~) {
+        return recover_command_result(model, identity)
+      }
+      if action
+        is @composer.CommandResultSubmitted(identity~, id~, text~, choice~) {
+        return submit_command_result(
+          dispatch, model, identity, id, text, choice,
+        )
+      }
       if action.identity().owner is @interop.Cloud(..) {
         guard model.accepts_composer_action(action.identity()) else {
           return (@cmd.none, model)
         }
         match action {
+          @composer.ShellCommandSubmitted(identity~, command~) =>
+            return submit_cloud_shell(dispatch, model, identity.owner, command)
+          @composer.ShellTerminalRequested(identity~, index~) => {
+            guard model.cloud.conversations.get(identity.owner.session())
+              is Some(conv) &&
+              conv.shell_commands.get(index) is Some(pending) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(
+              dispatch,
+              Terminal(@terminal.RevealCommand(shell=pending.id)),
+              model,
+            )
+          }
           @composer.StopRequested(identity~)
           | @composer.FollowupSubmitted(identity~, ..)
           | @composer.QueuedInputEditRequested(identity~, ..)
@@ -2524,7 +2573,9 @@ fn update_msg(
         }
       }
       match action {
-        @composer.DraftAttachmentsSubmitted(..) => (@cmd.none, model)
+        @composer.DraftAttachmentsSubmitted(..)
+        | @composer.CommandResultSubmitted(..)
+        | @composer.CommandResultRecovered(..) => (@cmd.none, model)
         @composer.ModelMenuToggled(..)
         | @composer.ReasoningMenuToggled(..)
         | @composer.SelectMenuDismissed(..)
@@ -3099,7 +3150,7 @@ fn update_msg(
       | ApplyEditorFeedback(_) as feedback
     ) => update_editor_feedback(dispatch, feedback, model)
     // Delivered to the component by boot, alongside the other component inputs.
-    ComposerReply(_) => (@cmd.none, model)
+    ComposerReply(_) | ComposerCommandResult(_) => (@cmd.none, model)
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a
@@ -6713,7 +6764,7 @@ fn update_msg(
             shell,
             message,
           )
-        None => (@cmd.none, model)
+        None => cloud_shell_not_started(dispatch, model, shell, message)
       }
     RunShellCommand(channel~, session~, id~, command~, attempt~) =>
       run_shell_command(dispatch, model, channel, session, id, command, attempt)
@@ -6722,6 +6773,27 @@ fn update_msg(
     Terminal(@terminal.InputFailed(message~)) =>
       model.notify_error(dispatch, message)
     Terminal(msg) => {
+      if model.cloud_selected() &&
+        (
+          msg is @terminal.NewTerminal ||
+          (msg is @terminal.ToggleTerminal && !model.terminal.is_open())
+        ) &&
+        model.cloud_identity() is None {
+        let (create, model) = if model.cloud_draft_identity() is None {
+          update_cloud(dispatch, @cloud.Create, model)
+        } else {
+          (@cmd.none, model)
+        }
+        guard model.cloud_draft_identity() is Some(owner) else {
+          return (create, model)
+        }
+        let (start, model) = update_cloud(
+          dispatch,
+          @cloud.TerminalRequested(owner, None),
+          model,
+        )
+        return (@cmd.batch([create, start]), model)
+      }
       let (cmd, terminal) = model.terminal.handle(
         dispatch.map(next => Terminal(next)),
         msg,

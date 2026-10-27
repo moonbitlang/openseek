@@ -1,4 +1,33 @@
 ///|
+/// Exercise the host adapter after the addressed result handoff. Composer
+/// recovery and independent draft ownership are covered in its package tests.
+fn finish_shell_to_host(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  id : String,
+  exit : Int32?,
+  output : String,
+  truncated : Bool,
+) -> (@cmd.Cmd, Model) {
+  let reports : Array[(@interop.ConversationIdentity, String)] = []
+  let capture = @cmd.Emit(message => {
+    if message is ComposerCommandResult(@composer.Ready(input, _, text)) {
+      reports.push((input.identity.owner, text))
+    }
+    @cmd.none
+  })
+  let (command, model) = shell_command_finished(
+    capture, model, id, exit, output, truncated,
+  )
+  guard reports is [(owner, text)] &&
+    owner is @interop.Host(key) &&
+    model.find_conversation(key.channel, key.session) is Some(conv) else {
+    return (command, model)
+  }
+  send_shell_result(dispatch, model, conv, text)
+}
+
+///|
 /// A conversation with `!` command `s1` (`ls`) still running and the user's
 /// own unsent writing in the composer.
 fn with_running_shell(model : Model, conv : Conversation) -> Model {
@@ -14,7 +43,7 @@ fn with_running_shell(model : Model, conv : Conversation) -> Model {
 test "a finished ! command starts a turn with its result when the conversation is idle" {
   let dispatch = test_dispatch()
   let model = with_running_shell(test_model(), test_model().active())
-  let (_, sent) = shell_command_finished(
+  let (_, sent) = finish_shell_to_host(
     dispatch,
     model,
     "s1",
@@ -41,7 +70,7 @@ test "a finished ! command starts a turn with its result when the conversation i
 test "a finished ! command steers the turn that is running" {
   let dispatch = test_dispatch()
   let model = with_running_shell(test_model(), running_conversation())
-  let (_, sent) = shell_command_finished(
+  let (_, sent) = finish_shell_to_host(
     dispatch,
     model,
     "s1",
@@ -68,7 +97,7 @@ test "a result that cannot be sent yet waits in the composer" {
     ..test_model().active(),
     controls: { ..test_model().active().controls, compaction: Compacting, },
   })
-  let (_, held) = shell_command_finished(
+  let (_, held) = finish_shell_to_host(
     dispatch,
     model,
     "s1",
@@ -120,7 +149,7 @@ test "a ! command that never ran goes back to an empty composer only" {
 test "a report for a command nobody is waiting on changes nothing" {
   let dispatch = test_dispatch()
   let model = test_model()
-  let (_, same) = shell_command_finished(
+  let (_, same) = finish_shell_to_host(
     dispatch,
     model,
     "unknown",
@@ -137,7 +166,7 @@ test "a result from a device that is not focused waits in its composer" {
   let model = with_running_shell(test_model(), test_model().active())
   // The page mirrors host settings for the focused device only.
   let elsewhere = { ..model, focused: @interop.ChannelId::Remote("device-b"), }
-  let (_, held) = shell_command_finished(
+  let (_, held) = finish_shell_to_host(
     dispatch,
     elsewhere,
     "s1",
@@ -166,7 +195,7 @@ test "a held result takes the draft out of a queue edit" {
   let model = with_running_shell(test_model(), conv)
   // A device that is not focused: the result is held, not sent.
   let elsewhere = { ..model, focused: @interop.ChannelId::Remote("device-b"), }
-  let (_, held) = shell_command_finished(
+  let (_, held) = finish_shell_to_host(
     dispatch,
     elsewhere,
     "s1",
@@ -227,4 +256,48 @@ test "a held result takes the draft out of a queue edit" {
     assert_eq(updated.submission_sequence, held.submission_sequence)
   }
   assert_eq(after.queued_inputs[0].content, "original")
+}
+
+///|
+test "terminal completion addresses the shared composer once without mutating its draft" {
+  let reports : Array[@composer.CommandResult] = []
+  let capture = @cmd.Emit(message => {
+    if message is ComposerCommandResult(result) {
+      reports.push(result)
+    }
+    @cmd.none
+  })
+  let model = with_running_shell(test_model(), test_model().active())
+  let (_, next) = shell_command_finished(
+    capture,
+    model,
+    "s1",
+    Some(0),
+    "output",
+    false,
+  )
+  assert_eq(next.active().task, "my own draft")
+  assert_true(next.active().shell_commands.is_empty())
+  assert_true(next.active().run is NoRun(..))
+  assert_true(
+    reports is [@composer.Ready(input, "s1", text)] &&
+    input.identity.owner.session() == "desktop-test" &&
+    @command_context.parse(text) is Some(_),
+  )
+  let _ = shell_command_finished(capture, next, "s1", Some(0), "output", false)
+  assert_eq(reports.length(), 1)
+}
+
+///|
+test "shared result recovery detaches a queue edit without changing its queued message" {
+  let conv = {
+    ..running_conversation(),
+    queue_edit: Some(Saving(id="queued-1", run_id="r7", mentions=[])),
+    queued_inputs: [{ id: "queued-1", content: "original", images: [], }],
+  }
+  let model = test_model().replace_conversation(conv)
+  let identity = model.composer_input().identity
+  let (_, recovered) = recover_command_result(model, identity)
+  assert_true(recovered.active().queue_edit is Some(SavingDetached(..)))
+  assert_true(recovered.active().queued_inputs == conv.queued_inputs)
 }

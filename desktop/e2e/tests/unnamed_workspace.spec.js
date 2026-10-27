@@ -166,14 +166,14 @@ test('local Chat drafts survive Cloud navigation and sign-out while new Chats re
   await cloud.goto();
   const local = page.locator('.conversation-row[title="legacy-chat"]');
   await cloud.open();
-  await expect(page.getByRole('button', { name: /^Show terminal/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Show terminal/ })).toBeVisible();
   await local.click();
   await expect(page.locator('#transcript')).toContainText('Browser result');
   await expect(page.getByRole('button', { name: /^Show terminal/ })).toBeVisible();
   await page.locator('#task').fill('Keep this local draft');
   await page.screenshot({ path: testInfo.outputPath('cloud-and-existing-local-chats.png') });
   await cloud.open();
-  await expect(page.getByRole('button', { name: /^Show terminal/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Show terminal/ })).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('button', { name: 'Back', exact: true }).click();

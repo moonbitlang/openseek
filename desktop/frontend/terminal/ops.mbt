@@ -10,7 +10,7 @@
 ///|
 fn open_session(
   dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  channel : Connection,
   key : String,
   session : String,
   workspace : @common.Uri?,
@@ -19,19 +19,24 @@ fn open_session(
   command? : String,
 ) -> @cmd.Cmd {
   match workspace {
-    Some(resource) if !@resource.belongs_to(resource, channel) =>
-      return @cmd.none
+    Some(resource) if channel is Host(host) &&
+      !@resource.belongs_to(resource, host) => return @cmd.none
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(channel, @commands.terminal_open, {
-        session,
-        workspace: workspace.map(value => value.path),
-        cols,
-        rows,
-        command,
-      }) catch {
+      let reply = try {
+        if channel is Cloud(..) {
+          ignore(connect_cloud(dispatch, scheduler, channel))
+        }
+        terminal_request(channel, @commands.terminal_open, {
+          session,
+          workspace: workspace.map(value => value.path),
+          cols,
+          rows,
+          command,
+        })
+      } catch {
         error => {
           scheduler.add(
             dispatch(
@@ -50,7 +55,7 @@ fn open_session(
 ///|
 fn send_input(
   dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  channel : Connection,
   key : String,
   id : String,
   batch : InputBatch,
@@ -59,7 +64,7 @@ fn send_input(
     @js.Promise::from_async(() => {
       let result : Result[Unit, InputWriteFailure] = try {
         ignore(
-          @interop.bridge_request(channel, @commands.terminal_input, {
+          terminal_request(channel, @commands.terminal_input, {
             id,
             data: if batch.chunk.binary {
               None
@@ -76,7 +81,7 @@ fn send_input(
         Ok(())
       } catch {
         error =>
-          if @interop.bridge_connection_lost(channel, error) {
+          if connection_lost(channel, error) {
             Err(ConnectionLost)
           } else {
             Err(WriteFailed(@interop.bridge_error_text(error)))
@@ -92,7 +97,7 @@ fn send_input(
 
 ///|
 fn send_resize(
-  channel : @interop.ChannelId,
+  channel : Connection,
   id : String,
   cols : Int32,
   rows : Int32,
@@ -100,11 +105,7 @@ fn send_resize(
   @cmd.custom_cmd(_ => {
     @js.Promise::from_async(() => {
       ignore(
-        @interop.bridge_request(channel, @commands.terminal_resize, {
-          id,
-          cols,
-          rows,
-        }) catch {
+        terminal_request(channel, @commands.terminal_resize, { id, cols, rows, }) catch {
           _ => return
         },
       )
@@ -119,7 +120,7 @@ fn send_resize(
 /// also covers this one if the request does not reach the host; no retry timer
 /// is needed.
 priv struct TerminalAck {
-  channel : @interop.ChannelId
+  channel : Connection
   id : String
   sequence : Int32
 }
@@ -129,7 +130,7 @@ fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     @js.Promise::from_async(() => {
       ignore(
-        @interop.bridge_request(self.channel, @commands.terminal_ack, {
+        terminal_request(self.channel, @commands.terminal_ack, {
           id: self.id,
           sequence: self.sequence,
         }) catch {
@@ -142,11 +143,11 @@ fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
 }
 
 ///|
-fn send_close(channel : @interop.ChannelId, id : String) -> @cmd.Cmd {
+fn send_close(channel : Connection, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     @js.Promise::from_async(() => {
       ignore(
-        @interop.bridge_request(channel, @commands.terminal_close, { id, }) catch {
+        terminal_request(channel, @commands.terminal_close, { id, }) catch {
           _ => return
         },
       )

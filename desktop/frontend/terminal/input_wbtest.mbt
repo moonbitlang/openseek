@@ -44,7 +44,7 @@ test "input waits for open and coalesces a burst without losing byte order" {
   assert_true(queued.tabs[0].input.active is None)
   let (_, running) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key~, id="pty"),
+    Opened(channel=Host(@interop.ChannelId::Local), key~, id="pty"),
     queued,
     ctx,
   )
@@ -84,7 +84,7 @@ test "binary input keeps separate base64 records between text events" {
   }
   state = update(
       emit,
-      Opened(channel=@interop.ChannelId::Local, key~, id="pty"),
+      Opened(channel=Host(@interop.ChannelId::Local), key~, id="pty"),
       state,
       ctx,
     ).1
@@ -105,7 +105,7 @@ test "failed or stale input acknowledgements never replay uncertain writes" {
   let key = opening.tabs[0].key
   let mut state = update(
       emit,
-      Opened(channel=@interop.ChannelId::Local, key~, id="pty"),
+      Opened(channel=Host(@interop.ChannelId::Local), key~, id="pty"),
       opening,
       ctx,
     ).1
@@ -149,7 +149,7 @@ test "input budgets count UTF8 bytes and bound queued events without truncation"
   let key = opening.tabs[0].key
   let running = update(
       emit,
-      Opened(channel=@interop.ChannelId::Local, key~, id="pty"),
+      Opened(channel=Host(@interop.ChannelId::Local), key~, id="pty"),
       opening,
       ctx,
     ).1
@@ -183,7 +183,7 @@ test "connection loss recovers with fresh input only in either callback order" {
   let ctx : Ctx = {
     host_name: None,
     connection_notice: None,
-    channel: remote,
+    channel: Host(remote),
     session: "input",
     placement: Some(@interop.WorkspaceRoot(root~)),
     dark_mode: false,
@@ -199,11 +199,11 @@ test "connection loss recovers with fresh input only in either callback order" {
     let key = opening.tabs[0].key
     let mut state = update(
         emit,
-        Opened(channel=remote, key~, id="old"),
+        Opened(channel=Host(remote), key~, id="old"),
         opening,
         ctx,
       ).1
-    state = { ..state, live_channels: [remote], }
+    state = { ..state, live_channels: [Host(remote)], }
     state = update(emit, UserInput(key~, data="maybe-delivered\n"), state, ctx).1
     state = update(emit, UserInput(key~, data="unsent-tail\n"), state, ctx).1
     guard state.tabs[0].input.active is Some(batch) else { fail("no write") }
@@ -229,7 +229,7 @@ test "connection loss recovers with fresh input only in either callback order" {
       ).0
     assert_true(state.open)
     assert_true(state.tabs.is_empty())
-    assert_true(state.interrupted_channels.contains(remote))
+    assert_true(state.interrupted_channels.contains(Host(remote)))
     if !reply_first {
       assert_true(update(emit, failure, state, down).1 == state)
     }
@@ -242,7 +242,7 @@ test "connection loss recovers with fresh input only in either callback order" {
     assert_true(replacement_key != key)
     state = update(
         emit,
-        Opened(channel=remote, key=replacement_key, id="new"),
+        Opened(channel=Host(remote), key=replacement_key, id="new"),
         state,
         ctx,
       ).1
@@ -262,7 +262,7 @@ test "connection loss recovers with fresh input only in either callback order" {
       fail("new input remained paused")
     }
     assert_eq(fresh.chunk.data, "fresh\n")
-    assert_false(state.interrupted_channels.contains(remote))
+    assert_false(state.interrupted_channels.contains(Host(remote)))
     assert_false(messages.any(msg => msg is InputFailed(..)))
   }
 }

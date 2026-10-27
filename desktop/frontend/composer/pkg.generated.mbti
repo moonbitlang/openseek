@@ -23,7 +23,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply])
+pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply], @cmd.Emit[CommandResult])
 
 pub fn dirty_paths_preview(Array[String], Int32) -> String
 
@@ -46,6 +46,8 @@ pub(all) enum Action {
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
   ShellCommandSubmitted(identity~ : Identity, command~ : String)
+  CommandResultRecovered(identity~ : Identity)
+  CommandResultSubmitted(identity~ : Identity, id~ : String, text~ : String, choice~ : FollowupChoice?)
   ShellTerminalRequested(identity~ : Identity, index~ : Int32)
   MentionOpened(identity~ : Identity, mention~ : Mention)
   GoalEditStarted(identity~ : Identity)
@@ -103,6 +105,12 @@ pub(all) struct CodexRequestInput {
   params : Json
   answers : Map[String, String]
 } derive(Eq)
+
+pub(all) enum CommandResult {
+  Ready(Input, String, String)
+  Restore(Input, String)
+  Settled(@interop.ConversationIdentity, String, Bool)
+}
 
 pub(all) enum ContextComponent {
   ConnectionBanner(device_name~ : String?)
@@ -396,6 +404,13 @@ pub(all) enum RunningSubmit {
 pub fn RunningSubmit::equal(Self, Self) -> Bool
 pub fn RunningSubmit::not_equal(Self, Self) -> Bool
 pub fn RunningSubmit::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ShellCommand {
+  id : String
+  command : String
+} derive(Eq)
+pub fn ShellCommand::equal(Self, Self) -> Bool
+pub fn ShellCommand::not_equal(Self, Self) -> Bool
 
 pub(all) struct SlashCommand {
   label : String

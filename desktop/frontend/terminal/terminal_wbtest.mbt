@@ -5,7 +5,7 @@ fn local_ctx(session : String, placement : @interop.CheckoutPlacement) -> Ctx {
   {
     host_name: None,
     connection_notice: None,
-    channel: @interop.ChannelId::Local,
+    channel: Host(@interop.ChannelId::Local),
     session,
     placement: Some(placement),
     dark_mode: false,
@@ -44,25 +44,29 @@ test "an exit before the open reply cannot revive a dead terminal" {
   let terminal_id = "terminal-exit-race"
   let (_, exited) = update(
     emit,
-    SessionExited(channel=@interop.ChannelId::Local, id=terminal_id, code=0),
+    SessionExited(
+      channel=Host(@interop.ChannelId::Local),
+      id=terminal_id,
+      code=0,
+    ),
     opening,
     ctx,
   )
   assert_true(
     exited.exited_before_open.contains(
-      (@interop.ChannelId::Local, terminal_id, 0),
+      (Host(@interop.ChannelId::Local), terminal_id, 0),
     ),
   )
   let (_, replied) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key~, id=terminal_id),
+    Opened(channel=Host(@interop.ChannelId::Local), key~, id=terminal_id),
     exited,
     ctx,
   )
   assert_true(replied.tabs.is_empty())
   assert_true(
     !replied.exited_before_open.contains(
-      (@interop.ChannelId::Local, terminal_id, 0),
+      (Host(@interop.ChannelId::Local), terminal_id, 0),
     ),
   )
   assert_true(!replied.open)
@@ -101,7 +105,7 @@ test "terminal UUIDs route independently of the focused device" {
   }
   let remote_ctx : Ctx = {
     ..local_ctx,
-    channel: remote,
+    channel: Host(remote),
     placement: Some(@interop.WorkspaceRoot(root=remote_workspace)),
   }
   let (_, local_opening) = update(
@@ -114,7 +118,7 @@ test "terminal UUIDs route independently of the focused device" {
   let local_id = "terminal-local"
   let (_, local_running) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key=local_key, id=local_id),
+    Opened(channel=Host(@interop.ChannelId::Local), key=local_key, id=local_id),
     local_opening,
     local_ctx,
   )
@@ -123,14 +127,14 @@ test "terminal UUIDs route independently of the focused device" {
   let remote_id = "terminal-remote"
   let (_, both_running) = update(
     emit,
-    Opened(channel=remote, key=remote_key, id=remote_id),
+    Opened(channel=Host(remote), key=remote_key, id=remote_id),
     both_opening,
     remote_ctx,
   )
   inspect(both_running.tabs.length(), content="2")
   let (_, remote_exited) = update(
     emit,
-    SessionExited(channel=remote, id=remote_id, code=0),
+    SessionExited(channel=Host(remote), id=remote_id, code=0),
     both_running,
     remote_ctx,
   )
@@ -186,14 +190,19 @@ test "a disconnected channel retires only its terminal tabs" {
     ],
     shown: Some("tab-remote"),
     exited_before_open: [
-      (remote, "exited-remote", 0),
-      (local_channel, "exited-local", 0),
+      (Host(remote), "exited-remote", 0),
+      (Host(local_channel), "exited-local", 0),
     ],
     synced_dark_mode: Some(false),
-    live_channels: [local_channel, remote],
+    live_channels: [Host(local_channel), Host(remote)],
     interrupted_channels: [],
+    cloud_failures: [],
   }
-  let (_, disconnected) = disconnect(@cmd.Emit(_ => @cmd.none), state, remote)
+  let (_, disconnected) = disconnect(
+    @cmd.Emit(_ => @cmd.none),
+    state,
+    Host(remote),
+  )
   inspect(disconnected.tabs.length(), content="1")
   assert_true(
     disconnected.tabs[0].workspace
@@ -202,7 +211,8 @@ test "a disconnected channel retires only its terminal tabs" {
   )
   assert_true(disconnected.shown is None)
   assert_true(
-    disconnected.exited_before_open == [(local_channel, "exited-local", 0)],
+    disconnected.exited_before_open ==
+    [(Host(local_channel), "exited-local", 0)],
   )
 }
 
@@ -216,7 +226,7 @@ test "an open panel waits for a reconnected channel before replacing its PTY" {
   let disconnected_ctx : Ctx = {
     host_name: None,
     connection_notice: None,
-    channel: remote,
+    channel: Host(remote),
     session: "reconnect",
     placement: Some(@interop.Scratch(root=Some(scratch_root))),
     dark_mode: false,
@@ -261,7 +271,7 @@ test "a missing checkout refuses new PTYs and retires only its conversation" {
   let (_, running) = update(
     emit,
     Opened(
-      channel=@interop.ChannelId::Local,
+      channel=Host(@interop.ChannelId::Local),
       key=opening_key,
       id="terminal-missing",
     ),
@@ -278,7 +288,7 @@ test "a missing checkout refuses new PTYs and retires only its conversation" {
   let (_, both_running) = update(
     emit,
     Opened(
-      channel=@interop.ChannelId::Local,
+      channel=Host(@interop.ChannelId::Local),
       key=other_key,
       id="terminal-other",
     ),
@@ -416,7 +426,7 @@ test "a ! command gets its own tab without opening the panel" {
   let state = start_command(State::empty(), emit, input, "s-1", "moon test")
   assert_false(state.open)
   guard state.tabs is [tab] else { fail("expected exactly one tab") }
-  assert_true(tab.status is TabOpening)
+  assert_true(tab.status is TabOpening(..))
   assert_true(tab.command is Some({ shell: "s-1", text: "moon test", }))
   // It is the tab the panel shows once the user opens it.
   let (_, revealed) = update(emit, RevealCommand(shell="s-1"), state, ctx)
@@ -462,14 +472,14 @@ test "a command tab waits for its report after exit, then retires" {
   let key = opening.tabs[0].key
   let (_, running) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key~, id="pty-1"),
+    Opened(channel=Host(@interop.ChannelId::Local), key~, id="pty-1"),
     opening,
     ctx,
   )
   assert_true(running.tabs[0].status is TabRunning)
   let (_, exited) = update(
     emit,
-    SessionExited(channel=@interop.ChannelId::Local, id="pty-1", code=2),
+    SessionExited(channel=Host(@interop.ChannelId::Local), id="pty-1", code=2),
     running,
     ctx,
   )
@@ -496,16 +506,21 @@ test "a quick command that exits before its open reply still reports" {
   let key = opening.tabs[0].key
   let (_, early) = update(
     emit,
-    SessionExited(channel=@interop.ChannelId::Local, id="pty-quick", code=0),
+    SessionExited(
+      channel=Host(@interop.ChannelId::Local),
+      id="pty-quick",
+      code=0,
+    ),
     opening,
     ctx,
   )
   assert_true(
-    early.exited_before_open == [(@interop.ChannelId::Local, "pty-quick", 0)],
+    early.exited_before_open ==
+    [(Host(@interop.ChannelId::Local), "pty-quick", 0)],
   )
   let (_, replied) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key~, id="pty-quick"),
+    Opened(channel=Host(@interop.ChannelId::Local), key~, id="pty-quick"),
     early,
     ctx,
   )

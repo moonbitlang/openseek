@@ -98,6 +98,30 @@ fn update_cloud(
   message : @cloud.Msg,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
+  if message is @cloud.TerminalReady(epoch, session, shell) {
+    guard epoch == model.cloud.epoch &&
+      model.cloud.user_id is Some(account) &&
+      model.account.map(credentials => credentials.user.user_id) ==
+      Some(account) &&
+      model.cloud.can_compose(session) else {
+      return (@cmd.none, model)
+    }
+    let owner = @interop.Cloud(account~, session~)
+    let target = {
+      ..model,
+      screen: Chat,
+      selected_conversation: Some(CloudSelection(account~, session~)),
+    }
+    if shell is Some(shell) {
+      return run_cloud_shell(dispatch, model, owner, shell)
+    }
+    let (command, terminal) = model.terminal.open_terminal(
+      dispatch.map(msg => Terminal(msg)),
+      target.terminal_input(),
+      on_screen=model.screen is Chat && model.cloud_identity() == Some(owner),
+    )
+    return (command, { ..model, terminal, })
+  }
   if message is @cloud.Create && model.account is None {
     return begin_account_login(dispatch, model, create=true)
   }
@@ -319,10 +343,23 @@ fn update_cloud(
     }
   }
   let next = { ..next, file_panel, }
+  if message is @cloud.CreateFailed(epoch, request, failure) &&
+    epoch == before.epoch &&
+    before.creation is Some(creation) &&
+    creation.request == request &&
+    before.conversations.get(creation.id)
+    is Some({ outgoing: Some({ input: @cloud.Terminal(shell), .. }), .. }) {
+    if shell is Some(shell) {
+      return cloud_shell_not_started(dispatch, next, shell.id, failure.label())
+    }
+    let (report, next) = next.notify_error(dispatch, failure.label())
+    return (@cmd.batch([command, ..file_commands, report]), next)
+  }
   let command = @cmd.batch(
     [
       command,
       ..file_commands,
+      cloud_command_results(dispatch, before, next.cloud, message),
       completion.map_or(@cmd.none, value => value.1.command(locale=next.locale)),
     ],
   )
@@ -433,7 +470,13 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     } else {
       None
     },
-    prediction: conversation.prediction,
+    shell_available: conversation.queue_edit is None &&
+    self.cloud.can_compose(owner.session()),
+    prediction: if conversation.shell_commands.is_empty() {
+      conversation.prediction
+    } else {
+      None
+    },
     prediction_source: conversation.prediction_source(
       ready=self.cloud.can_send(owner.session()) &&
         file_ctx(self).root() is Some(_),
@@ -466,6 +509,13 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       images_enabled: true,
       context: {
         let context = conversation.control_context()
+        if !conversation.shell_commands.is_empty() {
+          context.push(
+            @composer.ShellCommandsRunning(
+              commands=conversation.shell_commands.map(p => p.command),
+            ),
+          )
+        }
         if conversation.watch_status == Reconnecting {
           context.push(@composer.ConnectionBanner(device_name=Some("Cloud")))
         }

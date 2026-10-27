@@ -10,7 +10,7 @@ for (const desktop of [false, true]) {
     await cloud.create();
     await expect(page.locator('main h1')).toHaveText('New chat');
     await expect(page.locator('.conversation-open[aria-current="true"]')).toHaveCount(0);
-    await expect(page.locator('main .topbar .panel-toggle')).toHaveCount(0);
+    await expect(page.getByTitle('Show terminal (Ctrl+`)', { exact: true })).toBeVisible();
     await expect(cloud.row(sessionC)).toHaveCount(0);
     await page.locator('#task').fill('Unsubmitted Cloud draft');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();

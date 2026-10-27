@@ -52,6 +52,12 @@ fn State::send_pending(
     return (self, @cmd.none)
   }
   let request = submission.request
+  if submission.input is Terminal(shell) {
+    return (
+      self.replace(session, { ..conversation, outgoing: None, }),
+      emit(TerminalReady(self.epoch, session, shell)),
+    )
+  }
   let conversation = {
     ..conversation,
     // Fence history reads begun before this command, including its refusal.
@@ -60,7 +66,7 @@ fn State::send_pending(
     watch_status: Watching,
   }
   let conversation = match submission.input {
-    Native(_) => conversation
+    Native(_) | Terminal(_) => conversation
     Prompt(content~, ..) => {
       let tasks = conversation.records
         .filter(record => record.kind == "user")
@@ -79,7 +85,7 @@ fn State::send_pending(
         }),
         history_required: true,
         notice: None,
-        pending: Some({ content, known_tasks: tasks, }),
+        pending: Some({ content, known_tasks: tasks, result_id: None, }),
       }
     }
   }
@@ -89,6 +95,7 @@ fn State::send_pending(
         let (command, task_id) = match submission.input {
           Native(command) =>
             (command, conversation.control.bind(c => c.active_task_id))
+          Terminal(_) => return
           Prompt(draft~, attachments~, ..) => {
             let prepared = prepare_submission(
               token,
@@ -119,6 +126,7 @@ fn State::send_pending(
         _ => Err(Unreachable)
       }
       let message = match (submission.input, result) {
+        (Terminal(_), _) => return
         (Native(command), Ok(result)) =>
           CommandFinished(
             self.epoch,
