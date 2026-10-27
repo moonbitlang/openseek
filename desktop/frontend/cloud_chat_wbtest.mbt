@@ -323,7 +323,7 @@ test "Cloud uses the existing composer and transcript without a host workspace" 
   assert_false(input.shell_available)
   assert_true(input.presentation.images_enabled)
   assert_eq(input.slash_commands.map(command => command.command), [
-    "compact", "goal", "ultrareview", "simplify",
+    "compact", "goal", "ultrareview", "simplify", "shrink",
   ])
   assert_true(
     input.slash_commands == test_model().composer_input().slash_commands,

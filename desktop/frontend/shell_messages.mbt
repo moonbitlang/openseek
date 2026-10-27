@@ -92,6 +92,7 @@ priv enum ShellMessage {
   SetGoal
   UltraReview
   SimplifyProject
+  ShrinkApi
   GoalPlaceholder
   EditQueuePlaceholder
   QueuePlaceholder
@@ -682,6 +683,16 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "尋找安全的簡化並為每個套件建立一個提取請求（耗用大量 token）"
     (Japanese, SimplifyProject) =>
       "安全な簡略化を探し、パッケージごとにプルリクエストを作成（トークンを大量に消費）"
+    (English, ShrinkApi) =>
+      "Shrink the public API to a fixed point, one stacked pull request per round — uses many tokens"
+    (Spanish, ShrinkApi) =>
+      "Reducir la API pública hasta un punto fijo, un pull request apilado por ronda; consume muchos tokens"
+    (SimplifiedChinese, ShrinkApi) =>
+      "将公共 API 收缩到不动点，每轮一个堆叠的拉取请求（消耗大量 token）"
+    (TraditionalChinese, ShrinkApi) =>
+      "將公開 API 縮減到不動點，每輪一個堆疊的提取請求（耗用大量 token）"
+    (Japanese, ShrinkApi) =>
+      "公開 API を不動点まで縮小し、ラウンドごとに積み重ねたプルリクエストを作成（トークンを大量に消費）"
     (English, UltraReview) =>
       "Parallel multi-lens review of your changes — uses many tokens"
     (Spanish, UltraReview) =>

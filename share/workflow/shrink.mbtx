@@ -1,0 +1,1553 @@
+---
+import {
+  "moonbitlang/openseek_tools@0.2.0" @tools,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+---
+
+///|
+/// Run with mbtx(description="Shrink the public API", filename="@builtin/shrink.mbtx", args=["--", "optional focus"]).
+/// Shrinks the workspace's public API in rounds until `moon ide analyze`
+/// finds nothing left to shrink: one worker per package resolves each
+/// exported item no other package uses, a fresh explore child reviews each
+/// change, and each round becomes one pull request stacked on the previous
+/// round's, never merged (docs/plans/shrink-fixed-point.md).
+const Usage : String =
+  #|usage: @builtin/shrink.mbtx [--path DIR ...] [--skip DIR ...]
+  #|                            [--max-packages N] [--rounds N]
+  #|                            [--check-target T ...] [--stack-on BRANCH]
+  #|                            [--no-pr] [--] [FOCUS...]
+  #|
+  #|Shrinks this workspace's public API until `moon ide analyze` reports no
+  #|exported item without a production use in another package. Each round
+  #|analyzes the workspace, gives each of the packages with the most
+  #|candidates one worker in its own worktree, has a fresh reviewer read each
+  #|change, combines the accepted ones, checks the whole workspace, and opens
+  #|one pull request stacked on the previous round's. Nothing is merged.
+  #|
+  #|Run it from the repository root with no uncommitted changes to tracked
+  #|files, ideally in a checkout of its own: each round checks out its commit
+  #|(detached), and HEAD is restored at the end. Unless --no-pr, HEAD must be
+  #|an ancestor of origin/HEAD (with --stack-on, exactly origin/BRANCH) and
+  #|gh must be signed in.
+  #|
+  #|--path DIR (repeatable) shrinks only packages under DIR. --skip DIR
+  #|(repeatable) leaves packages under DIR alone. --max-packages N changes at
+  #|most N packages per round (default 8, at most 16). --rounds N stops after
+  #|N rounds. --check-target T (repeatable) checks each combined round with
+  #|`moon check --deny-warn --no-mbti --target T` (default: once, with no
+  #|--target). --stack-on BRANCH opens the first round's pull request against
+  #|BRANCH, to continue an earlier run's stack. --no-pr keeps each round on a
+  #|local branch. FOCUS, joined with spaces, is an emphasis for workers.
+  #|
+  #|A run that stops short, or gives packages up, prints the arguments that
+  #|continue it from its last round's branch.
+
+///|
+const DefaultPackages : Int = 8
+
+///|
+const MaxPackages : Int = 16
+
+///|
+/// Workers the engine runs at once; a ninth start is refused, not queued.
+const LiveWorkers : Int = 8
+
+///|
+/// Children one script may start; a round of k packages takes at most 2k.
+const StartQuota : Int = 64
+
+///|
+const ReviewSteps : Int = 60
+
+///|
+/// The engine's limit for a worktree name: `[a-z0-9][a-z0-9-]{0,39}`.
+const NameChars : Int = 40
+
+///|
+/// What workers and reviewers are told about shrinking a package's API: the
+/// method of shrink_package.md and the traps past sweeps hit.
+const Guidance : String =
+  #|# Shrinking a MoonBit package's public API
+  #|
+  #|`moon ide analyze` lists each exported item with `// usage: N (M in test)`.
+  #|N counts uses from OTHER packages of the workspace, M how many of those are
+  #|in tests; uses inside the item's own package never count. An item defined
+  #|in the package's `exports.mbt` is marked `, in exports.mbt`: that file
+  #|holds the items exported on purpose without a consumer. A type whose
+  #|`pub(all)` or `pub(open)` can narrow to `pub` is marked
+  #|`(all) or (open) can be removed`.
+  #|
+  #|## Resolve every candidate, one of four ways
+  #|- **Drop `pub`** when only its own package uses it (N == 0 and the
+  #|  compiler reports no unused warning afterwards).
+  #|- **Delete it** when nothing uses it and it is vestigial: an unused
+  #|  warning after dropping `pub` says so. Making it private instead only
+  #|  trades the export for a warning. Delete what only it used, too.
+  #|- **Narrow** `pub(all)`/`pub(open)` to `pub` when no other package
+  #|  constructs the type or implements the trait.
+  #|- **Move the block to `exports.mbt`** (keeping `pub`), with a `///` line
+  #|  that names why, when it is exported on purpose. Only these reasons count:
+  #|  - a test seam that tests of other packages use (name them);
+  #|  - protocol or round-trip surface: wire types, JSON codecs;
+  #|  - a documented tunable, or one member of a symmetric family whose
+  #|    other members are used;
+  #|  - a consumer the analyzer cannot see, named: a `.mbtx` script, a module
+  #|    outside the workspace, a js-only app, or outside users of a published
+  #|    module.
+  #|  "Might be useful later" is not a reason: delete it instead.
+  #|
+  #|## Tests
+  #|Test use alone never justifies an export. If only this package's own
+  #|blackbox tests (`*_test.mbt`) use the item, make it private and turn those
+  #|tests into whitebox tests (`*_wbtest.mbt`) of the package, or test it
+  #|through the public API. If tests of another package use it, either it is
+  #|a test seam (`exports.mbt`) or leave it and say so; never edit another
+  #|package's files.
+  #|
+  #|## Traps
+  #|- A trait implementation used through a trait object cannot be demoted
+  #|  (`implementation of method X is private`); derive-generated methods are
+  #|  not blocks you can edit.
+  #|- `priv` on a field of a plain `pub` struct is redundant: shrink the type's
+  #|  visibility, not its fields.
+  #|- Demoting an explicit impl can trip the implicit-method-promotion
+  #|  deprecation: call it as `Show::to_string(x)` or `ToJson::to_json(x)`.
+  #|- A parameter default that no caller passes shows up as
+  #|  `unused_default_value` once the function is private: make the
+  #|  parameter required or drop it.
+  #|- The analyzer only sees the workspace. Before ANY visibility change
+  #|  (dropping `pub`, deleting, narrowing), `git grep -n -w <name>` the whole
+  #|  repository: `.mbtx` scripts, js-only apps, and modules outside the
+  #|  workspace (such as a separate app module) use items it counts as
+  #|  unused. Narrowing breaks code that constructs the type with a literal
+  #|  or matches it from outside.
+  #|
+  #|## Verify
+  #|A shrink breaks consumers, not the package, so check the whole workspace:
+  #|`moon check --deny-warn --no-mbti` from the repository root for each
+  #|target the repository builds (its AGENTS.md says which; `--no-mbti` keeps
+  #|the check from rewriting other packages' interface files), and check any
+  #|consumer outside the workspace that `git grep` found. Then `moon test`
+  #|for the package, and `moon info` and `moon fmt` with the package path
+  #|only. The package's pkg.generated.mbti may only lose lines, or change
+  #|`pub(all)` to `pub`.
+
+///|
+async fn main {
+  let options = {
+    paths: [],
+    skips: [],
+    max_packages: DefaultPackages,
+    rounds: None,
+    checks: [],
+    stack_on: None,
+    publish: true,
+    focus: "",
+  }
+  let words : Array[String] = []
+  for args = @env.args()[1:] {
+    match args {
+      [] => break
+      ["--help" | "-h", ..] => {
+        println(Usage)
+        return
+      }
+      ["--path", dir, .. rest] => {
+        options.paths.push(directory(dir))
+        continue rest
+      }
+      ["--skip", dir, .. rest] => {
+        options.skips.push(directory(dir))
+        continue rest
+      }
+      ["--max-packages", value, .. rest] => {
+        options.max_packages = count("--max-packages", value, MaxPackages)
+        continue rest
+      }
+      ["--rounds", value, .. rest] => {
+        options.rounds = Some(count("--rounds", value, 99))
+        continue rest
+      }
+      ["--check-target", target, .. rest] => {
+        options.checks.push(target)
+        continue rest
+      }
+      ["--stack-on", branch, .. rest] => {
+        options.stack_on = Some(branch)
+        continue rest
+      }
+      ["--no-pr", .. rest] => {
+        options.publish = false
+        continue rest
+      }
+      [
+        "--path"
+        | "--skip"
+        | "--max-packages"
+        | "--rounds"
+        | "--check-target"
+        | "--stack-on" as flag,
+      ] => fail("\{flag} needs a value\n\{Usage}")
+      ["--", .. rest] => {
+        words.append(rest.to_owned())
+        break
+      }
+      [word, .. rest] => {
+        words.push(word)
+        continue rest
+      }
+    }
+  }
+  options.focus = words.join(" ").trim().to_owned()
+  // Preflight: everything that would stop the run is checked before any
+  // child starts, so a run that cannot finish spends no tokens.
+  let prefix = run("git", ["rev-parse", "--show-prefix"]).trim()
+  guard prefix.is_empty() else {
+    fail(
+      "run this from the repository root, not \{prefix}: workers' worktrees are made from the session's workspace, which must be the root",
+    )
+  }
+  clean(
+    "commit or stash the changes to tracked files first: each round checks out its own commit",
+  )
+  let head = run("git", ["rev-parse", "HEAD"]).trim().to_owned()
+  // What to check out again at the end: the branch, or the commit when
+  // HEAD is detached.
+  let start = match run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).trim() {
+    "HEAD" => head
+    branch => branch.to_owned()
+  }
+  let target = if options.publish {
+    Some(pr_target(options.stack_on))
+  } else {
+    None
+  }
+  let modules = module_dirs()
+  let kits = test_kits()
+  println(
+    "shrink: from \{start} at \{short(head)}; if the run is killed, finish or abort any cherry-pick and check out \{start} again",
+  )
+  // Rounds move HEAD; whatever else happens, the checkout is put back.
+  let swept : Result[Unit, Error] = try {
+    sweep(options, head, start, target, modules, kits)
+    Ok(())
+  } catch {
+    error => Err(error)
+  }
+  let restored = @shell.Cmd("git", ["checkout", "-q", start]).output(
+    timeout_ms=60000,
+  ) catch {
+    error => fail("could not check out \{start} again: \{error}")
+  }
+  guard restored.exit_code() == 0 else {
+    fail("could not check out \{start} again: \{first_line(restored.stderr())}")
+  }
+  match swept {
+    Ok(_) => ()
+    Err(error) => raise error
+  }
+}
+
+///|
+/// What the command line asked for.
+priv struct Options {
+  paths : Array[String]
+  skips : Array[String]
+  mut max_packages : Int
+  mut rounds : Int?
+  checks : Array[String]
+  mut stack_on : String?
+  mut publish : Bool
+  mut focus : String
+}
+
+///|
+/// Fail with `why` when tracked files have changes.
+async fn clean(why : String) -> Unit {
+  let changed = run("git", ["status", "--porcelain", "--untracked-files=no"])
+  guard changed.trim().is_empty() else { fail("\{why}\n\{changed}") }
+}
+
+///|
+/// The rounds: analyze, work, review, combine, check and publish, until the
+/// analyzer reports no candidate the run may still work on.
+async fn sweep(
+  options : Options,
+  head : String,
+  start : String,
+  target : Target?,
+  modules : Array[(String, String)],
+  kits : Array[String],
+) -> Unit {
+  // Packages given up this run: never offered again, so the rounds end.
+  let skipped : Array[String] = []
+  // The items each package's last accepted change was given; any of them
+  // still listed afterwards means the change did not resolve it.
+  let given : Map[String, Array[String]] = Map([])
+  let failures : Array[String] = []
+  // Each round's branch and where it went.
+  let stack : Array[(String, String)] = []
+  let mut base = head
+  // The branch the next round's pull request targets.
+  let mut parent = match target {
+    Some(target) => target.base
+    None => ""
+  }
+  let mut started = 0
+  let mut tokens = 0
+  let mut round = 0
+  let mut ending = ""
+  for ;; {
+    if options.rounds is Some(limit) && round >= limit {
+      ending = "stopped: --rounds \{limit}"
+      break
+    }
+    let packages = analyze(modules, kits).filter(pkg => {
+      within(pkg.dir, options.paths)
+    })
+    let open : Array[Package] = []
+    for pkg in packages {
+      if skipped.contains(pkg.dir) ||
+        (options.skips is [_, ..] && within(pkg.dir, options.skips)) {
+        continue
+      }
+      if given.get(pkg.dir) is Some(items) {
+        let left = pkg.candidates.filter(row => items.contains(row.code))
+        if left is [_, ..] {
+          println(
+            "  \{shown(pkg.dir)}: unresolved after its change: \{left.map(row => row.code).join("; ")}",
+          )
+          skipped.push(pkg.dir)
+          continue
+        }
+      }
+      open.push(pkg)
+    }
+    guard open is [_, ..] else {
+      ending = if packages is [] {
+        "fixed point"
+      } else {
+        "fixed point except \{packages.map(pkg => shown(pkg.dir)).join(" ")}"
+      }
+      break
+    }
+    let room = (StartQuota - started) / 2
+    guard room > 0 else {
+      ending = "stopped: the start quota is spent"
+      break
+    }
+    round += 1
+    let limit = if options.max_packages < room {
+      options.max_packages
+    } else {
+      room
+    }
+    let works = select(open, limit)
+    println(
+      "round \{round}: packages=\{open.length()} chosen=\{works.length()}",
+    )
+    let (spent, used) = work_and_review(works, base, options.focus, failures)
+    started += spent
+    tokens += used
+    let accepted = works.filter(work => work.review is Accepted(_))
+    for work in works {
+      print_work(work)
+      if work.review is Accepted(_) {
+        given[work.pkg.dir] = work.pkg.candidates.map(row => row.code)
+      } else {
+        skipped.push(work.pkg.dir)
+      }
+    }
+    guard accepted is [_, ..] else {
+      println("round \{round}: nothing accepted")
+      continue
+    }
+    // Combine: the accepted commits, in package order, on the round's base.
+    // Their files are disjoint, so the picks cannot conflict.
+    ignore(run("git", ["checkout", "-q", "--detach", base]))
+    let picked = @shell.Cmd(
+      "git",
+      [
+        "cherry-pick",
+        ..accepted.filter_map(work => work.change.map(change => change.commit)),
+      ],
+    ).output(timeout_ms=300000)
+    guard picked.exit_code() == 0 else {
+      ignore(
+        @shell.Cmd("git", ["cherry-pick", "--abort"]).output(timeout_ms=60000),
+      ) catch {
+        _ => ()
+      }
+      failures.push(
+        "round \{round}: the accepted changes do not combine: \{first_line(picked.stderr())}",
+      )
+      ending = "stopped: round \{round} does not combine"
+      break
+    }
+    let tip = run("git", ["rev-parse", "HEAD"]).trim().to_owned()
+    let branch = "shrink/r\{round}-\{tip[:8]}"
+    ignore(run("git", ["branch", "-f", branch, tip]))
+    for work in accepted {
+      if work.change is Some(change) {
+        // Its commit is on the round's branch now.
+        ignore(
+          @shell.Cmd("git", ["branch", "-D", change.branch]).output(
+            timeout_ms=30000,
+          ),
+        ) catch {
+          _ => ()
+        }
+      }
+    }
+    // Each package was checked alone; this is the first check of them
+    // together.
+    if combined_check(options.checks) is Some(why) {
+      failures.push("round \{round} (\{branch}) fails its check: \{why}")
+      ending = "stopped: round \{round} fails its check"
+      break
+    }
+    let api = api_change(base, tip)
+    let pr = match target {
+      None => "branch \{branch}"
+      Some(target) =>
+        match open_pr(round, branch, tip, parent, accepted, api, target) {
+          Ok(url) => url
+          Err(why) => {
+            failures.push("round \{round}: \{why}")
+            ending = "stopped: round \{round} was not published"
+            println("round \{round}: tip=\{short(tip)} pr=\{why}")
+            break
+          }
+        }
+    }
+    println(
+      "round \{round}: accepted=\{accepted.length()} tip=\{short(tip)} api: \{api} pr=\{pr}",
+    )
+    stack.push((branch, pr))
+    parent = branch
+    base = tip
+  }
+  // Reviewers may build a change in a worktree inside their scratch lab;
+  // the lab is gone once they end, and this drops the records left behind.
+  ignore(@shell.Cmd("git", ["worktree", "prune"]).output(timeout_ms=30000)) catch {
+    _ => ()
+  }
+  for entry in stack {
+    println("stack: \{entry.0} \{entry.1}")
+  }
+  println("\{ending}: rounds=\{round} starts=\{started} tokens=\{tokens}")
+  // A run that stopped short, or gave packages up, can go on from its last
+  // round: check out that branch and run again with these arguments.
+  if failures is [] && ending != "fixed point" {
+    let last = match stack {
+      [.., (branch, _)] => Some(branch)
+      [] => None
+    }
+    println(
+      "continue from \{last.unwrap_or(start)}: \{continuation(options, last, skipped)}",
+    )
+  }
+  guard failures is [] else {
+    fail("the shrink is incomplete: \{failures.join("; ")}")
+  }
+}
+
+///|
+/// The arguments that run the shrink on from `last`, the branch of its
+/// latest round, with the same scope and limits.
+fn continuation(
+  options : Options,
+  last : String?,
+  skipped : Array[String],
+) -> String {
+  let args : Array[String] = []
+  for dir in options.paths {
+    args.append(["--path", shown(dir)])
+  }
+  if options.max_packages != DefaultPackages {
+    args.append(["--max-packages", options.max_packages.to_string()])
+  }
+  for target in options.checks {
+    args.append(["--check-target", target])
+  }
+  match (options.publish, last, options.stack_on) {
+    (false, _, _) => args.push("--no-pr")
+    (true, Some(branch), _) | (true, None, Some(branch)) =>
+      args.append(["--stack-on", branch])
+    (true, None, None) => ()
+  }
+  for dir in [..options.skips, ..skipped] {
+    args.append(["--skip", shown(dir)])
+  }
+  if !options.focus.is_empty() {
+    args.append(["--", options.focus])
+  }
+  args.join(" ")
+}
+
+///|
+/// Run `program` and return its standard output, failing with its standard
+/// error when it exits nonzero.
+async fn run(program : String, args : Array[String]) -> String {
+  let output = @shell.Cmd(program, args).output(
+    timeout_ms=600000,
+    max_output_bytes=67108864,
+  )
+  guard output.exit_code() == 0 else {
+    fail(
+      "\{program} \{args.join(" ")} failed (exit \{output.exit_code()}): \{output.stderr().trim()}",
+    )
+  }
+  output.stdout()
+}
+
+///|
+/// Where pull requests go: the first round's base branch by name (not its
+/// remote-tracking ref) and the repository every `gh` call names.
+priv struct Target {
+  base : String
+  repo : String
+}
+
+///|
+async fn pr_target(stack_on : String?) -> Target {
+  let base = match stack_on {
+    Some(branch) => {
+      // A continued stack goes on from its last round's tip exactly, so
+      // each pull request carries only its own round.
+      let tip = @shell.Cmd("git", ["rev-parse", "origin/\{branch}"]).output(
+        timeout_ms=30000,
+      )
+      guard tip.exit_code() == 0 &&
+        tip.stdout().trim() == run("git", ["rev-parse", "HEAD"]).trim() else {
+        fail(
+          "HEAD is not origin/\{branch}: check out the last round's branch to continue its stack",
+        )
+      }
+      branch
+    }
+    None => {
+      let resolved = @shell.Cmd("git", [
+        "rev-parse", "--abbrev-ref", "origin/HEAD",
+      ]).output(timeout_ms=30000)
+      let default_ref = resolved.stdout().trim().to_owned()
+      guard resolved.exit_code() == 0 &&
+        default_ref.strip_prefix("origin/") is Some(base) &&
+        !base.is_empty() else {
+        fail(
+          "origin/HEAD does not name the default branch: run `git remote set-head origin --auto`, or pass --no-pr",
+        )
+      }
+      let ancestor = @shell.Cmd("git", [
+        "merge-base", "--is-ancestor", "HEAD", default_ref,
+      ]).output(timeout_ms=30000)
+      guard ancestor.exit_code() == 0 else {
+        fail(
+          "HEAD is not on \{default_ref}, so the first pull request would carry local commits too: update HEAD to \{default_ref}, or pass --no-pr",
+        )
+      }
+      base.to_owned()
+    }
+  }
+  // The repository branches are pushed to, so every PR is opened where its
+  // head branch is, whatever gh would pick by default.
+  let origin = run("git", ["remote", "get-url", "origin"]).trim().to_owned()
+  let repo = run("gh", [
+    "repo", "view", origin, "--json", "nameWithOwner", "--jq", ".nameWithOwner",
+  ]).trim()
+  guard !repo.is_empty() else {
+    fail("gh repo view named no repository for origin (\{origin})")
+  }
+  ignore(run("gh", ["auth", "status"]))
+  { base, repo: repo.to_owned(), }
+}
+
+///|
+/// Tracked files named `moon.pkg`, `moon.pkg.json`, `moon.mod` or
+/// `moon.mod.json`, with their text.
+async fn manifests(names : Array[String]) -> Array[(String, String)] {
+  let found : Array[(String, String)] = []
+  for entry in run("git", ["ls-files", "-z"]).split("\u{0}") {
+    let (dir, name) = parts(entry.to_owned())
+    if names.contains(name) {
+      found.push((dir, @fs.read_file(entry.to_owned()).text()))
+    }
+  }
+  found
+}
+
+///|
+/// Each tracked module's name and directory ("" at the root), so analyzer
+/// package names map to directories.
+async fn module_dirs() -> Array[(String, String)] {
+  [
+    for entry in manifests(["moon.mod", "moon.mod.json"]) if module_name(
+      entry.1,
+    )
+    is Some(name) => (name, entry.0)
+  ]
+}
+
+///|
+/// The `name` a module manifest declares, in either format: `name = "x"` or
+/// `"name": "x"`.
+fn module_name(text : String) -> String? {
+  for line in text.split("\n") {
+    let line = line.trim()
+    let rest = match line {
+      [.. "name", .. rest] => rest.trim_start()
+      [.. "\"name\"", .. rest] => rest.trim_start()
+      _ => continue
+    }
+    guard rest is ['=' | ':', .. value] else { continue }
+    let value = value.trim().trim_end(chars=",")
+    if value is ['"', .. name, '"'] {
+      return Some(name.to_owned())
+    }
+  }
+  None
+}
+
+///|
+/// Packages that other packages import only for their tests: test kits,
+/// whose test-only items are their purpose (shrink_package.md).
+async fn test_kits() -> Array[String] {
+  let production : Array[String] = []
+  let tests : Array[String] = []
+  for entry in manifests(["moon.pkg"]) {
+    // `import { "a", "b" @b, } for "test"`: the names up to the closing
+    // brace, and what follows it.
+    let mut block : Array[String]? = None
+    for line in entry.1.split("\n") {
+      let line = line.trim()
+      match block {
+        None if line.has_prefix("import") && line.has_suffix("{") =>
+          block = Some([])
+        None => ()
+        Some(names) if line.has_prefix("}") => {
+          if line.contains("for \"test\"") || line.contains("for \"wbtest\"") {
+            tests.append(names)
+          } else {
+            production.append(names)
+          }
+          block = None
+        }
+        Some(names) =>
+          if line is ['"', .. rest] && rest.split_once("\"") is Some((name, _)) {
+            names.push(name.to_owned())
+          }
+      }
+    }
+  }
+  for entry in manifests(["moon.pkg.json"]) {
+    let parsed = @json.parse(entry.1) catch { _ => continue }
+    guard parsed is Object(fields) else { continue }
+    for key, value in fields {
+      guard value is Array(items) else { continue }
+      let names = [
+        for item in items if item
+        is (String(name) | { "path": String(name), .. }) => name
+      ]
+      if key == "import" {
+        production.append(names)
+      } else if key is ("test-import" | "wbtest-import") {
+        tests.append(names)
+      }
+    }
+  }
+  [
+    for name in tests if !production.contains(name) => name
+  ]
+}
+
+///|
+/// One candidate: the analyzer's declaration line and its usage comment,
+/// and whether only tests use it.
+priv struct Row {
+  code : String
+  comment : String
+  test_only : Bool
+}
+
+///|
+/// One package with candidates: its directory ("" for the root), its own
+/// tracked source files, and the analyzer rows to resolve.
+priv struct Package {
+  dir : String
+  files : Array[String]
+  candidates : Array[Row]
+}
+
+///|
+/// Run the analyzer over the whole workspace and return the packages that
+/// have candidates, sorted by directory. A test kit's test-only items are
+/// not candidates.
+async fn analyze(
+  modules : Array[(String, String)],
+  kits : Array[String],
+) -> Array[Package] {
+  let output = run("moon", ["ide", "analyze"])
+  // The analyzer checks first, and a check may rewrite interface files;
+  // the next round's checkout must not lose or trip over that.
+  clean(
+    "`moon ide analyze` changed tracked files (an out-of-date pkg.generated.mbti?): commit them first",
+  )
+  let listed = [
+    for entry in run("git", ["ls-files", "-z"]).split("\u{0}") if !entry.is_empty() => {
+      entry.to_owned()
+    }
+  ]
+  let packages : Array[Package] = []
+  for name, rows in candidates(output) {
+    guard package_dir(name, modules) is Some(dir) else { continue }
+    let rows = if kits.contains(name) {
+      rows.filter(row => !row.test_only)
+    } else {
+      rows
+    }
+    let files = listed.filter(file => {
+      let (parent, base) = parts(file)
+      parent == dir && base.has_suffix(".mbt") && !base.has_prefix("generated_")
+    })
+    if files is [_, ..] && rows is [_, ..] {
+      packages.push({ dir, files, candidates: rows, })
+    }
+  }
+  packages.sort_by((a, b) => a.dir.lexical_compare(b.dir))
+  packages
+}
+
+///|
+/// The analyzer's candidates by package name: exported top-level items with
+/// no production use in another package, and types whose visibility can
+/// narrow, leaving out what `exports.mbt` keeps on purpose. Rows without a
+/// usage comment are not counted as unused, and trait implementations are
+/// left out: their counts are not reliable enough to act on.
+fn candidates(output : String) -> Map[String, Array[Row]] {
+  let found : Map[String, Array[Row]] = Map([])
+  let mut current = ""
+  for line in output.split("\n") {
+    if line is [.. "package \"", .. name, '"'] {
+      current = name.to_owned()
+      continue
+    }
+    // Members (fields, variants, trait methods) are indented; the last `//`
+    // starts the comment, as a value may hold a `//` of its own.
+    guard !current.is_empty() &&
+      line is ['p', ..] &&
+      line.rev_split_once("//") is Some((code, comment)) else {
+      continue
+    }
+    let comment = comment.trim()
+    let code = code.trim()
+    guard !comment.contains("in exports.mbt") && !code.has_prefix("pub impl") else {
+      continue
+    }
+    let test_only = match usage(comment) {
+      Some((total, tests)) if total == tests => total > 0
+      _ if comment.has_prefix("(all) or (open) can be removed") => false
+      _ => continue
+    }
+    let row = { code: code.to_owned(), comment: comment.to_owned(), test_only, }
+    match found.get(current) {
+      Some(rows) => rows.push(row)
+      None => found[current] = [row]
+    }
+  }
+  found
+}
+
+///|
+/// The counts of a usage comment `usage: N (M in test)`: uses from other
+/// packages, and how many of them are in tests.
+fn usage(comment : StringView) -> (Int, Int)? {
+  guard comment.strip_prefix("usage: ") is Some(rest) &&
+    rest.split_once(" (") is Some((total, rest)) &&
+    rest.split_once(" in test") is Some((tests, _)) else {
+    return None
+  }
+  match (number(total), number(tests)) {
+    (Some(total), Some(tests)) => Some((total, tests))
+    _ => None
+  }
+}
+
+///|
+/// A decimal count, or None when the text is not one.
+fn number(text : StringView) -> Int? {
+  guard !text.is_empty() else { return None }
+  let mut result = 0
+  for char in text {
+    guard char >= '0' && char <= '9' else { return None }
+    result = result * 10 + char.to_int() - '0'.to_int()
+  }
+  Some(result)
+}
+
+///|
+/// The directory of an analyzer package: the longest module name it falls
+/// under, plus the rest of its name.
+fn package_dir(name : String, modules : Array[(String, String)]) -> String? {
+  let mut best : (String, String)? = None
+  for entry in modules {
+    let (module_name, _) = entry
+    let inside = name == module_name || name.has_prefix("\{module_name}/")
+    if inside &&
+      (
+        best is None ||
+        (best is Some((longest, _)) && module_name.length() > longest.length())
+      ) {
+      best = Some(entry)
+    }
+  }
+  guard best is Some((module_name, dir)) else { return None }
+  let rest = name[module_name.length():].trim_start(chars="/").to_owned()
+  match (dir, rest) {
+    ("", rest) => Some(rest)
+    (dir, "") => Some(dir)
+    (dir, rest) => Some("\{dir}/\{rest}")
+  }
+}
+
+///|
+/// The interface change between two commits: lines removed and added in
+/// pkg.generated.mbti files, and lines added to exports.mbt files.
+async fn api_change(base : String, tip : String) -> String {
+  let mut removed = 0
+  let mut added = 0
+  let mut kept = 0
+  for line in run("git", ["diff", "--numstat", base, tip]).split("\n") {
+    guard line.split("\t").to_array() is [plus, minus, path] else { continue }
+    let plus = number(plus).unwrap_or(0)
+    let minus = number(minus).unwrap_or(0)
+    let (_, name) = parts(path.to_owned())
+    if name == "pkg.generated.mbti" {
+      removed += minus
+      added += plus
+    } else if name == "exports.mbt" {
+      kept += plus
+    }
+  }
+  "pkg.generated.mbti -\{removed} +\{added}, exports.mbt +\{kept}"
+}
+
+///|
+/// A path's directory ("" at the root) and file name.
+fn parts(path : String) -> (String, String) {
+  match path.rev_split_once("/") {
+    Some((dir, name)) => (dir.to_owned(), name.to_owned())
+    None => ("", path)
+  }
+}
+
+///|
+/// A `--path` argument as a directory prefix: no `./`, no trailing `/`, and
+/// "" for the root.
+fn directory(path : String) -> String {
+  let path = path.trim().trim_end(chars="/")
+  let path = path.strip_prefix("./").unwrap_or(path)
+  if path == "." {
+    ""
+  } else {
+    path.to_owned()
+  }
+}
+
+///|
+/// Whether `dir` is one of `paths` or below one; any directory when there are
+/// none.
+fn within(dir : String, paths : Array[String]) -> Bool {
+  paths.is_empty() ||
+  paths.any(path => path.is_empty() || dir == path || dir.has_prefix("\{path}/"))
+}
+
+///|
+/// A directory as shown to people and children: "." for the root.
+fn shown(dir : String) -> String {
+  if dir.is_empty() {
+    "."
+  } else {
+    dir
+  }
+}
+
+///|
+/// What a worker made, once it passed the gate.
+priv struct Change {
+  base : String
+  commit : String
+  branch : String
+  summary : String
+  verification : String
+}
+
+///|
+/// How a change fared in review.
+priv enum Review {
+  Pending
+  Accepted(String)
+  Rejected(String)
+  Unreviewed(String)
+}
+
+///|
+/// One chosen package and what became of it this round.
+priv struct Work {
+  pkg : Package
+  name : String
+  mut worker : String
+  mut change : Change?
+  mut review : Review
+}
+
+///|
+/// The packages with the most candidates (ties by directory), at most `limit`.
+fn select(packages : Array[Package], limit : Int) -> Array[Work] {
+  let ranked = packages.copy()
+  ranked.sort_by((a, b) => {
+    match b.candidates.length().compare(a.candidates.length()) {
+      0 => a.dir.lexical_compare(b.dir)
+      order => order
+    }
+  })
+  [
+    for
+      pkg in ranked[:if ranked.length() < limit {
+        ranked.length()
+      } else {
+        limit
+      }] => {
+      {
+        pkg,
+        name: worktree_name(pkg.dir),
+        worker: "not started",
+        change: None,
+        review: Pending,
+      }
+    }
+  ]
+}
+
+///|
+/// A worktree name the engine accepts: `shrink-`, a hash of the directory
+/// that keeps long paths apart, and as much of the directory as fits.
+fn worktree_name(dir : String) -> String {
+  let slug = StringBuilder()
+  let mut gap = false
+  for char in dir.to_lower() {
+    if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+      if gap && !slug.is_empty() {
+        slug.write_char('-')
+      }
+      gap = false
+      slug.write_char(char)
+    } else {
+      gap = true
+    }
+  }
+  let hash = short_hash(dir)
+  let room = NameChars - "shrink--".length() - hash.length()
+  let slug = String::from_iter(slug.to_string().iter().take(room)).trim_end(
+    chars="-",
+  )
+  let slug = if slug.is_empty() { "root" } else { slug.to_owned() }
+  "shrink-\{hash}-\{slug}"
+}
+
+///|
+/// 32-bit FNV-1a over the text's characters, as 8 hex digits.
+fn short_hash(text : String) -> String {
+  let mut hash : UInt = 2166136261
+  for char in text {
+    hash = (hash ^ char.to_int().reinterpret_as_uint()) * 16777619
+  }
+  let digits = "0123456789abcdef".to_array()
+  String::from_array(
+    [
+      for shift in 0..<8 => {
+        digits[((hash >> (28 - shift * 4)) & 15).reinterpret_as_int()]
+      }
+    ],
+  )
+}
+
+///|
+/// Run one round's workers, at most `LiveWorkers` at once, and review each
+/// change that passes the gate as soon as its worker ends. Returns the
+/// children started and the tokens they spent.
+async fn work_and_review(
+  works : Array[Work],
+  head : String,
+  focus : String,
+  failures : Array[String],
+) -> (Int, Int) {
+  let live : Map[String, Role] = Map([])
+  let mut next = 0
+  let mut started = 0
+  let mut tokens = 0
+  for ;; {
+    while next < works.length() &&
+          live.values().filter(role => role is Worker(_)).count() < LiveWorkers {
+      let index = next
+      next += 1
+      match start_worker(works[index], focus) {
+        Running(id) => {
+          started += 1
+          live[id] = Worker(index)
+        }
+        Refused(why) => {
+          works[index].worker = "not started: \{why}"
+          failures.push(
+            "the worker for \{shown(works[index].pkg.dir)} was not started",
+          )
+        }
+      }
+    }
+    if live.is_empty() {
+      break
+    }
+    for id in wait_any(live.keys().collect()) {
+      guard live.get(id) is Some(role) else { continue }
+      let end = finish(id)
+      // The host reports a worker ended once its outcome is recorded, and
+      // captures its worktree after that: until the capture is done, it is
+      // still running, and it still holds one of the host's worker slots.
+      if role is Worker(_) &&
+        end.subagent
+        is {
+          "workspace": {
+            "worktree": { "state": { "kind": "working", .. }, .. },
+            ..
+          },
+          ..
+        } {
+        continue
+      }
+      live.remove(id)
+      tokens += end.tokens
+      match role {
+        Worker(index) => {
+          let work = works[index]
+          if end.report is None {
+            failures.push(
+              "the worker for \{shown(work.pkg.dir)} did not report",
+            )
+          }
+          match gate(end, head) {
+            Err(why) => work.worker = why
+            Ok(change) => {
+              work.worker = "committed \{short(change.commit)}"
+              work.change = Some(change)
+              let launch = start(
+                "explore",
+                review_input(work, change),
+                "shrink:review-\{shown(work.pkg.dir)}",
+                ReviewSteps,
+              )
+              match launch {
+                Running(id) => {
+                  started += 1
+                  live[id] = Reviewer(index)
+                }
+                Refused(why) => {
+                  work.review = Unreviewed("not started: \{why}")
+                  failures.push(
+                    "the review of \{shown(work.pkg.dir)} was not started",
+                  )
+                }
+              }
+            }
+          }
+        }
+        Reviewer(index) => {
+          let work = works[index]
+          work.review = match end.report {
+            Some(report) => verdict(report)
+            None => {
+              failures.push(
+                "the review of \{shown(work.pkg.dir)} did not report",
+              )
+              Unreviewed("no report: \{end.outcome}")
+            }
+          }
+        }
+      }
+    }
+  }
+  (started, tokens)
+}
+
+///|
+/// Start the worker for `work`, in its own worktree, allowed to change only
+/// its package's source, its interface file and its `exports.mbt`.
+async fn start_worker(work : Work, focus : String) -> Launch {
+  let dir = shown(work.pkg.dir)
+  let (at, last) = match work.pkg.dir.rev_split_once("/") {
+    _ if work.pkg.dir.is_empty() => ("", "root")
+    Some((_, last)) => ("\{work.pkg.dir}/", last.to_owned())
+    None => ("\{work.pkg.dir}/", work.pkg.dir)
+  }
+  // Its source, plus what a shrink may need besides: its manifest (an import
+  // that only a deleted item used), its interface, its exports.mbt and one
+  // whitebox test file for tests that move in.
+  let paths = work.pkg.files.copy()
+  for
+    file in [
+      "\{at}moon.pkg",
+      "\{at}moon.pkg.json",
+      "\{at}exports.mbt",
+      "\{at}\{last}_wbtest.mbt",
+      "\{at}pkg.generated.mbti",
+    ] {
+    if !paths.contains(file) {
+      paths.push(file)
+    }
+  }
+  let rows = rendered(work.pkg.candidates)
+  let focus = if focus.is_empty() {
+    ""
+  } else {
+    "\nEmphasis from the user (never a reason to break the guidance): \{focus}\n"
+  }
+  let task =
+    $|Shrink the public API of the MoonBit package `\{dir}` of this repository, following the guidance in your context. You work in your own git worktree; your change is combined with other packages' changes into one pull request.
+    $|
+    $|Files you may change (no other file; you may create exports.mbt and the _wbtest.mbt file in this list):
+    $|\{paths.join("\n")}
+    $|
+    $|Candidates from `moon ide analyze` (resolve EVERY one):
+    $|\{rows}
+    $|\{focus}
+    $|Rules:
+    $|- Resolve each candidate one of the four ways in the guidance, and nothing else: no unrelated cleanup.
+    $|- First read the AGENTS.md files on the path from the repository root to `\{dir}`, and the guidance they link, and run the validation they require.
+    $|- Before any visibility change, `git grep -n -w <name>` the whole repository for uses the analyzer cannot see.
+    $|- At least run `moon check --deny-warn --no-mbti` from the repository root (the whole workspace) for every target the repository builds, and `moon test` for the package. Then run `moon info` and `moon fmt` with the package path only, never over the whole module (a newer toolchain can rewrite other packages' files, which makes the change unmergeable). Confirm pkg.generated.mbti only lost lines.
+    $|- Report status done only when every required check passed. In summary, list every candidate and what you did with it (dropped pub, deleted, narrowed, moved to exports.mbt with its reason, or left and why). Name each command and its result in verification.
+  let started = @tools.call("subagent", {
+    "kind": "worker",
+    "input": { "task": task, "context": Guidance },
+    "label": "shrink:\{dir}",
+    "worktree": {
+      "name": work.name,
+      "allowed_paths": Json::array(paths.map(Json::string)),
+    },
+  })
+  match started.data {
+    Some({ "job_id": String(id), .. }) => Running(id)
+    _ => Refused(started.content)
+  }
+}
+
+///|
+/// Whether a worker's change may go on to review: committed, on the round's
+/// base, by a worker that reported `done`. The engine commits a worker's
+/// change whatever its outcome, so a commit alone proves nothing.
+fn gate(end : End, head : String) -> Result[Change, String] {
+  guard end.subagent
+    is { "workspace": { "kind": "worktree", "worktree": worktree, .. }, .. } else {
+    return Err("no worktree (\{end.outcome})")
+  }
+  let commit = match worktree {
+    { "state": { "kind": "committed", "commit": String(commit), .. }, .. } =>
+      commit
+    { "state": { "kind": "no_changes", .. }, .. } =>
+      return Err("nothing changed")
+    { "state": { "kind": "unmergeable", "defects": defects, .. }, .. } =>
+      return Err("not mergeable: \{listed(defects)}")
+    { "state": { "kind": "capture_failed", "reasons": reasons, .. }, .. } =>
+      return Err("not captured: \{listed(reasons)}")
+    _ => return Err("not captured (\{end.outcome})")
+  }
+  guard worktree is { "base": String(base), "branch": String(branch), .. } else {
+    return Err("the worktree has no base or branch")
+  }
+  guard base == head else {
+    return Err("started from \{short(base)}, not \{short(head)}")
+  }
+  guard end.report is Some(report) else {
+    return Err("no report (\{end.outcome})")
+  }
+  guard report is { "status": "done", .. } else {
+    return Err(
+      "reported \{text_field(report, "status")}: \{first_line(text_field(report, "summary"))}",
+    )
+  }
+  Ok({
+    base,
+    commit,
+    branch,
+    summary: text_field(report, "summary"),
+    verification: text_field(report, "verification"),
+  })
+}
+
+///|
+/// The reviewer's brief: the change by reference, the candidates it had to
+/// resolve, the author's claim kept apart from the criteria, and how to
+/// answer.
+fn review_input(work : Work, change : Change) -> Json {
+  let rows = rendered(work.pkg.candidates)
+  let query =
+    $|Review ONE change another agent made to shrink the public API of a MoonBit package, and decide whether it should be published. Review nothing else.
+    $|
+    $|## The change
+    $|Package: \{shown(work.pkg.dir)}
+    $|Base: \{change.base}
+    $|Commit: \{change.commit}
+    $|It is not checked out. Read it as git objects: `git diff \{change.base} \{change.commit}` for the patch, `git show \{change.commit}:<file>` for a file after it and `git show \{change.base}:<file>` before it. `git grep <name> \{change.base}` searches the whole repository as it was. To build it, check it out with `git worktree add --detach <a directory in your scratch lab> \{change.commit}`; never create a branch.
+    $|
+    $|## The candidates it had to resolve
+    $|\{rows}
+    $|
+    $|## The author's summary (a claim, not evidence)
+    $|\{change.summary}
+    $|
+    $|## The criteria
+    $|- Every item made private, deleted or narrowed has no production use elsewhere that the change breaks: `git grep -w` other packages, `.mbtx` scripts, js-only packages and modules outside the workspace, not only what the analyzer counts. For a narrowed type, look for struct literals and constructors used outside its package.
+    $|- Every item moved to exports.mbt carries a comment naming one of the guidance's reasons, and the reason is true. "Might be useful" is not a reason; moving items there just to clear the list is grounds to reject.
+    $|- A deletion removes vestigial code, not one half of an API whose other half stays.
+    $|- Behavior is unchanged; tests were moved or converted, not lost (unless they only tested deleted code).
+    $|- Only the package's own files changed, and its pkg.generated.mbti only lost lines (or changed `pub(all)` to `pub`).
+    $|
+    $|## How to answer
+    $|Look for a reason to reject first. The first line of your answer must be exactly one of
+    $|VERDICT: ACCEPT
+    $|VERDICT: REJECT
+    $|followed by your reasoning. Cite each problem with its file, line and a short note.
+  { "query": query, "hints": Guidance }
+}
+
+///|
+/// The reviewer's verdict, read strictly: the answer's first line must be
+/// the verdict token alone (trailing periods aside). A literal `\n` also ends
+/// the line, as live children sometimes write one instead of a newline.
+fn verdict(report : Json) -> Review {
+  let answer = text_field(report, "answer").replace_all(old="\\n", new="\n")
+  let (head, reasoning) = match answer.trim().split("\n").to_array() {
+    [] => ("", "")
+    [head, .. rest] =>
+      (
+        head.trim().trim_end(chars=".").to_owned(),
+        rest.join("\n").trim().to_owned(),
+      )
+  }
+  match head {
+    "VERDICT: ACCEPT" => Accepted(reasoning)
+    "VERDICT: REJECT" => {
+      let problems = match report {
+        { "citations": Array(citations), .. } =>
+          citations.map(citation => {
+            let at = match citation {
+              { "line": Number(line, ..), .. } =>
+                "\{text_field(citation, "file")}:\{line.to_int()}"
+              _ => text_field(citation, "file")
+            }
+            "\n  - \{at}: \{text_field(citation, "note")}"
+          })
+        _ => []
+      }
+      Rejected("\{reasoning}\{problems.join("")}")
+    }
+    _ => Unreviewed("no verdict line")
+  }
+}
+
+///|
+/// Candidate rows as a list for a brief.
+fn rendered(rows : Array[Row]) -> String {
+  rows.map(row => "- `\{row.code}  // \{row.comment}`").join("\n")
+}
+
+///|
+/// Check the combined round: `moon check --deny-warn --no-mbti` once per
+/// target, or once with no target. `--no-mbti` keeps the check from
+/// rewriting interface files in the checkout. The first failure's first
+/// lines, if any.
+async fn combined_check(targets : Array[String]) -> String? {
+  let runs = if targets is [] {
+    [[]]
+  } else {
+    [
+      for target in targets => ["--target", target]
+    ]
+  }
+  for target in runs {
+    let args = ["check", "--deny-warn", "--no-mbti", ..target]
+    let command = "moon \{args.join(" ")}"
+    let checked = @shell.Cmd("moon", args).output(
+      timeout_ms=1800000,
+      max_output_bytes=16777216,
+    ) catch {
+      error => return Some("\{command}: \{error}")
+    }
+    guard checked.exit_code() == 0 else {
+      let output = "\{checked.stdout()}\n\{checked.stderr()}".trim()
+      let lines = output.split("\n").take(20).collect().join("\n")
+      return Some("\{command}:\n\{lines}")
+    }
+  }
+  None
+}
+
+///|
+/// Push the round's tip and open its pull request on top of `parent`; the
+/// URL on success.
+async fn open_pr(
+  round : Int,
+  branch : String,
+  tip : String,
+  parent : String,
+  accepted : Array[Work],
+  api : String,
+  target : Target,
+) -> Result[String, String] {
+  let pushed = @shell.Cmd("git", [
+    "push",
+    "origin",
+    "\{tip}:refs/heads/\{branch}",
+  ]).output(timeout_ms=300000) catch {
+    error => return Err("push failed: \{error}")
+  }
+  guard pushed.exit_code() == 0 else {
+    return Err("push failed: \{first_line(pushed.stderr())}")
+  }
+  let sections = accepted.map(work => {
+    let (change, reasoning) = match (work.change, work.review) {
+      (Some(change), Accepted(reasoning)) => (change, reasoning)
+      _ => abort("only accepted changes are published")
+    }
+    (
+      $|### `\{shown(work.pkg.dir)}`
+      $|\{change.summary}
+      $|
+      $|Verification (by the worker): \{change.verification}
+      $|
+      $|Review: \{reasoning}
+    )
+  })
+  let body =
+    $|Round \{round} of shrinking the public API toward the fixed point where `moon ide analyze` reports no exported item without a production use in another package. One commit per package; each was checked alone by its worker and reviewed by a separate agent, and the round was checked as a whole.
+    $|
+    $|Interface: \{api}.
+    $|
+    $|\{sections.join("\n\n")}
+    $|
+    $|Generated by `@builtin/shrink.mbtx`. Stacked on `\{parent}`. Not merged automatically.
+  let created = @shell.Cmd("gh", [
+    "pr",
+    "create",
+    "--repo",
+    target.repo,
+    "--base",
+    parent,
+    "--head",
+    branch,
+    "--title",
+    "refactor: shrink public API (round \{round})",
+    "--body",
+    body,
+  ]).output(timeout_ms=120000) catch {
+    error =>
+      return Err("pushed to \{branch}, but gh pr create failed: \{error}")
+  }
+  guard created.exit_code() == 0 else {
+    return Err(
+      "pushed to \{branch}, but gh pr create failed: \{first_line(created.stderr())}",
+    )
+  }
+  match created.stdout().trim().split("\n").to_array() {
+    [.., last] => Ok(last.trim().to_owned())
+    [] => Ok(branch)
+  }
+}
+
+///|
+/// One line for a chosen package, and a rejected change's reasons.
+fn print_work(work : Work) -> Unit {
+  let review = match work.review {
+    Pending => "-"
+    Accepted(_) => "accepted"
+    Rejected(_) => "rejected"
+    Unreviewed(why) => "unreviewed: \{why}"
+  }
+  println(
+    "  \{shown(work.pkg.dir)}: candidates=\{work.pkg.candidates.length()} worker=\{work.worker} review=\{review}",
+  )
+  if work.review is Rejected(why) {
+    println("    rejected: \{why}")
+  }
+  if work.change is Some(change) && !(work.review is Accepted(_)) {
+    println(
+      "    kept locally: \{change.branch} (git branch -D \{change.branch})",
+    )
+  }
+}
+
+///|
+/// One child's launch: running as a job, or refused with the reason.
+priv enum Launch {
+  Running(String)
+  Refused(String)
+}
+
+///|
+/// What a running child is to the work loop.
+priv enum Role {
+  Worker(Int)
+  Reviewer(Int)
+}
+
+///|
+/// Start one child through the host.
+async fn start(
+  kind : String,
+  input : Json,
+  label : String,
+  max_steps : Int,
+) -> Launch {
+  let started = @tools.call("subagent", {
+    "kind": kind,
+    "input": input,
+    "label": label,
+    "max_steps": max_steps,
+  })
+  match started.data {
+    Some({ "job_id": String(id), .. }) => Running(id)
+    _ => Refused(started.content)
+  }
+}
+
+///|
+/// Wait until at least one of `ids` has ended, or a minute has passed, and
+/// return the ones that ended.
+async fn wait_any(ids : Array[String]) -> Array[String] {
+  let waited = @tools.call("job_wait", {
+    "job_ids": Json::array(ids.map(Json::string)),
+  })
+  guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
+    fail(waited.content)
+  }
+  [
+    for job in jobs if !(job is { "state": "running", .. }) &&
+    job is { "job_id": String(id), .. } => id
+  ]
+}
+
+///|
+/// What an ended child left: its report if it made one, its subagent record
+/// (where a worker's change is), how it ended, and what it spent.
+priv struct End {
+  report : Json?
+  subagent : Json
+  outcome : String
+  tokens : Int
+}
+
+///|
+/// Read an ended child, its report in chunks that each fit one reply.
+async fn finish(id : String) -> End {
+  let text = StringBuilder()
+  for ;; {
+    let read = @tools.call("job_output", {
+      "job_id": id,
+      "offset": text.to_string().char_length(),
+    })
+    guard read.data is Some(data) else {
+      return {
+        report: None,
+        subagent: Json::null(),
+        outcome: read.content,
+        tokens: 0,
+      }
+    }
+    let subagent = match data {
+      { "subagent": subagent, .. } => subagent
+      _ => Json::null()
+    }
+    let tokens = match subagent {
+      {
+        "usage": {
+          "prompt_tokens": Number(prompt, ..),
+          "completion_tokens": Number(completion, ..),
+          ..
+        },
+        ..
+      } => prompt.to_int() + completion.to_int()
+      _ => 0
+    }
+    let outcome = match data {
+      { "state": { "outcome": String(outcome), .. }, .. } => outcome
+      _ => "ended"
+    }
+    match data {
+      { "report": { "chunk": String(chunk), "complete": complete, .. }, .. } => {
+        text.write_string(chunk)
+        if complete is True {
+          let report = @json.parse(text.to_string())
+          return { report: Some(report), subagent, outcome, tokens, }
+        }
+      }
+      _ => return { report: None, subagent, outcome, tokens, }
+    }
+  }
+}
+
+///|
+/// A count argument from 1 to `maximum`.
+fn count(flag : String, value : String, maximum : Int) -> Int raise {
+  let mut result = 0
+  guard !value.is_empty() && value.length() <= 2 else {
+    fail("\{flag} takes a number from 1 to \{maximum}\n\{Usage}")
+  }
+  for char in value {
+    guard char >= '0' && char <= '9' else {
+      fail("\{flag} takes a number from 1 to \{maximum}\n\{Usage}")
+    }
+    result = result * 10 + char.to_int() - '0'.to_int()
+  }
+  guard result >= 1 && result <= maximum else {
+    fail("\{flag} takes a number from 1 to \{maximum}\n\{Usage}")
+  }
+  result
+}
+
+///|
+fn text_field(json : Json, name : String) -> String {
+  match json {
+    Object(fields) =>
+      match fields.get(name) {
+        Some(String(text)) => text
+        _ => ""
+      }
+    _ => ""
+  }
+}
+
+///|
+fn first_line(text : String) -> String {
+  match text.trim().split("\n").next() {
+    Some(line) => line.trim().to_owned()
+    None => ""
+  }
+}
+
+///|
+/// A JSON array of strings as one line.
+fn listed(json : Json) -> String {
+  match json {
+    Array(items) =>
+      items.map(item => text_field({ "text": item }, "text")).join("; ")
+    _ => ""
+  }
+}
+
+///|
+fn short(commit : String) -> String {
+  String::from_iter(commit.iter().take(10))
+}

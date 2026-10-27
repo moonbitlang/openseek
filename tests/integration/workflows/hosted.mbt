@@ -74,7 +74,7 @@ fn FakeHost::answer(
         return reply("error: 16 subagents are already running", is_error=true)
       }
       // The engine runs at most 8 workers at once and refuses a ninth.
-      if self.name == "simplify" &&
+      if self.name is ("simplify" | "shrink") &&
         arguments is { "kind": "worker", .. } &&
         self.workers.filter(id => self.running.contains(id)).length() >= 8 {
         return reply("error: 8 workers are already running", is_error=true)
@@ -87,6 +87,8 @@ fn FakeHost::answer(
       }
       self.reports[job] = if self.name == "simplify" {
         self.simplify_child(job, arguments)
+      } else if self.name == "shrink" {
+        self.shrink_child(job, arguments)
       } else {
         child_report(self.name, self.mode, job, arguments)
       }
@@ -111,7 +113,7 @@ fn FakeHost::answer(
           self.workspaces[id] = @json.parse(captured)
         }
       }
-      if self.name != "simplify" {
+      if !(self.name is ("simplify" | "shrink")) {
         self.running.clear()
       } else if waiting is [first, ..] &&
         self.running.search(first) is Some(index) {

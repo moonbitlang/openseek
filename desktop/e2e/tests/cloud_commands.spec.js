@@ -49,7 +49,7 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   expect(app.device.pageErrors).toEqual([]);
 });
 
-for (const [name, workflow] of [['simplify', 'simplify.mbtx'], ['ultrareview', 'review.mbtx']]) {
+for (const [name, workflow] of [['simplify', 'simplify.mbtx'], ['shrink', 'shrink.mbtx'], ['ultrareview', 'review.mbtx']]) {
   for (const fresh of [false, true]) {
     test(`Cloud ${name} shares prompt expansion in ${fresh ? 'a new' : 'an existing'} session`, async ({ page }, testInfo) => {
       const app = await open(page);
@@ -59,7 +59,7 @@ for (const [name, workflow] of [['simplify', 'simplify.mbtx'], ['ultrareview', '
       await expect(page.locator('.completion-item').filter({ hasText: `/${name}` })).toBeVisible();
       if (!fresh && name === 'simplify') {
         await task.fill('/');
-        await expect(page.locator('.completion-item')).toHaveCount(4);
+        await expect(page.locator('.completion-item')).toHaveCount(5);
         await page.screenshot({ path: testInfo.outputPath('cloud-shared-slash-menu.png') });
         await task.fill(`/${name}`);
       }
