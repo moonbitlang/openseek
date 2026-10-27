@@ -153,10 +153,6 @@ pub fn UserMessage::submission_id(Self) -> String?
 // Type aliases
 pub using @openseek_protocol {type Content}
 
-pub using @openseek_protocol {type ContentPart}
-
 pub using @openseek_protocol {type Image}
-
-pub using @openseek_protocol {type ImageError}
 
 // Traits
