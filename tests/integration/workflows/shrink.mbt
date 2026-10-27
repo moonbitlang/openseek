@@ -36,6 +36,8 @@ fn FakeHost::shrink_child(
             "answer": "VERDICT: ACCEPT\nevery demoted item is unused\nthe seam names its users",
             "citations": [],
           })
+        "gamma" =>
+          Ok({ "answer": "VERDICT: ACCEPT\ndeleted dead code", "citations": [] })
         "beta" =>
           Ok({
             "answer": "VERDICT: REJECT\nblessed without a reason",
@@ -81,7 +83,8 @@ fn FakeHost::shrink_child(
         None => "1"
       }
       self.fixture["round:\{dir}"] = round
-      if dir == "alpha" && round == "1" {
+      let continuing = self.mode == "shrink-continue"
+      if dir == "alpha" && round == "1" && !continuing {
         // The package's own source, its interface and its exports.mbt: no
         // generated file, no nested package.
         assert_eq(Json::array(paths), [
@@ -108,7 +111,7 @@ fn FakeHost::shrink_child(
       if dir == "kit" {
         assert_true(task.contains("pub fn stray()") && !task.contains("seed"))
       }
-      if dir == "alpha" && round == "2" {
+      if dir == "alpha" && (round == "2" || continuing) {
         assert_true(task.contains("pub fn cascade() -> Int"), msg=task)
       }
       let base = self.fixture["base#\{round}"]
@@ -213,6 +216,10 @@ const FirstAnalysis : String =
   #|
   #|pub fn b() -> Int                                // usage: 0 (0 in test)
   #|
+  #|package "fx/app/gamma"
+  #|
+  #|pub fn g() -> Int                                // usage: 0 (0 in test)
+  #|
   #|package "fx/app/kit"
   #|
   #|pub fn seed() -> Int                             // usage: 2 (2 in test)
@@ -296,7 +303,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
   let artifact = compile(root, temp, "shrink")
   let repo = temp + "/shrink-repo"
   let origin = temp + "/shrink-origin.git"
-  for dir in ["alpha/nested", "beta", "kit", "sub/delta"] {
+  for dir in ["alpha/nested", "beta", "gamma", "kit", "sub/delta"] {
     @fs.mkdir(repo + "/" + dir, recursive=true)
   }
   write(repo + "/README.md", "fixture\n")
@@ -307,6 +314,8 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     "import {\n  \"fx/app/kit\",\n} for \"test\"\n",
   )
   write(repo + "/kit/moon.pkg", "")
+  write(repo + "/gamma/moon.pkg", "")
+  write(repo + "/gamma/g.mbt", "pub fn g() -> Int {\n  8\n}\n")
   write(repo + "/kit/k.mbt", "pub fn stray() -> Int {\n  7\n}\n")
   write(repo + "/alpha/a.mbt", "pub fn dead() -> Int {\n  1\n}\n")
   write(repo + "/alpha/a_test.mbt", "test {\n  ignore(@alpha.dead())\n}\n")
@@ -362,8 +371,11 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
   let beta1 = commit("work-beta-1", head, [
     ("beta/b.mbt", "fn b() -> Int {\n  5\n}\n"),
   ])
+  let gamma1 = commit("work-gamma-1", head, [("gamma/g.mbt", "")])
+  // A change that cannot be combined with alpha's: it edits alpha's file.
+  let clash = commit("work-clash", head, [("alpha/a.mbt", "clash\n")])
   ignore(git(repo, ["checkout", "-q", "--detach", head]))
-  ignore(pinned_git(repo, ["cherry-pick", alpha1]))
+  ignore(pinned_git(repo, ["cherry-pick", alpha1, gamma1]))
   let tip1 = git(repo, ["rev-parse", "HEAD"]).trim().to_owned()
   ignore(git(repo, ["checkout", "-q", "main"]))
   let alpha2 = commit("work-alpha-2", tip1, [("alpha/a.mbt", "// shrunk\n")])
@@ -387,12 +399,15 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
   extra_env["PATH"] = bin + ":" + path
   extra_env["OPENSEEK_GH_FIXTURE"] = calls
   extra_env["OPENSEEK_MOON_FIXTURE"] = calls
+  // The arguments the bounded run prints, which the next mode runs.
+  let mut continued = ""
   let branch1 = "shrink/r1-\{tip1[:8]}"
   let branch2 = "shrink/r2-\{tip2[:8]}"
   for
     mode in [
-      "shrink-publish", "shrink-check-fails", "shrink-rounds", "shrink-none", "shrink-fixed",
-      "shrink-bad-number", "shrink-subdir", "shrink-dirty", "shrink-ahead", "shrink-stack-on",
+      "shrink-publish", "shrink-check-fails", "shrink-conflict", "shrink-rounds",
+      "shrink-continue", "shrink-none", "shrink-fixed", "shrink-bad-number", "shrink-subdir",
+      "shrink-dirty", "shrink-ahead", "shrink-stack-on",
     ] {
     let host = fake_host("shrink", mode)
     host.fixture["base#1"] = head
@@ -400,6 +415,20 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     host.fixture["alpha#1"] = alpha1
     host.fixture["beta#1"] = beta1
     host.fixture["alpha#2"] = alpha2
+    host.fixture["gamma#1"] = if mode == "shrink-conflict" {
+      clash
+    } else {
+      gamma1
+    }
+    let start = if mode == "shrink-continue" { branch1 } else { "main" }
+    if mode == "shrink-continue" {
+      // The continuation starts from round 1's branch, where the analysis is
+      // the second one and alpha's change is made on round 1's tip.
+      host.fixture["base#1"] = tip1
+      host.fixture["alpha#1"] = alpha2
+      write(calls + "/analyze-1.txt", SecondAnalysis)
+      ignore(git(repo, ["checkout", "-q", branch1]))
+    }
     for file in ["gh.jsonl", "moon.jsonl"] {
       if @fs.exists(calls + "/" + file) {
         @fs.remove(calls + "/" + file)
@@ -420,10 +449,13 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     let args = match mode {
       "shrink-publish" =>
         [
-          "--check-target", "native", "--check-target", "js", "--", "keep", "the",
-          "protocol",
+          "--check-target", "native", "--check-target", "js", "--exclude", "sub",
+          "--", "keep", "the", "protocol",
         ]
-      "shrink-check-fails" => ["--no-pr"]
+      // Exactly what the bounded run printed.
+      "shrink-continue" =>
+        continued.split(" ").map(arg => arg.to_owned()).collect()
+      "shrink-check-fails" | "shrink-conflict" => ["--no-pr"]
       "shrink-rounds" => ["--no-pr", "--rounds", "1"]
       "shrink-none" => ["--no-pr", "--path", "beta"]
       "shrink-stack-on" => ["--stack-on", "other"]
@@ -445,8 +477,20 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-ahead" => ignore(git(repo, ["reset", "-q", "--hard", head]))
       _ => ()
     }
-    // Whatever happened, the checkout is back where it was.
-    assert_eq(git(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).trim(), "main")
+    // Whatever happened, the checkout is back where it was, with no pick
+    // left half done.
+    assert_eq(
+      git(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+      start,
+      msg=output,
+    )
+    assert_true(!@fs.exists(repo + "/.git/CHERRY_PICK_HEAD"), msg=output)
+    assert_eq(git(repo, ["status", "--porcelain"]).trim(), "", msg=output)
+    if mode == "shrink-continue" {
+      write(calls + "/analyze-1.txt", FirstAnalysis)
+      ignore(git(repo, ["checkout", "-q", "main"]))
+      ignore(git(repo, ["branch", "-D", branch1, "shrink/r1-\{tip2[:8]}"]))
+    }
     assert_eq(git(repo, ["rev-parse", "HEAD"]).trim(), head)
     let labels = host.starts.map(start => {
       match start {
@@ -476,8 +520,8 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         assert_eq(
           labels,
           [
-            "shrink:alpha", "shrink:beta", "shrink:kit", "shrink:sub/delta", "shrink:review-alpha",
-            "shrink:review-beta", "shrink:alpha", "shrink:review-alpha",
+            "shrink:alpha", "shrink:beta", "shrink:gamma", "shrink:kit", "shrink:review-alpha",
+            "shrink:review-beta", "shrink:review-gamma", "shrink:alpha", "shrink:review-alpha",
           ],
           msg=output,
         )
@@ -528,6 +572,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
             got_head == head_branch &&
             got_title == title &&
             body.contains("### `alpha`") &&
+            (index == 1 || body.contains("### `gamma`")) &&
             body.contains("the seam names its users") &&
             !body.contains("### `beta`"),
             msg=gh_calls[index + 2].stringify(),
@@ -551,16 +596,16 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
             "  beta: candidates=1 worker=committed",
             "    rejected: blessed without a reason\n  - beta/exports.mbt:1: no reason",
             "    kept locally: work-beta-1",
+            "  gamma: candidates=1 worker=committed \{gamma1[:10]} review=accepted",
             "  kit: candidates=1 worker=nothing changed review=-",
-            "  sub/delta: candidates=1 worker=nothing changed review=-",
-            "round 1: accepted=1 tip=\{tip1[:10]} api: pkg.generated.mbti -1 +0, exports.mbt +2 pr=https://github.com/example/repo/pull/7",
+            "round 1: accepted=2 tip=\{tip1[:10]} api: pkg.generated.mbti -1 +0, exports.mbt +2 pr=https://github.com/example/repo/pull/7",
             "round 2: packages=1 chosen=1",
             "  alpha: candidates=1 worker=committed \{alpha2[:10]} review=accepted",
             "round 2: accepted=1 tip=\{tip2[:10]}",
             "stack: \{branch1} https://github.com/example/repo/pull/7",
             "  alpha: unresolved after its change: pub fn cascade() -> Int",
-            "fixed point except alpha beta kit sub/delta: rounds=2 starts=8 tokens=96",
-            "continue from \{branch2}: --check-target native --check-target js --stack-on \{branch2} --skip beta --skip kit --skip sub/delta --skip alpha -- keep the protocol",
+            "fixed point except alpha beta kit sub/delta: rounds=2 starts=9 tokens=108",
+            "continue from \{branch2}: --check-target native --check-target js --stack-on \{branch2} --exclude sub --skip beta --skip kit --skip alpha -- keep the protocol",
           ],
         )
       }
@@ -580,16 +625,45 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
           ],
         )
       }
+      "shrink-conflict" => {
+        assert_eq(moon_calls, ["ide analyze @head"])
+        (false, ["round 1: the accepted changes do not combine: "])
+      }
       "shrink-rounds" => {
         assert_eq(gh_calls.length(), 0, msg=output)
+        // Round 1's branch stays for the next mode, which continues from it.
         assert_eq(git(repo, ["rev-parse", branch1]).trim(), tip1)
-        ignore(git(repo, ["branch", "-D", branch1]))
+        let prefix = "continue from \{branch1}: "
+        guard output
+          .split("\n")
+          .filter_map(line => line.strip_prefix(prefix))
+          .head()
+          is Some(rest) else {
+          fail("no continuation line\n\{output}")
+        }
+        continued = rest.to_owned()
         (
           true,
           [
-            "round 1: accepted=1 tip=\{tip1[:10]} api: pkg.generated.mbti -1 +0, exports.mbt +2 pr=branch \{branch1}",
+            "round 1: accepted=2 tip=\{tip1[:10]} api: pkg.generated.mbti -1 +0, exports.mbt +2 pr=branch \{branch1}",
             "stopped: --rounds 1: rounds=1",
-            "continue from \{branch1}: --no-pr --skip beta --skip kit --skip sub/delta",
+            "\{prefix}--no-pr --rounds 1 --skip beta --skip kit --skip sub/delta",
+          ],
+        )
+      }
+      "shrink-continue" => {
+        // The given-up packages stay given up, and the limit holds: one
+        // round, from round 1's tip, for alpha alone.
+        assert_eq(labels, ["shrink:alpha", "shrink:review-alpha"], msg=output)
+        assert_eq(moon_calls, [
+          "ide analyze @tip1", "check --deny-warn --no-mbti @tip2",
+        ])
+        (
+          true,
+          [
+            "round 1: packages=1 chosen=1",
+            "round 1: accepted=1 tip=\{tip2[:10]}",
+            "stopped: --rounds 1: rounds=1",
           ],
         )
       }

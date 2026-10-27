@@ -5890,8 +5890,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|/// change, and each round becomes one pull request stacked on the previous
           #|/// round's, never merged (docs/plans/shrink-fixed-point.md).
           #|const Usage : String =
-          #|  #|usage: @builtin/shrink.mbtx [--path DIR ...] [--skip DIR ...]
-          #|  #|                            [--max-packages N] [--rounds N]
+          #|  #|usage: @builtin/shrink.mbtx [--path DIR ...] [--exclude DIR ...]
+          #|  #|                            [--skip DIR ...] [--max-packages N] [--rounds N]
           #|  #|                            [--check-target T ...] [--stack-on BRANCH]
           #|  #|                            [--no-pr] [--] [FOCUS...]
           #|  #|
@@ -5908,8 +5908,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  #|an ancestor of origin/HEAD (with --stack-on, exactly origin/BRANCH) and
           #|  #|gh must be signed in.
           #|  #|
-          #|  #|--path DIR (repeatable) shrinks only packages under DIR. --skip DIR
-          #|  #|(repeatable) leaves packages under DIR alone. --max-packages N changes at
+          #|  #|--path DIR (repeatable) shrinks only packages under DIR. --exclude DIR
+          #|  #|(repeatable) leaves packages under DIR alone. --skip DIR (repeatable)
+          #|  #|leaves the one package in DIR alone. --max-packages N changes at
           #|  #|most N packages per round (default 8, at most 16). --rounds N stops after
           #|  #|N rounds. --check-target T (repeatable) checks each combined round with
           #|  #|`moon check --deny-warn --no-mbti --target T` (default: once, with no
@@ -6014,6 +6015,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|async fn main {
           #|  let options = {
           #|    paths: [],
+          #|    excludes: [],
           #|    skips: [],
           #|    max_packages: DefaultPackages,
           #|    rounds: None,
@@ -6032,6 +6034,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      }
           #|      ["--path", dir, .. rest] => {
           #|        options.paths.push(directory(dir))
+          #|        continue rest
+          #|      }
+          #|      ["--exclude", dir, .. rest] => {
+          #|        options.excludes.push(directory(dir))
           #|        continue rest
           #|      }
           #|      ["--skip", dir, .. rest] => {
@@ -6060,6 +6066,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      }
           #|      [
           #|        "--path"
+          #|        | "--exclude"
           #|        | "--skip"
           #|        | "--max-packages"
           #|        | "--rounds"
@@ -6130,6 +6137,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|/// What the command line asked for.
           #|priv struct Options {
           #|  paths : Array[String]
+          #|  /// Directories whose packages are all left alone.
+          #|  excludes : Array[String]
+          #|  /// Single packages left alone.
           #|  skips : Array[String]
           #|  mut max_packages : Int
           #|  mut rounds : Int?
@@ -6186,7 +6196,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    let open : Array[Package] = []
           #|    for pkg in packages {
           #|      if skipped.contains(pkg.dir) ||
-          #|        (options.skips is [_, ..] && within(pkg.dir, options.skips)) {
+          #|        options.skips.contains(pkg.dir) ||
+          #|        (options.excludes is [_, ..] && within(pkg.dir, options.excludes)) {
           #|        continue
           #|      }
           #|      if given.get(pkg.dir) is Some(items) {
@@ -6243,21 +6254,12 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    // Combine: the accepted commits, in package order, on the round's base.
           #|    // Their files are disjoint, so the picks cannot conflict.
           #|    ignore(run("git", ["checkout", "-q", "--detach", base]))
-          #|    let picked = @shell.Cmd(
-          #|      "git",
-          #|      [
-          #|        "cherry-pick",
-          #|        ..accepted.filter_map(work => work.change.map(change => change.commit)),
-          #|      ],
-          #|    ).output(timeout_ms=300000)
-          #|    guard picked.exit_code() == 0 else {
-          #|      ignore(
-          #|        @shell.Cmd("git", ["cherry-pick", "--abort"]).output(timeout_ms=60000),
-          #|      ) catch {
-          #|        _ => ()
-          #|      }
+          #|    let commits = accepted.filter_map(work => {
+          #|      work.change.map(change => change.commit)
+          #|    })
+          #|    if combine(commits) is Some(why) {
           #|      failures.push(
-          #|        "round \{round}: the accepted changes do not combine: \{first_line(picked.stderr())}",
+          #|        "round \{round}: the accepted changes do not combine: \{why}",
           #|      )
           #|      ending = "stopped: round \{round} does not combine"
           #|      break
@@ -6354,6 +6356,12 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      args.append(["--stack-on", branch])
           #|    (true, None, None) => ()
           #|  }
+          #|  if options.rounds is Some(limit) {
+          #|    args.append(["--rounds", limit.to_string()])
+          #|  }
+          #|  for dir in options.excludes {
+          #|    args.append(["--exclude", shown(dir)])
+          #|  }
           #|  for dir in [..options.skips, ..skipped] {
           #|    args.append(["--skip", shown(dir)])
           #|  }
@@ -6361,6 +6369,33 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    args.append(["--", options.focus])
           #|  }
           #|  args.join(" ")
+          #|}
+          #|
+          #|///|
+          #|/// Cherry-pick `commits` onto HEAD. On any failure, a nonzero exit or an
+          #|/// error such as a timeout, the pick is aborted so the checkout can be
+          #|/// restored; the reason, if it failed.
+          #|async fn combine(commits : Array[String]) -> String? {
+          #|  let why = try {
+          #|    let picked = @shell.Cmd("git", ["cherry-pick", ..commits]).output(
+          #|      timeout_ms=300000,
+          #|    )
+          #|    if picked.exit_code() == 0 {
+          #|      return None
+          #|    }
+          #|    first_line(picked.stderr())
+          #|  } catch {
+          #|    error => "\{error}"
+          #|  }
+          #|  let aborted = @shell.Cmd("git", ["cherry-pick", "--abort"]).output(
+          #|    timeout_ms=60000,
+          #|  ) catch {
+          #|    error => return Some("\{why}; the abort failed too: \{error}")
+          #|  }
+          #|  guard aborted.exit_code() == 0 else {
+          #|    Some("\{why}; the abort failed too: \{first_line(aborted.stderr())}")
+          #|  }
+          #|  Some(why)
           #|}
           #|
           #|///|
