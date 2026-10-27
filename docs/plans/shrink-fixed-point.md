@@ -32,10 +32,14 @@ Not candidates:
 - **`pub impl` rows**: the manual demotes some, but a conformance used
   through a trait object cannot be, and the counts don't tell which. They are
   left out of this version, so its fixed point covers the other rows only;
-- **`pub using` rows**: the analyzer does not count uses through a
-  re-export, so they read `usage: 0` while other packages use them (found
+- **re-exports**: the analyzer does not count uses through a `pub using`,
+  so a re-exported item reads `usage: 0` while other packages use it (found
   in the live run: `CloudOrigin`, `Failure`, `RequestError` of
-  `desktop/frontend/cloud`);
+  `desktop/frontend/cloud`). A re-exported type is a `pub using` row, but a
+  re-exported value is listed as a plain declaration (`pub const
+  CloudOrigin …`), so the script reads the package's `pub using` blocks and
+  leaves out every row that declares a re-exported name, or a method of
+  one;
 - **fields, variants and trait methods** (indented rows): a field of a plain
   `pub struct` cannot be made private, so they shrink only through their
   type's narrowing hint;
@@ -398,3 +402,9 @@ Second pass (Codex, xhigh, whole branch): the three fixes above confirmed.
 | MEDIUM: packages of a module with `source = "src"` map to the wrong directory and drop out silently, faking a fixed point | The module's `source` directory is resolved; the fixture's nested module uses one (a negative control without the fix fails) |
 | LOW: no test of a skipped package with an eligible descendant | The skip mode |
 | LOW: no test of a cherry-pick that raises rather than exits nonzero | Not injected: the test host cannot make `git` time out. Both outcomes go through the one `abort_pick`, which the conflict mode exercises |
+
+Third pass (Codex, xhigh, whole branch): the earlier fixes confirmed.
+
+| Codex finding | Resolution |
+|---|---|
+| MEDIUM: a re-exported value is listed as a plain `pub const`, so excluding `pub using` rows misses the live run's own case | Rows declaring a name the package's `pub using` blocks re-export (or a method of one) are left out; the fixture re-exports a value, a type and a renamed function |

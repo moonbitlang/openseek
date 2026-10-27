@@ -88,8 +88,8 @@ fn FakeHost::shrink_child(
         // The package's own source, its interface and its exports.mbt: no
         // generated file, no nested package.
         assert_eq(Json::array(paths), [
-          "alpha/a.mbt", "alpha/a_test.mbt", "alpha/moon.pkg", "alpha/moon.pkg.json",
-          "alpha/exports.mbt", "alpha/alpha_wbtest.mbt", "alpha/pkg.generated.mbti",
+          "alpha/a.mbt", "alpha/a_test.mbt", "alpha/reexport.mbt", "alpha/moon.pkg",
+          "alpha/moon.pkg.json", "alpha/exports.mbt", "alpha/alpha_wbtest.mbt", "alpha/pkg.generated.mbti",
         ])
         // Only the candidates: no blessed export, no used item, no member,
         // no trait implementation.
@@ -103,7 +103,7 @@ fn FakeHost::shrink_child(
         for
           row in [
             "kept", "Url", "used", "impl Show", "x : Int", "Wide::equal", "type Model",
-            "pub using",
+            "pub using", "Origin", "other_name", "Seed::make",
           ] {
           assert_true(!task.contains(row), msg="\{row} in \{task}")
         }
@@ -205,6 +205,9 @@ const FirstAnalysis : String =
   #|pub fn seam() -> Int                             // usage: 3 (3 in test)
   #|pub fn kept() -> Int                             // usage: 0 (0 in test), in exports.mbt
   #|pub using @kit {type Seed}                       // usage: 0 (0 in test)
+  #|pub const Origin : String = "https://a//b"       // usage: 0 (0 in test)
+  #|pub fn other_name() -> Int                       // usage: 0 (0 in test)
+  #|pub fn Seed::make() -> Seed                      // usage: 0 (0 in test)
   #|
   #|// Types and methods
   #|pub(all) struct Wide {                           // (all) or (open) can be removed
@@ -341,6 +344,12 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
   write(repo + "/kit/k.mbt", "pub fn stray() -> Int {\n  7\n}\n")
   write(repo + "/alpha/a.mbt", "pub fn dead() -> Int {\n  1\n}\n")
   write(repo + "/alpha/a_test.mbt", "test {\n  ignore(@alpha.dead())\n}\n")
+  // Re-exports: the analyzer lists the value and the renamed function as
+  // plain declarations, and counts no use that goes through them.
+  write(
+    repo + "/alpha/reexport.mbt",
+    "///|\npub using @kit {\n  Origin,\n  type Seed,\n  stray as other_name,\n}\n",
+  )
   write(repo + "/alpha/generated_x.mbt", "fn x() -> Int {\n  3\n}\n")
   write(
     repo + "/alpha/pkg.generated.mbti",
