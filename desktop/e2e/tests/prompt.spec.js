@@ -25,9 +25,11 @@ async function choose(page, name) {
 
 async function saveCustom(page, app, text) {
   await page.getByRole('textbox', { name: 'Custom prompt', exact: true }).fill(text);
-  await page.getByRole('button', { name: 'Save custom prompt', exact: true }).click();
+  await expect(page.locator('.prompt-save-status')).toHaveText('You have unsaved changes');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect.poll(() => app.hostSettings.custom_prompt).toBe(text);
-  await expect(page.getByRole('button', { name: 'Save custom prompt', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled();
+  await expect(page.locator('.prompt-save-status')).toHaveText('');
 }
 
 async function newChat(page) {

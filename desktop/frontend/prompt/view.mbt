@@ -62,12 +62,24 @@ pub fn Model::view(
                 .data_set("focus-owner", ""),
               "",
             ),
-            @html.button(
-              type_="button",
-              disabled=!ready || saving || self.draft is None,
-              on_click=dispatch(Save),
-              text(locale, if saving { Saving } else { SavePrompt }),
-            ),
+            @html.div(class="prompt-save-bar", [
+              @html.span(
+                class="prompt-save-status",
+                attrs=@html.Attrs::build().role("status"),
+                if self.draft is Some(_) && !saving {
+                  text(locale, UnsavedChanges)
+                } else {
+                  ""
+                },
+              ),
+              @html.button(
+                class="button primary",
+                type_="button",
+                disabled=!ready || saving || self.draft is None,
+                on_click=dispatch(Save),
+                text(locale, if saving { Saving } else { SavePrompt }),
+              ),
+            ]),
           ],
           stack=true,
         ),

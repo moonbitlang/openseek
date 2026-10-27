@@ -5,17 +5,23 @@ priv enum Message {
   AdditionalPromptDescription
   CustomPrompt
   SavePrompt
+  UnsavedChanges
   Saving
 }
 
 ///|
 fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
-    (English, SavePrompt) => "Save custom prompt"
-    (SimplifiedChinese, SavePrompt) => "保存自定义提示词"
-    (TraditionalChinese, SavePrompt) => "儲存自訂提示詞"
-    (Japanese, SavePrompt) => "カスタムプロンプトを保存"
-    (Spanish, SavePrompt) => "Guardar instrucciones personalizadas"
+    (English, SavePrompt) => "Save changes"
+    (SimplifiedChinese, SavePrompt) => "保存更改"
+    (TraditionalChinese, SavePrompt) => "儲存變更"
+    (Japanese, SavePrompt) => "変更を保存"
+    (Spanish, SavePrompt) => "Guardar cambios"
+    (English, UnsavedChanges) => "You have unsaved changes"
+    (SimplifiedChinese, UnsavedChanges) => "有未保存的更改"
+    (TraditionalChinese, UnsavedChanges) => "有尚未儲存的變更"
+    (Japanese, UnsavedChanges) => "未保存の変更があります"
+    (Spanish, UnsavedChanges) => "Hay cambios sin guardar"
     (English, Saving) => "Saving…"
     (SimplifiedChinese, Saving) => "正在保存…"
     (TraditionalChinese, Saving) => "儲存中…"

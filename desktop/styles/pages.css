@@ -263,6 +263,25 @@ h2 {
   font: inherit;
 }
 
+.prompt-save-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.prompt-save-status {
+  flex: 1 1 12rem;
+  min-height: 1.5em;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.prompt-save-bar > .button {
+  flex: none;
+  margin-inline-start: auto;
+}
+
 /* The bring-your-own-key guide inside the API group's card: prose plus
    numbered steps, with its own padding since the card's default is
    row-shaped. */
