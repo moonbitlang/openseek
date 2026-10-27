@@ -117,7 +117,6 @@ pub(all) enum ContextComponent {
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
 } derive(Eq)
-pub fn ContextComponent::render(locale? : @i18n.Locale, Self, Identity, @cmd.Emit[Action]) -> @html.Html
 
 pub(all) struct Draft {
   task : String
@@ -183,9 +182,7 @@ pub(all) struct GitControl {
 type GitPresentation derive(Eq)
 pub fn GitPresentation::GitPresentation(branch~ : String, changes? : GitChanges, pull_request? : GitPullRequest, compare_url? : String, missing_pull_request? : String) -> Self
 pub fn GitPresentation::equal(Self, Self) -> Bool
-pub fn GitPresentation::label(Self) -> String
 pub fn GitPresentation::not_equal(Self, Self) -> Bool
-pub fn GitPresentation::summary(locale? : @i18n.Locale, Self) -> String
 pub fn GitPresentation::tone(Self) -> String
 
 type GitPullRequest derive(Eq)
@@ -262,14 +259,6 @@ pub fn Mention::editor_annotation(String, @common.Range, String, String, side? :
 pub fn Mention::equal(Self, Self) -> Bool
 pub fn Mention::not_equal(Self, Self) -> Bool
 pub fn Mention::to_repr(Self) -> @debug.Repr
-
-type Menu[T] derive(Eq)
-pub fn[T] Menu::Menu(Array[T], loading~ : Bool, draft_without_token~ : String) -> Self[T]
-pub fn[T] Menu::current(Self[T]) -> T?
-pub fn[T : Eq] Menu::equal(Self[T], Self[T]) -> Bool
-pub fn[T : Eq] Menu::not_equal(Self[T], Self[T]) -> Bool
-pub fn[T] Menu::selected(Self[T]) -> Int32
-pub fn[T] Menu::shifted(Self[T], Int32) -> Self[T]
 
 pub(all) struct MissingWorktreeNotice {
   name : String
@@ -415,15 +404,6 @@ pub(all) enum StatusComponent {
   WorktreeStatus(WorktreeControl)
   ApprovalStatus(ApprovalToggle)
 } derive(Eq)
-
-type Trigger derive(Eq)
-pub fn Trigger::draft_without_token(Self) -> String
-pub fn Trigger::equal(Self, Self) -> Bool
-pub fn Trigger::marker(Self) -> String
-pub fn Trigger::matches(Self, Array[String]) -> Bool
-pub fn Trigger::not_equal(Self, Self) -> Bool
-pub fn Trigger::parse(String, inline_markers~ : String) -> Self?
-pub fn Trigger::query(Self) -> String
 
 pub(all) struct WorktreeArchiveDialog {
   refusal : @protocol.ArchiveNeedsForceReply

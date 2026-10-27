@@ -385,10 +385,9 @@ fn ApprovalNotice::render(
 ///|
 /// Render one caller-supplied context state. Keeping this method in the
 /// composer package prevents callers from smuggling arbitrary DOM into the
-/// stable context column. It is public so callers and tests can render the
-/// typed component without reaching through the stateful composer shell.
-pub fn ContextComponent::render(
-  locale~ : @i18n.Locale = English,
+/// stable context column.
+fn ContextComponent::render(
+  locale~ : @i18n.Locale,
   self : ContextComponent,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -825,22 +824,6 @@ pub fn dirty_paths_preview(
   let remaining = dirty_path_count - dirty_paths.length()
   let suffix = if remaining > 0 { ", and \{remaining} more" } else { "" }
   " Changed paths: \{dirty_paths.join(", ")}\{suffix}."
-}
-
-///|
-pub fn WorktreeArchiveDialog::message(
-  locale~ : @i18n.Locale = English,
-  self : WorktreeArchiveDialog,
-) -> String {
-  let refusal = self.refusal
-  let preview = dirty_paths_preview(
-    refusal.dirty_paths,
-    refusal.dirty_path_count,
-  )
-  dynamic_text(
-    locale,
-    DArchiveWarning(refusal.worktree.to_string(), preview.to_string()),
-  )
 }
 
 ///|

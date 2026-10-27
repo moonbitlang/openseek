@@ -19,39 +19,6 @@ pub fn GitChecks::GitChecks(
 }
 
 ///|
-pub fn GitChecks::tone(self : GitChecks) -> String {
-  if self.failed > 0 {
-    "failed"
-  } else if self.pending > 0 {
-    "pending"
-  } else {
-    "passed"
-  }
-}
-
-///|
-pub fn GitChecks::summary(
-  locale~ : @i18n.Locale = English,
-  self : GitChecks,
-) -> String {
-  let parts : Array[String] = []
-  if self.failed > 0 {
-    parts.push(dynamic_text(locale, DFailedChecks(self.failed.to_string())))
-  }
-  if self.pending > 0 {
-    parts.push(dynamic_text(locale, DPendingChecks(self.pending.to_string())))
-  }
-  if self.passed > 0 {
-    parts.push(dynamic_text(locale, DPassedChecks(self.passed.to_string())))
-  }
-  if parts.is_empty() {
-    ui(locale, NoChecks)
-  } else {
-    parts.join(" · ")
-  }
-}
-
-///|
 struct GitPullRequest {
   number : Int32
   title : String
@@ -71,17 +38,6 @@ pub fn GitPullRequest::GitPullRequest(
   checks? : GitChecks,
 ) -> GitPullRequest {
   { number, title, state, draft, url, checks, }
-}
-
-///|
-pub fn GitPullRequest::label(self : GitPullRequest) -> String {
-  let suffix = match self.state {
-    "open" => if self.draft { " Draft" } else { "" }
-    "merged" => " Merged"
-    "closed" => " Closed"
-    _ => ""
-  }
-  "#\{self.number}\{suffix}"
 }
 
 ///|
@@ -137,23 +93,15 @@ pub fn GitPresentation::GitPresentation(
 }
 
 ///|
-pub fn GitPresentation::tone(self : GitPresentation) -> String {
-  self.pull_request
-  .bind(pull_request => pull_request.checks)
-  .map(checks => checks.tone())
-  .unwrap_or("none")
-}
-
-///|
-pub fn GitPresentation::label(self : GitPresentation) -> String {
+fn GitPresentation::label(self : GitPresentation) -> String {
   self.pull_request
   .map(pull_request => pull_request.label())
   .unwrap_or(self.branch)
 }
 
 ///|
-pub fn GitPresentation::summary(
-  locale~ : @i18n.Locale = English,
+fn GitPresentation::summary(
+  locale~ : @i18n.Locale,
   self : GitPresentation,
 ) -> String {
   if self.pull_request is Some(pull_request) {
