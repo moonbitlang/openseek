@@ -1907,7 +1907,9 @@ fn description(
       #|perspectives), `@builtin/repo-map.mbtx` (maps architecture, validation and
       #|extension points), `@builtin/simplify.mbtx` (sweeps MoonBit packages for
       #|safe simplifications and opens one pull request per package; `--no-pr`
-      #|keeps them on local branches) and `@builtin/dream.mbtx` (consolidates
+      #|keeps them on local branches), `@builtin/shrink.mbtx` (shrinks the public
+      #|API in rounds until `moon ide analyze` finds nothing left; one stacked pull
+      #|request per round) and `@builtin/dream.mbtx` (consolidates
       #|high-signal lessons from session logs into `.openseek/memory/MEMORY.md`,
       #|`topics/*.md`, and reusable `.openseek/memory/skills/`; supports `--dry-run`
       #|and `--no-llm`).
