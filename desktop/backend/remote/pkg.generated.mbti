@@ -8,8 +8,6 @@ import {
 }
 
 // Values
-pub const LocalConsoleDevice : String = "host"
-
 pub async fn serve_app_server(@api.ApiState, &@io.Reader, &@io.Writer) -> Unit
 
 // Errors
@@ -24,7 +22,6 @@ pub struct LocalConsole {
 pub async fn LocalConsole::bind(port~ : Int32) -> Self
 pub fn LocalConsole::entry_url(Self) -> String
 pub fn LocalConsole::origin(Self) -> String
-pub fn LocalConsole::port(Self) -> Int32
 pub async fn LocalConsole::run(Self, @api.ApiState, root~ : String, entry~ : String) -> Unit
 
 type RelayActor

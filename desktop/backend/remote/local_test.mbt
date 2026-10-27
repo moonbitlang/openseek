@@ -8,7 +8,7 @@ async test "local login returns canonical shared routes for this device only" {
     group.spawn_bg(no_wait=true, () => {
       console.run(state, root~, entry="index.html")
     })
-    let origin = "http://127.0.0.1:\{console.port()}"
+    let origin = console.origin()
     for
       (destination, expected) in [
         ("/device/host/settings", "/device/host/settings"),

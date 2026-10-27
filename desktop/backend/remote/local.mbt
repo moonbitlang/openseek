@@ -47,83 +47,13 @@ pub struct LocalConsole {
 /// The roster id under which this host lists itself. Not `local`: the browser
 /// bundle keeps that id for the window's own inert channel, and a relay id is
 /// `d_…`, so this one collides with neither.
-pub const LocalConsoleDevice = "host"
+const LocalConsoleDevice = "host"
 
 ///|
-/// Bind the loopback listener on `port`. When that port is taken (another
-/// development host, an unrelated program), a fresh ephemeral port keeps the
-/// console usable; the Settings page shows whichever origin was bound.
-pub async fn LocalConsole::bind(port~ : Int32) -> LocalConsole {
-  guard @entropy.random_hex(32) is Some(token) else {
-    // No OS entropy is a hard failure, never weak randomness.
-    raise @host.HostError("no OS entropy available for the console token")
-  }
-  let server = @http.Server(
-    @socket.Addr::parse("127.0.0.1:\{port}"),
-    reuse_addr=true,
-  ) catch {
-    error => {
-      @xlog.warn(category="transport") <?
-        {
-          "event": "console_port_unavailable",
-          "port": port,
-          "error": "\{error}",
-          "message": "the development console port is taken; this launch serves the console on an ephemeral port",
-        }
-      Server(@socket.Addr::parse("127.0.0.1:0"), reuse_addr=true)
-    }
-  }
-  let name = match @platform.machine_hostname() {
-    Some(hostname) => hostname
-    None => "This device"
-  }
-  {
-    server,
-    token,
-    cookie_name: "seekmoon_session_\{server.addr.port()}",
-    name,
-  }
-}
-
-///|
-pub fn LocalConsole::port(self : LocalConsole) -> Int32 {
+/// The port this console is bound on. Private: consumers read the bound
+/// address through `origin()`, the exported accessor.
+fn LocalConsole::port(self : LocalConsole) -> Int32 {
   self.server.addr.port()
-}
-
-///|
-/// The console's origin, which is also the only `Origin` its routes accept.
-pub fn LocalConsole::origin(self : LocalConsole) -> String {
-  "http://127.0.0.1:\{self.port()}"
-}
-
-///|
-/// The URL a browser opens: the console page pinned to this host, with the
-/// token that makes its document response set the session cookie.
-pub fn LocalConsole::entry_url(self : LocalConsole) -> String {
-  "\{self.origin()}/?device=\{LocalConsoleDevice}&token=\{self.token}"
-}
-
-///|
-/// Accept and serve connections for the app's lifetime. Files come from
-/// `root`, with `/` resolving to `entry` inside it — the directory and
-/// document the window itself loads. Each connection is its own task: a
-/// static fetch answers one request and closes, while an upgraded WebSocket
-/// lives as one client actor until the page goes away.
-pub async fn LocalConsole::run(
-  self : LocalConsole,
-  state : @api.ApiState,
-  root~ : String,
-  entry~ : String,
-) -> Unit {
-  defer self.server.close()
-  @async.with_task_group(group => {
-    for ;; {
-      let (conn, _) = self.server.accept()
-      group.spawn_bg(allow_failure=true, () => {
-        self.handle(state, conn, root~, entry~)
-      })
-    }
-  })
 }
 
 ///|
