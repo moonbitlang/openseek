@@ -194,7 +194,10 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
      one at a time, in package order. The files are disjoint, so this should
      not conflict; the result is one commit per package. After each pick,
      the package's files that the commit left with nothing but comments are
-     `git rm`ed and the commit amended. On any failure (a nonzero exit, or an
+     `git rm`ed, and the commit is amended into
+     `refactor(<dir>): shrink public API` with the worker's summary as its
+     body (the engine names a worker's commit after its worktree). On any
+     failure (a nonzero exit, or an
      error such as a timeout) the pick is aborted and the run stops.
    - The tip is kept on the local branch `shrink/r<k>-<8 of the tip>`.
    - The accepted workers' branches are deleted.
@@ -343,7 +346,7 @@ with evidence:
 The reviewers built each change in their lab, and one proved its key claim
 with an experiment: a `pub` enum stays matchable from another package.
 
-The run surfaced five fixes, now in the script:
+The run surfaced six fixes, now in the script:
 
 - **`pub using` re-exports were false candidates.** The analyzer doesn't
   count uses through them, so they are now left out.
@@ -357,6 +360,10 @@ The run surfaced five fixes, now in the script:
 - **The combined check now covers separate workspaces** (`--check-in`).
   The workers' own `desktop/app` checks were what caught the bad
   narrowings.
+- **Commit names.** Round 1's PR carried the engine's commit names
+  (`subtask shrink-6e675f1b-desktop-frontend-compose: worker changes`), so
+  each pick is now reworded as `refactor(<dir>): shrink public API` with
+  the worker's summary as its body.
 - **Two traps are now in the guidance:** a `pub` type stays matchable and
   readable from other packages, and a `pub extend T with Eq` keeps a type in
   the interface.
