@@ -1,8 +1,6 @@
 import {
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/prompt" @content,
-  "moonbitlang/core/json",
-  "moonbitlang/editor/base/browser",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/i18n",

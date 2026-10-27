@@ -1,36 +1,48 @@
 ///|
-test "prompt default is copied into new chats without changing existing drafts" {
-  let original = {
-    ..test_conversation(),
-    task: "keep this draft",
-    composer_draft_present: true,
+test "host prompt snapshots resolve pending drafts once and leave captured drafts alone" {
+  let host = @interop.ChannelId::Local
+  let pending = test_model()
+    .clear_host_settings()
+    .activate(host, "pending-prompt", host.test_project())
+  assert_true(pending.active().system_prompt is None)
+  assert_false(pending.active().prompt_ready())
+  let settings = {
+    ..host_settings(provider="deepseek", has_deepseek_key=true),
+    prompt_source: "custom",
+    custom_prompt: "  Host instructions\n中文\n",
   }
-  let model = test_model().replace_conversation(original)
-  let custom = "  Custom instructions\n中文\n"
-  let (_, changed) = update(
+  let (_, loaded) = update_dev(
     test_dispatch(),
-    Prompt(@prompt.Edited(custom)),
-    model,
+    HostSettingsLoaded(
+      settings,
+      connection_generation=Some(pending.focused_connection_generation()),
+    ),
+    pending,
   )
-  let complete_prompt = changed.default_prompt.text(changed.default_model)
-  assert_true(complete_prompt != custom)
-  assert_eq(changed.active().system_prompt, original.system_prompt)
-  let fresh = changed.activate(
-    Local,
-    "fresh-prompt",
-    @interop.ChannelId::Local.test_project(),
-  )
-  assert_eq(fresh.active().system_prompt, complete_prompt)
-  let (_, changed_again) = update(
+  let captured = loaded.active().system_prompt
+  assert_true(captured is Some(text) && text.has_suffix(settings.custom_prompt))
+  let changed = loaded.apply_host_settings({
+    ..settings,
+    revision: 1,
+    custom_prompt: "Changed by another client",
+  })
+  assert_eq(changed.active().system_prompt, captured)
+  let other = @interop.ChannelId::Remote("other-host")
+  let switched = changed
+    .clear_host_settings()
+    .activate(other, "other-draft", other.test_project())
+  assert_true(switched.active().system_prompt is None)
+  let (_, stale) = update(
     test_dispatch(),
-    Prompt(@prompt.Selected("builtin_moonbit_guide")),
-    fresh,
+    FromDevice(host, HostSettingsLoaded(settings, connection_generation=None)),
+    switched,
   )
-  assert_eq(changed_again.active().system_prompt, complete_prompt)
-  let returned = changed_again.activate(
-    Local,
-    original.session_id,
-    original.project(),
+  assert_true(stale.active().system_prompt is None)
+  let ready = switched.apply_host_settings({
+    ..settings,
+    custom_prompt: "Other host",
+  })
+  assert_true(
+    ready.active().system_prompt is Some(text) && text.has_suffix("Other host"),
   )
-  assert_eq(returned.active().system_prompt, original.system_prompt)
 }

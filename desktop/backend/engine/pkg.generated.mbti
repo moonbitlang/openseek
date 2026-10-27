@@ -90,7 +90,7 @@ pub async fn submit_session_message(EngineManager, EventSink, String, String, St
 
 pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
 
-pub async fn update_settings(EngineManager, SettingsPatch, followup_behavior? : String, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
+pub async fn update_settings(EngineManager, SettingsPatch, followup_behavior? : String, prompt_source? : String, custom_prompt? : String, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
 
 // Errors
 pub(all) suberror EngineError {

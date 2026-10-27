@@ -1584,9 +1584,27 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // All providers use the composer's model selector; API setup only chooses
   // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
+    ..if model.host_settings_error is Some(error) {
+      [
+        @settings.row(
+          @settings.text(locale, LoadingSettings),
+          [
+            @html.span(error),
+            @html.button(
+              type_="button",
+              on_click=dispatch(RetryHostSettings),
+              shell_text(locale, RetryLabel),
+            ),
+          ],
+          stack=true,
+        ),
+      ]
+    },
     ..model.default_prompt.view(
       locale,
       dispatch.map(msg => Prompt(msg)),
+      ready=settings_loaded,
+      saving=model.settings_saves > 0,
       open=model.select_menu is Some(PromptMenu),
       toggle=dispatch(ToggleSelectMenu(PromptMenu)),
       dismiss=dispatch(CloseSelectMenu),

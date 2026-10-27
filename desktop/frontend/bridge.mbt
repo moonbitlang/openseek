@@ -972,7 +972,7 @@ fn start_payload(
   submission_id : String,
   workspace~ : @common.Uri,
   approval~ : @protocol.OpenSeekApproval,
-  system_prompt~ : String,
+  system_prompt? : String,
   images~ : Array[String] = [],
 ) -> @protocol.StartPayload {
   let session = session.trim().to_owned()
@@ -983,7 +983,7 @@ fn start_payload(
     model: Some(selected_model.to_string()),
     thinking: selected_model.thinking(reasoning),
     approval: Some(approval),
-    system_prompt: Some(system_prompt),
+    system_prompt,
     max_steps: parsed_max_steps(max_steps),
     session,
     workspace: Some(workspace.path),

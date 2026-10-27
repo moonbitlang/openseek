@@ -156,6 +156,7 @@ pub(all) struct SettingsPatch {
 fn settings_status_payload(
   settings : EngineSettings,
   revision : Int32,
+  custom_prompt~ : String = "",
 ) -> @protocol.SettingsStatusPayload {
   {
     revision,
@@ -169,6 +170,11 @@ fn settings_status_payload(
     has_glm_key: settings.glm_api_key is Some(_) || @env.get("GLM") is Some(_),
     has_custom_key: settings.custom_api_key is Some(_),
     followup_behavior: settings.followup_behavior,
+    prompt_source: match settings.raw.get("prompt_source") {
+      Some(String("custom")) => "custom"
+      _ => "builtin_moonbit_guide"
+    },
+    custom_prompt,
   }
 }
 
@@ -185,12 +191,32 @@ async fn EngineManager::settings_snapshot(
 }
 
 ///|
+fn custom_prompt_path() -> @pathx.Path raise {
+  guard @workspaces.global_store_root() is Some(root) else {
+    raise EngineError(
+      "cannot resolve the host user directory for prompt settings",
+    )
+  }
+  root.join("system-prompt.md").to_path()
+}
+
+///|
+async fn load_custom_prompt() -> String {
+  @fsx.read_text_if_exists(custom_prompt_path()).unwrap_or("")
+}
+
+///|
 /// The `settings.get` reply.
 pub async fn settings_status(
   manager : EngineManager,
 ) -> @protocol.SettingsStatusPayload {
-  let (settings, revision) = manager.settings_snapshot()
-  settings_status_payload(settings, revision)
+  manager.settings_lock.acquire()
+  defer manager.settings_lock.release()
+  settings_status_payload(
+    load_engine_settings(manager.runtime_dir),
+    manager.settings_revision,
+    custom_prompt=load_custom_prompt(),
+  )
 }
 
 ///|
@@ -201,6 +227,8 @@ pub async fn update_settings(
   manager : EngineManager,
   patch : SettingsPatch,
   followup_behavior? : String,
+  prompt_source? : String,
+  custom_prompt? : String,
   on_committed? : (@protocol.SettingsStatusPayload) -> Unit,
 ) -> @protocol.SettingsStatusPayload {
   manager.settings_lock.acquire()
@@ -214,7 +242,29 @@ pub async fn update_settings(
       "engine settings were written by a newer SeekMoon; update the app to change them",
     )
   }
+  let edits_json = patch.provider is Some(_) ||
+    patch.custom_api_url is Some(_) ||
+    patch.deepseek_api_key is Some(_) ||
+    patch.glm_api_key is Some(_) ||
+    patch.custom_api_key is Some(_) ||
+    followup_behavior is Some(_) ||
+    prompt_source is Some(_)
+  guard !(custom_prompt is Some(_) && edits_json) else {
+    raise EngineError("save custom prompt text separately from other settings")
+  }
+  // Read before committing; a successful write must not be followed by a
+  // failed read that suppresses its revision and broadcast.
+  let text = match custom_prompt {
+    Some(text) => text
+    None => load_custom_prompt()
+  }
   let raw = current.raw
+  if prompt_source is Some(value) {
+    guard value == "builtin_moonbit_guide" || value == "custom" else {
+      raise EngineError("unknown prompt source '\{value}'")
+    }
+    raw["prompt_source"] = Json(value)
+  }
   if patch.provider is Some(value) {
     guard ApiProvider::parse(value.trim().to_owned()) is Some(provider) else {
       raise EngineError("unknown API provider '\{value}'")
@@ -235,7 +285,13 @@ pub async fn update_settings(
   // old group so the durable file no longer advertises an ignored capability.
   raw.remove("wsl")
   raw["version"] = Json(EngineSettingsVersion.to_double())
-  write_settings_file(dir, Json(raw).stringify(indent=2))
+  if custom_prompt is Some(_) {
+    let path = custom_prompt_path()
+    @fsx.ensure_dir(path.dirname())
+    @fsx.write_text_atomic(path, text)
+  } else {
+    write_settings_file(dir, Json(raw).stringify(indent=2))
+  }
   // Disk is now committed. Advance the process-local order and publish while
   // still holding the same lock, so two clients can never observe revision 2
   // before revision 1. The API shields this finite commit+broadcast section
@@ -244,6 +300,7 @@ pub async fn update_settings(
   let status = settings_status_payload(
     decode_settings(raw),
     manager.settings_revision,
+    custom_prompt=text,
   )
   if on_committed is Some(callback) {
     callback(status)
@@ -429,7 +486,87 @@ async fn with_settings_dir(
   defer (if previous_key is Some(value) { @sys.set_env_var("DEEPSEEK", value) })
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-settings-"))
   defer (@fs.rmdir(dir.to_string(), recursive=true) catch { _ => () })
+  let previous_home = @sys.get_env_var("HOME")
+  let previous_profile = @sys.get_env_var("USERPROFILE")
+  @sys.set_env_var("HOME", dir.to_string())
+  @sys.set_env_var("USERPROFILE", dir.to_string())
+  defer restore_home_env(previous_home)
+  defer (match previous_profile {
+    Some(value) => @sys.set_env_var("USERPROFILE", value)
+    None => @sys.unset_env_var("USERPROFILE")
+  })
   body(dir, new_engine_manager("openseek", runtime_dir=dir))
+}
+
+///|
+async test "host prompt settings preserve literal text and publish only committed changes" {
+  with_settings_dir((dir, manager) => {
+    let empty : SettingsPatch = {
+      provider: None,
+      custom_api_url: None,
+      deepseek_api_key: None,
+      glm_api_key: None,
+      custom_api_key: None,
+    }
+    let committed : Array[Int32] = []
+    let custom = "  Host instructions\n中文\n"
+    let saved = update_settings(manager, empty, custom_prompt=custom, on_committed=status => {
+      committed.push(status.revision)
+    })
+    assert_eq(saved.custom_prompt, custom)
+    assert_eq(@fsx.read_text(custom_prompt_path()), custom)
+    assert_false(@fsx.exists(settings_file(dir)))
+    for source in ["custom", "builtin_moonbit_guide", "custom"] {
+      let selected = update_settings(manager, empty, prompt_source=source)
+      assert_eq(selected.prompt_source, source)
+      assert_eq(selected.custom_prompt, custom)
+    }
+    let another = new_engine_manager("openseek", runtime_dir=dir)
+    assert_eq(settings_status(another).custom_prompt, custom)
+    assert_eq(settings_status(another).prompt_source, "custom")
+    assert_eq(
+      update_settings(manager, empty, custom_prompt="").custom_prompt,
+      "",
+    )
+    let revision = manager.settings_revision
+    let rejected = try {
+      ignore(
+        update_settings(
+          manager,
+          empty,
+          custom_prompt="not committed",
+          prompt_source="custom",
+        ),
+      )
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+    assert_eq(manager.settings_revision, revision)
+    assert_eq(@fsx.read_text(custom_prompt_path()), "")
+    @fs.remove(custom_prompt_path().to_string())
+    @fs.mkdir(custom_prompt_path().to_string())
+    let failed = try {
+      ignore(
+        update_settings(
+          manager,
+          empty,
+          custom_prompt="cannot replace directory",
+          on_committed=status => committed.push(status.revision),
+        ),
+      )
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(failed)
+    assert_eq(committed, [saved.revision])
+    assert_eq(manager.settings_revision, revision)
+    // Existing-session run settings do not depend on reading global prompt text.
+    let (settings, _) = manager.settings_snapshot()
+    assert_true(settings.provider is Deepseek)
+  })
 }
 
 ///|
@@ -445,6 +582,8 @@ async test "missing settings read as the BYOK defaults" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "prompt_source": "builtin_moonbit_guide",
+      "custom_prompt": "",
     })
   })
 }
@@ -463,6 +602,8 @@ async test "the DEEPSEEK env fallback reads as a usable key" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "prompt_source": "builtin_moonbit_guide",
+      "custom_prompt": "",
     })
   })
 }
@@ -484,6 +625,8 @@ async test "a saved key round-trips as presence, never as text" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "prompt_source": "builtin_moonbit_guide",
+      "custom_prompt": "",
     })
     // The status never carries the key; the file carries it trimmed.
     assert_false(status.to_json().stringify().contains("sk-secret"))
@@ -519,6 +662,8 @@ async test "retired hosted providers converge on the DeepSeek default" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "prompt_source": "builtin_moonbit_guide",
+      "custom_prompt": "",
     })
     let text = @fsx.read_text(settings_file(dir))
     assert_true(text.contains("\"provider\": \"deepseek\""))
@@ -555,6 +700,8 @@ async test "a present-but-blank field clears the stored value" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "prompt_source": "builtin_moonbit_guide",
+      "custom_prompt": "",
     })
   })
 }
@@ -852,6 +999,8 @@ async test "the GLM provider stores its own key and reports presence" {
       "has_glm_key": true,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "prompt_source": "builtin_moonbit_guide",
+      "custom_prompt": "",
     })
     // The status never carries the key; the store carries it trimmed, in its
     // own slot rather than DeepSeek's.
@@ -877,6 +1026,8 @@ async test "the GLM env fallback reads as a usable key" {
       "has_glm_key": true,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "prompt_source": "builtin_moonbit_guide",
+      "custom_prompt": "",
     })
   })
 }

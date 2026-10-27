@@ -9,7 +9,6 @@ import {
 }
 
 // Values
-pub fn load(@cmd.Emit[Msg]) -> @cmd.Cmd
 
 // Errors
 
@@ -17,15 +16,17 @@ pub fn load(@cmd.Emit[Msg]) -> @cmd.Cmd
 pub struct Model {
   // private fields
 } derive(Eq)
+pub fn Model::draft_text(Self) -> String?
 pub fn Model::new() -> Self
+pub fn Model::receive(Self, String, String) -> Self
 pub fn Model::text(Self, @deepseek.Model) -> String
 pub fn Model::update(Self, Msg) -> (@cmd.Cmd, Self)
-pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg], open~ : Bool, toggle~ : @cmd.Cmd, dismiss~ : @cmd.Cmd) -> Array[@html.Html]
+pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg], ready~ : Bool, saving~ : Bool, open~ : Bool, toggle~ : @cmd.Cmd, dismiss~ : @cmd.Cmd) -> Array[@html.Html]
 
 pub(all) enum Msg {
-  Loaded(Model)
   Selected(String)
   Edited(String)
+  Save
 }
 
 // Type aliases

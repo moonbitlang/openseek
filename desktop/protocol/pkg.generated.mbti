@@ -3713,6 +3713,8 @@ pub(all) struct SettingsSetPayload {
   glm_api_key : String?
   custom_api_key : String?
   followup_behavior : String?
+  prompt_source : String?
+  custom_prompt : String?
 } derive(Eq, @debug.Debug)
 pub fn SettingsSetPayload::equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3730,6 +3732,8 @@ pub(all) struct SettingsStatusPayload {
   has_glm_key : Bool
   has_custom_key : Bool
   followup_behavior : String
+  prompt_source : String
+  custom_prompt : String
 } derive(Eq, @debug.Debug)
 pub fn SettingsStatusPayload::equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

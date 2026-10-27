@@ -658,6 +658,8 @@ test "a revoked page device is retired without connecting a survivor" {
       has_glm_key: false,
       has_custom_key: false,
       followup_behavior: "steer",
+      prompt_source: "builtin_moonbit_guide",
+      custom_prompt: "",
     }),
     installed_skills: [
       {

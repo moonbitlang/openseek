@@ -43,9 +43,21 @@ This package owns all static prompt composition and retains its existing
 `deepseek.Model` parameter. Desktop and native setup pass the selected typed
 model directly. It has no UI, storage,
 or process dependencies and supports native, wasm, and JS callers.
-The Desktop editor lives in `desktop/frontend/prompt`; its callers
-only handle component messages and capture the complete resulting string when
-creating a draft. Requests forward that captured string.
+The Desktop editor lives in `desktop/frontend/prompt`. Desktop and browser
+clients load the committed defaults from the connected host through
+`settings.get`, save through `settings.set`, and receive `settings.changed`.
+The source selection lives in the host's runtime `engine-settings.json`;
+literal custom additional text lives in that host user's
+`~/.openseek/system-prompt.md`. Text is saved explicitly, independently from
+source selection. Switching to the built-in guide does not delete the text.
+There is no prompt preference in localStorage and no cross-host synchronization.
+
+A new draft captures its complete base prompt once its host settings are ready.
+Already-captured drafts do not change when a client edits the shared default.
+Unsaved editor text stays local to the current host's form and does not change
+new-draft defaults; switching hosts discards that unsaved buffer. External file
+edits are read on the next settings fetch; no filesystem watcher is installed.
+Requests forward the captured string.
 
 Desktop sends the complete base text as `system_prompt`. The host captures it
 once in `sessions/<id>/system-prompt.md`, beside the durable transcript, and
@@ -56,6 +68,3 @@ project instructions, and skills for the new session. Older sessions without
 this file keep the existing default-generation behavior when edited or forked.
 The CLI's `--system-prompt-addendum-file` still appends experiment instructions.
 Saved sessions continue using their complete stored prompt.
-
-The Desktop preference stores its selected source separately from the custom
-editor text, so switching to the built-in guide does not delete saved text.

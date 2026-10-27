@@ -4,11 +4,23 @@ priv enum Message {
   AdditionalPrompt
   AdditionalPromptDescription
   CustomPrompt
+  SavePrompt
+  Saving
 }
 
 ///|
 fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, SavePrompt) => "Save custom prompt"
+    (SimplifiedChinese, SavePrompt) => "保存自定义提示词"
+    (TraditionalChinese, SavePrompt) => "儲存自訂提示詞"
+    (Japanese, SavePrompt) => "カスタムプロンプトを保存"
+    (Spanish, SavePrompt) => "Guardar instrucciones personalizadas"
+    (English, Saving) => "Saving…"
+    (SimplifiedChinese, Saving) => "正在保存…"
+    (TraditionalChinese, Saving) => "儲存中…"
+    (Japanese, Saving) => "保存中…"
+    (Spanish, Saving) => "Guardando…"
     (English, MoonBitGuide) => "MoonBit guide"
     (SimplifiedChinese, MoonBitGuide) => "MoonBit 指南"
     (TraditionalChinese, MoonBitGuide) => "MoonBit 指南"
@@ -25,14 +37,14 @@ fn text(locale : @i18n.Locale, message : Message) -> String {
     (Japanese, CustomPrompt) => "カスタムプロンプト"
     (Spanish, CustomPrompt) => "Instrucciones personalizadas"
     (English, AdditionalPromptDescription) =>
-      "Added to the system prompt for new chats."
+      "Saved on this host and shared by its clients. Applies to new chats."
     (SimplifiedChinese, AdditionalPromptDescription) =>
-      "追加到新对话的系统提示词中。"
+      "保存在当前主机，供连接到此主机的客户端共享，仅影响新对话。"
     (TraditionalChinese, AdditionalPromptDescription) =>
-      "附加至新對話的系統提示詞。"
+      "儲存在目前主機，供連接此主機的用戶端共用，僅套用至新對話。"
     (Japanese, AdditionalPromptDescription) =>
-      "新しいチャットのシステムプロンプトに追加します。"
+      "このホストに保存し、接続するクライアント間で共有します。新しいチャットに適用します。"
     (Spanish, AdditionalPromptDescription) =>
-      "Se añade al prompt del sistema de los chats nuevos."
+      "Se guarda en este host y se comparte entre sus clientes. Se aplica a los chats nuevos."
   }
 }

@@ -5,6 +5,7 @@ test "settings patches preserve optional GLM fields and omit absence" {
     "custom_api_url": null,
     "deepseek_api_key": null,
     "glm_api_key": "glm-secret",
+    "prompt_source": "custom",
     "future_field": true,
   })
   assert_eq(patch.provider, Some("glm"))
@@ -12,7 +13,13 @@ test "settings patches preserve optional GLM fields and omit absence" {
   @debug.assert_eq(patch.to_json(), {
     "provider": "glm",
     "glm_api_key": "glm-secret",
+    "prompt_source": "custom",
   })
+  let text : @protocol.SettingsSetPayload = @json.from_json({
+    "custom_prompt": "",
+  })
+  assert_eq(text.custom_prompt, Some(""))
+  @debug.assert_eq(text.to_json(), { "custom_prompt": "" })
 }
 
 ///|
@@ -25,6 +32,8 @@ test "settings status preserves and requires the GLM capability flag" {
     "has_glm_key": true,
     "has_custom_key": false,
     "followup_behavior": "queue",
+    "prompt_source": "custom",
+    "custom_prompt": "  Rules\n中文\n",
     "future_field": true,
   })
   assert_true(status.has_glm_key)
@@ -35,6 +44,8 @@ test "settings status preserves and requires the GLM capability flag" {
     "has_glm_key": true,
     "has_custom_key": false,
     "followup_behavior": "queue",
+    "prompt_source": "custom",
+    "custom_prompt": "  Rules\n中文\n",
   })
   let missing : @protocol.SettingsStatusPayload? = Some(
     @json.from_json({

@@ -42,7 +42,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   // Sending needs a live engine and a workspace to run in — nothing about the
   // transcript. The record is what the turn writes, not a precondition for
   // starting one, so a reload in flight or a failed one never gates Send.
-  let root_ready = self.bridge_state() is Connected &&
+  let root_ready = conv.prompt_ready() &&
+    self.bridge_state() is Connected &&
     self.api_ready() &&
     checkout_ready
   let primary_action : @composer.PrimaryAction = if conv.is_running() {
@@ -104,6 +105,15 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   // availability, and the top-bar status is owned by the run state — without
   // this notice a dismissed setup modal leaves a greyed Send with no
   // explanation and no way back to the form.
+  if !conv.prompt_ready() {
+    context.push(
+      @composer.ApiSetupNotice(
+        text=self.host_settings_error.unwrap_or(
+          @settings.text(self.locale, LoadingSettings),
+        ),
+      ),
+    )
+  }
   if self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
       shell_text(self.locale, NoEndpoint)

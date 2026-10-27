@@ -23,6 +23,13 @@ async function choose(page, name) {
   await expect(control).toContainText(name);
 }
 
+async function saveCustom(page, app, text) {
+  await page.getByRole('textbox', { name: 'Custom prompt', exact: true }).fill(text);
+  await page.getByRole('button', { name: 'Save custom prompt', exact: true }).click();
+  await expect.poll(() => app.hostSettings.custom_prompt).toBe(text);
+  await expect(page.getByRole('button', { name: 'Save custom prompt', exact: true })).toBeDisabled();
+}
+
 async function newChat(page) {
   await page.locator('.workspace-row').hover();
   await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
@@ -49,8 +56,7 @@ test('custom prompt persists and both sources send complete system prompts', asy
   await choose(page, 'Custom prompt');
   const custom = '  Project instructions\n保留空格、引号 "text" 与 $literal\n';
   const editor = page.getByRole('textbox', { name: 'Custom prompt', exact: true });
-  await editor.fill(custom);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('openseek.prompt')))).toEqual({ kind: 'custom', text: custom });
+  await saveCustom(page, app, custom);
   await page.reload();
   await expect(editor).toHaveValue(custom);
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('custom-prompt-light.png') });
@@ -67,6 +73,12 @@ test('custom prompt persists and both sources send complete system prompts', asy
   await expect(editor).toHaveValue(custom);
   await newChat(page);
   expect((await send(page, app, 'Use the restored custom text')).system_prompt).toBe(complete);
+  await settings(page);
+  app.hostSettings = { ...app.hostSettings, revision: app.hostSettings.revision + 1, custom_prompt: 'Saved by another client' };
+  app.notify('settings.changed', app.hostSettings);
+  await expect(editor).toHaveValue('Saved by another client');
+  await newChat(page);
+  expect((await send(page, app, 'Use the shared host setting')).system_prompt.endsWith('\n\nSaved by another client')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -80,7 +92,7 @@ test('changing the default preserves an existing unsent draft', async ({ page })
   await page.locator('#task').fill('Keep this draft');
   const draft = new URL(page.url()).pathname;
   await choose(page, 'Custom prompt');
-  await page.getByRole('textbox', { name: 'Custom prompt', exact: true }).fill('New default');
+  await saveCustom(page, app, 'New default');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(draft);
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
@@ -88,21 +100,20 @@ test('changing the default preserves an existing unsent draft', async ({ page })
   expect(app.pageErrors).toEqual([]);
 });
 
-test('an empty prompt retains the disabled preference and works in narrow dark Settings', async ({ page }, testInfo) => {
-  await page.addInitScript(() => localStorage.setItem('openseek.moonbit_guide', 'false'));
+test('the host custom prompt can be cleared in narrow dark Settings', async ({ page }, testInfo) => {
   const app = new PromptHarness(page);
+  app.hostSettings.prompt_source = 'custom';
+  app.hostSettings.custom_prompt = 'Text to clear';
   await app.install();
   await app.goto();
   const control = await settings(page);
   await expect(control).toContainText('Custom prompt');
   const editor = page.getByRole('textbox', { name: 'Custom prompt', exact: true });
-  await expect(editor).toHaveValue('');
+  await expect(editor).toHaveValue('Text to clear');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect.poll(() => page.locator('.app > aside').evaluate(el => el.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
-  await editor.fill('Text to clear');
-  await editor.fill('');
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('openseek.prompt')))).toEqual({ kind: 'custom', text: '' });
+  await saveCustom(page, app, '');
   const bounds = await editor.boundingBox();
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
@@ -121,7 +132,7 @@ test('the first native goal carries the same custom prompt as a first message', 
   await app.goto();
   await choose(page, 'Custom prompt');
   const custom = '  Goal instructions\n中文\n';
-  await page.getByRole('textbox', { name: 'Custom prompt', exact: true }).fill(custom);
+  await saveCustom(page, app, custom);
   await newChat(page);
   const task = page.locator('#task');
   await task.fill('/goal');

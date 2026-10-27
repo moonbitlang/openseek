@@ -17,7 +17,6 @@ fn load_saved_settings(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     scheduler.add(load_language(is_desktop~, dispatch))
-    scheduler.add(@prompt.load(dispatch.map(msg => Prompt(msg))))
     scheduler.add(
       dispatch(
         SettingsLoaded(

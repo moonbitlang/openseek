@@ -258,6 +258,8 @@ pub(all) struct SettingsSetPayload {
   glm_api_key : String?
   custom_api_key : String?
   followup_behavior : String?
+  prompt_source : String?
+  custom_prompt : String?
 } derive(Debug, Eq)
 
 ///|
@@ -270,6 +272,8 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
     glm_api_key: object.optional_string("glm_api_key"),
     custom_api_key: object.optional_string("custom_api_key"),
     followup_behavior: object.optional_string("followup_behavior"),
+    prompt_source: object.optional_string("prompt_source"),
+    custom_prompt: object.optional_string("custom_prompt"),
   }
 }
 
@@ -293,6 +297,12 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   }
   if self.custom_api_key is Some(value) {
     fields["custom_api_key"] = Json(value)
+  }
+  if self.prompt_source is Some(value) {
+    fields["prompt_source"] = Json(value)
+  }
+  if self.custom_prompt is Some(value) {
+    fields["custom_prompt"] = Json(value)
   }
   Json(fields)
 }
@@ -1395,6 +1405,8 @@ pub(all) struct SettingsStatusPayload {
   has_glm_key : Bool
   has_custom_key : Bool
   followup_behavior : String
+  prompt_source : String
+  custom_prompt : String
 } derive(Debug, Eq)
 
 ///|
@@ -1408,6 +1420,8 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
     has_glm_key: object.required_bool("has_glm_key"),
     has_custom_key: object.required_bool("has_custom_key"),
     followup_behavior: object.required_string("followup_behavior"),
+    prompt_source: object.required_string("prompt_source"),
+    custom_prompt: object.required_string("custom_prompt"),
   }
 }
 
@@ -1420,6 +1434,8 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
     "has_glm_key": Json(self.has_glm_key),
     "has_custom_key": Json(self.has_custom_key),
     "followup_behavior": Json(self.followup_behavior),
+    "prompt_source": Json(self.prompt_source),
+    "custom_prompt": Json(self.custom_prompt),
   }
   if self.custom_api_url is Some(value) {
     fields["custom_api_url"] = Json(value)

@@ -5,6 +5,8 @@ pub fn Model::view(
   self : Model,
   locale : @i18n.Locale,
   dispatch : @cmd.Emit[Msg],
+  ready~ : Bool,
+  saving~ : Bool,
   open~ : Bool,
   toggle~ : @cmd.Cmd,
   dismiss~ : @cmd.Cmd,
@@ -31,7 +33,7 @@ pub fn Model::view(
             Builtin => "builtin_moonbit_guide"
             Custom => "custom"
           },
-          disabled: false,
+          disabled: !ready || saving,
           open,
           toggle,
           dismiss,
@@ -51,13 +53,20 @@ pub fn Model::view(
           text(locale, CustomPrompt),
           [
             @html.textarea(
-              value=self.custom_text,
+              value=self.draft.unwrap_or(self.custom_text),
+              disabled=!ready || saving,
               rows=6,
               on_input=dispatch.map(text => Edited(text)),
               attrs=@html.Attrs::build()
                 .aria_label(text(locale, CustomPrompt))
                 .data_set("focus-owner", ""),
               "",
+            ),
+            @html.button(
+              type_="button",
+              disabled=!ready || saving || self.draft is None,
+              on_click=dispatch(Save),
+              text(locale, if saving { Saving } else { SavePrompt }),
             ),
           ],
           stack=true,

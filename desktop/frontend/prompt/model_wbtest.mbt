@@ -1,24 +1,14 @@
 ///|
-test "stored prompt sources retain their independent editor contents" {
-  for text in ["", "  Rules\n中文\n"] {
-    let (_, custom) = Model::new().update(Edited(text))
-    let (_, builtin) = custom.update(Selected("builtin_moonbit_guide"))
-    for model in [custom, builtin] {
-      let restored : Model = @json.from_json(ToJson::to_json(model))
-      assert_true(restored == model)
-      let (_, selected) = restored.update(Selected("custom"))
-      assert_eq(selected.custom_text, text)
-      assert_true(selected.source is Custom)
-    }
-  }
-  let legacy_builtin : Model = @json.from_json({
-    "kind": "builtin_moonbit_guide",
-  })
-  assert_true(legacy_builtin == Model::new())
-  let legacy_custom : Model = @json.from_json({
-    "kind": "custom",
-    "text": "saved",
-  })
-  assert_eq(legacy_custom.custom_text, "saved")
-  assert_true(legacy_custom.source is Custom)
+test "host snapshots update committed prompts without discarding unsaved text" {
+  let model = Model::new().receive("custom", "saved")
+  let (_, edited) = model.update(Edited("  unsaved\n中文\n"))
+  assert_eq(edited.text(Deepseek(V4Flash)), model.text(Deepseek(V4Flash)))
+  let remote = edited.receive("builtin_moonbit_guide", "another client")
+  assert_eq(remote.draft_text(), Some("  unsaved\n中文\n"))
+  let saved = remote.receive("custom", "  unsaved\n中文\n")
+  assert_true(saved.draft_text() is None)
+  assert_true(saved.text(Deepseek(V4Flash)).has_suffix("  unsaved\n中文\n"))
+  let (_, cleared) = saved.update(Edited(""))
+  assert_eq(cleared.draft_text(), Some(""))
+  assert_true(cleared.receive("custom", "").draft_text() is None)
 }

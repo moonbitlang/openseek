@@ -698,6 +698,8 @@ pub fn endpoints(
           state.manager,
           payload.to_patch(),
           followup_behavior?=payload.followup_behavior,
+          prompt_source?=payload.prompt_source,
+          custom_prompt?=payload.custom_prompt,
           // Every client renders these settings; clients that did not ask
           // must learn about the committed revision too.
           on_committed=status => state.hub.publish(SettingsChanged(status)),

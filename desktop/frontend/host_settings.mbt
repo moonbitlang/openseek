@@ -17,13 +17,14 @@ fn HostSettings::from_status(
     has_glm_key: payload.has_glm_key,
     has_custom_key: payload.has_custom_key,
     followup_behavior: payload.followup_behavior,
+    prompt_source: payload.prompt_source,
+    custom_prompt: payload.custom_prompt,
   }
 }
 
 ///|
-/// Seed (or refresh) the mirror from the host. A failed or malformed reply
-/// leaves the current mirror in place — the broadcast channel will correct
-/// it on the next change.
+/// Seed (or refresh) the mirror from the host. Failed reads leave the mirror
+/// intact and expose a retry, rather than silently stranding pending drafts.
 fn fetch_host_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -37,7 +38,17 @@ fn fetch_host_settings(
         @commands.settings_get,
         @protocol.EmptyPayload::NoPayload,
       ) catch {
-        _ => return
+        error => {
+          scheduler.add(
+            dispatch(
+              HostSettingsLoadFailed(
+                @interop.bridge_error_text(error),
+                connection_generation~,
+              ),
+            ),
+          )
+          return
+        }
       }
       scheduler.add(
         dispatch(
@@ -116,6 +127,8 @@ fn provider_settings_patch(
     glm_api_key: None,
     custom_api_key: None,
     followup_behavior: None,
+    prompt_source: None,
+    custom_prompt: None,
   }
 }
 
@@ -130,6 +143,8 @@ fn custom_url_settings_patch(url : String) -> @protocol.SettingsSetPayload {
     glm_api_key: None,
     custom_api_key: None,
     followup_behavior: None,
+    prompt_source: None,
+    custom_prompt: None,
   }
 }
 
@@ -167,6 +182,8 @@ fn api_key_settings_patch(
       None
     },
     followup_behavior: None,
+    prompt_source: None,
+    custom_prompt: None,
   }
 }
 
@@ -198,5 +215,7 @@ fn followup_behavior_patch(
     glm_api_key: None,
     custom_api_key: None,
     followup_behavior: Some(behavior.wire()),
+    prompt_source: None,
+    custom_prompt: None,
   }
 }
