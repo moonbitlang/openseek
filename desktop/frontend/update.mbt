@@ -1386,7 +1386,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
       None
     },
     locale: model.locale,
-    model: engine_model.wire(),
+    model: engine_model.to_string(),
     thinking: engine_model.thinking(model.reasoning_for(engine_model)),
     request_epoch: model.file_panel.request_epoch,
     // The native bridge and its watcher survive a page reload. Namespace the
@@ -2276,7 +2276,7 @@ fn update_msg(
       // tiers here is enough — every conversation minted afterwards reads
       // them.
       let default_model = stored
-        .bind(value => EngineModel::parse(value))
+        .bind(value => parse_engine_model(value))
         .unwrap_or(model.default_model)
       let default_agent = agent
         .bind(AgentChoice::parse)
@@ -3924,7 +3924,7 @@ fn update_msg(
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      if conv.engine_model is (Glm53 | Glm53Flash) {
+      if conv.engine_model is Glm(_) {
         (
           reasoning.save_for_glm(),
           { ..model, glm_reasoning: reasoning, select_menu: None, },
@@ -10383,7 +10383,7 @@ test "an approval notification click opens its local conversation" {
 fn encoded_start_workspace(conv : Conversation) -> String? {
   let payload = start_payload(
     "continue",
-    DsPro,
+    Deepseek(V4Pro),
     ReasoningMax,
     "1000",
     conv.session_id,
@@ -10506,7 +10506,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     Started(
       run_id="r-first",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("first-start"),
@@ -10559,7 +10559,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     Started(
       run_id="r-second",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some(second_submission),
@@ -10609,7 +10609,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
     Started(
       run_id="r8",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some(second_submission),
@@ -11038,7 +11038,7 @@ test "a new run frontier includes commits already buffered by reload" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -11981,7 +11981,7 @@ test "session list assigns a Started-first conversation to its durable workspace
     Started(
       run_id="foreign-run",
       session="desktop-started-first",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -12037,7 +12037,7 @@ test "Started places a foreign conversation from its host session root" {
     Started(
       run_id="foreign-run",
       session="desktop-workspace-run",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(
         @interop.ChannelId::Local.test_resource("/C:/work/core/.openseek"),
@@ -13538,7 +13538,7 @@ test "started routes by session without restating its placement" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13615,7 +13615,7 @@ test "started for an unknown session materializes its conversation" {
     Started(
       run_id="r7",
       session="desktop-ghost",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -13646,7 +13646,7 @@ test "started for an unknown session materializes its conversation" {
     Started(
       run_id="r8",
       session="desktop-rootless",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13675,7 +13675,7 @@ test "started places a conversation before the registry arrives" {
       Started(
         run_id="r9",
         session~,
-        model=DsPro,
+        model=Deepseek(V4Pro),
         max_steps=1000,
         session_root~,
         submission_id=None,
@@ -13739,7 +13739,7 @@ test "a run boundary discards the previous turn's live state whole" {
     Started(
       run_id="r-new",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13781,7 +13781,7 @@ test "a distinct started id replaces a stale open run as foreign" {
     Started(
       run_id="r-new",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13826,7 +13826,7 @@ test "a repeated started id is idempotent" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13857,7 +13857,7 @@ test "a start failure cannot close a run opened by a winning push" {
     Started(
       run_id="r-foreign",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("theirs"),
@@ -13960,7 +13960,7 @@ test "a matching Started establishes the run after an undelivered response" {
     Started(
       run_id="r-recovered",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("prompt-id"),
@@ -14002,7 +14002,7 @@ test "an accepted start response opens the run without Started" {
     Started(
       run_id="r-response",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("prompt-id"),
@@ -14065,7 +14065,7 @@ test "an old-host Started without an id is settled by the exact start response" 
     Started(
       run_id="r-old-host",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -14351,7 +14351,7 @@ test "a Started racing ahead of an older runs response stays open" {
     Started(
       run_id="r-after-snapshot",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("foreign-new"),
@@ -14378,7 +14378,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       {
         run_id: "old-run",
         session: "old-session",
-        model: DsPro,
+        model: Deepseek(V4Pro),
         max_steps: 1000,
         session_root: None,
         submission_id: None,
@@ -14474,7 +14474,7 @@ test "an older positive runs row cannot replace a newer Started" {
     Started(
       run_id="r8",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -14489,7 +14489,7 @@ test "an older positive runs row cannot replace a newer Started" {
         {
           run_id: "r7",
           session: "desktop-test",
-          model: DsPro,
+          model: Deepseek(V4Pro),
           max_steps: 1000,
           session_root: None,
           submission_id: None,
@@ -14525,7 +14525,7 @@ test "an older positive runs row cannot resurrect a finished run" {
         {
           run_id: "r7",
           session: "desktop-test",
-          model: DsPro,
+          model: Deepseek(V4Pro),
           max_steps: 1000,
           session_root: None,
           submission_id: None,
@@ -14579,7 +14579,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
     Started(
       run_id="r-fast",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("fast-start"),
@@ -15121,7 +15121,7 @@ test "a foreign background run schedules one causal read after Started" {
     Started(
       run_id="foreign-next",
       session~,
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -15409,7 +15409,7 @@ test "OpenRouter setup requires only its stored custom key" {
   assert_true({ ..openrouter, custom_key_saved: true, }.api_ready())
   // Model choice belongs to the chat, just as with the official endpoint.
   assert_true(
-    { ..openrouter, custom_key_saved: true, default_model: DsPro, }.api_ready(),
+    { ..openrouter, custom_key_saved: true, default_model: Deepseek(V4Pro), }.api_ready(),
   )
 }
 
@@ -15441,12 +15441,12 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.notification_corner is TopLeft)
   assert_true(restored.theme is Dark)
   assert_eq(restored.app_font_size, AppFontSize(15))
-  assert_true(restored.default_model is DsFlash)
+  assert_true(restored.default_model is Deepseek(V4Flash))
   assert_true(restored.default_agent is CodexAgent)
   assert_true(restored.openseek_reasoning is ReasoningHigh)
   assert_true(restored.glm_reasoning is ReasoningMax)
   // The stored conversation outranks the stored default for its own chat.
-  assert_true(restored.active().engine_model is DsPro)
+  assert_true(restored.active().engine_model is Deepseek(V4Pro))
   // Its stored approval choice comes back too; a malformed row is skipped.
   assert_true(
     restored.approval_for(@interop.ChannelId::Local, "desktop-test")
@@ -15479,7 +15479,7 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
   assert_eq(unknown.app_font_size, AppFontSize(14))
-  assert_true(unknown.default_model is DsFlash)
+  assert_true(unknown.default_model is Deepseek(V4Flash))
   assert_true(unknown.openseek_reasoning is ReasoningHigh)
   assert_true(unknown.glm_reasoning is ReasoningOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
@@ -15506,7 +15506,7 @@ test "the model selector switches one conversation, not the app" {
     }),
     model,
   )
-  assert_true(flash.active().engine_model is DsFlash)
+  assert_true(flash.active().engine_model is Deepseek(V4Flash))
   // The handler is pure: applying the same message to the same model produces
   // the same selected/default/stored model state.
   let (_, flash_again) = update(
@@ -15529,9 +15529,9 @@ test "the model selector switches one conversation, not the app" {
     is Some(other) else {
     fail("the second conversation vanished")
   }
-  assert_true(other.engine_model is DsPro)
+  assert_true(other.engine_model is Deepseek(V4Pro))
   // The tier just picked is what conversations opened afterwards start from.
-  assert_true(flash.default_model is DsFlash)
+  assert_true(flash.default_model is Deepseek(V4Flash))
   assert_true(
     flash
     .activate(
@@ -15540,7 +15540,7 @@ test "the model selector switches one conversation, not the app" {
       @interop.ChannelId::Local.test_project(),
     )
     .active().engine_model
-    is DsFlash,
+    is Deepseek(V4Flash),
   )
   let (_, pro) = update(
     dispatch,
@@ -15551,7 +15551,7 @@ test "the model selector switches one conversation, not the app" {
     }),
     flash,
   )
-  assert_true(pro.active().engine_model is DsPro)
+  assert_true(pro.active().engine_model is Deepseek(V4Pro))
 }
 
 ///|
@@ -15570,27 +15570,27 @@ test "a start never overrides the tier picked for the next turn" {
     }),
     test_model(),
   )
-  assert_true(queued.active().engine_model is DsFlash)
+  assert_true(queued.active().engine_model is Deepseek(V4Flash))
   let (_, ran) = update_dev(
     dispatch,
     Started(
       run_id="r1",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
     ),
     queued,
   )
-  assert_true(ran.active().engine_model is DsFlash)
+  assert_true(ran.active().engine_model is Deepseek(V4Flash))
 }
 
 ///|
 test "reopening a conversation recovers its own tier, not the last pick" {
   let dispatch = test_dispatch()
-  // Set the chat on screen to DsFlash, then open a different one and put it
-  // back on DsPro. The second pick moves the default new chats inherit — it
+  // Set the chat on screen to Deepseek(V4Flash), then open a different one and put it
+  // back on Deepseek(V4Pro). The second pick moves the default new chats inherit — it
   // must not follow the first conversation home.
   let (_, flash) = update(
     dispatch,
@@ -15606,7 +15606,7 @@ test "reopening a conversation recovers its own tier, not the last pick" {
     "other-chat",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(other.active().engine_model is DsFlash)
+  assert_true(other.active().engine_model is Deepseek(V4Flash))
   let (_, pro) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-pro", draft={
@@ -15616,7 +15616,7 @@ test "reopening a conversation recovers its own tier, not the last pick" {
     }),
     other,
   )
-  assert_true(pro.default_model is DsPro)
+  assert_true(pro.default_model is Deepseek(V4Pro))
   // Reopening drops the conversation and mints it again (nothing was sent,
   // so `activate` does not retain it) — exactly the path that used to hand
   // back the unrelated default.
@@ -15625,20 +15625,20 @@ test "reopening a conversation recovers its own tier, not the last pick" {
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(reopened.active().engine_model is DsFlash)
+  assert_true(reopened.active().engine_model is Deepseek(V4Flash))
 }
 
 ///|
 test "a run pins an inherited tier the user never clicked for" {
   let dispatch = test_dispatch()
-  // This chat never touched the chip — it just inherited DsPro and ran. That
+  // This chat never touched the chip — it just inherited Deepseek(V4Pro) and ran. That
   // still has to pin, or a later toggle elsewhere silently retiers it.
   let (_, ran) = update_dev(
     dispatch,
     Started(
       run_id="r1",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -15647,9 +15647,9 @@ test "a run pins an inherited tier the user never clicked for" {
   )
   assert_true(
     ran.remembered_model(@interop.ChannelId::Local, "desktop-test")
-    is Some(DsPro),
+    is Some(Deepseek(V4Pro)),
   )
-  // Another chat moves the page default to DsFlash...
+  // Another chat moves the page default to Deepseek(V4Flash)...
   let elsewhere = ran.activate(
     @interop.ChannelId::Local,
     "other-chat",
@@ -15664,14 +15664,14 @@ test "a run pins an inherited tier the user never clicked for" {
     }),
     elsewhere,
   )
-  assert_true(moved.default_model is DsFlash)
+  assert_true(moved.default_model is Deepseek(V4Flash))
   // ...and the first one still comes back on the tier it ran with.
   let reopened = moved.activate(
     @interop.ChannelId::Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(reopened.active().engine_model is DsPro)
+  assert_true(reopened.active().engine_model is Deepseek(V4Pro))
 }
 
 ///|
@@ -15918,7 +15918,7 @@ test "a begun conversation never changes agents" {
     Started(
       run_id="r1",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -15959,7 +15959,7 @@ test "an OpenSeek pick on a composing Codex draft hands the chat back" {
   )
   assert_false(back.codex.composing_draft())
   assert_true(back.default_agent is OpenSeekAgent)
-  assert_true(back.default_model is DsFlash)
+  assert_true(back.default_model is Deepseek(V4Flash))
 }
 
 ///|
@@ -16047,7 +16047,9 @@ test "remembered tiers survive a round trip through storage" {
     encoded_conversation_models(chosen.conversation_models),
   )
   assert_eq(restored, chosen.conversation_models)
-  assert_true(restored is [{ key: "local/desktop-test", model: DsFlash, }])
+  assert_true(
+    restored is [{ key: "local/desktop-test", model: Deepseek(V4Flash), }],
+  )
 }
 
 ///|
@@ -16057,16 +16059,20 @@ test "a write merges into the stored rows instead of replacing them" {
   // tab's row — that conversation would silently revert to the default.
   let stored = parse_conversation_models(
     encoded_conversation_models([
-      { key: "remote.b/sibling-chat", model: DsFlash, },
-      { key: "remote.a/desktop-test", model: DsPro, },
+      { key: "remote.b/sibling-chat", model: Deepseek(V4Flash), },
+      { key: "remote.a/desktop-test", model: Deepseek(V4Pro), },
     ]),
   )
-  let merged = remembered_with(stored, "remote.a/desktop-test", DsFlash)
+  let merged = remembered_with(
+    stored,
+    "remote.a/desktop-test",
+    Deepseek(V4Flash),
+  )
   assert_true(
     merged
     is [
-      { key: "remote.a/desktop-test", model: DsFlash, },
-      { key: "remote.b/sibling-chat", model: DsFlash, },
+      { key: "remote.a/desktop-test", model: Deepseek(V4Flash), },
+      { key: "remote.b/sibling-chat", model: Deepseek(V4Flash), },
     ],
   )
 }
@@ -16079,7 +16085,7 @@ fn encoded_conversation_models(
 ) -> String {
   let rows : Array[Json] = entries.map(entry => {
     "key": Json(entry.key),
-    "model": Json(entry.model.wire()),
+    "model": Json(entry.model.to_string()),
   })
   Json(rows).stringify()
 }
@@ -16094,9 +16100,9 @@ test "the remembered list stays capped, newest first" {
       @interop.ChannelId::Local,
       "session-\{index}",
       if index % 2 == 0 {
-        DsFlash
+        Deepseek(V4Flash)
       } else {
-        DsPro
+        Deepseek(V4Pro)
       },
     )
   }
@@ -16109,18 +16115,18 @@ test "the remembered list stays capped, newest first" {
       @interop.ChannelId::Local,
       "session-\{ConversationModelsLimit}",
     )
-    is Some(DsFlash),
+    is Some(Deepseek(V4Flash)),
   )
   // Re-choosing an existing conversation moves it, never duplicates it.
   let again = model.remember_model(
     @interop.ChannelId::Local,
     "session-1",
-    DsFlash,
+    Deepseek(V4Flash),
   )
   assert_eq(again.conversation_models.length(), ConversationModelsLimit)
   assert_true(
     again.remembered_model(@interop.ChannelId::Local, "session-1")
-    is Some(DsFlash),
+    is Some(Deepseek(V4Flash)),
   )
 }
 
@@ -16135,7 +16141,7 @@ test "a conversation first met through a live run adopts its tier" {
     Started(
       run_id="r2",
       session="background-chat",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -16144,7 +16150,7 @@ test "a conversation first met through a live run adopts its tier" {
     // contrasts with both of the things it must not move.
     test_model().replace_conversation({
       ..test_conversation(),
-      engine_model: DsFlash,
+      engine_model: Deepseek(V4Flash),
     }),
   )
   guard background.find_conversation(
@@ -16154,9 +16160,9 @@ test "a conversation first met through a live run adopts its tier" {
     is Some(conv) else {
     fail("the background run materialized no conversation")
   }
-  assert_true(conv.engine_model is DsPro)
-  assert_true(background.active().engine_model is DsFlash)
-  assert_true(background.default_model is DsFlash)
+  assert_true(conv.engine_model is Deepseek(V4Pro))
+  assert_true(background.active().engine_model is Deepseek(V4Flash))
+  assert_true(background.default_model is Deepseek(V4Flash))
 }
 
 ///|
@@ -16381,8 +16387,8 @@ test "the GLM provider aligns only a fresh chat to its model family" {
     glm_key_saved: true,
   })
   assert_true(glm.api_provider is Glm)
-  assert_true(glm.default_model is Glm53)
-  assert_true(glm.active().engine_model is Glm53)
+  assert_true(glm.default_model is Glm(G53))
+  assert_true(glm.active().engine_model is Glm(G53))
   // GLM's forced-thinking default is the shared low wire value, independent
   // from the High preference DeepSeek keeps.
   assert_true(glm.reasoning_for(glm.active().engine_model) is ReasoningOff)
@@ -16397,8 +16403,8 @@ test "the GLM provider aligns only a fresh chat to its model family" {
     ),
     test_model(),
   )
-  assert_true(restored.default_model is Glm53)
-  assert_true(restored.active().engine_model is Glm53)
+  assert_true(restored.default_model is Glm(G53))
+  assert_true(restored.active().engine_model is Glm(G53))
   // Startup is order-independent: if the host's GLM snapshot arrives before
   // localStorage, the later DeepSeek model preference cannot reintroduce a
   // mismatched fresh chat.
@@ -16422,14 +16428,14 @@ test "the GLM provider aligns only a fresh chat to its model family" {
     ),
     restored,
   )
-  assert_true(preferences_after_host.default_model is Glm53)
-  assert_true(preferences_after_host.active().engine_model is Glm53)
+  assert_true(preferences_after_host.default_model is Glm(G53))
+  assert_true(preferences_after_host.active().engine_model is Glm(G53))
   // Once a conversation has begun, its pinned model remains explicit and
   // visible for the user to change rather than being rewritten by Settings.
   let (_, running) = update(dispatch, ProviderChanged("glm"), running_model())
   assert_true(running.api_provider is Glm)
-  assert_true(running.default_model is Glm53)
-  assert_true(running.active().engine_model is DsPro)
+  assert_true(running.default_model is Glm(G53))
+  assert_true(running.active().engine_model is Deepseek(V4Pro))
   assert_true(running.display_status() is Running)
 }
 
@@ -17393,7 +17399,7 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   let dispatch = test_dispatch()
   let glm = test_model().replace_conversation({
     ..test_conversation(),
-    engine_model: Glm53,
+    engine_model: Glm(G53),
   })
   guard glm.openseek_reasoning_chip(glm.active()) is Some(control) else {
     fail("GLM reasoning control was hidden")
@@ -17407,7 +17413,7 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   assert_true(glm_max.openseek_reasoning is ReasoningHigh)
   let deepseek = glm_max.replace_conversation({
     ..glm_max.active(),
-    engine_model: DsPro,
+    engine_model: Deepseek(V4Pro),
   })
   let (_, deepseek_off) = update(dispatch, OpenSeekEffortPicked("no"), deepseek)
   assert_true(deepseek_off.openseek_reasoning is ReasoningOff)
@@ -18280,7 +18286,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     Started(
       run_id="unrelated-run",
       session=deleted_item.id,
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(
         @interop.ChannelId::Local.test_resource("/project/.openseek"),
@@ -18303,7 +18309,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     Started(
       run_id="recreated-run",
       session=deleted_item.id,
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -23646,17 +23652,17 @@ test "a workflow entry refines the parent conversation's run" {
 test "file context inherits the conversation model and its reasoning family" {
   let model = {
     ..test_model(),
-    default_model: DsPro,
+    default_model: Deepseek(V4Pro),
     openseek_reasoning: ReasoningMax,
     glm_reasoning: ReasoningOff,
   }
   let conv = test_conversation()
-  for engine_model in [EngineModel::DsFlash, Glm53] {
+  for engine_model in [@deepseek.Model::Deepseek(V4Flash), Glm(G53)] {
     let ctx = file_ctx(model.replace_conversation({ ..conv, engine_model, }))
-    assert_eq(ctx.model, engine_model.wire())
+    assert_eq(ctx.model, engine_model.to_string())
     assert_eq(
       ctx.thinking,
-      if engine_model is Glm53 {
+      if engine_model is Glm(G53) {
         Some(@protocol.ThinkingOff)
       } else {
         Some(@protocol.ThinkingMax)

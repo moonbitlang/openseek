@@ -96,8 +96,8 @@ fn save_fps_overlay(enabled : Bool) -> @cmd.Cmd {
 
 ///|
 /// Persist the tier new conversations start from.
-fn save_default_model(model : EngineModel) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => save_setting(ModelStorageKey, model.wire()))
+fn save_default_model(model : @deepseek.Model) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(ModelStorageKey, model.to_string()))
 }
 
 ///|
@@ -146,14 +146,14 @@ fn OpenSeekReasoning::save_for_glm(self : OpenSeekReasoning) -> @cmd.Cmd {
 ///
 /// The list is written as an array, not an object: newest first is the cap's
 /// eviction order, which an object's key order would not promise.
-fn save_conversation_model(key : String, model : EngineModel) -> @cmd.Cmd {
+fn save_conversation_model(key : String, model : @deepseek.Model) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     let stored = load_setting(ConversationModelsStorageKey)
       .map(parse_conversation_models)
       .unwrap_or([])
     let rows : Array[Json] = remembered_with(stored, key, model).map(entry => {
       "key": Json(entry.key),
-      "model": Json(entry.model.wire()),
+      "model": Json(entry.model.to_string()),
     })
     save_setting(ConversationModelsStorageKey, Json(rows).stringify())
   })
@@ -208,7 +208,7 @@ fn parse_conversation_models(text : String) -> Array[StoredConversationModel] {
       fields.get("key") is Some(String(key)) &&
       !key.is_empty() &&
       fields.get("model") is Some(String(wire)) &&
-      EngineModel::parse(wire) is Some(model) {
+      parse_engine_model(wire) is Some(model) {
       entries.push({ key, model, })
     }
   }

@@ -2,72 +2,32 @@
 using @engine_session {type CompactionPhase, type GoalCommand, type GoalRequest}
 
 ///|
-/// Which model a conversation's turns run with. The composer's shared selector
-/// offers the DeepSeek service tiers or the GLM models, following the
-/// configured provider; `Other` retains a wire name this build does not know —
-/// a run started with `OPENSEEK_MODEL` set, or a newer engine's model echoed
-/// back by `agent.started` — so the chip reports what the engine actually ran
-/// instead of a tier it never used.
-priv enum EngineModel {
-  DsPro
-  DsFlash
-  Glm53
-  Glm53Flash
-  Other(String)
-} derive(Eq, Debug)
-
-///|
-fn EngineModel::wire(self : EngineModel) -> String {
-  match self {
-    DsPro => "deepseek-v4-pro"
-    DsFlash => "deepseek-flash"
-    Glm53 => "glm-5.3"
-    Glm53Flash => "glm-5.3-flash"
-    Other(name) => name
+/// Read model names at storage and protocol boundaries. Unsupported names use
+/// the caller's existing absent-value handling.
+fn parse_engine_model(value : StringView) -> @deepseek.Model? {
+  Some(@deepseek.Model::parse(value.trim().to_owned())) catch {
+    _ => None
   }
 }
 
 ///|
-/// Read a wire name. A blank one is the absence of a model, not a tier, so it
-/// reads as `None` — stored preferences fall back to what they already had,
-/// and the event decoders treat it like the missing field it is. The retired
-/// `deepseek-v4-flash` name still reads as the flash tier, so a preference
-/// stored by an older build keeps selecting it.
-fn EngineModel::parse(value : StringView) -> EngineModel? {
-  match value.trim() {
-    "deepseek-v4-pro" => Some(DsPro)
-    "deepseek-flash" | "deepseek-v4-flash" => Some(DsFlash)
-    "glm-5.3" => Some(Glm53)
-    "glm-5.3-flash" => Some(Glm53Flash)
-    "" => None
-    name => Some(Other(name.to_owned()))
+/// The product-facing model name shown on the composer chip.
+fn @deepseek.Model::label(self : @deepseek.Model) -> String {
+  match self {
+    Deepseek(V4Pro) => "DS Pro"
+    Deepseek(V4Flash) => "DS Flash"
+    Glm(G53) => "GLM 5.3"
+    Glm(G53Flash) => "GLM 5.3 Flash"
+    Kimi(_) => self.to_string()
   }
 }
 
 ///|
-/// The product-facing model name shown on the composer chip. An unknown model
-/// keeps its wire name, so a custom endpoint never renders as a blank label.
-fn EngineModel::label(self : EngineModel) -> String {
+/// Whether this Desktop model exposes the no/high/max reasoning selector.
+fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
   match self {
-    DsPro => "DS Pro"
-    DsFlash => "DS Flash"
-    Glm53 => "GLM 5.3"
-    Glm53Flash => "GLM 5.3 Flash"
-    Other(name) => name
-  }
-}
-
-///|
-/// Whether this Desktop model is one whose request format accepts the
-/// `no`/`high`/`max` reasoning setting: the DeepSeek models, and the GLM
-/// models (the engine maps `no` to GLM's lowest supported effort, because
-/// GLM 5.3 always reasons). Unknown models include providers such as Kimi,
-/// where sending this setting would claim a capability the model does not
-/// expose.
-fn EngineModel::supports_reasoning(self : EngineModel) -> Bool {
-  match self {
-    DsPro | DsFlash | Glm53 | Glm53Flash => true
-    Other(_) => false
+    Deepseek(_) | Glm(_) => true
+    Kimi(_) => false
   }
 }
 
@@ -143,10 +103,10 @@ fn OpenSeekReasoning::label(
 /// `low` effort, so the chip must not promise an unavailable Off state.
 fn OpenSeekReasoning::label_for_model(
   self : OpenSeekReasoning,
-  model : EngineModel,
+  model : @deepseek.Model,
   locale~ : @i18n.Locale = English,
 ) -> String {
-  if model is (Glm53 | Glm53Flash) && self is ReasoningOff {
+  if model is Glm(_) && self is ReasoningOff {
     match locale {
       SimplifiedChinese => "低"
       TraditionalChinese => "低"
@@ -161,9 +121,9 @@ fn OpenSeekReasoning::label_for_model(
 
 ///|
 /// Encode a reasoning setting only for models that advertise it in this UI.
-/// Unknown providers keep the field absent, matching the hidden selector.
-fn EngineModel::thinking(
-  self : EngineModel,
+/// Kimi keeps the field absent, matching the hidden selector.
+fn @deepseek.Model::thinking(
+  self : @deepseek.Model,
   reasoning : OpenSeekReasoning,
 ) -> @protocol.OpenSeekThinking? {
   if self.supports_reasoning() {
@@ -180,7 +140,7 @@ fn EngineModel::thinking(
 /// session id, which keeps two hosts' identical session ids apart.
 priv struct StoredConversationModel {
   key : String
-  model : EngineModel
+  model : @deepseek.Model
 } derive(Eq, Debug)
 
 ///|
@@ -194,41 +154,38 @@ fn conversation_model_key(
 ///|
 test "engine models round-trip their wire names" {
   inspect(
-    EngineModel::parse("deepseek-v4-pro").unwrap().label(),
+    parse_engine_model("deepseek-v4-pro").unwrap().label(),
     content="DS Pro",
   )
   inspect(
-    EngineModel::parse("deepseek-flash").unwrap().label(),
+    parse_engine_model("deepseek-flash").unwrap().label(),
     content="DS Flash",
   )
   inspect(
-    EngineModel::parse("deepseek-flash").unwrap().wire(),
+    parse_engine_model("deepseek-flash").unwrap().to_string(),
     content="deepseek-flash",
   )
   // The retired name reads as the same tier, so a stored preference keeps
   // selecting the flash model — and is re-registered under the canonical
   // wire name the next time it is saved.
   inspect(
-    EngineModel::parse("deepseek-v4-flash").unwrap().label(),
+    parse_engine_model("deepseek-v4-flash").unwrap().label(),
     content="DS Flash",
   )
   inspect(
-    EngineModel::parse("deepseek-v4-flash").unwrap().wire(),
+    parse_engine_model("deepseek-v4-flash").unwrap().to_string(),
     content="deepseek-flash",
   )
-  inspect(EngineModel::parse("glm-5.3").unwrap().label(), content="GLM 5.3")
+  inspect(parse_engine_model("glm-5.3").unwrap().label(), content="GLM 5.3")
   inspect(
-    EngineModel::parse("glm-5.3-flash").unwrap().wire(),
+    parse_engine_model("glm-5.3-flash").unwrap().to_string(),
     content="glm-5.3-flash",
   )
-  assert_true(EngineModel::parse("glm-5.3") is Some(Glm53))
-  assert_true(EngineModel::Glm53Flash.supports_reasoning())
-  assert_true(EngineModel::DsFlash.supports_reasoning())
-  inspect(
-    EngineModel::parse(" custom-model ").unwrap().wire(),
-    content="custom-model",
-  )
-  assert_true(EngineModel::parse("  ") is None)
+  assert_true(parse_engine_model("glm-5.3") is Some(Glm(G53)))
+  assert_true(@deepseek.Model::Glm(G53Flash).supports_reasoning())
+  assert_true(@deepseek.Model::Deepseek(V4Flash).supports_reasoning())
+  assert_true(parse_engine_model(" custom-model ") is None)
+  assert_true(parse_engine_model("  ") is None)
 }
 
 ///|
@@ -490,24 +447,23 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
 ///|
 /// The model a fresh conversation starts from when the selected provider and
 /// the page's last model choice belong to different known model families.
-fn ApiProvider::default_model(self : ApiProvider) -> EngineModel {
+fn ApiProvider::default_model(self : ApiProvider) -> @deepseek.Model {
   match self {
-    Deepseek | OpenRouter | Custom => DsFlash
-    Glm => Glm53
+    Deepseek | OpenRouter | Custom => Deepseek(V4Flash)
+    Glm => Glm(G53)
   }
 }
 
 ///|
-/// Whether a known model belongs to the selected provider. Custom endpoints
-/// deliberately accept every model, and an unknown wire name stays pinned so
-/// a newer engine's model is never silently replaced by an older frontend.
-fn EngineModel::matches_provider(
-  self : EngineModel,
+/// Whether a model belongs to the selected provider. Custom endpoints accept
+/// every model; Kimi retains its existing endpoint selection.
+fn @deepseek.Model::matches_provider(
+  self : @deepseek.Model,
   provider : ApiProvider,
 ) -> Bool {
   match (provider, self) {
-    (Custom, _) | (_, Other(_)) => true
-    (Deepseek | OpenRouter, DsPro | DsFlash) | (Glm, Glm53 | Glm53Flash) => true
+    (Custom, _) | (_, Kimi(_)) => true
+    (Deepseek | OpenRouter, Deepseek(_)) | (Glm, Glm(_)) => true
     _ => false
   }
 }
@@ -563,7 +519,7 @@ priv enum RunEnd {
 priv struct RecoveredRun {
   run_id : String
   session : String
-  model : EngineModel
+  model : @deepseek.Model
   max_steps : Int32
   session_root : @common.Uri?
   submission_id : String?
@@ -749,7 +705,7 @@ priv struct Conversation {
   // through a live run, from that run's tier. Nothing but the chip changes it
   // afterwards: a start is always older than the composer, so echoing one
   // back would undo a choice the user has already made for the next turn.
-  engine_model : EngineModel
+  engine_model : @deepseek.Model
   // Creation default for this draft; stored chats keep their saved system prompt.
   moonbit_guide : Bool
   // Root-authored prompt snapshot for submission and delivery recovery. The
@@ -1301,7 +1257,7 @@ priv struct Model {
   // The tier a new conversation is born with: whatever was last picked in
   // the composer, persisted page-locally. The model a turn actually runs
   // with is the conversation's own `engine_model`, never this.
-  default_model : EngineModel
+  default_model : @deepseek.Model
   // The agent a new conversation is born with: whichever provider group the
   // unified model chip was last picked from, persisted page-locally. An
   // existing conversation never reads this — its agent is fixed at creation.
@@ -2466,7 +2422,7 @@ priv enum DeviceMsg {
   Started(
     run_id~ : String,
     session~ : String,
-    model~ : EngineModel,
+    model~ : @deepseek.Model,
     max_steps~ : Int32,
     session_root~ : @common.Uri?,
     submission_id~ : String?
@@ -2574,7 +2530,7 @@ fn empty_conversation(
   channel : @interop.ChannelId,
   session_id : String,
   project : @common.Uri,
-  model~ : EngineModel = DsPro,
+  model~ : @deepseek.Model = Deepseek(V4Pro),
   moonbit_guide~ : Bool = true,
 ) -> Conversation {
   {
@@ -2686,7 +2642,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     ssh_ui: SshUi::empty(),
     websocket_epoch: 0,
     focused: @interop.ChannelId::Local,
-    default_model: DsFlash,
+    default_model: Deepseek(V4Flash),
     default_moonbit_guide: true,
     default_agent: OpenSeekAgent,
     conversation_models: [],
@@ -3000,11 +2956,11 @@ fn Model::align_fresh_conversation_with_provider(self : Model) -> Model {
 /// value is translated by the engine to its lowest supported effort (`low`).
 fn Model::reasoning_for(
   self : Model,
-  engine_model : EngineModel,
+  engine_model : @deepseek.Model,
 ) -> OpenSeekReasoning {
   match engine_model {
-    Glm53 | Glm53Flash => self.glm_reasoning
-    DsPro | DsFlash | Other(_) => self.openseek_reasoning
+    Glm(_) => self.glm_reasoning
+    Deepseek(_) | Kimi(_) => self.openseek_reasoning
   }
 }
 
@@ -3431,7 +3387,7 @@ fn Model::remembered_model(
   self : Model,
   channel : @interop.ChannelId,
   session : String,
-) -> EngineModel? {
+) -> @deepseek.Model? {
   let key = conversation_model_key(channel, session)
   self.conversation_models
   .iter()
@@ -3446,7 +3402,7 @@ fn Model::remember_model(
   self : Model,
   channel : @interop.ChannelId,
   session : String,
-  model : EngineModel,
+  model : @deepseek.Model,
 ) -> Model {
   {
     ..self,
@@ -3521,7 +3477,7 @@ fn approvals_with(
 fn remembered_with(
   entries : Array[StoredConversationModel],
   key : String,
-  model : EngineModel,
+  model : @deepseek.Model,
 ) -> Array[StoredConversationModel] {
   let merged : Array[StoredConversationModel] = [{ key, model, }]
   for entry in entries {

@@ -109,7 +109,7 @@ fn start_in_new_worktree(
   channel : @interop.ChannelId,
   task : String,
   submission_id : String,
-  selected_model : EngineModel,
+  selected_model : @deepseek.Model,
   reasoning : OpenSeekReasoning,
   max_steps : String,
   session : String,
@@ -1917,7 +1917,7 @@ test "a start payload keeps launch choices without naming a worktree" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let payload = start_payload(
     "go",
-    DsPro,
+    Deepseek(V4Pro),
     ReasoningMax,
     "1000",
     "desktop-wt",
@@ -1935,9 +1935,9 @@ test "a start payload keeps launch choices without naming a worktree" {
   assert_eq(payload.thinking, Some(ThinkingMax))
   assert_eq(payload.approval, Some(ApprovalReview))
   assert_eq(payload.moonbit_guide, Some(false))
-  let unknown_model = start_payload(
+  let kimi_model = start_payload(
     "go",
-    Other("kimi-k2.5"),
+    Kimi(K27Code),
     ReasoningMax,
     "1000",
     "desktop-kimi",
@@ -1946,6 +1946,6 @@ test "a start payload keeps launch choices without naming a worktree" {
     approval=ApprovalAsk,
     moonbit_guide=true,
   )
-  assert_true(unknown_model.thinking is None)
-  assert_eq(unknown_model.moonbit_guide, Some(true))
+  assert_true(kimi_model.thinking is None)
+  assert_eq(kimi_model.moonbit_guide, Some(true))
 }

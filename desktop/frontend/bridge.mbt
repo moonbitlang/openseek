@@ -692,7 +692,7 @@ fn started_msg(
   let session = payload.session
   guard !session.is_empty() &&
     payload.model is Some(model) &&
-    EngineModel::parse(model) is Some(model) &&
+    parse_engine_model(model) is Some(model) &&
     payload.max_steps is Some(max_steps) else {
     return None
   }
@@ -728,7 +728,7 @@ fn RecoveredRun::from_started(
   let session = payload.session
   guard !session.is_empty() &&
     payload.model is Some(model) &&
-    EngineModel::parse(model) is Some(model) &&
+    parse_engine_model(model) is Some(model) &&
     payload.max_steps is Some(max_steps) else {
     return None
   }
@@ -865,7 +865,7 @@ fn start_openseek(
   channel : @interop.ChannelId,
   task : String,
   submission_id : String,
-  selected_model : EngineModel,
+  selected_model : @deepseek.Model,
   reasoning : OpenSeekReasoning,
   max_steps : String,
   session : String,
@@ -987,7 +987,7 @@ async fn request_agent_start(
 /// resolved host-side from the settings store.
 fn start_payload(
   task : String,
-  selected_model : EngineModel,
+  selected_model : @deepseek.Model,
   reasoning : OpenSeekReasoning,
   max_steps : String,
   session : String,
@@ -1002,7 +1002,7 @@ fn start_payload(
     task,
     images,
     submission_id: Some(submission_id),
-    model: Some(selected_model.wire()),
+    model: Some(selected_model.to_string()),
     thinking: selected_model.thinking(reasoning),
     approval: Some(approval),
     moonbit_guide: Some(moonbit_guide),
