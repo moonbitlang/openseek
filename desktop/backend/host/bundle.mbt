@@ -81,18 +81,6 @@ struct PackagedTools {
 }
 
 ///|
-/// Resolve the packaged tools from the platform-independent resource
-/// directory. Development deliberately uses PATH even if a previous package
-/// build left generated `seekmoon/` files in the checkout, and so does a host
-/// that was told of no resource directory at all.
-pub async fn PackagedTools::resolve(
-  resources : @resources.Resources?,
-) -> PackagedTools? {
-  guard resources is Some(resources) && resources.packaged else { return None }
-  PackagedTools::resolve_from_resource_dir(resources.dir.to_string())
-}
-
-///|
 /// Resolve a canonical resource root. This type method lets tests exercise
 /// path policy without pretending their test executable is a Proton package.
 async fn PackagedTools::resolve_from_resource_dir(
@@ -106,16 +94,6 @@ async fn PackagedTools::resolve_from_resource_dir(
 }
 
 ///|
-/// Put the packaged tools first in this process's PATH. Desktop child
-/// processes inherit this environment: OpenSeek's engine passes it to agent
-/// mbtx snippets, while Codex app-server passes it to its own tool processes.
-/// Keep an already-leading entry unchanged so embedding launchers cannot
-/// duplicate it.
-pub fn PackagedTools::apply_to_process_env(self : PackagedTools) -> Unit {
-  @sys.set_env_var("PATH", self.path_with_precedence(@sys.get_env_var("PATH")))
-}
-
-///|
 fn PackagedTools::path_with_precedence(
   self : PackagedTools,
   current : String?,
@@ -125,32 +103,6 @@ fn PackagedTools::path_with_precedence(
     return path
   }
   @env.prepend_to_path_env(self.bin_dir, current)
-}
-
-///|
-/// Locate the frontend from the resource directory. The supported
-/// development launcher exposes `desktop/` as that directory, while every
-/// installed app exposes the package root containing canonical `seekmoon/`.
-pub async fn frontend_entry_path(resources : @resources.Resources) -> String {
-  if !resources.packaged {
-    let path = resources.dir
-      .dirname()
-      .join("desktop-dev.html")
-      .normalize()
-      .to_string()
-    guard @fs.exists(path) else {
-      raise HostError("development frontend does not exist: \{path}")
-    }
-    return path
-  }
-  let path = resources.dir
-    .join(PackagedFrontendEntryPath)
-    .normalize()
-    .to_string()
-  guard @fs.exists(path) else {
-    raise HostError("packaged frontend does not exist: \{path}")
-  }
-  path
 }
 
 ///|
@@ -256,50 +208,4 @@ async test "development frontend comes from the declared resource root" {
     frontend_entry_path({ dir: resources, packaged: false, }),
     development,
   )
-}
-
-///|
-/// The running .app bundle root, when the executable sits in a macOS bundle
-/// layout (`…/Name.app/Contents/MacOS/exe`); None anywhere else — dev
-/// binaries and other platforms — which disables self-update.
-pub fn app_bundle_path(executable : String) -> String? {
-  let macos_dir = @pathx.Path(executable).dirname()
-  let contents_dir = macos_dir.dirname()
-  guard macos_dir.basename() == "MacOS" && contents_dir.basename() == "Contents" else {
-    return None
-  }
-  let bundle = contents_dir.dirname().to_string()
-  if bundle.has_suffix(".app") {
-    Some(bundle)
-  } else {
-    None
-  }
-}
-
-///|
-/// Resolve this desktop bundle's working-host resources. Missing visualizer
-/// files are reported when exporting, not when starting unrelated services.
-pub async fn desktop_resources(
-  resources : @resources.Resources,
-) -> HostResources {
-  let assets : VizAssets = if resources.packaged {
-    let viz = resources.dir.join(PackagedVizDir)
-    {
-      shell: viz.join("index.html").normalize().to_string(),
-      bundle: viz.join("viz_app.js").normalize().to_string(),
-    }
-  } else {
-    let checkout = resources.dir.dirname()
-    {
-      shell: checkout.join(DevelopmentVizShellPath).normalize().to_string(),
-      bundle: checkout.join(DevelopmentVizBundlePath).normalize().to_string(),
-    }
-  }
-  {
-    moonbit: DesktopBundle,
-    viz: Some(assets),
-    bin_dir: PackagedTools::resolve(Some(resources)).map(tools => tools.bin_dir),
-    ripgrep: ripgrep_command(Some(resources)),
-    moongrep: moongrep_command(Some(resources)),
-  }
 }

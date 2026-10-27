@@ -1,6 +1,6 @@
 ///|
 /// Native UI state is independent of temporary CEF profiles and remote hosts.
-pub async fn read_ui_language(
+async fn read_ui_language(
   runtime_dir : String?,
 ) -> @protocol.UiLanguagePreference {
   guard runtime_dir is Some(dir) else { return { language: None, } }
@@ -24,7 +24,7 @@ fn validate_ui_language(language : String?) -> Unit raise {
 }
 
 ///|
-pub async fn write_ui_language(
+async fn write_ui_language(
   runtime_dir : String?,
   preference : @protocol.UiLanguagePreference,
 ) -> @protocol.EmptyReply {

@@ -20,7 +20,7 @@ fn github_drafts_path(runtime_dir : String?, url : String) -> @pathx.Path raise 
 }
 
 ///|
-pub async fn read_github_drafts(
+async fn read_github_drafts(
   runtime_dir : String?,
   key : @protocol.GithubDraftsKey,
 ) -> @protocol.GithubDrafts {
@@ -36,7 +36,7 @@ pub async fn read_github_drafts(
 }
 
 ///|
-pub async fn write_github_drafts(
+async fn write_github_drafts(
   runtime_dir : String?,
   drafts : @protocol.GithubDrafts,
 ) -> @protocol.EmptyReply {

@@ -1,7 +1,7 @@
 ///|
 /// Tool paths chosen by the embedding host. None means unavailable; shared
 /// operations never reinterpret an absent bundled tool as a PATH fallback.
-pub(all) struct HostResources {
+pub struct HostResources {
   moonbit : @moonbit.ToolchainSource
   viz : VizAssets?
   bin_dir : String?
@@ -23,7 +23,7 @@ pub fn HostResources::from_path() -> HostResources {
 
 ///|
 /// The visualizer shell and compiled bundle used for a standalone export.
-pub(all) struct VizAssets {
+pub struct VizAssets {
   shell : String
   bundle : String
 }

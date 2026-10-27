@@ -188,14 +188,6 @@ pub async fn HostConnection::run(
 }
 
 ///|
-/// A desktop page reload cannot reclaim its old emulator instances. Retire
-/// those PTYs before attaching the new page; WebSocket-owned sessions are
-/// cancelled automatically with their connection task group.
-pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
-  @terminal.close_all_terminals(self.terminal)
-}
-
-///|
 /// Host-owned endpoints are assembled next to the private operations they
 /// invoke. The API package concatenates this catalog with engine/auth
 /// endpoints, so these operations do not need one public forwarding method

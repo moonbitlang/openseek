@@ -23,8 +23,6 @@ pub async fn desktop_resources(@resources.Resources) -> HostResources
 
 pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -> Array[@endpoint.Endpoint]
 
-pub async fn ensure_codex_config(@pathx.Path?) -> String
-
 pub async fn frontend_entry_path(@resources.Resources) -> String
 
 pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, app_version? : String, resources? : HostResources) -> HostState
@@ -35,17 +33,9 @@ pub async fn open_path_preview(@protocol.OpenPathPayload) -> @protocol.OpenPathR
 
 pub async fn prepared_runtime_dir(String) -> @pathx.Path?
 
-pub async fn read_github_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts
-
-pub async fn read_ui_language(String?) -> @protocol.UiLanguagePreference
-
 pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
 
 pub async fn stage_attachments_op(@protocol.StageAttachmentsPayload) -> @protocol.EmptyReply
-
-pub async fn write_github_drafts(String?, @protocol.GithubDrafts) -> @protocol.EmptyReply
-
-pub async fn write_ui_language(String?, @protocol.UiLanguagePreference) -> @protocol.EmptyReply
 
 // Errors
 pub(all) suberror HostError {
@@ -64,7 +54,7 @@ pub fn HostConnection::HostConnection() -> Self
 pub fn HostConnection::close_terminals(Self) -> Unit
 pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit, async (@protocol.Notification) -> Unit) -> Unit
 
-pub(all) struct HostResources {
+pub struct HostResources {
   moonbit : @moonbit.ToolchainSource
   viz : VizAssets?
   bin_dir : String?
@@ -80,7 +70,7 @@ type PackagedTools
 pub fn PackagedTools::apply_to_process_env(Self) -> Unit
 pub async fn PackagedTools::resolve(@resources.Resources?) -> Self?
 
-pub(all) struct VizAssets {
+pub struct VizAssets {
   shell : String
   bundle : String
 }
