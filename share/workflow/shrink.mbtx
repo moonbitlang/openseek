@@ -19,8 +19,8 @@ import {
 const Usage : String =
   #|usage: @builtin/shrink.mbtx [--path DIR ...] [--exclude DIR ...]
   #|                            [--skip DIR ...] [--max-packages N] [--rounds N]
-  #|                            [--check-target T ...] [--stack-on BRANCH]
-  #|                            [--no-pr] [--] [FOCUS...]
+  #|                            [--check-target T ...] [--check-in DIR ...]
+  #|                            [--stack-on BRANCH] [--no-pr] [--] [FOCUS...]
   #|
   #|Shrinks this workspace's public API until `moon ide analyze` reports no
   #|exported item without a production use in another package. Each round
@@ -41,7 +41,8 @@ const Usage : String =
   #|most N packages per round (default 8, at most 16). --rounds N stops after
   #|N rounds. --check-target T (repeatable) checks each combined round with
   #|`moon check --deny-warn --no-mbti --target T` (default: once, with no
-  #|--target). --stack-on BRANCH opens the first round's pull request against
+  #|--target). --check-in DIR (repeatable) also runs that check in DIR, a
+  #|separate workspace that imports this one. --stack-on BRANCH opens the first round's pull request against
   #|BRANCH, to continue an earlier run's stack. --no-pr keeps each round on a
   #|local branch. FOCUS, joined with spaces, is an emphasis for workers.
   #|
@@ -97,18 +98,29 @@ const Guidance : String =
   #|  - protocol or round-trip surface: wire types, JSON codecs;
   #|  - a documented tunable, or one member of a symmetric family whose
   #|    other members are used;
-  #|  - a consumer the analyzer cannot see, named: a `.mbtx` script, a module
-  #|    outside the workspace, a js-only app, or outside users of a published
-  #|    module.
+  #|  - a consumer the analyzer cannot see, named with its file and line: a
+  #|    `.mbtx` script; a module outside the workspace, such as a separate app
+  #|    workspace; a js-only app; a struct literal or a `{ ..x, f }` record
+  #|    update of a `pub(all)` type in another package (the narrowing hint
+  #|    misses both); or outside users of a published module.
   #|  "Might be useful later" is not a reason: delete it instead.
+  #|
+  #|Never leave a candidate where it is. If none of the first three ways is
+  #|right, the analyzer missed a consumer or the export is deliberate: record
+  #|that in exports.mbt, so the next analysis does not list it again. The one
+  #|exception is an item defined in a generated file; say so.
   #|
   #|## Tests
   #|Test use alone never justifies an export. If only this package's own
   #|blackbox tests (`*_test.mbt`) use the item, make it private and turn those
   #|tests into whitebox tests (`*_wbtest.mbt`) of the package, or test it
-  #|through the public API. If tests of another package use it, either it is
-  #|a test seam (`exports.mbt`) or leave it and say so; never edit another
-  #|package's files.
+  #|through the public API. If tests of another package use it, it is a test
+  #|seam (`exports.mbt`, naming those tests); never edit another package's
+  #|files.
+  #|
+  #|You cannot delete a file. When a file has no code left (say all its tests
+  #|moved to the whitebox file), leave nothing in it but comments, or nothing
+  #|at all: the workflow deletes such files when it combines the round.
   #|
   #|## Traps
   #|- A trait implementation used through a trait object cannot be demoted
@@ -116,6 +128,12 @@ const Guidance : String =
   #|  not blocks you can edit.
   #|- `priv` on a field of a plain `pub` struct is redundant: shrink the type's
   #|  visibility, not its fields.
+  #|- Narrowing `pub(all)` to `pub` keeps a type usable from other packages:
+  #|  they can still match its variants and read its fields. Only building a
+  #|  value (a literal, a constructor call, `{ ..x, f }`) needs `pub(all)`.
+  #|- A type made private surfaces `missing_priv`: mark it `priv`. A
+  #|  `pub extend T with Eq::{..}` keeps the type in the interface; replace it
+  #|  with a private `impl Eq for T` if the type still needs `Eq`.
   #|- Demoting an explicit impl can trip the implicit-method-promotion
   #|  deprecation: call it as `Show::to_string(x)` or `ToJson::to_json(x)`.
   #|- A parameter default that no caller passes shows up as
@@ -147,6 +165,7 @@ async fn main {
     max_packages: DefaultPackages,
     rounds: None,
     checks: [],
+    check_dirs: [],
     stack_on: None,
     publish: true,
     focus: "",
@@ -183,6 +202,10 @@ async fn main {
         options.checks.push(target)
         continue rest
       }
+      ["--check-in", dir, .. rest] => {
+        options.check_dirs.push(directory(dir))
+        continue rest
+      }
       ["--stack-on", branch, .. rest] => {
         options.stack_on = Some(branch)
         continue rest
@@ -198,6 +221,7 @@ async fn main {
         | "--max-packages"
         | "--rounds"
         | "--check-target"
+        | "--check-in"
         | "--stack-on" as flag,
       ] => fail("\{flag} needs a value\n\{Usage}")
       ["--", .. rest] => {
@@ -271,6 +295,8 @@ priv struct Options {
   mut max_packages : Int
   mut rounds : Int?
   checks : Array[String]
+  /// Separate workspaces whose check also gates a combined round.
+  check_dirs : Array[String]
   mut stack_on : String?
   mut publish : Bool
   mut focus : String
@@ -381,10 +407,10 @@ async fn sweep(
     // Combine: the accepted commits, in package order, on the round's base.
     // Their files are disjoint, so the picks cannot conflict.
     ignore(run("git", ["checkout", "-q", "--detach", base]))
-    let commits = accepted.filter_map(work => {
-      work.change.map(change => change.commit)
+    let picks = accepted.filter_map(work => {
+      work.change.map(change => (change.commit, work.pkg.dir))
     })
-    if combine(commits) is Some(why) {
+    if combine(picks) is Some(why) {
       failures.push(
         "round \{round}: the accepted changes do not combine: \{why}",
       )
@@ -408,7 +434,7 @@ async fn sweep(
     }
     // Each package was checked alone; this is the first check of them
     // together.
-    if combined_check(options.checks) is Some(why) {
+    if combined_check(options.checks, options.check_dirs) is Some(why) {
       failures.push("round \{round} (\{branch}) fails its check: \{why}")
       ending = "stopped: round \{round} fails its check"
       break
@@ -477,6 +503,9 @@ fn continuation(
   for target in options.checks {
     args.append(["--check-target", target])
   }
+  for dir in options.check_dirs {
+    args.append(["--check-in", shown(dir)])
+  }
   match (options.publish, last, options.stack_on) {
     (false, _, _) => args.push("--no-pr")
     (true, Some(branch), _) | (true, None, Some(branch)) =>
@@ -499,30 +528,90 @@ fn continuation(
 }
 
 ///|
-/// Cherry-pick `commits` onto HEAD. On any failure, a nonzero exit or an
-/// error such as a timeout, the pick is aborted so the checkout can be
+/// Cherry-pick each `(commit, package directory)` onto HEAD, in order. Workers
+/// cannot delete files, so the files a commit left without code in its
+/// package are removed in that same commit. On any failure (a nonzero exit,
+/// or an error such as a timeout) the pick is aborted so the checkout can be
 /// restored; the reason, if it failed.
-async fn combine(commits : Array[String]) -> String? {
-  let why = try {
-    let picked = @shell.Cmd("git", ["cherry-pick", ..commits]).output(
-      timeout_ms=300000,
-    )
-    if picked.exit_code() == 0 {
-      return None
+async fn combine(picks : Array[(String, String)]) -> String? {
+  for pick in picks {
+    let (commit, dir) = pick
+    let failed = try {
+      let picked = @shell.Cmd("git", ["cherry-pick", commit]).output(
+        timeout_ms=300000,
+      )
+      if picked.exit_code() == 0 {
+        None
+      } else {
+        Some(first_line(picked.stderr()))
+      }
+    } catch {
+      error => Some("\{error}")
     }
-    first_line(picked.stderr())
-  } catch {
-    error => "\{error}"
+    if failed is Some(why) {
+      return Some(abort_pick(why))
+    }
+    let cleaned : Result[Unit, Error] = try {
+      let emptied : Array[String] = []
+      for
+        line in run("git", ["show", "--name-only", "--format=", "HEAD"]).split(
+          "\n",
+        ) {
+        let file = line.trim().to_owned()
+        let (parent, name) = parts(file)
+        if parent == dir &&
+          name.has_suffix(".mbt") &&
+          @fs.exists(file) &&
+          no_code(@fs.read_file(file).text()) {
+          emptied.push(file)
+        }
+      }
+      if emptied is [_, ..] {
+        ignore(run("git", ["rm", "-q", "--", ..emptied]))
+        ignore(run("git", ["commit", "-q", "--amend", "--no-edit"]))
+      }
+      Ok(())
+    } catch {
+      error => Err(error)
+    }
+    if cleaned is Err(error) {
+      ignore(
+        @shell.Cmd("git", ["reset", "-q", "--hard", "HEAD"]).output(
+          timeout_ms=60000,
+        ),
+      ) catch {
+        _ => ()
+      }
+      return Some("removing the files \{shown(dir)} emptied: \{error}")
+    }
   }
+  None
+}
+
+///|
+/// Abort a cherry-pick that failed for `why`; the reason, with the abort's
+/// own failure if it failed too.
+async fn abort_pick(why : String) -> String {
   let aborted = @shell.Cmd("git", ["cherry-pick", "--abort"]).output(
     timeout_ms=60000,
   ) catch {
-    error => return Some("\{why}; the abort failed too: \{error}")
+    error => return "\{why}; the abort failed too: \{error}"
   }
   guard aborted.exit_code() == 0 else {
-    Some("\{why}; the abort failed too: \{first_line(aborted.stderr())}")
+    "\{why}; the abort failed too: \{first_line(aborted.stderr())}"
   }
-  Some(why)
+  why
+}
+
+///|
+/// Whether a source file holds nothing but blank lines and comments.
+fn no_code(text : String) -> Bool {
+  text
+  .split("\n")
+  .all(line => {
+    let line = line.trim()
+    line.is_empty() || line.has_prefix("//")
+  })
 }
 
 ///|
@@ -617,32 +706,42 @@ async fn manifests(names : Array[String]) -> Array[(String, String)] {
 }
 
 ///|
-/// Each tracked module's name and directory ("" at the root), so analyzer
-/// package names map to directories.
+/// Each tracked module's name and the directory its packages live under:
+/// the manifest's directory ("" at the root), joined with the module's
+/// `source` directory when it declares one. Analyzer package names map to
+/// directories through it.
 async fn module_dirs() -> Array[(String, String)] {
-  [
-    for entry in manifests(["moon.mod", "moon.mod.json"]) if module_name(
-      entry.1,
-    )
-    is Some(name) => (name, entry.0)
-  ]
+  let modules : Array[(String, String)] = []
+  for entry in manifests(["moon.mod", "moon.mod.json"]) {
+    guard manifest_field(entry.1, "name") is Some(name) else { continue }
+    let dir = match manifest_field(entry.1, "source").map(directory) {
+      None | Some("") => entry.0
+      Some(source) if entry.0.is_empty() => source
+      Some(source) => "\{entry.0}/\{source}"
+    }
+    modules.push((name, dir))
+  }
+  modules
 }
 
 ///|
-/// The `name` a module manifest declares, in either format: `name = "x"` or
-/// `"name": "x"`.
-fn module_name(text : String) -> String? {
+/// A string field a module manifest declares, in either format: `key = "x"`
+/// or `"key": "x"`.
+fn manifest_field(text : String, key : String) -> String? {
   for line in text.split("\n") {
     let line = line.trim()
-    let rest = match line {
-      [.. "name", .. rest] => rest.trim_start()
-      [.. "\"name\"", .. rest] => rest.trim_start()
-      _ => continue
+    let rest = match line.strip_prefix(key) {
+      Some(rest) => rest
+      None =>
+        match line.strip_prefix("\"\{key}\"") {
+          Some(rest) => rest
+          None => continue
+        }
     }
-    guard rest is ['=' | ':', .. value] else { continue }
+    guard rest.trim_start() is ['=' | ':', .. value] else { continue }
     let value = value.trim().trim_end(chars=",")
-    if value is ['"', .. name, '"'] {
-      return Some(name.to_owned())
+    if value is ['"', .. text, '"'] {
+      return Some(text.to_owned())
     }
   }
   None
@@ -761,8 +860,9 @@ async fn analyze(
 /// The analyzer's candidates by package name: exported top-level items with
 /// no production use in another package, and types whose visibility can
 /// narrow, leaving out what `exports.mbt` keeps on purpose. Rows without a
-/// usage comment are not counted as unused, and trait implementations are
-/// left out: their counts are not reliable enough to act on.
+/// usage comment are not counted as unused. Trait implementations and
+/// `pub using` re-exports are left out: the analyzer misses uses through
+/// dynamic dispatch and through a re-export.
 fn candidates(output : String) -> Map[String, Array[Row]] {
   let found : Map[String, Array[Row]] = Map([])
   let mut current = ""
@@ -780,7 +880,9 @@ fn candidates(output : String) -> Map[String, Array[Row]] {
     }
     let comment = comment.trim()
     let code = code.trim()
-    guard !comment.contains("in exports.mbt") && !code.has_prefix("pub impl") else {
+    guard !comment.contains("in exports.mbt") &&
+      !code.has_prefix("pub impl") &&
+      !code.has_prefix("pub using") else {
       continue
     }
     let test_only = match usage(comment) {
@@ -1152,7 +1254,7 @@ async fn start_worker(work : Work, focus : String) -> Launch {
   let task =
     $|Shrink the public API of the MoonBit package `\{dir}` of this repository, following the guidance in your context. You work in your own git worktree; your change is combined with other packages' changes into one pull request.
     $|
-    $|Files you may change (no other file; you may create exports.mbt and the _wbtest.mbt file in this list):
+    $|Files you may change (no other file; you may create exports.mbt and the _wbtest.mbt file in this list, and you cannot delete one: empty it instead):
     $|\{paths.join("\n")}
     $|
     $|Candidates from `moon ide analyze` (resolve EVERY one):
@@ -1163,7 +1265,7 @@ async fn start_worker(work : Work, focus : String) -> Launch {
     $|- First read the AGENTS.md files on the path from the repository root to `\{dir}`, and the guidance they link, and run the validation they require.
     $|- Before any visibility change, `git grep -n -w <name>` the whole repository for uses the analyzer cannot see.
     $|- At least run `moon check --deny-warn --no-mbti` from the repository root (the whole workspace) for every target the repository builds, and `moon test` for the package. Then run `moon info` and `moon fmt` with the package path only, never over the whole module (a newer toolchain can rewrite other packages' files, which makes the change unmergeable). Confirm pkg.generated.mbti only lost lines.
-    $|- Report status done only when every required check passed. In summary, list every candidate and what you did with it (dropped pub, deleted, narrowed, moved to exports.mbt with its reason, or left and why). Name each command and its result in verification.
+    $|- Report status done only when every required check passed. In summary, list every candidate and what you did with it (dropped pub, deleted, narrowed, or moved to exports.mbt with its reason). Name each command and its result in verification.
   let started = @tools.call("subagent", {
     "kind": "worker",
     "input": { "task": task, "context": Guidance },
@@ -1301,21 +1403,32 @@ fn rendered(rows : Array[Row]) -> String {
 
 ///|
 /// Check the combined round: `moon check --deny-warn --no-mbti` once per
-/// target, or once with no target. `--no-mbti` keeps the check from
-/// rewriting interface files in the checkout. The first failure's first
-/// lines, if any.
-async fn combined_check(targets : Array[String]) -> String? {
-  let runs = if targets is [] {
-    [[]]
+/// target (or once with no target), then once in each separate workspace in
+/// `dirs`. `--no-mbti` keeps the check from rewriting interface files in the
+/// checkout. The first failure's first lines, if any.
+async fn combined_check(
+  targets : Array[String],
+  dirs : Array[String],
+) -> String? {
+  let runs : Array[(Array[String], String)] = if targets is [] {
+    [([], ".")]
   } else {
     [
-      for target in targets => ["--target", target]
+      for target in targets => (["--target", target], ".")
     ]
   }
-  for target in runs {
+  for dir in dirs {
+    runs.push(([], shown(dir)))
+  }
+  for entry in runs {
+    let (target, cwd) = entry
     let args = ["check", "--deny-warn", "--no-mbti", ..target]
-    let command = "moon \{args.join(" ")}"
-    let checked = @shell.Cmd("moon", args).output(
+    let command = if cwd == "." {
+      "moon \{args.join(" ")}"
+    } else {
+      "moon \{args.join(" ")} (in \{cwd})"
+    }
+    let checked = @shell.Cmd("moon", args, cwd~).output(
       timeout_ms=1800000,
       max_output_bytes=16777216,
     ) catch {

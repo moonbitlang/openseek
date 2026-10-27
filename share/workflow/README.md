@@ -187,7 +187,8 @@ resolve every candidate: drop `pub`, delete it, narrow it, or move it to
 `exports.mbt` with a stated reason. Each change passes the same gate and
 `explore` review as in `simplify.mbtx`. The accepted commits are cherry-picked
 onto the round's base, checked together with
-`moon check --deny-warn --no-mbti` (once per `--check-target T`), kept on a
+`moon check --deny-warn --no-mbti` (once per `--check-target T`, and in each
+`--check-in DIR` workspace), kept on a
 local `shrink/r<k>-<commit>` branch, and, unless `--no-pr`, pushed and opened
 as a pull request whose base is the previous round's branch. The next round
 starts from that commit. A package whose change was not accepted, or whose

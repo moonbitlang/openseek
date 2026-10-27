@@ -493,7 +493,7 @@ const SimplifyPrompt : String =
 const ShrinkPrompt : String =
   #|Shrink this repository's public API to a fixed point with the bundled shrink workflow.
   #|
-  #|1. Call the `mbtx` tool with `filename: "@builtin/shrink.mbtx"` and `args: ["--", <focus>]`, where the focus is the Focus text below; when it is empty, pass no args. If the repository's AGENTS.md names the targets its checks build (such as native and js), put `--check-target <target>` for each before `--`.
+  #|1. Call the `mbtx` tool with `filename: "@builtin/shrink.mbtx"` and `args: ["--", <focus>]`, where the focus is the Focus text below; when it is empty, pass no args. If the repository's AGENTS.md names the targets its checks build (such as native and js), put `--check-target <target>` for each before `--`, and `--check-in <dir>` for each separate workspace it names that imports this one (a directory with its own moon.work).
   #|2. Wait for the job with `job_wait` and read it with `job_output`. If the run stops before starting (not at the repository root, uncommitted changes, HEAD not on the default branch, gh not signed in), report why and stop: do not commit, stash or push anything to get past it.
   #|3. Report the stacked pull requests it opened, in order, with what each round removed from the interface and kept in exports.mbt; the changes the reviewers rejected; and the packages it gave up on. If it printed a "continue from" line, show it, and do not run it yourself.
   #|
