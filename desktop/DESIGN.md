@@ -58,7 +58,8 @@ not belong to this design language.
 The idle state should feel calm. Focus is the moment when a field boundary is
 allowed to become explicit.
 
-- An idle field wrapper uses a transparent border.
+- An idle field wrapper uses a transparent border. The input composer is the
+  exception described under its reference surface.
 - The element marked with `data-focus-owner` owns the one visible focus edge.
 - A nested `data-focus-target` does not draw another outline.
 - Hover may strengthen the control fill and text, but should not introduce a
@@ -96,13 +97,17 @@ surface treatment.
 
 `.composer-inner` is the reference persistent card:
 
-- `border: 1px solid transparent`
+- `border: 1px solid var(--color-border)`
 - `background: var(--color-bg-surface)`
 - `box-shadow: var(--shadow-surface)`
-- `border-radius: var(--radius-md)`
+- `border-radius: var(--radius-lg)`
 
-Its boundary comes from the surface and ambient shadow. The transparent edge
-becomes explicit only when the shared focus-owner rule recolors it.
+The composer is the page's standing input target, so its edge stays visible
+while idle; the shared focus-owner rule recolors it on focus. The card holds a
+single row: the attachment button, the draft, and the send or stop actions,
+which stay on the draft's last line as it grows. The controls that shape the
+next turn sit below the card as quiet text in `.composer-toolbar`: approval,
+worktree, and git state lead; the model and reasoning trail.
 
 #### Transcript error
 

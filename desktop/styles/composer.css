@@ -2,7 +2,7 @@
 /* ---------- composer ---------- */
 .composer {
   background: var(--color-bg-canvas);
-  padding: 6px 24px 14px;
+  padding: 6px 24px 8px;
 }
 
 /* Caller-owned notices and approval panels remain a stable DOM sibling above
@@ -76,16 +76,37 @@
   display: grid;
   gap: 8px;
   /* A narrow editor split must size the card from its pane, not from the
-     textarea placeholder or the toolbar's combined intrinsic width. */
+     textarea placeholder or the actions' combined intrinsic width. */
   width: 100%;
   min-width: 0;
   max-width: 820px;
   margin: 0 auto;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   background: var(--color-bg-surface);
   padding: 8px 10px;
   box-shadow: var(--shadow-surface);
+}
+
+/* One row: the attachment button, the draft, and the send/stop actions. The
+   buttons sit on the draft's last line as it grows. */
+.composer-inner {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0 4px;
+  padding: 7px 8px;
+}
+
+/* Fixed columns: the attachment slot collapses when attaching is unavailable,
+   and the draft must keep the flexible column regardless. */
+.composer-inner > .composer-add {
+  grid-column: 1;
+}
+.composer-inner > .composer-input {
+  grid-column: 2;
+}
+.composer-inner > .composer-actions {
+  grid-column: 3;
 }
 
 .composer :is(button, a, summary):focus-visible {
@@ -111,17 +132,22 @@
 .content.terminal-open .composer-inner {
   flex: 0 1 auto;
   /* Reserve one mention row and one textarea line. The card minimum also
-     includes the fixed toolbar, gaps, border, and compact vertical padding. */
-  grid-template-rows: minmax(63px, 1fr) auto;
-  gap: 4px;
-  min-height: 112px;
+     includes the border and compact vertical padding. */
+  grid-template-rows: minmax(63px, 1fr);
+  min-height: 73px;
   padding-top: 4px;
   padding-bottom: 4px;
   width: 100%;
 }
 
 .content.terminal-open .composer-input {
+  /* Fill the card's row so the textarea, not the card, absorbs the shrink. */
+  align-self: stretch;
   gap: 4px;
+}
+
+.content.terminal-open .composer-toolbar {
+  flex: none;
 }
 
 .content.terminal-open .composer-input > .mention-tray {
@@ -583,32 +609,82 @@
   letter-spacing: normal;
 }
 
-.composer-toolbar {
-  display: flex;
-  align-items: center;
-  /* Match the input's grid-item opt-out so the status row can shrink too. */
-  min-width: 0;
+/* A single line of draft is exactly as tall as the buttons beside it. */
+.composer-input > textarea {
+  min-height: 30px;
+  padding: 4px 6px;
 }
 
-.composer-controls {
+/* The settings for the next turn, under the card in its column: how the turn
+   may act (approvals, worktree, git) leads, the model and reasoning trail.
+   The row is the containing block and size container for the menus its
+   controls open, so they measure against the composer's width. */
+.composer-toolbar {
+  position: relative;
+  container-type: inline-size;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  /* Auto margins stop a flex column from stretching it, and its inline-size
+     containment would then shrink it to nothing; size it like the card. */
   width: 100%;
+  max-width: 820px;
   min-width: 0;
+  margin: 4px auto 0;
+  padding: 0 4px;
 }
 
-/* The toolbar's left status group: the model chip, then the one git chip
-   (which lives here, not in the topbar). The row shares its width with the
-   send button and a resizable side panel, so both chips shrink and clip their
-   own label. Clipping is theirs and never this group's: `overflow` here would
-   also cut off the popover the git chip anchors. */
+.composer-toolbar:not(:has(> .composer-status > *)) {
+  display: none;
+}
+
+/* Each group shares the row with the other and with a resizable side panel,
+   so its chips shrink and clip their own label. Clipping is theirs and never
+   this group's: `overflow` here would also cut off the popovers they anchor. */
 .composer-status {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 2px;
   min-width: 0;
+}
+
+.composer-status-trailing {
+  justify-content: flex-end;
+}
+
+/* Toolbar controls are quiet text that lifts on hover; only state (an active
+   mode, a failing check, full access) keeps its colour. */
+.composer-toolbar :is(
+  .composer-model,
+  .composer-git-button,
+  .composer-auto-review,
+  .composer-worktree,
+  .codex-permission-button
+) {
+  height: 28px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.composer-toolbar .composer-auto-review.on,
+.composer-toolbar .composer-worktree.on {
+  background: transparent;
+  color: var(--color-accent-strong);
+}
+
+.composer-toolbar .codex-permission-control.danger .codex-permission-button {
+  background: transparent;
+  color: var(--color-danger);
+}
+
+.composer-status-trailing :is(.composer-model-glyph, .composer-model-chevron) {
+  display: none;
+}
+
+.composer-status-trailing .composer-model {
+  padding: 0 6px;
 }
 
 .composer-actions {
@@ -618,12 +694,16 @@
   flex: none;
 }
 
+.composer-actions .icon-button {
+  border-radius: 50%;
+}
+
 .composer-followup:empty {
   display: none;
 }
 
 /* The git chip. It deliberately does *not* establish a containing block: the
-   popover anchors to `.composer-inner` instead, so its width is the
+   popover anchors to `.composer-toolbar` instead, so its width is the
    composer's business rather than the chip's position along the row. See
    `.composer-git-menu`. */
 .composer-git {
@@ -866,6 +946,11 @@
   position-area: block-end span-inline-start;
 }
 
+/* Both pickers sit at the toolbar's right end, so their menus grow left. */
+.composer-status-trailing .composer-picker-menu {
+  position-area: block-end span-inline-start;
+}
+
 .composer-picker .custom-select-option {
   font-size: var(--font-size-sm);
 }
@@ -964,7 +1049,7 @@
   min-width: 30px;
   height: 30px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
   background: transparent;
   padding: 0;
   position: relative;
@@ -1272,7 +1357,8 @@
    background: a red patch exactly one character wide and one line tall sits
    over the first cell, above a layer in the ordinary text color, and both are
    clipped to the glyphs. `local` keeps the patch on the first line when a
-   long command scrolls. The 6px are the textarea's own left and top padding. */
+   long command scrolls. The 6px and 4px are the textarea's own left and top
+   padding. */
 .composer-input.shell-mode > textarea {
   font-family: var(--font-family-mono);
   color: transparent;
@@ -1280,7 +1366,7 @@
   background-image:
     linear-gradient(var(--color-danger), var(--color-danger)),
     linear-gradient(var(--color-text-primary), var(--color-text-primary));
-  background-size: calc(6px + 1ch) calc(6px + 1lh), auto;
+  background-size: calc(6px + 1ch) calc(4px + 1lh), auto;
   background-repeat: no-repeat;
   background-attachment: local;
   -webkit-background-clip: text;
@@ -1292,7 +1378,7 @@
 }
 
 .composer-mode-chip {
-  margin-top: 5px;
+  margin-top: 4px;
   padding: 1px 8px;
   border-radius: var(--radius-sm);
   background: var(--color-accent-soft);

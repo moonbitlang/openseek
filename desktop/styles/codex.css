@@ -160,9 +160,9 @@
   display: none;
 }
 
-/* Codex's approval-mode control lives in the shared composer status row, but
-   the menu opens against the full composer card so narrow editor splits do
-   not clip its descriptions. */
+/* Codex's approval-mode control lives in the shared composer toolbar, but
+   the menu opens against the whole toolbar so narrow editor splits do not
+   clip its descriptions. */
 .codex-permission-control {
   flex: 0 1 auto;
   min-width: 0;

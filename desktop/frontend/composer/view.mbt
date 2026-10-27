@@ -909,6 +909,10 @@ fn MentionChip::render(
 /// The component's final renderer-local view. It owns the textarea, mention
 /// tray, toolbar, action group, stable DOM order, and surrounding chrome;
 /// callers cannot construct it or pass rendered fragments through it.
+///
+/// The card holds one row: the attachment slot, the draft, then the actions.
+/// The settings that shape the next turn sit in a toolbar below the card,
+/// split into a leading and a trailing group.
 priv struct View {
   images : @cmd.Emit[@image_input.Event]?
   allow_images : Bool
@@ -924,7 +928,10 @@ priv struct View {
   keyboard : KeyboardActions
   // The position caption shown while a recalled prompt is in the draft.
   history : String?
-  status : Array[@html.Html]
+  // The permanent attachment slot at the start of the card's row.
+  attach : @html.Html
+  leading : Array[@html.Html]
+  trailing : Array[@html.Html]
   actions : Array[ActionButton]
   followup_menu : @html.Html?
   overlay : @html.Html?
@@ -956,6 +963,7 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
     actions.push(action.render(locale~))
   }
   let inner : Array[@html.Html] = [
+    self.attach,
     // Keep the input wrapper and its two children permanently mounted. Rabbita
     // diffs array children by position, so chips appearing must not replace
     // the focus-holding textarea subtree.
@@ -999,15 +1007,10 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
         },
       ],
     ),
-    @html.div(class="composer-toolbar", [
-      @html.div(class="composer-controls", [
-        @html.div(class="composer-status", self.status),
-        @html.div(class="composer-actions", actions),
-      ]),
-    ]),
+    @html.div(class="composer-actions", actions),
   ]
-  // Keep the stable input wrapper and toolbar first; transient overlays are
-  // always appended.
+  // Keep the stable attachment slot, input wrapper, and actions first;
+  // transient overlays are always appended.
   if self.overlay is Some(overlay) {
     inner.push(overlay)
   }
@@ -1030,6 +1033,10 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   @html.section(class="composer", [
     @html.div(class="composer-context", self.before_inner),
     @html.div(class="composer-inner", attrs~, inner),
+    @html.div(class="composer-toolbar", [
+      @html.div(class="composer-status", self.leading),
+      @html.div(class="composer-status composer-status-trailing", self.trailing),
+    ]),
   ])
 }
 
