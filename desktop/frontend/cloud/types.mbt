@@ -160,7 +160,7 @@ pub struct PendingCommand {
 } derive(Eq)
 
 ///|
-pub(all) enum CommandInput {
+pub enum CommandInput {
   Native(@wire.Command)
   Prompt(
     content~ : @wire.Content,
@@ -184,7 +184,7 @@ impl ToJson for SessionEdit with fn to_json(self) {
 }
 
 ///|
-pub(all) struct MetadataSave {
+pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32

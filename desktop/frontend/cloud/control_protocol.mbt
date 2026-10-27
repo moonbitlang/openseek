@@ -1,5 +1,5 @@
 ///|
-pub(all) enum ControlRunStatus {
+pub enum ControlRunStatus {
   Idle
   Running
   Stopping
@@ -16,7 +16,7 @@ pub impl FromJson for ControlRunStatus with fn from_json(json, path) {
 }
 
 ///|
-pub(all) enum SteerStatus {
+pub enum SteerStatus {
   Pending
   Applied
   Dropped
@@ -35,7 +35,7 @@ pub impl FromJson for SteerStatus with fn from_json(json, path) {
 }
 
 ///|
-pub(all) struct QueueEntry {
+pub struct QueueEntry {
   id : String
   content : @wire.Content
 } derive(Eq)
@@ -49,7 +49,7 @@ pub impl FromJson for QueueEntry with fn from_json(json, path) {
 }
 
 ///|
-pub(all) struct SteerReceipt {
+pub struct SteerReceipt {
   submission_id : String
   status : SteerStatus
 } derive(Eq)
@@ -66,7 +66,7 @@ pub impl FromJson for SteerReceipt with fn from_json(json, path) {
 }
 
 ///|
-pub(all) struct ControlState {
+pub struct ControlState {
   active_task_id : String?
   status : ControlRunStatus
   paused : Bool
@@ -126,7 +126,7 @@ pub impl FromJson for ControlState with fn from_json(json, path) {
 }
 
 ///|
-pub(all) struct ControlSnapshot {
+pub struct ControlSnapshot {
   session_id : String
   task_id : String?
   seq : Int32
@@ -156,7 +156,7 @@ pub impl FromJson for ControlSnapshot with fn from_json(json, path) {
 }
 
 ///|
-pub(all) enum ControlOperation {
+pub enum ControlOperation {
   Stop
   Steer(submission_id~ : String, content~ : @wire.Content)
   QueueAdd(id~ : String, content~ : @wire.Content)
@@ -206,7 +206,7 @@ impl ToJson for QueueRequest with fn to_json(self) {
 }
 
 ///|
-pub(all) enum ControlResult {
+pub enum ControlResult {
   Accepted
   Rejected(String)
 } derive(Eq)
@@ -243,7 +243,7 @@ fn QueueRequest::decode_reply(
 }
 
 ///|
-pub(all) enum ControlStreamEvent {
+pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
   NativeEvent(EngineFrame)
@@ -253,7 +253,7 @@ pub(all) enum ControlStreamEvent {
 ///|
 /// Native events can arrive between tasks. Their payload is decoded by the
 /// same OpenSeek parser as Local; the envelope owns only Cloud routing.
-pub(all) struct EngineFrame {
+pub struct EngineFrame {
   session_id : String
   task_id : String?
   seq : Int32
