@@ -37,12 +37,16 @@ pub(all) struct ContextActions {
   open_file : (String) -> @cmd.Cmd
   reveal_file : (String) -> @cmd.Cmd
   share_file : (String) -> @cmd.Cmd
+  download_file : (String) -> @cmd.Cmd
 }
 
 pub(all) struct ContextInput {
   platform : ClientPlatform
   open_web_links_in_app : Bool
   reveal_files : Bool
+  share_files : Bool
+  download_files : Bool
+  downloading : Bool
 } derive(Eq)
 pub fn ContextInput::equal(Self, Self) -> Bool
 pub fn ContextInput::not_equal(Self, Self) -> Bool

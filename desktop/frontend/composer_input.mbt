@@ -235,13 +235,6 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     prediction_source: if self.screen is Chat &&
       root_ready &&
       conv.run is NoRun(ended~) &&
-      (
-        ended is Some(RunFinished(Completed)) ||
-        (
-          conv.prediction is Some(record) &&
-          record.source_sequence == conv.watermark
-        )
-      ) &&
       conv.controls.compaction is NotCompacting &&
       conv.queued_inputs.is_empty() &&
       conv.pending_steers.is_empty() &&
@@ -249,7 +242,11 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       conv.controls.edit is None &&
       conv.queue_edit is None &&
       conv.watermark > 0 {
-      Some(conv.watermark)
+      @engine_session.prediction_source(
+        conv.prediction,
+        conv.watermark,
+        completed=ended is Some(RunFinished(Completed)),
+      )
     } else {
       None
     },

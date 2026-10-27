@@ -305,11 +305,9 @@ async fn job_history_page(
       }
     }
     let ids = files.filter_map(name => {
-      if name.has_suffix(".json") {
-        Some(@wire.job_id_from_storage(name[:name.length() - 5].to_owned()))
-      } else {
-        None
-      }
+      name
+      .strip_suffix(".json")
+      .map(stem => @wire.job_id_from_storage(stem.to_owned()))
     })
     for _, record in live {
       if record.generation == generation && !ids.contains(record.id) {

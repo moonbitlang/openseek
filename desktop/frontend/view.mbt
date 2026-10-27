@@ -1142,6 +1142,46 @@ fn remote_access_rows(
     ]
   }
   rows.push(@settings.row(@settings.text(model.locale, Account), controls))
+  if model.account is Some(_) {
+    let preferences = model.account_preferences
+    let controls : Array[@html.Html] = []
+    if preferences.value is Some(enabled) {
+      controls.push(
+        @settings.switch_control(
+          enabled~,
+          label=@settings.text(model.locale, HelpImproveSeekMoon),
+          disabled=preferences.pending ||
+            model.remote_connecting ||
+            model.console.busy,
+          on_click=dispatch(AccountPreferencesChanged(!enabled)),
+        ),
+      )
+    } else if preferences.pending {
+      controls.push(@html.span(@settings.text(model.locale, LoadingSettings)))
+    }
+    if preferences.error is Some(error) {
+      controls.push(
+        @html.span(
+          attrs=@html.Attrs::build().role("alert"),
+          @settings.text(
+            model.locale,
+            if preferences.value is Some(_) {
+              PreferencesSaveFailed(error)
+            } else {
+              PreferencesReadFailed(error)
+            },
+          ),
+        ),
+      )
+    }
+    rows.push(
+      @settings.row(
+        @settings.text(model.locale, HelpImproveSeekMoon),
+        controls,
+        desc=@settings.text(model.locale, ContentImprovementDescription),
+      ),
+    )
+  }
   if model.remote_connecting && model.is_desktop {
     rows.push(
       @settings.row("", [
@@ -1170,20 +1210,13 @@ fn remote_access_rows(
           []
         } else {
           [
-            @html.button(
-              class="button secondary",
-              attrs=@html.Attrs::build()
-                .role("switch")
-                .aria_checked(enabled.to_string())
-                .disabled(
-                  model.account is None || managed || model.remote_connecting,
-                ),
+            @settings.switch_control(
+              enabled~,
+              label=@settings.text(model.locale, RemoteControl),
+              disabled=model.account is None ||
+                managed ||
+                model.remote_connecting,
               on_click=dispatch(RemoteAccessSet(!enabled)),
-              if enabled {
-                @settings.text(model.locale, On)
-              } else {
-                @settings.text(model.locale, Off)
-              },
             ),
           ]
         },
@@ -1766,18 +1799,10 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @settings.row(
             @settings.text(locale, FpsOverlay),
             [
-              @html.button(
-                class="button secondary",
-                attrs=@html.Attrs::build()
-                  .role("switch")
-                  .aria_label(@settings.text(locale, FpsOverlay))
-                  .aria_checked(model.fps_overlay_enabled.to_string()),
+              @settings.switch_control(
+                enabled=model.fps_overlay_enabled,
+                label=@settings.text(locale, FpsOverlay),
                 on_click=dispatch(FpsOverlayChanged(!model.fps_overlay_enabled)),
-                if model.fps_overlay_enabled {
-                  @settings.text(locale, On)
-                } else {
-                  @settings.text(locale, Off)
-                },
               ),
             ],
             desc=@settings.text(locale, FpsDescription),
@@ -2684,7 +2709,7 @@ fn view(
   // The toast stack floats over everything (position: fixed), so appending
   // it last never shifts the layout; skipping it entirely while empty keeps
   // the corner clickable.
-  if model.notifications.length() > 0 || model.github.checkout is Some(_) {
+  if !model.notifications.is_empty() || model.github.checkout is Some(_) {
     children.push(notifications_view(dispatch, model))
   }
   children.push(

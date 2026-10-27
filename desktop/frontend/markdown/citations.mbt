@@ -129,7 +129,9 @@ fn MarkdownRender::citation_node(
       class="citation-link file-link",
       type_="button",
       title~,
-      attrs=attrs.data_set("context-file", path),
+      attrs=attrs
+        .data_set("context-file", path)
+        .data_set("context-workspace-file", FileReference(path).path()),
       on_click=open(path),
       children,
     )

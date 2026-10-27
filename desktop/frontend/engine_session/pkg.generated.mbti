@@ -13,6 +13,10 @@ pub fn composer_action(@composer.Action) -> Action?
 
 pub fn is_idle_event(@openseek_protocol.Event) -> Bool
 
+pub fn merge_prediction(@openseek_protocol.PredictionRecord?, @openseek_protocol.PredictionRecord?, Int32) -> @openseek_protocol.PredictionRecord?
+
+pub fn prediction_source(@openseek_protocol.PredictionRecord?, Int32, completed~ : Bool) -> Int32?
+
 pub fn refreshes_history(@openseek_protocol.Event) -> Bool
 
 pub fn slash_action(String) -> Action?

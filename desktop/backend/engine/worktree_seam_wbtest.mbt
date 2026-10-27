@@ -964,7 +964,7 @@ async test "deleting a live conversation skips the archive and drops its placeme
   )
   assert_true(reply is Deleted)
   assert_eq(deleted.length(), family.length())
-  assert_eq(deleted[deleted.length() - 1], "chat")
+  assert_true(deleted is [.., "chat"])
   let archived = @session_store.archived_root(store).join("sessions")
   for session_id in family {
     assert_false(@fsx.exists(live.join(session_id).to_path()))

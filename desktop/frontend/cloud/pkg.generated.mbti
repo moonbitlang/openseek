@@ -125,6 +125,7 @@ pub(all) struct Conversation {
   records : Array[Record]
   events : Array[Event]
   document : @protocol.SessionDocument
+  prediction : @openseek_protocol.PredictionRecord?
   request : Int32
   send_request : Int32
   loading : Bool
@@ -160,6 +161,7 @@ pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @c
 pub fn Conversation::equal(Self, Self) -> Bool
 pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
 pub fn Conversation::not_equal(Self, Self) -> Bool
+pub fn Conversation::prediction_source(Self, ready~ : Bool) -> Int32?
 pub fn Conversation::run_heartbeat(Self) -> @composer.RunHeartbeat?
 
 pub struct Creation {
@@ -190,6 +192,7 @@ pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 
 pub(all) struct History {
+  prediction : @openseek_protocol.PredictionRecord?
   session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool

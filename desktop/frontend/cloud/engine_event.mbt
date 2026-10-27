@@ -21,6 +21,18 @@ fn State::engine_event(
     // Local also ignores unrecognized native events.
     return (next, @cmd.none, None)
   }
+  if event is @wire.PredictionResult(source_sequence~, outcome~) {
+    // Prediction ownership is the native log frontier, including results that
+    // arrive after their task ends or ahead of a pending history response.
+    return (
+      next.replace(
+        session,
+        conversation.with_prediction(Some({ source_sequence, outcome, })),
+      ),
+      @cmd.none,
+      None,
+    )
+  }
   let conversation = match event {
     @wire.SteerApplied(submission_id~, ..) if frame.task_id is Some(task) =>
       conversation.steer_receipt(task, submission_id, false)

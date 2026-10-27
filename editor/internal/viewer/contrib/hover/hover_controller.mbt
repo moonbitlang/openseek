@@ -909,11 +909,9 @@ pub fn HoverController::widget_view_with_loading(
       // operation is incomplete; its loading row must be retained with the
       // suppressed replacement, not appended to the old complete view.
       if self.operation.state is HoverOpWaitingForAsyncShowingLoading &&
-        !self.current_complete {
-        match loading_message {
-          Some(message) => parts.push(message)
-          None => ()
-        }
+        !self.current_complete &&
+        loading_message is Some(message) {
+        parts.push(message)
       }
       Some({ anchor_range: hover.range, parts, })
     }

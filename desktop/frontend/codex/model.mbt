@@ -193,10 +193,7 @@ priv struct CodexTurn {
 /// accumulated. Only the explicit "full" view is the complete list; absent
 /// means an older app-server whose envelopes carried full items.
 fn CodexTurn::items_authoritative(self : CodexTurn) -> Bool {
-  match self.items_view {
-    Some(view) => view == "full"
-    None => true
-  }
+  self.items_view.map_or(true, view => view == "full")
 }
 
 ///|
@@ -835,7 +832,7 @@ fn CodexModelOption::reasoning_effort(
     self.reasoning_efforts.any(option => option.value == default_) {
     return default_
   }
-  self.reasoning_efforts.get(0).map(option => option.value).unwrap_or("")
+  self.reasoning_efforts.get(0).map_or("", option => option.value)
 }
 
 ///|
@@ -1145,8 +1142,7 @@ fn State::terminal_available(
 ) -> Bool {
   self
   .active_placement(channel)
-  .map(placement => placement.is_ready())
-  .unwrap_or(false)
+  .map_or(false, placement => placement.is_ready())
 }
 
 ///|
@@ -1644,7 +1640,7 @@ fn State::with_models(self : State, value : Json) -> State {
     if !default_model.is_empty() {
       default_model
     } else {
-      models.get(0).map(model => model.id).unwrap_or("")
+      models.get(0).map_or("", model => model.id)
     }
   } else {
     self.selected_model
@@ -1652,8 +1648,7 @@ fn State::with_models(self : State, value : Json) -> State {
   let selected_effort = models
     .iter()
     .find_first(model => model.id == selected_model)
-    .map(model => model.reasoning_effort(self.selected_effort))
-    .unwrap_or("")
+    .map_or("", model => model.reasoning_effort(self.selected_effort))
   { ..self, models, selected_model, selected_effort, notice: "", }
 }
 
@@ -2210,7 +2205,7 @@ fn State::with_observed_first_prompt(self : State) -> State {
 /// first input locally and the composer should say `Starting…`.
 fn State::waiting_for_first_user_item(self : State) -> Bool {
   self.submitted_first_prompt is Some(_) &&
-  self.active_thread().map(thread => !thread.has_user_item()).unwrap_or(true)
+  self.active_thread().map_or(true, thread => !thread.has_user_item())
 }
 
 ///|
@@ -2704,8 +2699,7 @@ fn CodexItem::text(
     "fileChange" =>
       fields
       .get("changes")
-      .map(value => value.stringify())
-      .unwrap_or(model_text(locale, FileChanges))
+      .map_or(model_text(locale, FileChanges), value => value.stringify())
     "webSearch" =>
       model_text(locale, WebSearch) +
       @jsonx.json_text(fields, "query").unwrap_or("")
@@ -2849,11 +2843,7 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
   let arguments : Json? = match self.kind {
     "commandExecution" =>
       Some({ "command": @jsonx.json_text(fields, "command").unwrap_or("") })
-    "fileChange" =>
-      match fields.get("changes") {
-        Some(changes) => Some({ "changes": changes })
-        None => None
-      }
+    "fileChange" => fields.get("changes").map(changes => { "changes": changes })
     "webSearch" =>
       Some({ "query": @jsonx.json_text(fields, "query").unwrap_or("") })
     "imageView" =>
@@ -2888,7 +2878,7 @@ fn CodexItem::tool_failed(self : CodexItem) -> Bool {
   // operation through their explicit success flag.
   failed_status ||
   (self.kind == "dynamicToolCall" && fields.get("success") is Some(False)) ||
-  @jsonx.json_int(fields, "exitCode").map(code => code != 0).unwrap_or(false)
+  @jsonx.json_int(fields, "exitCode").map_or(false, code => code != 0)
 }
 
 ///|

@@ -327,7 +327,7 @@ pub fn MoonModViewMode::equal(Self, Self) -> Bool
 pub fn MoonModViewMode::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
-  DownloadFile(desktop~ : Bool)
+  DownloadFile(desktop~ : Bool, path~ : @common.Uri)
   FileDownloadReady(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32, generation~ : Int32, path~ : @common.Uri, bytes~ : Bytes)
   FileDownloaded(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32, generation~ : Int32, path~ : @common.Uri, result~ : Result[Unit, String])
   OfficeCitationLocated(OfficeCitationNavigation, Bool)

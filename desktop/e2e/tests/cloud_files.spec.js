@@ -1425,3 +1425,79 @@ test('Cloud file share failure permits explicit retry without an automatic resen
   expect(shares()[1].body.idempotency_key).not.toBe(shares()[0].body.idempotency_key);
   expect(cloud.device.pageErrors).toEqual([]);
 });
+
+
+for (const target of ['tree', 'link', 'card', 'citation']) {
+  test(`Cloud ${target} context menu shares and downloads original files without opening a preview`, async ({ page }, testInfo) => {
+    const cloud = new CloudFilesHarness(page);
+    cloud.directories.set(`${sessionA}:`, [{ name: 'src', is_dir: true }, { name: 'artifact.bin', is_dir: false }]);
+    cloud.histories.set(sessionA, { messages: [{
+      task_id: 'initial', kind: 'assistant_message', created_at: 100,
+      data: { content: '[Binary](./artifact.bin:12)\n\n```openseek-file\nartifact.bin\n```\n\nFile[^1]\n\n[^1]: [Binary](./artifact.bin)' },
+    }], generating: false });
+    const raw = Buffer.from([0, 0xff, 13, 10, 0xfe]);
+    cloud.downloads.set(`${sessionA}:artifact.bin`, raw);
+    await cloud.install(); await cloud.goto(); await cloud.open();
+    if (target === 'tree') {
+      await openFiles(page, cloud);
+      await file(page, 'src').click({ button: 'right' });
+      const menu = page.getByRole('menu', { name: 'Context menu', exact: true });
+      await expect(menu).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: 'Share', exact: true })).toHaveCount(0);
+      await expect(menu.getByRole('menuitem', { name: 'Download to local', exact: true })).toHaveCount(0);
+      await menu.press('Escape');
+    }
+    const source = target === 'tree' ? file(page, 'artifact.bin')
+      : target === 'link' ? page.getByTitle('Open ./artifact.bin:12', { exact: true })
+      : target === 'card' ? page.locator('.workspace-file-card')
+      : page.locator('.citation-link.file-link');
+    await source.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Share file', exact: true });
+    await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
+    expect(cloud.fileRequests.find(request => request.share).body.path).toBe('artifact.bin');
+    await page.keyboard.press('Escape');
+    let finish;
+    cloud.holdDownload = new Promise(resolve => { finish = resolve; });
+    const download = page.waitForEvent('download');
+    await source.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Download to local', exact: true }).click();
+    await expect.poll(() => cloud.fileRequests.filter(request => request.download).length).toBe(1);
+    await source.click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Download to local', exact: true })).toBeDisabled();
+    if (target === 'link') await page.screenshot({ path: testInfo.outputPath('cloud-file-context-menu.png') });
+    finish(); cloud.holdDownload = null;
+    const saved = await download;
+    expect(saved.suggestedFilename()).toBe('artifact.bin');
+    expect(readFileSync(await saved.path())).toEqual(raw);
+    expect(cloud.fileRequests.filter(request => request.content || request.head)).toEqual([]);
+    expect(fileHostRequests(cloud)).toEqual([]);
+    await expect(page.locator('.editor-tab').filter({ hasText: 'artifact.bin' })).toHaveCount(0);
+    expect(cloud.device.pageErrors).toEqual([]);
+  });
+}
+
+
+test('Cloud context download reuses a cached file while another preview stays active', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.get(`${sessionA}:src`).push({ name: 'other.txt', is_dir: false });
+  cloud.contents.set(`${sessionA}:src/other.txt`, { kind: 'content', content: 'Other preview', sig: 'other', absolute: '/src/other.txt' });
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  await showTree(page); await file(page, 'other.txt').click();
+  await expect(source(page)).toContainText('Other preview');
+  await showTree(page);
+  const before = cloud.fileRequests.length;
+  const download = page.waitForEvent('download');
+  await file(page, 'hello #.mbt').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Download to local', exact: true }).click();
+  const saved = await download;
+  expect(saved.suggestedFilename()).toBe('hello #.mbt');
+  expect(readFileSync(await saved.path())).toEqual(Buffer.from(cloud.contents.get(`${sessionA}:src/hello #.mbt`).content));
+  const requests = cloud.fileRequests.slice(before);
+  expect(requests.filter(request => request.head)).toHaveLength(1);
+  expect(requests.find(request => request.head).status).toBe(304);
+  expect(requests.filter(request => request.download || request.content)).toEqual([]);
+  await expect(source(page)).toContainText('Other preview');
+  await expect(page.locator('.editor-tab.active .tab-name')).toHaveText('other.txt');
+  expect(cloud.device.pageErrors).toEqual([]);
+});

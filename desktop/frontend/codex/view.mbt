@@ -64,8 +64,7 @@ pub fn State::reasoning_effort_chip(
   let description = model.reasoning_efforts
     .iter()
     .find_first(option => option.value == selected)
-    .map(option => option.description)
-    .unwrap_or("")
+    .map_or("", option => option.description)
   Some({
     id: "codex-reasoning-picker",
     options,
@@ -273,9 +272,9 @@ pub fn State::project_activation(
   let holds = match self.selection {
     CodexDraftTask(draft) => CodexProject(draft.grouping_root()) == project
     CodexStoredTask(thread) =>
-      thread.project_root
-      .map(root => CodexProject(root.trim().to_owned()) == project)
-      .unwrap_or(false)
+      thread.project_root.map_or(false, root => {
+        CodexProject(root.trim().to_owned()) == project
+      })
     CodexNoTask => false
   }
   if holds {
@@ -309,8 +308,7 @@ pub fn State::loose_entries(
   for thread in self.threads {
     if thread
       .project_key()
-      .map(project => !context.project_registered(project.0))
-      .unwrap_or(true) {
+      .map_or(true, project => !context.project_registered(project.0)) {
       entries.push(
         @section.Conversation(
           thread.sidebar_input(locale~, self, context, false),
@@ -387,7 +385,7 @@ fn CodexThreadRow::sidebar_input(
   nested : Bool,
 ) -> @conversation.Input {
   let selected = context.selected &&
-    state.active_thread().map(item => item.id == self.id).unwrap_or(false)
+    state.active_thread().map_or(false, item => item.id == self.id)
   let activity = state.activity.entry(self.id)
   let needs_input = state.pending_requests.any(request => {
     request.thread_id == self.id
@@ -600,7 +598,7 @@ test "Codex archived catalog contributes restore inputs" {
 ///|
 test "Codex threads join their registered project's shared row" {
   let data : Array[Json] = []
-  for number = 1; number <= 6; number = number + 1 {
+  for number in 1..<=6 {
     data.push({
       "id": "thread-\{number}",
       "projectRoot": "/work/openseek",
@@ -790,11 +788,10 @@ test "background Codex activity follows its thread instead of selection" {
   assert_true(rows[1].input.run_mark is @conversation.NoRunMark)
 
   for
-    outcome in [
+    (wire_status, expected) in [
       ("completed", @conversation.CompletedMark),
       ("failed", @conversation.FailedMark),
     ] {
-    let (wire_status, expected) = outcome
     let stale_frontier = running.activity.frontier()
     let turn : Json = { "id": "turn-1", "status": wire_status, "items": [] }
     let completed = running.with_notification(

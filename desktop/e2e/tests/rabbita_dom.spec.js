@@ -1009,6 +1009,7 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
   contextMenu = page.getByRole('menu', { name: 'Context menu' });
   await expect(contextMenu.getByRole('menuitem')).toHaveText([
     'Open',
+    'Share',
     'Copy Path',
   ]);
   await page.keyboard.press('Escape');

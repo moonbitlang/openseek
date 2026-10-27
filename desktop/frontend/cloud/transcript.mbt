@@ -5,7 +5,7 @@ fn Conversation::session_view(
   @transcript.session_from_reply({
     session: self.document,
     watermark: None,
-    prediction: None,
+    prediction: self.prediction,
   })
 }
 

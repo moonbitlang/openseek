@@ -973,7 +973,7 @@ fn Ctx::checkout_ready(self : Ctx) -> Bool {
 
 ///|
 pub(all) enum Msg {
-  DownloadFile(desktop~ : Bool)
+  DownloadFile(desktop~ : Bool, path~ : @common.Uri)
   FileDownloadReady(
     owner~ : @interop.ConversationIdentity,
     auth_epoch~ : Int32,

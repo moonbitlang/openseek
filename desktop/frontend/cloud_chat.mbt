@@ -433,6 +433,11 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     } else {
       None
     },
+    prediction: conversation.prediction,
+    prediction_source: conversation.prediction_source(
+      ready=self.cloud.can_send(owner.session()) &&
+        file_ctx(self).root() is Some(_),
+    ),
     turn_id: conversation.task,
     goal: conversation.controls.input(),
     slash_commands: if !self.cloud.can_compose(owner.session()) {

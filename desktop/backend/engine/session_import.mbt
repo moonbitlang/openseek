@@ -39,8 +39,7 @@ pub async fn import_session(
     session=session_id,
     worktree_of=payload.worktree_of.unwrap_or(""),
     _ => {
-      for i = records.length() - 1; i >= 0; i = i - 1 {
-        let record = records[i]
+      for record in records.rev_iter() {
         store.create(record.session)
         store.set_title(record.session.id(), record.title) catch {
           error =>

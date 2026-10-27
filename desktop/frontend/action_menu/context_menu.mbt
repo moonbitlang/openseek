@@ -20,6 +20,9 @@ pub(all) struct ContextInput {
   // Reveal is intentionally local-window-only. A browser or a Desktop viewing
   // a remote host must not unexpectedly open a file manager on another device.
   reveal_files : Bool
+  share_files : Bool
+  download_files : Bool
+  downloading : Bool
 } derive(Eq)
 
 ///|
@@ -29,6 +32,7 @@ pub(all) struct ContextActions {
   open_file : (String) -> @cmd.Cmd
   reveal_file : (String) -> @cmd.Cmd
   share_file : (String) -> @cmd.Cmd
+  download_file : (String) -> @cmd.Cmd
 }
 
 ///|
@@ -36,7 +40,7 @@ priv enum ContextTarget {
   NoTarget
   WebLink(String)
   EmailLink(url~ : String, address~ : String)
-  FileLink(String, share_path~ : String?)
+  FileLink(String, workspace_file~ : String?)
 } derive(Eq)
 
 ///|
@@ -138,8 +142,8 @@ fn element_context(element : @dom.Element) -> ContextTarget {
     file.get_attribute("data-context-file") is Some(path) {
     return FileLink(
       path,
-      share_path=file
-        .get_attribute("data-context-share-file")
+      workspace_file=file
+        .get_attribute("data-context-workspace-file")
         .filter(path => !path.is_empty()),
     )
   }
@@ -311,12 +315,13 @@ fn context_item(
   title : String,
   icon : @html.Html,
   command : @cmd.Cmd,
+  enabled~ : Bool = true,
 ) -> Entry {
   Action({
     label,
     title,
     icon: Some(icon),
-    enabled: true,
+    enabled,
     destructive: false,
     command,
   })
@@ -398,7 +403,7 @@ fn context_definition(
         copy_item(ui(locale, CopyEmail), ui(locale, CopyEmailHint), address),
       )
     }
-    FileLink(path, share_path~) => {
+    FileLink(path, workspace_file~) => {
       navigation.push(
         context_item(
           ui(locale, OpenLabel),
@@ -418,13 +423,24 @@ fn context_definition(
           ),
         )
       }
-      if share_path is Some(path) {
+      if input.share_files && workspace_file is Some(path) {
         navigation.push(
           context_item(
             ui(locale, ShareFile),
             ui(locale, ShareFile),
             @icons.icon_link_external(),
             (actions.share_file)(path),
+          ),
+        )
+      }
+      if input.download_files && workspace_file is Some(path) {
+        navigation.push(
+          context_item(
+            ui(locale, DownloadToLocal),
+            ui(locale, DownloadToLocal),
+            @icons.icon_arrow_down(),
+            (actions.download_file)(path),
+            enabled=!input.downloading,
           ),
         )
       }

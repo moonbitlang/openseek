@@ -38,7 +38,7 @@ fn worker_input(
   provisioned : @subtask.Provisioned,
 ) -> Json {
   let entry = provisioned.entry
-  let fields = Map::from_iter(input.iter())
+  let fields = input.copy()
   // Set here, never taken from the caller's input: the mode decides the
   // worker's whole scope.
   fields["mode"] = "worktree"
@@ -246,9 +246,7 @@ async fn Launcher::entries(
   let parent = self.children.parent()
   let prefix = self.nonce_prefix()
   let (entries, _) = @subtask.load_entries(geometry.common_git_dir)
-  entries
-  .iter()
-  .filter_map(entry => {
+  entries.filter_map(entry => {
     guard entry.parent_session() is Some(owner) &&
       owner == parent &&
       entry.nonce().strip_prefix(prefix) is Some(subrun) else {
@@ -256,7 +254,6 @@ async fn Launcher::entries(
     }
     Some(("\{parent}-\{subrun}", entry))
   })
-  .to_array()
 }
 
 ///|

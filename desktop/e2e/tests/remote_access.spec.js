@@ -18,6 +18,8 @@ const signedIn = {
 async function installDesktop(page, { managed = false } = {}) {
   const app = new DesktopBrowserHarness(page);
   await app.install();
+  await page.route('https://cloud.moonbitlang.cn/v1/me/preferences', route =>
+    route.fulfill({ json: { allow_content_improvement: false } }));
   const environment = { ...signedIn, managed_by_env: true };
   const auth = { status: managed ? environment : signedOut, account: null, finishConnect: null, requests: app.requests, app };
   await page.exposeFunction('desktopRequest', request => {
@@ -99,10 +101,11 @@ test('account sign-in remains independent of the remote access toggle and signs 
   const signOut = section.getByRole('button', { name: 'Sign out', exact: true });
   await expect(section.getByText('@octocat', { exact: true })).toBeVisible();
   await expect(signOut).toBeEnabled();
-  const toggle = section.getByRole('switch');
+  const toggle = section.getByRole('switch', { name: 'Remote control', exact: true });
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   expect(auth.requests.filter(request => request.method === 'remote.access_set')).toEqual([]);
-  await toggle.click();
+  await toggle.focus();
+  await page.keyboard.press('Space');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await expect(section.getByText('online — reachable from your browser', { exact: true })).toBeVisible();
   await toggle.click();
@@ -112,6 +115,26 @@ test('account sign-in remains independent of the remote access toggle and signs 
   await signOut.click();
   await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
   await expect(toggle).toBeDisabled();
+  expect(auth.app.pageErrors).toEqual([]);
+});
+
+test('FPS overlay switch toggles with the keyboard and restores the saved preference', async ({ page }, testInfo) => {
+  const auth = await installDesktop(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const toggle = page.getByRole('switch', { name: 'FPS overlay', exact: true });
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await toggle.focus();
+  await page.keyboard.press('Space');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.fps_overlay'))).toBe('true');
+  await toggle.scrollIntoViewIfNeeded();
+  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('settings-switches.png') });
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.fps_overlay'))).toBe('false');
   expect(auth.app.pageErrors).toEqual([]);
 });
 

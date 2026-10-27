@@ -42,12 +42,12 @@ fn start_download(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
+  path : @common.Uri,
   desktop~ : Bool,
 ) -> (@cmd.Cmd, State) {
   guard ctx.owner is @interop.Cloud(account~, session~) &&
     state.owner == Some(ctx.owner) &&
     ctx.cloud_files is Some(access) &&
-    ctx.active_file is Some(path) &&
     ctx.relative(path) is Some(relative) &&
     state.download is None else {
     return (@cmd.none, state)
@@ -165,6 +165,7 @@ fn download_button(
   locale~ : @i18n.Locale,
   dispatch : @cmd.Emit[Msg],
   state : State,
+  path : @common.Uri,
   desktop~ : Bool,
 ) -> @html.Html {
   let pending = state.download is Some(_)
@@ -181,7 +182,7 @@ fn download_button(
     class="file-reveal-button",
     title=label,
     disabled=pending,
-    on_click=dispatch(DownloadFile(desktop~)),
+    on_click=dispatch(DownloadFile(desktop~, path~)),
     attrs=@html.Attrs::build().aria_label(label).aria_busy(pending.to_string()),
     [@icons.icon_arrow_down(), @html.text(label)],
   )

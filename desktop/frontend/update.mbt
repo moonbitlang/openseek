@@ -1715,6 +1715,9 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
+  let (preferences_cmd, model) = sync_account_preferences(
+    dispatch, previous, model,
+  )
   // The empty composer has no durable conversation. Its temporary tabs do
   // not reappear after leaving it, matching the old strip-switch behavior.
   let previous_owner = previous.dock_owner()
@@ -2035,6 +2038,7 @@ fn update(
     @cmd.batch([
       cmd,
       navigation_cmd,
+      preferences_cmd,
       notification_badge_cmd,
       sidebar_mode_cmd,
       quick_open_cmd,
@@ -4047,6 +4051,10 @@ fn update_msg(
       )
       (command, { ..model, web_push, })
     }
+    AccountPreferencesChanged(enabled) =>
+      change_account_preferences(dispatch, model, enabled)
+    AccountPreferencesLoaded(request, result) =>
+      account_preferences_loaded(dispatch, model, request, result)
     DeviceAccountExpired(channel, epoch, token) => {
       guard model.account.map(account => account.token) == Some(token) &&
         model.device_state(channel) is Some(device) &&
@@ -5197,7 +5205,7 @@ fn update_msg(
       let conversations = activated.conversations.map(conv => {
         if conv.device == owner.channel &&
           conv.session_id == owner.session &&
-          conv.messages.length() == 0 &&
+          conv.messages.is_empty() &&
           !conv.is_running() {
           {
             ..conv,
@@ -6733,6 +6741,18 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     ShareFile(path) => model.share_file(dispatch, path)
+    DownloadFile(path) => {
+      guard model.workspace_file(path) is Some(file) else {
+        return (@cmd.none, model)
+      }
+      update_msg(
+        dispatch,
+        FileEditor(
+          @fileeditor.DownloadFile(desktop=model.is_desktop, path=file),
+        ),
+        model,
+      )
+    }
     OpenExport(channel, source) => {
       let (cmd, export_dialog) = model.export_dialog.open(source, channel~)
       (cmd, { ..model, export_dialog, })

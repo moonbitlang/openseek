@@ -1307,10 +1307,9 @@ fn reset_engine_generation(
   // Actor defers normally retire themselves. Defensively retire any identity
   // still present so queued/in-flight load callers are answered and both
   // control queues close before a successor pump starts.
-  let followers : Array[SessionFollower] = []
-  for _, follower in manager.followers {
-    followers.push(follower)
-  }
+  let followers : Array[SessionFollower] = [
+    for _, follower in manager.followers => follower
+  ]
   for follower in followers {
     retire_follower_actor(manager, follower)
   }

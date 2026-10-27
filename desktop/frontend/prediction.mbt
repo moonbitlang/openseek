@@ -5,26 +5,14 @@ fn Conversation::with_prediction(
   self : Conversation,
   incoming : @wire.PredictionRecord?,
 ) -> Conversation {
-  let prediction = if incoming is Some(record) &&
-    record.outcome is Completed(..) &&
-    (
-      self.prediction is None ||
-      (
-        self.prediction is Some(old) &&
-        old.source_sequence <= record.source_sequence
-      )
-    ) {
-    Some(record)
-  } else {
-    self.prediction
+  {
+    ..self,
+    prediction: @engine_session.merge_prediction(
+      self.prediction,
+      incoming,
+      self.watermark,
+    ),
   }
-  let prediction = if prediction is Some(record) &&
-    record.source_sequence >= self.watermark {
-    Some(record)
-  } else {
-    None
-  }
-  { ..self, prediction, }
 }
 
 ///|

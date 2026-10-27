@@ -50,7 +50,7 @@ test "download completions are fenced by account epoch and owner" {
   let (state, _) = sync(test_emit(), State::empty(), ctx)
   let (_, pending) = update(
     test_emit(),
-    DownloadFile(desktop=false),
+    DownloadFile(desktop=false, path~),
     state,
     ctx,
   )

@@ -52,10 +52,9 @@ fn dedup_whole_margin_decorations(
   visible_end_line_number : Int32,
   decorations : Array[WholeMarginDecoration],
 ) -> Array[Array[String]] {
-  let output : Array[Array[String]] = []
-  for _ in visible_start_line_number..<=visible_end_line_number {
-    output.push([])
-  }
+  let output : Array[Array[String]] = [
+    for _ in visible_start_line_number..<=visible_end_line_number => []
+  ]
   if decorations.length() == 0 {
     return output
   }
@@ -109,14 +108,13 @@ fn dedup_whole_margin_decorations(
 fn prepare_margin_decorations_render(
   class_names_per_line : Array[Array[String]],
 ) -> Array[String] {
-  let output : Array[String] = []
-  for class_names in class_names_per_line {
-    let line_output = for class_name in class_names; line_output = "" {
-      continue "\{line_output}<div class=\"cmdr \{class_name}\" style=\"\"></div>"
-    } nobreak {
-      line_output
+  [
+    for class_names in class_names_per_line => {
+      for class_name in class_names; line_output = "" {
+        continue "\{line_output}<div class=\"cmdr \{class_name}\" style=\"\"></div>"
+      } nobreak {
+        line_output
+      }
     }
-    output.push(line_output)
-  }
-  output
+  ]
 }

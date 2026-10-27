@@ -91,16 +91,14 @@ fn CodexActivityLedger::completed(
 ) -> CodexActivityLedger {
   // Keep an idle tombstone even if this frontend missed turn/started: it must
   // still beat an active snapshot requested before the completion arrived.
-  let unseen_outcome = match turn {
-    Some(turn) =>
-      match turn.status {
-        "completed" => Some((turn.id, @conversation.Completed))
-        "failed" => Some((turn.id, @conversation.Failed))
-        "interrupted" => Some((turn.id, @conversation.Stopped))
-        _ => None
-      }
-    None => None
-  }
+  let unseen_outcome = turn.bind(turn => {
+    match turn.status {
+      "completed" => Some((turn.id, @conversation.Completed))
+      "failed" => Some((turn.id, @conversation.Failed))
+      "interrupted" => Some((turn.id, @conversation.Stopped))
+      _ => None
+    }
+  })
   self.record(thread_id, false, unseen_outcome?)
 }
 
@@ -158,8 +156,7 @@ fn CodexActivityLedger::reconcile_snapshot(
   guard frontier.connection_epoch == self.connection_epoch else { return self }
   let entries = self.entries.copy()
   let mut accepted = false
-  for status in statuses {
-    let (thread_id, runtime) = status
+  for (thread_id, runtime) in statuses {
     guard runtime is Some(runtime) else { continue }
     let current = self.entry(thread_id)
     guard current.revision <= frontier.revision else { continue }

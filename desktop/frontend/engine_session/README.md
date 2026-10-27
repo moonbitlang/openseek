@@ -35,3 +35,7 @@ Local receives durable commits; Cloud refreshes the native session document at
 semantic boundaries. These synchronization paths remain host-specific, as do
 connection ownership and the existing product queues. Neither adapter should
 implement a second command-specific editor or event reducer.
+
+`merge_prediction` reconciles native `PredictionRecord`s for both hosts, and
+`prediction_source` validates their native-log frontier. Host adapters supply
+availability; the shared Composer owns visibility and Tab acceptance.

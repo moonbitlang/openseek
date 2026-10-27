@@ -1592,6 +1592,7 @@ priv struct Model {
   account : @protocol.AccountSession?
   account_epoch : Int32
   account_login_create : Int32?
+  account_preferences : AccountPreferences
   remote_access : RemoteAccess?
   // An `auth.connect` waiting on the user's browser round-trip.
   remote_connecting : Bool
@@ -1770,6 +1771,8 @@ priv enum Msg {
   // sign-in state moved.
   AccountLoaded(Int32, Result[@protocol.AccountSession?, String])
   WebPush(@web_push.Msg)
+  AccountPreferencesChanged(Bool)
+  AccountPreferencesLoaded(Int32, Result[Bool, @cloud_client.Failure])
   DeviceAccountExpired(@interop.ChannelId, Int32, String)
   RemoteAccessSet(Bool)
   RemoteStatusLoaded(RemoteAccess)
@@ -1937,6 +1940,7 @@ priv enum Msg {
   // not be opened. The saved path remains useful in the transient toast.
   SessionSearch(@session_search.Msg)
   ShareFile(String)
+  DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
   OpenSessionImport
@@ -2799,6 +2803,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     account: None,
     account_epoch: 0,
     account_login_create: None,
+    account_preferences: AccountPreferences::empty(),
     remote_access: None,
     remote_connecting: false,
     remote_error: None,
@@ -3973,7 +3978,7 @@ fn Conversation::durable_frontier(self : Conversation) -> Int32 {
 ///|
 fn Conversation::has_begun(self : Conversation) -> Bool {
   self.is_running() ||
-  self.messages.length() > 0 ||
+  !self.messages.is_empty() ||
   !self.pending_steers.is_empty() ||
   // A `!` command in flight is about to become transcript.
   !self.shell_commands.is_empty()

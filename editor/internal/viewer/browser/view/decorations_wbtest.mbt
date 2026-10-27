@@ -99,3 +99,46 @@ test "different classes do not merge" {
   ])
   assert_eq(pieces.length(), 2)
 }
+
+///|
+test "prepare render seeds one empty cell per visible line" {
+  let rendered = prepare_decorations_render(
+    [],
+    4,
+    6,
+    _line => 11,
+    fake_measure,
+    7.0,
+  )
+  assert_eq(rendered.length(), 3)
+  assert_eq(rendered[0], "")
+  assert_eq(rendered[1], "")
+  assert_eq(rendered[2], "")
+  let empty_viewport = prepare_decorations_render(
+    [],
+    6,
+    4,
+    _line => 11,
+    fake_measure,
+    7.0,
+  )
+  assert_eq(empty_viewport.length(), 0)
+}
+
+///|
+test "prepare render appends a whole-line piece on every spanned line" {
+  let rendered = prepare_decorations_render(
+    [overlay_dec(Range(5, 1, 6, 1), "line-delete", is_whole_line=true)],
+    4,
+    7,
+    _line => 11,
+    fake_measure,
+    7.0,
+  )
+  let piece = "<div class=\"cdr line-delete\" style=\"left:0;width:100%;\"></div>"
+  assert_eq(rendered.length(), 4)
+  assert_eq(rendered[0], "")
+  assert_eq(rendered[1], piece)
+  assert_eq(rendered[2], piece)
+  assert_eq(rendered[3], "")
+}
