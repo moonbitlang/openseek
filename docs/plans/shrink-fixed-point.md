@@ -32,6 +32,10 @@ Not candidates:
 - **`pub impl` rows**: the manual demotes some, but a conformance used
   through a trait object cannot be, and the counts don't tell which. They are
   left out of this version, so its fixed point covers the other rows only;
+- **`pub using` rows**: the analyzer does not count uses through a
+  re-export, so they read `usage: 0` while other packages use them (found
+  in the live run: `CloudOrigin`, `Failure`, `RequestError` of
+  `desktop/frontend/cloud`);
 - **fields, variants and trait methods** (indented rows): a field of a plain
   `pub struct` cannot be made private, so they shrink only through their
   type's narrowing hint;
@@ -75,7 +79,8 @@ and `editor`, a Monaco mirror published as its own module).
 ```
 @builtin/shrink.mbtx [--path DIR ...] [--exclude DIR ...] [--skip DIR ...]
                      [--max-packages N] [--rounds N] [--check-target T ...]
-                     [--stack-on BRANCH] [--no-pr] [--] [FOCUS...]
+                     [--check-in DIR ...] [--stack-on BRANCH] [--no-pr]
+                     [--] [FOCUS...]
 ```
 
 - `--path DIR` (repeatable): only packages under these directories.
@@ -90,6 +95,8 @@ and `editor`, a Monaco mirror published as its own module).
 - `--check-target T` (repeatable): check each combined round with
   `moon check --deny-warn --no-mbti --target T`; by default once, with no
   `--target`. This repository passes `native` and `js`.
+- `--check-in DIR` (repeatable): also run that check in DIR, a separate
+  workspace that imports this one. This repository passes `desktop/app`.
 - `--stack-on BRANCH`: the first round's PR targets BRANCH, and HEAD must be
   exactly `origin/BRANCH`'s tip. This continues a published stack.
 - `--no-pr`: keep each round on a local branch; push nothing.
@@ -118,7 +125,8 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
 1. **Analyze.** Run `moon ide analyze`, then require tracked files to still
    be clean (its check could rewrite a stale `pkg.generated.mbti`). Parse the
    candidates and map each package name to its directory by the longest
-   tracked module name it falls under (`moon.mod` or `moon.mod.json`). Keep
+   tracked module name it falls under (`moon.mod` or `moon.mod.json`),
+   below the module's `source` directory when it declares one. Keep
    packages under `--path`, not under `--exclude`, not named by `--skip`, and
    not given up earlier in this run (see Progress). With none left, the run has reached the fixed
    point: "fixed point" when the analyzer reports nothing in scope, else
@@ -141,7 +149,15 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
      `exports.mbt` with a reason from this list: a test seam that tests of
      other packages use; protocol or round-trip surface; a documented tunable
      or one member of a symmetric family; a consumer the analyzer cannot see,
-     named. "Might be useful" is not a reason.
+     named with its file and line. "Might be useful" is not a reason. The
+     last reason includes the analyzer's own misses: a struct literal or a
+     `{ ..x, f }` record update of a `pub(all)` type in another package,
+     which its narrowing hint ignores. Nothing is left in place, since a
+     left item would be listed again forever; the one exception is an item
+     defined in a generated file.
+   - Workers cannot delete files (the remove tool needs an approval they
+     have no channel for), so they empty a file whose code all moved; the
+     combine step removes it.
    - Before any visibility change, `git grep -n -w <name>` the whole
      repository.
    - Test use alone never justifies an export. Tests of this package move to
@@ -174,14 +190,16 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
      `pub(all)` became `pub`).
 6. **Combine.** If nothing was accepted, the round publishes nothing and the
    next round starts from the same B. Otherwise:
-   - `git checkout --detach B`, then `git cherry-pick` the accepted commits in
-     package order. The files are disjoint, so this should not conflict; the
-     result is one commit per package. On any failure (a nonzero exit, or an
+   - `git checkout --detach B`, then `git cherry-pick` the accepted commits
+     one at a time, in package order. The files are disjoint, so this should
+     not conflict; the result is one commit per package. After each pick,
+     the package's files that the commit left with nothing but comments are
+     `git rm`ed and the commit amended. On any failure (a nonzero exit, or an
      error such as a timeout) the pick is aborted and the run stops.
    - The tip is kept on the local branch `shrink/r<k>-<8 of the tip>`.
    - The accepted workers' branches are deleted.
    - The combination is checked with `moon check --deny-warn --no-mbti` per
-     `--check-target`. Two packages' changes, each valid alone, meet here
+     `--check-target`, then in each `--check-in` directory. Two packages' changes, each valid alone, meet here
      for the first time (A starts using a helper B demotes). A failure stops
      the run and leaves the round on its local branch. Tests are not rerun
      on the combination: each package's tests ran in its worker, and a
@@ -228,7 +246,7 @@ to. Run it in a checkout of its own: a worktree at the default branch.
 - A run that stops short (`--rounds`, the quota) or gives packages up prints
   `continue from <branch>: <arguments>`: check out that branch and run again
   with them. The arguments keep `--path`, `--max-packages`,
-  `--check-target`, `--rounds`, `--no-pr` or `--stack-on <branch>`,
+  `--check-target`, `--check-in`, `--rounds`, `--no-pr` or `--stack-on <branch>`,
   `--exclude`, every skipped package (given and given-up, as exact
   `--skip`) and the focus. Desktop shows the line; it never continues by
   itself, so the person decides each further run.
@@ -275,7 +293,11 @@ host. The repository is a temporary one with:
 Committers are pinned, so the test predicts each round's cherry-picked tip
 and the scripted workers report commits on it. The modes cover:
 
-- **publish:** two stacked PRs; round 1 combining two packages' commits;
+- **publish:** a nested module (in `moon.mod.json` format, with
+  `"source": "src/"`) whose package lives under its source directory; two
+  stacked PRs; round 1 combining two packages' commits,
+  with the test file one worker emptied removed in its own commit;
+  `--check-in`;
   round 2 analyzed and checked at round 1's tip; `--exclude`; base branches; the interface line; the parser (padded rows, `//`
   inside a value, blessed, used, member, unannotated, impl and derive rows,
   an unmapped package, the test kit); allowed paths; the capture race; a
@@ -284,7 +306,8 @@ and the scripted workers report commits on it. The modes cover:
 - **check-fails**; **conflict** (the pick is aborted, nothing left half
   done); **rounds**, then **continue**, which runs the exact arguments the
   bounded run printed from its branch (given-up packages stay out, the limit
-  holds); **none** (nothing accepted);
+  holds); **none** (nothing accepted); **skip** (`--skip` of a package
+  leaves the package nested in it eligible);
 - **fixed point**;
 - **preflight:** bad number, subdirectory, dirty, ahead of origin, and a
   `--stack-on` mismatch.
@@ -299,6 +322,44 @@ e2e specs send `/shrink` locally and in Cloud.
 - Editing other packages' tests.
 - `pub impl` rows.
 - Merging PRs, or continuing automatically.
+
+## Live run, round 1
+
+A first live run on this repository (`--check-target native --check-target
+js --exclude editor --exclude tools_sdk --exclude protocol --max-packages 4
+--rounds 3`, deepseek-flash, from a clean worktree at `origin/main`) chose
+`desktop/frontend/fileeditor` (40 candidates), `desktop/protocol` (26),
+`desktop/frontend/cloud` (17) and `desktop/frontend/composer` (17). Each
+worker took about 10 minutes. They checked the whole workspace and, on their
+own, the separate `desktop/app` workspace too, and reported every candidate
+with evidence:
+
+- `fileeditor`: 2 deleted, 7 demoted, 26 narrowed, 3 test seams.
+- `protocol`: 2 deleted, 2 demoted, 13 narrowed. The `desktop/app` check
+  caught 2 bad narrowings, which were reverted.
+- `cloud`: 12 narrowed.
+- `composer`: 20 interface lines removed, including two types made private.
+
+The reviewers built each change in their lab, and one proved its key claim
+with an experiment: a `pub` enum stays matchable from another package.
+
+The run surfaced five fixes, now in the script:
+
+- **`pub using` re-exports were false candidates.** The analyzer doesn't
+  count uses through them, so they are now left out.
+- **Workers left items in place** that other packages build with struct
+  literals or `{ ..x }` updates, or that `desktop/app` builds. The narrowing
+  hint misses all of these, and a left item would be listed forever. Such
+  items now go to `exports.mbt` with the consumer named, and nothing is
+  left in place.
+- **Workers cannot delete files**, so two left a stub test file holding only
+  a comment. They now empty the file, and the combine step removes it.
+- **The combined check now covers separate workspaces** (`--check-in`).
+  The workers' own `desktop/app` checks were what caught the bad
+  narrowings.
+- **Two traps are now in the guidance:** a `pub` type stays matchable and
+  readable from other packages, and a `pub extend T with Eq` keeps a type in
+  the interface.
 
 ## Review
 
@@ -322,3 +383,11 @@ Implementation review (Codex, xhigh, whole branch):
 | MEDIUM: the continuation drops `--rounds` | Kept; the continue mode runs the printed arguments and checks the limit holds |
 | MEDIUM: a cherry-pick that raises (a timeout) skips the abort | Raised errors and nonzero exits share one abort path, whose own failure is reported |
 | Tests never combine two commits, nor execute a continuation | A second accepted package in round 1 (a negative control that picks only the first commit fails), a conflict mode, and the continue mode |
+
+Second pass (Codex, xhigh, whole branch): the three fixes above confirmed.
+
+| Codex finding | Resolution |
+|---|---|
+| MEDIUM: packages of a module with `source = "src"` map to the wrong directory and drop out silently, faking a fixed point | The module's `source` directory is resolved; the fixture's nested module uses one (a negative control without the fix fails) |
+| LOW: no test of a skipped package with an eligible descendant | The skip mode |
+| LOW: no test of a cherry-pick that raises rather than exits nonzero | Not injected: the test host cannot make `git` time out. Both outcomes go through the one `abort_pick`, which the conflict mode exercises |
