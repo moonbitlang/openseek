@@ -31,6 +31,8 @@ try {
       ? route.continue() : route.abort();
   });
   const app = new DesktopBrowserHarness(page);
+  // A Git checkout gives the composer its Git chip, whose menu Back closes.
+  app.gitBranch = { branch: 'android/smoke', diffstat: { added: 3, removed: 1, files: 1, partial: false } };
   await app.install();
   // The APK answers the frontend's document paths with its bundled document.
   // Let those navigations through to it instead of the desktop harness's
@@ -78,6 +80,11 @@ try {
   run('shell', 'input', 'keyevent', '4');
   await page.waitForFunction(() => !document.querySelector('dialog[open]'));
   check(page.url() === deviceUrl, 'Back left the page under the export dialog');
+  await page.locator('.composer-git-button').click();
+  await page.locator('.composer-git-menu').waitFor();
+  run('shell', 'input', 'keyevent', '4');
+  await page.locator('.composer-git-menu').waitFor({ state: 'detached' });
+  check(page.url() === deviceUrl, 'Back left the page under the Git menu');
   await page.locator('.sidebar-toggle').click();
   await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().x) < 1);
   await page.screenshot({ path: `${output}drawer.png` });

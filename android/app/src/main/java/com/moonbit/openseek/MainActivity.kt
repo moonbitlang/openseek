@@ -218,9 +218,9 @@ class MainActivity : ComponentActivity() {
                     if (!owned || focus.dispatchEvent(escape)) popover.hidePopover();
                     return true;
                 }
-                // An action menu closes on Escape from inside it, which restores
-                // focus, or on a click outside it.
-                const menu = [...document.querySelectorAll('[data-action-menu-surface]')].pop();
+                // Action menus and the composer's Git menu close on Escape from
+                // inside them, which restores focus, or on a click outside them.
+                const menu = [...document.querySelectorAll('[data-action-menu-surface], .composer-git-menu')].pop();
                 if (menu) {
                     const focus = document.activeElement;
                     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
