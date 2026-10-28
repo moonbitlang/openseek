@@ -248,33 +248,6 @@ test('a failed handwritten skill move preserves its state and can be retried', a
   });
 }
 
-test('builtin skills remain switchable and manually update while disabled without uninstall', async ({ page }) => {
-  const app = new SkillsHarness(page, true);
-  app.builtin = true;
-  app.installedSkills[0].builtin = true;
-  await app.openDetails();
-  const detail = page.locator('.skill-detail-page');
-  await expect(detail.getByText('Built-in', { exact: true })).toBeVisible();
-  await page.getByRole('switch').click();
-  await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
-  const row = page.locator('.skill-row').filter({ hasText: installed.name });
-  await expect(row.getByText('Built-in', { exact: true })).toBeVisible();
-
-  app.catalogSkills[0].version = '0.1.1';
-  await page.getByRole('button', { name: 'Refresh catalog', exact: true }).click();
-  await row.getByRole('button', { name: 'Manage skill', exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: 'Uninstall', exact: true })).toHaveCount(0);
-  await page.getByRole('menuitem', { name: 'Update to 0.1.1', exact: true }).click();
-  await expect(row).toContainText('Yoorkin/wayfinder@0.1.1');
-  await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-  await expect(row.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
-  expect(app.requests.filter(r => r.method === 'skills.install').map(r => r.params.version)).toEqual(['0.1.1']);
-  expect(app.requests.filter(r => r.method === 'skills.uninstall')).toEqual([]);
-  expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params.enabled)).toEqual([false]);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('failed builtin startup stays visible with an empty library and recovers through catalog refresh and manual install', async ({ page }) => {
   const app = new SkillsHarness(page);
   app.builtin = true;

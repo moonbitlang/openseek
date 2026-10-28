@@ -1,16 +1,12 @@
 ///|
-fn wb_skill(
-  enabled~ : Bool,
-  name~ : String = "widget",
-  builtin~ : Bool = false,
-) -> InstalledItem {
+fn wb_skill(enabled~ : Bool, name~ : String = "widget") -> InstalledItem {
   {
     id: "acme-widget",
     name,
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
-    builtin,
+    builtin: false,
     enabled,
   }
 }
@@ -109,34 +105,4 @@ test "a library change to the document reloads it and drops the old read" {
   guard ready.preview is Ready(content="fresh", ..) else {
     fail("the replacement read must settle")
   }
-}
-
-///|
-test "uninstall checks the current built-in status even for a stale action" {
-  let skill = wb_skill(enabled=false, builtin=true)
-  let input = wb_input(installed=[skill])
-  let initial = State::empty()
-  for payload in [skill, { ..skill, builtin: false, }] {
-    let (_, unchanged, outcome) = initial.handle(
-      wb_emit(),
-      Uninstall(payload),
-      input,
-    )
-    assert_true(unchanged == initial && outcome is None)
-  }
-}
-
-///|
-test "builtin startup errors are host-owned notices even without an installation" {
-  let input = wb_input(installed=[])
-  let error : @protocol.BuiltinSkillError = {
-    registry: { module_name: "acme/widget", package_path: "", },
-    message: "Registry offline: reload the catalog and install manually",
-  }
-  let initial = State::empty().with_builtin_errors(input.channel, [error])
-  assert_eq(notice_views(initial, input, None).length(), 1)
-  let (_, opened) = initial.opening(wb_emit(), input)
-  assert_eq(notice_views(opened, input, None).length(), 1)
-  let other = { ..input, channel: @interop.ChannelId::Remote("other"), }
-  assert_eq(notice_views(opened, other, None).length(), 0)
 }

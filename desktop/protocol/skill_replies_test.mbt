@@ -23,7 +23,12 @@ test "SkillsCatalogReply owns its success and error wire shapes" {
 
 ///|
 test "InstalledSkillsReply owns its success and error wire shapes" {
-  let success : @protocol.InstalledSkillsReply = InstalledSkills([], builtin_errors=[])
+  let success : @protocol.InstalledSkillsReply = InstalledSkills([], builtin_errors=[
+    {
+      registry: { module_name: "acme/tools", package_path: "widget", },
+      message: "Registry unavailable",
+    },
+  ])
   let decoded : @protocol.InstalledSkillsReply = @json.from_json(
     success.to_json(),
   )
@@ -80,29 +85,6 @@ test "InstalledSkillsReply preserves independent builtin and enabled flags" {
   } noraise {
     _ => fail("missing builtin status must be rejected")
   }
-}
-
-///|
-test "builtin errors roundtrip even when installation is absent" {
-  let error : @protocol.BuiltinSkillError = {
-    registry: { module_name: "acme/tools", package_path: "widget", },
-    message: "Registry unavailable; reload the catalog and install manually",
-  }
-  let reply : @protocol.InstalledSkillsReply = InstalledSkills([], builtin_errors=[
-    error,
-  ])
-  let wire = reply.to_json()
-  assert_eq(wire, {
-    "skills": [],
-    "builtin_errors": [
-      {
-        "registry": { "module_name": "acme/tools", "package_path": "widget" },
-        "message": "Registry unavailable; reload the catalog and install manually",
-      },
-    ],
-  })
-  let decoded : @protocol.InstalledSkillsReply = @json.from_json(wire)
-  assert_eq(decoded, reply)
 }
 
 ///|
