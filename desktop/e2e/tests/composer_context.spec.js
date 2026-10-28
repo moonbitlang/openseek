@@ -237,7 +237,8 @@ for (const expanded of [false, true]) {
   });
 }
 
-test('a narrow running composer keeps the follow-up draft usable', async ({ page }) => {
+test('a narrow running composer keeps the follow-up draft usable beside an editor and a terminal', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 700 });
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -245,17 +246,45 @@ test('a narrow running composer keeps the follow-up draft usable', async ({ page
   const composer = page.locator('#task');
   await composer.fill('Start a turn');
   await page.locator('#send').click();
-  await page.setViewportSize({ width: 400, height: 800 });
+  // Squeeze the conversation pane with the editor split.
+  await app.openQuickOpen();
+  await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
+  await expect(page.locator('#viewer-host .view-lines')).toBeVisible();
+  const split = await page.locator('.editor-resize-handle').boundingBox();
+  await page.mouse.move(split.x + split.width / 2, split.y + split.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(10, split.y + split.height / 2, { steps: 8 });
+  await page.mouse.up();
   await composer.fill('Follow up while it runs');
   await expect(page.locator('.composer-followup .composer-picker')).toBeVisible();
-  const card = await page.locator('.composer-inner').boundingBox();
-  const draft = await composer.boundingBox();
-  expect(draft.width).toBeGreaterThan(card.width * 0.8);
-  for (const action of [page.getByRole('button', { name: 'Stop', exact: true }), page.locator('#send')]) {
-    const box = await action.boundingBox();
-    expect(box.x).toBeGreaterThanOrEqual(card.x);
-    expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width);
-    expect(box.y).toBeGreaterThanOrEqual(draft.y + draft.height);
-  }
+  await expect.poll(() => page.locator('main').evaluate(el => el.getBoundingClientRect().width)).toBeLessThan(520);
+  const expectUsable = async () => {
+    const card = await page.locator('.composer-inner').boundingBox();
+    const draft = await composer.boundingBox();
+    expect(draft.width).toBeGreaterThan(card.width * 0.8);
+    for (const action of [page.getByRole('button', { name: 'Stop', exact: true }), page.locator('#send')]) {
+      const box = await action.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(card.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width);
+      expect(box.y).toBeGreaterThanOrEqual(draft.y + draft.height);
+      expect(box.y + box.height).toBeLessThanOrEqual(card.y + card.height);
+    }
+    const toolbar = await page.locator('.composer-toolbar').boundingBox();
+    const main = await page.locator('main').boundingBox();
+    expect(toolbar.y).toBeGreaterThanOrEqual(card.y + card.height);
+    expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(main.y + main.height);
+  };
+  await expectUsable();
+  // Then raise the terminal to its limit under the narrow pane.
+  await page.getByTitle('Show terminal (Ctrl+`)').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'terminal.open').length).toBe(1);
+  await page.locator('.content').evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
+  const seam = await page.locator('.terminal-resize-handle').boundingBox();
+  await page.mouse.move(seam.x + seam.width / 2, seam.y + seam.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(seam.x + seam.width / 2, 5, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(() => page.locator('main').evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(200);
+  await expectUsable();
   expect(app.pageErrors).toEqual([]);
 });

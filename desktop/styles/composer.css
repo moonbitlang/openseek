@@ -109,18 +109,39 @@
   grid-column: 3;
 }
 
-/* A narrow card cannot also fit a running turn's stop button and follow-up
-   picker beside the draft: the draft takes its own full row and the buttons
-   drop to a row below it, attachment left and actions right. */
-@container (width < 480px) {
+/* A narrow pane cannot also fit a running turn's stop button and follow-up
+   picker beside the draft. The draft takes its own full row and the buttons
+   drop to a row below it; the actions span the flexible column, so the
+   follow-up picker's label, not the card, gives up width. Beside an open
+   terminal the card also reserves that second row. */
+@container main-pane (width < 520px) {
   .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
+    row-gap: 6px;
+
     & > .composer-input {
       grid-column: 1 / -1;
       grid-row: 1;
     }
-    & > :is(.composer-add, .composer-actions) {
+    & > .composer-add {
       grid-row: 2;
-      margin-top: 6px;
+    }
+    & > .composer-actions {
+      grid-column: 2 / -1;
+      grid-row: 2;
+      justify-self: end;
+      min-width: 0;
+      max-width: 100%;
+    }
+  }
+
+  .content.terminal-open
+    .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
+    grid-template-rows: minmax(34px, 1fr) auto;
+    min-height: 86px;
+
+    &:has(.mention-tray:not(:empty)) {
+      grid-template-rows: minmax(63px, 1fr) auto;
+      min-height: 115px;
     }
   }
 }
@@ -673,8 +694,11 @@
   min-width: 0;
 }
 
+/* The auto margin keeps the group at the right end even when a narrow
+   toolbar wraps it onto its own line, where its leftward menus fit. */
 .composer-status-trailing {
   justify-content: flex-end;
+  margin-left: auto;
 }
 
 /* Toolbar controls are quiet text that lifts on hover; only state (an active
@@ -720,6 +744,12 @@
 
 .composer-actions .icon-button {
   border-radius: 50%;
+}
+
+/* A flex box, so the picker inside can shrink its label in a narrow row. */
+.composer-followup {
+  display: flex;
+  min-width: 0;
 }
 
 .composer-followup:empty {
