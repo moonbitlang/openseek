@@ -56,6 +56,10 @@ test('the Codex approval mode uses the headed select and confirms full access', 
   const dialog = page.getByRole('dialog', { name: 'Enable full Codex access' });
   await expect(dialog).toBeVisible();
   await expect(trigger).toHaveText('Request approval');
+  // The trigger keeps focus behind the dialog, but cannot reopen the menu.
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Enable full access' }).click();
   await expect(trigger).toHaveText('Full access');
   await expect(page.locator('.codex-permission-control')).toHaveClass(/danger/);

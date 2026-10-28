@@ -719,6 +719,14 @@ pub fn State::can_choose_permission(self : State) -> Bool {
 }
 
 ///|
+/// The permission menu stays shut while Full access awaits confirmation: the
+/// trigger keeps focus behind the dialog, and the dialog owns the choice.
+pub fn State::can_open_permission_menu(self : State) -> Bool {
+  self.can_choose_permission() &&
+  self.permission_picker is CodexPermissionClosed(_)
+}
+
+///|
 /// Build state from the authoritative `thread/read(includeTurns=true)` reply.
 /// The shell's black-box workspace tests use the same boundary as production
 /// instead of constructing Codex's private thread representation.

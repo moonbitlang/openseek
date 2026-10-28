@@ -2444,7 +2444,7 @@ fn update_msg(
         @composer.PermissionMenuToggled(identity~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) &&
-            model.codex.can_choose_permission() else {
+            model.codex.can_open_permission_menu() else {
             return (@cmd.none, model)
           }
           update_msg(dispatch, ToggleSelectMenu(CodexPermissionMenu), model)

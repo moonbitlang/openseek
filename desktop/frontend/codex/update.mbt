@@ -1281,9 +1281,12 @@ test "Codex permission picker confirms full access and freezes while running" {
     @interop.ChannelId::Local,
     open_external,
   )
+  assert_true(requested.can_open_permission_menu())
   assert_true(
     warning.permission_picker is CodexPermissionConfirmingFullAccess(_),
   )
+  // The dialog owns the choice until it is answered.
+  assert_true(!warning.can_open_permission_menu())
   assert_eq(warning.permission_mode(), @protocol.RequestApproval)
   let (_, cancelled) = update(
     dispatch,
