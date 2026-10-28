@@ -178,7 +178,8 @@ samp,
   border-top: 1px solid var(--color-border-subtle);
 }
 
-.custom-select-group-label {
+.custom-select-group-label,
+.custom-select-heading {
   padding: 5px 9px 4px;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
@@ -227,6 +228,31 @@ samp,
   font-size: var(--font-size-md);
   line-height: 1;
   text-align: center;
+}
+
+/* A described row stacks its label over a quieter explanation. */
+.custom-select-option-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.custom-select-option-description {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+/* A headed menu numbers its rows; the digit is the row's key shortcut. */
+.custom-select-option:has(.custom-select-option-key) {
+  grid-template-columns: minmax(0, 1fr) 16px 10px;
+}
+
+.custom-select-option-key {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 /* The transcript's tab radios are visually clipped, so their visible labels

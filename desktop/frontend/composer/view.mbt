@@ -53,6 +53,7 @@ fn ModelGroup::select_group(self : ModelGroup) -> @select_control.Group {
     options: self.options.map(option => {
       value: option.value,
       label: option.label,
+      description: None,
     }),
   }
 }
@@ -88,6 +89,7 @@ fn ModelSelect::render(
     change: action_emit.map(value => ModelSelected(identity~, value~, draft~)),
     title: self.title,
     aria_label: ui(locale, ModelLabel),
+    heading: None,
     presentation: Composer(@icons.icon(@icons.icon_sparkle), false),
   }.render()
 }
@@ -121,6 +123,7 @@ fn ReasoningSelect::render(
         options: self.options.map(option => {
           value: option.value,
           label: option.label,
+          description: None,
         }),
       },
     ],
@@ -132,6 +135,7 @@ fn ReasoningSelect::render(
     change: action_emit.map(value => ReasoningSelected(identity~, value~)),
     title: self.title,
     aria_label: ui(locale, ReasoningEffort),
+    heading: None,
     presentation: Composer(@icons.icon(@icons.icon_lightbulb), true),
   }.render()
 }
@@ -208,47 +212,68 @@ fn WorktreeControl::render(
 }
 
 ///|
-/// The Approve for me switch: "Request approval" while the person answers,
-/// "Auto-review", highlighted, while the reviewer does. A change applies
-/// from the conversation's next start.
-fn ApprovalToggle::render(
+/// The approval mode menu: "Request approval" while the person answers,
+/// "Auto-review" while the reviewer does. A change applies from the
+/// conversation's next start.
+fn ApprovalSelect::render(
   locale~ : @i18n.Locale = English,
-  self : ApprovalToggle,
+  self : ApprovalSelect,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
-  let label = if self.on {
-    ui(locale, AutoReviewLabel)
-  } else {
-    ui(locale, RequestApproval)
-  }
-  let body = [
-    @icons.icon(@icons.icon_shield),
-    @html.span(class="composer-auto-review-label", label),
+  let modes : Array[(@protocol.OpenSeekApproval, String, String)] = [
+    (
+      @protocol.ApprovalAsk,
+      ui(locale, RequestApproval),
+      ui(locale, RequestApprovalDescription),
+    ),
+    (
+      @protocol.ApprovalReview,
+      ui(locale, AutoReviewLabel),
+      ui(locale, AutoReviewDescription),
+    ),
   ]
-  @html.button(
-    class=if self.on {
-      "composer-auto-review on"
-    } else {
-      "composer-auto-review"
-    },
-    type_="button",
-    title=if !self.enabled {
-      ui(locale, AutoReviewLocked)
-    } else if self.on {
-      ui(locale, AutoReviewOnHint)
-    } else {
-      ui(locale, AutoReviewOffHint)
-    },
-    // The attribute form, which the diff can remove again (see rabbita's
-    // `Attrs::disabled`); the property form would stick once set.
-    attrs=@html.Attrs::build()
-      .aria_label(ui(locale, ApproveForMe))
-      .aria_pressed(self.on.to_string())
-      .disabled(!self.enabled),
-    on_click=action_emit(ApprovalModeToggled(identity~)),
-    body,
-  )
+  let mut title = ui(locale, ApprovalLocked)
+  if self.enabled {
+    for mode in modes {
+      if mode.0 == self.mode {
+        title = mode.2
+      }
+    }
+  }
+  @select_control.Control::{
+    id: "openseek-approval-picker",
+    groups: [
+      {
+        label: ui(locale, ApprovalMode),
+        options: modes.map(mode => {
+          value: mode.0.wire(),
+          label: mode.1,
+          description: Some(mode.2),
+        }),
+      },
+    ],
+    selected: self.mode.wire(),
+    disabled: !self.enabled,
+    open: self.open,
+    toggle: action_emit(ApprovalMenuToggled(identity~)),
+    dismiss: action_emit(SelectMenuDismissed(identity~)),
+    // The menu offers exactly the two wire values above.
+    change: action_emit.map(value => {
+      ApprovalSelected(
+        identity~,
+        mode=if value == @protocol.ApprovalReview.wire() {
+          @protocol.ApprovalReview
+        } else {
+          @protocol.ApprovalAsk
+        },
+      )
+    }),
+    title,
+    aria_label: ui(locale, ApprovalMode),
+    heading: Some(ui(locale, ApprovalMode)),
+    presentation: Composer(@html.text(""), false),
+  }.render()
 }
 
 ///|

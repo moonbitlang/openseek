@@ -277,7 +277,7 @@ const SidebarModeStorageKey : String = "openseek.sidebar_mode"
 const ConversationModelsStorageKey : String = "openseek.conversation_models"
 
 ///|
-/// Every conversation switched to Approve for me, so reopening one keeps its
+/// Every conversation set to auto-review, so reopening one keeps its
 /// reviewer. Only that choice is stored: a conversation missing here asks,
 /// which is also what a new conversation does — the reviewer is opted into
 /// per conversation, never inherited from an unrelated one. Rows are keys
@@ -1164,6 +1164,7 @@ type ComposerActionIdentity = @composer.Identity
 priv enum SelectMenu {
   OpenSeekModelMenu
   OpenSeekReasoningMenu
+  OpenSeekApprovalMenu
   CodexModelMenu
   CodexReasoningMenu
   ApiProviderMenu

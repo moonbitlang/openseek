@@ -78,7 +78,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   }
   status.push(
     @composer.ApprovalStatus({
-      on: self.approval_for(conv.device, conv.session_id) is ApprovalReview,
+      mode: self.approval_for(conv.device, conv.session_id),
+      open: self.select_menu is Some(OpenSeekApprovalMenu),
       enabled: !conv.is_running(),
     }),
   )

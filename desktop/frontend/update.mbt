@@ -2543,7 +2543,8 @@ fn update_msg(
         | @composer.PermissionSelected(..)
         | @composer.GitDetailsToggled(..)
         | @composer.WorktreeModeToggled(..)
-        | @composer.ApprovalModeToggled(..)
+        | @composer.ApprovalMenuToggled(..)
+        | @composer.ApprovalSelected(..)
         | @composer.ApiSetupRequested(..)
         | @composer.QueuedInputEditRequested(..)
         | @composer.QueuedInputSteerRequested(..)
@@ -2691,27 +2692,29 @@ fn update_msg(
                 ArchiveSession(conv.device, conv.session_id),
                 model,
               )
-            @composer.ApprovalModeToggled(..) => {
-              // A running turn keeps the policy its engine started with; the
-              // switch is locked meanwhile, so a late click changes nothing.
-              guard !conv.is_running() else { return (@cmd.none, model) }
+            // A running turn keeps the policy its engine started with; the
+            // menu is locked meanwhile, so a late click changes nothing.
+            @composer.ApprovalMenuToggled(..) =>
+              if conv.is_running() {
+                (@cmd.none, model)
+              } else {
+                update_msg(
+                  dispatch,
+                  ToggleSelectMenu(OpenSeekApprovalMenu),
+                  model,
+                )
+              }
+            @composer.ApprovalSelected(mode=approval, ..) => {
+              let (_, closed) = update_msg(dispatch, CloseSelectMenu, model)
+              guard !conv.is_running() else { return (@cmd.none, closed) }
               // The next start, compaction, or goal carries the choice, and
               // the host gives the conversation a new engine when it differs.
-              let approval : @protocol.OpenSeekApproval = if model.approval_for(
-                  conv.device,
-                  conv.session_id,
-                )
-                is ApprovalReview {
-                ApprovalAsk
-              } else {
-                ApprovalReview
-              }
               (
                 save_conversation_approval(
                   conversation_model_key(conv.device, conv.session_id),
                   approval,
                 ),
-                model.with_approval(conv.device, conv.session_id, approval),
+                closed.with_approval(conv.device, conv.session_id, approval),
               )
             }
             @composer.PermissionMenuToggled(..)

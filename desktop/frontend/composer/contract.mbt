@@ -204,12 +204,13 @@ pub(all) struct PermissionControl {
 } derive(Eq)
 
 ///|
-/// OpenSeek's Approve for me switch: whether a reviewer answers this
-/// conversation's permission questions before they reach the person.
-pub(all) struct ApprovalToggle {
-  on : Bool
+/// OpenSeek's approval mode menu: whether the person answers this
+/// conversation's permission questions or a reviewer answers them first.
+pub(all) struct ApprovalSelect {
+  mode : @protocol.OpenSeekApproval
+  open : Bool
   // Off while a turn runs: its engine keeps the policy it started with, so a
-  // switch flipped then would show a mode that is not in effect.
+  // mode chosen then would show a mode that is not in effect.
   enabled : Bool
 } derive(Eq)
 
@@ -222,7 +223,7 @@ pub(all) enum StatusComponent {
   PermissionStatus(PermissionControl)
   GitStatus(GitControl)
   WorktreeStatus(WorktreeControl)
-  ApprovalStatus(ApprovalToggle)
+  ApprovalStatus(ApprovalSelect)
 } derive(Eq)
 
 ///|
@@ -384,7 +385,8 @@ pub(all) enum Action {
   )
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
-  ApprovalModeToggled(identity~ : Identity)
+  ApprovalMenuToggled(identity~ : Identity)
+  ApprovalSelected(identity~ : Identity, mode~ : @protocol.OpenSeekApproval)
   ApiSetupRequested(identity~ : Identity)
   QueuedInputEditRequested(identity~ : Identity, id~ : String)
   QueuedInputSteerRequested(identity~ : Identity, id~ : String)
@@ -431,7 +433,8 @@ pub fn Action::identity(self : Action) -> Identity {
     | PermissionSelected(identity~, ..)
     | GitDetailsToggled(identity~)
     | WorktreeModeToggled(identity~)
-    | ApprovalModeToggled(identity~)
+    | ApprovalMenuToggled(identity~)
+    | ApprovalSelected(identity~, ..)
     | ApiSetupRequested(identity~)
     | QueuedInputEditRequested(identity~, ..)
     | QueuedInputSteerRequested(identity~, ..)
@@ -515,7 +518,7 @@ pub extend PermissionControl with Eq::{equal, not_equal}
 ///|
 #deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
 #doc(hidden)
-pub extend ApprovalToggle with Eq::{equal, not_equal}
+pub extend ApprovalSelect with Eq::{equal, not_equal}
 
 ///|
 pub extend Presentation with Eq::{equal, not_equal}

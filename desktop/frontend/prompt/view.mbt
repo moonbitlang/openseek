@@ -24,8 +24,13 @@ pub fn Model::view(
                 {
                   value: "builtin_moonbit_guide",
                   label: text(locale, MoonBitGuide),
+                  description: None,
                 },
-                { value: "custom", label: text(locale, CustomPrompt), },
+                {
+                  value: "custom",
+                  label: text(locale, CustomPrompt),
+                  description: None,
+                },
               ],
             },
           ],
@@ -42,6 +47,7 @@ pub fn Model::view(
           }),
           title: text(locale, AdditionalPrompt),
           aria_label: text(locale, AdditionalPrompt),
+          heading: None,
           presentation: Setting,
         }.render(),
       ],

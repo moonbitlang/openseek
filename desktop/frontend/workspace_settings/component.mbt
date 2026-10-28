@@ -132,6 +132,7 @@ fn setting_select(
     change,
     title: aria_label,
     aria_label,
+    heading: None,
     presentation: Setting,
   }
 }
@@ -170,8 +171,16 @@ fn dialog_contents(
           emit,
           id="workspace-default-mode-select",
           options=[
-            { value: "local", label: ui(locale, LocalLabel), },
-            { value: "worktree", label: ui(locale, WorktreeLabel), },
+            {
+              value: "local",
+              label: ui(locale, LocalLabel),
+              description: None,
+            },
+            {
+              value: "worktree",
+              label: ui(locale, WorktreeLabel),
+              description: None,
+            },
           ],
           selected=if worktree_mode { "worktree" } else { "local" },
           aria_label=ui(locale, NewChatsLabel),
@@ -193,8 +202,16 @@ fn dialog_contents(
           emit,
           id="workspace-submodules-select",
           options=[
-            { value: "checkout", label: ui(locale, InitializeLabel), },
-            { value: "skip", label: ui(locale, LeaveUninitialized), },
+            {
+              value: "checkout",
+              label: ui(locale, InitializeLabel),
+              description: None,
+            },
+            {
+              value: "skip",
+              label: ui(locale, LeaveUninitialized),
+              description: None,
+            },
           ],
           selected=if checkout_submodules { "checkout" } else { "skip" },
           aria_label=ui(locale, WorktreeSubmodules),
@@ -214,10 +231,14 @@ fn dialog_contents(
           emit,
           id="workspace-submodule-timeout-select",
           options=[
-            { value: "5", label: ui(locale, FiveSeconds), },
-            { value: "10", label: ui(locale, TenSeconds), },
-            { value: "30", label: ui(locale, ThirtySeconds), },
-            { value: "60", label: ui(locale, SixtySeconds), },
+            { value: "5", label: ui(locale, FiveSeconds), description: None, },
+            { value: "10", label: ui(locale, TenSeconds), description: None, },
+            {
+              value: "30",
+              label: ui(locale, ThirtySeconds),
+              description: None,
+            },
+            { value: "60", label: ui(locale, SixtySeconds), description: None, },
           ],
           selected=submodule_checkout_timeout_seconds.to_string(),
           aria_label=ui(locale, SubmoduleTimeout),

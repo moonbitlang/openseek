@@ -701,12 +701,11 @@
   margin-left: auto;
 }
 
-/* Toolbar controls are quiet text that lifts on hover; only state (an active
-   mode, a failing check, full access) keeps its colour. */
+/* Toolbar controls are quiet text that lifts on hover; only state (a
+   worktree launch, a failing check, full access) keeps its colour. */
 .composer-toolbar :is(
   .composer-model,
   .composer-git-button,
-  .composer-auto-review,
   .composer-worktree,
   .codex-permission-button
 ) {
@@ -716,9 +715,12 @@
   font-size: var(--font-size-sm);
 }
 
-.composer-toolbar .composer-auto-review.on,
+/* A worktree launch is the one toolbar mode that changes where the turn
+   runs, so it stays a filled chip rather than coloured text. */
 .composer-toolbar .composer-worktree.on {
-  background: transparent;
+  border-color: var(--color-accent-border);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
   color: var(--color-accent-strong);
 }
 
@@ -727,11 +729,12 @@
   color: var(--color-danger);
 }
 
-.composer-status-trailing :is(.composer-model-glyph, .composer-model-chevron) {
+/* Toolbar pickers read as their selected value alone. */
+.composer-toolbar :is(.composer-model-glyph, .composer-model-chevron) {
   display: none;
 }
 
-.composer-status-trailing .composer-model {
+.composer-toolbar .composer-model {
   padding: 0 6px;
 }
 
@@ -1457,48 +1460,3 @@
   color: var(--color-text-muted);
 }
 
-/* The Approve for me switch. Same box as `.composer-model` and
-   `.composer-worktree`, so the toolbar chips sit at one height; the shield
-   and its label, highlighted while on. */
-.composer-auto-review {
-  --icon-size: var(--icon-md);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  box-sizing: border-box;
-  height: 30px;
-  /* Shrinks like `.composer-model` in a narrow chat pane: the label clips
-     rather than pushing the toolbar past the composer. */
-  max-width: 220px;
-  min-width: 0;
-  overflow: hidden;
-  margin: 0;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--color-control-surface);
-  color: var(--color-text-muted);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.composer-auto-review-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.composer-auto-review:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-.composer-auto-review:not(:disabled):hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
-}
-.composer-auto-review.on {
-  background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
-}

@@ -514,8 +514,16 @@ fn Entry::followup_menu(
         {
           label: ui(locale, ThisMessage),
           options: [
-            { value: "steer", label: ui(locale, SteerNowLabel), },
-            { value: "queue", label: ui(locale, QueueNextLabel), },
+            {
+              value: "steer",
+              label: ui(locale, SteerNowLabel),
+              description: None,
+            },
+            {
+              value: "queue",
+              label: ui(locale, QueueNextLabel),
+              description: None,
+            },
           ],
         },
       ],
@@ -530,6 +538,7 @@ fn Entry::followup_menu(
       change: emit.map(value => FollowupSelected(value)),
       title: ui(locale, FollowupHint),
       aria_label: ui(locale, FollowupAction),
+      heading: None,
       presentation: Composer(@icons.icon(@icons.icon_indent), true),
     }.render(),
   )

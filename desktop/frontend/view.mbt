@@ -34,6 +34,7 @@ fn SelectMenu::setting_control(
     change,
     title: aria_label,
     aria_label,
+    heading: None,
     presentation: Setting,
   }.render()
 }
@@ -1489,10 +1490,19 @@ fn api_settings_rows(
             {
               value: "deepseek",
               label: @settings.text(model.locale, DeepseekOfficial),
+              description: None,
             },
-            { value: "glm", label: @settings.text(model.locale, GlmOfficial), },
-            { value: "openrouter", label: "OpenRouter", },
-            { value: "custom", label: @settings.text(model.locale, CustomUrl), },
+            {
+              value: "glm",
+              label: @settings.text(model.locale, GlmOfficial),
+              description: None,
+            },
+            { value: "openrouter", label: "OpenRouter", description: None, },
+            {
+              value: "custom",
+              label: @settings.text(model.locale, CustomUrl),
+              description: None,
+            },
           ],
           selected=model.api_provider.wire(),
           aria_label=@settings.text(model.locale, ApiEndpoint),
@@ -1655,12 +1665,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             model,
             id="language-select",
             options=[
-              { value: "system", label: @settings.text(locale, System), },
-              { value: "en", label: "English", },
-              { value: "zh-Hans", label: "简体中文", },
-              { value: "zh-Hant", label: "繁體中文", },
-              { value: "ja", label: "日本語", },
-              { value: "es", label: "Español", },
+              {
+                value: "system",
+                label: @settings.text(locale, System),
+                description: None,
+              },
+              { value: "en", label: "English", description: None, },
+              { value: "zh-Hans", label: "简体中文", description: None, },
+              { value: "zh-Hant", label: "繁體中文", description: None, },
+              { value: "ja", label: "日本語", description: None, },
+              { value: "es", label: "Español", description: None, },
             ],
             selected=model.language.wire(),
             aria_label=@settings.text(locale, Language),
@@ -1679,8 +1693,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             model,
             id="followup-behavior-select",
             options=[
-              { value: "steer", label: @settings.text(locale, Steer), },
-              { value: "queue", label: @settings.text(locale, Queue), },
+              {
+                value: "steer",
+                label: @settings.text(locale, Steer),
+                description: None,
+              },
+              {
+                value: "queue",
+                label: @settings.text(locale, Queue),
+                description: None,
+              },
             ],
             selected=model.followup_behavior.wire(),
             aria_label=@settings.text(locale, Followup),
@@ -1698,9 +1720,21 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             model,
             id="theme-select",
             options=[
-              { value: "system", label: @settings.text(locale, System), },
-              { value: "light", label: @settings.text(locale, Light), },
-              { value: "dark", label: @settings.text(locale, Dark), },
+              {
+                value: "system",
+                label: @settings.text(locale, System),
+                description: None,
+              },
+              {
+                value: "light",
+                label: @settings.text(locale, Light),
+                description: None,
+              },
+              {
+                value: "dark",
+                label: @settings.text(locale, Dark),
+                description: None,
+              },
             ],
             selected=model.theme.wire(),
             aria_label=@settings.text(locale, Theme),
@@ -1751,13 +1785,23 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               {
                 value: "bottom-right",
                 label: @settings.text(locale, BottomRight),
+                description: None,
               },
               {
                 value: "bottom-left",
                 label: @settings.text(locale, BottomLeft),
+                description: None,
               },
-              { value: "top-right", label: @settings.text(locale, TopRight), },
-              { value: "top-left", label: @settings.text(locale, TopLeft), },
+              {
+                value: "top-right",
+                label: @settings.text(locale, TopRight),
+                description: None,
+              },
+              {
+                value: "top-left",
+                label: @settings.text(locale, TopLeft),
+                description: None,
+              },
             ],
             selected=model.notification_corner.wire(),
             aria_label=@settings.text(locale, NotificationCorner),
@@ -1777,10 +1821,12 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               {
                 value: "right-sidebar",
                 label: @settings.text(locale, RightSidebar),
+                description: None,
               },
               {
                 value: "bottom-panel",
                 label: @settings.text(locale, BottomPanel),
+                description: None,
               },
             ],
             selected=model.tree_layout.wire(),

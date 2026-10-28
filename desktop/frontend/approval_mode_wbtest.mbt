@@ -1,47 +1,64 @@
 ///|
-/// The OpenSeek composer's Approve for me switch, read off the root's
+/// The OpenSeek composer's approval mode menu, read off the root's
 /// projection.
-fn approval_toggle(model : Model) -> @composer.ApprovalToggle? {
+fn approval_select(model : Model) -> @composer.ApprovalSelect? {
   for status in model.composer_input().presentation.status {
-    if status is ApprovalStatus(toggle) {
-      return Some(toggle)
+    if status is ApprovalStatus(select) {
+      return Some(select)
     }
   }
   None
 }
 
 ///|
-fn toggle_approval(model : Model) -> Model {
-  let (_, next) = update(
-    test_dispatch(),
-    ComposerAction(
-      ApprovalModeToggled(identity=model.composer_input().identity),
-    ),
-    model,
-  )
+fn approval_action(model : Model, action : @composer.Action) -> Model {
+  let (_, next) = update(test_dispatch(), ComposerAction(action), model)
   next
 }
 
 ///|
-test "an OpenSeek conversation asks until Approve for me is switched on" {
+fn choose_approval(model : Model, mode : @protocol.OpenSeekApproval) -> Model {
+  let identity = model.composer_input().identity
+  let opened = approval_action(model, ApprovalMenuToggled(identity~))
+  approval_action(opened, ApprovalSelected(identity~, mode~))
+}
+
+///|
+test "an OpenSeek conversation asks until auto-review is chosen" {
   let model = test_model()
-  assert_true(approval_toggle(model) is Some({ on: false, enabled: true, }))
+  assert_true(
+    approval_select(model)
+    is Some({ mode: ApprovalAsk, open: false, enabled: true, }),
+  )
   let conv = model.active()
   assert_true(model.approval_for(conv.device, conv.session_id) is ApprovalAsk)
 }
 
 ///|
-test "Approve for me is remembered for that conversation only" {
+test "the approval menu opens and closes from the composer" {
+  let model = test_model()
+  let identity = model.composer_input().identity
+  let opened = approval_action(model, ApprovalMenuToggled(identity~))
+  assert_true(approval_select(opened) is Some({ open: true, .. }))
+  let dismissed = approval_action(opened, SelectMenuDismissed(identity~))
+  assert_true(approval_select(dismissed) is Some({ open: false, .. }))
+}
+
+///|
+test "auto-review is remembered for that conversation only" {
   let model = test_model()
   let conv = model.active()
-  let on = toggle_approval(model)
-  assert_true(approval_toggle(on) is Some({ on: true, enabled: true, }))
+  let on = choose_approval(model, ApprovalReview)
+  assert_true(
+    approval_select(on)
+    is Some({ mode: ApprovalReview, open: false, enabled: true, }),
+  )
   assert_true(on.approval_for(conv.device, conv.session_id) is ApprovalReview)
   // Another conversation is untouched: the reviewer is never inherited.
   assert_true(on.approval_for(conv.device, "another-session") is ApprovalAsk)
-  // Switching it off forgets it.
-  let off = toggle_approval(on)
-  assert_true(approval_toggle(off) is Some({ on: false, enabled: true, }))
+  // Choosing to answer again forgets it.
+  let off = choose_approval(on, ApprovalAsk)
+  assert_true(approval_select(off) is Some({ mode: ApprovalAsk, .. }))
   assert_true(off.reviewed_conversations.is_empty())
 }
 
@@ -60,12 +77,21 @@ test "the reviewed list keeps the newest choices within the cap" {
 }
 
 ///|
-/// A running turn keeps the policy its engine started with, so the switch is
+/// A running turn keeps the policy its engine started with, so the menu is
 /// locked until the turn ends rather than showing a mode not in effect.
-test "Approve for me is locked while a turn runs" {
+test "the approval mode is locked while a turn runs" {
   let model = test_model().replace_conversation(running_conversation())
-  assert_true(approval_toggle(model) is Some({ on: false, enabled: false, }))
+  assert_true(
+    approval_select(model)
+    is Some({ mode: ApprovalAsk, open: false, enabled: false, }),
+  )
   let conv = model.active()
-  let clicked = toggle_approval(model)
-  assert_true(clicked.approval_for(conv.device, conv.session_id) is ApprovalAsk)
+  let identity = model.composer_input().identity
+  let toggled = approval_action(model, ApprovalMenuToggled(identity~))
+  assert_true(toggled.select_menu is None)
+  let chosen = approval_action(
+    model,
+    ApprovalSelected(identity~, mode=ApprovalReview),
+  )
+  assert_true(chosen.approval_for(conv.device, conv.session_id) is ApprovalAsk)
 }

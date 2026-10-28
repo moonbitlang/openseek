@@ -69,7 +69,8 @@ pub(all) enum Action {
   PermissionSelected(identity~ : Identity, mode~ : @protocol.CodexPermissionMode)
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
-  ApprovalModeToggled(identity~ : Identity)
+  ApprovalMenuToggled(identity~ : Identity)
+  ApprovalSelected(identity~ : Identity, mode~ : @protocol.OpenSeekApproval)
   ApiSetupRequested(identity~ : Identity)
   QueuedInputEditRequested(identity~ : Identity, id~ : String)
   QueuedInputSteerRequested(identity~ : Identity, id~ : String)
@@ -88,8 +89,9 @@ pub(all) struct ApprovalNotice {
   answered : Bool
 } derive(Eq)
 
-pub(all) struct ApprovalToggle {
-  on : Bool
+pub(all) struct ApprovalSelect {
+  mode : @protocol.OpenSeekApproval
+  open : Bool
   enabled : Bool
 } derive(Eq)
 
@@ -402,7 +404,7 @@ pub(all) enum StatusComponent {
   PermissionStatus(PermissionControl)
   GitStatus(GitControl)
   WorktreeStatus(WorktreeControl)
-  ApprovalStatus(ApprovalToggle)
+  ApprovalStatus(ApprovalSelect)
 } derive(Eq)
 
 pub(all) struct WorktreeArchiveDialog {

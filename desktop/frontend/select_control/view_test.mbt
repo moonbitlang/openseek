@@ -7,8 +7,8 @@ test "selected option does not request a change command" {
       {
         label: "Provider",
         options: [
-          { value: "deepseek", label: "DeepSeek", },
-          { value: "custom", label: "Custom URL", },
+          { value: "deepseek", label: "DeepSeek", description: None, },
+          { value: "custom", label: "Custom URL", description: None, },
         ],
       },
     ],
@@ -26,6 +26,7 @@ test "selected option does not request a change command" {
     }),
     title: "Provider",
     aria_label: "Provider",
+    heading: None,
     presentation: @select_control.Setting,
   }
   ignore(control.render())
