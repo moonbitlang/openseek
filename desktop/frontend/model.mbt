@@ -3663,17 +3663,28 @@ fn Model::conversation_is_new_chat(self : Model, conv : Conversation) -> Bool {
 
 ///|
 /// Replace (or add) the entry sharing `conv`'s session id, copy-on-write —
-/// prior model snapshots keep their own conversations array.
+/// prior model snapshots keep their own conversations array. A turn that
+/// starts in the conversation on screen, from this client or another, locks
+/// its approval mode, so the approval menu closes with it.
 fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
+  let select_menu = if self.select_menu is Some(OpenSeekApprovalMenu) &&
+    conv.is_running() &&
+    self.active_conversation() is Some(active) &&
+    active.device == conv.device &&
+    active.session_id == conv.session_id {
+    None
+  } else {
+    self.select_menu
+  }
   let conversations = self.conversations.copy()
   for index, existing in conversations {
     if existing.device == conv.device && existing.session_id == conv.session_id {
       conversations[index] = conv
-      return { ..self, conversations, }
+      return { ..self, conversations, select_menu, }
     }
   }
   conversations.push(conv)
-  { ..self, conversations, }
+  { ..self, conversations, select_menu, }
 }
 
 ///|

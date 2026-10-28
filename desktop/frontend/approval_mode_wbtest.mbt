@@ -124,3 +124,22 @@ test "a started Codex turn closes the shell-owned approval menu" {
     model_menu.with_codex(running).select_menu is Some(CodexModelMenu),
   )
 }
+
+///|
+/// A turn started in the conversation on screen, even by another client,
+/// locks the approval mode, so its open menu closes rather than lingering.
+test "a started turn closes the open approval menu" {
+  let model = test_model()
+  let identity = model.composer_input().identity
+  let opened = approval_action(model, ApprovalMenuToggled(identity~))
+  assert_true(opened.select_menu is Some(OpenSeekApprovalMenu))
+  let running = opened.replace_conversation(running_conversation())
+  assert_true(running.select_menu is None)
+  assert_true(approval_select(running) is Some({ open: false, .. }))
+  // Another menu stays open.
+  let model_menu = { ..model, select_menu: Some(OpenSeekModelMenu), }
+  assert_true(
+    model_menu.replace_conversation(running_conversation()).select_menu
+    is Some(OpenSeekModelMenu),
+  )
+}
