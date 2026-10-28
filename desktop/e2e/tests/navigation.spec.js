@@ -77,7 +77,7 @@ for (const [target, title] of [
           jsonrpc: '2.0', id: request.id, result: await app.replyFor(request),
         }));
       });
-      socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: 3 } }));
+      socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: app.hostProtocol } }));
     });
     const destination = `/device/host/${target}`;
     await page.goto(destination);
@@ -87,7 +87,7 @@ for (const [target, title] of [
     await expect.poll(() => signInChecks).toBe(2);
     await expect(heading(page)).toHaveText(title);
     expect(new URL(page.url()).search).toBe('');
-    expect(app.socketURLs).toHaveLength(2);
+    await expect.poll(() => app.socketURLs.length).toBe(2);
     expect(app.ticketRequests).toEqual([]);
     expect(app.pageErrors).toEqual([]);
   });
