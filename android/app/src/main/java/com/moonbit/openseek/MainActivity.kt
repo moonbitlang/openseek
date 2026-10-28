@@ -218,6 +218,15 @@ class MainActivity : ComponentActivity() {
                     if (!owned || focus.dispatchEvent(escape)) popover.hidePopover();
                     return true;
                 }
+                // An action menu closes on Escape from inside it, which restores
+                // focus, or on a click outside it.
+                const menu = [...document.querySelectorAll('[data-action-menu-surface]')].pop();
+                if (menu) {
+                    const focus = document.activeElement;
+                    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+                    if (!(focus && menu.contains(focus)) || focus.dispatchEvent(escape)) document.body.click();
+                    return true;
+                }
                 // The topmost modal next, as Escape would: a native dialog's
                 // cancel handler or a confirmation's backdrop dismisses it.
                 const dialog = [...document.querySelectorAll('dialog[open]')].pop();

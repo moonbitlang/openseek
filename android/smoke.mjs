@@ -64,9 +64,15 @@ try {
   await page.waitForFunction(() => !!document.querySelector('#stop'));
   check(app.requests.filter(r => r.method === 'agent.start').length === 1, 'send count');
   await page.locator('#stop').click();
-  // Back dismisses an open modal instead of leaving the page beneath it.
+  // Back dismisses an open menu or modal instead of leaving the page beneath it.
   const deviceUrl = page.url();
-  await page.getByRole('button', { name: 'Export and import', exact: true }).click();
+  const transfer = page.getByRole('button', { name: 'Export and import', exact: true });
+  await transfer.click();
+  await page.getByRole('menu', { name: 'Export and import', exact: true }).waitFor();
+  run('shell', 'input', 'keyevent', '4');
+  await page.waitForFunction(() => !document.querySelector('[data-action-menu-surface]'));
+  check(page.url() === deviceUrl, 'Back left the page under the action menu');
+  await transfer.click();
   await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
   await page.getByRole('dialog', { name: 'Export conversation', exact: true }).waitFor();
   run('shell', 'input', 'keyevent', '4');
@@ -78,7 +84,7 @@ try {
   run('shell', 'input', 'keyevent', '4');
   await page.waitForFunction(() => document.querySelector('.app.sidebar-collapsed'));
   check(app.pageErrors.length === 0, `page errors: ${app.pageErrors.join('; ')}`);
-  console.log('PASS: bundled entry and device page, device selector, real IME, send/stop, Back on modal and drawer');
+  console.log('PASS: bundled entry and device page, device selector, real IME, send/stop, Back on menu, modal and drawer');
 } finally {
   await page.unrouteAll({ behavior: 'wait' });
   // Reload disposes every fixture socket and restores the real application entry.

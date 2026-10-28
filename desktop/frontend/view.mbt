@@ -2057,9 +2057,9 @@ fn conversation_header(
     items.push(
       @html.button(
         class=if model.terminal.is_open() {
-          "panel-toggle active"
+          "panel-toggle terminal-toggle active"
         } else {
-          "panel-toggle"
+          "panel-toggle terminal-toggle"
         },
         title=if model.terminal.is_open() {
           shell_text(model.locale, HideTerminal)

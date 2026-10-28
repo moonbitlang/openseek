@@ -536,7 +536,11 @@ pub fn State::header(
   if !narrow {
     topbar.push(
       @html.button(
-        class=if terminal_open { "panel-toggle active" } else { "panel-toggle" },
+        class=if terminal_open {
+          "panel-toggle terminal-toggle active"
+        } else {
+          "panel-toggle terminal-toggle"
+        },
         attrs=@html.Attrs::build().disabled(!terminal_available),
         title=if terminal_open {
           ui(locale, HideTerminal)
