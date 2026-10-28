@@ -206,8 +206,18 @@ class MainActivity : ComponentActivity() {
     companion object {
         private val CLOSE_OVERLAY = """
             (() => {
-                const popover = document.querySelector(':popover-open');
-                if (popover) { popover.hidePopover(); return true; }
+                const popover = [...document.querySelectorAll(':popover-open')].pop();
+                if (popover) {
+                    // A component that owns the popover's open state closes it
+                    // on Escape from its trigger or contents; hiding the element
+                    // alone would leave that state open.
+                    const focus = document.activeElement;
+                    const owned = focus && (popover.contains(focus) ||
+                        (popover.id && focus.getAttribute('aria-controls') === popover.id));
+                    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+                    if (!owned || focus.dispatchEvent(escape)) popover.hidePopover();
+                    return true;
+                }
                 // The topmost modal next, as Escape would: a native dialog's
                 // cancel handler or a confirmation's backdrop dismisses it.
                 const dialog = [...document.querySelectorAll('dialog[open]')].pop();
