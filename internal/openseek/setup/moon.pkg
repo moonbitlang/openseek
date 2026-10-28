@@ -16,7 +16,6 @@ import {
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/openseek/internal/openseek/options",
-  "moonbitlang/openseek/mcp/config" @mcpconfig,
   "moonbitlang/core/json",
 }
 

@@ -122,42 +122,6 @@ test "HTTP environment references reject missing or malformed values" {
 }
 
 ///|
-test "parse keeps environment references as written" {
-  let servers = @config.parse({
-    "mcpServers": {
-      "host": {
-        "url": "${HOST_URL}",
-        "headers": { "Authorization": "Bearer ${HOST_TOKEN}" },
-      },
-      "tracker": { "command": "tracker-mcp" },
-    },
-  })
-  guard servers
-    is [Http(name="host", url~, headers~), Stdio(name="tracker", ..)] else {
-    fail("unexpected servers: \{Repr(servers)}")
-  }
-  assert_eq(url, "${HOST_URL}")
-  assert_eq(headers.get("Authorization"), Some("Bearer ${HOST_TOKEN}"))
-}
-
-///|
-test "parse rejects what decode rejects besides unset variables" {
-  for
-    entry in [
-      ({ "url": "${UNCLOSED" } : Json),
-      ({ "url": "http://localhost/mcp", "command": "both" } : Json),
-      ({ "args": ["no-command"] } : Json),
-    ] {
-    try @config.parse({ "mcpServers": { "host": entry } }) |> ignore catch {
-      @config.Invalid(_) => ()
-      error => raise error
-    } noraise {
-      _ => fail("an invalid server entry was accepted")
-    }
-  }
-}
-
-///|
 test "later configurations replace whole servers before connection" {
   let first = @config.decode({
     "mcpServers": {

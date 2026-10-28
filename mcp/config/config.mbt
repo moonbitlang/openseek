@@ -83,25 +83,6 @@ pub fn decode(
   json : Json,
   env~ : Map[String, String] = Map([]),
 ) -> Array[McpServer] raise {
-  decode_servers(json, Some(env))
-}
-
-///|
-/// Decode the configuration as `decode` does, but leave `${VAR}` references in
-/// HTTP URLs and headers as written (still checked for being well formed).
-/// For reading what a configuration declares without the variables a
-/// connection needs, which a process that only reads it may not have. A
-/// parsed server is not for connecting: `decode` it with the environment.
-pub fn parse(json : Json) -> Array[McpServer] raise {
-  decode_servers(json, None)
-}
-
-///|
-/// Decode every server entry; `env` is `None` when references stay as written.
-fn decode_servers(
-  json : Json,
-  env : Map[String, String]?,
-) -> Array[McpServer] raise {
   guard json is { "mcpServers": Object(servers), .. } else {
     raise Invalid("configuration is missing an `mcpServers` object")
   }
@@ -116,7 +97,7 @@ fn decode_servers(
 fn decode_server(
   name : String,
   entry : Json,
-  env : Map[String, String]?,
+  env : Map[String, String],
 ) -> McpServer raise {
   if entry is { "url": _, .. } {
     return decode_http_server(name, entry, env)
@@ -154,7 +135,7 @@ fn decode_server(
 fn decode_http_server(
   name : String,
   entry : Json,
-  env : Map[String, String]?,
+  env : Map[String, String],
 ) -> McpServer raise {
   guard entry is { "url": String(url), .. } else {
     raise Invalid("server `\{name}`: `url` must be a string")
@@ -171,12 +152,10 @@ fn decode_http_server(
 }
 
 ///|
-/// Expand `${VAR}` references in `text` from `env`; with `None` they are kept
-/// as written, still checked for being well formed.
 fn expand_env(
   name : String,
   text : String,
-  env : Map[String, String]?,
+  env : Map[String, String],
 ) -> String raise ConfigError {
   let out = StringBuilder()
   let mut rest = text[:]
@@ -186,16 +165,12 @@ fn expand_env(
       !variable.is_empty() else {
       raise Invalid("server `\{name}`: malformed environment reference")
     }
-    if env is Some(env) {
-      guard env.get(variable.to_owned()) is Some(value) else {
-        raise Invalid(
-          "server `\{name}`: environment variable `\{variable}` is not set",
-        )
-      }
-      out.write_string(value)
-    } else {
-      out.write_string("${\{variable}}")
+    guard env.get(variable.to_owned()) is Some(value) else {
+      raise Invalid(
+        "server `\{name}`: environment variable `\{variable}` is not set",
+      )
     }
+    out.write_string(value)
     rest = suffix
   }
   out.write_stringview(rest)

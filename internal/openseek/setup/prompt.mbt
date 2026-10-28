@@ -99,23 +99,11 @@ pub async fn configured_system_prompt(
 }
 
 ///|
-/// Name the servers of the merged MCP configuration in `config_paths`. They
-/// come from the files, not from connecting: the prompt is built before the
-/// engine connects, sometimes by a process that never connects (`sessions
-/// fork`) and so lacks the variables a server's references need, which is why
-/// the files are parsed rather than decoded. A server that later fails to
-/// connect is reported as unavailable by `@mcp.search`. A file that cannot be
-/// read or parsed names no server here; the engine reports it when it
-/// connects. `None` when no server is configured.
+/// Name the servers of the merged MCP configuration in `config_paths`. A
+/// server that later fails to connect is reported as unavailable by
+/// `@mcp.search`. `None` when no server is configured.
 async fn mcp_prompt_section(config_paths : Array[String]) -> String? {
-  let loaded : Array[Array[@mcpconfig.McpServer]] = []
-  for path in config_paths {
-    let servers = @mcpconfig.parse(@json.parse(@fs.read_file(path).text())) catch {
-      _ => continue
-    }
-    loaded.push(servers)
-  }
-  let names = @mcpconfig.merge(loaded).map(server => "`\{server.name()}`")
+  let names = mcp_server_names(config_paths).map(name => "`\{name}`")
   guard !names.is_empty() else { return None }
   Some(
     (
@@ -133,6 +121,28 @@ async fn mcp_prompt_section(config_paths : Array[String]) -> String? {
       $|or a command-line client.
     ),
   )
+}
+
+///|
+/// The server names `config_paths` declare under `mcpServers`, in file order;
+/// a name declared again by a later file keeps its first position, as merging
+/// keeps a replaced server's. Only the names are read, not the entries: the
+/// prompt is built before the engine connects, sometimes by a process that
+/// never connects (`sessions fork`) and lacks the variables an entry's
+/// references need. A file that cannot be read or parsed names no server
+/// here; the engine reports it when it connects.
+async fn mcp_server_names(config_paths : Array[String]) -> Array[String] {
+  let names : Array[String] = []
+  for path in config_paths {
+    let json = @json.parse(@fs.read_file(path).text()) catch { _ => continue }
+    guard json is { "mcpServers": Object(servers), .. } else { continue }
+    for name, _ in servers {
+      if !names.contains(name) {
+        names.push(name)
+      }
+    }
+  }
+  names
 }
 
 ///|
