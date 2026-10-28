@@ -26,7 +26,8 @@ try {
   const assets = new URL('.', home);
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
-    return url.origin === assets.origin && url.pathname.startsWith(assets.pathname)
+    return url.origin === assets.origin &&
+      (url.pathname.startsWith(assets.pathname) || url.pathname.startsWith('/assets/'))
       ? route.continue() : route.abort();
   });
   const app = new DesktopBrowserHarness(page);

@@ -23,7 +23,7 @@ class ConsoleOriginTest {
             assertTrue(path, ConsoleOrigin.servesDocument(path))
         }
         for (path in listOf(null, "/", "/cloudy", "/console/android/index.html",
-            "/console/android/frontend.js", "/v2/devices", "/v2/auth/login")) {
+            "/assets/frontend.js", "/v2/devices", "/v2/auth/login")) {
             assertFalse(path, ConsoleOrigin.servesDocument(path))
         }
     }

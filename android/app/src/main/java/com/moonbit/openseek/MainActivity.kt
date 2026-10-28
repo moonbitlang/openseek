@@ -90,9 +90,13 @@ class MainActivity : ComponentActivity() {
         // real HTTPS origin, its cookies and the shared account-token and Connect-ticket protocol.
         // The frontend's own document routes (/cloud, /device/...) are answered
         // with the same bundled document below, never fetched from the server.
+        // The bundle keeps the frontend's /assets/ resources in the APK's assets/
+        // directory, so they too come from the APK rather than the server.
+        val bundled = WebViewAssetLoader.AssetsPathHandler(this)
         val assets = WebViewAssetLoader.Builder()
             .setDomain(ConsoleOrigin.HOST)
-            .addPathHandler(ConsoleOrigin.ASSET_PATH, WebViewAssetLoader.AssetsPathHandler(this))
+            .addPathHandler(ConsoleOrigin.ASSET_PATH, bundled)
+            .addPathHandler(ConsoleOrigin.FRONTEND_PATH) { path -> bundled.handle("assets/$path") }
             .build()
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {

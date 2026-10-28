@@ -60,15 +60,14 @@ val bundleConsole by tasks.registering(Sync::class) {
     into(layout.buildDirectory.dir("generated/consoleAssets"))
     doLast {
         val entry = destinationDir.resolve("index.html")
-        // Application paths such as /cloud are answered with this same document,
-        // so its relative resources must resolve under the APK's asset mount.
+        // The document names the shared frontend under root-absolute /assets/
+        // URLs, which the WebView answers from this bundle's assets directory.
         entry.writeText(entry.readText()
-            .replace("<head>", "<head><base href=\"/console/android/\">")
             .replace("</head>", "<link rel=\"stylesheet\" href=\"/console/android/conversation.css\" /></head>")
             .replace("<body>", "<body class=\"android-connect\">"))
     }
     doFirst {
-        check(bundle.file("frontend.js").asFile.isFile && bundle.file("index.html").asFile.isFile) {
+        check(bundle.file("assets/frontend.js").asFile.isFile && bundle.file("index.html").asFile.isFile) {
             "Build the shared frontend first: node desktop/package/build.mjs browser --release"
         }
     }

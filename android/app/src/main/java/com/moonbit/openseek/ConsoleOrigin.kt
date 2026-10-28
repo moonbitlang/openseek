@@ -13,6 +13,9 @@ internal object ConsoleOrigin {
     const val ASSET_PATH = "/console/android/"
     const val ENTRY_URL = "${ORIGIN}${ASSET_PATH}index.html"
 
+    /** The shared frontend's resources, which index.html names root-absolutely. */
+    const val FRONTEND_PATH = "/assets/"
+
     /**
      * Pathnames the frontend navigates to as documents. openseek-api answers
      * them with its published frontend; the APK answers them with its own, so a

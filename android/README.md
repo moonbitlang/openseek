@@ -123,8 +123,8 @@ features. Their tests live under `desktop/e2e/tests` and require no Android
 build; see [Mobile browser client](../desktop/MOBILE_BROWSER.md). Android adds
 only native authentication, insets/lifecycle, Back, file picking and packaging.
 `conversation.css` hides panel buttons for this first conversation-only client.
-Its link uses the absolute APK asset path, so a frontend `<base>` or history
-change cannot relocate it. Responsive styling comes from the shared bundle.
+Its link uses the absolute APK asset path, so a history change cannot relocate
+it. The shared frontend's `/assets/` resources are answered from the APK too. Responsive styling comes from the shared bundle.
 
 After building the APK:
 
