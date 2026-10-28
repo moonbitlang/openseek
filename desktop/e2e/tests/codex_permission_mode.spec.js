@@ -30,6 +30,14 @@ test('the Codex approval mode uses the headed select and confirms full access', 
   await expect(trigger).not.toBeFocused();
   await page.mouse.click(1000, 450);
   await expect(menu).toHaveCount(0);
+  // Opening another picker closes this one, focus or not.
+  await trigger.dispatchEvent('click');
+  await expect(menu).toBeVisible();
+  await page.locator('.composer').getByRole('button', { name: 'Model', exact: true }).dispatchEvent('click');
+  await expect(page.getByRole('listbox', { name: 'Model' })).toBeVisible();
+  await expect(menu).toHaveCount(0);
+  await page.mouse.click(1000, 450);
+  await expect(page.getByRole('listbox', { name: 'Model' })).toHaveCount(0);
   await expect(trigger).toHaveText('Request approval');
   // Full access only takes effect after the confirmation dialog.
   await trigger.click();

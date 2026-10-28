@@ -191,6 +191,8 @@ pub(all) struct ComposerContext {
   channel : @interop.ChannelId
   model_control : @composer.ModelSelect
   reasoning_control : @composer.ReasoningSelect?
+  // The shell owns which composer select is open, this one included.
+  permission_menu_open : Bool
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
@@ -357,7 +359,7 @@ pub fn State::composer_input(
   status.push(
     @composer.PermissionStatus({
       mode: self.permission_picker.mode(),
-      open: self.permission_picker.is_open(),
+      open: context.permission_menu_open,
       enabled: self.can_choose_permission(),
     }),
   )
@@ -559,10 +561,6 @@ fn State::apply_composer_action(
       (@cmd.none, self.with_selected_model(value))
     @composer.ReasoningSelected(value~, ..) =>
       (@cmd.none, self.with_selected_effort(value))
-    @composer.PermissionMenuToggled(..) =>
-      update(dispatch, TogglePermissionMenu, self, channel, _ => @cmd.none)
-    @composer.PermissionMenuDismissed(..) =>
-      update(dispatch, DismissPermissionMenu, self, channel, _ => @cmd.none)
     @composer.PermissionSelected(mode~, ..) =>
       update(dispatch, ChoosePermission(mode), self, channel, _ => @cmd.none)
     @composer.GitDetailsToggled(..) =>
@@ -631,6 +629,8 @@ fn State::apply_composer_action(
     | @composer.ReasoningMenuToggled(..)
     | @composer.SelectMenuDismissed(..)
     | @composer.ApprovalAnswered(..)
+    | @composer.PermissionMenuToggled(..)
+    | @composer.PermissionMenuDismissed(..)
     | @composer.ApprovalMenuToggled(..)
     | @composer.ApprovalSelected(..)
     | @composer.ApiSetupRequested(..)
@@ -696,6 +696,7 @@ test "Codex projects app-server facts into the shared composer contract" {
       title: "Model",
     },
     reasoning_control: None,
+    permission_menu_open: false,
     file_candidates: [@pathx.Relative("src/main.mbt")],
     open_files: [],
     active_file: None,

@@ -333,6 +333,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
       locale=self.locale,
       self.select_menu is Some(CodexReasoningMenu),
     ),
+    permission_menu_open: self.select_menu is Some(CodexPermissionMenu),
     file_candidates: search.candidates,
     open_files: if workspace_ready {
       self.live_editor_files()

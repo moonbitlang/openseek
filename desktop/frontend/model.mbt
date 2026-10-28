@@ -1169,6 +1169,7 @@ priv enum SelectMenu {
   OpenSeekApprovalMenu
   CodexModelMenu
   CodexReasoningMenu
+  CodexPermissionMenu
   ApiProviderMenu
   PromptMenu
   FollowupBehaviorMenu

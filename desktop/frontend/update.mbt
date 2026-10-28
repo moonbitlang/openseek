@@ -2127,6 +2127,25 @@ fn close_dock_tabs(
 }
 
 ///|
+/// Hand a Codex composer action the shell does not own to the Codex package.
+fn codex_composer_action(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  action : @composer.Action,
+) -> (@cmd.Cmd, Model) {
+  let channel = model.focused
+  let (command, codex) = @codex.update(
+    locale=model.locale,
+    dispatch.map(next => Codex(channel~, next)),
+    @codex.Msg::composer_action(action),
+    model.codex,
+    channel,
+    url => open_external_link(dispatch, url),
+  )
+  (command, { ..model, codex, })
+}
+
+///|
 fn update_msg(
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
@@ -2407,6 +2426,31 @@ fn update_msg(
           }
           update_msg(dispatch, CodexEffortPicked(value), model)
         }
+        @composer.PermissionMenuToggled(identity~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) &&
+            model.codex.can_choose_permission() else {
+            return (@cmd.none, model)
+          }
+          update_msg(dispatch, ToggleSelectMenu(CodexPermissionMenu), model)
+        }
+        @composer.PermissionMenuDismissed(identity~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          update_msg(dispatch, CloseSelectMenu, model)
+        }
+        @composer.PermissionSelected(identity~, ..) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          // The menu closes with the choice; Codex applies it, or asks to
+          // confirm Full access first.
+          let (_, closed) = update_msg(dispatch, CloseSelectMenu, model)
+          codex_composer_action(dispatch, closed, action)
+        }
         @composer.ReviewChangesOpened(identity~, selection~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
@@ -2445,18 +2489,7 @@ fn update_msg(
           }
           update_msg(dispatch, FileEditor(@fileeditor.EnsureFileIndex), model)
         }
-        _ => {
-          let channel = model.focused
-          let (command, codex) = @codex.update(
-            locale=model.locale,
-            dispatch.map(next => Codex(channel~, next)),
-            @codex.Msg::composer_action(action),
-            model.codex,
-            channel,
-            url => open_external_link(dispatch, url),
-          )
-          (command, { ..model, codex, })
-        }
+        _ => codex_composer_action(dispatch, model, action)
       }
     ComposerAction(action) => {
       if action.identity().owner is @interop.Cloud(..) {
