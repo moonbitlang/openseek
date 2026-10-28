@@ -99,30 +99,24 @@ pub async fn configured_system_prompt(
 }
 
 ///|
-/// Name the servers of the merged MCP configuration in `config_paths`, in the
-/// order merging gives them (a replaced server keeps its first position).
-/// They come from the files, not from connecting: the prompt is built before
-/// the engine connects, sometimes by a process that never connects (`sessions
-/// fork`) and so lacks the variables a server's references need. A server
-/// that later fails to connect is reported as unavailable by `@mcp.search`. A
-/// file that cannot be read or decoded names no server here; the engine
-/// reports it when it connects. `None` when no server is configured.
+/// Name the servers of the merged MCP configuration in `config_paths`. They
+/// come from the files, not from connecting: the prompt is built before the
+/// engine connects, sometimes by a process that never connects (`sessions
+/// fork`) and so lacks the variables a server's references need, which is why
+/// the files are parsed rather than decoded. A server that later fails to
+/// connect is reported as unavailable by `@mcp.search`. A file that cannot be
+/// read or parsed names no server here; the engine reports it when it
+/// connects. `None` when no server is configured.
 async fn mcp_prompt_section(config_paths : Array[String]) -> String? {
-  let names : Array[String] = []
+  let loaded : Array[Array[@mcpconfig.McpServer]] = []
   for path in config_paths {
-    let declared = @mcpconfig.server_names(
-      @json.parse(@fs.read_file(path).text()),
-    ) catch {
+    let servers = @mcpconfig.parse(@json.parse(@fs.read_file(path).text())) catch {
       _ => continue
     }
-    for name in declared {
-      if !names.contains(name) {
-        names.push(name)
-      }
-    }
+    loaded.push(servers)
   }
+  let names = @mcpconfig.merge(loaded).map(server => "`\{server.name()}`")
   guard !names.is_empty() else { return None }
-  let names = names.map(name => "`\{name}`")
   Some(
     (
       $|## MCP servers

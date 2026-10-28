@@ -10,7 +10,7 @@ pub fn decode(Json, env? : Map[String, String]) -> Array[McpServer] raise
 
 pub fn merge(Array[Array[McpServer]]) -> Array[McpServer]
 
-pub fn server_names(Json) -> Array[String] raise
+pub fn parse(Json) -> Array[McpServer] raise
 
 // Errors
 pub suberror ConfigError {

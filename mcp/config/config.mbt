@@ -87,12 +87,13 @@ pub fn decode(
 }
 
 ///|
-/// The names of the servers the configuration declares, in order, checked as
-/// `decode` checks them but with `${VAR}` references left unexpanded: what a
-/// configuration names does not depend on the variables a connection needs,
-/// which a process that only reads it may not have.
-pub fn server_names(json : Json) -> Array[String] raise {
-  decode_servers(json, None).map(server => server.name())
+/// Decode the configuration as `decode` does, but leave `${VAR}` references in
+/// HTTP URLs and headers as written (still checked for being well formed).
+/// For reading what a configuration declares without the variables a
+/// connection needs, which a process that only reads it may not have. A
+/// parsed server is not for connecting: `decode` it with the environment.
+pub fn parse(json : Json) -> Array[McpServer] raise {
+  decode_servers(json, None)
 }
 
 ///|
