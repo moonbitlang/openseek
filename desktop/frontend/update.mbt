@@ -2337,7 +2337,7 @@ fn update_msg(
         conversation_models: remembered
         .map(parse_conversation_models)
         .unwrap_or([]),
-        reviewed_conversations: conversation_approvals
+        asking_conversations: conversation_approvals
         .map(parse_conversation_approvals)
         .unwrap_or([]),
         openseek_reasoning,
@@ -15517,10 +15517,10 @@ test "loaded UI preferences parse their wire names" {
   // Its stored approval choice comes back too; a malformed row is skipped.
   assert_true(
     restored.approval_for(@interop.ChannelId::Local, "desktop-test")
-    is ApprovalReview,
+    is ApprovalAsk,
   )
   assert_true(
-    restored.approval_for(@interop.ChannelId::Local, "other") is ApprovalAsk,
+    restored.approval_for(@interop.ChannelId::Local, "other") is ApprovalReview,
   )
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(

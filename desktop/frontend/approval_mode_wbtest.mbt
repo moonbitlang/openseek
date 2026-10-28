@@ -24,14 +24,16 @@ fn choose_approval(model : Model, mode : @protocol.OpenSeekApproval) -> Model {
 }
 
 ///|
-test "an OpenSeek conversation asks until auto-review is chosen" {
+test "an OpenSeek conversation is auto-reviewed until it asks" {
   let model = test_model()
   assert_true(
     approval_select(model)
-    is Some({ mode: ApprovalAsk, open: false, enabled: true, }),
+    is Some({ mode: ApprovalReview, open: false, enabled: true, }),
   )
   let conv = model.active()
-  assert_true(model.approval_for(conv.device, conv.session_id) is ApprovalAsk)
+  assert_true(
+    model.approval_for(conv.device, conv.session_id) is ApprovalReview,
+  )
 }
 
 ///|
@@ -45,30 +47,32 @@ test "the approval menu opens and closes from the composer" {
 }
 
 ///|
-test "auto-review is remembered for that conversation only" {
+test "asking is remembered for that conversation only" {
   let model = test_model()
   let conv = model.active()
-  let on = choose_approval(model, ApprovalReview)
+  let asking = choose_approval(model, ApprovalAsk)
   assert_true(
-    approval_select(on)
-    is Some({ mode: ApprovalReview, open: false, enabled: true, }),
+    approval_select(asking)
+    is Some({ mode: ApprovalAsk, open: false, enabled: true, }),
   )
-  assert_true(on.approval_for(conv.device, conv.session_id) is ApprovalReview)
-  // Another conversation is untouched: the reviewer is never inherited.
-  assert_true(on.approval_for(conv.device, "another-session") is ApprovalAsk)
-  // Choosing to answer again forgets it.
-  let off = choose_approval(on, ApprovalAsk)
-  assert_true(approval_select(off) is Some({ mode: ApprovalAsk, .. }))
-  assert_true(off.reviewed_conversations.is_empty())
+  assert_true(asking.approval_for(conv.device, conv.session_id) is ApprovalAsk)
+  // Another conversation is untouched: asking is never inherited.
+  assert_true(
+    asking.approval_for(conv.device, "another-session") is ApprovalReview,
+  )
+  // Choosing auto-review again forgets it.
+  let reviewed = choose_approval(asking, ApprovalReview)
+  assert_true(approval_select(reviewed) is Some({ mode: ApprovalReview, .. }))
+  assert_true(reviewed.asking_conversations.is_empty())
 }
 
 ///|
-test "the reviewed list keeps the newest choices within the cap" {
+test "the asking list keeps the newest choices within the cap" {
   let keys : Array[String] = [
     for index in 0..<(ConversationModelsLimit + 5) => "local/s\{index}"
   ]
   let folded = keys.fold(init=[], (acc, key) => {
-    approvals_with(acc, key, ApprovalReview)
+    approvals_with(acc, key, ApprovalAsk)
   })
   assert_eq(folded.length(), ConversationModelsLimit)
   assert_eq(folded[0], "local/s\{ConversationModelsLimit + 4}")
@@ -83,7 +87,7 @@ test "the approval mode is locked while a turn runs" {
   let model = test_model().replace_conversation(running_conversation())
   assert_true(
     approval_select(model)
-    is Some({ mode: ApprovalAsk, open: false, enabled: false, }),
+    is Some({ mode: ApprovalReview, open: false, enabled: false, }),
   )
   let conv = model.active()
   let identity = model.composer_input().identity
@@ -91,7 +95,9 @@ test "the approval mode is locked while a turn runs" {
   assert_true(toggled.select_menu is None)
   let chosen = approval_action(
     model,
-    ApprovalSelected(identity~, mode=ApprovalReview),
+    ApprovalSelected(identity~, mode=ApprovalAsk),
   )
-  assert_true(chosen.approval_for(conv.device, conv.session_id) is ApprovalAsk)
+  assert_true(
+    chosen.approval_for(conv.device, conv.session_id) is ApprovalReview,
+  )
 }

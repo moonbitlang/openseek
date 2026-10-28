@@ -170,8 +170,8 @@ fn save_conversation_approval(
 }
 
 ///|
-/// Read the reviewed list back; anything that will not parse degrades to
-/// remembering nothing, which is every conversation asking.
+/// Read the asking list back; anything that will not parse degrades to
+/// remembering nothing, which is every conversation auto-reviewed.
 fn parse_conversation_approvals(text : String) -> Array[String] {
   let keys : Array[String] = []
   guard !text.is_blank() else { return keys }
