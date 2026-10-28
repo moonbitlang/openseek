@@ -644,18 +644,6 @@ fn ContextComponent::render(
 }
 
 ///|
-fn @protocol.CodexPermissionMode::short_label(
-  locale~ : @i18n.Locale = English,
-  self : @protocol.CodexPermissionMode,
-) -> String {
-  match self {
-    @protocol.RequestApproval => ui(locale, AskLabel)
-    @protocol.AutoReview => ui(locale, ApproveForMe)
-    @protocol.FullAccess => ui(locale, FullAccess)
-  }
-}
-
-///|
 fn @protocol.CodexPermissionMode::title(
   locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
@@ -680,125 +668,70 @@ fn @protocol.CodexPermissionMode::description(
 }
 
 ///|
-fn @protocol.CodexPermissionMode::glyph(
-  self : @protocol.CodexPermissionMode,
-) -> String {
-  match self {
-    @protocol.RequestApproval => "✋"
-    @protocol.AutoReview => ">_"
-    @protocol.FullAccess => "!"
-  }
-}
-
-///|
-fn @protocol.CodexPermissionMode::render_option(
-  locale~ : @i18n.Locale = English,
-  self : @protocol.CodexPermissionMode,
-  selected : @protocol.CodexPermissionMode,
-  identity : Identity,
-  action_emit : @cmd.Emit[Action],
-) -> @html.Html {
-  ignore(locale)
-  let class_name = if self is @protocol.FullAccess {
-    "codex-permission-option danger"
-  } else {
-    "codex-permission-option"
-  }
-  @html.button(
-    class=if self == selected { class_name + " selected" } else { class_name },
-    type_="button",
-    on_click=action_emit(PermissionSelected(identity~, mode=self)),
-    [
-      @html.span(class="codex-permission-option-glyph", self.glyph()),
-      @html.span(class="codex-permission-copy", [
-        @html.span(class="codex-permission-option-title", self.title(locale~)),
-        @html.span(
-          class="codex-permission-option-desc",
-          self.description(locale~),
-        ),
-      ]),
-      @html.span(
-        class="codex-permission-check",
-        if self == selected {
-          "✓"
-        } else {
-          ""
-        },
-      ),
-    ],
-  )
-}
-
-///|
+/// Codex's approval mode menu, the same headed select as OpenSeek's. Full
+/// access is the last row and keeps its danger tone; choosing it still goes
+/// through the owner's confirmation before it takes effect.
 fn PermissionControl::render(
   locale~ : @i18n.Locale = English,
   self : PermissionControl,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
-  ignore(locale)
-  let class_name = if self.mode is @protocol.FullAccess {
-    "codex-permission-control danger"
-  } else {
-    "codex-permission-control"
-  }
-  let children : Array[@html.Html] = [
-    @html.button(
-      class="codex-permission-button",
-      type_="button",
-      disabled=!self.enabled,
-      title=if self.enabled {
-        ui(locale, PermissionHint)
-      } else {
-        ui(locale, PermissionLocked)
-      },
-      on_click=action_emit(PermissionMenuToggled(identity~)),
-      [
-        @html.span(class="codex-permission-button-glyph", self.mode.glyph()),
-        @html.span(
-          class="codex-permission-button-label",
-          self.mode.short_label(locale~),
-        ),
-        @html.span(class="codex-permission-chevron", ""),
-      ],
-    ),
+  let modes : Array[@protocol.CodexPermissionMode] = [
+    @protocol.RequestApproval,
+    @protocol.AutoReview,
+    @protocol.FullAccess,
   ]
-  if self.open {
-    children.push(
-      @html.div(
-        class="codex-permission-dismiss",
-        on_click=action_emit(PermissionMenuDismissed(identity~)),
-        ([] : Array[@html.Html]),
-      ),
-    )
-    children.push(
-      @html.div(class="codex-permission-menu", [
-        @html.div(
-          class="codex-permission-menu-title",
-          ui(locale, PermissionQuestion),
-        ),
-        @protocol.RequestApproval.render_option(
-          locale~,
-          self.mode,
-          identity,
-          action_emit,
-        ),
-        @protocol.AutoReview.render_option(
-          locale~,
-          self.mode,
-          identity,
-          action_emit,
-        ),
-        @protocol.FullAccess.render_option(
-          locale~,
-          self.mode,
-          identity,
-          action_emit,
-        ),
-      ]),
-    )
+  let wire = (mode : @protocol.CodexPermissionMode) => {
+    match mode {
+      @protocol.RequestApproval => "requestApproval"
+      @protocol.AutoReview => "autoReview"
+      @protocol.FullAccess => "fullAccess"
+    }
   }
-  @html.div(class=class_name, children)
+  let control = @select_control.Control::{
+    id: "codex-permission-picker",
+    groups: [
+      {
+        label: ui(locale, PermissionQuestion),
+        options: modes.map(mode => {
+          value: wire(mode),
+          label: mode.title(locale~),
+          description: Some(mode.description(locale~)),
+        }),
+      },
+    ],
+    selected: wire(self.mode),
+    disabled: !self.enabled,
+    open: self.open,
+    toggle: action_emit(PermissionMenuToggled(identity~)),
+    dismiss: action_emit(PermissionMenuDismissed(identity~)),
+    // The menu offers exactly the wire values above.
+    change: action_emit.map(value => {
+      let mode = match value {
+        "requestApproval" => @protocol.RequestApproval
+        "autoReview" => @protocol.AutoReview
+        _ => @protocol.FullAccess
+      }
+      PermissionSelected(identity~, mode~)
+    }),
+    title: if self.enabled {
+      ui(locale, PermissionHint)
+    } else {
+      ui(locale, PermissionLocked)
+    },
+    aria_label: ui(locale, ApprovalMode),
+    heading: Some(ui(locale, PermissionQuestion)),
+    presentation: Composer(@html.text(""), false),
+  }
+  @html.div(
+    class=if self.mode is @protocol.FullAccess {
+      "codex-permission-control danger"
+    } else {
+      "codex-permission-control"
+    },
+    [control.render()],
+  )
 }
 
 ///|

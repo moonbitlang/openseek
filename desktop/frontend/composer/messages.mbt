@@ -60,7 +60,6 @@ priv enum UiMessage {
   WaitingPlacement
   RetryWorktreeList
   RetryLabel
-  AskLabel
   ApproveForMe
   FullAccess
   RequestApproval
@@ -475,11 +474,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, RetryLabel) => "重试"
     (TraditionalChinese, RetryLabel) => "重試"
     (Japanese, RetryLabel) => "再試行"
-    (English, AskLabel) => "Ask"
-    (Spanish, AskLabel) => "Preguntar"
-    (SimplifiedChinese, AskLabel) => "询问"
-    (TraditionalChinese, AskLabel) => "詢問"
-    (Japanese, AskLabel) => "確認する"
     (English, ApproveForMe) => "Approve for me"
     (Spanish, ApproveForMe) => "Aprobar por mí"
     (SimplifiedChinese, ApproveForMe) => "代我审批"

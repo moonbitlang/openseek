@@ -706,8 +706,7 @@
 .composer-toolbar :is(
   .composer-model,
   .composer-git-button,
-  .composer-worktree,
-  .codex-permission-button
+  .composer-worktree
 ) {
   height: 28px;
   background: transparent;
@@ -722,11 +721,6 @@
   border-radius: var(--radius-md);
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
-}
-
-.composer-toolbar .codex-permission-control.danger .codex-permission-button {
-  background: transparent;
-  color: var(--color-danger);
 }
 
 /* Toolbar pickers read as their selected value alone. */
@@ -957,8 +951,7 @@
   color: var(--color-text-primary);
 }
 .composer-model-glyph,
-.composer-model-chevron,
-.codex-permission-chevron {
+.composer-model-chevron {
   flex: none;
   color: var(--color-text-muted);
 }
@@ -977,8 +970,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.composer-model-chevron,
-.codex-permission-chevron {
+.composer-model-chevron {
   width: 5px;
   height: 5px;
   margin: -3px 1px 0 3px;
