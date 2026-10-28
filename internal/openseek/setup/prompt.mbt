@@ -87,7 +87,53 @@ pub async fn configured_system_prompt(
   if skills_section is Some(section) {
     prompt <+ "\n\n\{section}"
   }
+  // Like skills, the configured servers vary per installation, so they also
+  // sit in the tail. The section is the model's cue that a service is
+  // reachable at all: without it the model has to guess that a script may
+  // find something, and in practice it rarely looks.
+  let mcp_section = mcp_prompt_section(@options.mcp_config_paths(matches))
+  if mcp_section is Some(section) {
+    prompt <+ "\n\n\{section}"
+  }
   prompt.to_string()
+}
+
+///|
+/// Name the servers of the merged MCP configuration in `config_paths`. They
+/// come from the files, not from connecting: the prompt is built before the
+/// engine connects, and a server that later fails to connect is reported as
+/// unavailable by `@mcp.search`. A file that cannot be read or decoded names
+/// no server here; the engine reports it when it connects. `None` when no
+/// server is configured.
+async fn mcp_prompt_section(config_paths : Array[String]) -> String? {
+  let loaded : Array[Array[@mcpconfig.McpServer]] = []
+  for path in config_paths {
+    let servers = @mcpconfig.decode(
+      @json.parse(@fs.read_file(path).text()),
+      env=@env.get_env_vars(),
+    ) catch {
+      _ => continue
+    }
+    loaded.push(servers)
+  }
+  let names = @mcpconfig.merge(loaded).map(server => "`\{server.name()}`")
+  guard !names.is_empty() else { return None }
+  Some(
+    (
+      $|## MCP servers
+      $|
+      $|Configured MCP servers: \{names.join(", ")}.
+      $|
+      $|They connect external services. Their tools are not in your function
+      $|list: an mbtx script reaches them through the SDK's `mcp` package (see
+      $|"MCP servers with moonbitlang/openseek_tools/mcp"). When a request
+      $|involves one of these services, or before concluding that something
+      $|cannot be done, search that server's tools with
+      $|`@mcp.search(server="<name>")` and call one with
+      $|`@mcp.call(server, tool, arguments)`, before reaching for `web_search`
+      $|or a command-line client.
+    ),
+  )
 }
 
 ///|
