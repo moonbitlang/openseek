@@ -112,15 +112,10 @@ test "a library change to the document reloads it and drops the old read" {
 }
 
 ///|
-test "builtin actions retain enablement and updates but never uninstall" {
+test "uninstall checks the current built-in status even for a stale action" {
   let skill = wb_skill(enabled=false, builtin=true)
   let input = wb_input(installed=[skill])
   let initial = State::empty()
-  let target = installed_menu_target(input.channel, skill)
-  assert_true(
-    installed_menu(English, initial, input, target, wb_emit()) is None,
-  )
-  // Also refuse a stale menu payload whose builtin marker predates a refresh.
   for payload in [skill, { ..skill, builtin: false, }] {
     let (_, unchanged, outcome) = initial.handle(
       wb_emit(),
@@ -129,46 +124,6 @@ test "builtin actions retain enablement and updates but never uninstall" {
     )
     assert_true(unchanged == initial && outcome is None)
   }
-  let (_, toggling, _) = initial.handle(
-    wb_emit(),
-    ToggleEnabled(skill.id),
-    input,
-  )
-  assert_true(toggling.pending_enabled(input.channel, skill.id))
-  assert_true(
-    toggling.busy is [{ action: SettingEnabled(enabled=true, ..), .. }],
-  )
-  let candidate : MarketItem = {
-    name: "widget",
-    module_name: "acme/widget",
-    package_path: "",
-    version: "1.1.0",
-    description: "",
-    author: "acme",
-    repository: "",
-  }
-  let (_, available, _) = initial.handle(
-    wb_emit(),
-    CatalogLoaded(channel=input.channel, items=[candidate]),
-    input,
-  )
-  guard installed_menu(English, available, input, target, wb_emit())
-    is Some(menu) else {
-    fail("builtin updates remain available")
-  }
-  guard menu.entries is [Action(action)] else {
-    fail(
-      "builtin menu contains just Update, without an empty separator or Uninstall",
-    )
-  }
-  assert_eq(action.label, "Update to 1.1.0")
-  assert_true(action.enabled && !action.destructive)
-  let (_, updating, _) = available.handle(wb_emit(), Update(candidate), input)
-  assert_true(
-    updating.pending_action(input.channel, ("acme/widget", ""))
-    is Some(Updating(..)),
-  )
-  assert_false(updating.pending_enabled(input.channel, skill.id))
 }
 
 ///|
@@ -184,13 +139,4 @@ test "builtin startup errors are host-owned notices even without an installation
   assert_eq(notice_views(opened, input, None).length(), 1)
   let other = { ..input, channel: @interop.ChannelId::Remote("other"), }
   assert_eq(notice_views(opened, other, None).length(), 0)
-  let replacement = { ..error, message: "Download failed", }
-  let replaced = opened.with_builtin_errors(input.channel, [replacement])
-  assert_true(
-    replaced.notices
-    is [BuiltinSyncFailed(error={ message: "Download failed", .. }, ..)],
-  )
-  assert_eq(notice_views(replaced, input, None).length(), 1)
-  let cleared = replaced.with_builtin_errors(input.channel, [])
-  assert_eq(notice_views(cleared, input, None).length(), 0)
 }

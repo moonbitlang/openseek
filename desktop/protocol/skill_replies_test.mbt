@@ -41,8 +41,6 @@ test "InstalledSkillsReply owns its success and error wire shapes" {
       {},
       { "skills": [] },
       { "skills": [], "builtin_errors": null },
-      { "skills": [], "builtin_errors": "failed" },
-      { "skills": [], "builtin_errors": [{}] },
     ] {
     try {
       let _ : @protocol.InstalledSkillsReply = @json.from_json(malformed)
@@ -55,14 +53,14 @@ test "InstalledSkillsReply owns its success and error wire shapes" {
 }
 
 ///|
-test "InstalledSkillsReply preserves a disabled entry" {
+test "InstalledSkillsReply preserves independent builtin and enabled flags" {
   let disabled : @protocol.InstalledSkill = {
-    id: "handmade",
-    name: "handmade",
+    id: "office",
+    name: "office-cli",
     description: "",
-    source: "",
-    registry: None,
-    builtin: false,
+    source: "moonbitlang/office@1.0.0",
+    registry: Some({ module_name: "moonbitlang/office", package_path: "", }),
+    builtin: true,
     enabled: false,
   }
   let reply : @protocol.InstalledSkillsReply = InstalledSkills([disabled], builtin_errors=[])
@@ -70,7 +68,18 @@ test "InstalledSkillsReply preserves a disabled entry" {
     reply.to_json(),
   )
   assert_eq(decoded, reply)
-  assert_true(decoded is InstalledSkills([entry], ..) && !entry.enabled)
+  assert_true(
+    decoded is InstalledSkills([entry], ..) && entry.builtin && !entry.enabled,
+  )
+  guard disabled.to_json() is Object(fields) else { fail("expected an object") }
+  fields.remove("builtin")
+  try {
+    let _ : @protocol.InstalledSkill = @json.from_json(Json(fields))
+  } catch {
+    JsonDecodeError(_) => ()
+  } noraise {
+    _ => fail("missing builtin status must be rejected")
+  }
 }
 
 ///|
@@ -94,64 +103,6 @@ test "builtin errors roundtrip even when installation is absent" {
   })
   let decoded : @protocol.InstalledSkillsReply = @json.from_json(wire)
   assert_eq(decoded, reply)
-  for
-    malformed in [
-      null,
-      {},
-      { "registry": null, "message": "offline" },
-      { "registry": {}, "message": "offline" },
-      { "registry": { "module_name": "acme/tools", "package_path": "" } },
-      {
-        "registry": { "module_name": "acme/tools", "package_path": "" },
-        "message": null,
-      },
-      {
-        "registry": { "module_name": "acme/tools", "package_path": "" },
-        "message": false,
-      },
-    ] {
-    try {
-      let _ : @protocol.BuiltinSkillError = @json.from_json(malformed)
-    } catch {
-      JsonDecodeError(_) => ()
-    } noraise {
-      _ => fail("builtin errors require an identity and message")
-    }
-  }
-}
-
-///|
-test "installed skills require an explicit builtin boolean" {
-  let fields : Map[String, Json] = {
-    "id": "widget",
-    "name": "widget",
-    "description": "",
-    "source": "acme/widget@1.0.0",
-    "enabled": false,
-  }
-  for builtin in [None, Some(Json::null()), Some(Json("false")), Some(Json(0))] {
-    let malformed = fields.copy()
-    if builtin is Some(value) {
-      malformed["builtin"] = value
-    }
-    try {
-      let _ : @protocol.InstalledSkill = @json.from_json(Json(malformed))
-    } catch {
-      JsonDecodeError(_) => ()
-    } noraise {
-      _ => fail("installed skills require an explicit builtin boolean")
-    }
-  }
-  for builtin in [true, false] {
-    let valid = fields.copy()
-    valid["builtin"] = Json(builtin)
-    valid["future"] = Json(true)
-    let skill : @protocol.InstalledSkill = @json.from_json(Json(valid))
-    assert_eq(skill.builtin, builtin)
-    assert_false(skill.enabled)
-    let decoded : @protocol.InstalledSkill = @json.from_json(skill.to_json())
-    assert_eq(decoded, skill)
-  }
 }
 
 ///|

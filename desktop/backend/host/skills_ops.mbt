@@ -68,11 +68,13 @@ async fn install_skill_op(
   state : HostState,
   payload : InstallSkillPayload,
   on_committed : () -> Unit,
+  registry? : String,
 ) -> InstallSkillReply {
   let installed = @skillmarket.install_skill(
     module_name=payload.module_name,
     version=payload.version,
     package_path=payload.package_path.unwrap_or(""),
+    registry?,
     on_committed=() => {
       state.skills.clear_error(
         module_name=payload.module_name,

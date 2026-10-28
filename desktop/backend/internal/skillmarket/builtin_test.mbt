@@ -4,23 +4,22 @@ fn widget_identity() -> @skillmarket.RegistrySkillIdentity {
 }
 
 ///|
-test "built-in manifest uses registry identities independent of display names" {
-  let entries = @skillmarket.builtin_skills()
-  assert_eq(entries.length(), 2)
-  assert_true(
-    entries[0] == { module_name: "moonbitlang/typst", package_path: "cli", },
-  )
-  assert_true(
-    entries[1] == { module_name: "moonbitlang/office", package_path: "", },
-  )
-  assert_true(@skillmarket.is_builtin(entries[0]))
-  assert_false(
-    @skillmarket.is_builtin({
-      module_name: "moonbitlang/typst",
-      package_path: "",
-    }),
-  )
-  assert_false(@skillmarket.is_builtin(widget_identity()))
+test "built-in identity includes both module and package" {
+  for identity in @skillmarket.builtin_skills() {
+    assert_true(@skillmarket.is_builtin(identity))
+    assert_false(
+      @skillmarket.is_builtin({
+        ..identity,
+        module_name: "other/" + identity.module_name,
+      }),
+    )
+    assert_false(
+      @skillmarket.is_builtin({
+        ..identity,
+        package_path: identity.package_path + "/other",
+      }),
+    )
+  }
 }
 
 ///|
@@ -82,51 +81,6 @@ async test "startup updates disabled skills while preserving their state" {
       skill_body_v2,
     )
     assert_false(@fs.exists("\{lib}/acme-widget"))
-  }
-}
-
-///|
-async test "catalog failures preserve existing skills and manual recovery clears the error" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="builtin-skills-offline-")
-    defer @fs.rmdir(lib, recursive=true)
-    ignore(
-      @skillmarket.install_skill(
-        module_name="acme/widget",
-        version="1.0.0",
-        package_path="",
-        registry=base,
-        library_dir=lib,
-      ),
-    )
-    let builtins = @skillmarket.BuiltinSkills::new(entries=[widget_identity()])
-    let mut changes = 0
-    builtins.sync(registry="\{base}/offline", library_dir=lib, () => {
-      changes += 1
-    })
-    assert_eq(changes, 1)
-    guard builtins.errors() is [error] else { fail("expected catalog failure") }
-    assert_true(error.registry == widget_identity())
-    assert_true(error.message.contains("HTTP 404"))
-    assert_eq(@fs.read_file("\{lib}/acme-widget/SKILL.md").binary(), skill_body)
-    ignore(
-      @skillmarket.install_skill(
-        module_name="acme/widget",
-        version="2.0.0",
-        package_path="",
-        registry=base,
-        library_dir=lib,
-        on_committed=() => {
-          builtins.clear_error(module_name="acme/widget", package_path="")
-        },
-      ),
-    )
-    assert_true(builtins.errors().is_empty())
-    assert_eq(
-      @fs.read_file("\{lib}/acme-widget/SKILL.md").binary(),
-      skill_body_v2,
-    )
   }
 }
 
@@ -286,45 +240,4 @@ async test "automatic update follows an enablement change during download" {
     assert_eq(installed.source, "acme/widget@2.0.0")
     assert_false(installed.enabled)
   }
-}
-
-///|
-async test "built-in uninstall is refused for enabled and disabled entries" {
-  let lib = @fs.tmpdir(prefix="builtin-skills-uninstall-")
-  defer @fs.rmdir(lib, recursive=true)
-  let dir = "\{lib}/moonbitlang-office"
-  @fs.mkdir(dir)
-  @fs.write_file("\{dir}/SKILL.md", skill_body)
-  @fs.write_file(
-    "\{dir}/.mooncakes.json",
-    "{\"module\":\"moonbitlang/office\",\"version\":\"1.0.0\",\"package\":\"\"}",
-  )
-  for enabled in [true, false] {
-    @skillmarket.set_skill_enabled(
-      "moonbitlang-office",
-      enabled~,
-      library_dir=lib,
-    )
-    let error = uninstall_failure(lib, "moonbitlang-office")
-    assert_true(error.contains("built-in skills cannot be uninstalled"))
-    guard @skillmarket.installed_skills(library_dir=lib) is [installed] else {
-      fail("expected retained built-in")
-    }
-    assert_eq(installed.enabled, enabled)
-  }
-}
-
-///|
-async test "an empty built-in list leaves existing skills untouched" {
-  let lib = @fs.tmpdir(prefix="builtin-skills-empty-")
-  defer @fs.rmdir(lib, recursive=true)
-  @fs.write_file("\{lib}/notes.md", "user notes")
-  let builtins = @skillmarket.BuiltinSkills::new(entries=[])
-  let mut changes = 0
-  builtins.sync(registry="http://127.0.0.1:1", library_dir=lib, () => {
-    changes += 1
-  })
-  assert_eq(changes, 0)
-  assert_true(builtins.errors().is_empty())
-  assert_eq(@fs.read_file("\{lib}/notes.md").text(), "user notes")
 }

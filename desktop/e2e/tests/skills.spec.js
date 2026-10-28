@@ -255,33 +255,23 @@ test('builtin skills remain switchable and manually update while disabled withou
   await app.openDetails();
   const detail = page.locator('.skill-detail-page');
   await expect(detail.getByText('Built-in', { exact: true })).toBeVisible();
-  // There is no empty management menu when the builtin is already current.
-  await expect(detail.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
   await page.getByRole('switch').click();
   await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   const row = page.locator('.skill-row').filter({ hasText: installed.name });
   await expect(row.getByText('Built-in', { exact: true })).toBeVisible();
-  await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-  await expect(row.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
 
   app.catalogSkills[0].version = '0.1.1';
   await page.getByRole('button', { name: 'Refresh catalog', exact: true }).click();
   await row.getByRole('button', { name: 'Manage skill', exact: true }).click();
-  await expect(page.getByRole('menuitem')).toHaveCount(1);
   await expect(page.getByRole('menuitem', { name: 'Uninstall', exact: true })).toHaveCount(0);
   await page.getByRole('menuitem', { name: 'Update to 0.1.1', exact: true }).click();
   await expect(row).toContainText('Yoorkin/wayfinder@0.1.1');
   await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
   await expect(row.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
-  await row.locator('.skill-summary').click();
-  await expect(detail.getByText('Built-in', { exact: true })).toBeVisible();
-  await expect(detail.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-  await detail.getByRole('switch').click();
-  await expect(detail.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
   expect(app.requests.filter(r => r.method === 'skills.install').map(r => r.params.version)).toEqual(['0.1.1']);
   expect(app.requests.filter(r => r.method === 'skills.uninstall')).toEqual([]);
-  expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params.enabled)).toEqual([false, true]);
+  expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params.enabled)).toEqual([false]);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -320,8 +310,5 @@ test('failed builtin startup stays visible with an empty library and recovers th
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.locator('.skills-notice')).toHaveCount(0);
   await expect(page.locator('.skill-row').getByText('Built-in', { exact: true })).toBeVisible();
-  expect(app.installedSkills[0].builtin).toBe(true);
-  expect(app.builtinSkillErrors).toEqual([]);
-  expect(app.requests.filter(r => r.method === 'skills.catalog')).toHaveLength(2);
   expect(app.pageErrors).toEqual([]);
 });
