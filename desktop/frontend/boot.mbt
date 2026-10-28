@@ -555,6 +555,23 @@ fn main {
             ),
           )
         }
+        // Codex keeps its approval mode menu's open state itself. The shared
+        // select's blur dismissal misses a click elsewhere when the click
+        // never focused its trigger (Safari), so it closes here too.
+        if model.screen is Codex && model.codex.permission_menu_open() {
+          subs.push(
+            @dismiss.on_outside_click(
+              "codex-permission-dismiss",
+              trigger=".custom-select-button",
+              emit.map((_ : Unit) => {
+                Codex(
+                  channel=model.focused,
+                  @codex.Msg::dismiss_permission_menu(),
+                )
+              }),
+            ),
+          )
+        }
         match model.select_menu {
           Some(ProjectMenu) =>
             subs.push(

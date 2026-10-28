@@ -49,6 +49,7 @@ pub fn Msg::cancel_login() -> Self
 pub fn Msg::change_draft_project(String) -> Self
 pub fn Msg::close_git_details() -> Self
 pub fn Msg::composer_action(@composer.Action) -> Self
+pub fn Msg::dismiss_permission_menu() -> Self
 pub fn Msg::effort_changed(String) -> Self
 pub fn Msg::is_account_action(Self) -> Bool
 pub fn Msg::login() -> Self
@@ -107,6 +108,7 @@ pub fn State::new_thread_cwd(Self) -> String
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::page(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], PageActions) -> Array[@html.Html]
 pub fn State::pending_auth_url(Self) -> String?
+pub fn State::permission_menu_open(Self) -> Bool
 pub fn State::prepare_new_navigation(Self) -> Self
 pub fn State::project_activation(Self, SidebarContext, String) -> String?
 pub fn State::project_conversations(locale? : @i18n.Locale, Self, SidebarContext, String) -> Array[CodexProjectRow]

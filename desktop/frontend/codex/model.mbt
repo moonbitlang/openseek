@@ -2015,6 +2015,19 @@ pub fn Msg::close_git_details() -> Msg {
 }
 
 ///|
+/// Whether the approval mode menu is open, so the shell can install the
+/// same click-away dismissal as its own select menus.
+pub fn State::permission_menu_open(self : State) -> Bool {
+  self.permission_picker.is_open()
+}
+
+///|
+/// Shell entrypoint for the approval mode menu's click-away dismissal.
+pub fn Msg::dismiss_permission_menu() -> Msg {
+  DismissPermissionMenu
+}
+
+///|
 fn State::without_thread(self : State, thread_id : String) -> State {
   let removing_active = self.active_thread() is Some(active) &&
     active.id == thread_id
