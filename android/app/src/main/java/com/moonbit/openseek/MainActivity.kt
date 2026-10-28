@@ -204,6 +204,12 @@ class MainActivity : ComponentActivity() {
             (() => {
                 const popover = document.querySelector(':popover-open');
                 if (popover) { popover.hidePopover(); return true; }
+                // The topmost modal next, as Escape would: a native dialog's
+                // cancel handler or a confirmation's backdrop dismisses it.
+                const dialog = [...document.querySelectorAll('dialog[open]')].pop();
+                if (dialog) { dialog.dispatchEvent(new Event('cancel', { cancelable: true })); return true; }
+                const modal = [...document.querySelectorAll('.modal-backdrop')].pop();
+                if (modal) { modal.click(); return true; }
                 const drawer = document.querySelector('.sidebar-backdrop.open');
                 if (drawer) { drawer.click(); return true; }
                 const panel = document.querySelector('.content.panel-open .right-panel-toggle');

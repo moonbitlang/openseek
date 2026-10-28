@@ -63,13 +63,21 @@ try {
   await page.waitForFunction(() => !!document.querySelector('#stop'));
   check(app.requests.filter(r => r.method === 'agent.start').length === 1, 'send count');
   await page.locator('#stop').click();
+  // Back dismisses an open modal instead of leaving the page beneath it.
+  const deviceUrl = page.url();
+  await page.getByRole('button', { name: 'Export and import', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Export conversation', exact: true }).waitFor();
+  run('shell', 'input', 'keyevent', '4');
+  await page.waitForFunction(() => !document.querySelector('dialog[open]'));
+  check(page.url() === deviceUrl, 'Back left the page under the export dialog');
   await page.locator('.sidebar-toggle').click();
   await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().x) < 1);
   await page.screenshot({ path: `${output}drawer.png` });
   run('shell', 'input', 'keyevent', '4');
   await page.waitForFunction(() => document.querySelector('.app.sidebar-collapsed'));
   check(app.pageErrors.length === 0, `page errors: ${app.pageErrors.join('; ')}`);
-  console.log('PASS: bundled entry and device page, device selector, real IME, send/stop, Back');
+  console.log('PASS: bundled entry and device page, device selector, real IME, send/stop, Back on modal and drawer');
 } finally {
   await page.unrouteAll({ behavior: 'wait' });
   // Reload disposes every fixture socket and restores the real application entry.
