@@ -39,8 +39,27 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
     on_lag=sub => sub.close(),
   )
   defer subscription.close()
+  let registry = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  defer registry.close()
+  let requested : @async.Queue[Unit] = Queue(kind=Blocking(1))
+  let release : @async.Queue[Unit] = Queue(kind=Blocking(1))
   @async.with_task_group(group => {
-    state.start_services(group, skill_registry="http://127.0.0.1:1")
+    group.spawn_bg(no_wait=true, () => {
+      registry.run_forever((request, body, conn) => {
+        ignore(body.read_all())
+        assert_eq(request.path, "/api/v0/skills")
+        requested.put(())
+        release.get()
+        conn.send_response(503, "Service Unavailable")
+      })
+    })
+    @async.with_timeout(5000, () => {
+      state.start_services(
+        group,
+        skill_registry="http://127.0.0.1:\{registry.addr.port()}",
+      )
+      requested.get()
+    })
     let grant = server.grant("one")
     let connection = @streamhttp.connect(
       group,
@@ -63,9 +82,11 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
       "type": "pull_request",
       "url": "https://github.com/o/r/pull/2",
     }
+    // The tool server must respond while the registry request is still pending.
     assert_false(
       client.call_tool(name="artifacts_attach", arguments=first).is_error,
     )
+    release.put(())
     // Repeating attach is idempotent; it never replaces earlier artifacts.
     assert_false(
       client.call_tool(name="artifacts_attach", arguments=first).is_error,
