@@ -109,6 +109,22 @@
   grid-column: 3;
 }
 
+/* A narrow card cannot also fit a running turn's stop button and follow-up
+   picker beside the draft: the draft takes its own full row and the buttons
+   drop to a row below it, attachment left and actions right. */
+@container (width < 480px) {
+  .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
+    & > .composer-input {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+    & > :is(.composer-add, .composer-actions) {
+      grid-row: 2;
+      margin-top: 6px;
+    }
+  }
+}
+
 .composer :is(button, a, summary):focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;

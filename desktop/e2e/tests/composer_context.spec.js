@@ -236,3 +236,26 @@ for (const expanded of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('a narrow running composer keeps the follow-up draft usable', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const composer = page.locator('#task');
+  await composer.fill('Start a turn');
+  await page.locator('#send').click();
+  await page.setViewportSize({ width: 400, height: 800 });
+  await composer.fill('Follow up while it runs');
+  await expect(page.locator('.composer-followup .composer-picker')).toBeVisible();
+  const card = await page.locator('.composer-inner').boundingBox();
+  const draft = await composer.boundingBox();
+  expect(draft.width).toBeGreaterThan(card.width * 0.8);
+  for (const action of [page.getByRole('button', { name: 'Stop', exact: true }), page.locator('#send')]) {
+    const box = await action.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(card.x);
+    expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width);
+    expect(box.y).toBeGreaterThanOrEqual(draft.y + draft.height);
+  }
+  expect(app.pageErrors).toEqual([]);
+});
