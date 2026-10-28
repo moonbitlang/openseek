@@ -122,6 +122,39 @@ test "HTTP environment references reject missing or malformed values" {
 }
 
 ///|
+test "server_names reads names without the environment references need" {
+  let names = @config.server_names({
+    "mcpServers": {
+      "host": {
+        "url": "${HOST_URL}",
+        "headers": { "Authorization": "Bearer ${HOST_TOKEN}" },
+      },
+      "tracker": { "command": "tracker-mcp" },
+    },
+  })
+  assert_eq(names, ["host", "tracker"])
+}
+
+///|
+test "server_names rejects what decode rejects besides unset variables" {
+  for
+    entry in [
+      ({ "url": "${UNCLOSED" } : Json),
+      ({ "url": "http://localhost/mcp", "command": "both" } : Json),
+      ({ "args": ["no-command"] } : Json),
+    ] {
+    try
+      @config.server_names({ "mcpServers": { "host": entry } }) |> ignore
+    catch {
+      @config.Invalid(_) => ()
+      error => raise error
+    } noraise {
+      _ => fail("an invalid server entry was accepted")
+    }
+  }
+}
+
+///|
 test "later configurations replace whole servers before connection" {
   let first = @config.decode({
     "mcpServers": {

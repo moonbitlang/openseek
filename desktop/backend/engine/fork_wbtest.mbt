@@ -99,10 +99,12 @@ async test "a committed fork succeeds even when its title cannot be saved" {
 
 ///|
 /// A stand-in for the engine's `sessions fork <id> --as <fork> --through <n>
-/// --session-root <root> --dir <dir> --model <model> [--notice=<text>]`. It
+/// --session-root <root> --dir <dir> --model <model> [--notice=<text>]
+/// [--mcp-config=<path>]...`. It
 /// copies the record, refuses an id that exists, writes what the host handed
 /// it — the directory, the model, the cut — as the fork's system prompt, the
-/// notice text to `<root>/notice-<fork>` when there is one, and prints the
+/// notice text to `<root>/notice-<fork>` when there is one, each
+/// `--mcp-config=<path>` as a line of `<root>/mcp-<fork>`, and prints the
 /// fork's id. The model `fails-before` makes it fail without writing anything, and
 /// `fails-after` once the record is written; `noisy` succeeds but prints more
 /// than the id; `hangs-after` writes the record, leaves `<root>/committed` to
@@ -131,6 +133,11 @@ fn worktree_fork_engine_script() -> String {
     $|      ;;
     $|    --notice=*)
     $|      notice="${1#--notice=}"
+    $|      shift
+    $|      continue
+    $|      ;;
+    $|    --mcp-config=*)
+    $|      printf '%s\{newline}' "${1#--mcp-config=}" >> "$root/mcp-$fork"
     $|      shift
     $|      continue
     $|      ;;
@@ -228,6 +235,12 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
       prompt,
     )
     @fsx.write_text(checkout.join("draft.txt").to_path(), "uncommitted")
+    // The user's MCP file, which the engine must read to name its servers in
+    // the fork's prompt.
+    guard mcp_config_path() is Some(mcp_path) else {
+      fail("the fixture has a home directory")
+    }
+    @fsx.write_text(mcp_path.to_path(), "{\"mcpServers\": {}}")
     let placements : Array[Array[WorktreeInfo]] = []
     let created : Array[String] = []
     let reply = fork_session(
@@ -252,6 +265,12 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
         @workspaces.store_root(repo).join("base-\{reply.session}").to_path(),
       ),
       prompt,
+    )
+    assert_eq(
+      @fsx.read_text(
+        @workspaces.store_root(repo).join("mcp-\{reply.session}").to_path(),
+      ),
+      "\{mcp_path.to_string()}\n",
     )
     assert_eq(created, [reply.session])
     guard placements is [[source, own]] else {

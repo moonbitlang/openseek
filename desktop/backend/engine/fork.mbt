@@ -71,6 +71,9 @@ async fn fork_session_in(
   guard !side_chat || @protocol.split_side_chat_id(payload.session) is None else {
     raise EngineError("a side chat cannot open a side chat of its own")
   }
+  // The fork's prompt names the MCP servers a conversation's engine is given;
+  // the user's file is read before the lifecycle lock, as it always is.
+  let mcp_config = resolved_mcp_config()
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
   let lease = manager.begin_record_read(payload.session)
@@ -171,6 +174,14 @@ async fn fork_session_in(
       if resolved_global_skills_dir() is Some(skills) {
         args.append(["--global-skills-dir", skills.to_string()])
       }
+      args.append(
+        engine_mcp_args(
+          mcp_config,
+          manager.runtime_dir,
+          @sys.get_env_vars(),
+          host_mcp=manager.mcp.server is Some(_),
+        ),
+      )
       let failure : Error? = try {
         ignore(engine_stdout(manager, args))
         None

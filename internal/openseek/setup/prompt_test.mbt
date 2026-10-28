@@ -240,7 +240,7 @@ async test "configured MCP servers are named in the prompt tail" {
       ),
       "broken.json": "{",
       "second.json": (
-        #|{"mcpServers": {"github": {"url": "https://api.githubcopilot.com/mcp/"}, "slack": {"command": "slack-mcp"}}}
+        #|{"mcpServers": {"github": {"url": "https://api.githubcopilot.com/mcp/"}, "slack": {"url": "${OPENSEEK_TEST_UNSET_SLACK_URL}"}}}
       ),
     }).write_to(dir)
     let parsed = @testkit.run_matches(
@@ -267,7 +267,8 @@ async test "configured MCP servers are named in the prompt tail" {
       workspace_root=dir,
     )
     // The section comes after the environment block, and an unusable file
-    // only drops its own servers: a replaced server keeps its first position.
+    // only drops its own servers: a replaced server keeps its first position,
+    // and a reference to an unset variable does not hide a server's name.
     let (_, tail) = split_composed_prompt(prompt)
     guard tail.split_once("\n## MCP servers\n") is Some((_, section)) else {
       fail("prompt tail carries no MCP servers section:\n\{tail}")
