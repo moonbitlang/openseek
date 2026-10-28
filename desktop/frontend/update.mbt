@@ -2142,7 +2142,22 @@ fn codex_composer_action(
     channel,
     url => open_external_link(dispatch, url),
   )
-  (command, { ..model, codex, })
+  (command, model.with_codex(codex))
+}
+
+///|
+/// Take Codex's next state. The shell owns its approval menu's open state,
+/// so the menu closes here once the mode can no longer change — a turn
+/// started, from this page or another client — rather than staying open
+/// behind a disabled trigger.
+fn Model::with_codex(self : Model, codex : @codex.State) -> Model {
+  let select_menu = if self.select_menu is Some(CodexPermissionMenu) &&
+    !codex.can_choose_permission() {
+    None
+  } else {
+    self.select_menu
+  }
+  { ..self, codex, select_menu, }
 }
 
 ///|
@@ -4505,7 +4520,7 @@ fn update_msg(
         channel,
         url => open_external_link(dispatch, url),
       )
-      (cmd, { ..model, codex, })
+      (cmd, model.with_codex(codex))
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })

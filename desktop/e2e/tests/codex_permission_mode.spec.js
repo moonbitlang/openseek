@@ -22,12 +22,19 @@ test('the Codex approval mode uses the headed select and confirms full access', 
   await testInfo.attach('codex-permission-menu', { path, contentType: 'image/png' });
   await page.keyboard.press('1');
   await expect(menu).toHaveCount(0);
-  // Safari does not focus a clicked button, so the trigger's blur never
-  // fires; a click elsewhere must still close the menu.
+  // Safari does not focus a clicked button; the menu takes focus for its
+  // trigger, so its keys never reach the draft.
   await page.locator('#task').focus();
   await trigger.dispatchEvent('click');
   await expect(menu).toBeVisible();
-  await expect(trigger).not.toBeFocused();
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press('2');
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toHaveText('Approve for me');
+  await expect(page.locator('#task')).toHaveValue('');
+  await page.locator('#task').focus();
+  await trigger.dispatchEvent('click');
+  await expect(menu).toBeVisible();
   await page.mouse.click(1000, 450);
   await expect(menu).toHaveCount(0);
   // Opening another picker closes this one, focus or not.
@@ -38,6 +45,9 @@ test('the Codex approval mode uses the headed select and confirms full access', 
   await expect(menu).toHaveCount(0);
   await page.mouse.click(1000, 450);
   await expect(page.getByRole('listbox', { name: 'Model' })).toHaveCount(0);
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('1');
   await expect(trigger).toHaveText('Request approval');
   // Full access only takes effect after the confirmation dialog.
   await trigger.click();

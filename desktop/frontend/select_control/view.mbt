@@ -189,9 +189,13 @@ fn Control::show_menu(self : Control) -> @cmd.Cmd {
 
 ///|
 /// Toggling changes whether the menu exists, so it enters the browser's top
-/// layer only after Rabbita has committed that render.
+/// layer only after Rabbita has committed that render. The trigger takes
+/// focus as well: Safari does not focus a clicked button, and the menu's keys
+/// (arrows, Escape, a headed menu's digits) are read from it. Focus waits for
+/// the render too, so a select whose menu this one replaced has already
+/// rendered closed and its blur no longer dismisses.
 fn Control::toggle_menu(self : Control) -> @cmd.Cmd {
-  @cmd.batch([self.toggle, self.show_menu()])
+  @cmd.batch([self.toggle, self.show_menu(), self.focus(None, true)])
 }
 
 ///|

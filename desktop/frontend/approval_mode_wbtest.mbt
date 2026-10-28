@@ -101,3 +101,26 @@ test "the approval mode is locked while a turn runs" {
     chosen.approval_for(conv.device, conv.session_id) is ApprovalReview,
   )
 }
+
+///|
+/// The shell owns Codex's approval menu, so it closes the menu itself once a
+/// turn makes the mode unchangeable, even a turn another client started.
+test "a started Codex turn closes the shell-owned approval menu" {
+  let idle = @codex.State::from_thread_snapshot({
+    "thread": { "id": "thread-1", "turns": [] },
+  })
+  let running = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "thread-1",
+      "turns": [{ "id": "turn-a", "status": "inProgress", "items": [] }],
+    },
+  })
+  let open = { ..test_model(), select_menu: Some(CodexPermissionMenu), }
+  assert_true(open.with_codex(idle).select_menu is Some(CodexPermissionMenu))
+  assert_true(open.with_codex(running).select_menu is None)
+  // Another menu is not the Codex package's to close.
+  let model_menu = { ..test_model(), select_menu: Some(CodexModelMenu), }
+  assert_true(
+    model_menu.with_codex(running).select_menu is Some(CodexModelMenu),
+  )
+}
