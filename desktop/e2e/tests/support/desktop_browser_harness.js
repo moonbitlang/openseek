@@ -10,7 +10,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 3;
+    this.hostProtocol = 4;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -87,6 +87,7 @@ export class DesktopBrowserHarness {
       prompt_source: 'builtin_moonbit_guide',
       custom_prompt: '',
     };
+    this.builtinSkillErrors = [];
     this.installedSkills = [
       {
         id: 'moonbit',
@@ -94,6 +95,7 @@ export class DesktopBrowserHarness {
         description: 'Authoritative MoonBit guidance',
         source: '',
         enabled: true,
+        builtin: false,
       },
     ];
     this.codexRequiresAuth = false;
@@ -697,7 +699,7 @@ export class DesktopBrowserHarness {
         return this.hostSettings;
       }
       case 'skills.installed':
-        return { skills: this.installedSkills };
+        return { skills: this.installedSkills, builtin_errors: this.builtinSkillErrors };
       case 'skills.catalog':
         return {
           skills: [
@@ -734,6 +736,7 @@ export class DesktopBrowserHarness {
           source: 'rabbita@0.15.4/moonbitlang/rabbita',
           registry: { module_name: 'rabbita', package_path: 'moonbitlang/rabbita' },
           enabled: true,
+          builtin: false,
         };
         if (!this.installedSkills.some(skill => skill.id === installed.id)) {
           this.installedSkills.push(installed);

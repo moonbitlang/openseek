@@ -10,6 +10,7 @@ const installed = {
   source: 'Yoorkin/wayfinder@0.1.0',
   registry: { module_name: 'Yoorkin/wayfinder', package_path: '' },
   enabled: true,
+  builtin: false,
 };
 
 class SkillsHarness extends DesktopBrowserHarness {
@@ -17,11 +18,15 @@ class SkillsHarness extends DesktopBrowserHarness {
     super(page);
     this.installedSkills = alreadyInstalled ? [structuredClone(installed)] : [];
     this.catalogSkills = [structuredClone(market)];
+    this.builtin = false;
+    this.catalogError = null;
   }
 
   replyFor(request) {
     switch (request.method) {
-      case 'skills.catalog': return { skills: this.catalogSkills };
+      case 'skills.catalog': return this.catalogError
+        ? { error: this.catalogError }
+        : { skills: this.catalogSkills };
       case 'skills.content':
       case 'skills.installed_content':
         return { kind: 'content', content: '# Wayfinder\n\nPlan uncertain work.', absolute: '', sig: '' };
@@ -31,8 +36,10 @@ class SkillsHarness extends DesktopBrowserHarness {
           ...structuredClone(installed),
           source: `${request.params.module_name}@${request.params.version}`,
           enabled: previous?.enabled ?? true,
+          builtin: this.builtin,
         };
         this.installedSkills = [updated];
+        this.builtinSkillErrors = [];
         return { installed: updated };
       }
       case 'skills.uninstall':
@@ -240,3 +247,81 @@ test('a failed handwritten skill move preserves its state and can be retried', a
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('builtin skills remain switchable and manually update while disabled without uninstall', async ({ page }) => {
+  const app = new SkillsHarness(page, true);
+  app.builtin = true;
+  app.installedSkills[0].builtin = true;
+  await app.openDetails();
+  const detail = page.locator('.skill-detail-page');
+  await expect(detail.getByText('Built-in', { exact: true })).toBeVisible();
+  // There is no empty management menu when the builtin is already current.
+  await expect(detail.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
+  await page.getByRole('switch').click();
+  await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  const row = page.locator('.skill-row').filter({ hasText: installed.name });
+  await expect(row.getByText('Built-in', { exact: true })).toBeVisible();
+  await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(row.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
+
+  app.catalogSkills[0].version = '0.1.1';
+  await page.getByRole('button', { name: 'Refresh catalog', exact: true }).click();
+  await row.getByRole('button', { name: 'Manage skill', exact: true }).click();
+  await expect(page.getByRole('menuitem')).toHaveCount(1);
+  await expect(page.getByRole('menuitem', { name: 'Uninstall', exact: true })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Update to 0.1.1', exact: true }).click();
+  await expect(row).toContainText('Yoorkin/wayfinder@0.1.1');
+  await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(row.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
+  await row.locator('.skill-summary').click();
+  await expect(detail.getByText('Built-in', { exact: true })).toBeVisible();
+  await expect(detail.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await detail.getByRole('switch').click();
+  await expect(detail.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+  expect(app.requests.filter(r => r.method === 'skills.install').map(r => r.params.version)).toEqual(['0.1.1']);
+  expect(app.requests.filter(r => r.method === 'skills.uninstall')).toEqual([]);
+  expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params.enabled)).toEqual([false, true]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('failed builtin startup stays visible with an empty library and recovers through catalog refresh and manual install', async ({ page }) => {
+  const app = new SkillsHarness(page);
+  app.builtin = true;
+  app.builtinSkillErrors = [{
+    registry: installed.registry,
+    message: 'Startup sync failed: registry offline. Refresh the catalog and install manually.',
+  }];
+  app.catalogError = 'Catalog unavailable while offline';
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  const skillsPage = page.locator('.skills-page');
+  const startupNotice = skillsPage.locator('.skills-notice');
+  await expect(startupNotice).toContainText('Yoorkin/wayfinder: Startup sync failed');
+  await expect(skillsPage.locator('.skill-row')).toHaveCount(0);
+  await expect(skillsPage).toContainText('Catalog unavailable while offline');
+  app.catalogError = null;
+  await page.getByRole('button', { name: 'Refresh catalog', exact: true }).click();
+  await expect(skillsPage).not.toContainText('Catalog unavailable while offline');
+  await expect(startupNotice).toContainText('Startup sync failed');
+  await page.locator('.skill-summary').click();
+  await expect(page.locator('.skill-detail-page .skills-notice')).toContainText('Yoorkin/wayfinder: Startup sync failed');
+
+  // The host invalidation refreshes both the library and startup errors,
+  // independently of when the original install reply reaches this client.
+  const release = app.holdReplyAfterCommit('skills.install');
+  await page.getByRole('button', { name: 'Install skill', exact: true }).click();
+  await expect(page.locator('.skill-detail-page').getByText('Built-in', { exact: true })).toBeVisible();
+  await expect(page.locator('.skill-detail-page .skills-notice')).toHaveCount(0);
+  release();
+  await expect(page.getByRole('switch')).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.locator('.skills-notice')).toHaveCount(0);
+  await expect(page.locator('.skill-row').getByText('Built-in', { exact: true })).toBeVisible();
+  expect(app.installedSkills[0].builtin).toBe(true);
+  expect(app.builtinSkillErrors).toEqual([]);
+  expect(app.requests.filter(r => r.method === 'skills.catalog')).toHaveLength(2);
+  expect(app.pageErrors).toEqual([]);
+});

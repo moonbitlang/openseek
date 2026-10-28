@@ -5,6 +5,16 @@
 // conversations keep the prompt they started with.
 
 ///|
+pub async fn HostState::sync_builtin_skills(
+  self : HostState,
+  on_changed : () -> Unit,
+  registry? : String,
+  library_dir? : @pathx.Path,
+) -> Unit {
+  self.skills.sync(registry?, library_dir?, on_changed)
+}
+
+///|
 async fn skills_catalog_op() -> SkillsCatalogReply {
   let skills = @skillmarket.fetch_catalog() catch {
     @skillmarket.SkillMarketError(message) => return SkillsCatalogError(message)
@@ -55,6 +65,7 @@ async fn installed_skill_content_op(
 
 ///|
 async fn install_skill_op(
+  state : HostState,
   payload : InstallSkillPayload,
   on_committed : () -> Unit,
 ) -> InstallSkillReply {
@@ -62,7 +73,13 @@ async fn install_skill_op(
     module_name=payload.module_name,
     version=payload.version,
     package_path=payload.package_path.unwrap_or(""),
-    on_committed~,
+    on_committed=() => {
+      state.skills.clear_error(
+        module_name=payload.module_name,
+        package_path=payload.package_path.unwrap_or(""),
+      )
+      on_committed()
+    },
   ) catch {
     @skillmarket.SkillMarketError(message) => return SkillInstallError(message)
     error => return SkillInstallError("\{error}")
@@ -80,6 +97,8 @@ fn @skillmarket.InstalledSkill::to_protocol(
     description: self.description,
     source: self.source,
     enabled: self.enabled,
+    builtin: self.registry is Some(identity) &&
+    @skillmarket.is_builtin(identity),
     registry: self.registry.map(registry => {
       module_name: registry.module_name,
       package_path: registry.package_path,
@@ -88,13 +107,26 @@ fn @skillmarket.InstalledSkill::to_protocol(
 }
 
 ///|
-async fn installed_skills_op() -> InstalledSkillsReply {
+async fn installed_skills_op(state : HostState) -> InstalledSkillsReply {
   let skills = @skillmarket.installed_skills() catch {
     @skillmarket.SkillMarketError(message) =>
       return InstalledSkillsError(message)
     error => return InstalledSkillsError("\{error}")
   }
-  InstalledSkills([ for skill in skills => skill.to_protocol() ])
+  InstalledSkills(
+    [
+      for skill in skills => skill.to_protocol()
+    ],
+    builtin_errors=state.skills
+      .errors()
+      .map(error => {
+        registry: {
+          module_name: error.registry.module_name,
+          package_path: error.registry.package_path,
+        },
+        message: error.message,
+      }),
+  )
 }
 
 ///|

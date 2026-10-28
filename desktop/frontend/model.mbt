@@ -2153,7 +2153,10 @@ priv enum DeviceMsg {
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.
-  InstalledSkillsLoaded(Array[@skills.InstalledItem])
+  InstalledSkillsLoaded(
+    Array[@skills.InstalledItem],
+    builtin_errors~ : Array[@protocol.BuiltinSkillError]
+  )
   InstalledSkillsFailed(String)
   // Another client changed this host's library; the focused client re-reads
   // it so the Skills page and `$` completion share the new contents.

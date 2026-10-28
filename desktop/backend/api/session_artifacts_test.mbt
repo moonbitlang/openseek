@@ -40,7 +40,7 @@ async test "host MCP attaches only to its caller and preserves concurrent artifa
   )
   defer subscription.close()
   @async.with_task_group(group => {
-    state.start_services(group)
+    state.start_services(group, skill_registry="http://127.0.0.1:1")
     let grant = server.grant("one")
     let connection = @streamhttp.connect(
       group,

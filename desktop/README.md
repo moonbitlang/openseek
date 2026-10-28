@@ -174,13 +174,12 @@ composer. The stylesheet decides between the two from the main pane's width.
 ## Skills
 
 The sidebar's **Skills** button opens a browser over the
-[mooncakes.io](https://mooncakes.io) skill registry — published MoonBit
-packages that ship a `SKILL.md` playbook next to a runnable wasm entry point.
-Installing one downloads just the `SKILL.md` (the wasm is fetched by `moon
-runwasm` when the agent follows the playbook), verifies it against the
-registry's sha256 digest, and writes it to the engine's global skills library
-(`OPENSEEK_GLOBAL_SKILLS_DIR`, defaulting to `~/.openseek/skills`) as
-`<slug>/SKILL.md` with a `.mooncakes.json` provenance marker. The engine
+[mooncakes.io](https://mooncakes.io) skill registry. Installing a skill downloads
+its documentation archive, verifies the registry-provided sha256 digest, and
+writes `SKILL.md`, companion files, and a `.mooncakes.json` provenance marker to
+`<slug>/` in the engine's global skills library (`OPENSEEK_GLOBAL_SKILLS_DIR`,
+defaulting to `~/.openseek/skills`). Installation uses documentation only; tools
+mentioned in a playbook are resolved separately when the agent uses them. The engine
 advertises the library in the system prompt of every **new** session — so
 installed skills apply to new chats, and to the CLI/TUI as well, since the
 library is shared.
@@ -191,6 +190,26 @@ entries remain visible in the Skills page, but are omitted from the engine's
 skill discovery and the composer's skill completion. Updates replace the
 entry in its current location, preserving its enabled state. Existing chats
 keep their saved system prompt; toggling does not refresh that prompt.
+
+The desktop backend automatically installs and updates its built-in skills:
+`moonbitlang/typst` (`cli`) and `moonbitlang/office` (the root package). At each
+local or remote host startup, a background task reads the registry catalog and
+installs missing or changed versions. Matching versions keep their existing
+files. Built-in entries carry a badge, support manual updates and enablement,
+and stay installed while listed in `backend/internal/skillmarket/builtin.mbt`.
+Disabled entries continue receiving updates and remain disabled. A skill removed
+from that list becomes an ordinary installed skill with its files and enabled
+state preserved.
+
+Startup sync failures appear on the Skills page and preserve any installed
+version. After connectivity returns, refresh the market and install or update
+manually, or let the next startup retry. Automatic and manual installs have the
+same built-in status. First-time availability depends on downloading the docs;
+sessions created earlier keep their original skill listing. Updates replace
+managed files in place, so existing sessions can read newer contents later.
+Use workspace skills for customizations that should survive automatic updates.
+Standalone CLI/TUI processes consume the shared library; the desktop backend
+owns automatic synchronization.
 
 The panel also lists what is already in the library. Hand-written skills are
 shown and can be enabled or disabled, including flat `.md` files. Installs

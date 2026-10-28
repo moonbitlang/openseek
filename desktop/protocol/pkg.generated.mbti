@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
-pub const HostProtocolRevision : Int32 = 3
+pub const HostProtocolRevision : Int32 = 4
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -431,6 +431,18 @@ pub fn BrowserVisiblePayload::to_json(Self) -> Json
 pub fn BrowserVisiblePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for BrowserVisiblePayload
 pub impl @json.FromJson for BrowserVisiblePayload
+
+pub(all) struct BuiltinSkillError {
+  registry : RegistrySkillIdentity
+  message : String
+} derive(Eq, @debug.Debug)
+pub fn BuiltinSkillError::equal(Self, Self) -> Bool
+pub fn BuiltinSkillError::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BuiltinSkillError::not_equal(Self, Self) -> Bool
+pub fn BuiltinSkillError::to_json(Self) -> Json
+pub fn BuiltinSkillError::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BuiltinSkillError
+pub impl @json.FromJson for BuiltinSkillError
 
 pub(all) struct CancelPayload {
   run_id : String?
@@ -1895,6 +1907,7 @@ pub(all) struct InstalledSkill {
   source : String
   registry : RegistrySkillIdentity?
   enabled : Bool
+  builtin : Bool
 } derive(Eq, @debug.Debug)
 pub fn InstalledSkill::equal(Self, Self) -> Bool
 pub fn InstalledSkill::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1905,7 +1918,7 @@ pub impl ToJson for InstalledSkill
 pub impl @json.FromJson for InstalledSkill
 
 pub(all) enum InstalledSkillsReply {
-  InstalledSkills(Array[InstalledSkill])
+  InstalledSkills(Array[InstalledSkill], builtin_errors~ : Array[BuiltinSkillError])
   InstalledSkillsError(String)
 } derive(Eq, @debug.Debug)
 pub fn InstalledSkillsReply::equal(Self, Self) -> Bool

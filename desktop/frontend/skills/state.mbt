@@ -33,6 +33,10 @@ struct State {
 priv enum Notice {
   SkillActionFailed(operation~ : PendingOperation, message~ : String)
   LibraryLoadFailed(String)
+  BuiltinSyncFailed(
+    channel~ : @interop.ChannelId,
+    error~ : @protocol.BuiltinSkillError
+  )
 } derive(Eq)
 
 ///|
@@ -59,7 +63,7 @@ fn Notice::belongs_to(
   match self {
     SkillActionFailed(operation~, ..) =>
       operation.channel == channel && operation.identity == identity
-    LibraryLoadFailed(_) => false
+    LibraryLoadFailed(_) | BuiltinSyncFailed(..) => false
   }
 }
 
@@ -276,6 +280,21 @@ pub fn State::opening(
 pub fn State::with_library_error(self : State, message : String) -> State {
   let notices = self.notices.filter(notice => !(notice is LibraryLoadFailed(_)))
   notices.push(LibraryLoadFailed(message))
+  { ..self, notices, }
+}
+
+///|
+/// Replace startup-sync failures with the focused host's authoritative reply.
+/// Errors can identify a missing builtin, so they are independent of the list.
+pub fn State::with_builtin_errors(
+  self : State,
+  channel : @interop.ChannelId,
+  errors : Array[@protocol.BuiltinSkillError],
+) -> State {
+  let notices = self.notices.filter(notice => !(notice is BuiltinSyncFailed(..)))
+  for error in errors {
+    notices.push(BuiltinSyncFailed(channel~, error~))
+  }
   { ..self, notices, }
 }
 
@@ -503,7 +522,11 @@ pub fn State::handle(
       )
     }
     Uninstall(item) => {
-      guard item.identity() is Some(identity) else {
+      guard !item.builtin &&
+        !input.installed
+        .iter()
+        .any(current => current.id == item.id && current.builtin) &&
+        item.identity() is Some(identity) else {
         return (@cmd.none, self, None)
       }
       self.start_action(

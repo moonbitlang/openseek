@@ -31,15 +31,54 @@ pub impl FromJson for SkillsCatalogReply with fn from_json(json, path) {
 }
 
 ///|
+pub(all) struct BuiltinSkillError {
+  registry : RegistrySkillIdentity
+  message : String
+} derive(Debug, Eq)
+
+///|
+pub extend BuiltinSkillError with Debug::{to_repr}
+
+///|
+pub extend BuiltinSkillError with Eq::{equal, not_equal}
+
+///|
+pub extend BuiltinSkillError with FromJson::{from_json}
+
+///|
+pub extend BuiltinSkillError with ToJson::{to_json}
+
+///|
+pub impl FromJson for BuiltinSkillError with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "BuiltinSkillError")
+  {
+    registry: @json.from_json(
+      object.required_json("registry"),
+      path=path.add_key("registry"),
+    ),
+    message: object.required_string("message"),
+  }
+}
+
+///|
+pub impl ToJson for BuiltinSkillError with fn to_json(self) {
+  { "registry": self.registry.to_json(), "message": Json(self.message) }
+}
+
+///|
 pub(all) enum InstalledSkillsReply {
-  InstalledSkills(Array[InstalledSkill])
+  InstalledSkills(
+    Array[InstalledSkill],
+    builtin_errors~ : Array[BuiltinSkillError]
+  )
   InstalledSkillsError(String)
 } derive(Debug, Eq)
 
 ///|
 pub impl ToJson for InstalledSkillsReply with fn to_json(self) {
   match self {
-    InstalledSkills(value) => { "skills": Json(value) }
+    InstalledSkills(value, builtin_errors~) =>
+      { "skills": Json(value), "builtin_errors": Json(builtin_errors) }
     InstalledSkillsError(message) => { "error": Json(message) }
   }
 }
@@ -54,6 +93,10 @@ pub impl FromJson for InstalledSkillsReply with fn from_json(json, path) {
       @json.from_json(
         object.required_json("skills"),
         path=path.add_key("skills"),
+      ),
+      builtin_errors=@json.from_json(
+        object.required_json("builtin_errors"),
+        path=path.add_key("builtin_errors"),
       ),
     )
   }

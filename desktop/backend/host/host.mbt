@@ -44,6 +44,7 @@ struct HostState {
   moon : MoonCliState
   updates : SelfUpdate
   resources : HostResources
+  skills : @skillmarket.BuiltinSkills
 }
 
 ///|
@@ -89,6 +90,7 @@ pub fn new_host_state(
     moon: MoonCliState(engine, runtime_dir?, source=resources.moonbit),
     updates: SelfUpdate(runtime_dir, executable, app_version~),
     resources,
+    skills: @skillmarket.BuiltinSkills::new(),
   }
 }
 
@@ -325,9 +327,9 @@ pub fn endpoints(
     Endpoint(@commands.skills_installed_content, payload => {
       installed_skill_content_op(payload)
     }),
-    Endpoint(@commands.skills_installed, _ => installed_skills_op()),
+    Endpoint(@commands.skills_installed, _ => installed_skills_op(state)),
     Endpoint(@commands.skills_install, payload => {
-      install_skill_op(payload, on_skills_changed)
+      install_skill_op(state, payload, on_skills_changed)
     }),
     Endpoint(@commands.skills_uninstall, payload => {
       uninstall_skill_op(payload, on_skills_changed)

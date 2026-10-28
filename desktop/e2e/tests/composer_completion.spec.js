@@ -6,12 +6,12 @@ for (const marker of ['@', '$']) {
     const app = new DesktopBrowserHarness(page);
     app.searchFiles = Array.from({ length: 20 }, (_, i) => `src/file-${i}.mbt`);
     app.installedSkills = Array.from({ length: 20 }, (_, i) => ({
-      id: `skill-${i}`, name: `skill-${i}`, description: `Skill ${i}`, source: '', enabled: true,
+      id: `skill-${i}`, name: `skill-${i}`, description: `Skill ${i}`, source: '', builtin: false, enabled: true,
     }));
     // The model covers enabled/disabled filtering; exercise its projection in
     // the existing skill-menu keyboard flow without another page startup.
     app.installedSkills.push({
-      id: 'disabled', name: 'disabled', description: '', source: '', enabled: false,
+      id: 'disabled', name: 'disabled', description: '', source: '', builtin: false, enabled: false,
     });
     await app.install();
     await app.goto();

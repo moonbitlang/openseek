@@ -23,7 +23,7 @@ test "SkillsCatalogReply owns its success and error wire shapes" {
 
 ///|
 test "InstalledSkillsReply owns its success and error wire shapes" {
-  let success : @protocol.InstalledSkillsReply = InstalledSkills([])
+  let success : @protocol.InstalledSkillsReply = InstalledSkills([], builtin_errors=[])
   let decoded : @protocol.InstalledSkillsReply = @json.from_json(
     success.to_json(),
   )
@@ -33,7 +33,17 @@ test "InstalledSkillsReply owns its success and error wire shapes" {
     "unknown": true,
   })
   assert_eq(failure.to_json(), { "error": "HTTP 404" })
-  for malformed in [null, { "error": null }, { "error": 42 }, {}] {
+  for
+    malformed in [
+      null,
+      { "error": null },
+      { "error": 42 },
+      {},
+      { "skills": [] },
+      { "skills": [], "builtin_errors": null },
+      { "skills": [], "builtin_errors": "failed" },
+      { "skills": [], "builtin_errors": [{}] },
+    ] {
     try {
       let _ : @protocol.InstalledSkillsReply = @json.from_json(malformed)
     } catch {
@@ -52,14 +62,96 @@ test "InstalledSkillsReply preserves a disabled entry" {
     description: "",
     source: "",
     registry: None,
+    builtin: false,
     enabled: false,
   }
-  let reply : @protocol.InstalledSkillsReply = InstalledSkills([disabled])
+  let reply : @protocol.InstalledSkillsReply = InstalledSkills([disabled], builtin_errors=[])
   let decoded : @protocol.InstalledSkillsReply = @json.from_json(
     reply.to_json(),
   )
   assert_eq(decoded, reply)
-  assert_true(decoded is InstalledSkills([entry]) && !entry.enabled)
+  assert_true(decoded is InstalledSkills([entry], ..) && !entry.enabled)
+}
+
+///|
+test "builtin errors roundtrip even when installation is absent" {
+  let error : @protocol.BuiltinSkillError = {
+    registry: { module_name: "acme/tools", package_path: "widget", },
+    message: "Registry unavailable; reload the catalog and install manually",
+  }
+  let reply : @protocol.InstalledSkillsReply = InstalledSkills([], builtin_errors=[
+    error,
+  ])
+  let wire = reply.to_json()
+  assert_eq(wire, {
+    "skills": [],
+    "builtin_errors": [
+      {
+        "registry": { "module_name": "acme/tools", "package_path": "widget" },
+        "message": "Registry unavailable; reload the catalog and install manually",
+      },
+    ],
+  })
+  let decoded : @protocol.InstalledSkillsReply = @json.from_json(wire)
+  assert_eq(decoded, reply)
+  for
+    malformed in [
+      null,
+      {},
+      { "registry": null, "message": "offline" },
+      { "registry": {}, "message": "offline" },
+      { "registry": { "module_name": "acme/tools", "package_path": "" } },
+      {
+        "registry": { "module_name": "acme/tools", "package_path": "" },
+        "message": null,
+      },
+      {
+        "registry": { "module_name": "acme/tools", "package_path": "" },
+        "message": false,
+      },
+    ] {
+    try {
+      let _ : @protocol.BuiltinSkillError = @json.from_json(malformed)
+    } catch {
+      JsonDecodeError(_) => ()
+    } noraise {
+      _ => fail("builtin errors require an identity and message")
+    }
+  }
+}
+
+///|
+test "installed skills require an explicit builtin boolean" {
+  let fields : Map[String, Json] = {
+    "id": "widget",
+    "name": "widget",
+    "description": "",
+    "source": "acme/widget@1.0.0",
+    "enabled": false,
+  }
+  for builtin in [None, Some(Json::null()), Some(Json("false")), Some(Json(0))] {
+    let malformed = fields.copy()
+    if builtin is Some(value) {
+      malformed["builtin"] = value
+    }
+    try {
+      let _ : @protocol.InstalledSkill = @json.from_json(Json(malformed))
+    } catch {
+      JsonDecodeError(_) => ()
+    } noraise {
+      _ => fail("installed skills require an explicit builtin boolean")
+    }
+  }
+  for builtin in [true, false] {
+    let valid = fields.copy()
+    valid["builtin"] = Json(builtin)
+    valid["future"] = Json(true)
+    let skill : @protocol.InstalledSkill = @json.from_json(Json(valid))
+    assert_eq(skill.builtin, builtin)
+    assert_false(skill.enabled)
+    let decoded : @protocol.InstalledSkill = @json.from_json(skill.to_json())
+    assert_eq(decoded, skill)
+  }
 }
 
 ///|
@@ -70,6 +162,7 @@ test "InstallSkillReply owns its success and error wire shapes" {
     description: "test",
     source: "acme/test@1.0.0",
     registry: Some({ module_name: "acme/test", package_path: "", }),
+    builtin: false,
     enabled: true,
   })
   let decoded : @protocol.InstallSkillReply = @json.from_json(success.to_json())

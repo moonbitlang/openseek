@@ -7161,12 +7161,14 @@ fn update_device_msg(
     return (@cmd.none, model)
   }
   match msg {
-    InstalledSkillsLoaded(items) => {
+    InstalledSkillsLoaded(items, builtin_errors~) => {
       guard channel == model.focused else { return (@cmd.none, model) }
-      let (cmd, skills) = model.skills.sync_library(
-        dispatch.map(msg => Skills(msg)),
-        { channel, installed: items, },
-      )
+      let (cmd, skills) = model.skills
+        .with_builtin_errors(channel, builtin_errors)
+        .sync_library(dispatch.map(msg => Skills(msg)), {
+          channel,
+          installed: items,
+        })
       (cmd, { ..model, installed_skills: items, skills, })
     }
     InstalledSkillsFailed(message) =>
@@ -19393,15 +19395,23 @@ test "installed skills replies are scoped to their source device" {
       description: "",
       source: "old/source@1.0.0",
       registry: Some({ module_name: "old/source", package_path: "", }),
+      builtin: false,
       enabled: true,
+    },
+  ]
+  let errors : Array[@protocol.BuiltinSkillError] = [
+    {
+      registry: { module_name: "builtin/missing", package_path: "", },
+      message: "Registry offline",
     },
   ]
   let (_, ignored) = update(
     dispatch,
-    FromDevice(Local, InstalledSkillsLoaded(old_host)),
+    FromDevice(Local, InstalledSkillsLoaded(old_host, builtin_errors=errors)),
     focused,
   )
   assert_eq(ignored.installed_skills.length(), 0)
+  assert_true(ignored.skills == focused.skills)
   let new_host : Array[@skills.InstalledItem] = [
     {
       id: "new",
@@ -19409,16 +19419,42 @@ test "installed skills replies are scoped to their source device" {
       description: "",
       source: "new/source@1.0.0",
       registry: Some({ module_name: "new/source", package_path: "", }),
+      builtin: false,
       enabled: true,
     },
   ]
   let (_, applied) = update(
     dispatch,
-    FromDevice(Remote("d_b"), InstalledSkillsLoaded(new_host)),
+    FromDevice(
+      Remote("d_b"),
+      InstalledSkillsLoaded(new_host, builtin_errors=errors),
+    ),
     ignored,
   )
   assert_eq(applied.installed_skills.length(), 1)
   assert_eq(applied.installed_skills[0].id, "new")
+  assert_true(
+    applied.skills == ignored.skills.with_builtin_errors(Remote("d_b"), errors),
+  )
+  let (_, missing) = update(
+    dispatch,
+    FromDevice(Remote("d_b"), InstalledSkillsLoaded([], builtin_errors=errors)),
+    applied,
+  )
+  assert_eq(missing.installed_skills.length(), 0)
+  assert_true(missing.skills == applied.skills)
+  let (_, recovered) = update(
+    dispatch,
+    FromDevice(
+      Remote("d_b"),
+      InstalledSkillsLoaded(new_host, builtin_errors=[]),
+    ),
+    missing,
+  )
+  assert_true(
+    recovered.skills == missing.skills.with_builtin_errors(Remote("d_b"), []),
+  )
+  assert_true(recovered.skills != missing.skills)
 }
 
 ///|

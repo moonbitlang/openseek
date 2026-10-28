@@ -71,17 +71,21 @@ struct FakeSkill {
 }
 
 ///|
-fn catalog_body(base : String, widget_digest : String) -> String {
+fn catalog_body(
+  base : String,
+  widget_digest : String,
+  version~ : String = "1.0.0",
+) -> String {
   let json : Json = [
     {
       "module": "acme/widget",
-      "version": "1.0.0",
+      "version": version,
       "name": "acme/widget",
       "package": "",
       "author": "acme",
       "repository": "https://example.com/acme/widget",
       "metadata": { "name": "widget", "description": "Build widgets fast." },
-      "archive_url": "\{base}/download/acme/widget@1.0.0/skills.zip",
+      "archive_url": "\{base}/download/acme/widget@\{version}/skills.zip",
       "archive_digest": widget_digest,
     },
     // A bare wasm entry point: no published skill archive, not installable.
@@ -132,6 +136,9 @@ async fn fake_registry(
   group : @async.TaskGroup[Unit],
   probe? : RegistryProbe,
   archive_gate? : ArchiveGate,
+  gate_entry~ : String = "acme/widget@2.0.0",
+  catalog_version~ : String = "1.0.0",
+  requests? : Array[String],
 ) -> String? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
     error if "\{error}".contains("Operation not permitted") => {
@@ -156,6 +163,10 @@ async fn fake_registry(
       digest: digest_of(widget_v1),
     },
     "acme/widget@2.0.0": {
+      archive: Some(widget_v2),
+      digest: digest_of(widget_v2),
+    },
+    "acme/widget@3.0.0": {
       archive: Some(widget_v2),
       digest: digest_of(widget_v2),
     },
@@ -191,9 +202,14 @@ async fn fake_registry(
           probe.leave()
         }
         let path = request.path
+        if requests is Some(requests) {
+          requests.push(path)
+        }
         if path == "/api/v0/skills" {
           conn.send_response(200, "OK", extra_headers=json_headers)
-          conn.write_string(catalog_body(base, widget_digest))
+          conn.write_string(
+            catalog_body(base, widget_digest, version=catalog_version),
+          )
         } else if path == "/api/v0/skills/acme/bare@1.0.0" {
           // A registered entry that legitimately publishes no archive.
           conn.send_response(200, "OK", extra_headers=json_headers)
@@ -232,7 +248,7 @@ async fn fake_registry(
           blob.strip_suffix(ZipSuffix) is Some(entry) &&
           skills.get(entry.to_owned()) is Some(skill) &&
           skill.archive is Some(archive) {
-          if entry == "acme/widget@2.0.0" && archive_gate is Some(gate) {
+          if entry == gate_entry && archive_gate is Some(gate) {
             gate.arrived.put(())
             gate.release.get()
           }

@@ -40,17 +40,22 @@ fn installed_menu(
         command: emit(Update(candidate)),
       }),
     )
-    entries.push(Separator)
   }
-  entries.push(
-    Action({
-      label: ui(locale, Uninstall),
-      title: ui(locale, Uninstall),
-      icon: Some(icon(@icons.icon_trash)),
-      enabled: true,
-      destructive: true,
-      command: emit(Uninstall(item)),
-    }),
-  )
+  if !item.builtin {
+    if !entries.is_empty() {
+      entries.push(Separator)
+    }
+    entries.push(
+      Action({
+        label: ui(locale, Uninstall),
+        title: ui(locale, Uninstall),
+        icon: Some(icon(@icons.icon_trash)),
+        enabled: true,
+        destructive: true,
+        command: emit(Uninstall(item)),
+      }),
+    )
+  }
+  guard !entries.is_empty() else { return None }
   Some({ label: ui(locale, ManageSkill), entries, })
 }

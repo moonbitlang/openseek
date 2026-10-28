@@ -306,6 +306,7 @@ test "Cloud uses the existing composer and transcript without a host workspace" 
         description: "",
         source: "local",
         registry: None,
+        builtin: false,
         enabled: true,
       },
     ],

@@ -1193,6 +1193,8 @@ pub(all) struct InstalledSkill {
   // Derived from the library location; disabled entries remain listed and
   // previewable, and new installs default to enabled.
   enabled : Bool
+  // Membership in the host's builtin manifest, independent of enablement.
+  builtin : Bool
 } derive(Debug, Eq)
 
 ///|
@@ -3776,6 +3778,7 @@ pub impl FromJson for InstalledSkill with fn from_json(json, path) {
     .optional_json("registry")
     .map(value => @json.from_json(value, path=path.add_key("registry"))),
     enabled: object.required_bool("enabled"),
+    builtin: object.required_bool("builtin"),
   }
 }
 
@@ -3787,6 +3790,7 @@ pub impl ToJson for InstalledSkill with fn to_json(self) {
   fields["description"] = Json(self.description)
   fields["source"] = Json(self.source)
   fields["enabled"] = Json(self.enabled)
+  fields["builtin"] = Json(self.builtin)
   if self.registry is Some(registry) {
     fields["registry"] = registry.to_json()
   }

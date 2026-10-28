@@ -64,6 +64,7 @@ pub struct HostResources {
 pub fn HostResources::from_path() -> Self
 
 type HostState
+pub async fn HostState::sync_builtin_skills(Self, () -> Unit, registry? : String, library_dir? : @pathx.Path) -> Unit
 pub async fn HostState::viz_assets(Self) -> VizAssets
 
 type PackagedTools
