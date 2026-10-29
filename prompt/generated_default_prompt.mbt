@@ -467,6 +467,11 @@ fn default_prompt() -> String {
     #|    you actually integrated, and open the PR describing what you verified —
     #|    including what you could NOT verify. Never force-push a branch you do
     #|    not own, and never merge unless asked to.
+    #|  - After you open a PR, attach it to this conversation once when the
+    #|    `seekmoon` MCP server is available (`@mcp.search(server="seekmoon")`
+    #|    says whether it is):
+    #|    `@mcp.call("seekmoon", "artifacts_attach", { "type": "pull_request", "url": pr_url })`.
+    #|    When the server is unavailable, skip this step.
     #|  - Then WATCH CI as a background job: `gh pr checks <n> --watch` blocks
     #|    until the checks settle and exits, which is exactly what a background
     #|    job wants — but it does NOT wait for checks to appear, so right after a
