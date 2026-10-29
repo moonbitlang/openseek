@@ -84,8 +84,6 @@ fn installed_row(
           skill.source
         },
       ),
-      builtin_badge(locale, skill),
-      installed_status(locale, state, channel, skill),
     ]),
   ]
   if !skill.description.is_blank() {
@@ -97,7 +95,10 @@ fn installed_row(
       attrs=@html.Attrs::build().aria_label(skill.name),
       [
         @html.span(class="skill-avatar", icon(icon_extensions)),
-        @html.span(class="skill-name", skill.name),
+        @html.span(class="skill-title", [
+          @html.span(class="skill-name", skill.name),
+          builtin_badge(locale, skill),
+        ]),
       ],
     ),
   ]
@@ -243,19 +244,18 @@ fn detail_shell(
   @page_shell.body(class="skills-page skill-detail-page", [
     @html.div(class="skill-detail-header", [
       @html.div(class="page-eyebrow", ui(locale, Details)),
-      @html.h2(preview_name(target)),
-      @html.div(class="skill-detail-meta skill-meta-line", [
-        @html.span(preview_meta(locale~, target)),
-        if detail_action_target(target, state, input) is Some(Installed(item)) {
-          @html.fragment([
-            builtin_badge(locale, item),
-            installed_status(locale, state, input.channel, item),
-          ])
-        } else {
-          @html.nothing
-        },
+      @html.div(class="skill-header", [
+        @html.div(class="skill-title", [
+          @html.h2(preview_name(target)),
+          if detail_action_target(target, state, input) is Some(Installed(item)) {
+            builtin_badge(locale, item)
+          } else {
+            @html.nothing
+          },
+        ]),
+        detail_action(locale~, target, state, input, emit),
       ]),
-      detail_action(locale~, target, state, input, emit),
+      @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
       @html.div(notice_views(state, input, Some(target))),
     ]),
     @html.div(class="skill-detail-card", [
@@ -570,19 +570,22 @@ fn installed_actions(
     )
   }
   @html.div(
-    class="skill-actions skill-installed-actions",
+    class="skill-actions",
     attrs=@html.Attrs::build().on_click(event => {
       event.stop_propagation()
       @cmd.none
     }),
-    buttons,
+    [
+      installed_status(locale, state, channel, item),
+      @html.div(class="skill-actions skill-installed-actions", buttons),
+    ],
   )
 }
 
 ///|
 fn builtin_badge(locale : @i18n.Locale, item : InstalledItem) -> @html.Html {
   if item.builtin {
-    @html.span(class="skill-update-badge", ui(locale, Builtin))
+    @html.span(class="skill-builtin-badge", ui(locale, Builtin))
   } else {
     @html.nothing
   }

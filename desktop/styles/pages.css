@@ -514,6 +514,18 @@ h2 {
   min-width: 0;
 }
 
+.skill-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.skill-detail-header .skill-title {
+  flex: 1;
+}
+
 .skill-name {
   min-width: 0;
   color: var(--color-text-primary);
@@ -662,16 +674,25 @@ h2 {
   font-size: var(--font-size-xs);
 }
 
+.skill-builtin-badge,
 .skill-update-badge {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   padding: 1px 6px;
   border-radius: 4px;
-  color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 10%, var(--color-bg-surface));
   font-size: var(--font-size-xs);
   white-space: nowrap;
+}
+
+.skill-builtin-badge {
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle);
+}
+
+.skill-update-badge {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-bg-surface));
 }
 
 .skill-update-badge > .icon {
