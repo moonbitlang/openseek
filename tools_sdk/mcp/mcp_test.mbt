@@ -257,6 +257,7 @@ async test "the first search downloads every page of the catalog" {
   assert_eq(page.total, 3)
   assert_true(page.next_offset is None)
   assert_true(page.instructions is None)
+  assert_eq("\{page}", page.text)
   assert_true(page.text.has_prefix("3 MCP tools across 2 servers."))
   assert_true(
     page.text.contains(
@@ -298,6 +299,7 @@ async test "an empty catalog and an unavailable server are ordinary pages" {
   let pages = []
   ignore(with_host(catalog_host([[]]), () => pages.push(@mcp.search())))
   assert_eq(pages[0].text, "No MCP servers are configured.")
+  inspect(pages[0], content="No MCP servers are configured.")
   assert_true(pages[0].tools.is_empty())
   assert_eq(pages[0].total, 0)
   ignore(
@@ -306,6 +308,7 @@ async test "an empty catalog and an unavailable server are ordinary pages" {
     }),
   )
   assert_eq(pages[1].text, "`billing` is unavailable: connection refused")
+  inspect(pages[1], content="`billing` is unavailable: connection refused")
   assert_true(pages[1].tools.is_empty())
 }
 

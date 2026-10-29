@@ -80,7 +80,7 @@ import {
 async fn main {
   // Print the page so the next model request sees the tools and schemas.
   let page = @mcp.search(query="list issues", server="github")
-  println(page.text)
+  println(page)
   guard page.tools is [tool, ..] else { return }
   let result = @mcp.call(tool.server, tool.name, { "repo": "moonbitlang/openseek" })
   if result.is_error { fail(result.content) }
