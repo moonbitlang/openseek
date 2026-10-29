@@ -6,8 +6,8 @@
 // <path> <old_string> <new_string> [<start_line>]. Verified end to end by
 // a host-backed test that runs it through the real sandbox and host.
 import {
-  "moonbitlang/openseek_tools@0.2.0",
-  "moonbitlang/async",
+  "moonbitlang/openseek_tools@0.4.0",
+  "moonbitlang/core/async",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
 }
@@ -23,7 +23,9 @@ async fn main {
   }
   let start_line : Int32 = match args {
     [_, _, _, line, ..] =>
-      @string.from_str(line) catch { _ => fail("start_line must be an integer") }
+      @string.from_str(line) catch {
+        _ => fail("start_line must be an integer")
+      }
     _ => 1
   }
   // Require no error-count increase and a net decrease in warning count.
@@ -52,8 +54,7 @@ async fn main {
     // explanation, never as an ordinary revert.
     Some({ "outcome": "reverted", "restore_failed": true, .. }) =>
       println("reverted but NOT restored: \{result.content}")
-    Some({ "outcome": "reverted", .. }) =>
-      println(result.content)
+    Some({ "outcome": "reverted", .. }) => println(result.content)
     Some({ "outcome": String(outcome), .. }) =>
       println("\{outcome}: \{result.content}")
     _ => println("no data: \{result.content}")

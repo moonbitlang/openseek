@@ -1,14 +1,14 @@
 ---
 import {
-  "moonbitlang/async@0.22.4",
-  "moonbitlang/async@0.22.4/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
   "moonbitlang/core/argparse",
   "moonbitlang/core/json",
 }
 ---
 
 ///|
-fn seconds(value : String, maximum : Int) -> Int raise {
+fn seconds(value : String, maximum : Int32) -> Int32 raise {
   guard !value.is_empty() && value.length() <= 4 else {
     fail("Expected seconds between 1 and \{maximum}")
   }

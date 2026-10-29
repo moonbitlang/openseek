@@ -1587,7 +1587,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
                 "ptc",
                 Json({
                   "type": "boolean",
-                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.2.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for runs without escalated; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with escalated.",
+                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.4.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for runs without escalated; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with escalated.",
                 }),
               ),
             ]
@@ -1647,7 +1647,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
 /// MoonBit is the system prompt's to teach — it is how a snippet does its
 /// work, not advice handed out after a refusal — so the refusal text below
 /// names no table. The default system prompt owns the
-/// `moonbitlang/async/shell` tutorial and worked examples; those teach one
+/// `moonbitlang/core/async/shell` tutorial and worked examples; those teach one
 /// role's workflow rather than describing what the tool enforces.
 ///
 /// The spawn list is RENDERED from `spawnable_commands` by

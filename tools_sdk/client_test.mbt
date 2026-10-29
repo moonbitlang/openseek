@@ -13,18 +13,19 @@ async test "public calls discover the host and forward JSON arguments unchanged"
       defer server.close()
       let received : Array[Json] = []
       let worker = group.spawn(no_wait=true, () => {
-        server.run_forever((req, body, conn) => {
+        server.run_forever((req, conn) => {
           defer conn.close()
           assert_true(req.meth is Post)
+          assert_eq(req.headers.get("Content-Type"), Some("application/json"))
           assert_eq(req.path, "/call")
           assert_eq(
             req.headers.get("Authorization"),
             Some("Bearer public-api-test"),
           )
-          let input = @json.parse(body.read_all().text())
+          let input = @json.parse(conn.text.read_all())
           received.push(input)
           conn.send_response(200, "OK")
-          conn.write(
+          conn.text.write_json(
             (
               {
                 "version": 1,

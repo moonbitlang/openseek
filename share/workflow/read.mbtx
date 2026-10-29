@@ -1,7 +1,7 @@
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -11,7 +11,7 @@ import {
 
 ///|
 /// Leave room below mbtx's 48,000-byte transport limit for run diagnostics.
-const OutputBytes : Int = 40_000
+const OutputBytes : Int32 = 40_000
 
 ///|
 suberror ReadError {
@@ -21,12 +21,12 @@ suberror ReadError {
 ///|
 struct Request {
   path : String
-  start : Int
-  end : Int?
+  start : Int32
+  end : Int32?
 }
 
 ///|
-fn positive_int(text : StringView) -> Int raise ReadError {
+fn positive_int(text : StringView) -> Int32 raise ReadError {
   let mut value = 0
   guard !text.is_empty() else {
     raise ReadError("expected a positive line number or budget")
@@ -83,7 +83,7 @@ fn request(selector : String, literal : Bool) -> Request raise ReadError {
 /// always ending at a Unicode scalar boundary, and its encoded length. Bytes
 /// are the one unit that matters: mbtx stops a program whose output passes
 /// its byte cap, so that is what every budget here counts.
-fn prefix(text : StringView, bytes : Int) -> (String, Int) {
+fn prefix(text : StringView, bytes : Int32) -> (String, Int32) {
   let out = StringBuilder()
   let mut used = 0
   for char in text {
@@ -109,7 +109,7 @@ fn prefix(text : StringView, bytes : Int) -> (String, Int) {
 ///|
 /// Render `content` with a body of at most `bytes` UTF-8 bytes, gutters
 /// included; the caller reserves room for the footer.
-fn render(content : String, input : Request, bytes : Int) -> String {
+fn render(content : String, input : Request, bytes : Int32) -> String {
   if content.is_empty() {
     return "<system>start_line=\{input.start} shown_lines=0 total_lines=0 truncated=false note=empty file</system>\n"
   }
@@ -153,14 +153,14 @@ fn render(content : String, input : Request, bytes : Int) -> String {
 /// `body` bounds the rendered content (the per-file budget, or less when the
 /// batch is nearly spent); `bytes` is what the batch still has for this file,
 /// so a small content budget never erases the reason a file could not be read.
-async fn read(input : Request, body~ : Int, bytes~ : Int) -> (String, Bool) {
+async fn read(input : Request, body~ : Int32, bytes~ : Int32) -> (String, Bool) {
   try {
     if @fs.kind(input.path, follow_symlink=true) is Directory {
       raise ReadError(
         "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files",
       )
     }
-    (render(@fs.read_file(input.path).text(), input, body), false)
+    (render(@fs.read_text(input.path), input, body), false)
   } catch {
     error => {
       let message = match error {

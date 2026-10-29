@@ -13,7 +13,7 @@ for automation, there is no shell tool.
 
 It runs a MoonBit script, the extensibility comes from published MoonBit library.
 
-For example, for shell and pipe utilities, every command — `moon`, `git`, can be a package, e.g, `moonbitlang/async/shell` API.
+For example, for shell and pipe utilities, every command — `moon`, `git`, can be a package, e.g, `moonbitlang/core/async/shell` API.
 
 Prefer PTC for work: call `edit`, `multi_edit`, `write`, `remove`, and enabled
 `web_search` through the host-tool SDK inside mbtx. These remain explicit,
@@ -92,7 +92,7 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
 ### Temporary and session files
 
 Environment gives the absolute session scratch directory. Use that real path
-with `@fs.read_file`, `@fs.write_file`, directory operations, or command arguments
+with `@fs.read_text`, `@fs.write_text`, directory operations, or command arguments
 and output redirection. It is writable by mbtx and retained across calls. Saved
 sessions keep it across restarts and archives; permanent deletion removes it.
 Unsaved sessions retain scratch only while running.
@@ -174,8 +174,8 @@ something cannot be done, search the catalog and print the page:
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.3.0/mcp" @mcp,
-  "moonbitlang/async",
+  "moonbitlang/openseek_tools@0.4.0/mcp" @mcp,
+  "moonbitlang/core/async",
 }
 ---
 
@@ -561,7 +561,7 @@ full diagnostics.
   src/parser.mbt:42:9`, and `moon ide hover parse --loc src/parser.mbt:42:9`.
 - `moon add`, `moon remove`, `moon update`, and `moon tree`:
   dependencies and package registry/dependency inspection. Examples:
-  `moon add moonbitlang/async`, `moon remove moonbitlang/async`,
+  `moon add moonbitlang/x`, `moon remove moonbitlang/x`,
   `moon update`, `moon tree`.
 - `moon search`: search the package registry for modules by keyword when
   the exact module name is not known yet; then add the chosen module with
@@ -605,9 +605,11 @@ example rather than guessing the flags.
 - `_test.mbt` files are black-box tests. Use `_wbtest.mbt` only when tests must
   inspect private helpers.
 
-When adding registry dependencies, prefer `moon add moonbitlang/async` or
-`moon add moonbitlang/x` from the module root so MoonBit writes a valid current
-version. Do not guess dependency versions by hand.
+Async IO is part of the standard library: import `moonbitlang/core/async`
+and the specific subpackages in `moon.pkg`; no `moon add` or version pin is needed.
+When adding registry dependencies, prefer `moon add moonbitlang/x` from the
+module root so MoonBit writes a valid current version. Do not guess dependency
+versions by hand.
 
 After adding new module dependencies, run `moon update` from the module root if
 `moon check` cannot find them.

@@ -1,7 +1,7 @@
 ---
 import {
-  "moonbitlang/openseek_tools@0.2.0" @tools,
-  "moonbitlang/async",
+  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
 }
 ---
@@ -91,7 +91,7 @@ async fn start(
   kind : String,
   input : Json,
   label : String,
-  max_steps : Int,
+  max_steps : Int32,
 ) -> Launch {
   let started = @tools.call("subagent", {
     "kind": kind,
@@ -136,8 +136,8 @@ async fn wait_all(launches : Array[Launch]) -> Unit {
 ///|
 /// What an ended child left, and what it spent either way.
 priv enum Outcome {
-  Reported(Json, tokens~ : Int)
-  NoReport(String, tokens~ : Int)
+  Reported(Json, tokens~ : Int32)
+  NoReport(String, tokens~ : Int32)
 }
 
 ///|
@@ -150,7 +150,9 @@ async fn outcome(id : String) -> Outcome {
       "job_id": id,
       "offset": text.to_string().char_length(),
     })
-    guard read.data is Some(data) else { return NoReport(read.content, tokens~) }
+    guard read.data is Some(data) else {
+      return NoReport(read.content, tokens~)
+    }
     if data
       is {
         "subagent": {

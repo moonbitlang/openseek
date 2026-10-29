@@ -50,13 +50,13 @@ Principles:
 
 There is no shell tool. Every command — `moon`, `git`, anything else — is
 spawned from a `mbtx` snippet through the shell-free
-`moonbitlang/async/shell` API; the tool's description lists the programs a
+`moonbitlang/core/async/shell` API; the tool's description lists the programs a
 snippet may start and its isolation rules. The `source` argument is a whole
 `.mbtx` program:
 
 - Open it with front matter: a `---` line, the `import { ... }` block, and a
   closing `---` line, with nothing (not even a comment) before it.
-- Import every package it uses separately: `"moonbitlang/async"` alone brings
+- Import every package it uses separately: `"moonbitlang/core/async"` alone brings
   in neither `fs` nor `shell`.
 - Keep `async fn main` for async IO.
 - Helpers that run a command or do IO are `async fn` too, without `noraise`;
@@ -71,8 +71,8 @@ prompt. -->
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
 }
 ---
 
@@ -106,7 +106,7 @@ MoonBit here, which also works on Windows, where the binaries do not exist:
 |-------------|------------------|
 | ls          | @fs.readdir(dir) |
 | find        | @shell.glob(pattern), spread into args as `[..files]` |
-| cat         | @fs.read_file(p).text() |
+| cat         | @fs.read_text(p) |
 | head/tail   | slice the split text; wc -l → count it |
 | grep        | `@builtin/rg.mbtx` (ripgrep flags and regex, not POSIX grep), or .split("\n").filter(...) on captured output |
 | sort/uniq   | .sort(), a Set, or a Map |
@@ -127,4 +127,4 @@ inspect each file's `truncated` footer and any `skipped_files` batch notice
 before requesting more. Relative paths use cwd (default workspace).
 Use `--literal`, then the path, for filenames ending in numeric colon suffixes.
 There is no standalone `read` tool. If bundled resources are unavailable,
-use an available workspace script or a bounded inline `@fs.read_file` program.
+use an available workspace script or a bounded inline `@fs.read_text` program.

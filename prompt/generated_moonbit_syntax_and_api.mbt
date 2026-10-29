@@ -31,8 +31,8 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/shell",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/shell",
     #|  "moonbitlang/core/env",
     #|}
     #|---
@@ -57,9 +57,9 @@ fn moonbit_syntax_and_api() -> String {
     #|---
     #|// Arguments: [--stdin] [<input>].
     #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/fs",
-    #|  "moonbitlang/async/stdio",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/fs",
+    #|  "moonbitlang/core/async/stdio",
     #|  "moonbitlang/core/argparse",
     #|}
     #|---
@@ -68,30 +68,31 @@ fn moonbit_syntax_and_api() -> String {
     #|/// Reading a path or stdin is async IO, so `main` is `async fn main`.
     #|async fn main {
     #|  let matches : @argparse.Matches = @argparse.parse(
-    #|      Command(
-    #|        "count-input",
-    #|        about="Print the length of a file or stdin.",
-    #|        flags=[
-    #|          // `long` omits the dashes: `long="stdin"`, not `long="--stdin"`.
-    #|          FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
-    #|        ],
-    #|        positionals=[
-    #|          PositionArg("input", default_values=["-"], about="Input file path."),
-    #|        ],
-    #|      ),
-    #|    )
-    #|  guard matches is {
-    #|    values: { "input"? : Some([input, ..]), .. },
-    #|    flags: { "stdin"? : (Some(stdin) | (None with stdin=false)), .. },
-    #|    ..
-    #|  } else {
+    #|    Command(
+    #|      "count-input",
+    #|      about="Print the length of a file or stdin.",
+    #|      flags=[
+    #|        // `long` omits the dashes: `long="stdin"`, not `long="--stdin"`.
+    #|        FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
+    #|      ],
+    #|      positionals=[
+    #|        PositionArg("input", default_values=["-"], about="Input file path."),
+    #|      ],
+    #|    ),
+    #|  )
+    #|  guard matches
+    #|    is {
+    #|      values: { "input"? : Some([input, ..]), .. },
+    #|      flags: { "stdin"? : Some(stdin) | (None with stdin = false), .. },
+    #|      ..
+    #|    } else {
     #|    fail("missing parsed argument: input")
     #|  }
     #|  let input = if stdin {
-    #|    @stdio.stdin.read_all().text()
+    #|    @stdio.stdin.text.read_all()
     #|    // we also have @stdio.stderr
     #|  } else {
-    #|    @fs.read_file(input).text()
+    #|    @fs.read_text(input)
     #|  }
     #|  println(input.length())
     #|}
@@ -99,7 +100,7 @@ fn moonbit_syntax_and_api() -> String {
     #|
     #|For a nonzero exit,import `"moonbitlang/x/sys"`, and call `@sys.exit(1)`.
     #|
-    #|## Shell EDSL with moonbitlang/async/shell
+    #|## Shell EDSL with moonbitlang/core/async/shell
     #|
     #|Use `@shell.Cmd` to run an external program and capture its output.
     #|
@@ -109,7 +110,7 @@ fn moonbit_syntax_and_api() -> String {
     #||-------------|------------------|
     #|| ls          | @fs.readdir(dir) |
     #|| find        | @shell.glob(pattern), spread into args as `[..files]` |
-    #|| cat         | @fs.read_file(p).text() |
+    #|| cat         | @fs.read_text(p) |
     #|| head/tail   | slice the split text; wc -l → count it |
     #|| grep        | `@builtin/rg.mbtx` (ripgrep flags and regex, not POSIX grep), or .split("\n").filter(...) on captured output |
     #|| sort/uniq   | .sort(), a Set, or a Map |
@@ -132,8 +133,8 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/shell",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/shell",
     #|}
     #|---
     #|
@@ -147,8 +148,7 @@ fn moonbit_syntax_and_api() -> String {
     #|  let out = @shell.Cmd("rg", [
     #|    // A regex needle is one ordinary string element, so double the
     #|    // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
-    #|    "-n", "protect_from_cancel\\(",
-    #|    "-g", "*.mbt", "src",
+    #|    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
     #|  ]).output()
     #|  // For redirect with `Cmd(.., stdout=ToFile(...))` to a file under
     #|  // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
@@ -163,7 +163,7 @@ fn moonbit_syntax_and_api() -> String {
     #|}
     #|```
     #|
-    #|Use `moon ide doc @moonbitlang/async/shell` for the full API.
+    #|Use `moon ide doc @moonbitlang/core/async/shell` for the full API.
     #|
     #|For compiler feedback, stream the line-delimited JSON from one `moon check`
     #|rather than collecting it and parsing it afterward:
@@ -171,8 +171,8 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/shell",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/shell",
     #|  "moonbitlang/core/json",
     #|}
     #|---
@@ -186,14 +186,14 @@ fn moonbit_syntax_and_api() -> String {
     #|    env={ "NO_COLOR": "1" },
     #|    // argv is passed literally
     #|    // `|`, `>`, `&&`, `$()`, and `*` receive no shell interpretation.
-    #|  // `<|` is sugar for a trailing lambda: `f() <| x => {...}` is the last
-    #|  // argument of `f`, written after the call instead of inside it.
+    #|    // `<|` is sugar for a trailing lambda: `f() <| x => {...}` is the last
+    #|    // argument of `f`, written after the call instead of inside it.
     #|  ).each_line() <| line => {
     #|    // Stderr is inherited, try to parse jsonl
     #|    let diagnostic = @json.parse(line) catch { _ => return }
-    #|    if diagnostic
+    #|    if diagnostic // literal does not need `String(..)`
     #|      is {
-    #|        "level": "error", // literal does not need `String(..)`
+    #|        "level": "error",
     #|        "path": String(path),
     #|        "loc": String(loc),
     #|        "message": String(message),
@@ -220,8 +220,8 @@ fn moonbit_syntax_and_api() -> String {
     #|// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
     #|// a host-backed test that runs it through the real sandbox and host.
     #|import {
-    #|  "moonbitlang/openseek_tools@0.2.0",
-    #|  "moonbitlang/async",
+    #|  "moonbitlang/openseek_tools@0.4.0",
+    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/env",
     #|  "moonbitlang/core/string",
     #|}
@@ -237,7 +237,9 @@ fn moonbit_syntax_and_api() -> String {
     #|  }
     #|  let start_line : Int32 = match args {
     #|    [_, _, _, line, ..] =>
-    #|      @string.from_str(line) catch { _ => fail("start_line must be an integer") }
+    #|      @string.from_str(line) catch {
+    #|        _ => fail("start_line must be an integer")
+    #|      }
     #|    _ => 1
     #|  }
     #|  // Require no error-count increase and a net decrease in warning count.
@@ -266,8 +268,7 @@ fn moonbit_syntax_and_api() -> String {
     #|    // explanation, never as an ordinary revert.
     #|    Some({ "outcome": "reverted", "restore_failed": true, .. }) =>
     #|      println("reverted but NOT restored: \{result.content}")
-    #|    Some({ "outcome": "reverted", .. }) =>
-    #|      println(result.content)
+    #|    Some({ "outcome": "reverted", .. }) => println(result.content)
     #|    Some({ "outcome": String(outcome), .. }) =>
     #|      println("\{outcome}: \{result.content}")
     #|    _ => println("no data: \{result.content}")
@@ -284,8 +285,8 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/openseek_tools@0.2.0" @tools,
-    #|  "moonbitlang/async",
+    #|  "moonbitlang/openseek_tools@0.4.0" @tools,
+    #|  "moonbitlang/core/async",
     #|  "moonbitlang/core/json",
     #|}
     #|---
@@ -315,7 +316,9 @@ fn moonbit_syntax_and_api() -> String {
     #|      "offset": text.to_string().char_length(),
     #|    })
     #|    guard read.data
-    #|      is Some({ "report": { "chunk": String(chunk), "complete": complete, .. }, .. }) else {
+    #|      is Some(
+    #|        { "report": { "chunk": String(chunk), "complete": complete, .. }, .. }
+    #|      ) else {
     #|      return None
     #|    }
     #|    text.write_string(chunk)
@@ -329,7 +332,9 @@ fn moonbit_syntax_and_api() -> String {
     #|async fn main {
     #|  let ids = [
     #|    scout("Where is X constructed, and by whom? Cite file:line.", "scout:x"),
-    #|    scout("Who calls Y, and what do the callers pass? Cite file:line.", "scout:y"),
+    #|    scout(
+    #|      "Who calls Y, and what do the callers pass? Cite file:line.", "scout:y",
+    #|    ),
     #|    scout("How does Z reach the network? Cite file:line.", "scout:z"),
     #|  ]
     #|  // Each wait returns within a minute with every child's state: drop the
@@ -369,8 +374,8 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/shell",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/shell",
     #|}
     #|---
     #|
@@ -474,7 +479,7 @@ fn moonbit_syntax_and_api() -> String {
     #|preferred_target = "native"
     #|
     #|import {
-    #|  "moonbitlang/async@0.22.5", // import modules(`username/modulename`) with version
+    #|  "moonbitlang/x@0.5.5", // import registry modules(`username/modulename`) with version
     #|}
     #|warnings = "+test_unqualified_package" // `moon explain --diagnostic test_unqualified_package` to learn more
     #|```
@@ -483,9 +488,9 @@ fn moonbit_syntax_and_api() -> String {
     #|
     #|```moon.pkg
     #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/fs", // package
-    #|  "moonbitlang/async/stdio",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/fs", // package
+    #|  "moonbitlang/core/async/stdio",
     #|  "moonbitlang/core/argparse",
     #|}
     #|
@@ -510,6 +515,12 @@ fn moonbit_syntax_and_api() -> String {
     #|  and an async lambda is `async fn(x) { ... }`.
     #|
     #|```mbtx
+    #|---
+    #|import {
+    #|  "moonbitlang/core/debug",
+    #|}
+    #|---
+    #|
     #|///|
     #|/// Parameters including `self` are never `mut`: a function that needs a changed
     #|/// value rebinds a local with `let mut`.
@@ -544,10 +555,10 @@ fn moonbit_syntax_and_api() -> String {
     #|  for n in [1, 2, 3] {
     #|    total += n
     #|  }
-    #|  assert_eq(total, 6)
+    #|  @debug.assert_eq(total, 6)
     #|  assert_eq(total.clamp(min=0, max=5), 5)
     #|  assert_eq(collatz_steps(6), 8)
-    #|  let counter = { count: 0, step: 2 }
+    #|  let counter = { count: 0, step: 2, }
     #|  counter.bump()
     #|  assert_eq(counter.count, 2)
     #|  // Negation is the `!` prefix; `Bool` has no `not` method.

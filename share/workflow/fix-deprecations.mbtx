@@ -16,10 +16,10 @@
 // Arguments: --dry-run   plan only, write nothing
 //            --limit N   stop after N fixes (default 500)
 import {
-  "moonbitlang/openseek_tools@0.2.0" @tools,
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/shell",
+  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
@@ -29,10 +29,10 @@ import {
 /// One deprecation site the script knows how to fix.
 struct Site {
   path : String
-  line : Int
+  line : Int32
   // 1-based, end exclusive, in Unicode code points — moon's column unit.
-  start_col : Int
-  end_col : Int
+  start_col : Int32
+  end_col : Int32
   replacement : String
 }
 
@@ -83,7 +83,7 @@ fn is_identifier(text : String) -> Bool {
 ///|
 /// "14:3-14:9" → (14, 3, 14, 9); `None` for a shape the script does not
 /// handle (a module-level diagnostic has no span at all).
-fn parse_loc(loc : String) -> (Int, Int, Int, Int)? {
+fn parse_loc(loc : String) -> (Int32, Int32, Int32, Int32)? {
   guard loc.split("-").collect() is [start, end] else { return None }
   guard start.split(":").collect() is [l1, c1] &&
     end.split(":").collect() is [l2, c2] else {
@@ -100,7 +100,7 @@ fn parse_loc(loc : String) -> (Int, Int, Int, Int)? {
 
 ///|
 /// A positive decimal integer, or `None` for anything else.
-fn parse_int(text : StringView) -> Int? {
+fn parse_int(text : StringView) -> Int32? {
   guard !text.is_empty() else { return None }
   let mut value = 0
   for ch in text {
@@ -136,7 +136,7 @@ fn split_qualified(span : String) -> (String, String) {
 ///|
 /// UTF-16 offset of the 1-based code-point column `col` in `line`, clamped
 /// to the line's end.
-fn utf16_offset(line : String, col : Int) -> Int {
+fn utf16_offset(line : String, col : Int32) -> Int32 {
   let mut units = 0
   let mut points = 1
   for ch in line {
@@ -177,9 +177,7 @@ async fn main {
   fn absolute(path : String) -> String {
     // `path[i]` is a UTF-16 unit: 58 is `:`, 92 is `\\`, 47 is `/`.
     let letter = path.length() >= 1 &&
-      (
-        (path[0] >= 65 && path[0] <= 90) || (path[0] >= 97 && path[0] <= 122)
-      )
+      ((path[0] >= 65 && path[0] <= 90) || (path[0] >= 97 && path[0] <= 122))
     let drive = path.length() >= 3 &&
       letter &&
       path[1] == 58 &&
@@ -193,9 +191,9 @@ async fn main {
 
   // 1. The diagnostics, from the script's own check.
   let lines : Array[String] = []
-  let code = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => lines.push(
-    line,
-  ))
+  let code = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => {
+    lines.push(line)
+  })
   let sites : Array[Site] = []
   let skipped : Array[Skipped] = []
   let mut errors = 0
@@ -227,10 +225,13 @@ async fn main {
               replacement,
             })
           (Some(_), Some(_)) =>
-            skipped.push({ where_, why: "multi-line span: \{message}" })
-          (None, _) => skipped.push({ where_, why: "no span: \{message}" })
+            skipped.push({ where_, why: "multi-line span: \{message}", })
+          (None, _) => skipped.push({ where_, why: "no span: \{message}", })
           (_, None) =>
-            skipped.push({ where_, why: "no bare replacement named: \{message}" })
+            skipped.push({
+              where_,
+              why: "no bare replacement named: \{message}",
+            })
         }
       }
       { "level": "warning", .. } => warnings += 1
@@ -250,12 +251,14 @@ async fn main {
   }
   // 2. Bottom-up per file, right to left per line: an edit never moves a
   // span the script has yet to touch.
-  sites.sort_by((a, b) => if a.path != b.path {
-    a.path.compare(b.path)
-  } else if a.line != b.line {
-    b.line.compare(a.line)
-  } else {
-    b.start_col.compare(a.start_col)
+  sites.sort_by((a, b) => {
+    if a.path != b.path {
+      a.path.compare(b.path)
+    } else if a.line != b.line {
+      b.line.compare(a.line)
+    } else {
+      b.start_col.compare(a.start_col)
+    }
   })
   let cache : Map[String, Array[String]] = Map([])
   // Files the host could not restore after a revert: their content on disk
@@ -279,9 +282,9 @@ async fn main {
     let file_lines = match cache.get(site.path) {
       Some(file_lines) => file_lines
       None => {
-        let text = @fs.read_file(site.path).text() catch {
+        let text = @fs.read_text(site.path) catch {
           error => {
-            skipped.push({ where_: site.path, why: "cannot read: \{error}" })
+            skipped.push({ where_: site.path, why: "cannot read: \{error}", })
             continue
           }
         }
@@ -291,7 +294,10 @@ async fn main {
       }
     }
     guard site.line >= 1 && site.line <= file_lines.length() else {
-      skipped.push({ where_: "\{site.path}:\{site.line}", why: "line out of range" })
+      skipped.push({
+        where_: "\{site.path}:\{site.line}",
+        why: "line out of range",
+      })
       continue
     }
     let line = file_lines[site.line - 1]

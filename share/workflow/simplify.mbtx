@@ -1,9 +1,9 @@
 ---
 import {
-  "moonbitlang/openseek_tools@0.2.0" @tools,
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/shell",
+  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
@@ -35,30 +35,30 @@ const Usage : String =
   #|branches. FOCUS, joined with spaces, is an emphasis for scouts and workers.
 
 ///|
-const DefaultScouts : Int = 8
+const DefaultScouts : Int32 = 8
 
 ///|
-const MaxScouts : Int = 16
+const MaxScouts : Int32 = 16
 
 ///|
-const DefaultPrs : Int = 8
+const DefaultPrs : Int32 = 8
 
 ///|
-const MaxPrs : Int = 16
+const MaxPrs : Int32 = 16
 
 ///|
 /// Workers the engine runs at once; a ninth start is refused, not queued.
-const LiveWorkers : Int = 8
+const LiveWorkers : Int32 = 8
 
 ///|
-const ScoutSteps : Int = 80
+const ScoutSteps : Int32 = 80
 
 ///|
-const ReviewSteps : Int = 60
+const ReviewSteps : Int32 = 60
 
 ///|
 /// The engine's limit for a worktree name: `[a-z0-9][a-z0-9-]{0,39}`.
-const NameChars : Int = 40
+const NameChars : Int32 = 40
 
 ///|
 /// What scouts and workers are told about simplifying MoonBit: what past
@@ -420,7 +420,7 @@ async fn pr_target() -> Target {
 priv struct Package {
   dir : String
   files : Array[String]
-  size : Int
+  size : Int32
 }
 
 ///|
@@ -453,7 +453,7 @@ async fn inventory(paths : Array[String]) -> Array[Package] {
     if files is [_, ..] {
       let mut size = 0
       for file in files {
-        size += @fs.read_file(file).text().length()
+        size += @fs.read_text(file).length()
       }
       packages.push({ dir, files, size, })
     }
@@ -505,7 +505,7 @@ fn shown(dir : String) -> String {
 ///|
 /// Deal sorted packages into at most `count` runs of roughly equal total
 /// size, keeping each package whole and the order intact.
-fn slices(packages : Array[Package], count : Int) -> Array[Array[Package]] {
+fn slices(packages : Array[Package], count : Int32) -> Array[Array[Package]] {
   let count = if count < packages.length() { count } else { packages.length() }
   let total = packages.fold(init=0, (sum, pkg) => sum + pkg.size)
   let share = (total + count - 1) / count
@@ -544,7 +544,7 @@ fn scout_input(group : Array[Package], focus : String) -> Json {
 /// One place a scout found worth simplifying.
 priv struct Candidate {
   file : String
-  line : Int?
+  line : Int32?
   note : String
 }
 
@@ -604,7 +604,7 @@ priv struct Work {
 fn select(
   packages : Array[Package],
   found : Array[Candidate],
-  limit : Int,
+  limit : Int32,
 ) -> Array[Work] {
   let ranked : Array[(Package, Array[Candidate])] = []
   for pkg in packages {
@@ -668,7 +668,7 @@ fn worktree_name(dir : String) -> String {
 ///|
 /// 32-bit FNV-1a over the text's characters, as 8 hex digits.
 fn short_hash(text : String) -> String {
-  let mut hash : UInt = 2166136261
+  let mut hash : UInt32 = 2166136261
   for char in text {
     hash = (hash ^ char.to_int().reinterpret_as_uint()) * 16777619
   }
@@ -926,7 +926,7 @@ fn report(
   packages : Array[Package],
   works : Array[Work],
   failures : Array[String],
-  tokens : Int,
+  tokens : Int32,
 ) -> Unit raise {
   let mut prs = 0
   let mut accepted = 0
@@ -980,8 +980,8 @@ priv enum Launch {
 ///|
 /// What a running child is to the work loop.
 priv enum Role {
-  Worker(Int)
-  Reviewer(Int)
+  Worker(Int32)
+  Reviewer(Int32)
 }
 
 ///|
@@ -990,7 +990,7 @@ async fn start(
   kind : String,
   input : Json,
   label : String,
-  max_steps : Int,
+  max_steps : Int32,
 ) -> Launch {
   let started = @tools.call("subagent", {
     "kind": kind,
@@ -1037,7 +1037,7 @@ priv struct End {
   report : Json?
   subagent : Json
   outcome : String
-  tokens : Int
+  tokens : Int32
 }
 
 ///|
@@ -1091,7 +1091,7 @@ async fn finish(id : String) -> End {
 
 ///|
 /// A count argument from 1 to `maximum`.
-fn count(flag : String, value : String, maximum : Int) -> Int raise {
+fn count(flag : String, value : String, maximum : Int32) -> Int32 raise {
   let mut result = 0
   guard !value.is_empty() && value.length() <= 2 else {
     fail("\{flag} takes a number from 1 to \{maximum}\n\{Usage}")

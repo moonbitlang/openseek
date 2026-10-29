@@ -1,7 +1,7 @@
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
   "moonbitlang/core/json",
 }
 ---
@@ -15,14 +15,14 @@ async fn main {
     env={ "NO_COLOR": "1" },
     // argv is passed literally
     // `|`, `>`, `&&`, `$()`, and `*` receive no shell interpretation.
-  // `<|` is sugar for a trailing lambda: `f() <| x => {...}` is the last
-  // argument of `f`, written after the call instead of inside it.
+    // `<|` is sugar for a trailing lambda: `f() <| x => {...}` is the last
+    // argument of `f`, written after the call instead of inside it.
   ).each_line() <| line => {
     // Stderr is inherited, try to parse jsonl
     let diagnostic = @json.parse(line) catch { _ => return }
-    if diagnostic
+    if diagnostic // literal does not need `String(..)`
       is {
-        "level": "error", // literal does not need `String(..)`
+        "level": "error",
         "path": String(path),
         "loc": String(loc),
         "message": String(message),

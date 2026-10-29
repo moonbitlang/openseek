@@ -33,16 +33,17 @@ async fn with_host(
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       defer server.close()
       let worker = group.spawn(no_wait=true, () => {
-        server.run_forever((req, request, conn) => {
+        server.run_forever((req, conn) => {
           defer conn.close()
           assert_true(req.meth is Post)
+          assert_eq(req.headers.get("Content-Type"), Some("application/json"))
           assert_eq(req.path, "/call")
           assert_eq(req.headers.get("Authorization"), Some("Bearer \{token}"))
-          let input = @json.parse(request.read_all().text())
+          let input = @json.parse(conn.text.read_all())
           received.push(input)
           let (status, envelope) = reply(input)
           conn.send_response(status, if status == 200 { "OK" } else { "Error" })
-          conn.write(envelope)
+          conn.text.write_json(envelope)
           conn.end_response()
         })
       })

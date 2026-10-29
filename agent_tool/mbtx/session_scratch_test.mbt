@@ -8,7 +8,7 @@ async test "session scratch permits raw file IO and script saving outside the wo
     let source =
       #|---
       #|import {
-      #|  "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/shell",
+      #|  "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/shell",
       #|  "moonbitlang/core/env",
       #|}
       #|---
@@ -16,11 +16,11 @@ async test "session scratch permits raw file IO and script saving outside the wo
       #|  let args = @env.args()
       #|  let dir = args[1]
       #|  @fs.mkdir("\{dir}/data", recursive=true)
-      #|  @fs.write_file("\{dir}/data/value.bin", b"\x00\xff")
+      #|  @fs.write_binary("\{dir}/data/value.bin", b"\x00\xff")
       #|  let code = @shell.Cmd("moon", ["--version"], stdout=ToFile("\{dir}/version.txt")).status()
       #|  guard code == 0 else { fail("command failed") }
       #|  for path in [args[2], "\{dir}/../outside.txt"] {
-      #|    try @fs.write_file(path, "forbidden") catch {
+      #|    try @fs.write_text(path, "forbidden") catch {
       #|      _ => ()
       #|    } noraise { _ => fail("write escaped scratch") }
       #|  }
@@ -42,11 +42,11 @@ async test "session scratch permits raw file IO and script saving outside the wo
     let read = dispatch(reopened, {
       "source": (
         #|---
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/env" }
         #|---
         #|async fn main {
         #|  let dir = @env.args()[1]
-        #|  guard @fs.read_file("\{dir}/data/value.bin").binary() == b"\x00\xff" else { fail("lost bytes") }
+        #|  guard @fs.read_binary("\{dir}/data/value.bin") == b"\x00\xff" else { fail("lost bytes") }
         #|  @fs.remove("\{dir}/data/value.bin")
         #|  @fs.rmdir("\{dir}/data")
         #|  println("read and removed")
@@ -91,9 +91,9 @@ async test "session scratch cannot grant writes through an escaping symlink" {
     let raw = dispatch(tool, {
       "source": (
         #|---
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/env" }
         #|---
-        #|async fn main { @fs.write_file(@env.args()[1], "escaped") }
+        #|async fn main { @fs.write_text(@env.args()[1], "escaped") }
       ),
       "args": ["\{scratch}/link/escaped.txt"],
       "ptc": false,

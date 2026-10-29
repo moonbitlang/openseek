@@ -3124,12 +3124,12 @@ lexscan input [with first|longest] {
 ```
 
 These scanner types require a direct `moonbitlang/core/lexbuf` import. This
-runnable example also imports the official `moonbitlang/async` runtime so its
+runnable example also imports the official `moonbitlang/core/async` runtime so its
 asynchronous scanner can be tested with `async test`:
 
 ```moonbit
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/lexbuf",
 }
 ```

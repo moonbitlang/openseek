@@ -47,8 +47,8 @@
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
   "moonbitlang/core/env",
 }
 ---
@@ -86,7 +86,7 @@ fn main raise {
 
 调用 `{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}` 输出 `Hello, Ada Lovelace!`；省略 `args` 则输出 `Hello, world!`。`args` 字段提供脚本输入；`argparse` 无需显式接收参数数组，即可处理选项解析、默认值和验证。
 
-没有 shell 工具。所有命令，包括 `moon`、`git`，都由 `mbtx` 代码通过不经过 shell 的 `moonbitlang/async/shell` API 启动。`source` 参数是一份完整的 `.mbtx` 程序（开头的 front matter 写导入，之后是普通 MoonBit 代码）：
+没有 shell 工具。所有命令，包括 `moon`、`git`，都由 `mbtx` 代码通过不经过 shell 的 `moonbitlang/core/async/shell` API 启动。`source` 参数是一份完整的 `.mbtx` 程序（开头的 front matter 写导入，之后是普通 MoonBit 代码）：
 
 - 文件以 front matter 开头：一行 `---`，`moon.pkg` 语法的 `import { ... }` 块，再一行 `---`。开头的 `---` 之前不能有任何内容，注释也不行。
 - 每个用到的包都要单独导入，core 包也一样，并使用真实路径：例如 `moonbitlang/core/encoding/base64`，不是 `moonbitlang/core/base64`；`moon ide doc "@base64"` 会显示路径。
@@ -100,9 +100,9 @@ fn main raise {
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
   "moonbitlang/core/env",
 }
 ---
@@ -139,7 +139,7 @@ async fn main {
 | --- | --- |
 | ls | @fs.readdir(dir) |
 | find | @shell.glob(pattern)，用 `[..files]` 展开到参数中 |
-| cat | @fs.read_file(p).text() |
+| cat | @fs.read_text(p) |
 | head/tail | 将文本拆分后切片；wc -l → 计数 |
 | grep | `@builtin/rg.mbtx`（ripgrep 的参数与正则，不是 POSIX grep），或对捕获的输出调用 .split("\n").filter(...) |
 | sort/uniq | .sort()、Set 或 Map |
@@ -159,8 +159,8 @@ async fn main {
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
 }
 ---
 
@@ -175,7 +175,7 @@ async fn main {
 }
 ```
 
-`.output()` 返回程序退出码，不会因为退出码非零而抛错；`rg` 无匹配时退出码为 1，应读取 `exit_code()` 判断结果。正则模式是一个普通字符串参数：按 MoonBit 语法将反斜杠写成双反斜杠（`"\\("`），或传 `-F` 做字面匹配。大量输出用 `stdout=ToFile(...)` 重定向到 `@fs.tmpdir(prefix="run-")` 下的文件，再仅读取所需片段。`prefix` 标签必填，此调用会创建目录；该目录是脚本唯一可写的位置，直接写 `/tmp` 会被拒绝。不关心输出时，`.status()` 只返回退出码。完整 API 可查 `moon ide doc @moonbitlang/async/shell`。
+`.output()` 返回程序退出码，不会因为退出码非零而抛错；`rg` 无匹配时退出码为 1，应读取 `exit_code()` 判断结果。正则模式是一个普通字符串参数：按 MoonBit 语法将反斜杠写成双反斜杠（`"\\("`），或传 `-F` 做字面匹配。大量输出用 `stdout=ToFile(...)` 重定向到 `@fs.tmpdir(prefix="run-")` 下的文件，再仅读取所需片段。`prefix` 标签必填，此调用会创建目录；该目录是脚本唯一可写的位置，直接写 `/tmp` 会被拒绝。不关心输出时，`.status()` 只返回退出码。完整 API 可查 `moon ide doc @moonbitlang/core/async/shell`。
 
 捕获命令输出时，不要将变量命名为 `test`：它是开始测试块的 MoonBit 关键字。`let test = @shell.Cmd("moon", ["test"]).output()` 会导致解析错误（`unexpected token` 指向 `test`）；使用 `let test_out = @shell.Cmd("moon", ["test"]).output()` 或 `let result = ...`，将 `test` 留给 `test { ... }`。
 
@@ -186,8 +186,8 @@ async fn main {
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
   "moonbitlang/core/json",
 }
 ---
@@ -236,7 +236,7 @@ async fn main {
 - `moon build`：检查构建产物或特定后端构建。例如 `moon build --target native cmd/tool --diagnostic-limit 5`。
 - `moon doc` 和 `moon explain`：文档与诊断帮助。
 - `moon ide doc`、`moon ide outline`、`moon ide peek-def`、`moon ide find-references`、`moon ide hover`：语义导航。已验证的示例：`moon ide doc "@json.parse"`、`moon ide outline parser`、`moon ide peek-def parse --loc src/parser.mbt:42:9`、`moon ide find-references parse --loc src/parser.mbt:42:9`、`moon ide hover parse --loc src/parser.mbt:42:9`。
-- `moon add`、`moon remove`、`moon update`、`moon tree`：管理依赖、检查包注册表或依赖关系。例如 `moon add moonbitlang/async`、`moon remove moonbitlang/async`、`moon update`、`moon tree`。
+- `moon add`、`moon remove`、`moon update`、`moon tree`：管理依赖、检查包注册表或依赖关系。例如 `moon add moonbitlang/x`、`moon remove moonbitlang/x`、`moon update`、`moon tree`。
 - `moon search`：不知道确切模块名时，按关键词搜索包注册表，再用 `moon add` 添加选定模块。例如 `moon search base64`、`moon search json --limit 5 --json`；`--json` 将一组结果输出为可解析的 JSON。
 - `moon clean`：怀疑旧构建输出有问题时清理 `_build`。例如 `moon clean`。
 - `moon bench`：运行基准测试，例如 `moon bench lib/parser`。
@@ -249,8 +249,8 @@ async fn main {
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
 }
 ---
 
@@ -324,8 +324,8 @@ async fn main {
     ```mbtx
     ---
     import {
-      "moonbitlang/openseek_tools@0.2.0" @tools,
-      "moonbitlang/async",
+      "moonbitlang/openseek_tools@0.4.0" @tools,
+      "moonbitlang/core/async",
       "moonbitlang/core/json",
     }
     ---
@@ -417,8 +417,8 @@ async fn main {
     ```mbtx
     ---
     import {
-      "moonbitlang/async",
-      "moonbitlang/async/shell",
+      "moonbitlang/core/async",
+      "moonbitlang/core/async/shell",
     }
     ---
 
@@ -474,7 +474,7 @@ async fn main {
 - `_test.mbt` 是黑盒测试。只有需要检查私有辅助实现时才用 `_wbtest.mbt`。
 - MoonBit 顶层项以 `///|` 分隔。
 
-添加注册表依赖时，优先在模块根目录运行 `moon add moonbitlang/async` 或 `moon add moonbitlang/x`，让 MoonBit 写入有效的当前版本，不要手工猜测版本号。
+异步 IO 已包含在标准库中：在 `moon.pkg` 导入 `moonbitlang/core/async` 及所需子包，无需 `moon add` 或指定版本。添加注册表依赖时，优先在模块根目录运行 `moon add moonbitlang/x`，让 MoonBit 写入有效的当前版本，不要手工猜测版本号。
 
 模块骨架示例：
 
@@ -484,7 +484,7 @@ version = "0.1.0"
 preferred_target = "native"
 
 import {
-  "moonbitlang/async@0.19.1", // import modules(`username/modulename`) with version
+  "moonbitlang/x@0.5.5", // import registry modules(`username/modulename`) with version
 }
 warnings = "+test_unqualified_package" // `moon explain --diagnostic test_unqualified_package` to learn more
 ```
@@ -495,9 +495,9 @@ warnings = "+test_unqualified_package" // `moon explain --diagnostic test_unqual
 
 ```moon.pkg
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs", // package
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs", // package
+  "moonbitlang/core/async/stdio",
   "moonbitlang/core/argparse",
 }
 
@@ -676,18 +676,18 @@ test {
 - CLI 参数解析优先使用 `moonbitlang/core/argparse`，对 `Command` 调用 `@argparse.parse(...)`。除了极小的一次性探测，不要用 `@env.args()` 手写选项解析。
 - `FlagArg.long` 不带前导横线：写 `long="stdin"`，不要写 `long="--stdin"`。
 - 执行实际工作前，将 `@argparse.Matches` 转为小型配置记录或局部值，验证逻辑放在转换附近。
-- 普通文件/stdin IO 使用 `moonbitlang/async/fs` 和 `moonbitlang/async/stdio`，不要用 C FFI 实现。
+- 普通文件/stdin IO 使用 `moonbitlang/core/async/fs` 和 `moonbitlang/core/async/stdio`，不要用 C FFI 实现。
 - 从路径或 stdin 读取的原生 CLI 通常需要 `async fn main`。
-- 自定义 CLI 诊断用 `@stdio.stderr.write(...)` 写 stderr。需要非零退出码时，添加 `moonbitlang/x` 模块，在 `moon.pkg` 导入 `"moonbitlang/x/sys"`，并调用 `@sys.exit(1)`。
+- 自定义 CLI 诊断用 `@stdio.stderr.text.write(...)` 写 stderr。需要非零退出码时，添加 `moonbitlang/x` 模块，在 `moon.pkg` 导入 `"moonbitlang/x/sys"`，并调用 `@sys.exit(1)`。
 
 示例：
 
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/stdio",
   "moonbitlang/core/argparse",
 }
 ---
@@ -714,9 +714,9 @@ async fn main {
     )
     |> config_from_matches
   let input = if config.stdin {
-    @stdio.stdin.read_all().text()
+    @stdio.stdin.text.read_all()
   } else {
-    @fs.read_file(config.input).text()
+    @fs.read_text(config.input)
   }
   println(input.length())
 }
@@ -741,7 +741,7 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 
 - `moon run` 的包路径在 `--` 前，程序参数在后。文件输入探测示例：`moon run --target native cmd/tomljson -- input.toml`，其中输入文件由 `write` 工具放入工作区。
 - Stdin 探测直接提供输入，不使用管道：`@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--", "--stdin"], stdin=Text("a.b = 1\n"))`。
-- Stdin 模式用 `@stdio.stdin.read_all().text()` 实现，不要用 `/dev/stdin` 或 C FFI。
+- Stdin 模式用 `@stdio.stdin.text.read_all()` 实现，不要用 `/dev/stdin` 或 C FFI。
 - 承诺支持文件和 stdin 输入时，两种都要验证。
 
 ## 文件引用

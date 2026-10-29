@@ -1,8 +1,8 @@
 ---
 import {
-  "moonbitlang/async@0.22.4",
-  "moonbitlang/async@0.22.4/fs",
-  "moonbitlang/async@0.22.4/os_error",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/os_error",
   "moonbitlang/core/env",
 }
 ---
@@ -23,18 +23,18 @@ async fn main {
     guard scripts.iter().all(script => script.0 != name) else {
       fail("mbtx_bundle: duplicate script name \{name}")
     }
-    scripts.push((name, @fs.read_file(input).text()))
+    scripts.push((name, @fs.read_text(input)))
   }
   let source = generated_source(scripts)
-  let current : String? = Some(@fs.read_file(output).text()) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => None
+  let current : String? = Some(@fs.read_text(output)) catch {
+    @os_error.OsError(NotFound, ..) => None
     error => raise error
   }
   if current == Some(source) {
     return
   }
   let tmp = "\{output}.tmp"
-  @fs.write_file(tmp, source, create_mode=CreateOrTruncate)
+  @fs.write_text(tmp, source, create_mode=CreateOrTruncate)
   @fs.rename(tmp, output, replace=true)
 }
 

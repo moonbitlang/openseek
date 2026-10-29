@@ -9,7 +9,7 @@ them wholesale. Keep Proton module versions consistent with that project.
 ## A minimal window
 
 The generated `app/moon.pkg` imports `moonbit-community/proton` and
-`moonbitlang/async`, and declares a native executable. Replace `app/main.mbt`
+`moonbitlang/core/async`, and declares a native executable. Replace `app/main.mbt`
 with:
 
 ```moonbit
@@ -54,7 +54,7 @@ Use these imports and executable settings in `app/moon.pkg`:
 
 ```text
 import {
-  "moonbitlang/async",
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
   "moonbit-community/proton",
   "moonbit-community/proton_contract",

@@ -6,8 +6,8 @@
 // when its URL contains <domain>. Verified by a host-backed test with a
 // stub search tool.
 import {
-  "moonbitlang/openseek_tools@0.2.0" @tools,
-  "moonbitlang/async",
+  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/core/async",
   "moonbitlang/core/env",
 }
 ---

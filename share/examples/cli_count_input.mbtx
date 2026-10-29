@@ -1,9 +1,9 @@
 ---
 // Arguments: [--stdin] [<input>].
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/stdio",
   "moonbitlang/core/argparse",
 }
 ---
@@ -12,30 +12,31 @@ import {
 /// Reading a path or stdin is async IO, so `main` is `async fn main`.
 async fn main {
   let matches : @argparse.Matches = @argparse.parse(
-      Command(
-        "count-input",
-        about="Print the length of a file or stdin.",
-        flags=[
-          // `long` omits the dashes: `long="stdin"`, not `long="--stdin"`.
-          FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
-        ],
-        positionals=[
-          PositionArg("input", default_values=["-"], about="Input file path."),
-        ],
-      ),
-    )
-  guard matches is {
-    values: { "input"? : Some([input, ..]), .. },
-    flags: { "stdin"? : (Some(stdin) | (None with stdin=false)), .. },
-    ..
-  } else {
+    Command(
+      "count-input",
+      about="Print the length of a file or stdin.",
+      flags=[
+        // `long` omits the dashes: `long="stdin"`, not `long="--stdin"`.
+        FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
+      ],
+      positionals=[
+        PositionArg("input", default_values=["-"], about="Input file path."),
+      ],
+    ),
+  )
+  guard matches
+    is {
+      values: { "input"? : Some([input, ..]), .. },
+      flags: { "stdin"? : Some(stdin) | (None with stdin = false), .. },
+      ..
+    } else {
     fail("missing parsed argument: input")
   }
   let input = if stdin {
-    @stdio.stdin.read_all().text()
+    @stdio.stdin.text.read_all()
     // we also have @stdio.stderr
   } else {
-    @fs.read_file(input).text()
+    @fs.read_text(input)
   }
   println(input.length())
 }

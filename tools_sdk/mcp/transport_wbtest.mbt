@@ -67,10 +67,11 @@ async test "HTTP failures are not retried" {
     defer server.close()
     let seen = Ref(0)
     let worker = group.spawn(no_wait=true, () => {
-      server.run_forever((_, _, conn) => {
+      server.run_forever((_, conn) => {
         defer conn.close()
         seen.val += 1
         conn.send_response(503, "Unavailable")
+        conn.text.write("not JSON")
         conn.end_response()
       })
     })
@@ -84,7 +85,10 @@ async test "HTTP failures are not retried" {
       )
       false
     } catch {
-      TransportError(_) => true
+      TransportError(message) => {
+        assert_true(message.contains("HTTP 503"), msg=message)
+        true
+      }
     }
     assert_true(rejected)
     assert_eq(seen.val, 1)
@@ -97,8 +101,11 @@ async test "caller cancellation is not converted to a transport failure" {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
     let worker = group.spawn(no_wait=true, () => {
-      server.run_forever((_, _, conn) => {
+      server.run_forever((_, conn) => {
         defer conn.close()
+        conn.send_response(200, "OK")
+        conn.text.write("{")
+        conn.flush()
         @async.sleep(60000)
       })
     })
