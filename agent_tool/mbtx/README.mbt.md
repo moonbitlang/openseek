@@ -146,8 +146,9 @@ from a snippet (`@shell.Cmd("moon", ["test", ...])`).
 
 ## Sandbox policy and source-file protection
 
-The wasm run carries a moonrun policy on every platform. Explicit native FFI
-is refused. The snippet may read anywhere but may write only inside its own
+The wasm run carries a moonrun policy on every platform. Unsupported FFI is
+reported by the wasm compiler through normal build diagnostics. The snippet
+may read anywhere but may write only inside its own
 `@fs.tmpdir()` and any caller-provided scratch lab; changing other workspace
 files belongs to the file tools. Process spawning is checked against the
 implementation's allowlist; the
