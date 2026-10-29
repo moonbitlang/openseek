@@ -22,14 +22,13 @@ async fn run_app_server(
   announce : &@io.Writer,
   startup_timeout_ms~ : Int32,
   heartbeat_ms~ : Int32,
-  skill_registry? : String,
 ) -> Unit {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
   let instance = @uuid.mint()
   let mut owned = false
   @async.with_task_group(group => {
-    state.start_services(group, skill_registry?)
+    state.start_services(group)
     let announcement = AppServerAnnouncement::{
       port: server.addr.port(),
       instance,

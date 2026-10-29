@@ -31,8 +31,6 @@ import {
 
 import {
   "moonbitlang/async/fs",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
   "openseek_desktop/backend/internal/fsx",
   "moonbitlang/core/env" @sys,
   "moonbitlang/openseek/mcp/streamhttp",

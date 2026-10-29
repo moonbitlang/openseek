@@ -43,7 +43,6 @@ async fn with_lifetime_server(
           output,
           startup_timeout_ms~,
           heartbeat_ms~,
-          skill_registry="http://127.0.0.1:1",
         )
       })
       guard announcement.read_until("\n") is Some(line) &&
