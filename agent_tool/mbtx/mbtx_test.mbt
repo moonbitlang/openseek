@@ -341,24 +341,36 @@ async test "filename reports read failures and refuses ambiguous calls" {
 }
 
 ///|
-async test "saved scripts retain compiler filename and FFI checks" {
+async test "saved scripts retain compiler filenames for type and FFI errors" {
   @vfs.with_tmpdir(ws => {
     @fs.write_file(
       "\{ws}/broken.mbtx",
-      "fn main { let _x : Int = \"nope\" }",
+      (
+        #|import { "moonbitlang/core/builtin" }
+        #|fn main { let _x : Int = "nope" }
+      ),
       create_mode=CreateOrTruncate,
     )
     let out = run_in(ws, { "filename": "./broken.mbtx" })
     assert_true(out.is_error)
-    assert_true(out.content.contains("broken.mbtx:1:"), msg=out.content)
+    assert_true(out.content.contains("broken.mbtx:2:"), msg=out.content)
     @fs.write_file(
       "\{ws}/ffi.mbtx",
-      "extern \"c\" fn escape() -> Unit = \"escape\"\nfn main { escape() }",
+      (
+        #|import { "moonbitlang/core/builtin" }
+        #|extern "c" fn escape() -> Unit = "escape"
+        #|fn main { escape() }
+      ),
       create_mode=CreateOrTruncate,
     )
     let out = run_in(ws, { "filename": "./ffi.mbtx" })
     assert_true(out.is_error)
-    assert_true(out.content.contains("native FFI"))
+    assert_true(out.content.contains("BUILD failed"), msg=out.content)
+    assert_true(out.content.contains("ffi.mbtx:2:"), msg=out.content)
+    assert_true(
+      out.content.contains("extern \"C\" is unsupported in wasm backend"),
+      msg=out.content,
+    )
   })
 }
 
@@ -550,20 +562,34 @@ async test "a snippet's temp directory lands somewhere it may write" {
 }
 
 ///|
-/// The FFI refusal keys on the syntax, not the word: a snippet that merely
-/// MENTIONS `extern` — in a commit message, a comment, any string — has done
-/// nothing wrong, and refusing it cost a real turn a retry.
-async test "the FFI refusal reads syntax, not the word extern" {
+async test "runs code containing FFI syntax in comments" {
+  let out = run(
+    (
+      #|import { "moonbitlang/core/builtin" }
+      #|// extern "c" fn example() -> Unit = "example"
+      #|fn main { println(42) }
+    ),
+  )
+  assert_false(out.is_error, msg=out.content)
+  assert_eq(out.content, "42\n")
+}
+
+///|
+async test "runs code containing FFI syntax in strings" {
   let mentions = run(
     (
+      #|import { "moonbitlang/core/builtin" }
       #|fn main {
-      #|  let message = "docs: explain how extern bindings are reviewed"
+      #|  let message =
+      #|    #|docs: explain how extern bindings are reviewed
+      #|    #|extern "c" fn example() -> Unit = "example"
       #|  println(message)
       #|}
     ),
   )
-  assert_false(mentions.is_error)
+  assert_false(mentions.is_error, msg=mentions.content)
   assert_true(mentions.content.contains("docs: explain"))
+  assert_true(mentions.content.contains("extern \"c\" fn example()"))
 }
 
 ///|
@@ -1370,18 +1396,22 @@ async test "streams structured moon check diagnostics with async shell" {
 }
 
 ///|
-async test "refuses native FFI (extern can bind libc system)" {
-  // `extern` sidesteps the @process import check, so it is refused too — the
-  // static boundary is best-effort until the wasm sandbox lands.
+async test "wasm compiler rejects native FFI before the program runs" {
   let out = run(
     (
+      #|import { "moonbitlang/core/builtin" }
+      #|#borrow(cmd)
       #|extern "c" fn c_system(cmd : Bytes) -> Int = "system"
       #|
-      #|fn main { c_system("true") |> ignore }
+      #|fn main { c_system(b"true") |> ignore }
     ),
   )
   assert_true(out.is_error)
-  assert_true(out.content.contains("native FFI"))
+  assert_true(out.content.contains("BUILD failed"), msg=out.content)
+  assert_true(
+    out.content.contains("extern \"C\" is unsupported in wasm backend"),
+    msg=out.content,
+  )
 }
 
 ///|
