@@ -243,18 +243,6 @@ samp,
   overflow-wrap: anywhere;
 }
 
-/* A headed menu numbers its rows; the digit is the row's key shortcut. */
-.custom-select-option:has(.custom-select-option-key) {
-  grid-template-columns: minmax(0, 1fr) 16px 10px;
-}
-
-.custom-select-option-key {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
 /* The transcript's tab radios are visually clipped, so their visible labels
    carry the keyboard focus indicator. Form-control focus remains centralized
    here even though the labels' geometry belongs to transcript.css. */

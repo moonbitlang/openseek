@@ -29,16 +29,6 @@ test('the approval mode is chosen per conversation and reaches agent.start', asy
   await expect(menu).toHaveCount(0);
   await expect(trigger).toHaveText('Request approval');
   await expect(trigger).toBeFocused();
-  // A headed menu's rows are numbered; the digit chooses the row.
-  await trigger.click();
-  await expect(menu).toBeVisible();
-  await page.keyboard.press('2');
-  await expect(menu).toHaveCount(0);
-  await expect(trigger).toHaveText('Auto-review');
-  await trigger.click();
-  await expect(menu).toBeVisible();
-  await page.keyboard.press('1');
-  await expect(trigger).toHaveText('Request approval');
   await page.locator('#task').fill('Delete the old notes');
   await page.locator('#send').click();
   await expect

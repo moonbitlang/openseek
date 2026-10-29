@@ -40,8 +40,7 @@ pub(all) struct Control {
   change : @cmd.Emit[String]
   title : String
   aria_label : String
-  // A headed menu is a short list of modes: the heading names the choice and
-  // its rows are numbered, with the digit keys choosing them.
+  // A heading names the choice the menu makes, above its rows.
   heading : String?
   presentation : Presentation
 }
@@ -141,34 +140,6 @@ fn Control::focus(
 }
 
 ///|
-/// Choosing a row completes the single-choice interaction even when it is
-/// already selected. Close in both cases, but only a new value may reach
-/// caller update logic as a change.
-fn Control::choose(self : Control, value : String) -> @cmd.Cmd {
-  if value == self.selected {
-    @cmd.batch([self.dismiss, self.focus(None, false)])
-  } else {
-    @cmd.batch([(self.change)(value), self.focus(None, false)])
-  }
-}
-
-///|
-/// The value a digit key picks in a headed menu, counting rows from 1.
-fn Control::numbered_value(
-  self : Control,
-  values : Array[String],
-  key : String,
-) -> String? {
-  guard self.heading is Some(_) &&
-    key.to_array() is [digit] &&
-    digit >= '1' &&
-    digit <= '9' else {
-    return None
-  }
-  values.get(digit.to_int() - '1'.to_int())
-}
-
-///|
 /// Lift the menu into CEF's top layer after Rabbita commits it. CSS anchor
 /// positioning keeps it attached to the trigger and chooses the side that
 /// fits, so opening a select needs no geometry measurement or clipping-parent
@@ -189,13 +160,9 @@ fn Control::show_menu(self : Control) -> @cmd.Cmd {
 
 ///|
 /// Toggling changes whether the menu exists, so it enters the browser's top
-/// layer only after Rabbita has committed that render. The trigger takes
-/// focus as well: Safari does not focus a clicked button, and the menu's keys
-/// (arrows, Escape, a headed menu's digits) are read from it. Focus waits for
-/// the render too, so a select whose menu this one replaced has already
-/// rendered closed and its blur no longer dismisses.
+/// layer only after Rabbita has committed that render.
 fn Control::toggle_menu(self : Control) -> @cmd.Cmd {
-  @cmd.batch([self.toggle, self.show_menu(), self.focus(None, true)])
+  @cmd.batch([self.toggle, self.show_menu()])
 }
 
 ///|
@@ -223,9 +190,8 @@ fn Control::dismiss_on_blur(
 fn Control::trigger_attrs(
   self : Control,
   selected_index : Int32,
-  values : Array[String],
+  option_count : Int32,
 ) -> @html.Attrs {
-  let option_count = values.length()
   @html.Attrs::build()
   .id(self.id)
   .aria_label(self.aria_label)
@@ -253,15 +219,7 @@ fn Control::trigger_attrs(
           @cmd.batch([self.toggle_menu(), self.focus(Some(index), true)])
         }
       }
-      key =>
-        // A pointer-opened menu leaves focus on its trigger, so the digit
-        // shortcuts are read here as well as on the rows.
-        if self.open && self.numbered_value(values, key) is Some(value) {
-          event.prevent_default()
-          self.choose(value)
-        } else {
-          @cmd.none
-        }
+      _ => @cmd.none
     }
   })
 }
@@ -270,10 +228,9 @@ fn Control::trigger_attrs(
 fn Control::option_attrs(
   self : Control,
   index : Int32,
-  values : Array[String],
+  option_count : Int32,
   selected : Bool,
 ) -> @html.Attrs {
-  let option_count = values.length()
   @html.Attrs::build()
   .id(self.option_id(index))
   .role("option")
@@ -293,9 +250,6 @@ fn Control::option_attrs(
     } else if event.key() == "Escape" {
       event.prevent_default()
       @cmd.batch([self.dismiss, self.focus(None, false)])
-    } else if self.numbered_value(values, event.key()) is Some(value) {
-      event.prevent_default()
-      self.choose(value)
     } else {
       @cmd.none
     }
@@ -306,7 +260,6 @@ fn Control::option_attrs(
 fn ViewOption::row_contents(
   self : ViewOption,
   selected : Bool,
-  number : Int32?,
 ) -> Array[@html.Html] {
   let check = @html.span(
     class="custom-select-option-check",
@@ -324,29 +277,21 @@ fn ViewOption::row_contents(
   } else {
     @html.span(class="custom-select-option-label", self.label)
   }
-  if number is Some(number) {
-    [
-      text,
-      check,
-      @html.span(class="custom-select-option-key", number.to_string()),
-    ]
-  } else {
-    [text, check]
-  }
+  [text, check]
 }
 
 ///|
 pub fn Control::render(self : Control) -> @html.Html {
   let mut selected_label = self.selected
   let mut selected_index = 0
-  let values : Array[String] = []
+  let mut option_count = 0
   for group in self.groups {
     for option in group.options {
       if option.value == self.selected {
         selected_label = option.label
-        selected_index = values.length()
+        selected_index = option_count
       }
-      values.push(option.value)
+      option_count += 1
     }
   }
   let children : Array[@html.Html] = [
@@ -356,7 +301,7 @@ pub fn Control::render(self : Control) -> @html.Html {
       title=self.title,
       disabled=self.disabled,
       on_click=self.toggle_menu(),
-      attrs=self.trigger_attrs(selected_index, values),
+      attrs=self.trigger_attrs(selected_index, option_count),
       self.presentation.trigger_contents(selected_label),
     ),
   ]
@@ -371,10 +316,13 @@ pub fn Control::render(self : Control) -> @html.Html {
       let rows : Array[@html.Html] = []
       for option in group.options {
         let selected = option.value == self.selected
-        let number = if self.heading is Some(_) {
-          Some(index + 1)
+        // Clicking a row completes the single-choice interaction even when it
+        // is already selected. Close in both cases, but only a new value may
+        // reach caller update logic as a change.
+        let choose = if selected {
+          @cmd.batch([self.dismiss, self.focus(None, false)])
         } else {
-          None
+          @cmd.batch([(self.change)(option.value), self.focus(None, false)])
         }
         rows.push(
           @html.button(
@@ -385,9 +333,9 @@ pub fn Control::render(self : Control) -> @html.Html {
             },
             type_="button",
             title=option.label,
-            on_click=self.choose(option.value),
-            attrs=self.option_attrs(index, values, selected),
-            option.row_contents(selected, number),
+            on_click=choose,
+            attrs=self.option_attrs(index, option_count, selected),
+            option.row_contents(selected),
           ),
         )
         index += 1
