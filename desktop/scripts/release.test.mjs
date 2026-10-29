@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { test } from "node:test";
 import { Release } from "./release.mjs";
 
@@ -104,10 +105,7 @@ test("verify checks the current Browser bundle the API serves", async t => {
   const manifest = { version: "0.1.9", platforms: {} };
   let current = "0.1.8";
   const url = await server(t, (request, response) => {
-    if (request.method === "HEAD") {
-      response.writeHead(200, { "content-length": String(bytes.length), "x-oss-meta-sha256": sha256, "x-oss-hash-crc64ecma": "1" });
-      response.end();
-    } else if (request.url === "/desktop/releases/latest.json") {
+    if (request.url === "/desktop/releases/latest.json") {
       response.end(JSON.stringify(manifest));
     } else if (request.url === "/browser/releases/current.json") {
       response.end(JSON.stringify({ version: current }));
@@ -218,297 +216,232 @@ test("missing artifacts have a useful message and retain the filesystem cause", 
   });
 });
 
-for (const scenario of [
-  { name: "publish includes the Windows installer and Android APK", fromCheckout: true, android: true, windowsFile: "SeekMoon-windows-x64-setup.exe" },
-  { name: "rollback preserves an Android APK", fromCheckout: false, android: true, windowsFile: "SeekMoon-windows-x64-setup.exe" },
-  { name: "rollback prefers NSIS when both Windows formats exist", fromCheckout: false, windowsFile: "SeekMoon-windows-x64-setup.exe" },
-  { name: "rollback preserves a legacy Windows ZIP", fromCheckout: false, windowsFile: "SeekMoon-windows-x64.zip" },
-  { name: "rollback supports releases predating Windows", fromCheckout: false, windowsFile: null },
-]) {
-  test(scenario.name, async t => {
-    const release = new Release();
-    const sha256 = "a".repeat(64);
-    t.mock.method(release, "moduleVersion", async () => "0.1.9");
-    const local = t.mock.method(release, "localArtifact", async () => ({ size: 123, sha256 }));
-    const head = t.mock.method(release, "headObject", (_version, artifact) => {
-      if (artifact.platform === "android" && !scenario.android) return { missing: true };
-      if (artifact.platform === "windows-x64" && (scenario.windowsFile === null ||
-        (scenario.windowsFile.endsWith(".zip") && artifact.file.endsWith(".exe")))) {
-        return { missing: true };
-      }
-      return { size: "123", sha256, crc64: "1" };
-    });
-    t.mock.method(release, "headS3Object", () => ({ size: "123", sha256 }));
-    let published;
-    t.mock.method(release, "fetchJson", async (path, options) => {
-      if (path === "/desktop/releases/v0.1.9/publish") {
-        assert.equal(options.method, "POST");
-        const { platforms } = JSON.parse(options.body);
-        published = { version: "0.1.9", platforms: Object.fromEntries(
-          Object.entries(platforms).map(([platform, { file, sha256 }]) =>
-            [platform, { url: `https://downloads.example.com/v0.1.9/${file}`, sha256 }])) };
-        return { published };
-      }
-      assert.equal(path, "/desktop/releases/latest.json");
-      return published;
-    });
-    await release.publish("v0.1.9", { fromCheckout: scenario.fromCheckout });
-    if (scenario.windowsFile === null) {
-      assert.equal(Object.hasOwn(published.platforms, "windows-x64"), false);
-    } else {
-      assert.deepEqual(published.platforms["windows-x64"], {
-        url: `https://downloads.example.com/v0.1.9/${scenario.windowsFile}`, sha256,
-      });
-    }
-    if (scenario.android) {
-      assert.deepEqual(published.platforms.android, {
-        url: "https://downloads.example.com/v0.1.9/SeekMoon-android.apk", sha256,
-      });
-    } else {
-      assert.equal(Object.hasOwn(published.platforms, "android"), false);
-    }
-    assert.equal(Object.keys(published.platforms).length,
-      3 + (scenario.windowsFile === null ? 0 : 1) + (scenario.android ? 1 : 0));
-    if (scenario.fromCheckout) {
-      assert.equal(local.mock.calls.at(-1).arguments[0].file, "SeekMoon-windows-x64-setup.exe");
-    } else {
-      assert.equal(local.mock.callCount(), 0);
-    }
-    if (scenario.windowsFile?.endsWith(".exe")) {
-      assert.equal(head.mock.calls.some(call => call.arguments[1].file === "SeekMoon-windows-x64.zip"), false);
-    }
-  });
+
+const ReleaseFiles = {
+  "macos-arm64": "SeekMoon.app.zip",
+  "macos-arm64-dmg": "SeekMoon.dmg",
+  browser: "SeekMoon.browser.tar.gz",
+  android: "SeekMoon-android.apk",
+  "windows-x64": "SeekMoon-windows-x64-setup.exe",
+};
+
+function asset(name, bytes) {
+  return { name, size: bytes.length, digest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`, bytes };
 }
 
-test("rollback does not hide OSS failures by falling back to ZIP", async t => {
+// A release checkout with distinct bytes per artifact in dist/, publishing
+// against an in-memory GitHub repository that `gh` reads and writes.
+async function githubFixture(t, { published = false } = {}) {
   const release = new Release();
-  const error = new Error("OSS access denied");
-  t.mock.method(release, "headS3Object", () => ({ size: "123", sha256: "a".repeat(64) }));
-  const head = t.mock.method(release, "headObject", (_version, artifact) => {
-    if (artifact.platform === "windows-x64") throw error;
-    return { size: "123", sha256: "a".repeat(64), crc64: "1" };
-  });
-  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not publish"));
-  await assert.rejects(release.publish("v0.1.9", { fromCheckout: false }), actual => actual === error);
-  assert.equal(request.mock.callCount(), 0);
-  assert.equal(head.mock.calls.some(call => call.arguments[1].file === "SeekMoon-windows-x64.zip"), false);
-});
-
-test("separate upload stages send identical installers and APKs without requiring AWS credentials during OSS uploads", async t => {
-  const release = new Release();
-  release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-upload-"));
+  release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-github-"));
   t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
-  const bytes = Buffer.from("release artifact fixture");
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
-  for (const file of ["SeekMoon.app.zip", "SeekMoon.dmg", "SeekMoon.browser.tar.gz", "SeekMoon-android.apk", "SeekMoon-windows-x64-setup.exe"]) {
-    await fs.writeFile(join(release.dist, file), bytes);
-  }
+  for (const file of Object.values(ReleaseFiles)) await fs.writeFile(join(release.dist, file), `built ${file}`);
   t.mock.method(release, "moduleVersion", async () => "0.1.9");
-  t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
-  let credentialsReady = false;
-  t.mock.method(release, "s3", () => {
-    assert.ok(credentialsReady, "AWS credentials are acquired after OSS uploads finish");
-    return { bucket: "mirror", region: "us-west-2", prefix: "releases" };
-  });
-  t.mock.method(release, "headS3Object", () => ({ size: String(bytes.length), sha256 }));
-  t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
-  t.mock.method(release, "verifyServed", async () => ({ sha256 }));
-  const stage = t.mock.method(release, "fetchJson", async () => {
-    assert.equal(commands.mock.callCount(), 10, "all artifacts reach S3 before staging the Browser");
-    return { sha256 };
-  });
+  t.mock.method(release, "repository", () => "owner/repo");
   t.mock.method(release, "unpackBrowser", async () => {});
-  const commands = t.mock.method(release, "commandRun", () => {});
-  await release.run("upload-oss", "v0.1.9");
-  assert.equal(commands.mock.callCount(), 5);
-  assert.ok(commands.mock.calls.every(call => call.arguments[0] === "ossutil"));
-  assert.equal(stage.mock.callCount(), 0);
-  const [program, args] = commands.mock.calls.at(-1).arguments;
-  assert.equal(program, "ossutil");
-  assert.equal(args[args.indexOf("--content-type") + 1], "application/octet-stream");
-  assert.equal(args.at(-2), join(release.dist, "SeekMoon-windows-x64-setup.exe"));
-  assert.equal(args.at(-1), "oss://test/releases/v0.1.9/SeekMoon-windows-x64-setup.exe");
-  credentialsReady = true;
-  await release.run("upload-s3");
-  assert.equal(commands.mock.callCount(), 10);
-  assert.ok(commands.mock.calls.slice(5).every(call => call.arguments[0] === "aws"));
-  assert.equal(stage.mock.callCount(), 1);
-  const [s3Program, s3Args] = commands.mock.calls.at(-1).arguments;
-  assert.equal(s3Program, "aws");
-  assert.equal(s3Args[2], join(release.dist, "SeekMoon-windows-x64-setup.exe"));
-  assert.equal(s3Args[3], "s3://mirror/releases/v0.1.9/SeekMoon-windows-x64-setup.exe");
-  assert.equal(s3Args[s3Args.indexOf("--metadata") + 1], `sha256=${sha256}`);
-  assert.equal(s3Args[s3Args.indexOf("--content-type") + 1], "application/octet-stream");
-  assert.equal(s3Args[s3Args.indexOf("--cache-control") + 1], "public, max-age=31536000, immutable");
-  const apkPath = join(release.dist, "SeekMoon-android.apk");
-  const apkCommands = commands.mock.calls.filter(call => call.arguments[1].includes(apkPath));
-  assert.equal(apkCommands.length, 2);
-  for (const { arguments: [program, args] } of apkCommands) {
-    assert.equal(args[args.indexOf("--content-type") + 1], "application/vnd.android.package-archive");
-    assert.equal(args[args.indexOf("--metadata") + 1], `sha256=${sha256}`);
-    assert.ok(args.includes(program === "ossutil"
-      ? "oss://test/releases/v0.1.9/SeekMoon-android.apk"
-      : "s3://mirror/releases/v0.1.9/SeekMoon-android.apk"));
-  }
-});
-
-test("release CI acquires AWS credentials after every OSS and Actions artifact transfer", async () => {
-  const workflow = await fs.readFile(new URL("../../.github/workflows/desktop-release.yml", import.meta.url), "utf8");
-  const publish = workflow.slice(workflow.indexOf("\n  release-publish:"));
-  const steps = publish.split(/^      - /m).slice(1);
-  const credentials = steps.findIndex(step => step.includes("uses: aws-actions/configure-aws-credentials@"));
-  const oss = steps.findIndex(step => step.includes('release.mjs upload-oss "v$RELEASE_VERSION"'));
-  const s3 = steps.findIndex(step => step.includes('release.mjs upload-s3 "v$RELEASE_VERSION"'));
-  const publication = steps.findIndex(step => step.includes('release.mjs publish "v$RELEASE_VERSION"'));
-  assert.ok(oss >= 0 && oss < credentials);
-  assert.equal(s3, credentials + 1);
-  assert.equal(publication, s3 + 1);
-  for (const [index, step] of steps.entries()) {
-    if (/uses: actions\/(?:upload|download)-artifact@/.test(step)) {
-      assert.ok(index < credentials, "artifact transfers must not consume the AWS session");
+  t.mock.method(release, "isPublished", async () => published);
+  t.mock.method(release, "env", name => {
+    assert.equal(name, "GITHUB_SHA");
+    return "0123456789abcdef";
+  });
+  const releases = new Map();
+  const github = args => {
+    const [command, subcommand, tag] = args;
+    if (command === "api") {
+      const wanted = JSON.parse(args.at(-1).match(/== (".*")\)$/)[1]);
+      return [...releases.values()].filter(release => release.tag_name === wanted)
+        .map(release => `${JSON.stringify(release)}\n`).join("");
     }
-    assert.ok(!step.includes('release.mjs upload "'), "CI uses the separate storage stages");
-  }
-});
-
-test("publish refuses missing, inaccessible or mismatching S3 objects before API publication", async t => {
-  const release = new Release();
-  const expected = { size: "123", sha256: "a".repeat(64), crc64: "1" };
-  t.mock.method(release, "moduleVersion", async () => "0.1.9");
-  t.mock.method(release, "localArtifact", async () => expected);
-  t.mock.method(release, "headObject", () => expected);
-  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not publish"));
-  const head = t.mock.method(release, "headS3Object", () => ({ size: "123", sha256: "b".repeat(64) }));
-  await assert.rejects(release.publish("v0.1.9", { fromCheckout: true }), /S3 object does not match/);
-  head.mock.mockImplementation(() => ({ size: "1", sha256: expected.sha256 }));
-  await assert.rejects(release.publish("v0.1.9", { fromCheckout: true }), /S3 object does not match/);
-  for (const error of [new Error("S3 404"), new Error("S3 access denied")]) {
-    head.mock.mockImplementation(() => { throw error; });
-    await assert.rejects(release.publish("v0.1.9", { fromCheckout: true }), actual => actual === error);
-  }
-  assert.equal(request.mock.callCount(), 0);
-});
-
-test("published retry restores all OSS bytes before the separate S3 stage", async t => {
-  const release = new Release();
-  t.mock.method(release, "moduleVersion", async () => "0.1.9");
-  t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
-  t.mock.method(release, "s3", () => ({}));
-  t.mock.method(release, "fetch", async () => new Response(null, { status: 200 }));
-  const restored = new Set();
-  t.mock.method(release, "commandRun", (program, args) => {
-    assert.equal(program, "ossutil");
-    assert.match(args.at(-2), /^oss:\/\//);
-    restored.add(args.at(-1));
-  });
-  const canonical = { size: 123, sha256: "a".repeat(64) };
-  t.mock.method(release, "localArtifact", async artifact => {
-    assert.ok(restored.has(join(release.dist, artifact.file)));
-    return canonical;
-  });
-  t.mock.method(release, "verifyServed", async (_version, _artifact, local) => assert.equal(local, canonical));
-  const mirror = t.mock.method(release, "uploadS3Artifact", (_version, _artifact, local) => {
-    assert.equal(restored.size, 5);
-    assert.equal(local, canonical);
-  });
-  t.mock.method(release, "unpackBrowser", async () => {});
-  t.mock.method(release, "fetchJson", async () => assert.fail("must not replace the published Browser"));
-  await release.uploadOss("v0.1.9");
-  assert.equal(mirror.mock.callCount(), 0);
-  await release.uploadS3("v0.1.9");
-  assert.equal(mirror.mock.callCount(), 5);
-});
-
-test("S3 upload failure stops before staging the Browser on the API", async t => {
-  const release = new Release();
-  t.mock.method(release, "moduleVersion", async () => "0.1.9");
-  t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
-  t.mock.method(release, "s3", () => ({}));
-  t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
-  t.mock.method(release, "commandRun", () => {});
-  t.mock.method(release, "localArtifact", async () => ({ size: 123, sha256: "a".repeat(64), path: "fixture" }));
-  t.mock.method(release, "verifyServed", async () => {});
-  t.mock.method(release, "uploadS3Artifact", () => { throw new Error("S3 unavailable"); });
-  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage Browser"));
-  await assert.rejects(release.uploadS3("v0.1.9"), /S3 unavailable/);
-  assert.equal(request.mock.callCount(), 0);
-});
-
-test("S3 stage refuses local bytes changed since the OSS stage", async t => {
-  const release = new Release();
-  t.mock.method(release, "moduleVersion", async () => "0.1.9");
-  t.mock.method(release, "s3", () => ({}));
-  t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
-  t.mock.method(release, "localArtifact", async () => ({ size: 123, sha256: "b".repeat(64), path: "fixture" }));
-  t.mock.method(release, "headObject", () => ({ size: "123", sha256: "a".repeat(64), crc64: "1" }));
-  const commands = t.mock.method(release, "commandRun", () => assert.fail("must not upload different bytes to S3"));
-  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage Browser"));
-  await assert.rejects(release.run("upload-s3", "v0.1.9"), /OSS object does not match the built artifact/);
-  assert.equal(commands.mock.callCount(), 0);
-  assert.equal(request.mock.callCount(), 0);
-});
-
-for (const provider of ["oss", "amz"]) {
-  test(`public verification follows redirects and hashes ${provider} downloads`, async t => {
-    const release = new Release();
-    release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-download-"));
-    t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
-    const bytes = Buffer.from("canonical release bytes");
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
-    let corrupt = false;
-    const url = await server(t, (request, response) => {
-      if (request.url === "/redirect") {
-        response.writeHead(302, { location: "/object" });
-        response.end();
-      } else {
-        response.writeHead(200, { "content-length": bytes.length, [`x-${provider}-meta-sha256`]: sha256 });
-        response.end(request.method === "HEAD" ? undefined : corrupt ? Buffer.alloc(bytes.length) : bytes);
+    const found = releases.get(tag);
+    switch (subcommand) {
+      case "create":
+        assert.equal(found, undefined);
+        releases.set(tag, { tag_name: tag, draft: args.includes("--draft"), assets: [] });
+        return "";
+      case "upload": {
+        assert.ok(found.draft, "public assets are never replaced");
+        assert.ok(args.includes("--clobber"));
+        const uploaded = asset(basename(args[3]), readFileSync(args[3]));
+        found.assets = [...found.assets.filter(asset => asset.name !== uploaded.name), uploaded];
+        return "";
       }
-    });
-    const manifest = { platforms: {} };
-    for (const [platform, file] of Object.entries({
-      "macos-arm64": "SeekMoon.app.zip", "macos-arm64-dmg": "SeekMoon.dmg",
-      browser: "SeekMoon.browser.tar.gz", android: "SeekMoon-android.apk", "windows-x64": "SeekMoon-windows-x64-setup.exe",
-    })) {
-      await fs.writeFile(join(release.dist, file), bytes);
-      manifest.platforms[platform] = { url: `${url}/redirect`, sha256 };
+      case "download":
+        for (const asset of found.assets) writeFileSync(join(args[args.indexOf("--dir") + 1], asset.name), asset.bytes);
+        return "";
+      case "edit":
+        assert.ok(args.includes("--draft=false") && args.includes("--latest"));
+        found.draft = false;
+        return "";
+      default:
+        assert.fail(`unexpected gh ${args.join(" ")}`);
     }
-    await release.verifyDownloads(manifest);
-    corrupt = true;
-    await assert.rejects(release.verifyDownloads(manifest), /download digest mismatch/);
+  };
+  const gh = t.mock.method(release, "gh", github);
+  return { release, releases, gh, github };
+}
+
+function publicRelease(tag, bytesFor = file => Buffer.from(`canonical ${file}`)) {
+  return { tag_name: tag, draft: false, assets: Object.values(ReleaseFiles).map(file => asset(file, bytesFor(file))) };
+}
+
+function ghCalls(gh, subcommand) {
+  return gh.mock.calls.map(call => call.arguments[0]).filter(args => args[1] === subcommand);
+}
+
+test("upload attaches every artifact to a new draft tagged at the built commit, then stages the Browser", async t => {
+  const { release, releases, gh } = await githubFixture(t);
+  const stage = t.mock.method(release, "fetchJson", async (path, options) => {
+    assert.equal(path, "/desktop/releases/v0.1.9/SeekMoon.browser.tar.gz?platform=browser");
+    assert.equal(options.method, "PUT");
+    assert.deepEqual(releases.get("v0.1.9").assets.map(asset => asset.name), Object.values(ReleaseFiles),
+      "every asset is on GitHub before the API sees the Browser");
+    return { sha256: createHash("sha256").update(options.body).digest("hex") };
+  });
+  await release.run("upload", "v0.1.9");
+  const [create] = ghCalls(gh, "create");
+  assert.equal(create[create.indexOf("--target") + 1], "0123456789abcdef");
+  assert.deepEqual(releases.get("v0.1.9").assets.map(asset => asset.name), Object.values(ReleaseFiles));
+  assert.equal(releases.get("v0.1.9").draft, true, "upload never makes a release public");
+  assert.equal(stage.mock.callCount(), 1);
+
+  // A retry of an unpublished release replaces the draft's provisional assets.
+  await fs.writeFile(join(release.dist, "SeekMoon.dmg"), "rebuilt DMG");
+  await release.run("upload", "v0.1.9");
+  assert.equal(ghCalls(gh, "create").length, 1);
+  assert.equal(releases.get("v0.1.9").assets.find(asset => asset.name === "SeekMoon.dmg").bytes.toString(), "rebuilt DMG");
+});
+
+test("upload refuses assets GitHub reports differently before staging the Browser", async t => {
+  const { release, releases, gh, github } = await githubFixture(t);
+  releases.set("v0.1.9", { tag_name: "v0.1.9", draft: true, assets: [] });
+  gh.mock.mockImplementation(args => {
+    const result = github(args);
+    if (args[1] === "upload" && basename(args[3]) === "SeekMoon-android.apk") {
+      releases.get("v0.1.9").assets.find(asset => asset.name === "SeekMoon-android.apk").digest = `sha256:${"b".repeat(64)}`;
+    }
+    return result;
+  });
+  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage the Browser"));
+  await assert.rejects(release.upload("v0.1.9"), /GitHub asset does not match the built artifact: android/);
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("upload adopts a public release's assets instead of replacing them with a rebuild", async t => {
+  const { release, releases, gh } = await githubFixture(t, { published: true });
+  releases.set("v0.1.9", publicRelease("v0.1.9"));
+  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not replace the published Browser"));
+  await release.upload("v0.1.9");
+  assert.equal(ghCalls(gh, "create").length + ghCalls(gh, "upload").length, 0);
+  for (const file of Object.values(ReleaseFiles)) {
+    assert.equal(await fs.readFile(join(release.dist, file), "utf8"), `canonical ${file}`);
+  }
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("publish makes the release public and latest before the API publishes GitHub's digests", async t => {
+  const { release, releases, gh } = await githubFixture(t);
+  releases.set("v0.1.9", { ...publicRelease("v0.1.9", file => Buffer.from(`built ${file}`)), draft: true });
+  let published;
+  t.mock.method(release, "fetchJson", async (path, options) => {
+    if (path === "/desktop/releases/v0.1.9/publish") {
+      assert.equal(releases.get("v0.1.9").draft, false, "the API links only to public assets");
+      const { platforms } = JSON.parse(options.body);
+      published = { version: "0.1.9", platforms: Object.fromEntries(Object.entries(platforms).map(([platform, { file, sha256 }]) =>
+        [platform, { url: `https://github.com/owner/repo/releases/download/v0.1.9/${file}`, sha256 }])) };
+      return { published };
+    }
+    assert.equal(path, "/desktop/releases/latest.json");
+    return published;
+  });
+  await release.run("publish", "v0.1.9");
+  assert.deepEqual(Object.keys(published.platforms).sort(), Object.keys(ReleaseFiles).sort());
+  assert.equal(published.platforms.android.sha256,
+    createHash("sha256").update("built SeekMoon-android.apk").digest("hex"));
+  assert.equal(ghCalls(gh, "edit").length, 1);
+});
+
+for (const scenario of [
+  { name: "a missing asset", change: assets => assets.filter(asset => asset.name !== "SeekMoon-android.apk"), error: /has no SeekMoon-android\.apk/ },
+  { name: "an asset without a digest", change: assets => assets.map(asset => ({ ...asset, digest: null })), error: /no SHA-256 digest/ },
+  { name: "an asset other than the built one", change: assets => assets.map(asset => asset.name === "SeekMoon.dmg" ? { ...asset, size: 1 } : asset), error: /does not match the built artifact: macos-arm64-dmg/ },
+]) {
+  test(`publish refuses ${scenario.name} before making the release public`, async t => {
+    const { release, releases, gh } = await githubFixture(t);
+    const draft = { ...publicRelease("v0.1.9", file => Buffer.from(`built ${file}`)), draft: true };
+    releases.set("v0.1.9", { ...draft, assets: scenario.change(draft.assets) });
+    const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not publish"));
+    await assert.rejects(release.publish("v0.1.9", { fromCheckout: true }), scenario.error);
+    assert.equal(ghCalls(gh, "edit").length, 0);
+    assert.equal(request.mock.callCount(), 0);
   });
 }
 
-test("Android mirror failure prevents staging and publishing a partial release", async t => {
-  const release = new Release();
-  const canonical = { size: 123, sha256: "a".repeat(64), path: "fixture" };
-  t.mock.method(release, "moduleVersion", async () => "0.1.9");
-  t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
-  t.mock.method(release, "s3", () => ({}));
-  t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
-  t.mock.method(release, "commandRun", () => {});
-  t.mock.method(release, "localArtifact", async () => canonical);
-  t.mock.method(release, "verifyServed", async () => canonical);
-  t.mock.method(release, "headObject", () => ({ ...canonical, size: "123", crc64: "1" }));
-  t.mock.method(release, "headS3Object", (_version, artifact) => ({
-    ...canonical, size: "123", sha256: artifact.platform === "android" ? "b".repeat(64) : canonical.sha256,
-  }));
-  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage or publish"));
-  await assert.rejects(release.upload("v0.1.9"), /S3 object does not match.*android/);
-  await assert.rejects(release.publish("v0.1.9", { fromCheckout: true }), /S3 object does not match.*android/);
+test("rollback republishes GitHub's digests without local archives", async t => {
+  const { release, releases, gh } = await githubFixture(t);
+  releases.set("v0.1.8", publicRelease("v0.1.8"));
+  const local = t.mock.method(release, "localArtifact", async () => assert.fail("rollback reads no local archives"));
+  let platforms, published;
+  t.mock.method(release, "fetchJson", async (path, options) => {
+    if (path === "/desktop/releases/v0.1.8/publish") {
+      platforms = JSON.parse(options.body).platforms;
+      published = { version: "0.1.8", platforms: Object.fromEntries(Object.entries(platforms).map(([platform, { file, sha256 }]) =>
+        [platform, { url: `https://github.com/owner/repo/releases/download/v0.1.8/${file}`, sha256 }])) };
+      return { published };
+    }
+    assert.equal(path, "/desktop/releases/latest.json");
+    return published;
+  });
+  await release.run("rollback", "v0.1.8");
+  assert.equal(local.mock.callCount(), 0);
+  assert.equal(platforms.browser.sha256, createHash("sha256").update("canonical SeekMoon.browser.tar.gz").digest("hex"));
+  assert.equal(ghCalls(gh, "edit")[0][2], "v0.1.8");
+});
+
+test("rollback refuses a version that has no GitHub release", async t => {
+  const { release, gh } = await githubFixture(t);
+  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not publish"));
+  await assert.rejects(release.publish("v0.1.7", { fromCheckout: false }), /v0\.1\.7 has no GitHub release/);
+  assert.equal(ghCalls(gh, "edit").length, 0);
   assert.equal(request.mock.callCount(), 0);
 });
 
-test("rollback retains Android lookup failures instead of omitting the APK", async t => {
+test("release lookup finds drafts by tag and refuses ambiguous tags", t => {
   const release = new Release();
-  const canonical = { size: "123", sha256: "a".repeat(64), crc64: "1" };
-  const error = new Error("Android object access denied");
-  t.mock.method(release, "headObject", (_version, artifact) => {
-    if (artifact.platform === "android") throw error;
-    return canonical;
+  t.mock.method(release, "repository", () => "owner/repo");
+  const lines = [];
+  const gh = t.mock.method(release, "gh", () => lines.join("\n"));
+  assert.equal(release.githubRelease("v0.1.9"), undefined);
+  const [args] = gh.mock.calls[0].arguments;
+  assert.ok(args.includes("--paginate"), "drafts and older releases may be past the first page");
+  assert.equal(args.at(-1), '.[] | select(.tag_name == "v0.1.9")');
+  lines.push(JSON.stringify({ tag_name: "v0.1.9", draft: true, assets: [] }));
+  assert.equal(release.githubRelease("v0.1.9").draft, true);
+  lines.push(JSON.stringify({ tag_name: "v0.1.9", draft: false, assets: [] }));
+  assert.throws(() => release.githubRelease("v0.1.9"), /2 GitHub releases are tagged v0\.1\.9/);
+});
+
+test("public verification follows redirects and hashes the downloaded bytes", async t => {
+  const release = new Release();
+  release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-download-"));
+  t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
+  const bytes = Buffer.from("canonical release bytes");
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  let corrupt = false;
+  const url = await server(t, (request, response) => {
+    if (request.url === "/redirect") {
+      response.writeHead(302, { location: "/object" });
+      response.end();
+    } else {
+      response.writeHead(200, { "content-length": bytes.length });
+      response.end(corrupt ? Buffer.alloc(bytes.length) : bytes);
+    }
   });
-  t.mock.method(release, "headS3Object", () => canonical);
-  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not publish"));
-  await assert.rejects(release.publish("v0.1.9", { fromCheckout: false }), actual => actual === error);
-  assert.equal(request.mock.callCount(), 0);
+  const manifest = { platforms: {} };
+  for (const [platform, file] of Object.entries(ReleaseFiles)) {
+    await fs.writeFile(join(release.dist, file), bytes);
+    manifest.platforms[platform] = { url: `${url}/redirect`, sha256 };
+  }
+  await release.verifyDownloads(manifest);
+  corrupt = true;
+  await assert.rejects(release.verifyDownloads(manifest), /download digest mismatch/);
 });
