@@ -36,8 +36,6 @@ pub struct SearchPage {
   total : Int32
   next_offset : Int32?
 }
-pub fn SearchPage::output(Self, &Logger) -> Unit
-pub fn SearchPage::to_string(Self) -> String
 pub impl Show for SearchPage
 
 pub struct Tool {

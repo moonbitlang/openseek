@@ -37,6 +37,8 @@ pub impl Show for SearchPage with fn output(self, logger) {
 }
 
 ///|
+#deprecated
+#doc(hidden)
 pub extend SearchPage with Show::{to_string, output}
 
 ///|
