@@ -508,38 +508,35 @@ fn Entry::followup_menu(
     return None
   }
   Some(
-    @select_control.Control::{
-      id: "composer-followup-select",
-      groups: [
+    @select_control.Control(
+      id="composer-followup-select",
+      groups=[
         {
           label: ui(locale, ThisMessage),
           options: [
-            {
-              value: "steer",
-              label: ui(locale, SteerNowLabel),
-              description: None,
-            },
-            {
-              value: "queue",
-              label: ui(locale, QueueNextLabel),
-              description: None,
-            },
+            @select_control.ViewOption(
+              value="steer",
+              label=ui(locale, SteerNowLabel),
+            ),
+            @select_control.ViewOption(
+              value="queue",
+              label=ui(locale, QueueNextLabel),
+            ),
           ],
         },
       ],
-      selected: match choice {
+      selected=match choice {
         SteerNow => "steer"
         QueueNext => "queue"
       },
-      disabled: !steer_available || self.image_reads > 0,
-      open: self.followup_menu_open,
-      toggle: emit(FollowupMenuToggled),
-      dismiss: emit(FollowupMenuDismissed),
-      change: emit.map(value => FollowupSelected(value)),
-      title: ui(locale, FollowupHint),
-      aria_label: ui(locale, FollowupAction),
-      heading: None,
-      presentation: Composer(@icons.icon(@icons.icon_indent), true),
-    }.render(),
+      disabled=!steer_available || self.image_reads > 0,
+      open=self.followup_menu_open,
+      toggle=emit(FollowupMenuToggled),
+      dismiss=emit(FollowupMenuDismissed),
+      change=emit.map(value => FollowupSelected(value)),
+      title=ui(locale, FollowupHint),
+      aria_label=ui(locale, FollowupAction),
+      presentation=Composer(@icons.icon(@icons.icon_indent), true),
+    ).render(),
   )
 }

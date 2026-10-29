@@ -51,9 +51,7 @@ fn ModelGroup::select_group(self : ModelGroup) -> @select_control.Group {
   {
     label: self.label,
     options: self.options.map(option => {
-      value: option.value,
-      label: option.label,
-      description: None,
+      @select_control.ViewOption(value=option.value, label=option.label)
     }),
   }
 }
@@ -78,20 +76,19 @@ fn ModelSelect::render(
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
-  @select_control.Control::{
-    id: self.id,
-    groups: self.groups.map(group => group.select_group()),
-    selected: self.selected,
-    disabled: self.disabled,
-    open: self.open,
-    toggle: action_emit(ModelMenuToggled(identity~)),
-    dismiss: action_emit(SelectMenuDismissed(identity~)),
-    change: action_emit.map(value => ModelSelected(identity~, value~, draft~)),
-    title: self.title,
-    aria_label: ui(locale, ModelLabel),
-    heading: None,
-    presentation: Composer(@icons.icon(@icons.icon_sparkle), false),
-  }.render()
+  @select_control.Control(
+    id=self.id,
+    groups=self.groups.map(group => group.select_group()),
+    selected=self.selected,
+    disabled=self.disabled,
+    open=self.open,
+    toggle=action_emit(ModelMenuToggled(identity~)),
+    dismiss=action_emit(SelectMenuDismissed(identity~)),
+    change=action_emit.map(value => ModelSelected(identity~, value~, draft~)),
+    title=self.title,
+    aria_label=ui(locale, ModelLabel),
+    presentation=Composer(@icons.icon(@icons.icon_sparkle), false),
+  ).render()
 }
 
 ///|
@@ -115,29 +112,26 @@ fn ReasoningSelect::render(
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
-  @select_control.Control::{
-    id: self.id,
-    groups: [
+  @select_control.Control(
+    id=self.id,
+    groups=[
       {
         label: ui(locale, ReasoningEffort),
         options: self.options.map(option => {
-          value: option.value,
-          label: option.label,
-          description: None,
+          @select_control.ViewOption(value=option.value, label=option.label)
         }),
       },
     ],
-    selected: self.selected,
-    disabled: self.disabled,
-    open: self.open,
-    toggle: action_emit(ReasoningMenuToggled(identity~)),
-    dismiss: action_emit(SelectMenuDismissed(identity~)),
-    change: action_emit.map(value => ReasoningSelected(identity~, value~)),
-    title: self.title,
-    aria_label: ui(locale, ReasoningEffort),
-    heading: None,
-    presentation: Composer(@icons.icon(@icons.icon_lightbulb), true),
-  }.render()
+    selected=self.selected,
+    disabled=self.disabled,
+    open=self.open,
+    toggle=action_emit(ReasoningMenuToggled(identity~)),
+    dismiss=action_emit(SelectMenuDismissed(identity~)),
+    change=action_emit.map(value => ReasoningSelected(identity~, value~)),
+    title=self.title,
+    aria_label=ui(locale, ReasoningEffort),
+    presentation=Composer(@icons.icon(@icons.icon_lightbulb), true),
+  ).render()
 }
 
 ///|
@@ -241,25 +235,27 @@ fn ApprovalSelect::render(
       }
     }
   }
-  @select_control.Control::{
-    id: "openseek-approval-picker",
-    groups: [
+  @select_control.Control(
+    id="openseek-approval-picker",
+    groups=[
       {
         label: ui(locale, ApprovalMode),
         options: modes.map(mode => {
-          value: mode.0.wire(),
-          label: mode.1,
-          description: Some(mode.2),
+          @select_control.ViewOption(
+            value=mode.0.wire(),
+            label=mode.1,
+            description=mode.2,
+          )
         }),
       },
     ],
-    selected: self.mode.wire(),
-    disabled: !self.enabled,
-    open: self.open,
-    toggle: action_emit(ApprovalMenuToggled(identity~)),
-    dismiss: action_emit(SelectMenuDismissed(identity~)),
+    selected=self.mode.wire(),
+    disabled=!self.enabled,
+    open=self.open,
+    toggle=action_emit(ApprovalMenuToggled(identity~)),
+    dismiss=action_emit(SelectMenuDismissed(identity~)),
     // The menu offers exactly the two wire values above.
-    change: action_emit.map(value => {
+    change=action_emit.map(value => {
       ApprovalSelected(
         identity~,
         mode=if value == @protocol.ApprovalReview.wire() {
@@ -269,11 +265,11 @@ fn ApprovalSelect::render(
         },
       )
     }),
-    title,
-    aria_label: ui(locale, ApprovalMode),
-    heading: Some(ui(locale, ApprovalMode)),
-    presentation: Composer(@html.text(""), false),
-  }.render()
+    title~,
+    aria_label=ui(locale, ApprovalMode),
+    heading=ui(locale, ApprovalMode),
+    presentation=Composer(@html.text(""), false),
+  ).render()
 }
 
 ///|
@@ -689,25 +685,27 @@ fn PermissionControl::render(
       @protocol.FullAccess => "fullAccess"
     }
   }
-  let control = @select_control.Control::{
-    id: "codex-permission-picker",
-    groups: [
+  let control = @select_control.Control(
+    id="codex-permission-picker",
+    groups=[
       {
         label: ui(locale, PermissionQuestion),
         options: modes.map(mode => {
-          value: wire(mode),
-          label: mode.title(locale~),
-          description: Some(mode.description(locale~)),
+          @select_control.ViewOption(
+            value=wire(mode),
+            label=mode.title(locale~),
+            description=mode.description(locale~),
+          )
         }),
       },
     ],
-    selected: wire(self.mode),
-    disabled: !self.enabled,
-    open: self.open,
-    toggle: action_emit(PermissionMenuToggled(identity~)),
-    dismiss: action_emit(PermissionMenuDismissed(identity~)),
+    selected=wire(self.mode),
+    disabled=!self.enabled,
+    open=self.open,
+    toggle=action_emit(PermissionMenuToggled(identity~)),
+    dismiss=action_emit(PermissionMenuDismissed(identity~)),
     // The menu offers exactly the wire values above.
-    change: action_emit.map(value => {
+    change=action_emit.map(value => {
       let mode = match value {
         "requestApproval" => @protocol.RequestApproval
         "autoReview" => @protocol.AutoReview
@@ -715,15 +713,15 @@ fn PermissionControl::render(
       }
       PermissionSelected(identity~, mode~)
     }),
-    title: if self.enabled {
+    title=if self.enabled {
       ui(locale, PermissionHint)
     } else {
       ui(locale, PermissionLocked)
     },
-    aria_label: ui(locale, ApprovalMode),
-    heading: Some(ui(locale, PermissionQuestion)),
-    presentation: Composer(@html.text(""), false),
-  }
+    aria_label=ui(locale, ApprovalMode),
+    heading=ui(locale, PermissionQuestion),
+    presentation=Composer(@html.text(""), false),
+  )
   @html.div(
     class=if self.mode is @protocol.FullAccess {
       "codex-permission-control danger"

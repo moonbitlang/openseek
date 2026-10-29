@@ -9,6 +9,16 @@ pub(all) struct ViewOption {
 }
 
 ///|
+/// A row without a description reads as a single line.
+pub fn ViewOption::ViewOption(
+  value~ : String,
+  label~ : String,
+  description? : String,
+) -> ViewOption {
+  { value, label, description, }
+}
+
+///|
 /// One optional group inside a custom select menu. A single group renders
 /// without a heading; several groups retain their boundaries in the popup.
 pub(all) struct Group {
@@ -43,6 +53,38 @@ pub(all) struct Control {
   // A heading names the choice the menu makes, above its rows.
   heading : String?
   presentation : Presentation
+}
+
+///|
+/// A menu without a heading opens straight onto its rows.
+pub fn Control::Control(
+  id~ : String,
+  groups~ : Array[Group],
+  selected~ : String,
+  disabled~ : Bool,
+  open~ : Bool,
+  toggle~ : @cmd.Cmd,
+  dismiss~ : @cmd.Cmd,
+  change~ : @cmd.Emit[String],
+  title~ : String,
+  aria_label~ : String,
+  heading? : String,
+  presentation~ : Presentation,
+) -> Control {
+  {
+    id,
+    groups,
+    selected,
+    disabled,
+    open,
+    toggle,
+    dismiss,
+    change,
+    title,
+    aria_label,
+    heading,
+    presentation,
+  }
 }
 
 ///|

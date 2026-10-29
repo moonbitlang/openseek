@@ -119,22 +119,21 @@ fn setting_select(
       change(target.channel, target.workspace, value),
     ])
   }
-  @select_control.Control::{
-    id,
-    groups: [{ label: aria_label, options, }],
-    selected,
-    disabled: input.settings is Unloaded,
-    open: state.menu is Some(current) &&
-    current == menu &&
-    state.key == input.target,
-    toggle: emit(ToggleMenu(menu)),
-    dismiss: emit(CloseMenu),
-    change,
-    title: aria_label,
-    aria_label,
-    heading: None,
-    presentation: Setting,
-  }
+  @select_control.Control(
+    id~,
+    groups=[{ label: aria_label, options, }],
+    selected~,
+    disabled=input.settings is Unloaded,
+    open=state.menu is Some(current) &&
+      current == menu &&
+      state.key == input.target,
+    toggle=emit(ToggleMenu(menu)),
+    dismiss=emit(CloseMenu),
+    change~,
+    title=aria_label,
+    aria_label~,
+    presentation=Setting,
+  )
 }
 
 ///|
@@ -171,16 +170,14 @@ fn dialog_contents(
           emit,
           id="workspace-default-mode-select",
           options=[
-            {
-              value: "local",
-              label: ui(locale, LocalLabel),
-              description: None,
-            },
-            {
-              value: "worktree",
-              label: ui(locale, WorktreeLabel),
-              description: None,
-            },
+            @select_control.ViewOption(
+              value="local",
+              label=ui(locale, LocalLabel),
+            ),
+            @select_control.ViewOption(
+              value="worktree",
+              label=ui(locale, WorktreeLabel),
+            ),
           ],
           selected=if worktree_mode { "worktree" } else { "local" },
           aria_label=ui(locale, NewChatsLabel),
@@ -202,16 +199,14 @@ fn dialog_contents(
           emit,
           id="workspace-submodules-select",
           options=[
-            {
-              value: "checkout",
-              label: ui(locale, InitializeLabel),
-              description: None,
-            },
-            {
-              value: "skip",
-              label: ui(locale, LeaveUninitialized),
-              description: None,
-            },
+            @select_control.ViewOption(
+              value="checkout",
+              label=ui(locale, InitializeLabel),
+            ),
+            @select_control.ViewOption(
+              value="skip",
+              label=ui(locale, LeaveUninitialized),
+            ),
           ],
           selected=if checkout_submodules { "checkout" } else { "skip" },
           aria_label=ui(locale, WorktreeSubmodules),
@@ -231,14 +226,16 @@ fn dialog_contents(
           emit,
           id="workspace-submodule-timeout-select",
           options=[
-            { value: "5", label: ui(locale, FiveSeconds), description: None, },
-            { value: "10", label: ui(locale, TenSeconds), description: None, },
-            {
-              value: "30",
-              label: ui(locale, ThirtySeconds),
-              description: None,
-            },
-            { value: "60", label: ui(locale, SixtySeconds), description: None, },
+            @select_control.ViewOption(value="5", label=ui(locale, FiveSeconds)),
+            @select_control.ViewOption(value="10", label=ui(locale, TenSeconds)),
+            @select_control.ViewOption(
+              value="30",
+              label=ui(locale, ThirtySeconds),
+            ),
+            @select_control.ViewOption(
+              value="60",
+              label=ui(locale, SixtySeconds),
+            ),
           ],
           selected=submodule_checkout_timeout_seconds.to_string(),
           aria_label=ui(locale, SubmoduleTimeout),
