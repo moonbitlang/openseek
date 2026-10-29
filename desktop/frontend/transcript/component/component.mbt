@@ -179,6 +179,7 @@ pub(all) struct Actions {
   open : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
   open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
+  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot]
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
@@ -366,7 +367,12 @@ pub fn component(
     },
     update=(state, input, msg, emit) => state.update(input, msg, emit),
     subscriptions=(model, _, emit) => {
-      transcript_subscription(model, emit, actions.departed)
+      transcript_subscription(
+        model,
+        emit,
+        actions.departed,
+        actions.artifact_context,
+      )
     },
   )
   // Every stream child renders in its own branch, keyed by the block within
@@ -696,6 +702,8 @@ priv suberror TranscriptSubscription {
   TranscriptSubscription(
     emit~ : @cmd.Emit[Msg],
     departed~ : @cmd.Emit[ScrollPosition],
+    artifact_owner~ : String,
+    artifact_context~ : @cmd.Emit[@mention_context.ArtifactSnapshot],
     // The Model's current reading, refreshed after every message. The scroll
     // listener reports only readings that differ from it, so the Model is the
     // single source of truth and no cache can drift from it.
@@ -712,6 +720,7 @@ fn transcript_subscription(
   model : Model,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
+  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot],
 ) -> @sub.Sub {
   @sub.custom_sub(
     "transcript-dom",
@@ -719,6 +728,8 @@ fn transcript_subscription(
     TranscriptSubscription(
       emit~,
       departed~,
+      artifact_owner=model.artifact_owner.key(),
+      artifact_context~,
       pinned=model.pinned,
       active=model.overview.active,
     ),
@@ -732,9 +743,18 @@ fn transcript_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    TranscriptSubscription(emit~, departed~, pinned~, active~) => {
+    TranscriptSubscription(
+      emit~,
+      departed~,
+      artifact_owner~,
+      artifact_context~,
+      pinned~,
+      active~
+    ) => {
       let mut emit = emit
       let mut departed = departed
+      let mut artifact_owner = artifact_owner
+      let mut artifact_context = artifact_context
       let mut pinned = pinned
       let mut active = active
       // The last scroller offset this listener saw. Growth inside an animated
@@ -775,9 +795,17 @@ fn transcript_sub_loader(
         // including when a conversation restores a nonzero reading position.
         element => last_top = element.get_scroll_top(),
       )
-      let remove_artifact_listener = artifact_frame_listener(() => {
-        scheduler.add(emit(ContentRendered))
-      })
+      let remove_artifact_listener = artifact_frame_listener(
+        () => scheduler.add(emit(ContentRendered)),
+        (owner, reference, payload) => {
+          guard owner == artifact_owner &&
+            @mention_context.artifact_snapshot(reference, payload)
+            is Some(snapshot) else {
+            return
+          }
+          scheduler.add(artifact_context(snapshot))
+        },
+      )
       Some({
         unload: scheduler => {
           remove_artifact_listener()
@@ -801,6 +829,8 @@ fn transcript_sub_loader(
             is TranscriptSubscription(
               emit=next,
               departed=left,
+              artifact_owner=next_artifact_owner,
+              artifact_context=next_artifact_context,
               pinned=next_pinned,
               active=next_active
             ) else {
@@ -808,6 +838,8 @@ fn transcript_sub_loader(
           }
           emit = next
           departed = left
+          artifact_owner = next_artifact_owner
+          artifact_context = next_artifact_context
           pinned = next_pinned
           active = next_active
         },

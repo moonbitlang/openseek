@@ -18,6 +18,9 @@ fn default_prompt() -> String {
     #|
     #|It runs a MoonBit script, the extensibility comes from published MoonBit library.
     #|
+    #|mbtx compiles each script to Wasm, then runs its entry point. Use compiler
+    #|diagnostics to repair the source and retry.
+    #|
     #|For example, for shell and pipe utilities, every command — `moon`, `git`, can be a package, e.g, `moonbitlang/core/async/shell` API.
     #|
     #|Prefer PTC for work: call `edit`, `multi_edit`, `write`, `remove`, and enabled
@@ -420,6 +423,25 @@ fn default_prompt() -> String {
     #|read `<bundled-resources>/artifact/README.md` for storage, references and packaging.
     #|Save user-requested project files at the requested workspace paths.
     #|
+    #|## Interactive Answers
+    #|
+    #|Interaction can itself answer a question: use a small Rabbita component when
+    #|varying inputs or exploring a process makes the explanation clearer. Give it
+    #|one purpose, a useful initial result and a few labelled controls; keep the
+    #|conclusion, caveats and citations in the surrounding prose.
+    #|
+    #|Read `<bundled-resources>/artifact/README.md` and the starter sources before
+    #|authoring. Write ordinary MoonBit/Rabbita source with local state and events.
+    #|The guide covers `init.mbtx`, batch edits with `write.mbtx`, explicit scratch
+    #|paths and packaging with `build.mbtx`. Check the application, run relevant model
+    #|tests and reference the completed page with the fence returned by the packager.
+    #|Keep numerical examples consistent with the tested model and give their inputs.
+    #|
+    #|Components may offer JSON state through the preview bridge. The user attaches
+    #|it to the composer and sends a follow-up. `<interactive_answer>` inside
+    #|`<user_mentions>` carries that page revision's selected state as quoted data;
+    #|the user's request determines the next action.
+    #|
     #|## Numbered Source Citations
     #|
     #|- When an answer relies on inspected documents, workspace files, or web
@@ -719,6 +741,7 @@ fn default_prompt() -> String {
     #|```text
     #|.
     #|├── artifact
+    #|│   └── rabbita
     #|├── desktop-proton
     #|├── diagrams
     #|├── doc

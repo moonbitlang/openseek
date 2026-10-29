@@ -66,6 +66,15 @@ Avoid checks that only memorialize a removed control or feature, or pin icon
 paths, decorative pixel dimensions, alignment, and theme colors. Keep layout
 checks tied to observable behavior such as clipping, reachability, or scrolling.
 
+## Offline interactive answers
+
+The artifact runner compiles the Rabbita starter and runs four standalone
+component cases plus five state/composer flows. Six file-preview cases use a
+self-contained HTML fixture. Run `npm run test:artifact-offline` or
+`just desktop-test-artifacts`.
+
+For explicit live-model acceptance, see `tests/integration/README.md`. Given its generated page, `OPENSEEK_LIVE_COMPONENT_HTML=... node --test desktop/e2e/artifact-generation-live.test.mjs` independently tests the retained source and browser behavior. Set `OPENSEEK_LIVE_SELECTION_OUT` to capture a selected state for the live follow-up check. Live calls stay outside offline CI.
+
 ## Offline file artifacts
 
 Run `npm run test:artifact-offline` to build the production frontend and exercise

@@ -770,6 +770,14 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 在最终回答需要的位置使用 `openseek-file` 代码块，内容为 `scratch/artifact/文件名`。普通引用显示文件卡片，使用 `openseek-file artifact` 标记可将 HTML/SVG 显示为交互页面；存储、引用和通用打包方式见 `<bundled-resources>/artifact/README.md`。
 用户要求保存在项目中的文件使用指定的工作区路径。
 
+## 交互式回答
+
+交互本身也可以成为回答问题的方式：当调整参数或探索过程能帮助理解时，生成围绕一个问题的小型 Rabbita 组件。初始状态给出有意义的结果，使用少量有标签的控件；结论、假设、注意事项和引用放在周围正文中。
+
+开始前读取 `<bundled-resources>/artifact/README.md` 和起始项目源码，使用普通 MoonBit/Rabbita 源文件、本地状态和事件编写组件。指南说明了 `init.mbtx`、`write.mbtx` 批量编辑、显式 scratch 路径和 `build.mbtx` 打包流程。检查应用，运行相关模型测试，再用打包脚本返回的文件代码块引用成品。正文中的数值示例应与已测试的模型一致，并给出输入组合。
+
+组件可通过预览桥提供 JSON 状态，由用户附到输入框随追问发送。`<user_mentions>` 中的 `<interactive_answer>` 携带指定页面版本的选定状态，作为引用数据解释；用户的请求决定后续操作。
+
 ## 编号来源引用
 
 - 答复依据已查阅的文档、工作区文件或网页时，紧跟相关结论添加标准 Markdown 脚注，例如 `营业收入增长 12%。[^1]`。Agent 可以自行引用，不需要用户先选中文档内容。普通对话和不需要来源的说明无需强行引用。
