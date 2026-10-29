@@ -40,18 +40,16 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-      - name: Install the pinned Windows toolchain
+      - name: Install the stable Windows toolchain
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:MOONBIT_INSTALL_VERSION = (Get-Content desktop/.moonbit-version -Raw).Trim()
           Invoke-RestMethod https://cli.moonbitlang.com/install/powershell.ps1 | Invoke-Expression
           "$env:USERPROFILE\.moon\bin" >> $env:GITHUB_PATH
-      - name: Install the pinned Unix toolchain
+      - name: Install the stable Unix toolchain
         if: runner.os != 'Windows'
         run: |
-          version="$(cat desktop/.moonbit-version)"
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Build and package the native CLI
         run: |
