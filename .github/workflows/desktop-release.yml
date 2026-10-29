@@ -118,6 +118,71 @@ jobs:
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
           echo "Releasing v$release_version." >> "$GITHUB_STEP_SUMMARY"
 
+  # The Browser bundle is platform-neutral. Building it apart from the macOS
+  # packager lets Android package the same bytes without waiting for Apple
+  # signing and notarization.
+  release-browser:
+    name: Build Browser
+    needs: release-needed
+    if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Stamp release version
+        shell: bash
+        run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
+
+      - name: Set up MoonBit
+        run: |
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Show MoonBit version
+        run: moon version --all
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      # Keep one compressed Browser archive beside the Desktop artifacts. OSS
+      # stores it as an immutable release artifact; the API receives the same
+      # small archive only because `/console/` must remain on the API origin.
+      # The browser build never touches the window host, so call the build
+      # program directly, as desktop CI does.
+      - name: Build browser release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node desktop/package/build.mjs browser --release
+          test -f desktop/dist/browser/index.html
+          test -f desktop/dist/browser/assets/frontend.js
+          tar -C desktop/dist -czf desktop/dist/SeekMoon.browser.tar.gz browser
+
+      # Only a hand-off to the Android builder and the publish job. The
+      # downloadable release artifact is uploaded there, after OSS has
+      # settled which bytes are canonical.
+      - name: Hand Browser archive to the Android builder and the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-browser-v${{ needs.release-needed.outputs.version }}-build
+          overwrite: true
+          path: desktop/dist/SeekMoon.browser.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   release-macos:
     name: Build, sign, and notarize macOS
     needs: release-needed
@@ -234,24 +299,9 @@ jobs:
             --sign "$MACOS_SIGNING_IDENTITY" \
             --notarize "$NOTARY_PROFILE"
 
-      # Keep one compressed Browser archive beside the Desktop artifacts. OSS
-      # stores it as an immutable release artifact; the API receives the same
-      # small archive only because `/console/` must remain on the API origin.
-      - name: Build browser release artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          moon -C desktop run package/browser --target native -- --release
-          test -f desktop/dist/browser/index.html
-          test -f desktop/dist/browser/assets/frontend.js
-          COPYFILE_DISABLE=1 tar \
-            -C desktop/dist \
-            -czf desktop/dist/SeekMoon.browser.tar.gz \
-            browser
-
       # Only a hand-off to the publish job. The downloadable release artifact
       # is uploaded there, after OSS has settled which bytes are canonical.
-      - name: Hand macOS and Browser archives to the publish job
+      - name: Hand macOS archives to the publish job
         uses: actions/upload-artifact@v4
         with:
           name: SeekMoon-macos-arm64-v${{ needs.release-needed.outputs.version }}-build
@@ -259,17 +309,6 @@ jobs:
           path: |
             desktop/dist/SeekMoon.app.zip
             desktop/dist/SeekMoon.dmg
-            desktop/dist/SeekMoon.browser.tar.gz
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
-
-      - name: Hand Browser archive to the Android builder
-        uses: actions/upload-artifact@v4
-        with:
-          name: SeekMoon-browser-v${{ needs.release-needed.outputs.version }}-build
-          overwrite: true
-          path: desktop/dist/SeekMoon.browser.tar.gz
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -284,7 +323,7 @@ jobs:
 
   release-android:
     name: Build and sign Android
-    needs: [release-needed, release-macos]
+    needs: [release-needed, release-browser]
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -470,7 +509,7 @@ jobs:
   # nothing: every archive arrives from a build job above.
   release-publish:
     name: Publish
-    needs: [release-needed, release-windows, release-macos, release-android]
+    needs: [release-needed, release-browser, release-windows, release-macos, release-android]
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -520,7 +559,13 @@ jobs:
 
       # Every platform's archives land in dist/ so the upload, publish, and
       # verification below cover the whole release.
-      - name: Collect macOS and Browser archives
+      - name: Collect Browser archive
+        uses: actions/download-artifact@v4
+        with:
+          name: SeekMoon-browser-v${{ needs.release-needed.outputs.version }}-build
+          path: desktop/dist
+
+      - name: Collect macOS archives
         uses: actions/download-artifact@v4
         with:
           name: SeekMoon-macos-arm64-v${{ needs.release-needed.outputs.version }}-build
@@ -555,6 +600,16 @@ jobs:
       # A retry of an API-published version replaces this run's nondeterministic
       # rebuilds with the exact OSS objects before reaching here. Keep those
       # canonical bytes as the downloadable Actions artifacts too.
+      - name: Upload Browser release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-browser-v${{ needs.release-needed.outputs.version }}
+          overwrite: true
+          path: desktop/dist/SeekMoon.browser.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
       - name: Upload macOS release artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -563,7 +618,6 @@ jobs:
           path: |
             desktop/dist/SeekMoon.app.zip
             desktop/dist/SeekMoon.dmg
-            desktop/dist/SeekMoon.browser.tar.gz
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
