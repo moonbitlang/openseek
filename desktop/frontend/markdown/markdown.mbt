@@ -415,7 +415,9 @@ fn MarkdownRender::table(
       Sep(_) => ()
     }
   }
-  @html.table([@html.thead(head), @html.tbody(body)])
+  @html.div(class="chat-table-scroll", [
+    @html.table([@html.thead(head), @html.tbody(body)]),
+  ])
 }
 
 ///|

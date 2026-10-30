@@ -840,23 +840,31 @@
   border-left: 3px solid var(--color-border-subtle);
   color: var(--color-text-secondary);
 }
-.msg-content.markdown table {
-  /* Scroll a wide table horizontally inside the message (like a code
-     block) rather than letting it widen or get clipped: display:block +
-     max-content lets overflow-x engage while max-width keeps it in
-     column. */
-  display: block;
-  width: max-content;
+.msg-content.markdown .chat-table-scroll {
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
   margin: 0.55em 0;
-  border-collapse: collapse;
+}
+.msg-content.markdown .chat-table-scroll > table {
+  width: max-content;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
   font-size: var(--font-size-md);
 }
 .msg-content.markdown th,
 .msg-content.markdown td {
+  /* Long descriptions wrap within a column; many columns scroll together. */
+  max-width: 28rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
   padding: 4px 10px;
-  border: 1px solid var(--color-border);
+}
+.msg-content.markdown td {
+  border-top: 1px solid var(--color-border);
 }
 .msg-content.markdown th {
   background: var(--color-bg-subtle);
