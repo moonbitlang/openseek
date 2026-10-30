@@ -337,7 +337,8 @@ test "tool results fill calls by id without changing call order" {
     is @transcript.Done(
       content=Content([Text("module contents")]),
       is_error=false,
-      brief=Some("read moon.mod")
+      brief=Some("read moon.mod"),
+      data=None
     ),
   )
   inspect(shell.call_id, content="c2")
@@ -348,8 +349,37 @@ test "tool results fill calls by id without changing call order" {
     is @transcript.Done(
       content=Content([Text("tests passed")]),
       is_error=false,
-      brief=Some("ran moon test")
+      brief=Some("ran moon test"),
+      data=None
     ),
+  )
+}
+
+///|
+test "chart data follows the same durable projection for history and live results" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"assistant","payload":{"content":"","tool_calls":[{"id":"plot","name":"mbtx","arguments":"{}"}]}}},
+    #|{"sequence":2,"item":{"kind":"tool_result","payload":{"tool_call_id":"plot","tool_name":"mbtx","content":"{\"artifact_id\":\"chart_data\"}","is_error":false,"data":{"artifacts":[{"id":"chart_data","kind":"mathplotlib","version":1,"spec":{"series":[{"y":[4,8]}]}}]}}}}
+  let reply = session_reply(events)
+  let history = @transcript.session_from_reply(reply).items
+  let live : Array[@transcript.TranscriptItem] = []
+  for event in reply.session.events.unwrap_or([]) {
+    ignore(
+      @transcript.apply_session_item(live, event.item, sequence=event.sequence),
+    )
+  }
+  // Stamps are absent from the fixture, so both paths are identical.
+  assert_true(live == history)
+  guard history[0].kind is Assistant(calls=[call], ..) &&
+    call.outcome is Done(data=Some(data), ..) else {
+    fail("missing chart metadata")
+  }
+  assert_true(
+    data
+    is {
+      "artifacts": [{ "id": "chart_data", "spec": { "series": _, .. }, .. }],
+      ..
+    },
   )
 }
 
@@ -413,7 +443,8 @@ test "reopened interrupted question does not retain a pending tool" {
     is @transcript.Done(
       content=Content([Text("cancelled: cancelled")]),
       is_error=true,
-      brief=None
+      brief=None,
+      data=None
     ),
   )
 }

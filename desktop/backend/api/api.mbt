@@ -621,6 +621,9 @@ pub fn endpoints(
     Endpoint(@commands.session_artifacts_list, payload => {
       @engine.session_artifacts_list(state.manager, payload.session)
     }),
+    Endpoint(@commands.session_artifact_file, payload => {
+      @engine.session_artifact_file(state.manager, payload)
+    }),
     Endpoint(@commands.session_artifacts_remove, payload => {
       state.save_session_artifacts(payload.session, artifacts => {
         artifacts.without(payload.artifact)

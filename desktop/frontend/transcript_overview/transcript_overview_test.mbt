@@ -37,6 +37,7 @@ fn shell_call(is_error : Bool) -> @transcript.ToolCall {
       content=Content([Text(if is_error { "boom" } else { "fine" })]),
       is_error~,
       brief=None,
+      data=None,
     ),
   }
 }

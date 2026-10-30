@@ -343,6 +343,12 @@ class Build {
     await cp(join(generated, "pdf-runtime.js"), join(output, "pdf-runtime.js"));
     await cp(join(generated, "vendor/pdfjs"), join(output, "vendor/pdfjs"), { recursive: true });
     await cp(join(generated, "mermaid"), join(output, "mermaid"), { recursive: true });
+    const plotModule = join(this.repo, ".mooncakes/Lampese/mathplotlib");
+    const plotLicenses = join(output, "licenses/mathplotlib");
+    await mkdir(plotLicenses, { recursive: true });
+    await cp(join(plotModule, "LICENSE"), join(plotLicenses, "LICENSE"));
+    await cp(join(plotModule, "docs/THIRD_PARTY_NOTICES.md"), join(plotLicenses, "THIRD_PARTY_NOTICES.md"));
+    await cp(join(plotModule, "docs/licenses"), join(plotLicenses, "licenses"), { recursive: true });
   }
 
   async native(profile) {

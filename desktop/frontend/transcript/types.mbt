@@ -78,7 +78,12 @@ pub(all) enum ToolOutcome {
   // Historical observation of a background call, with no terminal outcome yet.
   Snapshot(content~ : String)
   Pending(output~ : String?)
-  Done(content~ : @deepseek.Content, is_error~ : Bool, brief~ : String?)
+  Done(
+    content~ : @deepseek.Content,
+    is_error~ : Bool,
+    brief~ : String?,
+    data~ : Json?
+  )
 } derive(Eq)
 
 ///|

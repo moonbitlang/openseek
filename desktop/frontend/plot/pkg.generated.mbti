@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/plot"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
+}
+
+// Values
+pub fn renderer() -> @rabbita.Val[Renderer]
+
+// Errors
+
+// Types and methods
+pub struct Catalog {
+  // private fields
+} derive(Eq)
+pub fn Catalog::equal(Self, Self) -> Bool
+pub fn Catalog::from_tool_data(Array[Json?]) -> Self
+pub fn Catalog::not_equal(Self, Self) -> Bool
+
+pub struct Renderer {
+  // private fields
+}
+pub fn Renderer::begin(Self, Catalog, locale? : @i18n.Locale) -> (String, String) -> @html.Html
+pub fn Renderer::equal(Self, Self) -> Bool
+pub fn Renderer::not_equal(Self, Self) -> Bool
+pub impl Eq for Renderer
+
+// Type aliases
+
+// Traits

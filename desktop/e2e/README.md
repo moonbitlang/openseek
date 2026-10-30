@@ -65,3 +65,16 @@ a distinct integration path or reproduce a browser-specific regression.
 Avoid checks that only memorialize a removed control or feature, or pin icon
 paths, decorative pixel dimensions, alignment, and theme colors. Keep layout
 checks tied to observable behavior such as clipping, reachability, or scrolling.
+
+## Offline file artifacts
+
+Run `npm run test:artifact-offline` to build the production frontend and exercise
+self-contained HTML previews with fixture transport in a headless browser.
+Set `OPENSEEK_UI_CAPTURE_DIR` for local captures. From the repository root, run
+`node desktop/e2e/run-artifact-offline.mjs`.
+
+## Offline charts
+
+Run `npm run test:chart-offline` or `just desktop-test-charts` to compile the
+chart example with its own HTML template and exercise file previews and
+saved-chart compatibility through fixture transport in a headless browser.

@@ -27,6 +27,8 @@ type SessionStore derive(@debug.Debug)
 pub fn SessionStore::SessionStore(String) -> Self
 pub async fn SessionStore::accept_claim(Self, @agent_session.SessionId, String) -> Unit
 pub async fn SessionStore::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
+pub async fn SessionStore::artifact_dir(Self, @agent_session.SessionId) -> String
+pub async fn SessionStore::artifact_file(Self, @agent_session.SessionId, String) -> String
 pub async fn SessionStore::claim(Self, @agent_session.SessionId) -> SessionClaim
 pub async fn SessionStore::compact(Self, @agent_session.Session, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32) -> @agent_session.Session
 pub async fn SessionStore::create(Self, @agent_session.Session) -> Unit

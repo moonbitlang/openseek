@@ -124,6 +124,7 @@ test "minimal mbtx retains its description across completion and failure" {
         content=Content([Text("output")]),
         is_error=failed,
         brief=Some(if failed { "mbtx (exit=1)" } else { "mbtx (exit=0)" }),
+        data=None,
       ),
     })
     assert_eq(completed.caption, "Check project details")
@@ -145,6 +146,7 @@ test "minimal mbtx falls back safely without a usable description" {
         content=Content([Text("output")]),
         is_error=false,
         brief=Some("mbtx (exit=0)"),
+        data=None,
       ),
     }
     assert_eq(MinimalCall::from_tool(call).caption, "mbtx (exit=0)")
@@ -185,6 +187,7 @@ test "minimal descriptions share the card payload boundary" {
           content=Content([Text("")]),
           is_error=false,
           brief=Some("Completed work"),
+          data=None,
         ),
       }
       assert_eq(
@@ -210,6 +213,7 @@ test "other minimal tools still prefer their result brief" {
       content=Content([Text("output")]),
       is_error=false,
       brief=Some("Read moon.mod"),
+      data=None,
     ),
   }
   let completed = MinimalCall::from_tool(call)
@@ -257,6 +261,7 @@ test "folded minimal summaries preview operations independent of their outcome" 
         content=Content([Text("")]),
         is_error=false,
         brief=Some(brief),
+        data=None,
       ),
     })
     assert_eq(
@@ -384,6 +389,7 @@ test "job coordination does not take up captions in a work summary" {
         content=Content([Text("")]),
         is_error=false,
         brief=Some(name),
+        data=None,
       ),
     }
     entries.push(Call(MinimalCall::from_tool(call)))
@@ -416,6 +422,7 @@ test "a minimal shell caption never repeats the command line brief" {
       content=Content([Text("output")]),
       is_error=false,
       brief=Some("private command"),
+      data=None,
     ),
   }
   assert_eq(MinimalCall::from_tool(call).caption, "shell")
@@ -433,6 +440,7 @@ test "OpenSeek and Codex web search names share the search activity" {
         content=Content([Text("results")]),
         is_error=false,
         brief=Some("Search results"),
+        data=None,
       ),
     }
     assert_eq(MinimalCall::from_tool(call).category, Some("Search the web"))

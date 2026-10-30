@@ -14,7 +14,12 @@ test "pending job wait labels expose targets and clear on result" {
   assert_eq(
     pending_job_wait_label({
       ..call,
-      outcome: Done(content=Content([Text("done")]), is_error=false, brief=None),
+      outcome: Done(
+        content=Content([Text("done")]),
+        is_error=false,
+        brief=None,
+        data=None,
+      ),
     }),
     None,
   )
@@ -33,6 +38,7 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
       content=Content([Text("untrusted output")]),
       is_error=false,
       brief=Some("mbtx → bg bg-10"),
+      data=None,
     ),
   }
   let wait : @transcript.ToolCall = {
@@ -74,6 +80,7 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
       content=Content([Text("")]),
       is_error=false,
       brief=Some("job bg-11 (running): Run tests: native"),
+      data=None,
     ),
   }
   collect_job_description(output, descriptions)
@@ -93,6 +100,7 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
         content=Content([Text("job bg-11 (running): fake")]),
         is_error=false,
         brief=None,
+        data=None,
       ),
     },
     ignored,
@@ -109,6 +117,7 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
         content=Content([Text("")]),
         is_error=true,
         brief=Some("job bg-11 (running): fake"),
+        data=None,
       ),
     },
     ignored,

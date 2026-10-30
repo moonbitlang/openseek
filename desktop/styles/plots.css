@@ -1,0 +1,110 @@
+.chat-plot {
+  display: grid;
+  grid-template-columns: min-content minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  min-width: 0;
+}
+
+.chat-plot-y-label {
+  writing-mode: sideways-lr;
+  white-space: nowrap;
+}
+
+.chat-plot > .moonplot {
+  min-width: 0;
+}
+
+.chat-plot .moonplot {
+  --moonplot-text: var(--color-text-primary);
+  --moonplot-muted: var(--color-text-muted);
+  --moonplot-accent: var(--color-accent);
+}
+
+.chat-plot .moonplot-viewport {
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.chat-plot[data-plot-picking="true"] .moonplot-viewport {
+  cursor: crosshair;
+}
+
+.chat-plot .moonplot-tooltip {
+  --moonplot-muted: #64748b;
+  border-color: #2563eb;
+  background: #fff;
+  color: #263443;
+  box-shadow: 0 3px 12px #2563eb1f;
+}
+
+.chat-plot [data-moonplot-hover] {
+  stroke: #2563eb;
+  stroke-width: 2.5;
+}
+
+.chat-plot [data-moonplot-selected] {
+  stroke: #2563eb;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 3px #2563eb80);
+}
+
+.chat-plot .moonplot-legend {
+  padding-top: 10px;
+  gap: 8px;
+}
+
+.chat-plot .moonplot-series {
+  border: 1px solid var(--color-accent-border);
+  background: var(--color-bg-surface);
+}
+
+/* A checkmark conveys the active state alongside the series color. */
+.chat-plot .moonplot-series::after {
+  content: "";
+  width: 10px;
+  height: 6px;
+  margin: -3px 1px 0 3px;
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.chat-plot .moonplot-series:hover {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+
+.chat-plot .moonplot-series[aria-pressed="false"] {
+  border-style: dashed;
+  border-color: var(--color-border);
+  background: transparent;
+}
+
+.chat-plot .moonplot-series[aria-pressed="false"]::after {
+  visibility: hidden;
+}
+
+.chat-plot-error {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.chat-plot-error pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .chat-plot {
+    margin: 12px 0;
+  }
+}
+.chat-plot-unavailable {
+  margin: 16px 0;
+  color: var(--color-text-muted);
+}

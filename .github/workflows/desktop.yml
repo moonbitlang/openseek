@@ -11,6 +11,7 @@ on:
       # Desktop's browser frontend renders the shared engine event protocol
       # and root-module tool output views.
       - "protocol/**"
+      - "share/artifact/**"
       - "agent_tool/edit_diff/**"
       - "agent_tool/mbtx/html/**"
       - "jsonrpc/**"
@@ -24,6 +25,7 @@ on:
       - "desktop/**"
       - "editor/**"
       - "protocol/**"
+      - "share/artifact/**"
       - "agent_tool/edit_diff/**"
       - "agent_tool/mbtx/html/**"
       - "jsonrpc/**"

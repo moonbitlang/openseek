@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek_protocol/artifact"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn charts(Json?) -> Array[Chart]
+
+// Errors
+
+// Types and methods
+pub struct Chart {
+  id : String
+  spec : Json
+} derive(Eq, @debug.Debug)
+pub fn Chart::Chart(id~ : String, spec~ : Json) -> Self
+pub fn Chart::attach(Self, Json?) -> Json
+pub fn Chart::embed(Self) -> String
+pub fn Chart::equal(Self, Self) -> Bool
+#deprecated
+pub fn Chart::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Chart::not_equal(Self, Self) -> Bool
+pub fn Chart::receipt(Self) -> String
+pub fn Chart::to_json(Self) -> Json
+#deprecated
+pub fn Chart::to_repr(Self) -> @debug.Repr
+pub impl ToJson for Chart
+pub impl @json.FromJson for Chart
+
+// Type aliases
+
+// Traits

@@ -423,6 +423,7 @@ pub fn apply_session_item(
             content=model_content(payload.content),
             is_error=payload.is_error,
             brief=payload.brief,
+            data=payload.data,
           ),
         }
         items[index] = {
@@ -657,6 +658,7 @@ fn interrupt_pending_calls(
                   ]),
                   is_error=true,
                   brief=None,
+                  data=None,
                 ),
               }
             }),

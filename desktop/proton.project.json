@@ -32,6 +32,7 @@
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moonfmt",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/mooninfo",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moonrun",
+        "seekmoon/toolchains/moonbit/macos-arm64/lib/libLLVM.dylib",
         "seekmoon/toolchains/moonbit/macos-arm64/lib/libbinaryen.dylib",
         "seekmoon/toolchains/moonbit/macos-arm64/lib/why3/commands/why3bench.cmxs",
         "seekmoon/toolchains/moonbit/macos-arm64/lib/why3/commands/why3config.cmxs",

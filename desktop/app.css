@@ -22,3 +22,6 @@
 @import url("./styles/github_markdown.css");
 @import url("./styles/office_viewer.css");
 @import url("../.mooncakes/Lampese/office-viewer/public/page-thumbnails.css");
+
+@import url("../.mooncakes/Lampese/mathplotlib/rabbita/moonplot.css");
+@import url("./styles/plots.css");

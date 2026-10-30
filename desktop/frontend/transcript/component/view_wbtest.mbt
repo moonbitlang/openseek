@@ -88,6 +88,7 @@ test "transcript stream children use stable typed keys in display order" {
                   content=Content([Text("output")]),
                   is_error=false,
                   brief=None,
+                  data=None,
                 ),
               },
             ],

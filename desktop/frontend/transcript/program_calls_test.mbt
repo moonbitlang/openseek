@@ -22,6 +22,37 @@ test "program calls retain edit arguments and interruption state" {
 }
 
 ///|
+test "program call results retain chart artifact data" {
+  let data : Json = {
+    "artifacts": [
+      {
+        "id": "chart_nested",
+        "kind": "mathplotlib",
+        "version": 1,
+        "spec": { "series": [{ "y": [3, 6] }] },
+      },
+    ],
+  }
+  let calls = @transcript.program_calls(
+    Some({
+      "ptc_calls": [
+        {
+          "name": "mbtx",
+          "arguments": {},
+          "status": "done",
+          "result": { "content": "receipt", "is_error": false, "data": data },
+        },
+      ],
+    }),
+    "outer",
+  )
+  guard calls is [{ outcome: Done(data=Some(retained), ..), .. }] else {
+    fail("missing nested artifact data")
+  }
+  assert_eq(retained, data)
+}
+
+///|
 test "live program calls remain pending until their terminal result" {
   let calls = @transcript.program_calls(
     Some({

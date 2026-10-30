@@ -58,7 +58,17 @@ pub fn program_calls(
           { "brief": String(value), .. } => Some(value)
           _ => None
         }
-        Done(content=Content([Text(content)]), is_error=flag == true, brief~)
+        let data = match result {
+          { "data": Null, .. } => None
+          { "data": value, .. } => Some(value)
+          _ => None
+        }
+        Done(
+          content=Content([Text(content)]),
+          is_error=flag == true,
+          brief~,
+          data~,
+        )
       }
       _ =>
         Done(
@@ -67,6 +77,7 @@ pub fn program_calls(
           ]),
           is_error=true,
           brief=None,
+          data=None,
         )
     }
     calls.push({

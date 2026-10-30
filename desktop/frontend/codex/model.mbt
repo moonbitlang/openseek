@@ -2740,6 +2740,7 @@ fn CodexItem::transcript_item(
           content=Content([Text(output)]),
           is_error=self.tool_failed(),
           brief=self.tool_brief(locale~),
+          data=None,
         )
       } else if output.is_empty() {
         Pending(output=None)

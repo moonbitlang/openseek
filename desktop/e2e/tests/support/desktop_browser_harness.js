@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { extname, resolve, sep } from 'node:path';
 
 const officeFixture = name =>
   readFileSync(new URL(`../../fixtures/office/${name}`, import.meta.url)).toString('base64');
@@ -10,7 +11,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 4;
+    this.hostProtocol = 5;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -533,11 +534,24 @@ export class DesktopBrowserHarness {
 
   async install() {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
+    const offlineAssets = process.env.OPENSEEK_DESKTOP_OFFLINE_ASSETS;
+    if (offlineAssets) {
+      const root = resolve(offlineAssets);
+      const types = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.wasm': 'application/wasm' };
+      await this.page.route('http://127.0.0.1:5175/**', async route => {
+        const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
+        const file = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
+        if (!file.startsWith(root + sep)) return route.fulfill({ status: 404, body: '' });
+        try { await route.fulfill({ contentType: types[extname(file)] || 'application/octet-stream', body: readFileSync(file) }); }
+        catch { await route.fulfill({ status: 404, body: '' }); }
+      });
+    }
     // Match openseek-api: every page route (`/device/:device/*page`, `/cloud`
     // and `/cloud/*page`) serves the one current document.
     await this.page.route(url => url.pathname.startsWith('/device/') || url.pathname === '/cloud' ||
       url.pathname.startsWith('/cloud/'), async route => {
       if (!route.request().isNavigationRequest()) return route.continue();
+      if (offlineAssets) return route.fulfill({ contentType: 'text/html', body: readFileSync(resolve(offlineAssets, 'index.html')) });
       const url = new URL('/index.html', route.request().url());
       const response = await route.fetch({ url: url.href });
       await route.fulfill({ response });

@@ -1,0 +1,13 @@
+import {
+  "moonbitlang/openseek_protocol/artifact",
+  "openseek_desktop/frontend/i18n",
+  "Lampese/mathplotlib",
+  "Lampese/mathplotlib/rabbita" @plot_dom,
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+}
+
+supported_targets = "js"

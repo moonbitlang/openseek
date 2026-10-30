@@ -10,7 +10,7 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
-pub const HostProtocolRevision : Int32 = 4
+pub const HostProtocolRevision : Int32 = 5
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -223,6 +223,32 @@ pub fn ArchivedSessionPayload::to_json(Self) -> Json
 pub fn ArchivedSessionPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ArchivedSessionPayload
 pub impl @json.FromJson for ArchivedSessionPayload
+
+pub(all) struct ArtifactFilePayload {
+  session : String
+  workspace : String
+  archived : Bool
+  reference : String
+} derive(Eq, @debug.Debug)
+pub fn ArtifactFilePayload::equal(Self, Self) -> Bool
+pub fn ArtifactFilePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ArtifactFilePayload::not_equal(Self, Self) -> Bool
+pub fn ArtifactFilePayload::to_json(Self) -> Json
+pub fn ArtifactFilePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ArtifactFilePayload
+pub impl @json.FromJson for ArtifactFilePayload
+
+pub(all) struct ArtifactFileReply {
+  path : String
+  content : String?
+} derive(Eq, @debug.Debug)
+pub fn ArtifactFileReply::equal(Self, Self) -> Bool
+pub fn ArtifactFileReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ArtifactFileReply::not_equal(Self, Self) -> Bool
+pub fn ArtifactFileReply::to_json(Self) -> Json
+pub fn ArtifactFileReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ArtifactFileReply
+pub impl @json.FromJson for ArtifactFileReply
 
 pub(all) struct AskUserPayload {
   questions : Array[UserQuestion]

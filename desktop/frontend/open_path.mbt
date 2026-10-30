@@ -69,6 +69,9 @@ fn request_open_path(
   annotation? : String,
   return_to? : @interop.ConversationKey,
 ) -> (@cmd.Cmd, Model) {
+  if path.has_prefix("artifact://") {
+    return request_open_artifact(dispatch, model, path)
+  }
   guard model.active_checkout() is Some(active) &&
     active.placement is Some(placement) &&
     placement.is_ready() &&
@@ -107,6 +110,48 @@ fn request_open_path(
     ),
     model,
   )
+}
+
+///|
+fn request_open_artifact(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  reference : String,
+) -> (@cmd.Cmd, Model) {
+  guard @workspace_file_ref.artifact_path(reference) is Some(_) &&
+    model.active_conversation() is Some(conversation) &&
+    model.active_checkout() is Some(active) &&
+    @resource.path_for(conversation.workspace.project(), active.owner.channel)
+    is Some(workspace) else {
+    return (@cmd.none, model)
+  }
+  let model = model.begin_editor_navigation()
+  let context = FileOpenContext::new(
+    active.owner,
+    model.file_panel.file_link_generation,
+  )
+  let payload : @protocol.ArtifactFilePayload = {
+    session: active.owner.session,
+    workspace,
+    archived: conversation.is_archived_read_only(),
+    reference,
+  }
+  let command = @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let result : Result[@protocol.ArtifactFileReply, String] = Ok(
+        @interop.bridge_request(
+          active.owner.channel,
+          @commands.session_artifact_file,
+          payload,
+        ),
+      ) catch {
+        error => Err(error.to_string())
+      }
+      scheduler.add(dispatch(ArtifactOpenResolved(context, result)))
+    })
+    |> ignore
+  })
+  (command, model)
 }
 
 ///|
