@@ -142,3 +142,82 @@ test "a conversation switch retires the run that opened before it" {
   let (_, settled) = opened.reconcile(emit(), input())
   assert_true(settled == opened)
 }
+
+///|
+fn cloud_input(
+  account~ : String = "account",
+  session~ : String = "cloud-session",
+  epoch~ : Int32 = 1,
+) -> @quick_open.Input raise {
+  guard @resource.cloud_root("https://cloud.moonbitlang.cn", account, session)
+    is Some(root) else {
+    fail("invalid Cloud root")
+  }
+  @quick_open.Input::cloud(
+    owner=@interop.Cloud(account~, session~),
+    root~,
+    access={ token: "fixture-token", epoch, },
+    open_files=[],
+    active_file=None,
+  )
+}
+
+///|
+test "Cloud file Quick Open ranks the complete index and treats hash as file text" {
+  let input = cloud_input()
+  let owner = @interop.Cloud(account="account", session="cloud-session")
+  let (_, opened) = @quick_open.State::empty().open(
+    emit(),
+    input,
+    @quick_open.Files,
+  )
+  // Typing while the complete index is in flight does not obsolete its result.
+  let (_, typed, _) = opened.handle(
+    emit(),
+    @quick_open.ValueChanged("#literal"),
+    input,
+  )
+  let (_, loaded, _) = typed.handle(
+    emit(),
+    @quick_open.CloudFilesLoaded(owner~, generation=1, files=[
+      Relative("src/#literal.mbt"),
+      Relative("src/other.mbt"),
+    ]),
+    input,
+  )
+  let (_, closed, accepted) = loaded.handle(emit(), @quick_open.Pick(0), input)
+  assert_false(closed.is_open())
+  assert_eq(accepted, Some({ path: "src/#literal.mbt", range: None, }))
+  let (_, unsupported) = @quick_open.State::empty().open(
+    emit(),
+    input,
+    @quick_open.Symbols,
+  )
+  assert_false(unsupported.is_open())
+}
+
+///|
+test "Cloud Quick Open fences account sessions and credential epochs" {
+  let input = cloud_input()
+  let owner = @interop.Cloud(account="account", session="cloud-session")
+  let (_, opened) = @quick_open.State::empty().open(
+    emit(),
+    input,
+    @quick_open.Files,
+  )
+  let other = cloud_input(account="other")
+  let (_, retired) = opened.reconcile(emit(), other)
+  assert_false(retired.is_open())
+  let (_, reopened) = retired.open(emit(), other, @quick_open.Files)
+  let (_, late, accepted) = reopened.handle(
+    emit(),
+    @quick_open.CloudFilesLoaded(owner~, generation=1, files=[
+      Relative("private.mbt"),
+    ]),
+    other,
+  )
+  assert_true(late == reopened)
+  assert_eq(accepted, None)
+  let (_, renewed) = opened.reconcile(emit(), cloud_input(epoch=2))
+  assert_false(renewed.is_open())
+}

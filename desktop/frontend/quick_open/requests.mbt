@@ -137,12 +137,13 @@ fn clear_file_cache(
 /// Search workspace symbols and route the reply back to the exact owning run.
 fn symbol_request(
   emit : @cmd.Emit[Msg],
-  root : @common.Uri?,
-  owner : @interop.ConversationKey,
+  input : Input,
   query : String,
   generation : Int32,
 ) -> @cmd.Cmd {
-  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+  guard input.owner is @interop.Host(owner) &&
+    input.root is Some(root) &&
+    @resource.belongs_to(root, owner.channel) else {
     return @cmd.none
   }
   @symbols.search(
@@ -152,4 +153,34 @@ fn symbol_request(
     loaded=items => emit(SymbolsLoaded(owner~, query~, generation~, items~)),
     failed=emit(SymbolsRequestFailed(owner~, query~, generation~)),
   )
+}
+
+///|
+/// Cloud exposes a complete file snapshot; ranking is local so every query
+/// searches the whole index without borrowing a Host cache or transport.
+fn cloud_file_request(
+  emit : @cmd.Emit[Msg],
+  input : Input,
+  generation : Int32,
+) -> @cmd.Cmd {
+  guard input.owner is @interop.Cloud(session~, ..) &&
+    input.cloud_access is Some(access) else {
+    return @cmd.none
+  }
+  let owner = input.owner
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let paths = @cloud_client.read_file_index(access.token, session) catch {
+        _ => {
+          scheduler.add(emit(CloudFilesFailed(owner~, generation~)))
+          return
+        }
+      }
+      let files = [
+        for path in paths if !path.is_empty() => @pathx.Relative(path)
+      ]
+      scheduler.add(emit(CloudFilesLoaded(owner~, generation~, files~)))
+    })
+    |> ignore
+  })
 }

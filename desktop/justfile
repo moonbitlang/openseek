@@ -46,7 +46,7 @@ console-proxy *args:
     moon run package/browser --target native
     moon run backend/internal/console_proxy/main --target native -- {{ args }}
 
-# Build the Desktop browser application and run Playwright.
+# Use the CI bundle: a debug resource can exceed Chromium's mocked-response limit.
 test-browser:
-    moon run package/browser --target native
+    node package/build.mjs browser --release
     {{ if os() == "windows" { "npm.cmd" } else { "npm" } }} --prefix e2e test
