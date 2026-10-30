@@ -318,11 +318,18 @@ fn dialog_component(
     update=(state, input, msg, emit) => state.update(input, msg, emit),
     subscriptions=(state, input, emit) => {
       if state.menu is Some(_) && state.key == input.target {
-        @dismiss.on_outside_click(
-          "workspace-settings-select-dismiss",
-          trigger=".custom-select-button",
-          emit.map(_ => CloseMenu),
-        )
+        @sub.batch([
+          @dismiss.on_outside_click(
+            "workspace-settings-select-dismiss",
+            trigger=".custom-select-button",
+            emit.map(_ => CloseMenu),
+          ),
+          @dismiss.on_back(
+            "workspace-settings-select-back",
+            level=TopLayer,
+            emit.map(_ => CloseMenu),
+          ),
+        ])
       } else {
         @sub.none
       }

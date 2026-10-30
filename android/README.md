@@ -116,6 +116,12 @@ resolution with that frontend before claiming end-to-end CSR support.
 There is no native JavaScript command bridge. Cleartext, mixed content and file
 URL access are disabled; backup is disabled and inspection is debug-only.
 
+Back dispatches the frontend's cancelable `openseek-back` event on the document.
+The frontend closes its topmost open layer (a menu, dialog, the drawer, a
+management page) and cancels the event, as Escape does on a keyboard; Android
+goes back in the WebView's history only when no layer closed. The shell knows
+nothing of the frontend's layers or DOM (`desktop/frontend/dismiss/back.mbt`).
+
 ## Validation
 
 Shared mobile layout, Chat/Connect entry and offline behavior are browser

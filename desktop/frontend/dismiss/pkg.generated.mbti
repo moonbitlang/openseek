@@ -7,11 +7,21 @@ import {
 }
 
 // Values
+pub fn host_back() -> @sub.Sub
+
+pub fn on_back(String, level? : Level, @cmd.Emit[Unit]) -> @sub.Sub
+
 pub fn on_outside_click(String, trigger~ : String, @cmd.Emit[Unit]) -> @sub.Sub
 
 // Errors
 
 // Types and methods
+pub(all) enum Level {
+  Page
+  Panel(Int32)
+  Popup
+  TopLayer
+}
 
 // Type aliases
 

@@ -256,6 +256,8 @@ fn excel_copy_controls(
         .to_keyboard_event()
         .map(key => key.key() == "Escape")
         .unwrap_or(false) {
+        // Clearing the selection spends this Escape; it closes no layer.
+        event.prevent_default()
         dispatch(ExcelSelectionCleared(preview))
       } else {
         @cmd.none
