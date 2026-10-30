@@ -32,16 +32,75 @@ async test "execution revokes dependents at stop before waiting and accepts late
 /// this test stays gated to non-Windows.
 #cfg(not(platform="windows"))
 async test "execution observes process exit before draining descendant-held output" {
-  @async.with_timeout(3000, () => {
+  @async.with_timeout(1500, () => {
     @async.with_task_group(group => {
       let exec = ShellExecution::start(AgentTaskScope(group), program="sh", args=[
-        "-c", "sleep 0.5 & exit 0",
+        "-c", "sleep 3 & printf tail; exit 0",
       ])
       let observed : Ref[ExecStatus?] = Ref(None)
       exec.on_ending(() => observed.val = Some(exec.status()))
       exec.wait()
       assert_true(observed.val is Some(Running))
       assert_true(exec.status() is Exited(0))
+      assert_eq(exec.head(), "tail")
+      assert_eq(exec.output_error(), None)
+    })
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "stop ends output draining after the direct child has exited" {
+  @async.with_timeout(3000, () => {
+    @async.with_task_group(group => {
+      let exec = ShellExecution::start(AgentTaskScope(group), program="sh", args=[
+        "-c", "(while printf x; do :; done) 2>/dev/null & exit 0",
+      ])
+      assert_eq(exec.process.wait(), 0)
+      // Stop only once the monitor has seen the natural exit; the descendant
+      // keeps the pipe busy, so the drain is still running.
+      for _ in 0..<100 {
+        if exec.exited_on_its_own {
+          break
+        }
+        @async.sleep(10)
+      }
+      assert_true(exec.exited_on_its_own)
+      assert_true(exec.status() is Running)
+      exec.request_stop()
+      exec.wait()
+      // The stop ends the drain; the natural exit seen first still stands.
+      assert_true(exec.status() is Exited(0))
+      assert_true(exec.stop_cause() is None)
+      assert_eq(exec.output_error(), None)
+    })
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "output cap ends draining a continuously writing descendant" {
+  @async.with_timeout(3000, () => {
+    @async.with_task_group(group => {
+      let exec = ShellExecution::start(
+        AgentTaskScope(group),
+        program="sh",
+        args=["-c", "(while printf x; do :; done) 2>/dev/null & exit 0"],
+        inline_cap=4096,
+        hard_cap=4096,
+        kill_at_hard_cap=true,
+      )
+      exec.wait()
+      // The cap may be reached before or after the shell's own exit is seen;
+      // a natural exit seen first stands.
+      if exec.exited_on_its_own {
+        assert_true(exec.status() is Exited(0))
+      } else {
+        assert_true(exec.status() is Killed)
+      }
+      assert_true(exec.killed_by_output_limit())
+      assert_true(exec.output_truncated())
+      assert_eq(exec.output_error(), None)
     })
   })
 }

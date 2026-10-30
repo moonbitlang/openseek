@@ -1,9 +1,7 @@
 ///|
-/// After the direct child exits, how long to let the reader keep draining the
-/// pipe before force-closing it. In the normal case the reader hits EOF almost
-/// immediately (the child closed its write end); this grace only elapses when a
-/// descendant inherited and is holding the pipe open, in which case there is no
-/// more of the job's own output to wait for.
+/// After the direct child exits, how long to wait for the next output chunk.
+/// Storing a chunk does not consume this idle budget: slow spill-file writes
+/// must not cause unread pipe data to be discarded.
 let reader_drain_grace_ms : Int32 = 200
 
 ///|
@@ -207,28 +205,48 @@ pub async fn[X] ShellExecution::start(
 /// the direct child's exit. Coupling the two (read to EOF, then `wait`) would
 /// hang forever when the child exits but a descendant holds the pipe open — so a
 /// concurrent reader drains bytes and `process.wait()` is the authoritative exit
-/// signal that then closes the reader to unblock it.
+/// signal that starts an idle timeout on subsequent pipe reads. The reader is
+/// closed only after its task has finished, including cancellation cleanup.
 async fn ShellExecution::monitor(
   self : ShellExecution,
   reader : @process.ReadFromProcess,
   process : @process.Process,
 ) -> Unit {
   defer self.sink.close()
+  defer reader.close()
   errdefer self.set_terminal(Killed)
-  let reader_done : @async.Queue[Unit] = Queue(kind=Unbounded)
   @async.with_task_group(reads => {
     // Revoke dependents before this group joins the output reader, including
     // when cancellation bypasses the process wait's error handler.
-    errdefer {
+    errdefer self.begin_ending()
+    let exited = reads.spawn(() => {
+      // A concurrent stop may make wait raise or return a kill signal's code.
+      let terminal = try {
+        let code = process.wait()
+        if self.cancel_requested {
+          Killed
+        } else {
+          self.exited_on_its_own = true
+          Exited(code)
+        }
+      } catch {
+        _ => Killed
+      }
       self.begin_ending()
-      reader.close()
-    }
-    reads.spawn_bg(no_wait=true, allow_failure=true) <| () => {
-      defer ignore(reader_done.try_put(()) catch { _ => false })
+      terminal
+    })
+    let output = reads.spawn(allow_failure=true) <| () => {
       errdefer self.request_stop()
       for ;; {
         match
-          (reader.read_some(max_len=1024) catch {
+          (@async.any([
+            () => reader.read_some(max_len=1024),
+            () => {
+              ignore(exited.wait())
+              @async.sleep(reader_drain_grace_ms)
+              None
+            },
+          ]) catch {
             error => {
               let message = "failed to read process output: \{error}"
               self.sink.failure = Some(message)
@@ -258,32 +276,28 @@ async fn ShellExecution::monitor(
               self.killed_by_output_limit = true
               self.request_stop()
             }
+            // A descendant may keep writing after the direct child exits.
+            // Explicit stop and output caps must still end that drain even
+            // when the pipe never becomes idle. Before that exit, keep
+            // reading: a cancel handler may let the child write its last
+            // output while it winds down.
+            if exited.try_wait() is Some(_) &&
+              (self.cancel_requested || self.sink.truncated()) {
+              break
+            }
           }
         }
       }
     }
-    // The direct child's exit is authoritative, independent of the pipe. A
-    // concurrent `stop` cancels the process, so `wait` may raise or return a
-    // kill signal's code — every path lands on a terminal status.
-    let terminal = try {
-      let code = process.wait()
-      if self.cancel_requested {
-        Killed
-      } else {
-        self.exited_on_its_own = true
-        Exited(code)
-      }
+    let terminal = exited.wait()
+    // Join the reader before flushing or publishing a terminal snapshot. The
+    // per-read race cancels and joins a pending read on idle timeout; it never
+    // closes a descriptor while another task is reading or storing its data.
+    let output_ok = try {
+      output.wait()
+      true
     } catch {
-      _ => Killed
-    }
-    self.begin_ending()
-    // The child is gone, but the pipe may still hold output it wrote before
-    // exiting. Let the reader drain to EOF; only if it is still blocked after a
-    // short grace — a descendant is holding the pipe open — force it closed.
-    match
-      @async.with_timeout_opt(reader_drain_grace_ms, () => reader_done.get()) {
-      Some(_) => ()
-      None => reader.close()
+      _ => false
     }
     // Surface leftover half-decoded bytes, then publish the terminal status — in
     // that order, so a poller can never observe a terminal execution missing the
@@ -296,7 +310,7 @@ async fn ShellExecution::monitor(
       }
     }
     self.set_terminal(
-      if self.sink.failure is Some(_) {
+      if !output_ok || self.sink.failure is Some(_) {
         Killed
       } else {
         terminal
