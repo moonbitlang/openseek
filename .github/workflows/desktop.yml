@@ -112,8 +112,12 @@ jobs:
           $runtimeDirs = Get-ChildItem desktop/dist/seekmoon -Recurse -Filter *.dll |
             Select-Object -ExpandProperty DirectoryName -Unique
           if (-not $runtimeDirs) { throw 'Packaged app contains no runtime DLLs' }
-          $env:PATH = ($runtimeDirs -join ';') + ';' + $env:PATH
-          moon test desktop/backend/engine/jobs_wbtest.mbt --target native
+          # The DLL scan also finds MoonBit's bin directory. Its packaged core
+          # is initialized on app startup, so keep tests and their children on
+          # the CI installation.
+          $ciMoon = (Get-Command moon -CommandType Application | Select-Object -First 1).Source
+          $env:PATH = (Split-Path $ciMoon) + ';' + ($runtimeDirs -join ';') + ';' + $env:PATH
+          & $ciMoon test desktop/backend/engine/jobs_wbtest.mbt --target native
 
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
