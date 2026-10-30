@@ -32,35 +32,47 @@ timestamp, and one `SessionItem` payload:
 Appending never mutates the receiver. It returns a new session that shares the
 old log structure.
 
-User and tool message content uses
-`Content(Array[ContentPart])`, with ordered `Text(text)` and `Image(image)`
-parts. Constructors accept arrays; `.content().text()` concatenates text parts
-when a caller needs plain text. Projection preserves the full ordered content.
-Assistant content, runtime notices, summaries, reasoning, and terminal status
-text remain strings.
+User and tool content uses ordered `Text`, inline `Image`, and durable
+`ImageRef` parts. Text extraction excludes images. The agent admits initial
+input, steering input, and tool results through the attachment store before
+constructing their session items. The admitted content is shared by history
+and the live model-request buffer; session append never transforms it.
+Images retain their original PNG/JPEG/GIF/WebP bytes and the existing 5 MiB
+limit; this path does not resize or transcode them.
 
-JSON encoding writes a single `Text` part as a string, preserving compatibility
-with older readers for those records. Empty content, multiple text parts, and
-content containing images use arrays. Readers accept both forms; strings decode
-as one `Text` part. An image part has the shape
-`{"type":"image","media_type":"image/png","data":"<canonical padded base64>"}`.
-Image constructors retain original bytes, check PNG/JPEG/GIF/WebP signatures and
-limit decoded size to 5 MiB. They do not decode pixels, resize, or re-encode.
-Malformed base64 and mismatched MIME types fail decoding; unknown parts are not
-silently dropped. Provider-only `file` parts are not durable content: an expired
-provider ID cannot recover the original bytes. Legacy string records remain
-readable.
+New durable images have the form
+`{"type":"image","attachment_id":"sha256:...","media_type":"image/png","bytes":123}`.
+Their bytes live in the executing host's
+`~/.openseek/attachments/v1/objects/<first-two-hex-digits>/<sha256>` and are shared
+across sessions and worktrees. Hash, size and MIME are verified on read.
+Legacy inline base64 records remain readable; migrate them explicitly with
+`openseek sessions migrate-images <id> --dir <workspace>` to reduce existing
+logs. Normal history reads do not rewrite files. Migration preserves sequences
+and timestamps. Logs containing references use header version 2; readers
+accept both versions 1 and 2. Single text content still serializes as a string.
 
-`Content`, `ContentPart`, and `Image` are re-exported from the shared protocol
-module; `SteerApplied` receipts preserve the same ordered content.
+`Session::chat_messages()` preserves order and projects references as internal
+`openseek-attachment:` addresses. `deepseek/client` resolves those addresses
+before encoding a provider request, uploading through the Files API and using
+`File(file_id=...)`. Normal turns and compaction share this path. Legacy inline
+records continue to use data URLs until migrated.
 
-`Session::chat_messages()` returns `@deepseek.ChatMessage` values, projecting
-images into `image_url` parts containing base64 data URLs while preserving part
-order and stored history. `deepseek/client` checks image support when encoding
-each request; the DeepSeek encoder restricts images to user/tool roles.
-Both normal turns and resumed sessions send the image bytes directly; no Files
-API upload, provider ID, expiry handling, or upload cache is involved. Images
-never require their original filesystem path or a separate attachment directory.
+Upload mappings are persisted separately in
+`~/.openseek/deepseek/files-v1.json`, scoped by a digest of endpoint and
+credentials plus the image identity. Uploads request a one-day lifetime and
+refresh when fewer than five minutes remain. A short file lock covers index
+reread, merge and atomic replacement; it never covers network IO. Up to four
+unique images per request upload concurrently. Concurrent duplicate uploads
+reuse the committed winner; unused remote duplicates expire naturally.
+Explicit provider file-not-found/expired/invalid-ID errors invalidate the exact
+cached IDs and allow one refresh attempt, before any completion has started.
+There is no automatic deletion of local shared attachments.
+
+Desktop loads referenced thumbnails on demand from the owning authenticated
+host. Message edits retain the reference. Forks share attachments without
+copying them into worktrees. A raw JSONL is no longer a portable image bundle:
+when moving it to another host, also copy the referenced attachment objects.
+Standalone HTML exports embed image bytes to stay self-contained.
 
 The agent loop and compaction call the provider client directly. Desktop
 accepts selected, pasted, or dropped images, carries them through initial prompts,

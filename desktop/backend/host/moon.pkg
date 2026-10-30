@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/attachments",
   "openseek_desktop/commands",
   "openseek_desktop/backend/engine",
   "openseek_desktop/backend/uuid",

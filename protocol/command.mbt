@@ -246,6 +246,13 @@ fn parse_command_content(line : Json) -> Result[Content, String] {
       }
       let parts : Array[ContentPart] = [Text(text)]
       for url in urls {
+        if url.has_prefix("openseek-attachment:") {
+          let reference = ImageRef::from_url(url) catch {
+            error => return Err("\{error}")
+          }
+          parts.push(ImageRef(reference))
+          continue
+        }
         let image = Image::from_data_url(url) catch {
           error => return Err("\{error}")
         }

@@ -19,6 +19,10 @@ fn control_draft(content : @wire.Content) -> @composer.Draft {
     .filter_map(part => {
       match part {
         Text(_) => None
+        ImageRef(reference) => {
+          let image : @composer.Image = { name: "Image", url: reference.url(), }
+          Some(image)
+        }
         Image(image) => {
           let image : @composer.Image = {
             name: "Image",

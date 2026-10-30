@@ -80,6 +80,9 @@ async fn cancel_after_picture(
   model : @deepseek.Model,
   image : @agent_session.Image,
 ) -> Array[@agent_session.SessionItem] {
+  let home = @fs.tmpdir(prefix="openseek-cancel-image-")
+  let attachments = @attachments.AttachmentStore(home + "/attachments")
+  defer @fs.rmdir(home, recursive=true)
   let items : Array[@agent_session.SessionItem] = []
   @async.with_task_group(group => {
     let bodies : Array[String] = []
@@ -128,6 +131,8 @@ async fn cancel_after_picture(
         api_key="offline",
         model~,
         api_url=url,
+        attachments~,
+        upload_index_dir=home + "/deepseek",
         session=Session(SessionId("ptc-cancel"), system_prompt="system"),
         content=Content([Text("block")]),
         max_steps=3,
@@ -155,8 +160,8 @@ async test "agent cancellation persists completed images and interrupted PTC met
   assert_true(
     items.any(item => {
       item is Tool(result) &&
-      result.content().0 is [Text(_), Image(saved)] &&
-      saved == image &&
+      result.content().0 is [Text(_), ImageRef(saved)] &&
+      saved.attachment_id == "sha256:\{@attachments.digest(image.bytes)}" &&
       result.data()
       is Some(
         {

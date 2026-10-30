@@ -1,5 +1,5 @@
 ///|
-/// The version of the session-file header record this package understands.
+/// The default text-only header version. Readers also accept attachment format 2.
 let session_file_version : Int32 = 1
 
 ///|
@@ -42,13 +42,13 @@ pub enum HeaderParse {
 ///
 /// Header and event records are structurally disjoint (events carry
 /// `sequence`/`item`, never `version`), so this is also how a reader tells
-/// the two apart. Any object carrying a numeric `version` other than 1 is a
+/// the two apart. Any object carrying a numeric `version` other than 1 or 2 is a
 /// header from a format this build does not read — `UnsupportedVersion` —
 /// even though its remaining fields cannot be interpreted.
 pub fn classify_header(json : Json) -> HeaderParse {
   match json {
-    { "version": Number(version, ..), .. } if version.to_int() !=
-      session_file_version => UnsupportedVersion(version.to_int())
+    { "version": Number(version, ..), .. } if version != 1 && version != 2 =>
+      UnsupportedVersion(version.to_int())
     {
       "version": Number(_, ..),
       "id": String(id),

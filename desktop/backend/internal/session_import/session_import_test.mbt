@@ -62,7 +62,7 @@ async test "invalid JSON and incomplete logs are rejected before writing" {
       "not json",
       "{}",
       "[]",
-      dataset(events="{\"version\":2,\"id\":\"x\",\"system_prompt\":\"\"}\n"),
+      dataset(events="{\"version\":3,\"id\":\"x\",\"system_prompt\":\"\"}\n"),
       dataset(
         events="{\"version\":1,\"id\":\"x\",\"system_prompt\":\"\"}\n{partial",
       ),
