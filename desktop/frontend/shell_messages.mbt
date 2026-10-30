@@ -26,6 +26,7 @@ priv enum ShellMessage {
   ShowMinimal
   DetailedMode
   ConversationTransfer
+  ConversationActions
   ExportConversation
   ImportConversation
   HideTerminal
@@ -257,6 +258,11 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, ConversationTransfer) => "导出与导入"
     (TraditionalChinese, ConversationTransfer) => "匯出與匯入"
     (Japanese, ConversationTransfer) => "共有とインポート"
+    (English, ConversationActions) => "Conversation actions"
+    (Spanish, ConversationActions) => "Acciones de conversación"
+    (SimplifiedChinese, ConversationActions) => "对话操作"
+    (TraditionalChinese, ConversationActions) => "對話操作"
+    (Japanese, ConversationActions) => "会話の操作"
     (English, ExportConversation) => "Export"
     (Spanish, ExportConversation) => "Exportar"
     (SimplifiedChinese, ExportConversation) => "导出"

@@ -3749,9 +3749,8 @@ fn Model::conversation_by_pending_steer(
 /// Panel state survives page switches, but the panel is rendered only when
 /// the current task supplies the identity and checkout needed by the host.
 /// Rendering and read acknowledgment must agree on whether it covers a chat.
-fn Model::file_panel_visible(self : Model) -> Bool {
+fn Model::file_panel_available(self : Model) -> Bool {
   (!self.cloud_selected() || file_ctx(self).cloud_files is Some(_)) &&
-  self.right_panel_open &&
   (
     self.screen is Chat ||
     (
@@ -3760,6 +3759,11 @@ fn Model::file_panel_visible(self : Model) -> Bool {
       placement.checkout_root() is Some(_)
     )
   )
+}
+
+///|
+fn Model::file_panel_visible(self : Model) -> Bool {
+  self.right_panel_open && self.file_panel_available()
 }
 
 ///|
