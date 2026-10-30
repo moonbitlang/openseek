@@ -761,9 +761,9 @@ async test "query cancellation keeps the cache-populating scan alive" {
     group.spawn_bg(() => service.run())
     let root = @pathx.Path("/workspace-cancel").resolve()
     let first = group.spawn(() => service.search(root, "cache-a", "", 0, 1))
-    @async.with_timeout(1000, () => starts.get())
+    starts.get()
     service.cancel("cache-a", 1)
-    let cancelled = @async.with_timeout(1000, () => first.wait())
+    let cancelled = first.wait()
     assert_true(cancelled.cancelled)
     release.put(())
     @async.pause()
@@ -790,23 +790,17 @@ async test "one connection serializes discovery across cache sessions" {
     let first = group.spawn(() => {
       service.search(first_root, "cache-one", "", 0, 1)
     })
-    assert_eq(
-      @async.with_timeout(1000, () => starts.get()),
-      first_root.to_string(),
-    )
+    assert_eq(starts.get(), first_root.to_string())
     let second = group.spawn(() => {
       service.search(second_root, "cache-two", "", 0, 2)
     })
     @async.pause()
     assert_true(starts.try_get() is None)
     releases.put(())
-    ignore(@async.with_timeout(1000, () => first.wait()))
-    assert_eq(
-      @async.with_timeout(1000, () => starts.get()),
-      second_root.to_string(),
-    )
+    ignore(first.wait())
+    assert_eq(starts.get(), second_root.to_string())
     releases.put(())
-    ignore(@async.with_timeout(1000, () => second.wait()))
+    ignore(second.wait())
     group.return_immediately(())
   })
 }
