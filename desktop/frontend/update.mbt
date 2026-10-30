@@ -2193,7 +2193,12 @@ fn update_msg(
       }
       (
         @cmd.batch([
-          fetch_account(dispatch, model.is_desktop, model.account_epoch),
+          fetch_account(
+            dispatch,
+            model.is_desktop,
+            model.account_epoch,
+            local_console=model.is_local_console(),
+          ),
           @cmd.custom_cmd(_ => @cloud.discard_legacy_credential()),
           device,
           load_saved_settings(is_desktop=model.is_desktop, dispatch),
@@ -4163,7 +4168,14 @@ fn update_msg(
       }
       expire_account(dispatch, model)
     }
-    RemoteStatusLoaded(status) =>
+    RemoteStatusLoaded(status) => {
+      if model.is_local_console() {
+        let epoch = model.account_epoch + 1
+        return (
+          fetch_account(dispatch, false, epoch, local_console=true),
+          { ..model, account_epoch: epoch, },
+        )
+      }
       (
         if model.is_desktop && !model.remote_connecting {
           fetch_account(dispatch, true, model.account_epoch)
@@ -4172,6 +4184,7 @@ fn update_msg(
         },
         { ..model, remote_access: Some(status), },
       )
+    }
     RemoteAccessSet(enabled) =>
       (set_remote_access(dispatch, enabled), { ..model, remote_error: None, })
     RemoteConnectClicked => begin_account_login(dispatch, model, create=false)

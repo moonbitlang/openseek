@@ -1,6 +1,7 @@
 // The development console: a `.dev` build serves its own frontend bundle on
 // plain `http://127.0.0.1:<port>/` to the system browser, answering the
 // console's account routes for the one machine it is — `/v1/auth/me`, a
+// launch-authorized `/v1/auth/session` handoff of the window's current account,
 // `/v1/devices` roster naming this host as device `host`, and
 // `/v1/devices/host/ws` upgraded into the JSON-RPC connection a relayed
 // browser gets (docs/remote-protocol.md). The page is the same bundle and
@@ -63,6 +64,7 @@ priv enum Route {
   // `GET /?…token=…`: the entry document, whose response sets the session.
   Entry(String)
   AuthMe
+  AccountSession
   Devices
   // The gate's sign-in link (`GET /v1/auth/login`) and the page's sign-out
   // (`POST /v1/auth/logout`): the console page leaves and comes back, while
@@ -84,6 +86,7 @@ fn route(meth : @http.RequestMethod, path : String, entry~ : String) -> Route {
     (Get, "/") if query_param(query, "token") is Some(token) => Entry(token)
     (Get, path) if @routes.is_application_path(path) => ApplicationPage
     (Get, "/v1/auth/me") => AuthMe
+    (Get, "/v1/auth/session") => AccountSession
     (Get, "/v1/devices") => Devices
     (Get, "/v1/auth/login") => Login
     (Post, "/v1/auth/logout") => Logout
@@ -112,6 +115,7 @@ async fn LocalConsole::handle(
   // The account routes and the socket are the session's; the page and its
   // files are not, since the entry document is what grants the session.
   let needs_session = route is AuthMe ||
+    route is AccountSession ||
     route is Devices ||
     route is DeviceSocket ||
     route is Logout
@@ -128,6 +132,7 @@ async fn LocalConsole::handle(
           root,
           entry,
           conn,
+          local_console_document=true,
           cookie=Cookie(
             self.cookie_name,
             self.token,
@@ -139,9 +144,15 @@ async fn LocalConsole::handle(
       } else {
         respond_status(conn, 403, "Forbidden")
       }
-    // No account stands behind the local console, so it has no avatar; the
-    // field is absent rather than empty.
+    // Launch authorization has a local identity independent of the optional
+    // Desktop account returned by /v1/auth/session.
     AuthMe => respond_json(conn, { "login": "local" })
+    AccountSession => {
+      let reply : @protocol.AccountSessionReply = {
+        session: state.auth_store().account(),
+      }
+      respond_json(conn, reply.to_json())
+    }
     Devices =>
       respond_json(conn, {
         "devices": [
@@ -183,8 +194,15 @@ async fn LocalConsole::handle(
       respond_redirect(conn, target)
     }
     Logout => respond_status(conn, 204, "No Content")
-    Static(relative) => serve_static(root, relative, conn)
-    ApplicationPage => serve_static(root, entry, conn)
+    Static(relative) =>
+      serve_static(
+        root,
+        relative,
+        conn,
+        local_console_document=relative == entry,
+      )
+    ApplicationPage =>
+      serve_static(root, entry, conn, local_console_document=true)
     Unknown => respond_status(conn, 404, "Not Found")
     MethodNotAllowed => respond_status(conn, 405, "Method Not Allowed")
   }
@@ -262,6 +280,7 @@ async fn serve_static(
   relative : String,
   conn : @http.ServerConnection,
   cookie? : @http.Cookie,
+  local_console_document~ : Bool = false,
 ) -> Unit {
   // Only an absent file is 404; an unreadable one is the bundle being broken,
   // which the log names and the browser sees as a server failure.
@@ -280,6 +299,20 @@ async fn serve_static(
       respond_status(conn, 500, "Internal Server Error")
       return
     }
+  }
+  // The marker identifies this host independently of its current CSR route.
+  // It carries no account or launch credential; public documents and assets
+  // retain their existing accessibility.
+  let body = if local_console_document {
+    let html = @utf8.decode_lossy(body, ignore_bom=true)
+    @utf8.encode(
+      html.replace_all(
+        old="<head>",
+        new="<head>\n<meta name=\"seekmoon-local-console\" />",
+      ),
+    )
+  } else {
+    body
   }
   conn.send_response(
     200,
@@ -426,6 +459,9 @@ test "routes: the entry, the console's account routes, then the bundle" {
     is Static("desktop-dev.html"),
   )
   assert_true(route(Get, "/v1/auth/me", entry="index.html") is AuthMe)
+  assert_true(
+    route(Get, "/v1/auth/session", entry="index.html") is AccountSession,
+  )
   assert_true(route(Get, "/v1/devices", entry="index.html") is Devices)
   assert_true(route(Post, "/v1/auth/logout", entry="index.html") is Logout)
   assert_true(route(Get, "/v1/auth/login", entry="index.html") is Login)

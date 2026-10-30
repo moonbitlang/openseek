@@ -220,7 +220,11 @@ fn update_console_msg(
         fetch_console_roster(
           dispatch,
           generation,
-          token?=model.account.map(account => account.token),
+          token?=if model.is_local_console() {
+            None
+          } else {
+            model.account.map(account => account.token)
+          },
         ),
         {
           ..model,
@@ -250,6 +254,13 @@ fn update_console_msg(
       apply_roster(dispatch, model, metas)
     }
     RosterUnauthorized(generation~, token~) => {
+      if model.is_local_console() {
+        guard generation == model.console.roster_request_generation &&
+          token is None else {
+          return (@cmd.none, model)
+        }
+        return console_signed_out(dispatch, model)
+      }
       guard generation == model.console.roster_request_generation &&
         model.account.map(account => account.token) == token else {
         return (@cmd.none, model)
@@ -269,11 +280,21 @@ fn update_console_msg(
         },
       )
     }
-    RefreshClicked =>
+    RefreshClicked => {
+      let local_console = model.is_local_console()
+      let epoch = model.account_epoch + (if local_console { 1 } else { 0 })
       (
-        fetch_account(dispatch, false, model.account_epoch),
+        @cmd.batch([
+          fetch_account(dispatch, false, epoch, local_console~),
+          if local_console {
+            fetch_console_me(dispatch)
+          } else {
+            @cmd.none
+          },
+        ]),
         {
           ..model,
+          account_epoch: epoch,
           console: {
             ..model.console,
             roster_sync: RosterLoading,
@@ -281,7 +302,11 @@ fn update_console_msg(
           },
         },
       )
+    }
     SignOutClicked => {
+      if model.is_local_console() {
+        return update_console_msg(dispatch, RefreshClicked, model)
+      }
       guard !model.console.busy else { return (@cmd.none, model) }
       (
         sign_out(dispatch),
