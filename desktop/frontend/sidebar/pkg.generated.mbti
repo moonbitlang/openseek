@@ -25,6 +25,7 @@ pub(all) struct Account {
   avatar : String
   busy : Bool
   notice : String?
+  managed_by_desktop : Bool
   device : DeviceChoice?
   online_devices : Array[DeviceChoice]
 } derive(Eq, @debug.Debug)

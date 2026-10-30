@@ -14,6 +14,10 @@ pub(all) enum Message {
   DownloadVersion(String)
   Status
   Account
+  ManagedByDesktop
+  DesktopAccountDescription
+  DesktopSignInHint
+  LocalConsoleLaunchHint
   SignOut
   SignOutDescription
   SignIn
@@ -258,6 +262,41 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, Account) => "账户"
     (TraditionalChinese, Account) => "帳戶"
     (Japanese, Account) => "アカウント"
+    (English, ManagedByDesktop) => "Managed by Desktop"
+    (Spanish, ManagedByDesktop) => "Gestionada desde Desktop"
+    (SimplifiedChinese, ManagedByDesktop) => "由 Desktop 管理"
+    (TraditionalChinese, ManagedByDesktop) => "由 Desktop 管理"
+    (Japanese, ManagedByDesktop) => "Desktop で管理"
+    (English, DesktopAccountDescription) =>
+      "This console uses Desktop's account. Manage sign-in and sign-out in Desktop, then refresh here."
+    (Spanish, DesktopAccountDescription) =>
+      "Esta consola usa la cuenta de Desktop. Inicia o cierra sesión en Desktop y actualiza esta página."
+    (SimplifiedChinese, DesktopAccountDescription) =>
+      "此控制台使用 Desktop 的账户。请在 Desktop 中登录或退出，然后在此刷新。"
+    (TraditionalChinese, DesktopAccountDescription) =>
+      "此主控台使用 Desktop 的帳戶。請在 Desktop 中登入或登出，然後在此重新整理。"
+    (Japanese, DesktopAccountDescription) =>
+      "このコンソールは Desktop のアカウントを使用します。Desktop でログインまたはログアウトしてから、ここで更新してください。"
+    (English, DesktopSignInHint) =>
+      "Sign in to Desktop, then refresh to use Cloud."
+    (Spanish, DesktopSignInHint) =>
+      "Inicia sesión en Desktop y actualiza esta página para usar Cloud."
+    (SimplifiedChinese, DesktopSignInHint) =>
+      "请在 Desktop 中登录，然后刷新以使用 Cloud。"
+    (TraditionalChinese, DesktopSignInHint) =>
+      "請在 Desktop 中登入，然後重新整理以使用 Cloud。"
+    (Japanese, DesktopSignInHint) =>
+      "Cloud を使用するには、Desktop にログインしてから更新してください。"
+    (English, LocalConsoleLaunchHint) =>
+      "Open the Local Console from Desktop to authorize this browser."
+    (Spanish, LocalConsoleLaunchHint) =>
+      "Abre la consola local desde Desktop para autorizar este navegador."
+    (SimplifiedChinese, LocalConsoleLaunchHint) =>
+      "请从 Desktop 打开本地 Console，以授权此浏览器。"
+    (TraditionalChinese, LocalConsoleLaunchHint) =>
+      "請從 Desktop 開啟本機 Console，以授權此瀏覽器。"
+    (Japanese, LocalConsoleLaunchHint) =>
+      "このブラウザーを認証するには、Desktop からローカル Console を開いてください。"
     (English, SignOut) => "Sign out"
     (Spanish, SignOut) => "Cerrar sesión"
     (SimplifiedChinese, SignOut) => "退出登录"

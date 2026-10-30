@@ -8,6 +8,7 @@ fn selector_account(
     avatar: "",
     busy: false,
     notice: None,
+    managed_by_desktop: false,
     device,
     online_devices,
   }
