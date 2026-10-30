@@ -1,7 +1,7 @@
 ///|
 priv struct SourceRange {
-  first : Int
-  last_exclusive : Int
+  first : Int32
+  last_exclusive : Int32
 }
 
 ///|
@@ -139,8 +139,8 @@ fn push_loc_range(ranges : Array[SourceRange], meta : @cmark_base.Meta) -> Unit 
 fn push_html_comment_ranges(
   markdown : String,
   ranges : Array[SourceRange],
-  start~ : Int,
-  stop~ : Int,
+  start~ : Int32,
+  stop~ : Int32,
 ) -> Unit {
   let len = markdown.length()
   let stop = stop.clamp(min=0, max=len)
@@ -159,7 +159,11 @@ fn push_html_comment_ranges(
 }
 
 ///|
-fn find_html_comment_open(markdown : String, start~ : Int, stop~ : Int) -> Int? {
+fn find_html_comment_open(
+  markdown : String,
+  start~ : Int32,
+  stop~ : Int32,
+) -> Int32? {
   let stop = stop.clamp(min=0, max=markdown.length())
   let start = start.clamp(min=0, max=stop)
   for cursor in start..<(stop - 3) {
@@ -177,9 +181,9 @@ fn find_html_comment_open(markdown : String, start~ : Int, stop~ : Int) -> Int? 
 ///|
 fn find_html_comment_close(
   markdown : String,
-  start~ : Int,
-  stop~ : Int,
-) -> Int? {
+  start~ : Int32,
+  stop~ : Int32,
+) -> Int32? {
   let stop = stop.clamp(min=0, max=markdown.length())
   let start = start.clamp(min=0, max=stop)
   for cursor in start..<(stop - 2) {
@@ -194,7 +198,7 @@ fn find_html_comment_close(
 }
 
 ///|
-fn line_start(markdown : String, offset : Int) -> Int {
+fn line_start(markdown : String, offset : Int32) -> Int32 {
   for cursor in offset>=..1 {
     if markdown[cursor - 1] == '\n' || markdown[cursor - 1] == '\r' {
       break cursor

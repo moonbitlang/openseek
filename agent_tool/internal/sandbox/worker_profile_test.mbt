@@ -5,7 +5,7 @@ async fn git_setup(args : Array[String], cwd : String) -> String {
     "git",
     args,
     inherit_env=true,
-    cwd=cwd.view(),
+    cwd=cwd.clamped_view(),
   )
   guard code == 0 else { fail("git failed in \{cwd}: \{data.text()}") }
   data.text()

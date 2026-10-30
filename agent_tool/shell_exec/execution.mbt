@@ -156,7 +156,7 @@ pub async fn[X] ShellExecution::start(
     stdin=child_stdin,
     stdout=writer,
     stderr=writer,
-    cwd?=cwd.map(cwd => cwd.view()),
+    cwd?=cwd.map(cwd => cwd.clamped_view()),
     extra_env?,
     cancel_handler=CancellationHandler(pid => {
       if started.val is Some(exec) {

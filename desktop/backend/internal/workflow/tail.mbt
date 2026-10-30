@@ -342,6 +342,6 @@ pub fn display_label(label : String) -> String {
   if flat.length() <= 72 {
     flat
   } else {
-    flat.view(end_offset=71).to_owned() + "…"
+    flat.clamped_view(end=71).to_owned() + "…"
   }
 }

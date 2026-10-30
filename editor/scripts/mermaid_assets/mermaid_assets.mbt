@@ -109,7 +109,7 @@ async fn run_tar(
     "tar",
     command_args,
     inherit_env=true,
-    cwd=working_dir.view(),
+    cwd=working_dir.clamped_view(),
   ) catch {
     error =>
       raise MermaidAssetError(

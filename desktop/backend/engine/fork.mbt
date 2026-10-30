@@ -393,5 +393,5 @@ async test "fork validates its request before spawning and releases its reader l
 /// A fresh side-chat token: the leading hex digits of a random UUID, which
 /// are all drawn from the entropy source.
 fn side_chat_token() -> String raise {
-  @uuid.mint().view(end_offset=@protocol.SideChatTokenLength).to_owned()
+  @uuid.mint().exact_view(end=@protocol.SideChatTokenLength).to_owned()
 }

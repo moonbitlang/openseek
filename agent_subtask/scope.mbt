@@ -25,8 +25,8 @@ fn parse_status_z(output : String) -> Array[Change] {
       index += 1
       continue
     }
-    let xy = record.view(end_offset=2).to_owned()
-    let path = record.view(start_offset=3).to_owned()
+    let xy = record.exact_view(end=2).to_owned()
+    let path = record.exact_view(start=3).to_owned()
     changes.push({ path, kind: xy.trim().to_owned(), })
     // A rename/copy consumes the NEXT field as its source path.
     if xy.contains("R") || xy.contains("C") {
@@ -101,7 +101,7 @@ fn gitlink_introductions_in_raw_z(output : String) -> Array[String] {
     if meta.has_prefix(":") && index + 1 < fields.length() {
       // :src_mode dst_mode src_oid dst_oid status
       let parts = meta
-        .view(start_offset=1)
+        .exact_view(start=1)
         .split(" ")
         .map(p => p.to_owned())
         .collect()

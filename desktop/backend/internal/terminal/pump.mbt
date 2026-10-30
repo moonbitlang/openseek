@@ -63,10 +63,10 @@ async fn run_session(
       request.reply.put(Err("terminal command must not be empty"))
       return
     }
-    let args = request.argv[1:].map(arg => arg.view())
+    let args = request.argv[1:].map(arg => arg.clamped_view())
     let pty = @pty.spawn(
       group,
-      file.view(),
+      file.clamped_view(),
       args,
       // The PTY applies the working directory in the platform spawn call,
       // so neither POSIX nor Windows needs a shell command that performs cd.

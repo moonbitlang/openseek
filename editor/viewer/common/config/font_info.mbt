@@ -205,7 +205,7 @@ fn wrap_in_quotes(font_family : String) -> String {
 /// weights, but retaining prefix/sign handling prevents raw strings such as
 /// `0500` or `500suffix` from leaking into CSS variation syntax.
 fn parse_decimal_prefix(value : String) -> String {
-  let view = value.view()
+  let view = value.clamped_view()
   let index = for index = 0; index < value.length(); {
     let code = view.unsafe_get(index).to_int()
     if is_ecmascript_whitespace(code) {

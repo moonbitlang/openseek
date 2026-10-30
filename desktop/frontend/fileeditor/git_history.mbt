@@ -15,7 +15,7 @@ fn short_commit(commit : String) -> String {
   if commit.length() <= 8 {
     commit
   } else {
-    commit.view(end_offset=8).to_owned()
+    commit.exact_view(end=8).to_owned()
   }
 }
 

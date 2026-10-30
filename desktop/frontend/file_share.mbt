@@ -44,7 +44,7 @@ fn Model::workspace_file(self : Model, path : String) -> @common.Uri? {
       _ => return None
     }
   } else if ctx.owner is @interop.Host(owner) &&
-    (path.has_prefix("/") || path.view() =~ re"^[A-Za-z]:[\\/]") {
+    (path.has_prefix("/") || path.clamped_view() =~ re"^[A-Za-z]:[\\/]") {
     guard @resource.of_path(owner.channel, @common.Uri::file(path).path)
       is Some(file) else {
       return None

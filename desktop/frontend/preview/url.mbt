@@ -24,7 +24,7 @@ fn authority_of(url : String) -> String? {
   } else {
     return None
   }
-  Some(head_of(url.view(start_offset=offset)))
+  Some(head_of(url.exact_view(start=offset)))
 }
 
 ///|
@@ -155,7 +155,7 @@ pub fn normalize_url(input : String) -> String? {
     trimmed
   } else {
     // A colon before any slash is either a port (digits) or a foreign scheme.
-    match head_of(trimmed.view()).split(":").collect() {
+    match head_of(trimmed.clamped_view()).split(":").collect() {
       [_] => ()
       [_, port] if all_digits(port) => ()
       _ => return None

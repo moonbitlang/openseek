@@ -249,7 +249,7 @@ fn unmerged_paths(output : String) -> Array[String] {
   let files : Array[String] = []
   for record in output.split("\u{0}") {
     guard record.find("\t") is Some(tab) else { continue }
-    let path = record.to_owned().view(start_offset=tab + 1).to_owned()
+    let path = record.to_owned().exact_view(start=tab + 1).to_owned()
     guard !path.is_empty() else { continue }
     if !files.contains(path) {
       files.push(path)

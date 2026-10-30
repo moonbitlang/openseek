@@ -576,11 +576,11 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
   let out = run(
     (
       #|---
-      #|import { "bobzhang/myshell", "moonbitlang/core/async" }
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
       #|---
       #|
       #|async fn main {
-      #|  @myshell.Cmd("curl", ["--version"]).output() |> ignore
+      #|  @shell.Cmd("curl", ["--version"]).output() |> ignore
       #|}
     ),
   )
@@ -705,13 +705,13 @@ async test "a command outside the spawn allowlist is denied by the policy" {
   let out = run(
     (
       #|---
-      #|import { "bobzhang/myshell", "moonbitlang/core/async" }
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
       #|---
       #|
       #|async fn main {
       #|  let refused = try {
-      #|    let result = @myshell.Cmd("chmod", ["644", "/tmp"]).output()
-      #|    "ran exit=\{result.exit_code}"
+      #|    let result = @shell.Cmd("chmod", ["--help"]).output()
+      #|    "ran exit=\{result.exit_code()}"
       #|  } catch { _ => "refused" }
       #|  println("chmod: \{refused}")
       #|}
@@ -729,17 +729,17 @@ async test "the spawn allowlist discriminates between subcommands" {
   let out = run(
     (
       #|---
-      #|import { "bobzhang/myshell", "moonbitlang/core/async" }
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
       #|---
       #|
       #|async fn main {
       #|  // A refusal must be the POLICY refusing, not the command failing, so
       #|  // make the repo first: every probe below then exits 0 if it is allowed
       #|  // to start at all.
-      #|  @myshell.Cmd("git", ["init", "-q", "."]).output() |> ignore
+      #|  @shell.Cmd("git", ["init", "-q", "."]).output() |> ignore
       #|  async fn probe(program : String, args : Array[String]) -> String {
       #|    try {
-      #|      @myshell.Cmd(program, args).output() |> ignore
+      #|      @shell.Cmd(program, args).output() |> ignore
       #|      "ran"
       #|    } catch { _ => "refused" }
       #|  }
@@ -1093,7 +1093,7 @@ async test "the removed background field has grammatical migration guidance" {
 }
 
 // The EDSL guidance the description carries — how a snippet is shaped, the
-// warning off `@myshell.Pipeline`, batching probes into one turn — is not
+// warning off `@shell.Pipeline`, batching probes into one turn — is not
 // re-pinned by phrase here: an assertion that a text contains its own words
 // breaks on every rewrite and catches no real gap.
 
@@ -1540,13 +1540,13 @@ async test "an approved escalation runs outside the spawn allowlist" {
   let out = run_escalating(
     (
       #|---
-      #|import { "bobzhang/myshell", "moonbitlang/core/async" }
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
       #|---
       #|
       #|async fn main {
       #|  let ran = try {
-      #|    let result = @myshell.Cmd("chmod", ["644", "/tmp"]).output()
-      #|    "ran exit=\{result.exit_code}"
+      #|    let result = @shell.Cmd("chmod", ["--help"]).output()
+      #|    "ran exit=\{result.exit_code()}"
       #|  } catch { _ => "refused" }
       #|  println("chmod: \{ran}")
       #|}
@@ -1640,11 +1640,11 @@ async test "an ordinary call never asks for approval" {
 async test "a refusal names escalation when a channel is wired" {
   let source =
     #|---
-    #|import { "bobzhang/myshell", "moonbitlang/core/async" }
+    #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
     #|---
     #|
     #|async fn main {
-    #|  @myshell.Cmd("chmod", ["644", "/tmp"]).output() |> ignore
+    #|  @shell.Cmd("chmod", ["--help"]).output() |> ignore
     #|}
   let asking = @vfs.with_tmpdir(prefix="mbtx-hint-", ws => {
     let definition = @mbtx.definition(
@@ -1685,7 +1685,7 @@ async test "an escalated run is not read as a policy refusal" {
     // text the scan looks for — from the OS, not from any policy.
     let source =
       #|---
-      #|import { "bobzhang/myshell", "moonbitlang/core/async", "moonbitlang/core/async/fs" }
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async", "moonbitlang/core/async/fs" }
       #|---
       #|
       #|async fn main {
@@ -1693,7 +1693,7 @@ async test "an escalated run is not read as a policy refusal" {
       #|  let path = dir + "/not-executable"
       #|  @fs.write_text(path, "not a program", create_mode=CreateOrTruncate)
       #|  let refused = try {
-      #|    @myshell.Cmd(path, []).output() |> ignore
+      #|    @shell.Cmd(path, []).output() |> ignore
       #|    "ran"
       #|  } catch { error => "\{error}" }
       #|  println("child: \{refused}")

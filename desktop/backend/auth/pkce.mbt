@@ -62,7 +62,7 @@ priv enum Callback {
 fn parse_callback(target : String, oauth_state~ : String) -> Callback {
   let (path, query) = match target.split_once("?") {
     Some((path, query)) => (path, query)
-    None => (target, "".view())
+    None => (target, "".clamped_view())
   }
   guard path == "/cb" else { return Stray }
   let mut code : String? = None

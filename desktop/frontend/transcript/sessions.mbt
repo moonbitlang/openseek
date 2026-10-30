@@ -197,7 +197,7 @@ pub fn subrun_child_sessions(
     // token can arrive as `sr-3,` or `sr-3)`.
     let token = raw.trim(chars=",()")
     guard token.has_prefix("sr-") else { continue }
-    let digits = token.view(start_offset=3)
+    let digits = token.exact_view(start=3)
     guard !digits.is_empty() &&
       digits.length() <= 9 &&
       digits.all(c => c.is_ascii_digit()) else {

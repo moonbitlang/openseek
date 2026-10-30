@@ -1,6 +1,6 @@
 ///|
 fn parsed_xdg_documents_line(line : String) -> String? {
-  parse_xdg_documents_dir_line(Path("/home/u"), line.view()).map(path => {
+  parse_xdg_documents_dir_line(Path("/home/u"), line.clamped_view()).map(path => {
     path.to_string()
   })
 }

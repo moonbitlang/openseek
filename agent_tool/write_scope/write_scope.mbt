@@ -181,7 +181,7 @@ fn WriteScope::relative_parts(
   let relative = if path == root {
     ""
   } else {
-    path.view(start_offset=root.length() + 1).to_owned()
+    path.exact_view(start=root.length() + 1).to_owned()
   }
   relative.split("/").map(p => p.to_owned()).collect()
 }

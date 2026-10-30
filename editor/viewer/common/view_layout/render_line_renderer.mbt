@@ -276,7 +276,7 @@ fn split_large_tokens(
 ) -> Array[LinePart] {
   let mut last_token_end_index = 0
   let result : Array[LinePart] = []
-  let view = line_content.view()
+  let view = line_content.clamped_view()
   if only_at_spaces {
     for token in tokens {
       let token_end_index = token.end_index
@@ -360,7 +360,7 @@ fn split_leading_whitespace_from_rtl(
     return tokens
   }
   let first_token_end_index = first_token.end_index
-  let view = line_content.view()
+  let view = line_content.clamped_view()
   let mut first_non_whitespace_index = 0
   for i in 0..<first_token_end_index {
     let charcode = view.unsafe_get(i).to_int()
@@ -413,7 +413,7 @@ fn extract_control_characters(
   let result : Array[LinePart] = []
   let mut last_end_index = 0
   let mut char_offset = 0
-  let view = line_content.view()
+  let view = line_content.clamped_view()
   for token in tokens {
     let token_end_index = token.end_index
     while char_offset < token_end_index {
@@ -468,7 +468,7 @@ fn apply_render_whitespace(
   let only_boundary = input.render_whitespace == Boundary
   let only_trailing = input.render_whitespace == Trailing
   let generate_for_each = generate_line_part_for_each_whitespace(input)
-  let view = line_content.view()
+  let view = line_content.clamped_view()
   let result : Array[LinePart] = []
   let mut token_index = 0
   let mut token_type = tokens[token_index].class_name
@@ -735,7 +735,7 @@ fn render_line(
   let render_space_char_code = input.render_space_char_code
   let render_whitespace = input.render_whitespace
   let render_control_characters = input.render_control_characters
-  let view = line_content.view()
+  let view = line_content.clamped_view()
   let character_mapping = CharacterMapping(len + 1)
   let mut last_character_mapping_defined = false
   let mut char_index = 0
@@ -1062,7 +1062,7 @@ fn last_non_whitespace_index_of(view : StringView, len : Int32) -> Int32 {
 /// Monaco's `strings.containsRTL`, restricted to the code units in
 /// `line_content[start:end)` (surrogate pairs decoded to code points).
 fn contains_rtl_in(line_content : String, start : Int32, end : Int32) -> Bool {
-  let view = line_content.view()
+  let view = line_content.clamped_view()
   for i = start; i < end; {
     let c = view.unsafe_get(i).to_int()
     let (i, code) = if c >= 0xD800 && c <= 0xDBFF && i + 1 < end {

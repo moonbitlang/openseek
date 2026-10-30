@@ -18,7 +18,7 @@ fn reference_file(
   match owner {
     Host(_) => path.path
     Cloud(..) =>
-      path.path.strip_prefix("/").unwrap_or(path.path.view()).to_owned()
+      path.path.strip_prefix("/").unwrap_or(path.path.clamped_view()).to_owned()
   }
 }
 

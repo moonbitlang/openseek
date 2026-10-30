@@ -32,7 +32,7 @@ fn WorktreeCheckout::revision(self : WorktreeCheckout) -> String {
 fn valid_recovery_ref(name : String, recovery_ref : String) -> Bool {
   let prefix = "\{WorktreeRecoveryPrefix}\{name}-"
   guard recovery_ref.has_prefix(prefix) else { return false }
-  let suffix = recovery_ref.view(start_offset=prefix.length())
+  let suffix = recovery_ref.exact_view(start=prefix.length())
   suffix.length() == 32 &&
   suffix.iter().all(ch => ch.is_ascii_digit() || (ch >= 'a' && ch <= 'f'))
 }
@@ -77,7 +77,7 @@ async fn checkout_states(dir : @pathx.Absolute) -> Map[String, CheckoutState] {
   for field in output.split("\u{0}") {
     if field is [.. "worktree ", .. path] {
       current = if path.has_prefix(prefix) {
-        let name = path.view(start_offset=prefix.length()).to_owned()
+        let name = path.exact_view(start=prefix.length()).to_owned()
         if valid_worktree_name(name) {
           Some(name)
         } else {

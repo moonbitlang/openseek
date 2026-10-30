@@ -29,7 +29,7 @@ async fn collect_process_output(
       stdin=stdin_reader,
       stdout=writer,
       stderr=writer,
-      cwd=cwd.view(),
+      cwd=cwd.clamped_view(),
       cancel_handler=@process.hard_cancel(),
       no_wait=true,
       no_console_window=true,

@@ -25,10 +25,10 @@ async fn run_capture(
 ) -> String? {
   let outcome = @async.with_timeout_opt(BaselineProbeBudgetMs, () => {
     @process.collect_stdout(
-      command.view(),
+      command.clamped_view(),
       args,
       inherit_env=true,
-      cwd=cwd.view(),
+      cwd=cwd.clamped_view(),
     )
   }) catch {
     _ => return None

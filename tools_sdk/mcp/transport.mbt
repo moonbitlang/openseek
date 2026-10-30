@@ -79,7 +79,7 @@ async fn post(
 ) -> Reply raise TransportError {
   // No retries: a lost response does not prove a call failed to execute.
   async fn send() -> Json {
-    let client = @http.post_stream(url, headers={
+    let client = @http.post(url, headers={
       "Authorization": "Bearer \{token}",
       "Content-Type": "application/json",
     })

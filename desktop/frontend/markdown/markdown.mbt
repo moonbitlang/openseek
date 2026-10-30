@@ -558,7 +558,7 @@ fn trim_bare_url(candidate : String) -> (String, String) {
       break
     }
   }
-  let suffix = candidate.view(start_offset=url.length()).to_owned()
+  let suffix = candidate.exact_view(start=url.length()).to_owned()
   (url, suffix)
 }
 
@@ -583,7 +583,7 @@ fn trim_unmatched_closer(
     (opens, closes)
   }
   if closes > opens {
-    url.view(end_offset=url.length() - 1).to_owned()
+    url.exact_view(end=url.length() - 1).to_owned()
   } else {
     url
   }
@@ -595,12 +595,12 @@ fn trim_unmatched_closer(
 /// the browser can navigate to.
 fn has_web_authority(url : String) -> Bool {
   let scheme_length = if url.length() >= 8 &&
-    url.view(end_offset=8).equal_ignore_ascii_case("https://") {
+    url.clamped_view(end=8).equal_ignore_ascii_case("https://") {
     8
   } else {
     7
   }
-  let rest = url.view(start_offset=scheme_length)
+  let rest = url.exact_view(start=scheme_length)
   for index, ch in rest {
     if ch == '/' || ch == '?' || ch == '#' {
       return index > 0
@@ -615,7 +615,7 @@ fn has_web_authority(url : String) -> Bool {
 /// user's backtick-delimited snippets deliberately bypass this helper.
 pub fn linkified_text_nodes(source : String) -> Array[@html.Html] {
   let out : Array[@html.Html] = []
-  let mut rest = source.view()
+  let mut rest = source.clamped_view()
   while bare_web_url_pattern.execute(rest) is Some(matched) {
     if !matched.before().is_empty() {
       out.push(@html.text(matched.before().to_owned()))
@@ -649,14 +649,14 @@ fn MarkdownRender::prose_nodes(
     return linkified_text_nodes(source)
   }
   let out : Array[@html.Html] = []
-  let mut rest = source.view()
+  let mut rest = source.clamped_view()
   while bare_interactive_pattern.execute(rest) is Some(matched) {
     let before = matched.before()
     if !before.is_empty() {
       out.push(@html.text(before.to_owned()))
     }
     let candidate = matched.content().to_owned()
-    if candidate.view() =~ re"(?i:^https?://)" {
+    if candidate.clamped_view() =~ re"(?i:^https?://)" {
       let (url, suffix) = trim_bare_url(candidate)
       // Keep the URL-only renderer's contract here: prose may only create an
       // HTTP(S) anchor when the destination has a non-empty authority. In
@@ -885,7 +885,7 @@ priv struct FileReference(String)
 /// not silently treated as local paths. A fragment is retained only when it is
 /// the supported positive `#Lline` editor position.
 fn FileReference::local_file_uri_path(self : FileReference) -> String? {
-  guard self.0.view() =~ re"(?i:^file://)" else { return None }
+  guard self.0.clamped_view() =~ re"(?i:^file://)" else { return None }
   let uri = @common.Uri::parse(self.0) catch { _ => return None }
   guard uri.scheme.equal_ignore_ascii_case("file") &&
     (
@@ -901,7 +901,7 @@ fn FileReference::local_file_uri_path(self : FileReference) -> String? {
   }
   let position = if fragment.is_empty() {
     ""
-  } else if fragment.view() =~ re"^L[1-9][[:digit:]]*$" {
+  } else if fragment.clamped_view() =~ re"^L[1-9][[:digit:]]*$" {
     "#" + fragment
   } else if @office_location.parse(uri.path + "#" + fragment) is Some(_) {
     "#" + fragment
@@ -938,10 +938,13 @@ fn FileReference::local_file_uri_path(self : FileReference) -> String? {
 ///|
 /// The path before a supported editor position, when one is present.
 fn FileReference::position_path(self : FileReference) -> String? {
-  if self.0.view() =~ (re":[[:digit:]]+(?::[[:digit:]]+)?$", before=path) {
+  if self.0.clamped_view() =~ (
+      re":[[:digit:]]+(?::[[:digit:]]+)?$",
+      before=path,
+    ) {
     return Some(path.to_owned())
   }
-  if self.0.view() =~ (re"#L[[:digit:]]+$", before=path) {
+  if self.0.clamped_view() =~ (re"#L[[:digit:]]+$", before=path) {
     return Some(path.to_owned())
   }
   None

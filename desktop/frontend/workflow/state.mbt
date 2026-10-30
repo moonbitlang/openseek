@@ -94,7 +94,7 @@ pub extend Run with @debug.Debug::{to_repr}
 /// The ordinal in a sub-run id (`sr-7` → 7), or `None` for any other shape.
 fn ordinal_of(id : String) -> Int32? {
   guard id.has_prefix("sr-") else { return None }
-  let digits = id.view(start_offset=3)
+  let digits = id.exact_view(start=3)
   // Bounded as `@protocol.split_child_session_id` bounds it: nine digits,
   // so a pathological id cannot overflow, and beyond that it is simply not
   // a sub-run id.
@@ -306,7 +306,7 @@ pub fn entry(runs : Array[Run], entry : Entry) -> Array[Run] {
       None => {
         let ordinal = match entry.child.rev_find("-sr-") {
           Some(at) =>
-            ordinal_of(entry.child.view(start_offset=at + 1).to_owned()).unwrap_or(
+            ordinal_of(entry.child.exact_view(start=at + 1).to_owned()).unwrap_or(
               0,
             )
           None => 0

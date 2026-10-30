@@ -16,7 +16,7 @@ pub fn page_query_param(name : String) -> String? {
   guard search is Some(search) else { return None }
   let query = match search.strip_prefix("?") {
     Some(rest) => rest
-    None => search.view()
+    None => search.clamped_view()
   }
   for pair in query.split("&") {
     guard pair.split_once("=") is Some((key, encoded)) else { continue }
