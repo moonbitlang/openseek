@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek_protocol" @wire,
   "moonbit-community/proton_contract",
   "openseek_desktop/protocol",
 }

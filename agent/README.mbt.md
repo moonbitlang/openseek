@@ -65,6 +65,14 @@ snapshot. Filesystem-backed callers use this to persist progress even if a later
 model call or tool execution fails. Callers that only need an in-memory result
 can return `session.append(item)` from the callback.
 
+Initial input, steering input, and tool results save image bytes in
+`~/.openseek/attachments` before constructing their session items. The persistence
+hook receives references and records the supplied content unchanged. The same
+content enters the live request buffer without reading back the last session event.
+`run_turn_in_scope` accepts an optional `AttachmentStore` and `upload_index_dir`
+for hosts using other storage locations. Admission and both provider clients use
+the same store; upload records default to `~/.openseek/deepseek/files-v1.json`.
+
 `run_turn_in_scope` is the long-lived engine API. The caller owns the
 `AgentRuntime`, `AgentTaskScope`, and usually a `Tools` registry built once with
 `build_tools`. This is the API used by serve mode so stateful tools and queued

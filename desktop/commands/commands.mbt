@@ -1043,3 +1043,9 @@ pub let fs_share_file : Command[
   @protocol.FileSharePayload,
   @protocol.SessionShareReply,
 ] = Command("fs.share_file")
+
+///|
+/// Read a verified image from the owning host's user-level attachment store.
+pub let fs_read_attachment : Command[@wire.ImageRef, @protocol.ReadFileReply] = Command(
+  "fs.read_attachment",
+)

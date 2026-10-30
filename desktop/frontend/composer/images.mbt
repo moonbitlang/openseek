@@ -1,6 +1,6 @@
 ///|
-/// Browser-owned image bytes encoded as a data URL. This value travels with
-/// the draft; a file path on the browser device is never sent to another device.
+/// Draft image: a browser data URL or a host attachment address when editing
+/// a sent message. Host addresses stay on their owning conversation channel.
 pub(all) struct Image {
   name : String
   url : String
