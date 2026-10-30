@@ -57,9 +57,9 @@ fn zip_of(files : Array[(String, Bytes)]) -> Bytes raise {
 }
 
 ///|
-/// The `sha256:`-prefixed digest the fake registry declares for `bytes`.
+/// The plain hexadecimal SHA-256 the standalone registry declares.
 fn digest_of(bytes : Bytes) -> String {
-  "sha256:\{@crypto.bytes_to_hex_string(@crypto.sha256(bytes))}"
+  @crypto.bytes_to_hex_string(@crypto.sha256(bytes))
 }
 
 ///|
@@ -71,44 +71,37 @@ struct FakeSkill {
 }
 
 ///|
-fn catalog_body(
-  base : String,
-  widget_digest : String,
-  version~ : String = "1.0.0",
-) -> String {
-  let json : Json = [
-    {
-      "module": "acme/widget",
-      "version": version,
-      "name": "acme/widget",
-      "package": "",
-      "author": "acme",
-      "repository": "https://example.com/acme/widget",
-      "metadata": { "name": "widget", "description": "Build widgets fast." },
-      "archive_url": "\{base}/download/acme/widget@\{version}/skills.zip",
-      "archive_digest": widget_digest,
-    },
-    // A bare wasm entry point: no published skill archive, not installable.
-    {
-      "module": "acme/bare-wasm",
-      "version": "1.0.0",
-      "name": "acme/bare-wasm",
-      "package": "",
-      "author": "acme",
-      "metadata": { "description": "A wasm tool without a skill." },
-    },
-  ]
-  json.stringify()
+fn skill_record(base : String, entry : String, digest : String) -> Json raise {
+  guard entry.split_once("/") is Some((owner, rest)) &&
+    rest.split_once("@") is Some((name, version)) else {
+    fail("invalid fixture reference: \{entry}")
+  }
+  {
+    "owner": owner.to_owned(),
+    "name": name.to_owned(),
+    "version": version.to_owned(),
+    "author_avatar": "",
+    "description": "Build widgets fast.",
+    "detail_url": "/skills/\{entry}",
+    "archive_url": "\{base}/download/\{entry}/skills.zip",
+    "archive_digest": digest,
+    "created_at": "2026-10-30T00:00:00Z",
+  }
 }
 
 ///|
-fn skill_entry_body(base : String, entry : String, digest : String) -> String {
-  (
-    {
-      "module": "acme/widget",
-      "archive_url": "\{base}/download/\{entry}/skills.zip",
-      "archive_digest": digest,
-    } : Json).stringify()
+fn skill_entry_body(
+  base : String,
+  entry : String,
+  digest : String,
+  readme : String,
+) -> String raise {
+  guard skill_record(base, entry, digest) is Object(fields) else {
+    fail("expected a skill record")
+  }
+  fields["readme"] = Json::string(readme)
+  fields["versions"] = ["1.0.0", "2.0.0", "3.0.0"]
+  Json::object(fields).stringify()
 }
 
 ///|
@@ -139,6 +132,9 @@ async fn fake_registry(
   gate_entry~ : String = "acme/widget@2.0.0",
   catalog_version~ : String = "1.0.0",
   requests? : Array[String],
+  catalog_response? : Json,
+  preview? : String,
+  include_builtins~ : Bool = false,
 ) -> String? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
     error if "\{error}".contains("Operation not permitted") => {
@@ -171,10 +167,7 @@ async fn fake_registry(
       digest: digest_of(widget_v2),
     },
     "acme/noarchive@1.0.0": { archive: None, digest: digest_of(b""), },
-    "acme/badsum@1.0.0": {
-      archive: Some(widget_v1),
-      digest: "sha256:deadbeef",
-    },
+    "acme/badsum@1.0.0": { archive: Some(widget_v1), digest: "deadbeef", },
     "acme/nomd@1.0.0": { archive: Some(no_md), digest: digest_of(no_md), },
     "acme/wrapped@1.0.0": {
       archive: Some(wrapped),
@@ -185,12 +178,41 @@ async fn fake_registry(
       archive: Some(not_text),
       digest: digest_of(not_text),
     },
+    "acme/mismatch@1.0.0": {
+      archive: Some(widget_v1),
+      digest: digest_of(widget_v1),
+    },
     "acme/loop@1.0.0": {
       archive: Some(widget_v1),
       digest: digest_of(widget_v1),
     },
   }
-  let widget_digest = digest_of(widget_v1)
+  for name in ["typst", "office-cli", "office"] {
+    let bytes = zip_of([
+      (
+        "SKILL.md",
+        @utf8.encode(
+          "---\nname: \{name}\ndescription: Built-in skill\n---\nInstructions",
+        ),
+      ),
+    ])
+    skills["moonbitlang/\{name}@1.0.0"] = {
+      archive: Some(bytes),
+      digest: digest_of(bytes),
+    }
+  }
+  let catalog : Array[Json] = [
+    skill_record(base, "acme/widget@\{catalog_version}", digest_of(widget_v1)),
+  ]
+  if include_builtins {
+    for name in ["typst", "office-cli"] {
+      let entry = "moonbitlang/\{name}@1.0.0"
+      guard skills.get(entry) is Some(skill) else {
+        fail("missing built-in fixture")
+      }
+      catalog.push(skill_record(base, entry, skill.digest))
+    }
+  }
   group.spawn_bg(no_wait=true) <| () => {
     let json_headers : @http.Headers = { "Content-Type": "application/json" }
     server.run_forever(
@@ -201,17 +223,17 @@ async fn fake_registry(
           @async.sleep(20)
           probe.leave()
         }
-        let path = request.path
         if requests is Some(requests) {
-          requests.push(path)
+          requests.push(request.path)
         }
+        let path = request.path.replace_all(old="%40", new="@")
         if path == "/api/v0/skills" {
           conn.send_response(200, "OK", extra_headers=json_headers)
           conn.write_string(
-            catalog_body(base, widget_digest, version=catalog_version),
+            catalog_response.unwrap_or(Json::array(catalog)).stringify(),
           )
         } else if path == "/api/v0/skills/acme/bare@1.0.0" {
-          // A registered entry that legitimately publishes no archive.
+          // Missing required release coordinates are a malformed response.
           conn.send_response(200, "OK", extra_headers=json_headers)
           conn.write_string("{\"module\":\"acme/bare\"}")
         } else if path == "/api/v0/skills/acme/malformed@1.0.0" {
@@ -222,14 +244,21 @@ async fn fake_registry(
           skills.get(entry.to_owned()) is Some(skill) {
           conn.send_response(200, "OK", extra_headers=json_headers)
           conn.write_string(
-            skill_entry_body(base, entry.to_owned(), skill.digest),
+            skill_entry_body(
+              base,
+              entry.to_owned(),
+              skill.digest,
+              preview.unwrap_or(
+                @utf8.decode(
+                  if entry == "acme/widget@2.0.0" {
+                    skill_body_v2
+                  } else {
+                    skill_body
+                  },
+                ),
+              ),
+            ),
           )
-        } else if path == "/source/acme/widget@1.0.0/SKILL.md" ||
-          path == "/source/acme/widget@1.0.0/cmd/run/SKILL.md" {
-          // The bare preview asset exists for v1 only; v2 covers the
-          // missing-asset refusal.
-          conn.send_response(200, "OK")
-          conn.write(skill_body)
         } else if path.strip_prefix(DownloadPrefix) is Some(download) &&
           download.strip_suffix(ZipSuffix) is Some(entry) &&
           skills.get(entry.to_owned()) is Some(skill) &&
@@ -300,11 +329,15 @@ async fn uninstall_failure(lib : @pathx.Path, id : String) -> String {
 }
 
 ///|
-async test "the catalog lists installable skills only" {
+async test "the catalog projects standalone skill records into the host payload" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let skills = @skillmarket.fetch_catalog(registry=base)
     guard skills is [skill] else { fail("expected one installable skill") }
+    assert_eq(skill.module_name, "acme/widget")
+    assert_eq(skill.package_path, "")
+    assert_eq(skill.author, "acme")
+    assert_eq(skill.repository, "")
     assert_eq(skill.name, "widget")
     assert_eq(skill.version, "1.0.0")
     assert_eq(skill.description, "Build widgets fast.")
@@ -357,7 +390,7 @@ async test "an archive that wraps its files in a directory is refused" {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
     let message = install_failure(base, lib, "acme/wrapped")
-    assert_true(message.contains("does not contain a SKILL.md"))
+    assert_true(message.contains("Archive must contain SKILL.md at its root"))
     assert_false(@fs.exists("\{lib}/acme-wrapped"))
   }
 }
@@ -368,62 +401,121 @@ async test "a redirect loop on the archive download is refused" {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
     let message = install_failure(base, lib, "acme/loop")
-    assert_true(message.contains("redirected too many times"))
+    assert_true(message.contains("Too many HTTP redirects"))
     assert_false(@fs.exists("\{lib}/acme-loop"))
   }
 }
 
 ///|
-async test "preview fetches the bare SKILL.md from the registry source tree" {
+async test "preview reads the versioned detail API without downloading archives" {
   @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    for package_path in ["", "cmd/run"] {
-      let content = @skillmarket.fetch_skill_content(
-        module_name="acme/widget",
-        version="1.0.0",
-        package_path~,
-        registry=base,
-      )
-      assert_true(content.contains("Build widgets fast."))
-      assert_true(content.contains("Use moon runwasm acme/widget."))
-    }
+    let requests : Array[String] = []
+    guard fake_registry(group, requests~) is Some(base) else { return }
+    let content = @skillmarket.fetch_skill_content(
+      module_name="acme/widget",
+      version="2.0.0",
+      package_path="",
+      registry=base,
+    )
+    assert_eq(content, @utf8.decode(skill_body_v2))
+    assert_eq(requests, ["/api/v0/skills/acme/widget%402.0.0"])
   }
 }
 
 ///|
-async test "catalog HTTP errors name the URL and status" {
+async test "catalog errors preserve registry context and the client diagnosis" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     try @skillmarket.fetch_catalog(registry="\{base}/missing") catch {
-      @skillmarket.SkillMarketError(message) =>
-        assert_eq(
-          message,
-          "GET \{base}/missing/api/v0/skills returned HTTP 404",
-        )
+      @skillmarket.SkillMarketError(message) => {
+        assert_true(message.contains(base))
+        assert_true(message.contains("HTTP 404: Skill not found"))
+      }
       error => raise error
     } noraise {
       _ => fail("expected a catalog HTTP error")
     }
+    for response in [Json::null(), { "all": [] }, [{ "owner": "acme" }]] {
+      guard fake_registry(group, catalog_response=response) is Some(malformed) else {
+        fail("expected local registry")
+      }
+      try @skillmarket.fetch_catalog(registry=malformed) catch {
+        @skillmarket.SkillMarketError(message) =>
+          assert_true(message.contains("skill catalog from"))
+        error => raise error
+      } noraise {
+        _ => fail("malformed catalog must not become an empty success")
+      }
+    }
+    guard fake_registry(group, catalog_response=[]) is Some(empty) else {
+      fail("expected local registry")
+    }
+    assert_eq(@skillmarket.fetch_catalog(registry=empty).length(), 0)
   }
 }
 
 ///|
-async test "a skill without a bare SKILL.md has no preview" {
+async test "preview reports missing skills and bounds readme bytes" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
-    try {
-      let _ = @skillmarket.fetch_skill_content(
-        module_name="acme/widget",
-        version="2.0.0",
+    try
+      @skillmarket.fetch_skill_content(
+        module_name="acme/missing",
+        version="1.0.0",
         package_path="",
         registry=base,
       )
-      fail("preview without a bare SKILL.md should have failed")
-    } catch {
+    catch {
       @skillmarket.SkillMarketError(message) =>
-        assert_true(message.contains("does not publish a SKILL.md"))
+        assert_true(message.contains("HTTP 404"))
       error => raise error
+    } noraise {
+      _ => fail("missing skill must fail")
     }
+    guard fake_registry(group, preview="界".repeat(180000)) is Some(large) else {
+      fail("expected local registry")
+    }
+    try
+      @skillmarket.fetch_skill_content(
+        module_name="acme/widget",
+        version="1.0.0",
+        package_path="",
+        registry=large,
+      )
+    catch {
+      @skillmarket.SkillMarketError(message) =>
+        assert_eq(message, "SKILL.md is too large to preview")
+      error => raise error
+    } noraise {
+      _ => fail("oversized preview must fail")
+    }
+  }
+}
+
+///|
+async test "legacy subpackages cannot accidentally install a standalone skill" {
+  @async.with_task_group() <| group => {
+    let requests : Array[String] = []
+    guard fake_registry(group, requests~) is Some(base) else { return }
+    let lib = @fs.tmpdir(prefix="skillmarket-")
+    defer @fs.rmdir(lib, recursive=true)
+    try
+      @skillmarket.install_skill(
+        module_name="acme/widget",
+        version="1.0.0",
+        package_path="cmd/run",
+        registry=base,
+        library_dir=lib,
+      )
+    catch {
+      @skillmarket.SkillMarketError(message) =>
+        assert_true(message.contains("package path"))
+      error => raise error
+    } noraise {
+      _ => fail("subpackage install must fail")
+    }
+    assert_eq(requests, [])
+    assert_eq(@skillmarket.installed_skills(library_dir=lib).length(), 0)
   }
 }
 
@@ -604,7 +696,7 @@ async test "a non-skill module is refused" {
       @fs.tmpdir(prefix="skillmarket-"),
       "acme/nothing",
     )
-    assert_true(message.contains("is not a published skill"))
+    assert_true(message.contains("HTTP 404: Skill not found"))
   }
 }
 
@@ -619,37 +711,42 @@ async test "install refuses every bad fixture and leaves no library directory" {
     for
       row in [
         (
-          "a skill without archive coordinates is not installable", "acme/bare",
-          "does not publish a skill archive", "acme-bare",
+          "archive metadata must match the release", "acme/mismatch", "Archive name does not match",
+          "acme-mismatch",
         ),
         (
-          "malformed archive coordinates are a registry error, not absence", "acme/malformed",
-          "malformed", "acme-malformed",
+          "legacy module records cannot install standalone skills", "acme/bare",
+          "Invalid skill response", "acme-bare",
+        ),
+        (
+          "an incomplete detail response is a registry error", "acme/malformed",
+          "Invalid skill response", "acme-malformed",
         ),
         (
           "a skill whose archive is missing reports it plainly", "acme/noarchive",
-          "missing from the registry", "acme-noarchive",
+          "HTTP 404", "acme-noarchive",
         ),
         (
-          "an archive that fails its digest check is refused", "acme/badsum", "does not match its published digest",
+          "an archive that fails its digest check is refused", "acme/badsum", "Archive SHA-256 mismatch",
           "acme-badsum",
         ),
         (
-          "an archive without a SKILL.md is refused at install", "acme/nomd", "does not contain a SKILL.md",
+          "an archive without a SKILL.md is refused at install", "acme/nomd", "Archive must contain SKILL.md at its root",
           "acme-nomd",
         ),
         (
-          "an archive whose SKILL.md is not text is refused", "acme/binary", "unreadable SKILL.md",
+          "an archive whose SKILL.md is not text is refused", "acme/binary", "SKILL.md must be valid UTF-8",
           "acme-binary",
         ),
         (
-          "a path-escaping archive is refused", "acme/slip", "unsafe path", "acme-slip",
+          "a path-escaping archive is refused", "acme/slip", "Invalid archive path",
+          "acme-slip",
         ),
       ] {
       let (scenario, module_name, reason, directory) = row
       let lib = @fs.tmpdir(prefix="skillmarket-")
       let message = install_failure(base, lib, module_name)
-      assert_true(message.contains(reason), msg="case: \{scenario}")
+      assert_true(message.contains(reason), msg="case: \{scenario}: \{message}")
       assert_false(@fs.exists("\{lib}/\{directory}"), msg="case: \{scenario}")
     }
   }

@@ -174,8 +174,12 @@ composer. The stylesheet decides between the two from the main pane's width.
 ## Skills
 
 The sidebar's **Skills** button opens a browser over the
-[mooncakes.io](https://mooncakes.io) skill registry. Installing a skill downloads
-its documentation archive, verifies the registry-provided sha256 digest, and
+[mooncakes.io](https://mooncakes.io) standalone skill registry through
+[`moonbit-community/skills`](https://github.com/moonbit-community/skills).
+Skills are identified by `owner/name@version`; previews come from the detail
+API's `readme`. This client requires the standalone skills API and must ship
+with that server update; the old module/package catalog is not supported.
+Installing a skill downloads its documentation archive, verifies the registry-provided sha256 digest, and
 writes `SKILL.md`, companion files, and a `.mooncakes.json` provenance marker to
 `<slug>/` in the engine's global skills library (`OPENSEEK_GLOBAL_SKILLS_DIR`,
 defaulting to `~/.openseek/skills`). Installation uses documentation only; tools
@@ -192,8 +196,9 @@ entry in its current location, preserving its enabled state. Existing chats
 keep their saved system prompt; toggling does not refresh that prompt.
 
 The desktop backend automatically installs and updates its built-in skills:
-`moonbitlang/typst` (`cli`) and `moonbitlang/office` (the root package). At each
-local or remote host startup, a background task reads the registry catalog and
+`moonbitlang/typst` and `moonbitlang/office-cli`. Existing module-based installs
+of Typst (`cli`) and Office retain their directories and enabled state when
+updated to standalone skills. At each local or remote host startup, a background task reads the registry catalog and
 installs missing or changed versions. Matching versions keep their existing
 files. Built-in entries carry a badge, support manual updates and enablement,
 and stay installed while listed in `backend/internal/skillmarket/builtin.mbt`.

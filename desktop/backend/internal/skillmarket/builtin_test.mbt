@@ -115,3 +115,107 @@ async test "automatic commit skips an installation completed during download" {
     }
   }
 }
+
+///|
+async test "standalone built-ins upgrade legacy entries in place and retain disablement" {
+  @async.with_task_group() <| group => {
+    guard fake_registry(group, include_builtins=true) is Some(base) else {
+      return
+    }
+    for enabled in [true, false] {
+      let lib = @fs.tmpdir(prefix="builtin-migration-")
+      defer @fs.rmdir(lib, recursive=true)
+      let directory = if enabled { lib } else { "\{lib}/.disabled" }
+      for
+        (id, module_name, package_path) in [
+          ("moonbitlang-typst-cli", "moonbitlang/typst", "cli"),
+          ("moonbitlang-office", "moonbitlang/office", ""),
+        ] {
+        @fs.mkdir("\{directory}/\{id}", recursive=true)
+        @fs.write_file(
+          "\{directory}/\{id}/SKILL.md",
+          "legacy instructions",
+          create_mode=CreateNew,
+        )
+        @fs.write_file(
+          "\{directory}/\{id}/.mooncakes.json",
+          (
+            {
+              "module": module_name,
+              "package": package_path,
+              "version": "1.0.0",
+            } : Json).stringify(),
+          create_mode=CreateNew,
+        )
+      }
+      let before = @skillmarket.installed_skills(library_dir=lib)
+      assert_eq(before.length(), 2)
+      assert_true(
+        before.all(skill => {
+          skill.registry is Some(identity) && @skillmarket.is_builtin(identity)
+        }),
+      )
+      let builtins = @skillmarket.BuiltinSkills::new()
+      let mut changes = 0
+      builtins.sync(registry=base, library_dir=lib, () => changes += 1)
+      assert_true(builtins.errors().is_empty())
+      assert_eq(changes, 2)
+      let installed = @skillmarket.installed_skills(library_dir=lib)
+      assert_eq(installed.length(), 2)
+      for
+        (id, name) in [
+          ("moonbitlang-office", "office-cli"),
+          ("moonbitlang-typst-cli", "typst"),
+        ] {
+        guard installed.iter().find_first(skill => skill.id == id)
+          is Some(skill) else {
+          fail("missing migrated entry: \{id}")
+        }
+        assert_eq(skill.name, name)
+        assert_eq(skill.enabled, enabled)
+        assert_eq(skill.source, "moonbitlang/\{name}@1.0.0")
+        assert_true(
+          @skillmarket.read_skill_content(skill.id, library_dir=lib).contains(
+            "Instructions",
+          ),
+        )
+        assert_true(
+          uninstall_failure(lib, skill.id).contains("disable the skill instead"),
+        )
+      }
+      builtins.sync(registry=base, library_dir=lib, () => changes += 1)
+      assert_eq(changes, 2)
+    }
+  }
+}
+
+///|
+async test "a new standalone skill is not mistaken for a legacy built-in with the same name" {
+  @async.with_task_group() <| group => {
+    guard fake_registry(group) is Some(base) else { return }
+    let lib = @fs.tmpdir(prefix="builtin-identity-")
+    defer @fs.rmdir(lib, recursive=true)
+    let custom = @skillmarket.install_skill(
+      module_name="moonbitlang/office",
+      version="1.0.0",
+      package_path="",
+      registry=base,
+      library_dir=lib,
+    )
+    let builtin = @skillmarket.install_skill(
+      module_name="moonbitlang/office-cli",
+      version="1.0.0",
+      package_path="",
+      registry=base,
+      library_dir=lib,
+    )
+    assert_eq(custom.id, "moonbitlang-office")
+    assert_eq(builtin.id, "moonbitlang-office-cli")
+    assert_eq(@skillmarket.installed_skills(library_dir=lib).length(), 2)
+    @skillmarket.uninstall_skill(custom.id, library_dir=lib)
+    guard @skillmarket.installed_skills(library_dir=lib) is [remaining] else {
+      fail("expected only the built-in to remain")
+    }
+    assert_eq(remaining.id, builtin.id)
+  }
+}

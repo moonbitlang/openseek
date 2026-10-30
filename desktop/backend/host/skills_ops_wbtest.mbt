@@ -9,9 +9,11 @@ async test "manual installation clears its startup failure before notifying clie
     None => @sys.unset_env_var("OPENSEEK_GLOBAL_SKILLS_DIR")
   })
   let archive = @zip.Archive::Archive()
-  archive.add("SKILL.md", b"---\nname: office-cli\n---\nOffice documentation\n")
+  archive.add(
+    "SKILL.md", b"---\nname: office-cli\ndescription: Office documentation\n---\nOffice documentation\n",
+  )
   let bytes = @zip.write(archive)
-  let digest = "sha256:\{@crypto.bytes_to_hex_string(@crypto.sha256(bytes))}"
+  let digest = @crypto.bytes_to_hex_string(@crypto.sha256(bytes))
   let registry = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer registry.close()
   let base = "http://127.0.0.1:\{registry.addr.port()}"
@@ -21,11 +23,20 @@ async test "manual installation clears its startup failure before notifying clie
         ignore(body.read_all())
         match request.path {
           "/api/v0/skills" => conn.send_response(503, "Service Unavailable")
-          "/api/v0/skills/moonbitlang/office@1.0.0" => {
+          "/api/v0/skills/moonbitlang/office-cli%401.0.0" => {
             conn.send_response(200, "OK")
             conn.write_string(
               (
                 {
+                  "owner": "moonbitlang",
+                  "name": "office-cli",
+                  "version": "1.0.0",
+                  "description": "Office documentation",
+                  "author_avatar": "",
+                  "detail_url": "/skills/moonbitlang/office-cli@1.0.0",
+                  "created_at": "2026-10-30T00:00:00Z",
+                  "readme": "Office documentation",
+                  "versions": ["1.0.0"],
                   "archive_url": "\{base}/office.zip",
                   "archive_digest": digest,
                 } : Json).stringify(),
@@ -46,20 +57,20 @@ async test "manual installation clears its startup failure before notifying clie
       fail("expected an empty library with startup errors")
     }
     assert_true(
-      before.any(error => error.registry.module_name == "moonbitlang/office"),
+      before.any(error => error.registry.module_name == "moonbitlang/office-cli"),
     )
     let mut cleared_at_commit = false
     let installed = install_skill_op(
       state,
       {
-        module_name: "moonbitlang/office",
+        module_name: "moonbitlang/office-cli",
         package_path: Some(""),
         version: "1.0.0",
       },
       () => {
         cleared_at_commit = state.skills
           .errors()
-          .all(error => error.registry.module_name != "moonbitlang/office")
+          .all(error => error.registry.module_name != "moonbitlang/office-cli")
       },
       registry=base,
     )
@@ -74,7 +85,9 @@ async test "manual installation clears its startup failure before notifying clie
     }
     assert_eq(
       remaining,
-      before.filter(error => error.registry.module_name != "moonbitlang/office"),
+      before.filter(error => {
+        error.registry.module_name != "moonbitlang/office-cli"
+      }),
     )
     for enabled in [true, false] {
       assert_true(

@@ -1,9 +1,33 @@
 ///|
 pub fn builtin_skills() -> Array[RegistrySkillIdentity] {
   [
-    { module_name: "moonbitlang/typst", package_path: "cli", },
-    { module_name: "moonbitlang/office", package_path: "", },
+    { module_name: "moonbitlang/typst", package_path: "", },
+    { module_name: "moonbitlang/office-cli", package_path: "", },
   ]
+}
+
+///|
+/// The standalone registry uses SKILL.md names. Recognize the two built-ins
+/// installed by the module registry so updates retain their library entries.
+fn standalone_identity(
+  identity : RegistrySkillIdentity,
+) -> RegistrySkillIdentity {
+  match (identity.module_name, identity.package_path) {
+    ("moonbitlang/typst", "cli") =>
+      { module_name: "moonbitlang/typst", package_path: "", }
+    ("moonbitlang/office", "") =>
+      { module_name: "moonbitlang/office-cli", package_path: "", }
+    _ => identity
+  }
+}
+
+///|
+fn legacy_builtin_slug(identity : RegistrySkillIdentity) -> String? {
+  match (identity.module_name, identity.package_path) {
+    ("moonbitlang/typst", "") => Some("moonbitlang-typst-cli")
+    ("moonbitlang/office-cli", "") => Some("moonbitlang-office")
+    _ => None
+  }
 }
 
 ///|

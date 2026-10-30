@@ -106,14 +106,6 @@ fn slugify(name : String) -> String {
 }
 
 ///|
-/// The `sha256:`-prefixed hex digest of `content`: how a downloaded skill
-/// archive is checked against the digest the registry declares, and what an
-/// install's provenance sidecar records.
-fn content_digest(content : Bytes) -> String {
-  "sha256:\{@crypto.bytes_to_hex_string(@crypto.sha256(content))}"
-}
-
-///|
 /// Parse `name:` and `description:` from a markdown frontmatter block —
 /// the same rules as the engine's `agent_skill` parser, so the panel shows
 /// the names the model will see. Anything missing falls back to
@@ -163,10 +155,13 @@ fn decode_sidecar(text : String) -> InstalledSource? {
   } else {
     ""
   }
-  Some({
-    label: source_label(module_name, version, package_path),
-    registry: { module_name, package_path, },
-  })
+  let identity : RegistrySkillIdentity = { module_name, package_path, }
+  let registry = match json {
+    { "kind": String("standalone"), .. } => identity
+    { "kind": _, .. } => return None
+    _ => standalone_identity(identity)
+  }
+  Some({ label: source_label(module_name, version, package_path), registry, })
 }
 
 ///|
@@ -224,18 +219,14 @@ async fn install_skill_impl(
   mode~ : InstallMode = Replace,
   on_committed? : () -> Unit,
 ) -> InstalledSkill? {
-  let entry = entry_path(module_name, version, package_path)
-  let source = fetch_archive_source(registry, entry)
-  let identity = if package_path.is_empty() {
-    module_name
-  } else {
-    "\{module_name}/\{package_path}"
-  }
-  let slug = slugify(identity)
+  let entry = skill_reference(module_name, version, package_path)
+  let identity : RegistrySkillIdentity = { module_name, package_path, }
+  let slug = slugify(module_name)
   guard valid_slug(slug) else {
     raise SkillMarketError("registry entry \{entry} has no installable name")
   }
-  let skill = skill_files(fetch_archive(entry, source), entry)
+  let (archive, digest) = fetch_archive(registry, entry)
+  let skill = skill_files(archive, entry)
   let text = @utf8.decode(skill.skill_md) catch {
     _ =>
       raise SkillMarketError(
@@ -244,15 +235,29 @@ async fn install_skill_impl(
   }
   let (name, description) = parse_frontmatter(text, slug)
   let provenance : Json = {
+    "kind": "standalone",
     "module": module_name,
     "version": version,
     "package": package_path,
-    "digest": source.digest,
+    "digest": digest,
   }
   library_lock.acquire()
   defer library_lock.release()
   let root : SkillLibrary = { root: library_dir, }
   root.recover_all()
+  // Reuse an older built-in's owned directory, including its disabled location.
+  // Its sidecar is rewritten with standalone coordinates in the same commit.
+  let slug = if legacy_builtin_slug(identity) is Some(legacy) {
+    let previous = root.locate(legacy)
+    if read_installed_source(previous.library.target(legacy)) is Some(source) &&
+      source.registry == identity {
+      legacy
+    } else {
+      slug
+    }
+  } else {
+    slug
+  }
   let location = root.locate(slug)
   let library = location.library
   let target = library.target(slug)
