@@ -5,19 +5,52 @@
 
 ///|
 /// Project the focused conversation and its open editor tabs into the palette.
-/// The projection is read-only; the opaque palette state itself is stored once
-/// in the application Model. The checkout is passed in because the palette
-/// only ever exists for one that is on screen.
-fn Model::quick_open_input(
-  self : Model,
-  active : ActiveCheckout,
-) -> @quick_open.Input {
-  @quick_open.Input(
-    owner=active.owner,
-    root=active.placement.bind(placement => placement.checkout_root()),
-    open_files=self.live_editor_files(),
-    active_file=self.active_workspace_file(),
+/// The projection is read-only. A Cloud session supplies its authenticated
+/// file source; a Host conversation supplies its directory placement. Home
+/// and other surfaces without either source have no palette input.
+fn Model::quick_open_input(self : Model) -> @quick_open.Input? {
+  if self.cloud_selected() {
+    let ctx = file_ctx(self)
+    guard self.cloud_identity() is Some(owner) &&
+      ctx.root() is Some(root) &&
+      ctx.cloud_files is Some(access) else {
+      return None
+    }
+    return Some(
+      @quick_open.Input::cloud(
+        owner~,
+        root~,
+        access={ token: access.token, epoch: access.epoch, },
+        open_files=self.live_editor_files(),
+        active_file=self.active_workspace_file(),
+      ),
+    )
+  }
+  guard self.active_checkout() is Some(active) else { return None }
+  Some(
+    @quick_open.Input(
+      owner=active.owner,
+      root=active.placement.bind(placement => placement.checkout_root()),
+      open_files=self.live_editor_files(),
+      active_file=self.active_workspace_file(),
+    ),
   )
+}
+
+///|
+/// Unsupported shortcuts keep their browser meaning. Cloud exposes file
+/// browsing, while workspace symbols still require an engine host.
+fn Model::quick_open_available(
+  self : Model,
+  provider : @quick_open.Provider,
+) -> Bool {
+  self.project_picker is None &&
+  self.archive_confirm is None &&
+  self.delete_confirm is None &&
+  !(self.update_ux is ConfirmingRestart(..)) &&
+  (self.cloud_selected() || !(self.bridge_state() is BridgeLost(_))) &&
+  !(self.cloud_selected() && provider is @quick_open.Symbols) &&
+  self.quick_open_input() is Some(_)
 }
 
 ///|
@@ -29,17 +62,13 @@ fn open_quick_open(
   model : Model,
   provider : @quick_open.Provider,
 ) -> (@cmd.Cmd, Model) {
-  guard model.project_picker is None &&
-    model.archive_confirm is None &&
-    model.delete_confirm is None &&
-    !(model.update_ux is ConfirmingRestart(..)) &&
-    !(model.bridge_state() is BridgeLost(_)) &&
-    model.active_checkout() is Some(active) else {
+  guard model.quick_open_available(provider) &&
+    model.quick_open_input() is Some(input) else {
     return (@cmd.none, model)
   }
   let (cmd, quick_open) = model.quick_open.open(
     dispatch.map(msg => QuickOpen(msg)),
-    model.quick_open_input(active),
+    input,
     provider,
   )
   (cmd, { ..model, quick_open, })
@@ -56,17 +85,27 @@ fn update_quick_open(
   // The palette searches one checkout. With none on screen it has no owner to
   // answer for, so it closes rather than resolving the message against a
   // conversation or task that is gone.
-  guard model.active_checkout() is Some(active) else {
+  guard model.quick_open_input() is Some(input) else {
     let (cmd, quick_open) = model.quick_open.close()
     return (cmd, { ..model, quick_open, })
   }
   let (cmd, quick_open, accepted) = model.quick_open.handle(
     dispatch.map(msg => QuickOpen(msg)),
     msg,
-    model.quick_open_input(active),
+    input,
   )
   let model = { ..model, quick_open, }
   guard accepted is Some(target) else { return (cmd, model) }
+  if model.cloud_selected() && model.cloud_identity() is Some(owner) {
+    let (open, next) = open_cloud_file(
+      dispatch,
+      model,
+      owner,
+      target.path,
+      target.range,
+    )
+    return (@cmd.batch([cmd, open]), next)
+  }
   // Settings and catalog surfaces return to Chat because they have no editor.
   // Codex keeps its owning surface so the editor resolves the accepted row
   // against that task's checkout instead of the hidden OpenSeek conversation.

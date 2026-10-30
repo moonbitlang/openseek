@@ -42,6 +42,11 @@ fn load_saved_settings(
       is Some(mode) {
       scheduler.add(dispatch(SidebarModeLoaded(mode)))
     }
+    scheduler.add(
+      dispatch(
+        CloudFollowupLoaded(load_setting(CloudFollowupBehaviorStorageKey)),
+      ),
+    )
     if load_setting(OverviewStorageKey) is Some(stored) {
       scheduler.add(dispatch(OverviewLoaded(stored == "true")))
     }
@@ -69,6 +74,13 @@ fn parse_sidebar_mode(text : String) -> @sidebar.Mode? {
 fn save_sidebar_mode(mode : @sidebar.Mode) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     save_setting(SidebarModeStorageKey, sidebar_mode_wire(mode))
+  })
+}
+
+///|
+fn save_cloud_followup_behavior(behavior : FollowupBehavior) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    save_setting(CloudFollowupBehaviorStorageKey, behavior.wire())
   })
 }
 

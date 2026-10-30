@@ -43,6 +43,7 @@ pub(all) struct Input {
   search : @session_search.Model
   locale : @i18n.Locale
   mode : Mode
+  has_host : Bool
   notices : Array[String]
   sections : Array[@section.Input]
   update_label : String?
@@ -293,40 +294,45 @@ pub fn component(
         ),
       )
     }
-    footer.push(
-      @html.button(
-        class=if input.skills_active {
-          "sidebar-button active"
-        } else {
-          "sidebar-button"
-        },
-        on_click=actions.open_skills,
-        [
-          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_extensions)),
-          @html.span(
-            class="sidebar-label",
-            @messages.text(input.locale, Skills),
-          ),
-        ],
-      ),
-    )
-    footer.push(
-      @html.button(
-        class=if input.schedules_active {
-          "sidebar-button active"
-        } else {
-          "sidebar-button"
-        },
-        on_click=actions.open_schedules,
-        [
-          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_clockface)),
-          @html.span(
-            class="sidebar-label",
-            @messages.text(input.locale, Scheduled),
-          ),
-        ],
-      ),
-    )
+    if input.has_host {
+      footer.push(
+        @html.button(
+          class=if input.skills_active {
+            "sidebar-button active"
+          } else {
+            "sidebar-button"
+          },
+          on_click=actions.open_skills,
+          [
+            @html.span(
+              class="sidebar-icon",
+              @icons.icon(@icons.icon_extensions),
+            ),
+            @html.span(
+              class="sidebar-label",
+              @messages.text(input.locale, Skills),
+            ),
+          ],
+        ),
+      )
+      footer.push(
+        @html.button(
+          class=if input.schedules_active {
+            "sidebar-button active"
+          } else {
+            "sidebar-button"
+          },
+          on_click=actions.open_schedules,
+          [
+            @html.span(class="sidebar-icon", @icons.icon(@icons.icon_clockface)),
+            @html.span(
+              class="sidebar-label",
+              @messages.text(input.locale, Scheduled),
+            ),
+          ],
+        ),
+      )
+    }
     footer.push(
       @html.button(
         class=if input.settings_active {
@@ -425,7 +431,11 @@ pub fn component(
               ModeChat,
               @icons.icon_comment_discussion,
             ),
-            actions.mode_option(input, WorkMode, ModeWork, @icons.icon_code),
+            if input.has_host {
+              actions.mode_option(input, WorkMode, ModeWork, @icons.icon_code)
+            } else {
+              @html.nothing
+            },
           ],
         ),
       ]),

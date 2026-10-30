@@ -7,6 +7,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
@@ -29,11 +30,14 @@ pub fn Accepted::to_repr(Self) -> @debug.Repr
 
 type Input derive(Eq)
 pub fn Input::Input(owner~ : @interop.ConversationKey, root~ : @common.Uri?, open_files~ : Array[@pathx.Relative], active_file~ : @pathx.Relative?) -> Self
+pub fn Input::cloud(owner~ : @interop.ConversationIdentity, root~ : @common.Uri, access~ : @cloud_client.Access, open_files~ : Array[@pathx.Relative], active_file~ : @pathx.Relative?) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
   ValueChanged(String)
+  CloudFilesLoaded(owner~ : @interop.ConversationIdentity, generation~ : Int32, files~ : Array[@pathx.Relative])
+  CloudFilesFailed(owner~ : @interop.ConversationIdentity, generation~ : Int32)
   FilesDue(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int32)
   FileCacheLoaded(owner~ : @interop.ConversationKey, cache_key~ : String, generation~ : Int32)
   FileCacheRequestFailed(owner~ : @interop.ConversationKey, cache_key~ : String, generation~ : Int32)

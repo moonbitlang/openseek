@@ -34,10 +34,11 @@ just test-browser
 The repository root keeps `just desktop-test-browser` as an alias. After the
 bundle has been built, `npm test` in this directory runs Playwright alone.
 
-CI builds with `node package/build.mjs browser --release` from `desktop/` so
-each fresh page loads the smaller production bundle. Local `just test-browser`
-keeps the debug bundle for diagnosis. Both use the same static-server script
-compiled for native release to avoid Wasm transfer overhead.
+CI and local `just test-browser` build with
+`node package/build.mjs browser --release` from `desktop/`. The smaller bundle
+keeps mocked resource responses below Chromium's 100 MiB DevTools pipe limit;
+large debug bundles can exceed it after base64 encoding. Both use the same
+static-server script compiled for native release to avoid Wasm transfer overhead.
 
 CI runs the browser tests in the official Playwright image, which includes
 Chromium, WebKit, and their system dependencies. Keep `PLAYWRIGHT_IMAGE` in

@@ -131,6 +131,7 @@ pub(all) enum Message {
   Updates
   CheckUpdates
   LoadingSettings
+  BrowserPreferences
   RuntimeSettings
   DeepseekKey
   GlmKey

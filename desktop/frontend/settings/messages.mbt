@@ -114,6 +114,7 @@ pub(all) enum Message {
   Updates
   CheckUpdates
   LoadingSettings
+  BrowserPreferences
   RuntimeSettings
   DeepseekKey
   GlmKey
@@ -876,6 +877,16 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, LoadingSettings) => "正在加载运行设置…"
     (TraditionalChinese, LoadingSettings) => "正在載入執行設定…"
     (Japanese, LoadingSettings) => "実行設定を読み込み中…"
+    (English, BrowserPreferences) =>
+      "Preferences for this browser and your Cloud conversations."
+    (Spanish, BrowserPreferences) =>
+      "Preferencias de este navegador y de tus conversaciones en Cloud."
+    (SimplifiedChinese, BrowserPreferences) =>
+      "此浏览器和 Cloud 会话的偏好设置。"
+    (TraditionalChinese, BrowserPreferences) =>
+      "此瀏覽器和 Cloud 對話的偏好設定。"
+    (Japanese, BrowserPreferences) =>
+      "このブラウザーと Cloud の会話の設定。"
     (English, RuntimeSettings) => "Runtime settings for the SeekMoon engine."
     (Spanish, RuntimeSettings) =>
       "Configuración de ejecución del motor de SeekMoon."

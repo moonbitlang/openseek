@@ -57,6 +57,7 @@ pub(all) struct Input {
   search : @session_search.Model
   locale : @i18n.Locale
   mode : Mode
+  has_host : Bool
   notices : Array[String]
   sections : Array[@section.Input]
   update_label : String?

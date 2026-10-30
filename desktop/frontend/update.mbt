@@ -1833,12 +1833,9 @@ fn update(
   // many messages — device/session switches, background pushes, connection
   // metadata, restored session data, a worktree registry broadcast — so the
   // package fences the palette once here rather than in every branch.
-  let (quick_open_cmd, quick_open) = match model.active_checkout() {
-    Some(active) =>
-      model.quick_open.reconcile(
-        dispatch.map(msg => QuickOpen(msg)),
-        model.quick_open_input(active),
-      )
+  let (quick_open_cmd, quick_open) = match model.quick_open_input() {
+    Some(input) =>
+      model.quick_open.reconcile(dispatch.map(msg => QuickOpen(msg)), input)
     // No checkout on screen is no owner to fence against — the palette has
     // nothing left to search, so it closes here for the same reason it does
     // when its conversation is replaced.
@@ -2285,6 +2282,15 @@ fn update_msg(
       (
         apply_language(is_desktop=model.is_desktop, dispatch, locale),
         { ..model, locale, },
+      )
+    }
+    CloudFollowupLoaded(value) => {
+      guard !model.has_host() && value is Some(value) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        { ..model, followup_behavior: FollowupBehavior::parse(value), },
       )
     }
     SettingsLoaded(
@@ -4091,8 +4097,14 @@ fn update_msg(
       (push, next.settle_api_setup())
     }
     FollowupBehaviorChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       let behavior = FollowupBehavior::parse(value)
+      if !model.has_host() {
+        return (
+          save_cloud_followup_behavior(behavior),
+          { ..model, followup_behavior: behavior, select_menu: None, },
+        )
+      }
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       (
         push_host_settings(
           dispatch,
@@ -4524,13 +4536,26 @@ fn update_msg(
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
-    SidebarModeSelected(sidebar_mode) => (@cmd.none, { ..model, sidebar_mode, })
+    SidebarModeSelected(sidebar_mode) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          sidebar_mode: if model.has_host() {
+            sidebar_mode
+          } else {
+            ChatMode
+          },
+        },
+      )
     DeviceChosen(id) => (@nav.load(@routes.device_entry_path(id)), model)
     // A conversation already on screen has claimed the list, and a Cloud
     // destination shows the Chat list; the stored pick only decides what any
     // other empty page shows.
     SidebarModeLoaded(sidebar_mode) =>
-      if model.sidebar_revealed is None &&
+      if !model.has_host() {
+        (@cmd.none, { ..model, sidebar_mode: ChatMode, })
+      } else if model.sidebar_revealed is None &&
         !(model.navigation.location is Some(location) &&
         location.target.is_cloud()) {
         (@cmd.none, { ..model, sidebar_mode, })
@@ -10273,6 +10298,7 @@ fn test_model() -> Model {
     ],
     focused: @interop.ChannelId::Local,
     console: local_console_state(login_return_to="/console/"),
+    sidebar_mode: WorkMode,
     // The shared fixture represents a connected desktop after its initial
     // settings snapshot. Loading-state tests opt back into revision -1.
     host_settings_revision: 0,
@@ -10440,6 +10466,107 @@ test "viewport resize flips the narrow flag and resets the sidebar" {
   let (_, wide) = update(dispatch, ViewportResized(width=1280), same)
   assert_false(wide.narrow)
   assert_true(wide.sidebar_open)
+}
+
+///|
+test "Cloud follow-up preferences load and change without borrowing a host snapshot" {
+  let dispatch = test_dispatch()
+  let base = test_model()
+  let cloud = {
+    ..base,
+    devices: [],
+    console: { ..base.console, page_device: None, },
+    host_settings_revision: -1,
+    followup_behavior: FollowupSteer,
+    select_menu: Some(FollowupBehaviorMenu),
+  }
+  for
+    message in [
+      CloudFollowupLoaded(Some("queue")),
+      FollowupBehaviorChanged("queue"),
+    ] {
+    let (_, once) = update_msg(dispatch, message, cloud)
+    let (_, twice) = update_msg(dispatch, message, cloud)
+    assert_true(once.followup_behavior is FollowupQueue)
+    assert_true(once.followup_behavior == twice.followup_behavior)
+    assert_true(once.select_menu == twice.select_menu)
+    assert_eq(once.host_settings_revision, -1)
+    assert_eq(once.settings_saves, 0)
+  }
+  let (_, missing) = update_msg(dispatch, CloudFollowupLoaded(None), cloud)
+  assert_true(missing.followup_behavior is FollowupSteer)
+  let (_, changed) = update_msg(
+    dispatch,
+    FollowupBehaviorChanged("queue"),
+    cloud,
+  )
+  assert_true(changed.select_menu is None)
+  let (_, steered) = update_msg(
+    dispatch,
+    FollowupBehaviorChanged("steer"),
+    changed,
+  )
+  assert_true(steered.followup_behavior is FollowupSteer)
+  // The browser store never overrides an online or offline device's settings.
+  for host in [base, { ..base, devices: [], host_settings_revision: -1, }] {
+    let (_, once) = update_msg(
+      dispatch,
+      CloudFollowupLoaded(Some("queue")),
+      host,
+    )
+    let (_, twice) = update_msg(
+      dispatch,
+      CloudFollowupLoaded(Some("queue")),
+      host,
+    )
+    assert_true(once.followup_behavior == host.followup_behavior)
+    assert_true(once.followup_behavior == twice.followup_behavior)
+    assert_eq(once.settings_saves, host.settings_saves)
+  }
+  let loading = { ..base, devices: [], host_settings_revision: -1, }
+  let (_, retained) = update_msg(
+    dispatch,
+    FollowupBehaviorChanged("queue"),
+    loading,
+  )
+  assert_true(retained.followup_behavior == loading.followup_behavior)
+  let (_, saved) = update_msg(dispatch, FollowupBehaviorChanged("queue"), base)
+  let (_, again) = update_msg(dispatch, FollowupBehaviorChanged("queue"), base)
+  assert_true(saved.followup_behavior is FollowupQueue)
+  assert_true(saved.followup_behavior == again.followup_behavior)
+  assert_true(saved.select_menu == again.select_menu)
+  assert_eq(saved.settings_saves, base.settings_saves + 1)
+  assert_eq(saved.settings_saves, again.settings_saves)
+}
+
+///|
+test "device-less sidebar mode stays Chat for loaded and selected Work preferences" {
+  let dispatch = test_dispatch()
+  let base = test_model()
+  let cloud = {
+    ..base,
+    devices: [],
+    console: { ..base.console, page_device: None, },
+    sidebar_mode: WorkMode,
+  }
+  for message in [SidebarModeLoaded(WorkMode), SidebarModeSelected(WorkMode)] {
+    let (_, once) = update_msg(dispatch, message, cloud)
+    let (_, twice) = update_msg(dispatch, message, cloud)
+    assert_true(once.sidebar_mode is ChatMode)
+    assert_true(once.sidebar_mode == twice.sidebar_mode)
+    for host in [base, { ..base, devices: [], }] {
+      let (_, selected) = update_msg(dispatch, message, {
+        ..host,
+        sidebar_mode: ChatMode,
+      })
+      let (_, repeated) = update_msg(dispatch, message, {
+        ..host,
+        sidebar_mode: ChatMode,
+      })
+      assert_true(selected.sidebar_mode is WorkMode)
+      assert_true(selected.sidebar_mode == repeated.sidebar_mode)
+    }
+  }
 }
 
 ///|

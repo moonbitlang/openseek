@@ -404,9 +404,26 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     self.cloud.creating_session()
   let history : Array[String] = []
   for record in conversation.records {
-    if record.kind == "user" &&
-      record.data is { "content": String(content), .. } {
-      history.push(content)
+    if record.kind == "user" && record.data is { "content": content, .. } {
+      let text = match content {
+        String(text) => text
+        Array(parts) =>
+          parts
+          .iter()
+          .filter_map(part => {
+            match part {
+              { "type": "text", "text": String(text), .. } => Some(text)
+              _ => None
+            }
+          })
+          .join("")
+        _ => continue
+      }
+      // Recall only the text without decoding the immutable image payloads.
+      // Keep mention envelopes so the composer can restore their chips.
+      if !text.is_blank() {
+        history.push(text)
+      }
     }
   }
   let input = self.dormant_composer_input()
