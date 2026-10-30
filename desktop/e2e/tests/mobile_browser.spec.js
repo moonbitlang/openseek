@@ -43,6 +43,39 @@ test('phone conversation sends once, stops, reconnects and keeps the composer vi
   expect(app.pageErrors).toEqual([]);
 });
 
+test('Back closes the topmost layer first and reports when none is open', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.gitBranch = { branch: 'phone/back', diffstat: { added: 1, removed: 0, files: 1, partial: false } };
+  await app.install();
+  await app.goto();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
+  // The Android shell's Back: true exactly when a layer took it.
+  const back = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
+  expect(await back()).toBe(false);
+  await page.locator('.sidebar-toggle').click();
+  await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
+  await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
+  const menu = page.getByRole('menu', { name: 'Workspace actions' });
+  await expect(menu).toBeVisible();
+  // The menu opened over the drawer, so it closes first.
+  expect(await back()).toBe(true);
+  await expect(menu).toBeHidden();
+  await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
+  expect(await back()).toBe(true);
+  await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
+  expect(await back()).toBe(false);
+  // Escape reaches the same layers from a keyboard, including the Git menu,
+  // which has no Escape handling of its own.
+  await page.locator('.sidebar-toggle').click();
+  await app.openSession();
+  await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
+  await page.locator('.composer-git-button').click();
+  await expect(page.locator('.composer-git-menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.composer-git-menu')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('long engine-start failures remain readable within the phone viewport and restore the draft', async ({ page }, info) => {
   const app = await installConsole(page);
   const failure = 'Engine failed to start: invalid option\nUsage: openseek serve [OPTIONS]\n' +

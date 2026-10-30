@@ -2003,6 +2003,19 @@ pub fn Msg::close_git_details() -> Msg {
 }
 
 ///|
+/// The message that closes the page's open confirmation, the topmost first,
+/// for the shell's Back. None while no confirmation is open.
+pub fn State::confirmation_dismissal(self : State) -> Msg? {
+  if self.permission_picker is CodexPermissionConfirmingFullAccess(_) {
+    Some(CancelFullAccess)
+  } else if self.archive_confirm is Some(_) {
+    Some(CancelArchiveDiscard)
+  } else {
+    None
+  }
+}
+
+///|
 fn State::without_thread(self : State, thread_id : String) -> State {
   let removing_active = self.active_thread() is Some(active) &&
     active.id == thread_id
