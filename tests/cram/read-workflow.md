@@ -163,7 +163,7 @@ are still returned, and the call exits 1 so the tool reports it as an error.
 ```mooncram
 $ moonx "$READ" absent.txt note.txt
 === "absent.txt" ===
-error reading file: "OSError(\"@fs.kind(): \\\"absent.txt\\\": No such file or directory\")"
+error reading file: "@fs.kind(): \"absent.txt\": No such file or directory"
 === "note.txt" ===
 1 |whole file
 <system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>
@@ -192,7 +192,7 @@ $ printf 'kept' > log:12
 ```mooncram
 $ moonx "$READ" log:12
 === "log" ===
-error reading file: "OSError(\"@fs.kind(): \\\"log\\\": No such file or directory\")"
+error reading file: "@fs.kind(): \"log\": No such file or directory"
 [1]
 ```
 
