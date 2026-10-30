@@ -180,7 +180,13 @@ fn dialog_view(
     .aria_controls(ListId)
     .aria_expanded("true")
     .aria_autocomplete("list")
-    .aria_keyshortcuts("Meta+P Control+P Meta+T Control+T")
+    .aria_keyshortcuts(
+      if open.owner is @interop.Cloud(..) {
+        "Meta+P Control+P"
+      } else {
+        "Meta+P Control+P Meta+T Control+T"
+      },
+    )
     .data_set("focus-owner", "")
   let input_attrs = if active_id.is_empty() {
     base_input_attrs

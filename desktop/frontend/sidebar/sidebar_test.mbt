@@ -4,6 +4,7 @@ test "the sidebar input keeps peer sections in one component value" {
     search: @session_search.Model(),
     locale: English,
     mode: WorkMode,
+    has_host: true,
     notices: [],
     sections: [
       {

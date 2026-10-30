@@ -828,11 +828,15 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
           ).map(row => @section.Conversation(row))
           [
             self.cloud_chat_section(self.focused.uri_authority()),
-            self.local_chat_section(
-              channel=self.focused.uri_authority(),
-              activation=None,
-              rows=[],
-            ),
+            ..if self.has_host() {
+              [
+                self.local_chat_section(
+                  channel=self.focused.uri_authority(),
+                  activation=None,
+                  rows=[],
+                ),
+              ]
+            },
             {
               id: @section.Id(
                 source="archived",
@@ -895,6 +899,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     notices,
     locale: self.locale,
     mode: self.sidebar_mode,
+    has_host: self.has_host(),
     sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
@@ -1585,6 +1590,7 @@ fn api_settings_rows(
 /// saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let locale = model.locale
+  let has_host = model.has_host()
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
   // All providers use the composer's model selector; API setup only chooses
@@ -1638,8 +1644,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       []
     },
-    @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
-    @settings.group(icon_key, "API", api_rows),
+    ..if has_host {
+      [
+        @settings.group(
+          icon_sparkle,
+          @settings.text(locale, Engine),
+          engine_rows,
+        ),
+        @settings.group(icon_key, "API", api_rows),
+      ]
+    },
     @settings.group(
       icon_key,
       @settings.text(locale, Account) +
@@ -1647,11 +1661,15 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @settings.text(locale, RemoteAccess),
       remote_access_rows(dispatch, model),
     ),
-    @settings.group(
-      icon_extensions,
-      "Codex",
-      codex_account_rows(dispatch, model),
-    ),
+    ..if has_host {
+      [
+        @settings.group(
+          icon_extensions,
+          "Codex",
+          codex_account_rows(dispatch, model),
+        ),
+      ]
+    },
     @settings.group(icon_layout, @settings.text(locale, Interface), [
       @settings.row(
         @settings.text(locale, Language),
@@ -1700,7 +1718,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             selected=model.followup_behavior.wire(),
             aria_label=@settings.text(locale, Followup),
             change=dispatch.map(value => FollowupBehaviorChanged(value)),
-            disabled=!settings_loaded,
+            disabled=has_host && !settings_loaded,
           ),
         ],
         desc=@settings.text(locale, FollowupDescription),
@@ -1860,7 +1878,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
       @html.div(
         class="settings-subtitle",
-        if !settings_loaded {
+        if !has_host {
+          @settings.text(locale, BrowserPreferences)
+        } else if !settings_loaded {
           @settings.text(locale, LoadingSettings)
         } else if ready {
           @settings.text(locale, RuntimeSettings)

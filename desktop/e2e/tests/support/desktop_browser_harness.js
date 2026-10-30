@@ -682,13 +682,14 @@ export class DesktopBrowserHarness {
           'deepseek_api_key',
           'glm_api_key',
           'custom_api_key',
+          'followup_behavior',
           'prompt_source',
           'custom_prompt',
         ]) {
           if (patch[key] === undefined) {
             continue;
           }
-          if (['provider', 'custom_api_url', 'prompt_source', 'custom_prompt'].includes(key)) {
+          if (['provider', 'custom_api_url', 'followup_behavior', 'prompt_source', 'custom_prompt'].includes(key)) {
             this.hostSettings[key] = patch[key];
           } else {
             const savedKey = `has_${key.replace('_api_key', '')}_key`;

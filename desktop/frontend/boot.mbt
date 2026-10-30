@@ -7,7 +7,7 @@
 
 ///|
 priv suberror AppShortcutSubscription {
-  AppShortcutSubscription(@cmd.Emit[Msg])
+  AppShortcutSubscription(@cmd.Emit[Msg], files~ : Bool, symbols~ : Bool)
 }
 
 ///|
@@ -16,13 +16,19 @@ fn app_shortcut_sub_loader(
   scheduler : &Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    AppShortcutSubscription(emit) => {
+    AppShortcutSubscription(emit, files~, symbols~) => {
       let mut emit = emit
+      let mut files = files
+      let mut symbols = symbols
       let target = @dom.document().as_event_target()
       let is_apple = app_shortcut_platform_is_apple()
       let listener : @dom.Listener = event => {
         guard event.to_keyboard_event() is Some(keyboard) &&
           app_shortcut_message(keyboard, is_apple) is Some(message) else {
+          return
+        }
+        if (message is QuickOpenOpen(@quick_open.Files) && !files) ||
+          (message is QuickOpenOpen(@quick_open.Symbols) && !symbols) {
           return
         }
         // In a real browser these chords overlap print/new-tab, new-window,
@@ -50,8 +56,17 @@ fn app_shortcut_sub_loader(
           )
         },
         update_tagger: payload => {
-          guard payload is AppShortcutSubscription(next) else { return }
+          guard payload
+            is AppShortcutSubscription(
+              next,
+              files=new_files,
+              symbols=new_symbols
+            ) else {
+            return
+          }
           emit = next
+          files = new_files
+          symbols = new_symbols
         },
       })
     }
@@ -66,11 +81,15 @@ fn app_shortcut_sub_loader(
 /// sidebar, Shift+B toggles the right panel, and Shift+F opens Search.
 /// Period opens Settings.
 /// Plus/equal and minus adjust the app font size, including held-key repeats.
-fn app_shortcut_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
+fn app_shortcut_subscription(emit : @cmd.Emit[Msg], model : Model) -> @sub.Sub {
   @sub.custom_sub(
     "app-shortcut-capture",
     Global,
-    AppShortcutSubscription(emit),
+    AppShortcutSubscription(
+      emit,
+      files=model.quick_open_available(@quick_open.Files),
+      symbols=model.quick_open_available(@quick_open.Symbols),
+    ),
     app_shortcut_sub_loader,
   )
 }
@@ -508,7 +527,7 @@ fn main {
           @sub.on_resize(
             emit.map(viewport => ViewportResized(width=viewport.width.to_int())),
           ),
-          app_shortcut_subscription(emit),
+          app_shortcut_subscription(emit, model),
           language_subscription(emit),
           // Host event sources follow the device roster. Removing a device
           // therefore unloads its WebSocket immediately; advancing its retry
