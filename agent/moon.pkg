@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek/attachments",
   "moonbitlang/openseek/agent_tool/read_image",
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/mcp/host" @mcphost,
@@ -51,6 +50,7 @@ import {
   "moonbitlang/openseek/agent_tool/edit",
   "moonbitlang/openseek/agent_tool/multi_edit",
   "moonbitlang/openseek/agent_tool/remove",
+  "moonbitlang/openseek/attachments",
 } for "test"
 
 warnings = "+unnecessary_annotation"

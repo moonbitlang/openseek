@@ -63,15 +63,19 @@ async test "adjacent concurrent-safe calls overlap and keep result order" {
     }
     let journal : Array[String] = []
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=Session(SessionId("concurrent-probes"), system_prompt="system"),
       content=Content([Text("probe twice")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
-      api_url=url,
       tools=Tools([probe_tool(journal, concurrent_safe=true)]),
     )
     assert_eq(journal, ["start-a", "start-b", "end-a", "end-b"])
@@ -94,15 +98,19 @@ async test "unflagged adjacent calls stay sequential" {
     }
     let journal : Array[String] = []
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=Session(SessionId("sequential-probes"), system_prompt="system"),
       content=Content([Text("probe twice")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
-      api_url=url,
       tools=Tools([probe_tool(journal, concurrent_safe=false)]),
     )
     assert_eq(journal, ["start-a", "end-a", "start-b", "end-b"])
@@ -126,15 +134,19 @@ async test "no prefetch behind a batch-sealing control call" {
     }
     let journal : Array[String] = []
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=Session(SessionId("sealed-batch"), system_prompt="system"),
       content=Content([Text("finish immediately")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
-      api_url=url,
       tools=Tools([
         probe_tool(journal, concurrent_safe=true),
         @finish.definition(),

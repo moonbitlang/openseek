@@ -55,6 +55,7 @@ pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@de
 pub fn Client::supports_image_input(Self) -> Bool
 pub async fn Client::upload_attachment(Self, @openseek_protocol.ImageRef) -> String
 pub async fn Client::upload_image(Self, Bytes, filename~ : String, expires_after_seconds? : Int32, timeout_ms? : Int32) -> UploadedFile
+pub fn Client::with_thinking(Self, @deepseek.ThinkingMode) -> Self
 
 type StreamHandler
 pub fn StreamHandler::StreamHandler(on_content_delta~ : async (String) -> Unit, on_reasoning_delta? : async (String) -> Unit, on_retry? : (Int32, Int32, String) -> Unit) -> Self

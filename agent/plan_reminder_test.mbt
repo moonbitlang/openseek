@@ -84,15 +84,19 @@ async test "a plan-silent turn gets one staleness reminder after the cadence" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do a long task")]),
       append_item=(session, item) => session.append(item),
       max_steps=cadence + 10,
-      api_url=url,
     )
     // Exactly cadence+2 requests: cadence+1 tool-call steps plus the
     // finishing answer. A retry would inflate the count and fail here
@@ -142,15 +146,19 @@ async test "a recorded plan delays the reminder and is re-surfaced by it" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do a long task")]),
       append_item=(session, item) => session.append(item),
       max_steps=cadence + 10,
-      api_url=url,
     )
     // Exactly cadence+3 requests: the plan write, cadence+1 more tool-call
     // steps, the finishing answer.
@@ -205,15 +213,19 @@ async test "the no-plan nag fires at most once per turn" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do a long task")]),
       append_item=(session, item) => session.append(item),
       max_steps=2 * cadence + 10,
-      api_url=url,
     )
     // Exactly 2*cadence+4 requests: 2*cadence+3 tool-call steps plus the
     // finishing answer.
@@ -268,15 +280,19 @@ async test "a stale recorded plan re-nags on the request cadence" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do a long task")]),
       append_item=(session, item) => session.append(item),
       max_steps=2 * cadence + 10,
-      api_url=url,
     )
     // Exactly 2*cadence+3 requests: the plan write, 2*cadence+1 more
     // tool-call steps, the finishing answer.

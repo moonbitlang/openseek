@@ -76,15 +76,19 @@ async test "a standing goal from a prior turn is re-surfaced at turn start" {
       .append(User(UserMessage(Content([Text("earlier task")]))))
       .append(Terminal(Finished("earlier answer")))
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("next chunk")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools=goal_probe_tools(),
     )
     // Two rounds: the answer, then the once-per-turn goal check's follow-up.
@@ -120,15 +124,19 @@ async test "a freshly set goal is not double-announced" {
       .append(Terminal(Finished("earlier answer")))
       .append(goal_set_marker("GOAL-MARKER fresh objective"))
     let _ = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("get started")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools=goal_probe_tools(),
     )
     // Two rounds: the goal check still fires for a fresh goal; only the
@@ -154,15 +162,19 @@ async test "a long turn is reminded exactly once, at the start" {
       .append(goal_set_marker("GOAL-MARKER long objective"))
       .append(Terminal(Finished("earlier answer")))
     let _ = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep going")]),
       append_item=(session, item) => session.append(item),
       max_steps=40,
-      api_url=url,
       tools=goal_probe_tools(),
     )
     // 31 probe rounds, the first final answer, then the goal check's
@@ -195,15 +207,19 @@ async test "a goal steered in mid-turn is announced once, not reminded" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("start")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
-      api_url=url,
       tools=goal_probe_tools(),
     )
     // Probe round, first final answer, goal-check follow-up.
@@ -234,15 +250,19 @@ async test "a cleared goal produces no reminders" {
       .append(Terminal(Finished("earlier answer")))
       .append(Runtime(RuntimeNotice(@agent_session.GoalClearedNotice)))
     let _ = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("just answer")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
-      api_url=url,
       tools=goal_probe_tools(),
     )
     assert_eq(bodies.length(), 1)

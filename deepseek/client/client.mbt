@@ -490,3 +490,12 @@ async fn Client::chat_stream_attempt(
 #doc(hidden)
 #deprecated
 pub extend Client with Debug::{to_repr}
+
+///|
+/// Change reasoning mode while preserving transport and attachment dependencies.
+pub fn Client::with_thinking(
+  self : Client,
+  thinking : @deepseek.ThinkingMode,
+) -> Client {
+  { ..self, thinking, }
+}

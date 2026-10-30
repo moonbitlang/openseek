@@ -104,7 +104,8 @@ its `attachments` store and resolves them through the Files API. The persistent
 mapping lives in `upload_index_dir` and is shared across clients; records are
 scoped by endpoint and credential digest. The defaults are
 `~/.openseek/attachments` and `~/.openseek/deepseek`. Applications should pass the
-same `AttachmentStore` used for content admission.
+same `AttachmentStore` used for content admission. `with_thinking` preserves
+both storage dependencies when deriving a summary client.
 
 Uploads run outside the short index-write lock. Cached IDs refresh near expiry
 or once after an explicit invalid/expired file response. Local images retain

@@ -97,15 +97,19 @@ async test "a finish attempt with a standing goal gets one goal check" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-check-final"),
       content=Content([Text("do the next chunk")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools=goal_probe_tools(),
     )
     // Exactly two model rounds: the premature finish, then the post-check
@@ -170,15 +174,19 @@ async test "a finish tool call mid-batch closes the batch before the check" {
       ),
     ])
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-check-batch"),
       content=Content([Text("do the next chunk")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools~,
     )
     assert_eq(bodies.length(), 2)
@@ -240,15 +248,19 @@ async test "checkpoint replay provenance distinguishes a same-text follow-up" {
       ),
     ])
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-check-replay-provenance"),
       content=Content([Text("finish carefully")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools~,
     )
     assert_eq(bodies.length(), 2)
@@ -291,15 +303,19 @@ async test "a check on the reminder boundary is not buried by a reminder" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-check-boundary"),
       content=Content([Text("grind through it")]),
       append_item=(session, item) => session.append(item),
       max_steps=40,
-      api_url=url,
       tools=goal_probe_tools(),
     )
     assert_eq(bodies.length(), 31)
@@ -331,15 +347,19 @@ async test "no goal or a cleared goal never triggers the check" {
       Runtime(RuntimeNotice(@agent_session.GoalClearedNotice)),
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=cleared,
       content=Content([Text("just answer")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
-      api_url=url,
       tools=goal_probe_tools(),
     )
     assert_eq(bodies.length(), 1)
@@ -366,14 +386,18 @@ async test "a goal check at the ceiling checkpoints first" {
     }
     let session = answered_goal_session("goal-check-ceiling")
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do the big task")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
     )
     // The pressured completion with an unchecked goal checkpoints FIRST,
     // then runs the check round from the compacted projection — never from
@@ -432,14 +456,18 @@ async test "a pressured goal-met-then-finish batch salvages both" {
       @finish.definition(),
     ])
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("wrap it all up")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools~,
     )
     // The check text asks for goal(met) BEFORE finish: at the hard ceiling

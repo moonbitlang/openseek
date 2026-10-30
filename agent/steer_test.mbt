@@ -52,15 +52,19 @@ async test "queued steering is folded in at the next step boundary" {
     // shares it across turns.
     let tools = @agent.build_tools(runtime, scope)
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do the task")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
-      api_url=url,
       tools~,
     )
     // The steered text is durably part of the conversation: task, two identical steers,
@@ -151,15 +155,19 @@ async test "a steer racing the final call keeps the turn alive" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("write a poem")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
     )
     // User input beat the model's completion: the draft stayed an ordinary
     // assistant message, the steer follows it, and the turn finished on the
@@ -215,15 +223,19 @@ async test "inject racing the final call keeps the turn alive" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("inspect files")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
     )
     let events = result.events()
     assert_eq(events.length(), 5)
@@ -263,15 +275,19 @@ async test "blank steering input is dropped at the boundary" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do the task")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
-      api_url=url,
     )
     // The blank steer left no trace; only the real one was applied.
     assert_eq(result.events().length(), 4)
@@ -353,13 +369,17 @@ async test "streaming reasoning deltas survive a stream retry and stay transient
       system_prompt="system",
     )
     let result = @agent.run_turn_with_append(
-      api_key="test-key",
-      model=Deepseek(V4Flash),
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       session~,
       task="do the task",
       append_item=(session, item) => session.append(item),
       max_steps=1,
-      api_url=url,
     )
     let events = result.events()
     assert_eq(events.length(), 3)
@@ -476,15 +496,19 @@ async test "a background notice steer is applied as a runtime notice" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do a task")]),
       append_item=(session, item) => session.append(item),
       max_steps=10,
-      api_url=url,
     )
     // The notice persists as a RuntimeNotice (not a user message), so on resume
     // it renders as a system notice rather than user input.
@@ -522,10 +546,15 @@ async test "a runtime notice after a completion preserves the follow-up step" {
       ),
     ])
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=Session(
         SessionId("notice-after-completion"),
         system_prompt="system",
@@ -533,7 +562,6 @@ async test "a runtime notice after a completion preserves the follow-up step" {
       content=Content([Text("do a task")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools~,
     )
     let events = result.events()

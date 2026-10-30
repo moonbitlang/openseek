@@ -81,14 +81,7 @@ async test "persistent upload index survives clients, isolates credentials and r
         ImageUrl(url=reference.url()),
       ]),
     ]
-    let summary_client = @client.Client(
-      api_key="first-secret",
-      model=Deepseek(V4Flash),
-      api_url~,
-      attachments~,
-      upload_index_dir=home + "/deepseek",
-      thinking=No,
-    )
+    let summary_client = resumed.with_thinking(No)
     assert_eq(summary_client.thinking, No)
     ignore(summary_client.chat(messages))
     assert_eq(uploads.length(), 2)

@@ -74,13 +74,17 @@ async test "images are admitted before append without reordering queued or arriv
     )
     let recorded : Array[@agent_session.SessionItem] = []
     let first = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        attachments~,
+        upload_index_dir=home + "/deepseek",
+        thinking=Max,
+      ),
+      admit_content=content => attachments.admit(content),
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test",
-      model=Deepseek(V4Flash),
-      api_url=url,
-      attachments~,
-      upload_index_dir=home + "/deepseek",
       session=Session(SessionId("images"), system_prompt="system"),
       content=Content([Image(image)]),
       submission_id="initial",
@@ -138,13 +142,17 @@ async test "images are admitted before append without reordering queued or arriv
     let resumed : @agent_session.Session = @json.from_json(Json(first))
     ignore(
       @agent.run_turn_in_scope(
+        client=Client(
+          api_key="test",
+          model=Deepseek(V4Flash),
+          api_url=url,
+          attachments~,
+          upload_index_dir=home + "/deepseek",
+          thinking=Max,
+        ),
+        admit_content=content => attachments.admit(content),
         runtime=AgentRuntime(),
         scope=AgentTaskScope(group),
-        api_key="test",
-        model=Deepseek(V4Flash),
-        api_url=url,
-        attachments~,
-        upload_index_dir=home + "/deepseek",
         session=resumed,
         content=Content([Text("replay")]),
         append_item=(session, item) => session.append(item),
@@ -159,26 +167,23 @@ async test "images are admitted before append without reordering queued or arriv
 
 ///|
 async test "failed initial admission never reaches the session append hook" {
-  let root = @fs.tmpdir(prefix="openseek-admission-failure-")
-  defer @fs.rmdir(root, recursive=true)
-  let blocked = root + "/not-a-directory"
-  @fs.write_file(blocked, "occupied")
-  let attachments = @attachments.AttachmentStore(blocked)
   let initial = @agent_session.Session(
     SessionId("admission-failure"),
     system_prompt="system",
   )
   let image = @agent_session.Image::from_bytes(b"GIF87a")
   let appended : Array[@agent_session.SessionItem] = []
+  let admitted : Array[@agent_session.Content] = []
   @async.with_task_group() <| group => {
     try
       @agent.run_turn_in_scope(
         runtime=AgentRuntime(),
         scope=AgentTaskScope(group),
-        api_key="unused",
-        model=Deepseek(V4Flash),
-        attachments~,
-        upload_index_dir=root + "/deepseek",
+        client=Client(api_key="unused", model=Deepseek(V4Flash)),
+        admit_content=content => {
+          admitted.push(content)
+          fail("attachment store unavailable")
+        },
         session=initial,
         content=Content([Image(image)]),
         append_item=(session, item) => {
@@ -188,12 +193,12 @@ async test "failed initial admission never reaches the session append hook" {
         max_steps=0,
       )
     catch {
-      _ => ()
+      error => assert_true("\{error}".contains("attachment store unavailable"))
     } noraise {
       _ => fail("expected admission failure")
     }
   }
-  assert_eq(@fs.read_file(blocked).text(), "occupied")
+  assert_eq(admitted, [Content([Image(image)])])
   assert_eq(appended.length(), 0)
   assert_eq(initial.events().length(), 0)
 }
