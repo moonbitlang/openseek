@@ -683,7 +683,7 @@ async fn build_export_html(
         is_marker=row.is_marker,
         last_active=row.last_active.map(seconds => seconds.to_double()),
         first_prompt=row.first_prompt,
-        events=read_text_lossy(row.path),
+        events=portable_session_text(read_text_lossy(row.path)),
       ),
     )
   }
@@ -1518,4 +1518,23 @@ async test "locate_bundle prefers the freshest artifact; explicit wins" {
   assert_eq(locate_bundle(["", "\{root}/absent.js", old_path]), Some(old_path))
   assert_eq(locate_bundle(["", "\{root}/absent.js"]), None)
   @fs.rmdir(root, recursive=true)
+}
+
+///|
+/// Standalone exports carry referenced bytes so they survive moving off-host.
+async fn portable_session_text(text : String) -> String {
+  let attachments = @attachments.AttachmentStore::default()
+  let lines : Array[String] = []
+  for line in text.split("\n") {
+    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line)) catch {
+      _ => {
+        lines.push(line.to_owned())
+        continue
+      }
+    }
+    lines.push(
+      Json(event.map_content(content => attachments.restore(content))).stringify(),
+    )
+  }
+  lines.join("\n")
 }

@@ -194,8 +194,8 @@ test "classify_header separates versions, headers, and non-headers" {
   // A file written by a newer format is named as such, not misreported as
   // header-less.
   debug_inspect(
-    @log.classify_header({ "version": 2, "whatever": "future shape" }),
-    content="UnsupportedVersion(2)",
+    @log.classify_header({ "version": 3, "whatever": "future shape" }),
+    content="UnsupportedVersion(3)",
   )
   // An event record is structurally not a header.
   debug_inspect(
@@ -215,7 +215,7 @@ test "classify_header separates versions, headers, and non-headers" {
   // line rather than adopting it as the header.
   let parsed = @log.parse_events(
     (
-      #|{"version":2,"id":"demo","system_prompt":"SYS"}
+      #|{"version":3,"id":"demo","system_prompt":"SYS"}
       #|
     ),
   )

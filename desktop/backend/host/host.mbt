@@ -223,6 +223,14 @@ pub fn endpoints(
     Endpoint(@commands.fs_import_attachment, payload => {
       import_attachment_op(payload)
     }),
+    Endpoint(@commands.fs_read_attachment, reference => {
+      let image = @attachments.AttachmentStore::default().read(reference)
+      BinaryContent(
+        data_base64=@base64.encode(image.bytes),
+        media_type=image.media_type,
+        sig=reference.attachment_id,
+      )
+    }),
     Endpoint(@commands.fs_stage_attachments, payload => {
       stage_attachments_op(payload)
     }),

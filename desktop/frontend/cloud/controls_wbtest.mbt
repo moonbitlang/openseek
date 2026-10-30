@@ -165,6 +165,16 @@ test "Cloud dropped queued steer restores its complete editable content" {
     "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
   )
   let content : @wire.Content = Content([Text("Recover this"), Image(image)])
+  let reference = @wire.ImageRef::ImageRef(
+    attachment_id="sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    media_type=image.media_type,
+    bytes=image.bytes.length(),
+  )
+  let referenced : @wire.Content = Content([
+    Text("Recover this"),
+    ImageRef(reference),
+  ])
+  assert_eq(prompt_content(control_draft(referenced)), referenced)
   let draft = control_draft(content)
   assert_eq(draft.task, "Recover this")
   assert_eq(draft.images.length(), 1)

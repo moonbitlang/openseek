@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const bytes = readFileSync(new URL('../../../deepseek/client/testdata/two-colors.png', import.meta.url));
@@ -213,4 +214,36 @@ test('read_image and PTC results display images when committed and after reload'
   await page.reload();
   await app.openSession();
   await verify();
+});
+test('durable image references load from the host and survive message editing', async ({ page }) => {
+  const app = await open(page);
+  const attachment_id = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  const reference = { type: 'image', attachment_id, media_type: 'image/png', bytes: bytes.length };
+  app.imageAttachments = { [attachment_id]: { data: png, media_type: 'image/png' } };
+  app.sessionEvents = [{ sequence: 1, ts: 1000, item: { kind: 'user', payload: { content: [{ type: 'text', text: 'Inspect this image' }, reference] } } },
+    { sequence: 2, ts: 2000, item: { kind: 'terminal', payload: { kind: 'finished', message: 'Done' } } }];
+  await page.reload();
+  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await expect(page.locator('.user-image')).toHaveAttribute('src', url);
+  await expect.poll(() => app.requests.filter(r => r.method === 'fs.read_attachment').length).toBeGreaterThan(0);
+  const read = app.requests.find(r => r.method === 'fs.read_attachment');
+  expect(read.params.attachment_id).toBe(attachment_id);
+  await page.locator('#user-message-edit-trigger-1').click();
+  await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
+  await expect(page.locator('#user-message-edit-1')).toHaveValue('Inspect this image');
+  await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => app.requests.find(r => r.method === 'session.edit')?.params.images).toEqual([
+    `openseek-attachment:${attachment_id}:image/png:${bytes.length}`,
+  ]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('missing durable image settles as unavailable without breaking the transcript', async ({ page }) => {
+  const app = await open(page);
+  app.rpcErrors.set('fs.read_attachment', 'Image attachment is missing');
+  app.sessionEvents.push({ sequence: 18, item: { kind: 'user', payload: { content: [{ type: 'image', attachment_id: `sha256:${'a'.repeat(64)}`, media_type: 'image/png', bytes: 10 }] } } });
+  await page.reload();
+  await app.openSession();
+  await expect(page.locator('.user-image.unavailable')).toHaveCount(1);
+  expect(app.pageErrors).toEqual([]);
 });

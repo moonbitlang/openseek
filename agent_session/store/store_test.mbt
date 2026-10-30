@@ -976,14 +976,14 @@ async test "store names an unsupported session file version on load" {
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   @fs.write_file(
     session_file(store, "s1"),
-    "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
+    "{\"version\":3,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
     create_mode=CreateOrTruncate,
   )
   try store.load(SessionId("s1")) catch {
     error =>
-      assert_true("\{error}".contains("unsupported session file version 2"))
+      assert_true("\{error}".contains("unsupported session file version 3"))
   } noraise {
-    _ => fail("version-2 session file was accepted")
+    _ => fail("version-3 session file was accepted")
   }
 }
 

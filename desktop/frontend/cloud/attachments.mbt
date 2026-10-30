@@ -13,11 +13,19 @@ fn prompt_content(draft : @composer.Draft) -> @wire.Content raise RequestError {
   let parts : Array[@wire.ContentPart] = [Text(draft.prompt())]
   for image in draft.images {
     parts.push(
-      Image(
-        @wire.Image::from_data_url(image.url) catch {
-          _ => raise @cloud_client.RequestError(InvalidImage)
-        },
-      ),
+      if image.url.has_prefix("openseek-attachment:") {
+        ImageRef(
+          @wire.ImageRef::from_url(image.url) catch {
+            _ => raise @cloud_client.RequestError(InvalidImage)
+          },
+        )
+      } else {
+        Image(
+          @wire.Image::from_data_url(image.url) catch {
+            _ => raise @cloud_client.RequestError(InvalidImage)
+          },
+        )
+      },
     )
   }
   Content(parts)
@@ -58,6 +66,15 @@ async fn prepare_submission(
     }
   }
   for image in draft.images {
+    if image.url.has_prefix("openseek-attachment:") {
+      // Queued content already belongs to this session's attachment store.
+      ignore(
+        @wire.ImageRef::from_url(image.url) catch {
+          _ => raise @cloud_client.RequestError(InvalidImage)
+        },
+      )
+      continue
+    }
     let image_data = @wire.Image::from_data_url(image.url) catch {
       _ => raise @cloud_client.RequestError(InvalidImage)
     }
