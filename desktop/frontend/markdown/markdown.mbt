@@ -24,6 +24,8 @@ pub fn markdown_nodes(
   locale~ : @i18n.Locale = English,
   source : String,
   open_file? : (String) -> @cmd.Cmd,
+  artifact_view? : (String, String) -> @html.Html,
+  defer_artifacts~ : Bool = false,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
@@ -31,6 +33,8 @@ pub fn markdown_nodes(
       locale,
       defs: doc.defs,
       open_file,
+      artifact_view,
+      defer_artifacts,
       citations: [],
       in_sources: false,
     }
@@ -52,6 +56,8 @@ priv struct MarkdownRender {
   defs : Map[String, @cmark.LabelDef]
   // How to make a file path clickable; `None` renders paths inertly.
   open_file : ((String) -> @cmd.Cmd)?
+  artifact_view : ((String, String) -> @html.Html)?
+  defer_artifacts : Bool
   // Per-render state: repeated references share one entry, and message-local
   // source actions never depend on document-global fragment IDs.
   citations : Array[Citation]
@@ -85,7 +91,15 @@ fn MarkdownRender::push_block(
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
     CodeBlock(node) | ExtMathBlock(node) =>
-      out.push(code_block(locale=self.locale, node.v, self.open_file))
+      out.push(
+        code_block(
+          locale=self.locale,
+          node.v,
+          self.open_file,
+          artifact_view?=self.artifact_view,
+          defer_artifacts=self.defer_artifacts,
+        ),
+      )
     // Raw HTML is shown as text, not injected; see the module comment.
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
@@ -135,14 +149,28 @@ fn code_block(
   locale~ : @i18n.Locale = English,
   block : @cmark.CodeBlock,
   open_file : ((String) -> @cmd.Cmd)?,
+  artifact_view? : (String, String) -> @html.Html,
+  defer_artifacts~ : Bool = false,
 ) -> @html.Html {
   let source = lines_text(block.code)
   let language = code_block_language(block)
   let closed = code_block_is_closed(block)
   if language == @workspace_file_ref.FenceLanguage {
+    if defer_artifacts && source.trim_start().has_prefix("artifact:") {
+      return @html.nothing
+    }
     match @workspace_file_ref.parse(language, source, closed~) {
-      Some(reference) =>
+      Some(reference) => {
+        if reference.artifact {
+          if defer_artifacts {
+            return @html.nothing
+          }
+          if artifact_view is Some(render) {
+            return render(reference.path, reference.name)
+          }
+        }
         return workspace_file_card(locale, reference, open_file)
+      }
       None => ()
     }
   }
@@ -236,19 +264,21 @@ fn code_block_is_closed(block : @cmark.CodeBlock) -> Bool {
 }
 
 ///|
-fn workspace_file_card(
+/// Render a file reference using the same compact card as workspace outputs.
+pub fn workspace_file_card(
   locale : @i18n.Locale,
   reference : @workspace_file_ref.WorkspaceFileRef,
   open_file : ((String) -> @cmd.Cmd)?,
 ) -> @html.Html {
   let kind_class = workspace_file_kind_class(reference.kind)
   let kind_label = workspace_file_kind_label(locale, reference.kind)
+  let label = if reference.artifact { reference.name } else { reference.path }
   let title = match locale {
-    SimplifiedChinese => "打开 \{reference.path}"
-    TraditionalChinese => "開啟 \{reference.path}"
-    Japanese => "\{reference.path} を開く"
-    English => "Open \{reference.path}"
-    Spanish => "Abrir \{reference.path}"
+    SimplifiedChinese => "打开 \{label}"
+    TraditionalChinese => "開啟 \{label}"
+    Japanese => "\{label} を開く"
+    English => "Open \{label}"
+    Spanish => "Abrir \{label}"
   }
   let attrs = @html.Attrs::build()
     .aria_label(title)
@@ -714,7 +744,8 @@ fn MarkdownRender::link_destination(
 
 ///|
 fn safe_destination(destination : String) -> String? {
-  if @cmark.InlineLink::is_unsafe(destination) {
+  if destination.has_prefix("artifact:") ||
+    @cmark.InlineLink::is_unsafe(destination) {
     None
   } else {
     Some(destination)

@@ -513,9 +513,10 @@ pub fn SessionStore::session_file(
 /// The copy is `Session::fork` of the source as it is durably recorded now —
 /// read under the source's shared lock, so it is one consistent log even
 /// while another process appends to it — and carries the source's display
-/// title. Nothing else in the source's directory is copied: a prediction is
-/// about the source's own tail, and job logs and scratch files are its
-/// working state. Sub-run sessions are not copied either, and nothing
+/// title. The scratch/artifact subtree is copied so inherited file references
+/// resolve to independent files. Predictions, job logs, and other scratch
+/// files are the source's own working state and are not copied.
+/// Sub-run sessions are not copied either, and nothing
 /// records which session the fork came from: a sub-run the copied history
 /// names as `sr-N` is looked up under the fork's id by every reader, where it
 /// is missing — or, once the fork has run its own `sr-N`, a different run.
@@ -565,6 +566,13 @@ pub async fn SessionStore::fork(
     @os_error.OSError(_) as error if error.is_EEXIST() =>
       fail("session \{fork.value()} already exists")
     error => raise error
+  }
+  let source_files = self.artifact_dir(source)
+  if @fs.exists(source_files) {
+    validate_artifact_directory(self.scratch_dir(source), source_files)
+    let destination = self.artifact_dir(fork)
+    @fs.mkdir(destination, recursive=true, permission=0o700)
+    copy_artifact_tree(source_files, destination)
   }
   with_session_lock(self, fork, Exclusive, () => {
     let path = self.session_file_path(fork)

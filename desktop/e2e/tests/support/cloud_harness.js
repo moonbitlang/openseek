@@ -258,7 +258,7 @@ export class CloudHarness {
           setBadge: params => window.cloudNotification('setBadge', params),
         },
         openseek: new Proxy({}, { get: (_, method) => async params => {
-          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 4 } });
+          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 5 } });
           return window.cloudHostRequest({ method, params });
         } }),
       };

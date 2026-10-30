@@ -12,8 +12,10 @@ import {
 /// their main functions. Run from the repository root, as with the other
 /// maintenance scripts.
 async fn main {
+  let temporary = @fs.tmpdir(prefix="bundled-check-")
+  defer (@fs.rmdir(temporary, recursive=true) catch { _ => () })
   let mut checked = 0
-  for directory in ["share/workflow", "share/examples"] {
+  for directory in ["share/workflow", "share/examples", "share/artifact"] {
     let scripts = @fs.readdir(directory, sort=true).filter(name => {
       name.has_suffix(".mbtx")
     })
@@ -24,7 +26,13 @@ async fn main {
       let relative = "\{directory}/\{script}"
       println("Checking \{relative}")
       let code = @shell.Cmd("moon", [
-        "check", "--target", "wasm", "--deny-warn", relative,
+        "check",
+        "--target",
+        "wasm",
+        "--deny-warn",
+        "--target-dir",
+        temporary + "/script-\{checked}",
+        relative,
       ]).status()
       if code != 0 {
         @sys.exit(code)

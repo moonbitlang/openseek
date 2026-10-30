@@ -1990,6 +1990,10 @@ priv enum Msg {
   RevealFile(String)
   // The host chooses the viewer; the frontend retains the navigation context.
   OpenPathResolved(FileOpenContext, @protocol.OpenPathReply)
+  ArtifactOpenResolved(
+    FileOpenContext,
+    Result[@protocol.ArtifactFileReply, String]
+  )
   // Open or close the composer git chip's details popover.
   ToggleGitDetails
   // Show or hide the conversation overview, and the stored choice read back

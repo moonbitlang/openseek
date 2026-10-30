@@ -423,6 +423,12 @@ pub let fs_read_file : Command[
 ] = Command("fs.read_file")
 
 ///|
+pub let session_artifact_file : Command[
+  @protocol.ArtifactFilePayload,
+  @protocol.ArtifactFileReply,
+] = Command("session.artifact_file")
+
+///|
 pub let fs_prepare_attachment : Command[
   @protocol.PrepareAttachmentPayload,
   @protocol.PrepareAttachmentReply,

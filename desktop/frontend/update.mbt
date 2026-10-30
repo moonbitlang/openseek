@@ -5933,6 +5933,17 @@ fn update_msg(
     }
     OpenPathResolved(context, reply) =>
       finish_open_path(dispatch, model, context, reply)
+    ArtifactOpenResolved(context, reply) => {
+      guard context.generation == model.file_panel.file_link_generation &&
+        model.active_checkout() is Some(active) &&
+        active.owner == context.owner else {
+        return (@cmd.none, model)
+      }
+      match reply {
+        Ok(reply) => request_open_path(dispatch, model, reply.path, None)
+        Err(error) => model.notify_error(dispatch, error)
+      }
+    }
     ToggleGitDetails => {
       let opening = !model.git_details_open
       let model = { ..model, git_details_open: opening, }

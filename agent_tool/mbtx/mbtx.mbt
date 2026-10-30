@@ -149,13 +149,18 @@ pub fn definition(
   AgentToolDefinition(
     name="mbtx",
     description=description(
-      background=bg_runtime is Some(_),
-      escalation=approval is Some(_),
-      delegation=subagents,
-      auto_background_after_ms~,
-      foreground_timeout_ms~,
-      build_timeout_ms~,
-    ),
+        background=bg_runtime is Some(_),
+        escalation=approval is Some(_),
+        delegation=subagents,
+        auto_background_after_ms~,
+        foreground_timeout_ms~,
+        build_timeout_ms~,
+      ) +
+      (if scratch_dir is Some(_) {
+        "\nFile artifacts: write completed files under the artifact/ subdirectory of the session scratch path shown in Environment. Use that actual path as an explicit script argument and new filenames for revisions, then reference artifact://FILENAME in an openseek-file fence in the final answer. Read <bundled-resources>/artifact/README.md for normal MoonBit/Rabbita interactive HTML generation."
+      } else {
+        ""
+      }),
     schema=JsonSchema(
       schema(
         escalation=approval is Some(_),

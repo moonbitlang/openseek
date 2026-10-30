@@ -8,6 +8,8 @@ import {
 // Values
 pub const FenceLanguage : String = "openseek-file"
 
+pub fn artifact_path(String) -> String?
+
 pub fn file_icon_path(FileKind) -> String
 
 pub fn file_kind(String) -> FileKind
@@ -47,6 +49,7 @@ pub struct WorkspaceFileRef {
   name : String
   extension : String?
   kind : FileKind
+  artifact : Bool
 } derive(Eq, @debug.Debug)
 pub fn WorkspaceFileRef::equal(Self, Self) -> Bool
 pub fn WorkspaceFileRef::not_equal(Self, Self) -> Bool

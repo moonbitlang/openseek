@@ -35,6 +35,7 @@ fn assistant_view(
   reasoning_complete~ : Bool = true,
   subrun? : SubrunLink,
   fork? : @html.Html,
+  artifact_view? : (String, String) -> @html.Html,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
@@ -120,6 +121,7 @@ fn assistant_view(
     }
     parts.push(
       assistant_message_view(
+        artifact_view?,
         locale~,
         text,
         on_open,
@@ -606,7 +608,7 @@ fn result_row_view(
       }
     }
   }
-  if body.is_empty() {
+  let result = if body.is_empty() {
     @html.div(class="tool-result-label" + error_class + pending_class, line)
   } else {
     @html.details(
@@ -614,7 +616,10 @@ fn result_row_view(
       [@html.summary(class="tool-result-summary", title=label, line), ..body],
     )
   }
+  result
 }
+
+///|
 
 ///|
 /// Clamp tool arguments or output around skip markers before constructing the
@@ -1100,6 +1105,7 @@ fn transcript_item_view(
   fork? : @html.Html,
   edit? : @html.Html,
   editor? : @html.Html,
+  artifact_view? : (String, String) -> @html.Html,
 ) -> @html.Html {
   match item.kind {
     User(content~) =>
@@ -1115,6 +1121,7 @@ fn transcript_item_view(
       )
     Assistant(reasoning~, prose~, calls~, replay=_, finished~, end_sequence=_) =>
       assistant_view(
+        artifact_view?,
         locale~,
         on_open,
         prose?,
@@ -1131,6 +1138,7 @@ fn transcript_item_view(
       )
     Answer(text) =>
       assistant_message_view(
+        artifact_view?,
         locale~,
         text,
         on_open,
@@ -1142,6 +1150,7 @@ fn transcript_item_view(
       )
     Failure(text) =>
       assistant_message_view(
+        artifact_view?,
         locale~,
         text,
         on_open,
@@ -1178,6 +1187,7 @@ fn assistant_message_view(
   show_actions~ : Bool = false,
   fork? : @html.Html,
   streaming~ : Bool = false,
+  artifact_view? : (String, String) -> @html.Html,
 ) -> @html.Html {
   // Errors and abort notices are durable run status rather than assistant
   // prose. Keep their exact text and inline code readable in an unboxed status
@@ -1194,7 +1204,17 @@ fn assistant_message_view(
   } else {
     @html.div(
       class="msg-content markdown",
-      @markdown.markdown_nodes(locale~, content, open_file=on_open),
+      @markdown.markdown_nodes(
+        locale~,
+        content,
+        open_file=on_open,
+        artifact_view?=if show_actions && !streaming {
+          artifact_view
+        } else {
+          None
+        },
+        defer_artifacts=!show_actions || streaming,
+      ),
     )
   }
   let children = [speaker_label(assistant_name), body]

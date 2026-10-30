@@ -73,6 +73,7 @@ struct Input {
   source : Source
   focused : @interop.ChannelId?
   active_session : String
+  archived : Bool
   can_fork : Bool
   // Disable every conversation while a request is pending; only its source
   // answer receives the spinner's terminal sequence below.
@@ -121,6 +122,7 @@ pub fn Input::Input(
   focused? : @interop.ChannelId,
   identity? : String,
   active_session~ : String,
+  archived~ : Bool = false,
   can_fork~ : Bool = false,
   fork_busy~ : Bool = false,
   edit_busy~ : Bool = false,
@@ -147,6 +149,7 @@ pub fn Input::Input(
     source,
     focused,
     active_session,
+    archived,
     can_fork,
     fork_busy,
     edit_busy,
@@ -203,6 +206,8 @@ priv struct Model {
   overview : @transcript_overview.State
   image_owner : ImageOwner
   images : ImageCache
+  artifact_owner : ArtifactOwner
+  artifact_files : ArtifactFileCache
 } derive(Eq)
 
 ///|
@@ -212,6 +217,12 @@ priv enum Msg {
   ContentRendered
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
+  ArtifactRequested(String)
+  ArtifactResolved(
+    ArtifactOwner,
+    String,
+    Result[@protocol.ArtifactFileReply, String]
+  )
   Overview(@transcript_overview.Msg)
 }
 
@@ -226,6 +237,12 @@ fn Model::update(
   // root can move (a worktree gets bound after the first send). Never project
   // the previous root's data URLs into a render for the new one.
   let image_owner = input.image_owner()
+  let artifact_owner = input.artifact_owner()
+  let self = if self.artifact_owner == artifact_owner {
+    self
+  } else {
+    { ..self, artifact_owner, artifact_files: ArtifactFileCache::empty(), }
+  }
   let self = if self.image_owner == image_owner {
     self
   } else {
@@ -256,6 +273,8 @@ fn Model::update(
         ),
       )
       commands.push(self.images.apply_after_render())
+      commands.push(discover_artifact_files(emit))
+      commands.push(self.artifact_files.apply_after_render(artifact_owner))
       (self, @cmd.batch(commands))
     }
     ImageRequested(path) => {
@@ -266,6 +285,23 @@ fn Model::update(
       guard owner == image_owner else { return (self, @cmd.none) }
       let images = self.images.settle(path, result)
       ({ ..self, images, }, images.apply_after_render())
+    }
+    ArtifactRequested(reference) => {
+      let (artifact_files, command) = self.artifact_files.begin_read(
+        artifact_owner, reference, emit,
+      )
+      (
+        { ..self, artifact_files, },
+        @cmd.batch([command, artifact_files.apply_after_render(artifact_owner)]),
+      )
+    }
+    ArtifactResolved(owner, reference, result) => {
+      guard owner == artifact_owner else { return (self, @cmd.none) }
+      let artifact_files = self.artifact_files.settle(reference, result)
+      (
+        { ..self, artifact_files, },
+        artifact_files.apply_after_render(artifact_owner),
+      )
     }
     Overview(msg) => {
       let previous_active = self.overview.active
@@ -315,6 +351,8 @@ pub fn component(
           overview: @transcript_overview.State::empty(),
           image_owner: input.image_owner(),
           images: ImageCache::empty(),
+          artifact_owner: input.artifact_owner(),
+          artifact_files: ArtifactFileCache::empty(),
         },
         @cmd.batch([
           render_rows_once_after_mount(),
@@ -353,6 +391,9 @@ pub fn component(
   let rows = blocks.map2(editors, (blocks, editors) => {
     blocks.map(pair => (pair.0, pair.1, editors.for_block(pair.1)))
   })
+  let rows = rows.map2(input.map(input => input.artifact_owner()), (rows, owner) => {
+    rows.map(row => (row.0, row.1, row.2, owner))
+  })
   let rendered = rows.assoc_by(
     (key, row) => {
       let renders = Ref(0)
@@ -362,7 +403,7 @@ pub fn component(
       )
       let editor_emit = edit_emit.map(msg => (key, msg))
       changes.map2(row, (changes, row) => {
-        let (locale, block, editor) = row
+        let (locale, block, editor, owner) = row
         renders.val += 1
         let html = @html.memo_by(
           block,
@@ -370,6 +411,15 @@ pub fn component(
             block.render(
               locale~,
               actions,
+              artifact_view=(reference, title) => {
+                artifact_file_view(
+                  reference,
+                  title,
+                  locale,
+                  actions.open,
+                  owner,
+                )
+              },
               changes?=changes.control(block, changes_emit),
               editor?=editor.view(block, locale~, editor_emit),
               begin_edit=editor_emit(BeginEdit),
@@ -731,8 +781,12 @@ fn transcript_sub_loader(
         // including when a conversation restores a nonzero reading position.
         element => last_top = element.get_scroll_top(),
       )
+      let remove_artifact_listener = artifact_frame_listener(() => {
+        scheduler.add(emit(ContentRendered))
+      })
       Some({
         unload: scheduler => {
+          remove_artifact_listener()
           target.remove_event_listener_with_options(
             "scroll",
             listener,

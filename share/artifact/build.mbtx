@@ -1,0 +1,182 @@
+---
+// Package a standalone MoonBit JavaScript application and its editable sources.
+// Usage: build.mbtx PROJECT_DIRECTORY OUTPUT_DIRECTORY NEW_OUTPUT_FILENAME.html
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+---
+
+///|
+async fn executable_scripts(
+  directory : String,
+  scripts : Array[String],
+) -> Unit {
+  for name in @fs.readdir(directory) {
+    let path = directory + "/" + name
+    if @fs.kind(path, follow_symlink=false) is Directory {
+      executable_scripts(path, scripts)
+    } else if name.has_suffix(".js") {
+      scripts.push(path)
+    }
+  }
+}
+
+///|
+// Retain editable source inputs, skipping dependency/build caches and rejecting
+// links as the session fork's artifact copier does.
+async fn copy_sources(source : String, destination : String) -> Unit {
+  @fs.mkdir(destination)
+  copy_source_files(source, destination)
+}
+
+///|
+async fn copy_source_files(source : String, destination : String) -> Unit {
+  for name in @fs.readdir(source, include_hidden=true) {
+    if name
+      is (".git"
+      | ".mooncakes"
+      | "_build"
+      | "target"
+      | "node_modules"
+      | ".DS_Store") {
+      continue
+    }
+    let from = source + "/" + name
+    let to = destination + "/" + name
+    match @fs.kind(from, follow_symlink=false) {
+      Directory => copy_sources(from, to)
+      Regular =>
+        @fs.write_binary(to, @fs.read_binary(from), create_mode=CreateNew)
+      _ =>
+        fail("component sources must be regular files or directories: \{from}")
+    }
+  }
+}
+
+///|
+fn inline_script(source : String) -> String {
+  // An HTML comment followed by <script> in a compiled string can put the
+  // HTML parser into its double-escaped script state. Preserve the JS value
+  // with a hex escape before inserting the executable into raw HTML text.
+  let source = source.replace_all(old="<!--", new="\\x3c!--")
+  let out = StringBuilder()
+  let mut start = 0
+  for index in 0..<(source.length() - 7) {
+    if source[index] == '<' &&
+      source[index + 1] == '/' &&
+      source[index + 2:index + 8].to_lower() == "script" {
+      out.write_string(source[start:index + 1].to_owned())
+      out.write_string("\\/")
+      start = index + 2
+    }
+  }
+  out.write_string(source[start:].to_owned())
+  out.to_string()
+}
+
+///|
+async fn main {
+  guard @env.args()[1:] is [project, directory, filename] else {
+    fail(
+      "Usage: build.mbtx PROJECT_DIRECTORY OUTPUT_DIRECTORY NEW_OUTPUT_FILENAME.html",
+    )
+  }
+  guard !filename.is_empty() &&
+    !filename.contains("/") &&
+    !filename.contains("\\") &&
+    !filename.contains(":") &&
+    !filename.contains("\n") &&
+    !filename.contains("\r") &&
+    !filename.contains("\t") &&
+    !filename.contains("\u{0}") &&
+    filename.to_lower().has_suffix(".html") else {
+    fail("choose one new .html filename, without a directory")
+  }
+  guard !directory.is_empty() else {
+    fail("output directory must not be empty")
+  }
+  @fs.mkdir(directory, recursive=true, allow_exist=true)
+  guard @fs.kind(directory, follow_symlink=false) is Directory else {
+    fail("output directory must be a regular directory")
+  }
+  let directory = @fs.realpath(directory)
+  let project = @fs.realpath(project)
+  let output = directory + "/" + filename
+  let sources = output + ".source"
+  guard !@fs.exists(output) && !@fs.exists(sources) else {
+    fail("artifact already exists; choose a new filename")
+  }
+  // Compile a snapshot to keep the HTML and its retained sources consistent.
+  // Compiler output lives in the temporary build directory.
+  let temporary = @fs.realpath(@fs.tmpdir(prefix="artifact-build-"))
+  defer (@fs.rmdir(temporary, recursive=true) catch { _ => () })
+  let snapshot = temporary + "/source"
+  copy_sources(project, snapshot)
+  let build_directory = temporary + "/build"
+  let checked = @shell.Cmd(
+    "moon",
+    [
+      "check", "--target", "js", "--deny-warn", "--output-json", "--target-dir",
+      build_directory,
+    ],
+    cwd=snapshot,
+  ).output(max_output_bytes=256 * 1024)
+  guard checked.exit_code() == 0 else {
+    fail(
+      (checked.stdout() + checked.stderr()).replace_all(
+        old=snapshot,
+        new=project,
+      ),
+    )
+  }
+  let build = @shell.Cmd(
+    "moon",
+    [
+      "build", "--target", "js", "--release", "--output-json", "--target-dir", build_directory,
+    ],
+    cwd=snapshot,
+  ).output(max_output_bytes=256 * 1024)
+  guard build.exit_code() == 0 else {
+    fail(
+      (build.stdout() + build.stderr()).replace_all(old=snapshot, new=project),
+    )
+  }
+  let artifacts : Array[String] = []
+  executable_scripts(build_directory + "/js/release/build", artifacts)
+  guard artifacts is [script] && script.has_suffix(".js") else {
+    fail("build must select exactly one JavaScript executable")
+  }
+  let code = inline_script(@fs.read_text(script))
+  let default_html =
+    $|<!doctype html><html><head><meta charset="utf-8">
+    $|<meta name="viewport" content="width=device-width,initial-scale=1">
+    $|<style>html,body{margin:0;background:transparent;font:14px system-ui}</style>
+    $|</head><body><div id="app"></div><script>\{code}</script></body></html>
+  let template = snapshot + "/index.html"
+  let html = if @fs.exists(template) {
+    let page = @fs.read_text(template)
+    let marker = "<!-- openseek:script -->"
+    guard page.split(marker).collect().length() == 2 else {
+      fail(
+        "index.html must contain exactly one <!-- openseek:script --> marker",
+      )
+    }
+    page.replace_all(old=marker, new="<script>\{code}</script>")
+  } else {
+    default_html
+  }
+  guard @utf8.encode(html).length() <= 8 * 1024 * 1024 else {
+    fail("component HTML exceeds the 8 MiB inline preview limit")
+  }
+  // The session can live on a different volume from the OS temporary directory.
+  // Claim the new source directory, then clean it up if publishing fails.
+  @fs.mkdir(sources)
+  errdefer @fs.rmdir(sources, recursive=true)
+  copy_source_files(snapshot, sources)
+  @fs.write_text(output, html, create_mode=CreateNew)
+  println("```openseek-file\nartifact://\{filename}\n```")
+}
