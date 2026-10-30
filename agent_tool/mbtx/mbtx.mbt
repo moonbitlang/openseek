@@ -428,16 +428,6 @@ async fn execute(
       }
     }
   }
-  // Keep the early diagnostic for unsupported FFI. The wasm compiler also
-  // rejects `extern "c"` and `extern "js"`; this scan only explains the
-  // refusal before building. Match the quoted syntax, not the bare word,
-  // which may appear in prose and string literals.
-  if source.contains("extern \"") {
-    return @agent_tool.respond(
-      "mbtx refuses this program: it uses native FFI (extern), which the wasm backend cannot compile or run sandboxed.",
-      is_error=true,
-    )
-  }
   // The program's working directory (default: the workspace root, so relative
   // `@fs` paths reach workspace files). An explicit relative `cwd` resolves
   // against the workspace, as every workspace-relative tool path does.
