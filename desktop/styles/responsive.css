@@ -29,6 +29,9 @@
   .topbar {
     padding-inline-end: var(--panel-toggle-inline-inset);
   }
+  .content:has(> .right-panel-toggle:not(.hidden)) > main > .topbar {
+    padding-inline-end: var(--panel-toggle-reserved-width);
+  }
 
   .quick-open-backdrop {
     --quick-open-top: 16px;

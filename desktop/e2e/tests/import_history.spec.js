@@ -65,7 +65,7 @@ async function setup(page, worktree = false, unplaced = false) {
 
 async function openImport(page) {
   await expect(page.locator('.sidebar').getByRole('button', { name: 'Import conversation', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Export and import', exact: true }).click();
+  await page.locator('main > .topbar').getByRole('button', { name: /^(Export and import|Conversation actions)$/ }).click();
   await page.getByRole('menuitem', { name: 'Import', exact: true }).click();
 }
 

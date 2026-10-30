@@ -2,9 +2,20 @@
 const ConversationTransferTarget = "conversation-transfer"
 
 ///|
+priv struct ConversationTransferInput {
+  locale : @i18n.Locale
+  visible : Bool
+  narrow : Bool
+  source : (@interop.ChannelId, @protocol.SessionExportPayload)?
+  cloud : @interop.ConversationIdentity?
+  overview_available : Bool
+  overview_open : Bool
+} derive(Eq)
+
+///|
 fn Model::conversation_transfer_input(
   self : Model,
-) -> (@i18n.Locale, Bool, (@interop.ChannelId, @protocol.SessionExportPayload)?) {
+) -> ConversationTransferInput {
   let source = match self.chat_column() {
     Transcript(conversation=conv, ..) if self.screen is Chat &&
       !conv.messages.is_empty() =>
@@ -21,18 +32,43 @@ fn Model::conversation_transfer_input(
       )
     _ => None
   }
-  (self.locale, self.screen is Chat, source)
+  {
+    locale: self.locale,
+    visible: self.screen is Chat &&
+    (
+      !self.cloud_selected() ||
+      (self.narrow && self.cloud_identity() is Some(_))
+    ),
+    narrow: self.narrow,
+    source,
+    cloud: self.cloud_identity(),
+    overview_available: self.screen is Chat &&
+    !self.cloud_selected() &&
+    self.active_conversation() is Some(_),
+    overview_open: self.overview_open,
+  }
 }
 
 ///|
-fn conversation_transfer_button(locale : @i18n.Locale) -> @html.Html {
+fn conversation_transfer_button(
+  locale : @i18n.Locale,
+  narrow~ : Bool = false,
+) -> @html.Html {
+  let label = shell_text(
+    locale,
+    if narrow {
+      ConversationActions
+    } else {
+      ConversationTransfer
+    },
+  )
   @html.button(
     class="panel-toggle",
-    title=shell_text(locale, ConversationTransfer),
+    title=label,
     attrs=@action_menu.button_attrs(
       ConversationTransferTarget,
-      align_right=false,
-    ).aria_label(shell_text(locale, ConversationTransfer)),
+      align_right=narrow,
+    ).aria_label(label),
     @icons.icon(@icons.icon_more),
   )
 }
@@ -56,39 +92,66 @@ fn open_conversation_transfer(command : @cmd.Cmd) -> @cmd.Cmd {
 ///|
 fn conversation_transfer_menu(
   emit : @cmd.Emit[Msg],
-  input : (
-    @i18n.Locale,
-    Bool,
-    (@interop.ChannelId, @protocol.SessionExportPayload)?,
-  ),
+  input : ConversationTransferInput,
   target : String,
 ) -> @action_menu.Definition? {
-  let (locale, visible, source) = input
-  guard visible && target == ConversationTransferTarget else { return None }
+  let { locale, source, .. } = input
+  guard input.visible && target == ConversationTransferTarget else {
+    return None
+  }
   let entries : Array[@action_menu.Entry] = []
   entries.push(
     Action({
       label: shell_text(locale, ExportConversation),
       title: "",
       icon: Some(icon(icon_chat_export)),
-      enabled: source is Some(_),
+      enabled: input.cloud is Some(_) || source is Some(_),
       destructive: false,
-      command: match source {
-        Some((channel, source)) =>
-          open_conversation_transfer(emit(OpenExport(channel, source)))
-        None => @cmd.none
+      command: if input.cloud is Some(_) {
+        open_conversation_transfer(emit(OpenCloudExport))
+      } else {
+        match source {
+          Some((channel, source)) =>
+            open_conversation_transfer(emit(OpenExport(channel, source)))
+          None => @cmd.none
+        }
       },
     }),
   )
-  entries.push(
-    Action({
-      label: shell_text(locale, ImportConversation),
-      title: "",
-      icon: Some(@icons.icon(@icons.icon_chat_import)),
-      enabled: true,
-      destructive: false,
-      command: open_conversation_transfer(emit(OpenSessionImport)),
-    }),
-  )
-  Some({ label: shell_text(locale, ConversationTransfer), entries, })
+  if input.cloud is None {
+    entries.push(
+      Action({
+        label: shell_text(locale, ImportConversation),
+        title: "",
+        icon: Some(@icons.icon(@icons.icon_chat_import)),
+        enabled: true,
+        destructive: false,
+        command: open_conversation_transfer(emit(OpenSessionImport)),
+      }),
+    )
+  }
+  if input.narrow && input.overview_available {
+    entries.push(Separator)
+    entries.push(
+      Action({
+        label: @conversation_overview.toggle_label(locale~, input.overview_open),
+        title: "",
+        icon: Some(icon(@icons.icon_preview)),
+        enabled: true,
+        destructive: false,
+        command: open_conversation_transfer(emit(ToggleOverview)),
+      }),
+    )
+  }
+  Some({
+    label: shell_text(
+      locale,
+      if input.narrow {
+        ConversationActions
+      } else {
+        ConversationTransfer
+      },
+    ),
+    entries,
+  })
 }
