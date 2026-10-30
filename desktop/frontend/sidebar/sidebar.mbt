@@ -11,6 +11,8 @@ pub(all) struct Account {
   avatar : String
   busy : Bool
   notice : String?
+  // The Local Console inherits Desktop's account and cannot sign it out.
+  managed_by_desktop : Bool
   // The page's device, when it has one; a Cloud page has none.
   device : DeviceChoice?
   // The account's online devices, in roster order; the selector offers these.
@@ -363,19 +365,28 @@ pub fn component(
         @html.button(
           class="console-account-action",
           disabled=account.busy,
-          title=@messages.text(input.locale, RefreshDevices),
+          title=@messages.text(
+            input.locale,
+            if account.managed_by_desktop {
+              Refresh
+            } else {
+              RefreshDevices
+            },
+          ),
           on_click=actions.refresh_account,
           @messages.text(input.locale, Refresh),
         ),
       )
-      account_row.push(
-        @html.button(
-          class="console-account-action",
-          disabled=account.busy,
-          on_click=actions.sign_out,
-          @messages.text(input.locale, SignOut),
-        ),
-      )
+      if !account.managed_by_desktop {
+        account_row.push(
+          @html.button(
+            class="console-account-action",
+            disabled=account.busy,
+            on_click=actions.sign_out,
+            @messages.text(input.locale, SignOut),
+          ),
+        )
+      }
       let choose = @messages.text(input.locale, ChooseDevice)
       footer.push(
         @html.button(

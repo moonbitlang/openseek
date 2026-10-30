@@ -31,6 +31,10 @@ pub(all) enum Message {
   DownloadVersion(String)
   Status
   Account
+  ManagedByDesktop
+  DesktopAccountDescription
+  DesktopSignInHint
+  LocalConsoleLaunchHint
   SignOut
   SignOutDescription
   SignIn

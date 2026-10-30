@@ -19,10 +19,14 @@ fn reconcile_navigation(
       }
     }),
   }
-  // Browser URLs are account-neutral. A changed login re-resolves the URL;
-  // desktop history retains its account-bound identity.
+  // Browser URLs are account-neutral. A changed login or renewed credential
+  // re-resolves the URL after its Cloud state is retired; desktop history
+  // retains its account-bound identity.
   if !next.is_desktop &&
-    previous.cloud.user_id != next.cloud.user_id &&
+    (
+      previous.cloud.user_id != next.cloud.user_id ||
+      previous.cloud.epoch != next.cloud.epoch
+    ) &&
     next.navigation.location
     is Some(
       { target: CloudSession(session~, ..) | CloudDraft(id=session, ..), .. } as location
@@ -100,4 +104,71 @@ fn reconcile_navigation(
   let (activate, next) = activate_navigation(dispatch, next)
   commands.push(activate)
   (@cmd.batch(commands), next)
+}
+
+///|
+test "renewing a browser Cloud credential reactivates the same session without retiring its host" {
+  let dispatch = test_dispatch()
+  let base = test_model()
+  let account : @protocol.AccountSession = {
+    token: "old-token",
+    user: { user_id: "fixture-user", login: "octocat", avatar_url: "", },
+  }
+  let browser = {
+    ..base,
+    is_desktop: false,
+    account: Some(account),
+    console: {
+      ..base.console,
+      page_device: Some("host"),
+      auth: AuthSignedIn(login="local", avatar=""),
+    },
+    cloud: {
+      ..@cloud.State::empty(),
+      user_id: Some(account.user.user_id),
+      epoch: 3,
+    },
+    navigation: {
+      ..base.navigation,
+      location: Some({
+        device: None,
+        target: CloudSession(
+          account=Some(account.user.user_id),
+          session="cloud-session",
+        ),
+      }),
+      phase: Active,
+    },
+  }
+  let (_, opened) = update(
+    dispatch,
+    OpenCloudConversation(account=account.user.user_id, session="cloud-session"),
+    browser,
+  )
+  guard opened.cloud.conversations.get("cloud-session") is Some(previous) else {
+    fail("the selected Cloud session starts loading")
+  }
+  let message = AccountLoaded(
+    opened.account_epoch,
+    Ok(Some({ ..account, token: "new-token", })),
+  )
+  let (_, renewed) = update(dispatch, message, opened)
+  let (_, repeated) = update(dispatch, message, opened)
+  guard renewed.cloud.conversations.get("cloud-session") is Some(current) else {
+    fail("the selected Cloud session reloads after the credential changes")
+  }
+  assert_true(current.loading)
+  assert_true(current.request > previous.request)
+  assert_eq(renewed.cloud.epoch, opened.cloud.epoch + 1)
+  assert_eq(renewed.cloud.user_id, opened.cloud.user_id)
+  assert_eq(renewed.cloud_identity(), opened.cloud_identity())
+  assert_true(renewed.navigation.location == opened.navigation.location)
+  assert_true(renewed.navigation.phase is Active)
+  assert_eq(renewed.focused, opened.focused)
+  assert_eq(renewed.devices.length(), opened.devices.length())
+  assert_eq(renewed.conversations.length(), opened.conversations.length())
+  assert_true(renewed.console.auth is AuthSignedIn(login="local", ..))
+  assert_eq(renewed.cloud.epoch, repeated.cloud.epoch)
+  assert_true(renewed.navigation.location == repeated.navigation.location)
+  assert_true(renewed.cloud.conversations == repeated.cloud.conversations)
 }
