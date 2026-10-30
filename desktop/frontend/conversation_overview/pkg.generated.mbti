@@ -13,6 +13,8 @@ import {
 // Values
 pub fn toggle(locale? : @i18n.Locale, Bool, @cmd.Cmd) -> @html.Html
 
+pub fn toggle_label(locale? : @i18n.Locale, Bool) -> String
+
 pub fn update(Msg, State) -> State
 
 pub fn view(locale? : @i18n.Locale, State, environment~ : Environment, changes~ : Changes?, connectors~ : Connectors, background? : Background, @cmd.Emit[Msg]) -> @html.Html

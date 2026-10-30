@@ -1918,22 +1918,22 @@ fn conversation_header(
       ),
     )
   }
-  items.push(conversation_transfer_button(model.locale))
+  items.push(conversation_transfer_button(model.locale, narrow=model.narrow))
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
   if !model.narrow {
     items.push(model.terminal_toggle(toggle_terminal))
   }
-  // The overview is the only place the conversation's connectors are shown,
-  // so the narrow layout keeps it: there it is always the panel over the
-  // transcript.
-  items.push(
-    @conversation_overview.toggle(
-      locale=model.locale,
-      model.overview_open,
-      dispatch(ToggleOverview),
-    ),
-  )
+  // Narrow conversations expose the same overview through their actions menu.
+  if !model.narrow {
+    items.push(
+      @conversation_overview.toggle(
+        locale=model.locale,
+        model.overview_open,
+        dispatch(ToggleOverview),
+      ),
+    )
+  }
   items
 }
 
@@ -2255,12 +2255,16 @@ fn view(
             @html.nothing
           },
           if model.cloud_identity() is Some(_) {
-            @html.button(
-              class="panel-toggle",
-              title=shell_text(model.locale, ExportConversation),
-              on_click=dispatch(OpenCloudExport),
-              icon(icon_chat_export),
-            )
+            if model.narrow {
+              conversation_transfer_button(model.locale, narrow=true)
+            } else {
+              @html.button(
+                class="panel-toggle",
+                title=shell_text(model.locale, ExportConversation),
+                on_click=dispatch(OpenCloudExport),
+                icon(icon_chat_export),
+              )
+            }
           } else {
             @html.nothing
           },
@@ -2289,7 +2293,9 @@ fn view(
               title,
               selected.map(selected => selected.workspace),
             )
-            items.push(conversation_transfer_button(model.locale))
+            items.push(
+              conversation_transfer_button(model.locale, narrow=model.narrow),
+            )
             items
           }
         }
@@ -2462,27 +2468,13 @@ fn view(
     ),
     ..content,
   ]
-  let panel_available = (
-      !model.cloud_selected() || file_ctx(model).cloud_files is Some(_)
-    ) &&
-    (
-      model.screen is Chat ||
-      (
-        file_ctx(model).placement is Some(placement) &&
-        placement.checkout_root() is Some(_)
-      )
-    )
+  let panel_available = model.file_panel_available()
   let panel_toggle_visible = if model.cloud_selected() {
     file_ctx(model).cloud_files is Some(_)
   } else {
     file_panel_visible ||
-    (
-      !model.narrow &&
-      (
-        model.screen is Codex ||
-        (model.screen is Chat && model.active_conversation() is Some(_))
-      )
-    )
+    (model.screen is Chat && model.active_conversation() is Some(_)) ||
+    (!model.narrow && model.screen is Codex)
   }
   let panel_toggle_label = if file_panel_visible {
     shell_text(model.locale, HidePanel)

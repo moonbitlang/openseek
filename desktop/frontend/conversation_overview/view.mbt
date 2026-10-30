@@ -53,19 +53,20 @@ pub(all) struct Background {
 }
 
 ///|
-/// The titlebar control that shows and hides the overview. One control owns
-/// both states, whether the overview is a rail or a panel over the
-/// conversation.
+/// Shared wording for the titlebar button and narrow conversation menu.
+pub fn toggle_label(locale~ : @i18n.Locale = English, open : Bool) -> String {
+  text(locale, if open { HideOverview } else { ShowOverview })
+}
+
+///|
+/// The titlebar control that shows and hides the overview, whether it is a
+/// rail beside the conversation or a panel over it.
 pub fn toggle(
   locale~ : @i18n.Locale = English,
   open : Bool,
   on_click : @cmd.Cmd,
 ) -> @html.Html {
-  let label = if open {
-    text(locale, HideOverview)
-  } else {
-    text(locale, ShowOverview)
-  }
+  let label = toggle_label(locale~, open)
   @html.button(
     class=if open {
       "panel-toggle conv-overview-toggle active"
