@@ -1,0 +1,16 @@
+import {
+  "moonbitlang/openseek/agent",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/prompt",
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")

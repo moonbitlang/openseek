@@ -249,6 +249,8 @@ pub let schedules_save : Command[@protocol.ScheduleSavePayload, @protocol.Schedu
 
 pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveReply]
 
+pub let session_artifact_file : Command[@protocol.ArtifactFilePayload, @protocol.ArtifactFileReply]
+
 pub let session_artifacts_list : Command[@protocol.SessionArtifactsChangedPayload, @protocol.SessionArtifacts]
 
 pub let session_artifacts_remove : Command[@protocol.SessionArtifactRemovePayload, @protocol.SessionArtifacts]

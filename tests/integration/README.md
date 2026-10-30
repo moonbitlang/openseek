@@ -45,6 +45,31 @@ permission question. The child's `allow` deletes the file and its `deny`
 keeps it; either way it saw the user's message and its transcript records the
 verdict.
 
+# Interactive answers
+
+The native test `moon test agent/interactive_answer_test.mbt --target native`
+drives a real agent turn with a scripted model and the actual mbtx tool. It
+first returns a script compile error, then a component check error, repairs
+both from the next model requests, packages the real Rabbita application and
+finishes with its artifact reference. It asserts that failed scripts execute
+no writes and failed component checks publish neither a page nor source
+revision. This exercises the repair loop through the scripted provider.
+
+Live acceptance is explicit and separate from offline CI:
+
+```sh
+moon run tests/integration/artifact_generation --target native -- ENGINE_SETTINGS_FILE
+```
+
+The client reads the configured DeepSeek key and creates an isolated temporary
+workspace and scratch. The model authors, checks, tests and packages a small
+Rabbita explanation.
+It saves the generated page, source revision, answer and session trace in the
+printed acceptance directory.
+An unfinished acceptance can continue by passing that directory as a second
+argument. This command is not part of `just test` and needs explicit live
+service configuration.
+
 # Bundled workflows
 
 `just test-workflows` runs the native MoonBit fixture package at

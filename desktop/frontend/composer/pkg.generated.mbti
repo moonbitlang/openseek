@@ -133,6 +133,7 @@ pub fn Draft::not_equal(Self, Self) -> Bool
 pub fn Draft::prompt(Self) -> String
 pub fn Draft::to_repr(Self) -> @debug.Repr
 pub fn Draft::user_item(Self) -> @transcript.ItemKind
+pub fn Draft::with_artifact_snapshot(Self, @mention_context.ArtifactSnapshot) -> Self
 pub fn Draft::with_mention(Self, Mention) -> Self
 pub fn Draft::with_office_selection(Self, String?) -> Self
 pub fn Draft::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self

@@ -1,0 +1,90 @@
+---
+// Batch-write a scratch component's text inputs before checking the module.
+// Usage: write.mbtx SCRATCH_DIRECTORY PROJECT_DIRECTORY RELATIVE_FILE SOURCE_FILE [RELATIVE_FILE SOURCE_FILE ...]
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/env",
+}
+---
+
+///|
+async fn main {
+  let args = @env.args()[1:]
+  guard args is [scratch, project, .. files] &&
+    !files.is_empty() &&
+    files.length() % 2 == 0 else {
+    fail(
+      "Usage: write.mbtx SCRATCH_DIRECTORY PROJECT_DIRECTORY RELATIVE_FILE SOURCE_FILE [RELATIVE_FILE SOURCE_FILE ...]",
+    )
+  }
+  guard @fs.kind(scratch, follow_symlink=false) is Directory else {
+    fail("scratch directory must be a regular directory")
+  }
+  let scratch = @fs.realpath(scratch)
+  let directory = scratch + "/artifact"
+  let project = @fs.realpath(project)
+  guard (
+      project.has_prefix(scratch + "/") || project.has_prefix(scratch + "\\")
+    ) &&
+    project != directory &&
+    !project.has_prefix(directory + "/") &&
+    !project.has_prefix(directory + "\\") else {
+    fail(
+      "write.mbtx only edits a scratch working project, not workspace files or published source revisions",
+    )
+  }
+  let targets : Array[(String, String)] = []
+  for index in 0..<(files.length() / 2) {
+    let name = files[index * 2]
+    guard !name.is_empty() &&
+      !name.contains("\\") &&
+      !name.contains(":") &&
+      name
+      .split("/")
+      .all(part => !part.is_empty() && part != "." && part != "..") else {
+      fail("source filename must be relative and cannot contain traversal")
+    }
+    let parts = name.split("/").to_array()
+    let mut parent = project
+    for part in parts[:parts.length() - 1] {
+      parent += "/" + part.to_owned()
+      if @fs.exists(parent) {
+        guard @fs.kind(parent, follow_symlink=false) is Directory else {
+          fail("source parent must be a regular directory")
+        }
+      } else {
+        @fs.mkdir(parent)
+      }
+    }
+    let target = project + "/" + name
+    if @fs.readdir(parent, include_hidden=true).contains(
+        parts[parts.length() - 1].to_owned(),
+      ) {
+      guard @fs.kind(target, follow_symlink=false) is Regular else {
+        fail("source target must be a regular file")
+      }
+    }
+    let source = @fs.realpath(files[index * 2 + 1]) catch {
+      _ =>
+        fail(
+          "SOURCE_FILE must name an existing scratch file; write the generated text to a file first and pass its absolute path",
+        )
+    }
+    guard (
+        source.has_prefix(scratch + "/") || source.has_prefix(scratch + "\\")
+      ) &&
+      @fs.kind(source, follow_symlink=false) is Regular else {
+      fail(
+        "SOURCE_FILE must be a regular file inside this session's scratch directory",
+      )
+    }
+    targets.push((target, @fs.read_text(source)))
+  }
+  for target in targets {
+    let (path, content) = target
+    @fs.write_text(path, content, create_mode=CreateOrTruncate)
+    println("Wrote: \{path}")
+  }
+  println("Batch written. Check/test the whole project before packaging it.")
+}

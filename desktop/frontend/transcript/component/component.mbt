@@ -73,6 +73,7 @@ struct Input {
   source : Source
   focused : @interop.ChannelId?
   active_session : String
+  archived : Bool
   can_fork : Bool
   // Disable every conversation while a request is pending; only its source
   // answer receives the spinner's terminal sequence below.
@@ -121,6 +122,7 @@ pub fn Input::Input(
   focused? : @interop.ChannelId,
   identity? : String,
   active_session~ : String,
+  archived~ : Bool = false,
   can_fork~ : Bool = false,
   fork_busy~ : Bool = false,
   edit_busy~ : Bool = false,
@@ -147,6 +149,7 @@ pub fn Input::Input(
     source,
     focused,
     active_session,
+    archived,
     can_fork,
     fork_busy,
     edit_busy,
@@ -176,6 +179,7 @@ pub(all) struct Actions {
   open : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
   open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
+  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot]
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
@@ -203,6 +207,8 @@ priv struct Model {
   overview : @transcript_overview.State
   image_owner : ImageOwner
   images : ImageCache
+  artifact_owner : ArtifactOwner
+  artifact_files : ArtifactFileCache
 } derive(Eq)
 
 ///|
@@ -212,6 +218,12 @@ priv enum Msg {
   ContentRendered
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
+  ArtifactRequested(String)
+  ArtifactResolved(
+    ArtifactOwner,
+    String,
+    Result[@protocol.ArtifactFileReply, String]
+  )
   Overview(@transcript_overview.Msg)
 }
 
@@ -226,6 +238,12 @@ fn Model::update(
   // root can move (a worktree gets bound after the first send). Never project
   // the previous root's data URLs into a render for the new one.
   let image_owner = input.image_owner()
+  let artifact_owner = input.artifact_owner()
+  let self = if self.artifact_owner == artifact_owner {
+    self
+  } else {
+    { ..self, artifact_owner, artifact_files: ArtifactFileCache::empty(), }
+  }
   let self = if self.image_owner == image_owner {
     self
   } else {
@@ -256,6 +274,8 @@ fn Model::update(
         ),
       )
       commands.push(self.images.apply_after_render())
+      commands.push(discover_artifact_files(emit))
+      commands.push(self.artifact_files.apply_after_render(artifact_owner))
       (self, @cmd.batch(commands))
     }
     ImageRequested(path) => {
@@ -266,6 +286,23 @@ fn Model::update(
       guard owner == image_owner else { return (self, @cmd.none) }
       let images = self.images.settle(path, result)
       ({ ..self, images, }, images.apply_after_render())
+    }
+    ArtifactRequested(reference) => {
+      let (artifact_files, command) = self.artifact_files.begin_read(
+        artifact_owner, reference, emit,
+      )
+      (
+        { ..self, artifact_files, },
+        @cmd.batch([command, artifact_files.apply_after_render(artifact_owner)]),
+      )
+    }
+    ArtifactResolved(owner, reference, result) => {
+      guard owner == artifact_owner else { return (self, @cmd.none) }
+      let artifact_files = self.artifact_files.settle(reference, result)
+      (
+        { ..self, artifact_files, },
+        artifact_files.apply_after_render(artifact_owner),
+      )
     }
     Overview(msg) => {
       let previous_active = self.overview.active
@@ -315,6 +352,8 @@ pub fn component(
           overview: @transcript_overview.State::empty(),
           image_owner: input.image_owner(),
           images: ImageCache::empty(),
+          artifact_owner: input.artifact_owner(),
+          artifact_files: ArtifactFileCache::empty(),
         },
         @cmd.batch([
           render_rows_once_after_mount(),
@@ -328,7 +367,12 @@ pub fn component(
     },
     update=(state, input, msg, emit) => state.update(input, msg, emit),
     subscriptions=(model, _, emit) => {
-      transcript_subscription(model, emit, actions.departed)
+      transcript_subscription(
+        model,
+        emit,
+        actions.departed,
+        actions.artifact_context,
+      )
     },
   )
   // Every stream child renders in its own branch, keyed by the block within
@@ -353,6 +397,9 @@ pub fn component(
   let rows = blocks.map2(editors, (blocks, editors) => {
     blocks.map(pair => (pair.0, pair.1, editors.for_block(pair.1)))
   })
+  let rows = rows.map2(input.map(input => input.artifact_owner()), (rows, owner) => {
+    rows.map(row => (row.0, row.1, row.2, owner))
+  })
   let rendered = rows.assoc_by(
     (key, row) => {
       let renders = Ref(0)
@@ -362,7 +409,7 @@ pub fn component(
       )
       let editor_emit = edit_emit.map(msg => (key, msg))
       changes.map2(row, (changes, row) => {
-        let (locale, block, editor) = row
+        let (locale, block, editor, owner) = row
         renders.val += 1
         let html = @html.memo_by(
           block,
@@ -370,6 +417,15 @@ pub fn component(
             block.render(
               locale~,
               actions,
+              artifact_view=(reference, title) => {
+                artifact_file_view(
+                  reference,
+                  title,
+                  locale,
+                  actions.open,
+                  owner,
+                )
+              },
               changes?=changes.control(block, changes_emit),
               editor?=editor.view(block, locale~, editor_emit),
               begin_edit=editor_emit(BeginEdit),
@@ -652,6 +708,8 @@ priv suberror TranscriptSubscription {
   TranscriptSubscription(
     emit~ : @cmd.Emit[Msg],
     departed~ : @cmd.Emit[ScrollPosition],
+    artifact_owner~ : String,
+    artifact_context~ : @cmd.Emit[@mention_context.ArtifactSnapshot],
     // The Model's current reading, refreshed after every message. The scroll
     // listener reports only readings that differ from it, so the Model is the
     // single source of truth and no cache can drift from it.
@@ -668,6 +726,7 @@ fn transcript_subscription(
   model : Model,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
+  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot],
 ) -> @sub.Sub {
   @sub.custom_sub(
     "transcript-dom",
@@ -675,6 +734,8 @@ fn transcript_subscription(
     TranscriptSubscription(
       emit~,
       departed~,
+      artifact_owner=model.artifact_owner.key(),
+      artifact_context~,
       pinned=model.pinned,
       active=model.overview.active,
     ),
@@ -688,9 +749,18 @@ fn transcript_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    TranscriptSubscription(emit~, departed~, pinned~, active~) => {
+    TranscriptSubscription(
+      emit~,
+      departed~,
+      artifact_owner~,
+      artifact_context~,
+      pinned~,
+      active~
+    ) => {
       let mut emit = emit
       let mut departed = departed
+      let mut artifact_owner = artifact_owner
+      let mut artifact_context = artifact_context
       let mut pinned = pinned
       let mut active = active
       // The last scroller offset this listener saw. Growth inside an animated
@@ -731,8 +801,20 @@ fn transcript_sub_loader(
         // including when a conversation restores a nonzero reading position.
         element => last_top = element.get_scroll_top(),
       )
+      let remove_artifact_listener = artifact_frame_listener(
+        () => scheduler.add(emit(ContentRendered)),
+        (owner, reference, payload) => {
+          guard owner == artifact_owner &&
+            @mention_context.artifact_snapshot(reference, payload)
+            is Some(snapshot) else {
+            return
+          }
+          scheduler.add(artifact_context(snapshot))
+        },
+      )
       Some({
         unload: scheduler => {
+          remove_artifact_listener()
           target.remove_event_listener_with_options(
             "scroll",
             listener,
@@ -753,6 +835,8 @@ fn transcript_sub_loader(
             is TranscriptSubscription(
               emit=next,
               departed=left,
+              artifact_owner=next_artifact_owner,
+              artifact_context=next_artifact_context,
               pinned=next_pinned,
               active=next_active
             ) else {
@@ -760,6 +844,8 @@ fn transcript_sub_loader(
           }
           emit = next
           departed = left
+          artifact_owner = next_artifact_owner
+          artifact_context = next_artifact_context
           pinned = next_pinned
           active = next_active
         },

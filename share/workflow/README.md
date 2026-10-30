@@ -21,6 +21,8 @@ this resource root's absolute path.
 
 See [Checking, testing, and formatting](../../tests/cram/validation-workflows.md)
 for executable examples of these validation scripts against a small project.
+For generated files and self-contained HTML, see the
+[file artifact contract](../artifact/README.md).
 
 Call `mbtx(description="Check the workspace", filename="@builtin/check.mbtx")` (or another bundled name) and omit `source`. No file
 creation is needed. `cwd` selects the module to check or test, defaulting to

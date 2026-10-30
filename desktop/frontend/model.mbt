@@ -1664,6 +1664,10 @@ priv enum Msg {
   OpenCloudConversation(account~ : String, session~ : String)
   ComposerAction(@composer.Action)
   ComposerReply(@composer.QuoteReply)
+  TranscriptArtifactContextRequested(
+    slot~ : String,
+    @mention_context.ArtifactSnapshot
+  )
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
   // be mistaken for an OpenSeek conversation owned by the root store.
@@ -1990,6 +1994,10 @@ priv enum Msg {
   RevealFile(String)
   // The host chooses the viewer; the frontend retains the navigation context.
   OpenPathResolved(FileOpenContext, @protocol.OpenPathReply)
+  ArtifactOpenResolved(
+    FileOpenContext,
+    Result[@protocol.ArtifactFileReply, String]
+  )
   // Open or close the composer git chip's details popover.
   ToggleGitDetails
   // Show or hide the conversation overview, and the stored choice read back

@@ -56,11 +56,14 @@ test('read workflow keeps thought, prose and tool order and highlights mixed out
   const prose = page.getByText('Inspect the requested files.', { exact: true });
   await expect(thought).toBeVisible();
   await expect(prose).toBeVisible();
-  const thoughtBox = await thought.boundingBox();
-  const proseBox = await prose.boundingBox();
-  const callBox = await call.locator('.tool-call-summary').boundingBox();
-  expect(thoughtBox.y + thoughtBox.height).toBeLessThanOrEqual(proseBox.y);
-  expect(proseBox.y + proseBox.height).toBeLessThanOrEqual(callBox.y);
+  // Wait for the details expansion before checking transcript order.
+  await expect.poll(async () => {
+    const thoughtBox = await thought.boundingBox();
+    const proseBox = await prose.boundingBox();
+    const callBox = await call.locator('.tool-call-summary').boundingBox();
+    return thoughtBox.y + thoughtBox.height <= proseBox.y &&
+      proseBox.y + proseBox.height <= callBox.y;
+  }).toBe(true);
   await call.locator('.tool-call-summary').click();
   await call.getByText('Filename', { exact: true }).click();
   await expect(call.locator('.mbtx-args')).toContainText('src/main.mbt:120:120');

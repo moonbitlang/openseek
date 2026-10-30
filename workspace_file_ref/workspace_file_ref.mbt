@@ -1,6 +1,5 @@
 ///|
-/// The fence language emitted by a model when it wants to reference one
-/// workspace item without embedding its contents in the conversation.
+/// The fence language for referencing a workspace file or session artifact.
 pub const FenceLanguage : String = "openseek-file"
 
 ///|
@@ -26,14 +25,14 @@ pub extend FileKind with Eq::{equal, not_equal}
 pub extend FileKind with Debug::{to_repr}
 
 ///|
-/// A validated workspace-relative file reference extracted from a fenced
-/// block. The path is kept exactly as authored after outer whitespace is
-/// removed; it is never resolved or read by this package.
+/// A workspace-relative path or an `artifact://` reference extracted from a
+/// fenced block. Path resolution and file reads belong to the owning host.
 pub struct WorkspaceFileRef {
   path : String
   name : String
   extension : String?
   kind : FileKind
+  artifact : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -98,8 +97,15 @@ pub fn parse(
   guard !path.contains_char('\u{0}') && !path.contains_char('\t') else {
     return None
   }
-  guard !is_absolute_or_uri(path) else { return None }
-  let normalized = path.replace_all(old="\\", new="/")
+  let artifact = path.has_prefix("artifact://")
+  let relative = if artifact { path[11:].to_owned() } else { path }
+  guard !relative.is_empty() &&
+    !is_absolute_or_uri(relative) &&
+    !relative.contains("://") &&
+    (!artifact || !relative.contains(":")) else {
+    return None
+  }
+  let normalized = relative.replace_all(old="\\", new="/")
   guard !normalized.has_suffix("/") else { return None }
   let components = normalized.split("/").collect()
   guard !components.is_empty() && components.any(part => !part.is_empty()) else {
@@ -115,7 +121,18 @@ pub fn parse(
   guard !name.is_empty() && name != "." && name != ".." else { return None }
   let extension = extension_of(name)
   let kind = file_kind(name)
-  { path, name, extension, kind, } |> Some
+  { path, name, extension, kind, artifact, } |> Some
+}
+
+///|
+/// Decode the relative file path of an artifact reference. The caller supplies
+/// the owning host, workspace and conversation for resolution.
+pub fn artifact_path(reference : String) -> String? {
+  guard parse(FenceLanguage, reference, closed=true) is Some(file) &&
+    file.artifact else {
+    return None
+  }
+  Some(file.path[11:].to_owned().replace_all(old="\\", new="/"))
 }
 
 ///|
@@ -274,6 +291,25 @@ test "workspace file references accept portable relative paths" {
   assert_eq(reference.name, "matrix.xlsx")
   assert_eq(reference.extension, Some("xlsx"))
   assert_eq(reference.kind, Spreadsheet)
+  assert_false(reference.artifact)
+}
+
+///|
+test "artifact references are distinct from workspace paths and cannot name another root" {
+  let file = parse(FenceLanguage, "artifact://charts/revenue.html", closed=true).unwrap()
+  assert_true(file.artifact)
+  assert_eq(file.name, "revenue.html")
+  assert_eq(artifact_path(file.path), Some("charts/revenue.html"))
+  assert_false(
+    parse(FenceLanguage, "artifact/revenue.html", closed=true).unwrap().artifact,
+  )
+  for
+    path in [
+      "artifact://", "artifact:///etc/passwd", "artifact://../other/chart.html",
+      "artifact://C:/chart.html", "artifact://a\nb", "https://example.com/chart.html",
+    ] {
+    assert_true(parse(FenceLanguage, path, closed=true) is None, msg=path)
+  }
 }
 
 ///|

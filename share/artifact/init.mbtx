@@ -1,0 +1,53 @@
+---
+// Copy the seven starter source files into a scratch working project.
+// Usage: init.mbtx SCRATCH_DIRECTORY STARTER_DIRECTORY NEW_PROJECT_NAME
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/env",
+}
+---
+
+///|
+async fn main {
+  guard @env.args()[1:] is [scratch, starter, name] else {
+    fail(
+      "Usage: init.mbtx SCRATCH_DIRECTORY STARTER_DIRECTORY NEW_PROJECT_NAME",
+    )
+  }
+  guard !name.is_empty() &&
+    name != "." &&
+    name != ".." &&
+    name
+    .iter()
+    .all(ch => ch is ('a'..<='z' | 'A'..<='Z' | '0'..<='9' | '-' | '_')) else {
+    fail("project name must use letters, digits, hyphens or underscores")
+  }
+  guard @fs.kind(scratch, follow_symlink=false) is Directory else {
+    fail("scratch directory must be a regular directory")
+  }
+  let scratch = @fs.realpath(scratch)
+  let work = scratch + "/component-work"
+  @fs.mkdir(work, recursive=true, allow_exist=true)
+  guard @fs.kind(work, follow_symlink=false) is Directory else {
+    fail("component working directory must be a regular directory")
+  }
+  let project = work + "/" + name
+  @fs.mkdir(project)
+  errdefer @fs.rmdir(project, recursive=true)
+  for
+    filename in [
+      "moon.mod", "moon.pkg", "main.mbt", "model.mbt", "model_wbtest.mbt", "bridge.mbt",
+      "index.html",
+    ] {
+    @fs.write_binary(
+      project + "/" + filename,
+      @fs.read_binary(starter + "/" + filename),
+      create_mode=CreateNew,
+    )
+  }
+  println("Project: \{project}")
+  println(
+    "Write generated sources to fresh scratch files, then use artifact/write.mbtx SCRATCH_DIRECTORY PROJECT RELATIVE_FILE SOURCE_FILE ... to apply related files together. SOURCE_FILE names an existing scratch file. Then check/test and build.",
+  )
+}

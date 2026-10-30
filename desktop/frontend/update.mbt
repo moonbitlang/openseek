@@ -3161,7 +3161,8 @@ fn update_msg(
       | ApplyEditorFeedback(_) as feedback
     ) => update_editor_feedback(dispatch, feedback, model)
     // Delivered to the component by boot, alongside the other component inputs.
-    ComposerReply(_) => (@cmd.none, model)
+    ComposerReply(_) | TranscriptArtifactContextRequested(_, ..) =>
+      (@cmd.none, model)
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a
@@ -5933,6 +5934,17 @@ fn update_msg(
     }
     OpenPathResolved(context, reply) =>
       finish_open_path(dispatch, model, context, reply)
+    ArtifactOpenResolved(context, reply) => {
+      guard context.generation == model.file_panel.file_link_generation &&
+        model.active_checkout() is Some(active) &&
+        active.owner == context.owner else {
+        return (@cmd.none, model)
+      }
+      match reply {
+        Ok(reply) => request_open_path(dispatch, model, reply.path, None)
+        Err(error) => model.notify_error(dispatch, error)
+      }
+    }
     ToggleGitDetails => {
       let opening = !model.git_details_open
       let model = { ..model, git_details_open: opening, }

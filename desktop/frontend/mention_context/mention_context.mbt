@@ -62,6 +62,7 @@ pub(all) enum MentionRef {
   // A materialized read-only Office selection. The JSON body is carried
   // verbatim into the Agent prompt using the office-viewer schema.
   OfficeSelection(materialized~ : String)
+  InteractiveAnswer(ArtifactSnapshot)
   Annotation(
     file~ : String,
     start_line~ : Int32,
@@ -221,6 +222,7 @@ pub fn glyph(mention : MentionRef) -> String {
     Symbol(_) => "#"
     SemanticSearch(_) | SemanticSearchArtifact(_) => "⌕"
     OfficeSelection(_) => "▦"
+    InteractiveAnswer(_) => "◈"
     Annotation(_) => "✎"
   }
 }
@@ -242,6 +244,7 @@ pub fn label(mention : MentionRef) -> String {
     SemanticSearchArtifact(artifact) =>
       "Semantic search · \{artifact.pattern_count} patterns · \{artifact.match_count} matches (file)"
     OfficeSelection(materialized~) => office_selection_label(materialized)
+    InteractiveAnswer(snapshot) => snapshot.title
     Annotation(file~, start_line~, end_line~, side~, ..) => {
       let suffix = if side is OriginalRevision { " (original)" } else { "" }
       "\{file}:\{start_line}-\{end_line}\{suffix}"
@@ -272,6 +275,7 @@ pub fn target(mention : MentionRef) -> Target? {
     SemanticSearch(_)
     | SemanticSearchArtifact(_)
     | OfficeSelection(_)
+    | InteractiveAnswer(_)
     | Annotation(side=OriginalRevision, ..) => None
     Annotation(
       file~,
@@ -379,6 +383,7 @@ fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
       write_body(parts, materialized)
       parts <+ "</office_selection>\n"
     }
+    InteractiveAnswer(snapshot) => write_artifact_snapshot(parts, snapshot)
     Annotation(file~, start_line~, end_line~, quote~, comment~, side~) => {
       let file = MentionAttribute::encode(file).wire
       let side_attribute = match side {
@@ -512,6 +517,16 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
   let mut index = 0
   while index < lines.length() {
     let line = lines[index]
+    if line == "<interactive_answer>" {
+      guard index + 2 < lines.length() &&
+        lines[index + 2] == "</interactive_answer>" &&
+        parse_artifact_snapshot(lines[index + 1]) is Some(snapshot) else {
+        return None
+      }
+      mentions.push(InteractiveAnswer(snapshot))
+      index += 3
+      continue
+    }
     if line == "<browser_annotation>" {
       guard index + 2 < lines.length() &&
         lines[index + 2] == "</browser_annotation>" &&

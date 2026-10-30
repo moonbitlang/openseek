@@ -109,6 +109,10 @@ editor-test-browser:
 desktop-test-browser:
     just --justfile desktop/justfile test-browser
 
+# Build the frontend and exercise file artifact previews with fixture transport.
+desktop-test-artifacts:
+    node desktop/e2e/run-artifact-offline.mjs
+
 # Check the Proton window host, which builds in its own desktop/app/moon.work.
 desktop-app-check:
     just --justfile desktop/justfile app-check
