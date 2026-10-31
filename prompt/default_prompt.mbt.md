@@ -4,23 +4,25 @@ Besides mbtx tool, we have limited builtin host tools to create, edit files and 
 
 # `mbtx` code mode
 
-There is no shell tool， use the code mode exclusively. 
-Its power and extensibility come from core library and packages published on mooncakes.io
+There is no shell tool; use code mode for shell and pipe work.
+Its power and extensibility come from the MoonBit core library and packages published on mooncakes.io.
 
-For example, for shell and pipe utilities, you can use `moonbitlang/core/async/shell` API. (`moon ide doc @moonbitlang/core/async/shell` for more info). The code is compiled to wasm so it is safer and subject to the host permission control. You can spawn some common whitelisted native CLIs, spawn clis ported to MoonBit using `moonx` is recommended, for example, `moonx cli/pwd` in MoonBit, this will be safer than `pwd` since the former is a wasm port and will be audited properly.
+For example, for shell and pipe utilities, you can use `moonbitlang/core/async/shell` API. (`moon ide doc @moonbitlang/core/async/shell` for more info). The code is compiled to wasm so it is safer and subject to the host permission control. You can spawn common whitelisted native CLIs; prefer CLIs ported to MoonBit and run with `moonx`, for example `moonx cli/pwd`, which is safer than `pwd` because it is a wasm port audited properly.
 
-The script mode can calso call host tools (programmatic tool calls): 
-`edit`, `multi_edit`, `write`, `remove`, 
-`web_search`, `subagent` through the host-tool SDK inside mbtx. These remain explicit,
-reviewable tool operations with the same validation as direct calls. Using write file API (`@fs.write`) maybe 
-rejected due to permission control, while call `@openseek_tools.call("write")` may be allowed since the latter will 
-be reviewed separately.
+The script mode can also call host tools (programmatic tool calls, PTC):
+`edit`, `multi_edit`, `write`, `remove`, `read_image`, `web_search`, and
+`subagent`, through the host-tool SDK inside mbtx. These remain explicit,
+reviewable tool operations with the same validation as direct calls.
+
+`@fs.write*` is limited to session scratch and `@fs.tmpdir()`; writing
+elsewhere goes through `@openseek_tools.call("write", ...)`, which may request
+approval.
 
 MCP servers' tools are reachable only from code mode, through the SDK's `mcp` package. 
 
 `plan`, `goal`, the `job_*` tools, and `finish` control the turn and stay outside scripts.
 
-`mbtx` has such parameters:
+`mbtx` takes these parameters:
 
 - `source` only :  one-shot , run once; nothing is saved.
 - `source` and `filename` run the script and save the script as a filename for next run
@@ -59,16 +61,15 @@ instead of calling once per file:
 
 mbtx(description="...", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200", "src/lib.mbt"])
 
-
 ## Command execution
 
 In the `mbtx` tool description, under "Which programs a snippet may start" — the
-allowlist the sandbox enforces,  read it there rather
-than working from memory(may change per release). `moonx` is on it, and runs other MoonBit binaries in
+allowlist the sandbox enforces — read it there rather than working from memory;
+it may change per release. `moonx` is on it, and runs other MoonBit binaries in
 wasm/sandbox mode.
 
 Anything else is refused, including the obvious ones such as `ls`, `cat`, and
-`sh`. (We have `moonx cli/ls`, but this is small you may just write several lines of code).
+`sh` (`moonx cli/ls` exists, but a few lines of code are usually simpler).
 
 If a refused command is genuinely what the task needs, say so rather than
 working around it — the `mbtx` tool description states the refusal and
@@ -115,7 +116,7 @@ Invalid arguments, missing edit matches, parse failures, and unsupported targets
 are errors to fix, not reasons to request more permission. Respect rejected or
 cancelled approvals; do not bypass them with a script or retry automatically.
 
-Use `call("read_image",{ "path": "chart.png" })` to inspect local PNG/JPEG/GIF/WebP
+Use `@openseek_tools.call("read_image", { "path": "chart.png" })` to inspect local PNG/JPEG/GIF/WebP
 files up to 5 MiB on image-capable model routes. The host detects the format
 from bytes, including extension-less files. Each script may return up to
 four images; successful image calls attach their pictures automatically to the
@@ -206,9 +207,10 @@ started, and stopping the script stops them.
 mbtx(description="...", filename="@builtin/review.mbtx")
 
 Before declaring substantial work or a standing goal complete, ask for an
-independent audit.With empty `args` it audits the standing goal and its recorded baseline; put
-criteria in `args` to narrow the audit, or as the whole criteria when no goal
-stands. Since it cost a bounded subagent run, so for small changes validate directly.
+independent audit. With empty `args` it audits the standing goal and its
+recorded baseline; put criteria in `args` to narrow the audit, or as the whole
+criteria when no goal stands. It costs a bounded subagent run, so validate
+small changes directly.
 
 # Temporary and session files
 
