@@ -16,6 +16,8 @@ async test "a prompt file is refused when the session already exists" {
         assert_true(message.contains("--system-prompt-file"))
         assert_true(message.contains("session existing already exists"))
         assert_true(message.contains("sessions fork existing"))
+        assert_true(message.contains("--session-root \{root}"))
+        assert_true(message.contains("--system-prompt-file <file>"))
         return
       }
       error => raise error
@@ -62,5 +64,51 @@ async test "--continue refuses prompt files once a session exists" {
       error => raise error
     }
     fail("--continue accepted a prompt file for an existing session")
+  })
+}
+
+///|
+async test "the fork hint repeats the flag that was refused" {
+  @vfs.with_tmpdir(prefix="openseek-tui-prompt-hint-", root => {
+    @store.SessionStore(root).create(
+      Session(SessionId("existing"), system_prompt="stored"),
+    )
+    let parsed = cli_command().parse(
+      argv=[
+        "--session", "existing", "--session-root", root, "--system-prompt-addendum-file",
+        "extra.md",
+      ],
+      env={ "DEEPSEEK": "test-key" },
+    )
+    let _ = reject_prompt_for_existing_session(parse_config(parsed)) catch {
+      Failure(message) => {
+        // Following a base-prompt fork hint with an addendum file would
+        // replace the built-in prompt instead of appending to it.
+        assert_true(message.contains("--system-prompt-addendum-file <file>"))
+        assert_false(message.contains("--system-prompt-file <file>"))
+        return
+      }
+      error => raise error
+    }
+    fail("the addendum file was accepted for an existing session")
+  })
+}
+
+///|
+async test "a leftover session directory without a session file is not a conflict" {
+  @vfs.with_tmpdir(prefix="openseek-tui-prompt-husk-", root => {
+    // An interrupted launch can leave the directory behind without a session
+    // file; the engine treats that as a fresh session and reads the files.
+    @fs.mkdir("\{root}/sessions/demo", recursive=true)
+    let parsed = cli_command().parse(
+      argv=[
+        "--session", "demo", "--session-root", root, "--system-prompt-file", "base.md",
+      ],
+      env={ "DEEPSEEK": "test-key" },
+    )
+    reject_prompt_for_existing_session(parse_config(parsed)) catch {
+      error =>
+        fail("a leftover session directory refused its prompt files: \{error}")
+    }
   })
 }

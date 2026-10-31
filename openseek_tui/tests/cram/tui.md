@@ -192,20 +192,42 @@ Pass --engine <path> to a working openseek binary, or omit --engine to run the p
 
 The prompt is written into a new session's header, so a session that already
 exists keeps the one it stored. Naming one with an existing `--session` is
-refused before the engine runs, pointing at the fork that changes it.
+refused before the engine runs, pointing at the fork that changes it. The
+paths inside that hint are this machine's, so they are normalized here.
 
 ```mooncram
 $ sh <<'EOF'
 > root=$(mktemp -d)
 > mkdir -p "$root/sessions/demo"
+> printf '{"version":1,"id":"demo","system_prompt":"system"}\n' > "$root/sessions/demo/openseek_session-demo.jsonl"
 > stderr=$(mktemp)
 > env DEEPSEEK=test-key openseek_tui.exe --session demo --session-root "$root" --system-prompt-file prompt.md > /dev/null 2> "$stderr"
 > status=$?
-> cat "$stderr"
+> sed -E 's#--dir [^ ]+ --session-root [^ ]+#--dir <workspace> --session-root <root>#' "$stderr"
 > echo "status=$status"
 > rm -rf "$root" "$stderr"
 > EOF
 error: --system-prompt-file applies only when this launch creates the session, and session demo already exists with the system prompt it stored. Fork it to change the prompt:
-  openseek sessions fork demo --as <new-id> --system-prompt-file <file>
+  openseek sessions fork demo --as <new-id> --dir <workspace> --session-root <root> --system-prompt-file <file>
+status=1
+```
+
+`--continue` resolves to the same stored session and is refused the same way;
+the hint repeats the addendum flag when that is what was given.
+
+```mooncram
+$ sh <<'EOF'
+> root=$(mktemp -d)
+> mkdir -p "$root/sessions/demo"
+> printf '{"version":1,"id":"demo","system_prompt":"system"}\n' > "$root/sessions/demo/openseek_session-demo.jsonl"
+> stderr=$(mktemp)
+> env DEEPSEEK=test-key openseek_tui.exe --continue --session-root "$root" --system-prompt-addendum-file addendum.md > /dev/null 2> "$stderr"
+> status=$?
+> sed -E 's#--dir [^ ]+ --session-root [^ ]+#--dir <workspace> --session-root <root>#' "$stderr"
+> echo "status=$status"
+> rm -rf "$root" "$stderr"
+> EOF
+error: --system-prompt-addendum-file applies only when this launch creates the session, and session demo already exists with the system prompt it stored. Fork it to change the prompt:
+  openseek sessions fork demo --as <new-id> --dir <workspace> --session-root <root> --system-prompt-addendum-file <file>
 status=1
 ```

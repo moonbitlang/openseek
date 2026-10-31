@@ -1,8 +1,12 @@
 ///|
-/// UI-only options — meaningless to the headless `openseek` engine, so they live
-/// only on the `openseek_tui` command (never on the engine CLI). This keeps them
-/// out of `openseek`'s help and makes `openseek --prompt x run` a clean error
-/// instead of a silent no-op.
+/// Options the `openseek_tui` command declares beyond the shared agent ones.
+/// Most are UI-only — meaningless to the headless `openseek` engine — so they
+/// live only here, which keeps them out of `openseek`'s help and makes
+/// `openseek --prompt x run` a clean error instead of a silent no-op.
+/// `--system-prompt-file` and `--system-prompt-addendum-file` are the
+/// exception: they mirror the engine's own prompt options and are forwarded on
+/// its `serve` command line. They carry no env binding of their own, so an
+/// inherited `OPENSEEK_SYSTEM_PROMPT_*` still reaches the engine unchanged.
 pub fn tui_ui_options() -> Array[@argparse.OptionArg] {
   [
     OptionArg(
@@ -777,24 +781,39 @@ fn prompt_file_option(input : String) -> String? {
 }
 
 ///|
+/// Whether the durable store already holds a session file for `config`'s id.
+/// `SessionStore::exists` tests only the directory, and the engine treats a
+/// directory left behind by an interrupted launch — one with no session file —
+/// as a fresh session, so the refusal must look at the file too.
+async fn session_is_stored(config : AppConfig) -> Bool {
+  let store = @store.SessionStore(config.session_root)
+  guard store.exists(config.session_id) else { return false }
+  let path = store.session_file(config.session_id) catch { _ => return false }
+  @fs.exists(path)
+}
+
+///|
 /// Refuse prompt files for a session that already exists. The engine assembles
 /// a prompt only when it writes a new session's header; a resumed session keeps
 /// the one it stored, so forwarding these files would silently do nothing.
-/// Forking is how an existing conversation changes its prompt.
+/// Forking is how an existing conversation changes its prompt, so the refusal
+/// names the fork that keeps this store and repeats the file that was refused.
 async fn reject_prompt_for_existing_session(config : AppConfig) -> Unit {
-  let flags = match
+  let (refused, fork_files) = match
     (config.system_prompt_file, config.system_prompt_addendum_file) {
-    (Some(_), Some(_)) => "--system-prompt-file/--system-prompt-addendum-file"
-    (Some(_), None) => "--system-prompt-file"
-    (None, Some(_)) => "--system-prompt-addendum-file"
+    (Some(_), Some(_)) =>
+      (
+        "--system-prompt-file/--system-prompt-addendum-file", "--system-prompt-file <file> --system-prompt-addendum-file <file>",
+      )
+    (Some(_), None) => ("--system-prompt-file", "--system-prompt-file <file>")
+    (None, Some(_)) =>
+      ("--system-prompt-addendum-file", "--system-prompt-addendum-file <file>")
     (None, None) => return
   }
+  guard session_is_stored(config) else { return }
   let id = config.session_id.value()
-  guard @store.SessionStore(config.session_root).exists(config.session_id) else {
-    return
-  }
   fail(
-    "\{flags} applies only when this launch creates the session, and session \{id} already exists with the system prompt it stored. Fork it to change the prompt:\n  openseek sessions fork \{id} --as <new-id> --system-prompt-file <file>",
+    "\{refused} applies only when this launch creates the session, and session \{id} already exists with the system prompt it stored. Fork it to change the prompt:\n  openseek sessions fork \{id} --as <new-id> --dir \{config.cwd} --session-root \{config.session_root} \{fork_files}",
   )
 }
 

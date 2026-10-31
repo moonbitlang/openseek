@@ -89,8 +89,8 @@ rather than letting the files be ignored, and points at the fork that changes a
 conversation's prompt:
 
 ```bash
-openseek sessions fork <id> --as <new-id> --system-prompt-file prompt.md
-openseek_tui --session <new-id>
+openseek sessions fork <id> --as <new-id> --session-root <root> --system-prompt-file prompt.md
+openseek_tui --session <new-id> --session-root <root>
 ```
 
 ## Packages

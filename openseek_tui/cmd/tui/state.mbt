@@ -35,9 +35,9 @@ priv struct AppConfig {
 }
 
 ///|
-/// The engine's `serve` argv, with the full placement: session and
-/// workspace. Every value is attached so a leading `-` is data, not a second
-/// option.
+/// The engine's `serve` argv, with the full placement: session, workspace, and
+/// the prompt files of the session this launch creates. Every value is attached
+/// so a leading `-` is data, not a second option.
 fn AppConfig::engine_serve_args(self : AppConfig) -> Array[String] {
   let args = [
     ..self.engine_args_prefix,
