@@ -80,6 +80,19 @@ The shared engine options (`--api-key`, `--model`, `--api-url`, `--max-steps`,
 `--thinking`, `--session`, `--session-root`) are the same ones `openseek run`
 takes; `openseek_tui --help` lists them all.
 
+`--system-prompt-file` and `--system-prompt-addendum-file` choose the system
+prompt of the session this launch creates, with the engine's own semantics: the
+prompt is written into a new session's header, and a resumed session keeps the
+one it stored. The launch therefore refuses them for a session that already
+exists — with `--continue`, or with a `--session` id already in the store —
+rather than letting the files be ignored, and points at the fork that changes a
+conversation's prompt:
+
+```bash
+openseek sessions fork <id> --as <new-id> --system-prompt-file prompt.md
+openseek_tui --session <new-id>
+```
+
 ## Packages
 
 | Package | Purpose | README |

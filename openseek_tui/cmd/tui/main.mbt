@@ -16,6 +16,16 @@ pub fn tui_ui_options() -> Array[@argparse.OptionArg] {
       about="Initial prompt to send once the UI opens.",
     ),
     OptionArg(
+      "system-prompt-file",
+      long="system-prompt-file",
+      about="Read the system prompt of the session this launch creates from this file instead of the built-in prompt; a session that already exists keeps the prompt it stored.",
+    ),
+    OptionArg(
+      "system-prompt-addendum-file",
+      long="system-prompt-addendum-file",
+      about="Append this file to the system prompt of the session this launch creates; a session that already exists keeps the prompt it stored.",
+    ),
+    OptionArg(
       "change-directory",
       short='C',
       long="change-directory",
@@ -142,6 +152,8 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
     engine_input,
     model_input,
     thinking_input,
+    prompt_file_input,
+    prompt_addendum_input,
   ) = match matches {
     {
       values: {
@@ -153,10 +165,17 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
         | (Some([]) | None with engine = ""),
         "model": [model, ..],
         "thinking": [thinking, ..],
+        "system-prompt-file"? : Some([prompt_file, ..])
+        | (Some([]) | None with prompt_file = ""),
+        "system-prompt-addendum-file"? : Some([prompt_addendum, ..])
+        | (Some([]) | None with prompt_addendum = ""),
         ..
       },
       ..
-    } => (api_url, session, session_root, engine, model, thinking)
+    } =>
+      (
+        api_url, session, session_root, engine, model, thinking, prompt_file, prompt_addendum,
+      )
     _ => fail("missing parsed TUI defaults")
   }
   let cwd = match @env.current_dir() {
@@ -228,6 +247,8 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
       None => generated_session_id(@env.now().reinterpret_as_int64())
     },
     session_root: session_root_value,
+    system_prompt_file: prompt_file_option(prompt_file_input),
+    system_prompt_addendum_file: prompt_file_option(prompt_addendum_input),
     engine,
     engine_args_prefix,
   }
@@ -457,6 +478,7 @@ pub async fn run(matches : @argparse.Matches) -> Unit {
   if continue_requested(matches) {
     config = with_latest_session(config)
   }
+  reject_prompt_for_existing_session(config)
   // Fail before the terminal UI takes over the screen if the engine is unusable,
   // rather than dropping the user into a UI that dies on the first task.
   let probe = probe_engine_with_notice(config)
@@ -742,4 +764,77 @@ test "engine_probe_error tailors its advice to the default engine" {
   let bad = engine_probe_error(explicit, NotLaunchable)
   assert_true(bad.contains("omit --engine"))
   assert_false(bad.contains("Install MoonBit"))
+}
+
+///|
+/// A prompt-file flag's value, or `None` when it is empty: the engine then
+/// keeps whichever prompt it would use without the flag.
+fn prompt_file_option(input : String) -> String? {
+  match input.trim() {
+    "" => None
+    path => Some(path.to_owned())
+  }
+}
+
+///|
+/// Refuse prompt files for a session that already exists. The engine assembles
+/// a prompt only when it writes a new session's header; a resumed session keeps
+/// the one it stored, so forwarding these files would silently do nothing.
+/// Forking is how an existing conversation changes its prompt.
+async fn reject_prompt_for_existing_session(config : AppConfig) -> Unit {
+  let flags = match
+    (config.system_prompt_file, config.system_prompt_addendum_file) {
+    (Some(_), Some(_)) => "--system-prompt-file/--system-prompt-addendum-file"
+    (Some(_), None) => "--system-prompt-file"
+    (None, Some(_)) => "--system-prompt-addendum-file"
+    (None, None) => return
+  }
+  let id = config.session_id.value()
+  guard @store.SessionStore(config.session_root).exists(config.session_id) else {
+    return
+  }
+  fail(
+    "\{flags} applies only when this launch creates the session, and session \{id} already exists with the system prompt it stored. Fork it to change the prompt:\n  openseek sessions fork \{id} --as <new-id> --system-prompt-file <file>",
+  )
+}
+
+///|
+test "cli forwards system prompt files to the engine" {
+  let parsed = cli_command().parse(
+    argv=[
+      "--session", "demo", "--system-prompt-file", "prompts/base.md", "--system-prompt-addendum-file",
+      "prompts/extra.md",
+    ],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  let config = { ..parse_config(parsed), cwd: ".", }
+  assert_eq(config.system_prompt_file, Some("prompts/base.md"))
+  assert_eq(config.system_prompt_addendum_file, Some("prompts/extra.md"))
+  @debug.assert_eq(config.engine_serve_args(), [
+    "moonbitlang/openseek@\{EngineModuleVersion}",
+    "serve",
+    "--session=demo",
+    "--session-root=.openseek",
+    "--dir=.",
+    "--system-prompt-file=prompts/base.md",
+    "--system-prompt-addendum-file=prompts/extra.md",
+  ])
+  // Without the flags the engine keeps its built-in prompt.
+  let plain = {
+    ..parse_config(
+      cli_command().parse(argv=["--session", "demo"], env={
+        "DEEPSEEK": "test-key",
+      }),
+    ),
+    cwd: ".",
+  }
+  assert_true(plain.system_prompt_file is None)
+  assert_true(plain.system_prompt_addendum_file is None)
+  @debug.assert_eq(plain.engine_serve_args(), [
+    "moonbitlang/openseek@\{EngineModuleVersion}",
+    "serve",
+    "--session=demo",
+    "--session-root=.openseek",
+    "--dir=.",
+  ])
 }

@@ -67,6 +67,8 @@ fn goal_test_state() -> State {
     thinking: Max,
     session_id: SessionId("goal-test"),
     session_root: ".openseek",
+    system_prompt_file: None,
+    system_prompt_addendum_file: None,
     engine: "openseek",
     engine_args_prefix: [],
   })
