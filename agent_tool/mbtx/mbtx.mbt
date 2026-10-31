@@ -1746,9 +1746,11 @@ fn description(
     #|Agent workflows (they start subagents): @builtin/review.mbtx (independent
     #|worktree audit against the criteria in args), @builtin/change-review.mbtx
     #|(working-tree review from three perspectives), @builtin/repo-map.mbtx
-    #|(architecture, validation, extension points) or @builtin/simplify.mbtx
+    #|(architecture, validation, extension points), @builtin/simplify.mbtx
     #|(sweeps MoonBit packages for safe simplifications and opens one pull
-    #|request per package; --no-pr keeps them on local branches).
+    #|request per package; --no-pr keeps them on local branches) or
+    #|@builtin/shrink.mbtx (shrinks the public API in rounds until
+    #|`moon ide analyze` finds nothing left; one stacked pull request per round).
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
     #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.

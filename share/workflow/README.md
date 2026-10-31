@@ -82,6 +82,9 @@ other colons. Paths with spaces are single args without shell quoting.
   extension points for a new contributor.
 - `simplify.mbtx` sweeps the repository's MoonBit packages for safe, obvious
   simplifications and opens one pull request per changed package (see below).
+- `shrink.mbtx` shrinks the workspace's public API in rounds until
+  `moon ide analyze` finds nothing left to shrink, one stacked pull request per
+  round (see below).
 
 Run these in a session that can start subagents; they start them through the
 host with `@tools.call("subagent", ...)`:
@@ -100,6 +103,10 @@ host with `@tools.call("subagent", ...)`:
 
 ```json
 {"description":"Simplify the project","filename":"@builtin/simplify.mbtx","args":["--max-prs","2","--","pattern matching"]}
+```
+
+```json
+{"description":"Shrink the public API","filename":"@builtin/shrink.mbtx","args":["--check-target","native","--check-target","js"]}
 ```
 
 `review.mbtx` launches one `review` child (100-step ceiling). With no
@@ -166,6 +173,32 @@ a line per scout and per chosen package, then
 when any start was refused, any child ended without a report, or a push or
 pull request failed. The design is in
 [docs/plans/simplify-swarm.md](../../docs/plans/simplify-swarm.md).
+
+`shrink.mbtx` has the same preflight as `simplify.mbtx` (with `--stack-on
+BRANCH`, HEAD must be exactly `origin/BRANCH`). Each round runs
+`moon ide analyze` over the workspace. A candidate is an exported top-level
+item with no production use in another package (`usage: N (N in test)`), or a
+type whose `pub(all)`/`pub(open)` can narrow; items in a package's
+`exports.mbt`, trait implementations, rows without a usage count, and a test
+kit's test-only items are not. The packages with the most candidates, at most
+`--max-packages N` (default 8, at most 16; `--exclude DIR` leaves a subtree
+out, `--skip DIR` one package), each get one `worker` that must
+resolve every candidate: drop `pub`, delete it, narrow it, or move it to
+`exports.mbt` with a stated reason. Each change passes the same gate and
+`explore` review as in `simplify.mbtx`. The accepted commits are cherry-picked
+onto the round's base, checked together with
+`moon check --deny-warn --no-mbti` (once per `--check-target T`, and in each
+`--check-in DIR` workspace), kept on a
+local `shrink/r<k>-<commit>` branch, and, unless `--no-pr`, pushed and opened
+as a pull request whose base is the previous round's branch. The next round
+starts from that commit. A package whose change was not accepted, or whose
+accepted change left an item it was given, is not offered again in the run, so
+the rounds end. The run ends at the fixed point, at `--rounds N`, or when the
+64-start quota cannot fit another round, and prints the arguments that
+continue it. It checks out each round's commit in the session's checkout and
+checks out the starting branch again at the end, so run it in a checkout of
+its own. The design is in
+[docs/plans/shrink-fixed-point.md](../../docs/plans/shrink-fixed-point.md).
 
 For MoonBit, scouts start with the selected package’s `moon.pkg` and
 `pkg.generated.mbti`, then use its dependencies and public API to choose

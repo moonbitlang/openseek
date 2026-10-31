@@ -188,6 +188,21 @@ test('simplify sends the sweep prompt with its focus', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
+test('shrink sends the fixed-point prompt with its focus', async ({ page }) => {
+  const app = await open(page);
+  const task = page.locator('#task');
+  await task.fill('/shri');
+  await expect(page.locator('.completion-item').filter({ hasText: 'shrink' }).first()).toBeVisible();
+  await task.press('Enter');
+  await expect(task).toHaveValue('/shrink ');
+  await page.keyboard.type('keep the protocol');
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('Focus: keep the protocol');
+  expect(app.requests.find(r => r.method === 'agent.start').params.task).toContain('"@builtin/shrink.mbtx"');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('a failed first Codex send keeps the agent fixed while retrying', async ({ page }) => {
   const app = await open(page);
   await choose(page, 'Codex test');

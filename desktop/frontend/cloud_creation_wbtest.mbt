@@ -33,7 +33,7 @@ test "new Cloud is an editable empty composer without a remote session" {
   assert_false(blank.composer_input().presentation.disabled)
   assert_eq(
     blank.composer_input().slash_commands.map(command => command.command),
-    ["compact", "goal", "ultrareview", "simplify"],
+    ["compact", "goal", "ultrareview", "simplify", "shrink"],
   )
   assert_true(
     blank.composer_input().presentation.primary_action
