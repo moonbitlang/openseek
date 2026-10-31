@@ -25,20 +25,22 @@ Usage: openseek_tui [options]
 OpenSeek terminal UI.
 
 Options:
-  -h, --help                                 Show help information.
-  --continue                                 Resume the most recently active session in --session-root.
-  --api-key <api-key>                        API key for the selected chat provider. [default: ]
-  --model <model>                            Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
-  --api-url <api-url>                        OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
-  --retry-attempts <retry-attempts>          Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
-  --retry-backoff-ms <retry-backoff-ms>      Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
-  --max-steps <max-steps>                    Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
-  --thinking <thinking>                      Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
-  --session <session>                        Create or resume this durable session id.
-  --session-root <session-root>              Directory containing durable OpenSeek sessions. [default: .openseek]
-  --engine <engine>                          Agent engine command to spawn instead of the default (moonx running the pinned moonbitlang/openseek release); it must speak the serve JSONL protocol.
-  --prompt <prompt>                          Initial prompt to send once the UI opens.
-  -C, --change-directory <change-directory>  Run as if started in this directory: it becomes the workspace, and a relative --session-root or --engine path resolves against it.
+  -h, --help                                                   Show help information.
+  --continue                                                   Resume the most recently active session in --session-root.
+  --api-key <api-key>                                          API key for the selected chat provider. [default: ]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                                      Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                                        Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                                          Create or resume this durable session id.
+  --session-root <session-root>                                Directory containing durable OpenSeek sessions. [default: .openseek]
+  --engine <engine>                                            Agent engine command to spawn instead of the default (moonx running the pinned moonbitlang/openseek release); it must speak the serve JSONL protocol.
+  --prompt <prompt>                                            Initial prompt to send once the UI opens.
+  --system-prompt-file <system-prompt-file>                    Read the system prompt of the session this launch creates from this file instead of the built-in prompt; a session that already exists keeps the prompt it stored.
+  --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the system prompt of the session this launch creates; a session that already exists keeps the prompt it stored.
+  -C, --change-directory <change-directory>                    Run as if started in this directory: it becomes the workspace, and a relative --session-root or --engine path resolves against it.
 ```
 
 ## API Key Is Required
@@ -172,4 +174,38 @@ $ env DEEPSEEK=test-key openseek_tui.exe --engine does-not-exist --prompt "inspe
 error: engine 'does-not-exist' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
 Pass --engine <path> to a working openseek binary, or omit --engine to run the pinned release through moonx.
 [1]
+```
+
+## A Custom System Prompt Comes From The Prompt File Flags
+
+`--system-prompt-file` replaces the built-in prompt and
+`--system-prompt-addendum-file` appends to it, for the session this launch
+creates. Both parse and reach the engine preflight here, which fails
+deterministically on a missing engine.
+
+```mooncram
+$ env DEEPSEEK=test-key openseek_tui.exe --engine does-not-exist --system-prompt-file prompt.md --system-prompt-addendum-file addendum.md
+error: engine 'does-not-exist' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
+Pass --engine <path> to a working openseek binary, or omit --engine to run the pinned release through moonx.
+[1]
+```
+
+The prompt is written into a new session's header, so a session that already
+exists keeps the one it stored. Naming one with an existing `--session` is
+refused before the engine runs, pointing at the fork that changes it.
+
+```mooncram
+$ sh <<'EOF'
+> root=$(mktemp -d)
+> mkdir -p "$root/sessions/demo"
+> stderr=$(mktemp)
+> env DEEPSEEK=test-key openseek_tui.exe --session demo --session-root "$root" --system-prompt-file prompt.md > /dev/null 2> "$stderr"
+> status=$?
+> cat "$stderr"
+> echo "status=$status"
+> rm -rf "$root" "$stderr"
+> EOF
+error: --system-prompt-file applies only when this launch creates the session, and session demo already exists with the system prompt it stored. Fork it to change the prompt:
+  openseek sessions fork demo --as <new-id> --system-prompt-file <file>
+status=1
 ```

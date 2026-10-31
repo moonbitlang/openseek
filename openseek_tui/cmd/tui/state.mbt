@@ -16,6 +16,13 @@ priv struct AppConfig {
   // resumes) an id; otherwise one is generated per launch.
   session_id : @agent_session.SessionId
   session_root : String
+  // Prompt files for the session this launch creates, forwarded to the engine
+  // as `serve --system-prompt-file=…`. A prompt is written only when the engine
+  // creates a session header, so an existing session keeps its stored prompt;
+  // `reject_prompt_for_existing_session` refuses that combination instead of
+  // letting these files be ignored.
+  system_prompt_file : String?
+  system_prompt_addendum_file : String?
   // The agent engine the TUI spawns and reads JSONL events from. Defaults to
   // `moonx` running the pinned `moonbitlang/openseek` release (see
   // `default_engine`); override (e.g. to a local build or a recorded-stream
@@ -32,13 +39,23 @@ priv struct AppConfig {
 /// workspace. Every value is attached so a leading `-` is data, not a second
 /// option.
 fn AppConfig::engine_serve_args(self : AppConfig) -> Array[String] {
-  [
+  let args = [
     ..self.engine_args_prefix,
     "serve",
     "--session=\{self.session_id.value()}",
     "--session-root=\{self.session_root}",
     "--dir=\{self.cwd}",
   ]
+  // The files ride on the engine's own prompt options. Whether they apply is
+  // the engine's call — it reads them only while creating a session — which is
+  // why the launch refuses them for a session that already exists.
+  if self.system_prompt_file is Some(path) {
+    args.push("--system-prompt-file=\{path}")
+  }
+  if self.system_prompt_addendum_file is Some(path) {
+    args.push("--system-prompt-addendum-file=\{path}")
+  }
+  args
 }
 
 ///|
