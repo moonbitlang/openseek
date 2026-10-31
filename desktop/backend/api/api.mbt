@@ -351,6 +351,14 @@ pub fn[T] ApiState::subscribe(
 }
 
 ///|
+/// What a client that joins now must already know: the runs in flight and
+/// the standing approvals, as `agent.runs` answers it. It does not suspend, so
+/// reading it right after `subscribe` misses and repeats nothing.
+pub fn ApiState::runs(self : ApiState) -> @protocol.RunsReply {
+  self.hub.runs()
+}
+
+///|
 /// Publish one notification to every subscriber — shared host pumps such as
 /// `lsp.diagnostics` go through here. Connection-owned `fs.changed` events
 /// bypass the hub and return only to their owning connection.

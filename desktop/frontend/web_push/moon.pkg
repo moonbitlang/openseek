@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/editor/base/browser" @base_browser,
+  "moonbitlang/async/http",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/js",
+  "openseek_desktop/frontend/interop",
+}
+
+supported_targets = "js"

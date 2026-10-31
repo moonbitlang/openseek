@@ -81,6 +81,7 @@ async fn with_bundle(body : async (String) -> Unit) -> Unit {
   )
   @fs.mkdir("\{root}/assets")
   @fs.write_file("\{root}/assets/frontend.js", "void 0")
+  @fs.write_file("\{root}/sw.js", "void 0")
   body(root)
 }
 
@@ -120,6 +121,13 @@ async test "the proxy serves the bundle and forwards relay traffic as a bearer c
       )
       let (asset, _) = @http.get(origin + "/assets/frontend.js")
       assert_eq(asset.code, 200)
+      // The push worker is a root file, so its default scope is `/`.
+      let (worker, _) = @http.get(origin + "/sw.js")
+      assert_eq(worker.code, 200)
+      assert_true(
+        worker.headers.get("content-type") is Some(kind) &&
+        kind.has_prefix("text/javascript"),
+      )
       let (missing, _) = @http.get(origin + "/missing.js")
       assert_eq(missing.code, 404)
       // Bodies, methods, queries and statuses pass through unchanged.

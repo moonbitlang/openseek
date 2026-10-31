@@ -11,9 +11,15 @@ pub(all) enum Frame {
   Registered(device~ : String)
   Open(stream~ : String)
   Fail(message~ : String)
+  Notify(PushEvent)
 }
 pub fn Frame::decode(String) -> Self?
 pub fn Frame::encode(Self) -> String
+
+pub(all) enum PushEvent {
+  Finished(session~ : String, status~ : String, answer~ : String?)
+  Approval(session~ : String, tool~ : String, detail~ : String)
+}
 
 // Type aliases
 

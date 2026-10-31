@@ -1,0 +1,78 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/web_push"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn forget() -> @cmd.Cmd
+
+pub fn probe(@cmd.Emit[Msg]) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub(all) struct Ctx {
+  token : String
+  locale : String
+} derive(Eq, @debug.Debug)
+pub fn Ctx::equal(Self, Self) -> Bool
+pub fn Ctx::not_equal(Self, Self) -> Bool
+pub fn Ctx::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Msg {
+  Probed(Probe)
+  TurnOn
+  TurnOff
+  SendTest
+  TurnedOn
+  Denied
+  Dismissed
+  TurnOnFailed(String)
+  TurnedOff
+  TurnOffFailed(String)
+  TestSent
+  TestFailed(String)
+} derive(Eq, @debug.Debug)
+pub fn Msg::equal(Self, Self) -> Bool
+pub fn Msg::not_equal(Self, Self) -> Bool
+pub fn Msg::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Permission {
+  Granted
+  Denied
+  Default
+} derive(Eq, @debug.Debug)
+pub fn Permission::equal(Self, Self) -> Bool
+pub fn Permission::not_equal(Self, Self) -> Bool
+pub fn Permission::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Probe {
+  NoPushApi
+  NoRelayKey
+  Ready(key~ : String, permission~ : Permission, subscribed~ : Bool)
+} derive(Eq, @debug.Debug)
+pub fn Probe::equal(Self, Self) -> Bool
+pub fn Probe::not_equal(Self, Self) -> Bool
+pub fn Probe::to_repr(Self) -> @debug.Repr
+
+pub enum State {
+  Checking
+  Unsupported
+  Unavailable
+  Off(key~ : String, error~ : String?)
+  Working(key~ : String)
+  On(key~ : String, error~ : String?)
+  Blocked
+} derive(Eq, @debug.Debug)
+pub fn State::State() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::to_repr(Self) -> @debug.Repr
+pub fn State::update(Self, Msg, Ctx, @cmd.Emit[Msg]) -> (Self, @cmd.Cmd)
+
+// Type aliases
+
+// Traits

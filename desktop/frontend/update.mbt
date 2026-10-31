@@ -4151,6 +4151,16 @@ fn update_msg(
       )
     AccountLoaded(epoch, result) =>
       account_loaded(dispatch, model, epoch, result)
+    WebPush(msg) => {
+      // Relay calls are the account's; a reply after sign-out has none.
+      guard model.account is Some(account) else { return (@cmd.none, model) }
+      let (web_push, command) = model.web_push.update(
+        msg,
+        { token: account.token, locale: model.locale.tag(), },
+        dispatch.map(msg => WebPush(msg)),
+      )
+      (command, { ..model, web_push, })
+    }
     AccountPreferencesChanged(enabled) =>
       change_account_preferences(dispatch, model, enabled)
     AccountPreferencesLoaded(request, result) =>
