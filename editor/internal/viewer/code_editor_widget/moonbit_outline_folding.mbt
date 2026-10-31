@@ -1,7 +1,8 @@
 ///|
-/// A brace-delimited top-level MoonBit function body. The declaration prefix
-/// through `body_start_line_number` remains visible when its outline is
-/// collapsed; the fold hides the following body lines and closing brace.
+/// A brace-delimited top-level MoonBit function or type (`struct`, `enum`,
+/// `trait`, `suberror`) body. The declaration prefix through
+/// `body_start_line_number` remains visible when its outline is collapsed;
+/// the fold hides the following body lines and closing brace.
 priv struct MoonbitFunctionBodyFold {
   declaration_start_line_number : Int32
   body_start_line_number : Int32
@@ -205,9 +206,26 @@ fn is_moonbit_plain_comment_line(line : String) -> Bool {
 }
 
 ///|
+/// Type declarations whose brace body folds like a function body.
+fn is_moonbit_outline_type_keyword(word : StringView) -> Bool {
+  word is ("struct" | "enum" | "trait" | "suberror")
+}
+
+///|
+/// Whether `line` has code after `start`, ignoring whitespace and a trailing
+/// `//` comment.
+fn moonbit_line_has_code_after(line : String, start : Int32) -> Bool {
+  let rest = line[start:].trim(chars=" \t")
+  !(rest.is_empty() || rest.has_prefix("//"))
+}
+
+///|
 /// Finds brace-bodied top-level MoonBit functions and top-level plain-comment
 /// runs without treating braces in comments, strings, interpolations, or raw
-/// lines as source delimiters. The function scan is intentionally
+/// lines as source delimiters. Brace-bodied `struct`, `enum`, `trait`, and
+/// `suberror` declarations fold the same way, except a type closed by
+/// `} derive(...)`, whose closing line must stay visible. The function scan
+/// is intentionally
 /// declaration-specific: `declare` and `=`-backed functions have no MoonBit
 /// body, while qualified methods and formatted `impl ... with fn ...`
 /// declarations are included. Comment runs require the line-start lexical
@@ -226,6 +244,11 @@ fn moonbit_source_folds(snapshot : @model.TextSnapshot) -> MoonbitSourceFolds {
   let mut brace_depth = 0
   let mut function_keyword_line = 0
   let mut function_keyword_bracket_depth = 0
+  // Whether the pending keyword, and then the declaration it names, is a
+  // type rather than a function: formatted types open their body on the
+  // declaration line and may close it with `} derive(...)`.
+  let mut function_keyword_is_type = false
+  let mut declaration_is_type = false
   let mut pending_function_prefix_line = 0
   let mut pending_function_prefix_paren_depth = 0
   let mut pending_impl_start_line = 0
@@ -418,6 +441,8 @@ fn moonbit_source_folds(snapshot : @model.TextSnapshot) -> MoonbitSourceFolds {
           } else if function_keyword_line > 0 &&
             function_keyword_bracket_depth == 0 {
             declaration_start_line = function_keyword_line
+            declaration_is_type = function_keyword_is_type
+            function_keyword_is_type = false
             function_keyword_line = 0
             paren_depth = 0
             bracket_depth = 0
@@ -451,15 +476,18 @@ fn moonbit_source_folds(snapshot : @model.TextSnapshot) -> MoonbitSourceFolds {
               line_number
             }
             function_keyword_bracket_depth = 0
+            function_keyword_is_type = false
             pending_impl_start_line = 0
             pending_impl_saw_with = false
-          } else if !line_saw_equals && word == "fn" {
+          } else if !line_saw_equals &&
+            (word == "fn" || is_moonbit_outline_type_keyword(word)) {
             function_keyword_line = if pending_function_prefix_line > 0 {
               pending_function_prefix_line
             } else {
               line_number
             }
             function_keyword_bracket_depth = 0
+            function_keyword_is_type = word != "fn"
             pending_function_prefix_line = 0
             pending_function_prefix_paren_depth = 0
           } else if word == "let" || word == "const" {
@@ -525,6 +553,7 @@ fn moonbit_source_folds(snapshot : @model.TextSnapshot) -> MoonbitSourceFolds {
             ']' => if bracket_depth > 0 { bracket_depth -= 1 }
             '=' if paren_depth == 0 && bracket_depth == 0 => {
               declaration_start_line = 0
+              declaration_is_type = false
               pending_function_prefix_line = 0
               pending_function_prefix_paren_depth = 0
               pending_impl_start_line = 0
@@ -571,11 +600,18 @@ fn moonbit_source_folds(snapshot : @model.TextSnapshot) -> MoonbitSourceFolds {
         } else if code == '}' && brace_depth > 0 {
           brace_depth -= 1
           if brace_depth == 0 && body_start_line > 0 {
-            folds.push({
-              declaration_start_line_number: declaration_start_line,
-              body_start_line_number: body_start_line,
-              body_end_line_number: line_number,
-            })
+            // A type's closing line may carry `derive(...)`; folding that
+            // line would hide the derive list, so such a type keeps the
+            // provider's fold, which leaves the closing line visible.
+            if !(declaration_is_type &&
+              moonbit_line_has_code_after(line, index + 1)) {
+              folds.push({
+                declaration_start_line_number: declaration_start_line,
+                body_start_line_number: body_start_line,
+                body_end_line_number: line_number,
+              })
+            }
+            declaration_is_type = false
             function_keyword_line = 0
             function_keyword_bracket_depth = 0
             pending_function_prefix_line = 0
@@ -590,6 +626,18 @@ fn moonbit_source_folds(snapshot : @model.TextSnapshot) -> MoonbitSourceFolds {
         }
         index += 1
       }
+    }
+    // A type that reaches the end of its declaration line with no body open
+    // is a tuple, abstract, or bodyless type (`struct P(Int)`, `suberror E`).
+    // Release it so a later top-level `{` cannot become its body.
+    if declaration_is_type &&
+      declaration_start_line > 0 &&
+      body_start_line == 0 &&
+      paren_depth == 0 &&
+      bracket_depth == 0 &&
+      block_comment_depth == 0 {
+      declaration_start_line = 0
+      declaration_is_type = false
     }
     if joins_comment_run {
       if comment_run_start_line == 0 {
