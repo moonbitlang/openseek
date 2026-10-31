@@ -227,7 +227,12 @@ fn install_selection_listener(
     }
     match watch {
       Idle => ()
-      Offer(_) => close()
+      // The offer floats over everything, so this Escape is spent on it and
+      // reaches no layer beneath (`@dismiss.on_back`).
+      Offer(_) => {
+        event.prevent_default()
+        close()
+      }
       // A reply holds typed text: only Escape typed into it closes it, and
       // then it closes nothing else. Escape meant for another overlay opened
       // over the reply is that overlay's.
@@ -467,7 +472,18 @@ pub fn[T : Eq] selection_component(
       state.update(target, msg, emit, deliver)
     },
     subscriptions=(state, _, emit) => {
-      selection_subscription(emit, state.watch())
+      let watch = state.watch()
+      let selection = selection_subscription(emit, watch)
+      // Back closes an offer. A reply holds typed text, so only Escape typed
+      // into it closes it, never a Back meant for the page.
+      guard watch is Offer(_) else { return selection }
+      @sub.batch([
+        selection,
+        @dismiss.on_back(
+          "selection-actions-back",
+          emit.map((_ : Unit) => Closed),
+        ),
+      ])
     },
   )
   state.map3(target, locale, (state, target, locale) => {

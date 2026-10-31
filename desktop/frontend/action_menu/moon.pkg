@@ -9,6 +9,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
+  "openseek_desktop/frontend/dismiss",
   "openseek_desktop/frontend/icons",
 }
 

@@ -522,7 +522,7 @@ pub fn context_component(
         enabled,
         emit.map((_ : Unit) => CloseContext),
       )
-      @sub.batch([
+      let subs = [
         requests,
         dismiss_subscription(
           GlobalContextTarget,
@@ -530,7 +530,17 @@ pub fn context_component(
           dismiss_on_context=false,
         ),
         focus,
-      ])
+      ]
+      // The menu renders only with an enabled action to offer.
+      if enabled is Some(_) {
+        subs.push(
+          @dismiss.on_back(
+            "context-menu-back",
+            emit.map((_ : Unit) => CloseContext),
+          ),
+        )
+      }
+      @sub.batch(subs)
     },
   )
   state.map3(input, locale, (state, input, locale) => {

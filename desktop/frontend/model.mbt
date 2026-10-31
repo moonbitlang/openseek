@@ -1997,9 +1997,13 @@ priv enum Msg {
   ToggleOverview
   OverviewLoaded(Bool)
   Overview(@conversation_overview.Msg)
-  // Clicks away from a transient menu, one per menu. Each is separate from
-  // its toggle on purpose: a dismissal must never reopen what it closed.
+  // Clicks away from a transient menu, one per menu, and Back on a narrow
+  // layout's overlays. Each is separate from its toggle on purpose: a
+  // dismissal must never reopen what it closed.
   CloseGitDetails
+  CloseSidebar
+  CloseOverview
+  CloseRightPanel
   // The transcript component reports where its reader was as it leaves the
   // screen; the root remembers it for the conversation's next visit.
   TranscriptLeft(slot~ : String, scroll~ : @transcript_component.ScrollPosition)

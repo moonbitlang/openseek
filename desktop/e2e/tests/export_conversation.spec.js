@@ -503,3 +503,38 @@ for (const browser of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('Back keeps a dialog above a panel that only covers the page after a resize', async ({ page }) => {
+  const app = new ExportHarness(page);
+  await app.openDesktop();
+  // A wide window shows the overview as a rail beside the conversation; a
+  // phone-narrow one turns it into a panel over the transcript.
+  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  const overview = page.locator('.conv-overview');
+  await expect(overview).toBeVisible();
+  const dialog = await app.openExport();
+  await page.setViewportSize({ width: 393, height: 851 });
+  // The Android shell's Back: true exactly when something closed.
+  const back = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
+  expect(await back()).toBe(true);
+  await expect(dialog).toBeHidden();
+  await expect(overview).toBeVisible();
+  expect(await back()).toBe(true);
+  await expect(overview).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Back closes a modal dialog before Quick Open opened beneath it', async ({ page }) => {
+  const app = new ExportHarness(page);
+  await app.openDesktop();
+  const dialog = await app.openExport();
+  // The palette opens under the modal dialog, which the browser keeps on top.
+  await app.openQuickOpen();
+  const back = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
+  expect(await back()).toBe(true);
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('#quick-open-input')).toBeVisible();
+  expect(await back()).toBe(true);
+  await expect(page.locator('#quick-open-input')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});

@@ -820,6 +820,7 @@ pub fn[Input : Eq] component(
       @sub.batch([
         open,
         dismiss_subscription(menu.target, emit.map((_ : Unit) => Msg::Close)),
+        @dismiss.on_back("action-menu-back", emit.map((_ : Unit) => Msg::Close)),
         focus,
       ])
     },
