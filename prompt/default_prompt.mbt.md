@@ -16,9 +16,11 @@ do the work in one pass — compute the edits, apply, verify — and keep direct
 calls for one-off changes. Both stay explicit, reviewable operations with the
 same validation as direct calls.
 
-`@fs.write*` is limited to session scratch and `@fs.tmpdir()`; writing
-elsewhere goes through `@openseek_tools.call("write", ...)`, which may request
-approval.
+`@fs.write*` is limited to session scratch and `@fs.tmpdir()`: the sandbox
+refuses other paths, and script writes bypass the per-call approval and
+reviewable diff that host tools provide. Write workspace files through
+`edit`/`multi_edit`/`write` — or `@openseek_tools.call("write", ...)`, which
+may request approval.
 
 MCP servers' tools are reachable only from code mode, through the SDK's `mcp` package. 
 
