@@ -56,7 +56,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       can_stop=can_stop(conv),
       submit=if conv.queue_edit is Some(_) {
         @composer.SaveQueue
-      } else if self.followup_behavior is FollowupQueue {
+      } else if self.followup_behavior() is FollowupQueue {
         @composer.Queue
       } else {
         @composer.Steer
@@ -109,18 +109,18 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   if !conv.prompt_ready() {
     context.push(
       @composer.ApiSetupNotice(
-        text=self.host_settings_error.unwrap_or(
-          @settings.text(self.locale, LoadingSettings),
-        ),
+        text=self
+          .host_settings_error()
+          .unwrap_or(@settings.text(self.locale, LoadingSettings)),
       ),
     )
   }
   if self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
       shell_text(self.locale, NoEndpoint)
-    } else if self.api_provider is Glm {
+    } else if self.api_provider() is Glm {
       shell_text(self.locale, NoGlmKey)
-    } else if self.api_provider is OpenRouter {
+    } else if self.api_provider() is OpenRouter {
       shell_text(self.locale, NoOpenRouterKey)
     } else {
       shell_text(self.locale, NoDeepSeekKey)
@@ -267,7 +267,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     file_index,
     presentation: {
       images_enabled: conv.engine_model is Deepseek(V4Flash) &&
-      self.api_provider is (Deepseek | Custom),
+      self.api_provider() is (Deepseek | Custom),
       context,
       status,
       placeholder: if conv.controls.edit is Some(_) {
@@ -275,7 +275,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       } else if conv.queue_edit is Some(_) {
         shell_text(self.locale, EditQueuePlaceholder)
       } else if conv.is_running() {
-        if self.followup_behavior is FollowupQueue {
+        if self.followup_behavior() is FollowupQueue {
           shell_text(self.locale, QueuePlaceholder)
         } else {
           shell_text(self.locale, SteerPlaceholder)

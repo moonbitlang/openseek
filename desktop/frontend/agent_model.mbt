@@ -203,7 +203,7 @@ fn Model::openseek_model_chip(
   conv : Conversation,
 ) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = [
-    openseek_model_group(self.api_provider, conv.engine_model),
+    openseek_model_group(self.api_provider(), conv.engine_model),
   ]
   if self.composing_new_chat() {
     groups.push(self.codex_model_group())
@@ -278,7 +278,7 @@ fn Model::openseek_reasoning_chip(
 fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = []
   if self.codex.composing_draft() {
-    groups.push(openseek_model_group(self.api_provider, self.default_model))
+    groups.push(openseek_model_group(self.api_provider(), self.default_model))
   }
   groups.push(self.codex_model_group())
   let selected = match self.codex.model_listing(locale=self.locale) {

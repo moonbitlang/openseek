@@ -22,8 +22,7 @@ fn integrated_cloud_model() -> Model {
       user: { user_id: "fixture-user", login: "octocat", avatar_url: "", },
     }),
     is_desktop: true,
-    deepseek_key_saved: false,
-  }
+  }.with_host_endpoint(endpoint => { ..endpoint, deepseek_key_saved: false, })
   let (_, model) = update(
     test_dispatch(),
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
