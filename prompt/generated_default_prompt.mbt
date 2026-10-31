@@ -16,8 +16,10 @@ fn default_prompt() -> String {
     #|
     #|The script mode can also call host tools (programmatic tool calls, PTC):
     #|`edit`, `multi_edit`, `write`, `remove`, `read_image`, `web_search`, and
-    #|`subagent`, through the host-tool SDK inside mbtx. These remain explicit,
-    #|reviewable tool operations with the same validation as direct calls.
+    #|`subagent`, through the host-tool SDK inside mbtx. Prefer PTC when a script can
+    #|do the work in one pass — compute the edits, apply, verify — and keep direct
+    #|calls for one-off changes. Both stay explicit, reviewable operations with the
+    #|same validation as direct calls.
     #|
     #|`@fs.write*` is limited to session scratch and `@fs.tmpdir()`; writing
     #|elsewhere goes through `@openseek_tools.call("write", ...)`, which may request
