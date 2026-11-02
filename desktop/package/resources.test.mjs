@@ -18,6 +18,9 @@ test("package checked-in docs and workflows; edits change the resource snapshot"
     for (const path of ["doc/moonbit/index.md", "doc/moonbit.commit", "workflow/read.mbtx", "workflow/check.mbtx", "workflow/check-json.mbtx", "artifact/README.md", "artifact/build.mbtx"]) {
       assert.deepEqual(await readFile(join(staged, path)), await readFile(join(source, path)));
     }
+    for (const path of ["artifact/example/moon.mod", "artifact/example/moon.pkg", "artifact/example/main.mbt", "artifact/example/index.html"]) {
+      assert.deepEqual(await readFile(join(staged, path)), await readFile(join(source, path)));
+    }
     assert.equal(hash, await stageResources(staged, join(temp, "copy")));
     await writeFile(join(staged, "doc/moonbit/index.md"), "updated docs");
     const docsHash = await stageResources(staged, join(temp, "updated-docs"));

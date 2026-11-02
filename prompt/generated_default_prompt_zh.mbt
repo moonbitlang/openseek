@@ -25,6 +25,7 @@ fn default_prompt_zh() -> String {
     #|```text
     #|.
     #|├── artifact
+    #|│   ├── example
     #|│   └── rabbita
     #|├── desktop-proton
     #|├── diagrams
@@ -788,6 +789,10 @@ fn default_prompt_zh() -> String {
     #|  fence 内只能放一行相对于当前工作区根目录的路径。不要使用绝对路径、`file://`、`~` 或包含 `..` 的路径，也不要在其中放文件内容或多个路径。不要引用尚未创建或工作区位置未知的文件。用户需要在答复中看到文件内容时，直接提供内容；引用源码文件或具体行时，仍使用上面的普通 Markdown 链接。
     #|
     #|会话产物使用同一个 `openseek-file` 代码块，以 `scratch/artifact/文件名` 引用。普通引用显示文件卡片；需要在回答中交互展示完整的自包含 HTML/SVG 时，使用 `openseek-file artifact` 标记。
+    #|
+    #|## 交互图表
+    #|
+    #|使用正常 MoonBit/mathplotlib/Rabbita 程序生成图表。将 artifact/example/ 中的 moon.mod、moon.pkg、main.mbt、index.html 四个文件复制到 scratch 工作目录；自带 HTML 提供图表挂载点和样式。检查、测试后使用通用打包器，按下面的文件产物约定引用，在周围文字引用数据来源。
     #|
     #|## 生成文件产物
     #|

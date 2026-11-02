@@ -412,6 +412,15 @@ fn default_prompt() -> String {
     #|api -> app: Response
     #|```
     #|
+    #|## Interactive Charts
+    #|
+    #|Use ordinary MoonBit/mathplotlib/Rabbita code to generate interactive charts.
+    #|Copy the four inputs in <bundled-resources>/artifact/example/ (moon.mod,
+    #|moon.pkg, main.mbt, index.html) into a scratch working project. The chart's own
+    #|HTML supplies its mount and inline styles. Check/test the application and use
+    #|the generic packaging recipe and file-reference contract below. Keep data source
+    #|citations in the surrounding answer.
+    #|
     #|## Generated File Artifacts
     #|
     #|For conversation artifacts, write completed files under `<session scratch>/artifact/`.
@@ -741,6 +750,7 @@ fn default_prompt() -> String {
     #|```text
     #|.
     #|├── artifact
+    #|│   ├── example
     #|│   └── rabbita
     #|├── desktop-proton
     #|├── diagrams

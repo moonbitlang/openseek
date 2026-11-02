@@ -759,6 +759,10 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 
 会话产物使用同一个 `openseek-file` 代码块，以 `scratch/artifact/文件名` 引用。普通引用显示文件卡片；需要在回答中交互展示完整的自包含 HTML/SVG 时，使用 `openseek-file artifact` 标记。
 
+## 交互图表
+
+使用正常 MoonBit/mathplotlib/Rabbita 程序生成图表。将 artifact/example/ 中的 moon.mod、moon.pkg、main.mbt、index.html 四个文件复制到 scratch 工作目录；自带 HTML 提供图表挂载点和样式。检查、测试后使用通用打包器，按下面的文件产物约定引用，在周围文字引用数据来源。
+
 ## 生成文件产物
 
 用于会话展示的产物写入 `<会话 scratch>/artifact/`。使用 Environment 中给出的实际 scratch 路径，并通过脚本参数显式传入输出路径；修改产物时使用新文件名。

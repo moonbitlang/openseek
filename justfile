@@ -140,3 +140,7 @@ viz-test-browser:
 # Exercise bundled agent workflows against an offline child contract.
 test-workflows:
     moon run tests/integration/workflows
+
+# Compile the chart example and exercise its file preview and saved-chart compatibility.
+desktop-test-charts:
+    node desktop/e2e/run-chart-offline.mjs
