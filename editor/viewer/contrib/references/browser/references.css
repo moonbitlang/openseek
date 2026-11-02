@@ -1,6 +1,7 @@
 /* Shared Peek Definition/References shell and reference-results tree. */
 
 .moonbit-viewer-references-peek {
+  font-size: var(--ui-font-size, 13px);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -32,9 +33,9 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  min-height: 28px;
+  min-height: 2.25em;
   box-sizing: border-box;
-  padding-right: 2px;
+  padding-right: 0.25em;
   color: var(--vscode-peekViewTitleLabel-foreground, inherit);
   background: var(
     --vscode-peekViewTitle-background,
@@ -47,9 +48,9 @@
   flex: 1;
   align-items: baseline;
   min-width: 0;
-  margin-left: 20px;
+  margin-left: 1.5em;
   overflow: hidden;
-  font-size: 13px;
+  font-size: var(--ui-font-size, 13px);
   white-space: nowrap;
 }
 
@@ -84,15 +85,15 @@
 }
 
 .moonbit-viewer-references-peek-close {
-  width: 24px;
-  height: 24px;
+  width: 1.25em;
+  height: 1.25em;
   padding: 0;
   border: 0;
   color: inherit;
   background: transparent;
   font: inherit;
-  font-size: 20px;
-  line-height: 20px;
+  font-size: 1.5em;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -146,16 +147,16 @@
   display: flex;
   align-items: center;
   width: 100%;
-  height: 23px;
+  height: 2em;
   box-sizing: border-box;
   overflow: hidden;
-  padding: 0 8px;
+  padding: 0 0.75em;
   border: 0;
   color: inherit;
   background: transparent;
   font: inherit;
-  font-size: 12px;
-  line-height: 23px;
+  font-size: 0.9em;
+  line-height: 1.9;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -184,8 +185,8 @@
 
 .moonbit-viewer-reference-results-twistie {
   flex: 0 0 auto;
-  width: 16px;
-  margin-right: 2px;
+  width: 1.5em;
+  margin-right: 0.25em;
   color: var(--vscode-icon-foreground, inherit);
   text-align: center;
   transform-origin: center;
@@ -220,18 +221,18 @@
 
 .moonbit-viewer-reference-results-file-count {
   flex: 0 0 auto;
-  min-width: 18px;
+  min-width: 1.5em;
   margin-left: auto;
-  padding: 0 5px;
+  padding: 0 0.5em;
   border-radius: 9px;
   color: var(--vscode-badge-foreground, #fff);
   background: var(--vscode-badge-background, #4d4d4d);
-  line-height: 18px;
+  line-height: 1.5;
   text-align: center;
 }
 
 .moonbit-viewer-reference-results-reference {
-  padding-left: 26px;
+  padding-left: 2.25em;
 }
 
 .moonbit-viewer-reference-results-snippet {
@@ -317,14 +318,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
+  padding: 1em;
   box-sizing: border-box;
   color: var(--vscode-descriptionForeground, rgba(180, 180, 180, 0.9));
   background: var(
     --vscode-peekViewEditor-background,
     var(--vscode-editor-background)
   );
-  font-size: 12px;
+  font-size: 0.9em;
   text-align: center;
 }
 
@@ -353,5 +354,5 @@
 }
 
 .moonbit-viewer-reference-results-test-children {
-  padding-left: 12px;
+  padding-left: 1em;
 }

@@ -12,7 +12,7 @@
   --button-hover-background: var(--button-background);
   --button-disabled-opacity: 0.5;
 
-  padding: 6px 12px;
+  padding: 0.5em 1em;
   border: 1px solid var(--button-border-color);
   border-radius: var(--radius-sm);
   background: var(--button-background);
@@ -22,8 +22,8 @@
   cursor: pointer;
 
   &:where(.compact) {
-    min-height: 28px;
-    padding: 3px 9px;
+    min-height: 2.25em;
+    padding: 0.25em 0.75em;
   }
 
   &:focus-visible {
@@ -76,7 +76,7 @@
 a:where(.setting-link) {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   border-radius: var(--radius-sm);
   text-decoration: none;
 }
@@ -89,16 +89,16 @@ a:where(.setting-link) {
   place-items: center;
   min-height: 0;
   overflow: auto;
-  padding: 24px;
+  padding: var(--space-7);
 }
 
 .onboarding-card {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--space-5);
   max-width: 420px;
-  padding: 28px;
+  padding: 2rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
@@ -118,13 +118,13 @@ a:where(.setting-link) {
   grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: 24px 28px 28px;
+  padding: var(--space-7) 2rem 2rem;
 }
 
 .management-page-content {
   display: grid;
   align-content: start;
-  gap: 24px;
+  gap: var(--space-7);
   max-width: 720px;
   margin: 0 auto;
 }
@@ -139,8 +139,8 @@ a:where(.setting-link) {
 
 .settings-header {
   display: grid;
-  gap: 7px;
-  margin-bottom: 4px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-2);
 }
 
 .settings-header h1,
@@ -160,18 +160,18 @@ h2 {
 .settings {
   display: grid;
   align-content: start;
-  gap: 26px;
+  gap: var(--space-7);
 }
 
 .settings-group {
   display: grid;
-  gap: 7px;
+  gap: var(--space-4);
 }
 
 .settings-group-head {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--space-4);
 }
 
 .settings-group-head .icon {
@@ -188,15 +188,15 @@ h2 {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 2px 18px;
+  padding: var(--space-1) var(--space-6);
 }
 
 .setting-row {
   display: flex;
-  gap: 16px;
+  gap: var(--space-6);
   align-items: center;
   justify-content: space-between;
-  padding: 14px 0;
+  padding: 1rem 0;
 }
 
 .setting-row + .setting-row,
@@ -209,13 +209,13 @@ h2 {
 .setting-row.stack {
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: var(--space-4);
 }
 
 .setting-text {
   flex: 1;
   display: grid;
-  gap: 3px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -241,7 +241,7 @@ h2 {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-4);
 }
 
 .setting-row.stack .setting-control {
@@ -254,7 +254,7 @@ h2 {
   width: 100%;
   min-height: 140px;
   box-sizing: border-box;
-  padding: 9px;
+  padding: var(--space-4);
   resize: vertical;
   color: inherit;
   background: var(--color-bg-surface);
@@ -267,11 +267,11 @@ h2 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: var(--space-4) var(--space-5);
 }
 
 .prompt-save-status {
-  flex: 1 1 12rem;
+  flex: 1 1 13.75rem;
   min-height: 1.5em;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
@@ -287,8 +287,8 @@ h2 {
    row-shaped. */
 .setup-guide {
   display: grid;
-  gap: 14px;
-  padding: 16px 0;
+  gap: 1rem;
+  padding: var(--space-6) 0;
 }
 
 .setup-guide p {
@@ -300,12 +300,12 @@ h2 {
 
 .setup-guide-steps {
   display: grid;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .setup-guide-step {
   display: flex;
-  gap: 10px;
+  gap: var(--space-5);
   align-items: baseline;
   font-size: var(--font-size-md);
 }
@@ -315,8 +315,8 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   background: var(--color-accent-soft);
   color: var(--color-accent);
@@ -345,7 +345,7 @@ h2 {
 }
 
 .setting-control input {
-  padding: 7px 10px;
+  padding: var(--space-4) var(--space-5);
   font-size: var(--font-size-md);
 }
 
@@ -372,14 +372,14 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 18px;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   width: 100%;
   min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
-  padding: 7px 8px 7px 10px;
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
   font-size: var(--font-size-md);
   letter-spacing: -0.01em;
   text-align: left;
@@ -413,23 +413,23 @@ h2 {
 
 /* ---------- skills page ---------- */
 .skills-page > .management-page-content {
-  gap: 20px;
+  gap: var(--space-7);
 }
 
 .skills-header {
   display: grid;
-  gap: 7px;
-  margin-bottom: 4px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-2);
 }
 
 .skills-heading {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-5);
 }
 
 .skills-header h1 {
-  font-size: calc(var(--font-size-base) + 12px);
+  font-size: var(--font-size-page-title);
   letter-spacing: -0.02em;
 }
 
@@ -441,12 +441,12 @@ h2 {
 .skills-search {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-5);
   width: 100%;
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 9px 13px;
+  padding: var(--space-4) var(--space-5);
   color: var(--color-text-muted);
 }
 
@@ -480,8 +480,8 @@ h2 {
     var(--color-bg-surface)
   );
   display: grid;
-  gap: 6px;
-  padding: 14px 0;
+  gap: var(--space-3);
+  padding: 1rem 0;
   position: relative;
   isolation: isolate;
   cursor: pointer;
@@ -504,13 +504,13 @@ h2 {
 .skill-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-5);
   min-width: 0;
 }
 
 .skill-info {
   display: grid;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
 }
 
@@ -518,7 +518,7 @@ h2 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: var(--space-3) var(--space-4);
   min-width: 0;
 }
 
@@ -529,7 +529,7 @@ h2 {
 .skill-name {
   min-width: 0;
   color: var(--color-text-primary);
-  font-size: calc(var(--font-size-md) + 2px);
+  font-size: var(--font-size-emphasis);
   font-weight: 500;
   overflow-wrap: anywhere;
 }
@@ -539,7 +539,7 @@ h2 {
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
   overflow-wrap: anywhere;
-  margin-top: 4px;
+  margin-top: var(--space-2);
 }
 
 .skill-meta {
@@ -560,7 +560,7 @@ h2 {
 .skill-summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   flex: 1;
   min-width: 0;
   padding: 0;
@@ -582,7 +582,7 @@ h2 {
 .skill-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   flex-shrink: 0;
 }
 
@@ -666,7 +666,7 @@ h2 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: var(--space-3) var(--space-5);
 }
 
 .skill-operation {
@@ -678,8 +678,8 @@ h2 {
 .skill-update-badge {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
   border-radius: 4px;
   font-size: var(--font-size-xs);
   white-space: nowrap;
@@ -714,8 +714,8 @@ h2 {
 
 .skill-preview {
   display: grid;
-  gap: 14px;
-  padding: 18px 20px;
+  gap: 1rem;
+  padding: var(--space-6) var(--space-7);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
@@ -725,7 +725,7 @@ h2 {
 .skill-preview-head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-5);
 }
 
 .skill-preview-head h2 {
@@ -744,7 +744,7 @@ h2 {
 }
 
 .skill-metadata {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-7);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
@@ -752,7 +752,7 @@ h2 {
 }
 
 .skill-metadata-title {
-  padding: 12px 14px 10px;
+  padding: var(--space-5) 1rem var(--space-5);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -775,7 +775,7 @@ h2 {
 
 .skill-metadata-table th,
 .skill-metadata-table td {
-  padding: 10px 14px;
+  padding: var(--space-5) 1rem;
   border: 1px solid var(--color-border);
   line-height: var(--line-height-normal);
   text-align: left;
@@ -808,7 +808,7 @@ h2 {
 
 .skill-detail-header {
   display: grid;
-  gap: 8px;
+  gap: var(--space-4);
 }
 
 .skill-detail-header h2 {
@@ -826,7 +826,7 @@ h2 {
 
 .skill-detail-card {
   min-width: 0;
-  padding: 22px 24px;
+  padding: var(--space-7) var(--space-7);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
@@ -836,10 +836,10 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-5);
   min-height: 40px;
-  margin: -22px -24px 18px;
-  padding: 6px 10px 6px 16px;
+  margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-7)) var(--space-6);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-6);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-subtle);
 }
@@ -856,7 +856,7 @@ h2 {
 
 .skill-copy-button {
   flex-shrink: 0;
-  padding: 4px 10px;
+  padding: var(--space-2) var(--space-5);
   font-size: var(--font-size-xs);
 }
 
@@ -902,7 +902,7 @@ h2 {
 
 .skill-preview-markdown pre {
   margin: 0.55em 0;
-  padding: 10px 13px;
+  padding: var(--space-5) var(--space-5);
   overflow: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -919,7 +919,7 @@ h2 {
 
 .skill-preview-markdown blockquote {
   margin: 0.55em 0;
-  padding: 2px 12px;
+  padding: var(--space-1) var(--space-5);
   border-left: 3px solid var(--color-border-subtle);
   color: var(--color-text-secondary);
 }
@@ -935,7 +935,7 @@ h2 {
 
 .skill-preview-markdown th,
 .skill-preview-markdown td {
-  padding: 4px 10px;
+  padding: var(--space-2) var(--space-5);
   border: 1px solid var(--color-border);
 }
 
@@ -961,13 +961,13 @@ h2 {
 }
 
 .settings-group-card .skills-empty {
-  padding: 14px 0;
+  padding: 1rem 0;
 }
 
 .pill {
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  padding: 3px 9px;
+  padding: var(--space-2) var(--space-4);
   background: transparent;
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
@@ -976,17 +976,17 @@ h2 {
 
 /* Scheduled tasks share the Settings page's type scale and theme. */
 .schedules-page > .management-page-content { max-width: 900px; }
-.schedule-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.schedule-card, .schedule-form { border: 1px solid var(--color-border); border-radius: 10px; padding: 18px; margin: 16px 0; }
-.schedule-card h2, .schedule-card h3 { margin: 0 0 8px; font-size: 16px; }
-.schedule-meta, .schedule-log, .schedule-empty { color: var(--color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.schedule-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-5) 0; }
+.schedule-card, .schedule-form { border: 1px solid var(--color-border); border-radius: 10px; padding: var(--space-6); margin: var(--space-6) 0; }
+.schedule-card h2, .schedule-card h3 { margin: 0 0 var(--space-4); font-size: var(--font-size-emphasis); }
+.schedule-meta, .schedule-log, .schedule-empty { color: var(--color-text-muted); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .schedule-task { white-space: pre-wrap; overflow-wrap: anywhere; }
-.schedule-field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
-.schedule-field input, .schedule-field select, .schedule-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 9px; color: inherit; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; font: inherit; }
+.schedule-field { display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-5) 0; }
+.schedule-field input, .schedule-field select, .schedule-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: var(--space-4); color: inherit; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; font: inherit; }
 .schedule-field textarea { min-height: 100px; resize: vertical; }
-.schedule-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.schedule-error { padding: 12px; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-danger); }
-.schedule-history-title { margin-top: 32px; }
+.schedule-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
+.schedule-error { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-danger); }
+.schedule-history-title { margin-top: 2.25rem; }
 @media (max-width: 640px) { .schedule-form-grid { grid-template-columns: 1fr; gap: 0; } }
 
 .schedule-log-content { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--font-size-sm) var(--font-mono); }

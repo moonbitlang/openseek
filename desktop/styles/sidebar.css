@@ -14,7 +14,7 @@ aside {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding-bottom: 14px;
+  padding-bottom: 1rem;
   border-right: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
@@ -127,14 +127,14 @@ html.is-resizing .sidebar-resize-handle {
 }
 
 .sidebar-heading {
-  padding: 0 8px;
-  margin-bottom: 4px;
+  padding: 0 var(--space-4);
+  margin-bottom: var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  line-height: 20px;
+  line-height: calc(20 / 12);
 }
 
 /* the console's device selector, above the account row */
@@ -152,8 +152,8 @@ html.is-resizing .sidebar-resize-handle {
 .console-account {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -172,7 +172,7 @@ html.is-resizing .sidebar-resize-handle {
 }
 .console-account-action {
   flex: none;
-  padding: 2px 6px;
+  padding: var(--space-1) var(--space-3);
   border: none;
   background: none;
   color: var(--color-text-muted);
@@ -187,7 +187,7 @@ html.is-resizing .sidebar-resize-handle {
   cursor: default;
 }
 .console-notice {
-  padding: 2px 8px 6px;
+  padding: var(--space-1) var(--space-4) var(--space-3);
   color: var(--color-warning);
   font-size: var(--font-size-xs);
 }
@@ -195,11 +195,11 @@ html.is-resizing .sidebar-resize-handle {
 .conversation-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
   /* Keep breathing room around the 1.6em line box as the font grows. */
   min-height: 2em;
-  padding: 0 8px;
+  padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
@@ -243,7 +243,7 @@ html.is-resizing .sidebar-resize-handle {
 }
 .conversation-rename-input {
   align-self: stretch;
-  margin: 2px 0;
+  margin: var(--space-1) 0;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -289,7 +289,7 @@ html.is-resizing .sidebar-resize-handle {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-5);
   min-height: 100%;
   color: var(--color-text-secondary);
 }
@@ -314,8 +314,8 @@ html.is-resizing .sidebar-resize-handle {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -364,7 +364,7 @@ html.is-resizing .sidebar-resize-handle {
 .row-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 /* Both groups stay in layout (visibility, not display) so the cell keeps
    one width across the swap. */
@@ -386,7 +386,7 @@ html.is-resizing .sidebar-resize-handle {
 }
 .conversation-row.loading .row-trailing {
   display: flex;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .conversation-row.loading:hover .row-trailing:has(.row-actions) .row-status,
 .conversation-row.loading:focus-within .row-trailing:has(.row-actions) .row-status {
@@ -424,9 +424,9 @@ html.is-resizing .sidebar-resize-handle {
 .section-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   min-height: 2em;
-  margin-bottom: 2px;
+  margin-bottom: var(--space-1);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-md);
   font-weight: 400;
@@ -434,12 +434,12 @@ html.is-resizing .sidebar-resize-handle {
   text-transform: none;
 }
 .sidebar-group:not(:first-child) > .section-heading {
-  margin-top: 10px;
+  margin-top: var(--space-5);
 }
 .section-disclosure {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   flex: 1 1 auto;
   min-width: 0;
   min-height: 2em;
@@ -465,9 +465,9 @@ html.is-resizing .sidebar-resize-handle {
   --icon-size: var(--icon-md);
   display: grid;
   place-items: center;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -507,16 +507,16 @@ html.is-resizing .sidebar-resize-handle {
 .conversation-row + .sidebar-project,
 .sidebar-conversation + .sidebar-project,
 .sidebar-project:not(.collapsed):has(.conversation-row) + .sidebar-project {
-  margin-block-start: 8px;
+  margin-block-start: var(--space-4);
 }
 
 .workspace-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   min-width: 0;
   min-height: 2em;
-  padding: 0 8px;
+  padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
@@ -525,7 +525,7 @@ html.is-resizing .sidebar-resize-handle {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   min-width: 0;
   align-self: stretch;
   padding: 0;
@@ -582,12 +582,12 @@ html.is-resizing .sidebar-resize-handle {
   --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   box-sizing: border-box;
   /* Same box as `.composer-model`, so the toolbar chips sit at one height. */
-  height: 30px;
+  height: 2.25rem;
   margin: 0;
-  padding: 0 9px;
+  padding: 0 var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-control-surface);
@@ -613,12 +613,12 @@ button.composer-worktree:hover {
    gap make up the rest of the indent, landing the title under its
    workspace's. */
 .conversation-row.nested {
-  padding-left: 16px;
+  padding-left: var(--space-6);
 }
 .project-show-more {
   width: 100%;
-  min-height: calc(26em / 14);
-  padding: 0 8px;
+  min-height: 2em;
+  padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -632,7 +632,7 @@ button.composer-worktree:hover {
    row indents its label 8 + 14 + 6 = 28px; a project's nested rows add their
    own 16px pad on top, landing at 36px. */
 .project-show-more {
-  padding-left: 36px;
+  padding-left: 2.5rem;
 }
 .project-show-more:hover {
   background: var(--color-bg-subtle);
@@ -662,9 +662,9 @@ button.composer-worktree:hover {
 .subrun-lane {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-4);
   min-width: 0;
-  padding: 4px 2px;
+  padding: var(--space-2) var(--space-1);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
@@ -686,7 +686,7 @@ button.composer-worktree:hover {
 .subrun-detail {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-4);
   min-width: 0;
 }
 .subrun-step {
@@ -705,11 +705,11 @@ button.composer-worktree:hover {
    when closed. */
 .row-twisty {
   --icon-size: var(--icon-sm);
-  flex: 0 0 14px;
+  flex: 0 0 1rem;
   display: grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
+  width: 1rem;
+  height: 1rem;
   padding: 0;
   border: 0;
   border-radius: 3px;
@@ -741,11 +741,11 @@ button.row-twisty:hover {
    further in than its parent, and quieter — it is that turn's evidence, not
    a conversation of its own. */
 .conversation-row.subrun {
-  padding-left: 28px;
+  padding-left: 2rem;
   color: var(--color-text-muted);
 }
 .conversation-row.subrun.nested {
-  padding-left: 36px;
+  padding-left: 2.5rem;
 }
 .conversation-row.subrun.active {
   color: var(--color-accent-strong);
@@ -776,9 +776,9 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 62px;
-  padding: 10px 14px 10px 16px;
+  gap: var(--space-5);
+  min-height: 4.5rem;
+  padding: var(--space-5) 1rem var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-border-subtle);
   background: color-mix(
     in srgb,
@@ -790,7 +790,7 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 11px;
+  gap: var(--space-5);
 }
 .picker-header-icon {
   --icon-size: var(--icon-lg);
@@ -813,7 +813,7 @@ button.row-twisty:hover {
   line-height: 1.3;
 }
 .picker-subtitle {
-  margin-top: 1px;
+  margin-top: var(--space-1);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   line-height: 1.35;
@@ -822,8 +822,8 @@ button.row-twisty:hover {
   --icon-size: var(--icon-md);
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -842,8 +842,8 @@ button.row-twisty:hover {
 .picker-location-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-subtle);
 }
@@ -853,9 +853,9 @@ button.row-twisty:hover {
   align-items: center;
   min-width: 0;
   overflow-x: auto;
-  gap: 1px;
-  min-height: 32px;
-  padding: 2px 5px;
+  gap: var(--space-1);
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -867,12 +867,12 @@ button.row-twisty:hover {
 }
 .picker-path-editor {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 26px;
+  grid-template-columns: 22px minmax(0, 1fr) 2rem;
   flex: 1 1 auto;
   align-items: center;
   min-width: 0;
-  min-height: 32px;
-  padding: 2px 3px 2px 7px;
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border: 1px solid var(--color-focus-ring);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -887,8 +887,8 @@ button.row-twisty:hover {
 }
 .picker-path-editor input {
   width: 100%;
-  height: 26px;
-  padding: 0 5px;
+  height: 2rem;
+  padding: 0 var(--space-2);
   border: 0;
   background: transparent;
   font-size: var(--font-size-sm);
@@ -897,8 +897,8 @@ button.row-twisty:hover {
   --icon-size: var(--icon-xs);
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 1.75rem;
+  height: 1.75rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -916,7 +916,7 @@ button.row-twisty:hover {
 }
 .picker-crumb {
   flex: none;
-  padding: 3px 6px;
+  padding: var(--space-2) var(--space-3);
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -948,9 +948,9 @@ button.row-twisty:hover {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 9px;
+  gap: var(--space-3);
+  min-height: 2.5rem;
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -972,11 +972,11 @@ button.row-twisty:hover {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
-  padding: 12px;
+  padding: var(--space-5);
   background: var(--color-bg-surface);
 }
 .picker-list {
-  flex: 1 1 320px;
+  flex: 1 1 23rem;
   min-height: 0;
   overflow-y: auto;
   border: 1px solid var(--color-border);
@@ -991,8 +991,8 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 30px;
-  padding: 0 11px 0 42px;
+  min-height: 2.25rem;
+  padding: 0 var(--space-5) 0 3rem;
   border-bottom: 1px solid var(--color-border);
   background: color-mix(
     in srgb,
@@ -1008,16 +1008,16 @@ button.row-twisty:hover {
   font-weight: var(--font-weight-regular);
 }
 .picker-list-rows {
-  min-height: calc(100% - 30px);
+  min-height: calc(100% - 2.25rem);
 }
 .picker-row {
   --icon-size: var(--icon-md);
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--space-4);
   width: 100%;
-  min-height: 38px;
-  padding: 0 10px 0 11px;
+  min-height: 2.75rem;
+  padding: 0 var(--space-5) 0 var(--space-5);
   border: 0;
   border-bottom: 1px solid var(--color-border-subtle);
   border-radius: 0;
@@ -1063,7 +1063,7 @@ button.row-twisty:hover {
   display: grid;
   place-items: center;
   flex: none;
-  width: 18px;
+  width: 1.5rem;
   color: var(--color-text-muted);
   opacity: 0;
   transform: rotate(-90deg);
@@ -1080,9 +1080,9 @@ button.row-twisty:hover {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px;
-  min-height: 46px;
-  padding: 5px 8px 5px 11px;
+  gap: var(--space-4);
+  min-height: 3.5rem;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-5);
   border-bottom: 1px solid var(--color-accent-border);
   background: var(--color-accent-soft);
 }
@@ -1095,14 +1095,14 @@ button.row-twisty:hover {
 }
 .picker-create-row input {
   width: 100%;
-  height: 34px;
-  padding: 0 9px;
+  height: 2.5rem;
+  padding: 0 var(--space-4);
   background: var(--color-bg-surface);
 }
 .picker-create-cancel,
 .picker-create-submit {
-  min-height: 32px;
-  padding: 0 9px;
+  min-height: 2.5rem;
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -1129,7 +1129,7 @@ button.row-twisty:hover {
   place-items: center;
   align-content: center;
   min-height: 100%;
-  padding: 32px;
+  padding: 2.25rem;
   text-align: center;
 }
 .picker-empty-title {
@@ -1139,7 +1139,7 @@ button.row-twisty:hover {
 }
 .picker-empty-detail {
   max-width: 320px;
-  margin-top: 4px;
+  margin-top: var(--space-2);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
@@ -1148,9 +1148,9 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 64px;
-  padding: 8px 12px;
+  gap: var(--space-6);
+  min-height: 4.75rem;
+  padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-subtle);
 }
@@ -1159,7 +1159,7 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 9px;
+  gap: var(--space-4);
 }
 .picker-current-icon {
   display: grid;
@@ -1204,11 +1204,11 @@ button.row-twisty:hover {
 
 @media (max-width: 600px) {
   .modal.picker-modal {
-    width: calc(100vw - 24px);
-    height: calc(100vh - 24px);
+    width: calc(100vw - 1.75rem);
+    height: calc(100vh - 1.75rem);
   }
   .picker-header {
-    padding: 9px 12px;
+    padding: var(--space-4) var(--space-5);
   }
   .picker-location-bar {
     flex-wrap: wrap;
@@ -1223,7 +1223,7 @@ button.row-twisty:hover {
     margin-left: auto;
   }
   .picker-list {
-    flex-basis: min(42vh, 320px);
+    flex-basis: min(42vh, 23rem);
   }
   .picker-create-row {
     grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr);
@@ -1272,7 +1272,7 @@ button.row-twisty:hover {
   display: grid;
   gap: calc(1em / 14);
   min-width: 0;
-  margin-top: 14px;
+  margin-top: 1rem;
   padding: 0 var(--sidebar-inset);
 }
 
@@ -1280,7 +1280,7 @@ button.row-twisty:hover {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   width: 100%;
   min-width: 0;
   min-height: 2em;
@@ -1288,7 +1288,7 @@ button.row-twisty:hover {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
-  padding: 0 8px;
+  padding: 0 var(--space-4);
   text-align: left;
   cursor: pointer;
 
@@ -1321,12 +1321,12 @@ button.row-twisty:hover {
   --icon-size: var(--icon-md);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   box-sizing: border-box;
-  height: 26px;
-  margin: 9px 10px 12px;
-  width: calc(100% - 20px);
-  padding: 0 9px;
+  height: 2rem;
+  margin: var(--space-4) var(--space-5) var(--space-5);
+  width: calc(100% - 2 * var(--space-5));
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-separator);
   border-radius: 7px;
   background: var(--color-bg-surface);
@@ -1350,21 +1350,21 @@ button.row-twisty:hover {
   font: inherit;
 }
 .sidebar-search input::placeholder { color: var(--color-text-muted); }
-.sidebar-search-clear { --icon-size: var(--icon-sm); width: 18px; height: 18px; }
+.sidebar-search-clear { --icon-size: var(--icon-sm); width: 1.5rem; height: 1.5rem; }
 .conversation-row.search-selected { background: var(--color-bg-subtle); }
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
 
 /* Host identity and actions share the right edge without moving the title. */
 .workspace-row {
-  gap: 8px;
-  min-height: 32px;
+  gap: var(--space-4);
+  min-height: 2.5rem;
 }
 .workspace-trailing {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   flex: 0 1 auto;
-  min-width: 44px;
+  min-width: 3.25rem;
   max-width: 42%;
 }
 .workspace-host,
@@ -1375,7 +1375,7 @@ button.row-twisty:hover {
 .workspace-host {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-4);
   min-width: 0;
   max-width: 100%;
   color: var(--color-text-muted);
@@ -1398,7 +1398,7 @@ button.row-twisty:hover {
 .workspace-host-status.offline { background: var(--color-text-muted); }
 .workspace-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
 }
 .workspace-row:is(:hover, :focus-within, :has(.workspace-menu-button[aria-expanded="true"])) .workspace-host {
   visibility: hidden;

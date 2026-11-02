@@ -41,10 +41,28 @@
   --font-family-sans: ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-size-base: 14px;
-  --font-size-xs: calc(var(--font-size-base) - 2px);
-  --font-size-sm: calc(var(--font-size-base) - 1px);
-  --font-size-md: var(--font-size-base);
-  --font-size-lg: calc(var(--font-size-base) + 3px);
+  --font-size-micro: calc(1rem * 10 / 14);
+  --font-size-caption: calc(1rem * 11 / 14);
+  --font-size-xs: calc(1rem * 12 / 14);
+  --font-size-sm: calc(1rem * 13 / 14);
+  --font-size-md: 1rem;
+  --font-size-emphasis: calc(1rem * 16 / 14);
+  --font-size-lg: calc(1rem * 17 / 14);
+  --font-size-title: calc(1rem * 20 / 14);
+  --font-size-page-title: calc(1rem * 26 / 14);
+
+  /* Recurring UI insets; one-off dimensions stay with their component. */
+  --space-1: calc(1rem * 2 / 14);
+  --space-2: calc(1rem * 4 / 14);
+  --space-3: calc(1rem * 6 / 14);
+  --space-4: calc(1rem * 8 / 14);
+  --space-5: calc(1rem * 12 / 14);
+  --space-6: calc(1rem * 16 / 14);
+  --space-7: calc(1rem * 24 / 14);
+
+  /* Also inherited by editor UI mounted in a body-level overlay. */
+  --ui-font-family: var(--font-family-sans);
+  --ui-font-size: var(--font-size-sm);
   --font-weight-regular: 400;
   --line-height-tight: 1;
   --line-height-normal: 1.5;

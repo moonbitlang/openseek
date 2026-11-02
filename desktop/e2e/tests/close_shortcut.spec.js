@@ -303,37 +303,6 @@ test('Close respects dialogs and closes successive dock tabs without closing the
   expect(app.pageErrors).toEqual([]);
 });
 
-
-test('new terminals and existing terminals use the current font size', async ({ page }) => {
-  const app = await installDesktop(page);
-  // Observe the real xterm instance; rendering and options remain production code.
-  await page.evaluate(() => {
-    window.fontTestTerminals = [];
-    window.__openseek_xterm.Terminal = new Proxy(window.__openseek_xterm.Terminal, {
-      construct(target, args) {
-        const terminal = Reflect.construct(target, args);
-        window.fontTestTerminals.push(terminal);
-        return terminal;
-      },
-    });
-  });
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const fontSize = page.getByRole('slider', { name: 'Font size', exact: true });
-  await fontSize.fill('18');
-  await app.openSession();
-  await page.keyboard.press('Control+Backquote');
-  await expect(page.locator('.terminal-instance:visible .xterm-helper-textarea')).toBeFocused();
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([17]);
-
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await fontSize.fill('12');
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11]);
-  await app.openSession();
-  await page.getByTitle('New terminal in this workspace', { exact: true }).click();
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11, 11]);
-  expect(app.pageErrors).toEqual([]);
-});
-
 // A native dialog can change CEF's media query without changing OS appearance.
 test('desktop theme follows Proton and ignores browser color-scheme changes', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });

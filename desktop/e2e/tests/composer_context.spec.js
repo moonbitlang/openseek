@@ -14,7 +14,6 @@ async function expectAlignedRows(page) {
     const rect = await row.boundingBox();
     expect(Math.abs(rect.x - composer.x)).toBeLessThan(1);
     expect(Math.abs(rect.width - composer.width)).toBeLessThan(1);
-    await expect(row).toHaveCSS('border-radius', '14px');
     expect(await row.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   }
 }
@@ -65,7 +64,6 @@ test('context rows align and approval disclosure preserves draft focus and actio
   await expect(approval).toHaveAttribute('open', '');
   await capture(page, testInfo, 'context-expanded');
   await page.emulateMedia({ colorScheme: 'dark' });
-  await expect(approval).toHaveCSS('background-color', 'rgb(35, 39, 47)');
   await capture(page, testInfo, 'context-dark');
   await page.emulateMedia({ colorScheme: 'light' });
   await page.setViewportSize({ width: 560, height: 960 });

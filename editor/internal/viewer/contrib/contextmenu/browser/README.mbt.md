@@ -18,6 +18,11 @@ the menu is larger than the viewport. The current definition menu uses only
 top-level actions; if another caller supplies a submenu, deeper menu data is
 intentionally not rendered as another flyout.
 
+The detached menu copies `--ui-font-family` and `--ui-font-size` together
+with its host's palette. Text, action-row height and internal spacing follow
+that UI size (13px standalone default); menu placement uses the resulting
+measured bounds.
+
 Rows expose `menu`/`menuitem`, `aria-haspopup`, and `aria-expanded` semantics.
 Up/Down/Home/End/PageUp/PageDown move among non-separator rows, Enter/Space
 activate, Right opens a submenu, and Left returns to its parent. Pointer hover

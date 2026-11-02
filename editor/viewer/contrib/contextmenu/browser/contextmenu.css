@@ -33,7 +33,7 @@
     "Segoe UI",
     sans-serif
   );
-  font-size: 13px;
+  font-size: var(--ui-font-size, 13px);
   outline: 0;
   border: none;
   border-radius: var(--vscode-cornerRadius-large, 4px);
@@ -60,12 +60,12 @@
 }
 
 .moonbit-context-menu .monaco-menu {
-  min-width: 160px;
+  min-width: 12.5em;
   color: var(--vscode-menu-foreground, var(--moonbit-menu-foreground));
   background: var(--vscode-menu-background, var(--moonbit-menu-background));
   border: 1px solid var(--vscode-menu-border, var(--moonbit-menu-border));
   border-radius: var(--vscode-cornerRadius-large, 4px);
-  font-size: 13px;
+  font-size: var(--ui-font-size, 13px);
 }
 
 .moonbit-context-menu .monaco-action-bar,
@@ -78,7 +78,7 @@
   display: block;
   width: 100%;
   margin: 0;
-  padding: 4px 0;
+  padding: 0.25em 0;
   overflow: visible;
   white-space: nowrap;
 }
@@ -96,8 +96,8 @@
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  height: 24px;
-  margin: 0 4px;
+  height: 2em;
+  margin: 0 0.25em;
   color: inherit;
   border-radius: var(--vscode-cornerRadius-medium, 2px);
   cursor: default;
@@ -164,7 +164,7 @@
 }
 
 .moonbit-context-menu .submenu-indicator.codicon::before {
-  margin-right: -20px;
+  margin-right: -1.25em;
   margin-left: auto;
 }
 
@@ -172,7 +172,7 @@
   display: block;
   width: 100%;
   height: 0 !important;
-  margin: 5px 0 !important;
+  margin: 0.5em 0 !important;
   padding: 0;
   border-bottom: 1px solid
     var(

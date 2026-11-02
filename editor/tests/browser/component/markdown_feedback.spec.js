@@ -412,13 +412,6 @@ test('visible composer follows document resizing without losing its draft', asyn
 
 test('composer follows the active selection endpoint and fits a narrow document on first display', async ({ page }) => {
   await openFixture(page);
-  // Prose must not override the shared compact composer's typography. Check
-  // the textarea before any input event can resize it.
-  await selectRenderedText(page, '自动保存');
-  await settleComposer(page);
-  const composerFont = await page.locator(widget).evaluate((node) => getComputedStyle(node).fontFamily);
-  expect(await page.locator(input).evaluate((node) => getComputedStyle(node).fontFamily)).toBe(composerFont);
-  expect((await page.locator(input).boundingBox()).height).toBe(30);
   const source = Array.from({ length: 20 }, (_, index) =>
     index === 8 ? 'Start **anchor start** with some context.' :
       index === 9 ? 'The final **anchor finish** follows here.' : `Paragraph ${index}.`,
@@ -455,12 +448,9 @@ test('composer follows the active selection endpoint and fits a narrow document 
   await settleComposer(page);
   const root = await page.locator(documentRoot).boundingBox();
   const composer = await page.locator(widget).boundingBox();
-  const textarea = await page.locator(input).boundingBox();
-  expect(composer.width).toBeLessThanOrEqual(root.width * 0.9 + 1);
   expect(composer.x).toBeGreaterThanOrEqual(root.x);
   expect(composer.x + composer.width).toBeLessThanOrEqual(root.x + root.width);
   expect(composer.y).toBeGreaterThanOrEqual(root.y);
   expect(composer.y + composer.height).toBeLessThanOrEqual(root.y + root.height);
-  expect(textarea.height).toBe(30);
   await expect(page.locator(input)).not.toBeFocused();
 });

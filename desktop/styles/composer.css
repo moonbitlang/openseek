@@ -2,7 +2,7 @@
 /* ---------- composer ---------- */
 .composer {
   background: var(--color-bg-canvas);
-  padding: 6px 24px 8px;
+  padding: var(--space-3) var(--space-7) var(--space-4);
 }
 
 /* Caller-owned notices and approval panels remain a stable DOM sibling above
@@ -10,8 +10,8 @@
    and from the input so their borders do not visually merge. */
 .composer-context:not(:empty) {
   display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 
 /* Archived transcripts occupy the composer's grid row but expose only their
@@ -20,13 +20,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-6);
   max-width: 820px;
   margin: 0 auto;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
-  padding: 8px 10px;
+  padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-surface);
 }
 
@@ -39,7 +39,7 @@
   flex: none;
   border-color: var(--color-border);
   background: var(--color-bg-canvas);
-  padding: 5px 10px;
+  padding: var(--space-2) var(--space-5);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
 }
@@ -54,8 +54,11 @@
 .content.terminal-open .composer {
   display: flex;
   flex-direction: column;
+  /* Compact shared gaps leave room for the draft and actions when the
+     terminal reduces main to its minimum height. */
+  gap: var(--space-2);
   max-height: calc(100cqh - var(--topbar-height));
-  padding: 4px 24px;
+  padding: var(--space-2) var(--space-7);
 }
 
 /* Notices and banners give up space before the input does. Keeping
@@ -63,6 +66,7 @@
    unclipped, so menus anchored inside composer-inner can still open upward. */
 .content.terminal-open .composer-context {
   flex: 0 1 auto;
+  margin-bottom: 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -74,7 +78,7 @@
   position: relative;
   container-type: inline-size;
   display: grid;
-  gap: 8px;
+  gap: var(--space-4);
   /* A narrow editor split must size the card from its pane, not from the
      textarea placeholder or the actions' combined intrinsic width. */
   width: 100%;
@@ -84,7 +88,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-bg-surface);
-  padding: 8px 10px;
+  padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-surface);
 }
 
@@ -93,8 +97,8 @@
 .composer-inner {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
-  gap: 0 4px;
-  padding: 7px 8px;
+  gap: 0 var(--space-2);
+  padding: var(--space-4) var(--space-4);
 }
 
 /* Fixed columns: the attachment slot collapses when attaching is unavailable,
@@ -116,7 +120,7 @@
    terminal the card also reserves that second row. */
 @container main-pane (width < 520px) {
   .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
-    row-gap: 6px;
+    row-gap: var(--space-3);
 
     & > .composer-input {
       grid-column: 1 / -1;
@@ -136,12 +140,12 @@
 
   .content.terminal-open
     .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
-    grid-template-rows: minmax(34px, 1fr) auto;
-    min-height: 86px;
+    grid-template-rows: minmax(2.5rem, 1fr) auto;
+    min-height: 6.25rem;
 
     &:has(.mention-tray:not(:empty)) {
-      grid-template-rows: minmax(63px, 1fr) auto;
-      min-height: 115px;
+      grid-template-rows: minmax(4.5rem, 1fr) auto;
+      min-height: 8.25rem;
     }
   }
 }
@@ -155,7 +159,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
   /* Grid items otherwise keep their min-content width and let a content-sized
      textarea paint through the card when the conversation pane is narrow. */
   min-width: 0;
@@ -171,15 +175,15 @@
   flex: 0 1 auto;
   /* One textarea line at either text size. The card minimum also includes
      the border and vertical padding. */
-  grid-template-rows: minmax(34px, 1fr);
-  min-height: 50px;
+  grid-template-rows: minmax(2.5rem, 1fr);
+  min-height: 3.75rem;
   width: 100%;
 }
 
 .content.terminal-open .composer-inner:has(.mention-tray:not(:empty)) {
   /* One mention row above the line. */
-  grid-template-rows: minmax(63px, 1fr);
-  min-height: 79px;
+  grid-template-rows: minmax(4.5rem, 1fr);
+  min-height: 5.75rem;
 }
 
 .content.terminal-open .composer-input {
@@ -187,11 +191,12 @@
      and keep the draft's last line beside the buttons. */
   align-self: stretch;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .content.terminal-open .composer-toolbar {
   flex: none;
+  margin-top: 0;
 }
 
 .content.terminal-open .composer-input > .mention-tray {
@@ -209,7 +214,7 @@
   flex: 0 1 auto;
   /* Exactly one line plus the vertical padding, at desktop or mobile text
      size (33.6px for 16px text, the row minimum above). */
-  min-height: calc(1lh + 8px);
+  min-height: calc(1lh + var(--space-4));
 }
 
 /* mention chips ($ skills, # symbols) above the textarea; the tray is
@@ -218,7 +223,7 @@
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .mention-tray:empty {
   display: none;
@@ -226,9 +231,9 @@
 .mention-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   max-width: 260px;
-  padding: 2px 4px 2px 8px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border: 1px solid var(--color-accent-border);
   border-radius: var(--radius-pill);
   background: var(--color-accent-soft);
@@ -242,7 +247,7 @@
 .mention-jump {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   min-width: 0;
 }
 .mention-jump {
@@ -293,10 +298,10 @@
    <user_mentions> envelope): same chip chrome, no remove button, so the
    padding evens out; a small gap before the typed text below */
 .user-bubble .mention-tray {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-3);
 }
 .user-bubble .mention-chip {
-  padding: 2px 8px;
+  padding: var(--space-1) var(--space-4);
 }
 
 /* slash/skill completion menu, floated above the composer */
@@ -309,7 +314,7 @@
   z-index: 20;
 }
 .completion-hint {
-  padding: 5px 9px 4px;
+  padding: var(--space-2) var(--space-4) var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -338,7 +343,7 @@
 }
 /* state line for a # menu whose results are still loading or empty */
 .completion-empty {
-  padding: 7px 9px;
+  padding: var(--space-4) var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
@@ -348,8 +353,8 @@
    class flips visibility, so the textarea's index never shifts */
 .composer-banner {
   max-width: 820px;
-  margin: 0 auto 8px;
-  padding: 6px 12px;
+  margin: 0 auto var(--space-4);
+  padding: var(--space-3) var(--space-5);
   border: 1px solid var(--color-separator);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
@@ -377,10 +382,10 @@
 .composer-running {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   max-width: 820px;
-  margin: 0 auto 8px;
-  padding: 0 12px;
+  margin: 0 auto var(--space-4);
+  padding: 0 var(--space-5);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
@@ -399,10 +404,10 @@
 .composer-notice {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   max-width: 820px;
-  margin: 0 auto 8px;
-  padding: 6px 12px;
+  margin: 0 auto var(--space-4);
+  padding: var(--space-3) var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
@@ -427,7 +432,7 @@
   border-color: var(--color-border);
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
-  padding: 4px 10px;
+  padding: var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
@@ -451,7 +456,7 @@
 .composer-approval-question {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
 }
 /* The program the decision is actually about, highlighted by the same helper
    the transcript's mbtx card uses. Token colours come from the
@@ -462,8 +467,8 @@
    Inside the expandable approval details, keep the full program scrollable
    rather than truncating it so the complete operation can be inspected. */
 .composer-approval-body {
-  margin: 8px 0 0;
-  padding: 8px 10px;
+  margin: var(--space-4) 0 0;
+  padding: var(--space-4) var(--space-5);
   max-height: 220px;
   overflow: auto;
   overscroll-behavior: contain;
@@ -491,7 +496,7 @@
    radius, and the cursor. */
 .composer-approval-action {
   flex: none;
-  padding: 4px 10px;
+  padding: var(--space-2) var(--space-5);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -520,18 +525,18 @@
    above the composer until the engine settles it */
 .pending-steers {
   max-width: 820px;
-  margin: 0 auto 8px;
+  margin: 0 auto var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
-  padding: 4px 10px;
+  padding: var(--space-2) var(--space-5);
 }
 .pending-steer-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   min-width: 0;
-  padding: 4px 0;
+  padding: var(--space-2) 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
@@ -560,18 +565,18 @@
    the conversation. Keep them in the same centered lane as pending steers. */
 .queued-inputs {
   max-width: 820px;
-  margin: 0 auto 8px;
+  margin: 0 auto var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
-  padding: 4px 10px;
+  padding: var(--space-2) var(--space-5);
 }
 .queued-input-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   min-width: 0;
-  padding: 4px 0;
+  padding: var(--space-2) 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
@@ -603,15 +608,15 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
 }
 .queued-input-action {
   --icon-size: var(--icon-lg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 2rem;
+  height: 2rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -642,12 +647,12 @@
      composer stable and scroll the textarea's contents instead. */
   field-sizing: content;
   width: 100%;
-  min-height: 26px;
-  max-height: 180px;
+  min-height: 2em;
+  max-height: 13em;
   overflow-y: auto;
   border: 0;
   background: transparent;
-  padding: 6px 6px 2px;
+  padding: var(--space-3) var(--space-3) var(--space-1);
   resize: none;
   font-size: var(--font-size-md);
   line-height: var(--line-height-relaxed);
@@ -656,8 +661,8 @@
 
 /* A single line of draft is exactly as tall as the buttons beside it. */
 .composer-input > textarea {
-  min-height: 30px;
-  padding: 4px 6px;
+  min-height: 2.25em;
+  padding: var(--space-2) var(--space-3);
 }
 
 /* The settings for the next turn, under the card in its column: how the turn
@@ -670,14 +675,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-4);
   /* Auto margins stop a flex column from stretching it, and its inline-size
      containment would then shrink it to nothing; size it like the card. */
   width: 100%;
   max-width: 820px;
   min-width: 0;
-  margin: 4px auto 0;
-  padding: 0 4px;
+  margin: var(--space-2) auto 0;
+  padding: 0 var(--space-2);
 }
 
 .composer-toolbar:not(:has(> .composer-status > *)) {
@@ -690,7 +695,7 @@
 .composer-status {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -708,7 +713,7 @@
   .composer-git-button,
   .composer-worktree
 ) {
-  height: 28px;
+  height: 2.25em;
   background: transparent;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
@@ -729,13 +734,13 @@
 }
 
 .composer-toolbar .composer-model {
-  padding: 0 6px;
+  padding: 0 var(--space-3);
 }
 
 .composer-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   flex: none;
 }
 
@@ -764,12 +769,12 @@
 .composer-git-button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.5em;
   box-sizing: border-box;
   /* `.composer-git` is the shrinking flex item; follow its assigned width so
      the button label cannot overflow while its popover stays unclipped. */
   width: 100%;
-  height: 30px;
+  height: 2.5em;
   max-width: 220px;
   min-width: 0;
   overflow: hidden;
@@ -778,7 +783,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-control-surface);
-  padding: 0 9px;
+  padding: 0 0.75em;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
@@ -839,7 +844,7 @@
   bottom: calc(100% + 6px);
   left: 0;
   width: min(420px, 100%);
-  padding: 5px;
+  padding: var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
@@ -852,9 +857,9 @@
 .composer-git-link {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   width: 100%;
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   text-decoration: none;
@@ -895,12 +900,12 @@
 }
 .composer-git-rule {
   height: 1px;
-  margin: 4px 8px;
+  margin: var(--space-2) var(--space-4);
   background: var(--color-border-subtle);
 }
 .composer-git-diff {
   display: inline-flex;
-  gap: 6px;
+  gap: var(--space-3);
   flex: none;
 }
 .composer-git-clean {
@@ -919,7 +924,7 @@
 }
 
 /* Model and reasoning use the same custom picker. The wrapper keeps the popup
-   outside the clipped pill, while the button retains the old 30px geometry. */
+   outside the clipped pill; its button follows the control's own type size. */
 .composer-picker {
   display: inline-flex;
   flex: 0 1 auto;
@@ -927,16 +932,16 @@
 .composer-model {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.5em;
   box-sizing: border-box;
-  height: 30px;
+  height: 2.5em;
   max-width: 220px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   margin: 0;
-  padding: 0 9px;
+  padding: 0 0.75em;
   background: var(--color-control-surface);
   color: var(--color-text-secondary);
   font: inherit;
@@ -973,7 +978,7 @@
 .composer-model-chevron {
   width: 5px;
   height: 5px;
-  margin: -3px 1px 0 3px;
+  margin: calc(-1 * var(--space-2)) var(--space-1) 0 var(--space-2);
   border-right: 1px solid currentColor;
   border-bottom: 1px solid currentColor;
   color: var(--color-text-muted);
@@ -1073,7 +1078,7 @@
   place-items: center;
   width: 20px;
   height: 20px;
-  padding: 2px;
+  padding: var(--space-1);
   border: 0;
   border-radius: 50%;
   background: var(--color-bg-surface);
@@ -1094,9 +1099,9 @@
 }
 .composer-attach {
   box-sizing: border-box;
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -1128,8 +1133,8 @@
 .composer-attachment-confirm {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px;
+  gap: var(--space-3);
+  padding: var(--space-5);
   border: 1px solid transparent;
   background: var(--color-control-surface);
   border-radius: var(--radius-sm);
@@ -1145,7 +1150,7 @@
 .composer-attachment-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-5);
 }
 
 /* Selected review changes share the draft's mention tray and anchor to the
@@ -1155,7 +1160,7 @@
 }
 
 .changes-chip .mention-jump {
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .changes-chevron {
@@ -1184,7 +1189,7 @@
   flex-direction: column;
   max-height: min(580px, 65vh);
   min-height: 0;
-  padding: 16px 18px 0;
+  padding: var(--space-6) var(--space-6) 0;
   border: 1px solid var(--color-border);
   border-radius: 14px;
   background: var(--color-bg-surface);
@@ -1215,7 +1220,7 @@
   position-try-order: most-block-size;
   position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
   inset: auto;
-  margin: 10px 0;
+  margin: var(--space-5) 0;
   width: min(640px, 100cqw, calc(100dvw - 32px));
   max-height: min(580px, calc(100dvh - 32px), calc(100% - 20px));
 }
@@ -1228,7 +1233,7 @@
 .changes-excerpt-header, .changes-file-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-5);
 }
 
 .changes-popup-header {
@@ -1236,7 +1241,7 @@
 }
 
 .changes-popup-heading {
-  font-size: 16px;
+  font-size: var(--font-size-emphasis);
 }
 
 .changes-popup-subtitle, .changes-directory {
@@ -1245,7 +1250,7 @@
 }
 
 .changes-popup-subtitle {
-  margin: 8px 0 12px;
+  margin: var(--space-4) 0 var(--space-5);
 }
 
 .changes-popup-files {
@@ -1256,7 +1261,7 @@
 }
 
 .changes-file {
-  padding-bottom: 10px;
+  padding-bottom: var(--space-5);
 }
 
 .changes-file-header {
@@ -1265,7 +1270,7 @@
   align-items: start;
   width: 100%;
   border: 0;
-  padding: 12px 0;
+  padding: var(--space-5) 0;
   background: none;
   color: inherit;
   line-height: var(--line-height-normal);
@@ -1286,7 +1291,7 @@
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: var(--space-2);
 }
 
 .changes-file-path > * {
@@ -1310,15 +1315,15 @@
 .changes-excerpt {
   border: 1px solid var(--color-border);
   border-radius: 7px;
-  padding: 10px;
-  margin-bottom: 8px;
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
 }
 
 .changes-excerpt-header {
-  margin-bottom: 9px;
+  margin-bottom: var(--space-4);
   font-size: var(--font-size-sm);
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .changes-range {
@@ -1331,7 +1336,7 @@
   background: none;
   cursor: pointer;
   color: var(--color-text-muted);
-  padding: 2px;
+  padding: var(--space-1);
 }
 
 .changes-open {
@@ -1346,8 +1351,8 @@
 
 .changes-preview {
   --editor-font-family: var(--font-family-mono);
-  --editor-font-size: 12px;
-  --editor-line-height: 22px;
+  --editor-font-size: var(--font-size-xs);
+  --editor-line-height: calc(22 / 12);
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 5px;
@@ -1357,7 +1362,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   border-top: 1px solid var(--color-border);
-  padding: 12px 0;
+  padding: var(--space-5) 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
@@ -1390,7 +1395,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  column-gap: 8px;
+  column-gap: var(--space-4);
 }
 
 .composer-input.shell-mode > .mention-tray {
@@ -1427,8 +1432,8 @@
 }
 
 .composer-mode-chip {
-  margin-top: 4px;
-  padding: 1px 8px;
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-sm);
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
@@ -1440,7 +1445,7 @@
 
 .shell-commands-running {
   display: grid;
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .shell-command-text {

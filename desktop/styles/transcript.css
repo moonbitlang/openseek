@@ -276,7 +276,7 @@
   justify-content: center;
   flex-wrap: wrap;
   column-gap: 0.25em;
-  font-size: calc(var(--font-size-base) + 12px);
+  font-size: var(--font-size-page-title);
   font-weight: 600;
   line-height: 1.25;
   color: var(--color-text-primary);
@@ -858,7 +858,7 @@
 .msg-content.markdown th,
 .msg-content.markdown td {
   /* Long descriptions wrap within a column; many columns scroll together. */
-  max-width: 28rem;
+  max-width: 32rem;
   white-space: normal;
   overflow-wrap: anywhere;
   padding: 4px 10px;
@@ -937,10 +937,10 @@
 .msg-content.markdown .citation-sources-heading {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-4);
   width: fit-content;
   min-height: 34px;
-  padding: 5px 10px 5px 7px;
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-bg-surface);
@@ -958,7 +958,7 @@
   color: var(--color-text-primary);
 }
 .msg-content.markdown .citation-sources[open] > .citation-sources-heading {
-  margin-bottom: 10px;
+  margin-bottom: var(--space-5);
 }
 .msg-content.markdown .citation-sources-heading:focus-visible {
   outline: 2px solid var(--color-accent);
@@ -966,11 +966,11 @@
 }
 .msg-content.markdown .citation-sources-count {
   min-width: 18px;
-  padding: 1px 4px;
+  padding: var(--space-1) var(--space-2);
   border-radius: 6px;
   background: var(--color-bg-subtle);
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   font-weight: 400;
   text-align: center;
 }
@@ -983,7 +983,7 @@
 }
 .msg-content.markdown .citation-source-previews {
   display: flex;
-  padding-right: 2px;
+  padding-right: var(--space-1);
 }
 .msg-content.markdown .citation-source-glyph {
   width: 28px;
@@ -1003,7 +1003,7 @@
   border-radius: 50%;
 }
 .msg-content.markdown .citation-source-previews .citation-source-glyph + .citation-source-glyph {
-  margin-left: -7px;
+  margin-left: calc(-1 * var(--space-4));
 }
 .msg-content.markdown .citation-source-previews svg {
   width: 13px;
@@ -1012,7 +1012,7 @@
 .msg-content.markdown ol.citation-source-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: 8px;
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1022,9 +1022,9 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: start;
-  gap: 9px;
+  gap: var(--space-4);
   margin: 0;
-  padding: 12px;
+  padding: var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   background: var(--color-bg-surface);
@@ -1032,7 +1032,7 @@
 .msg-content.markdown .citation-source-number {
   min-width: 14px;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   line-height: 1.7;
   text-align: center;
 }
@@ -1042,12 +1042,12 @@
   overflow-wrap: anywhere;
 }
 .msg-content.markdown .citation-source-origin {
-  margin-bottom: 3px;
-  font-size: 11px;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-caption);
   line-height: 1.5;
 }
 .msg-content.markdown .citation-source-copy {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   line-height: 1.5;
 }
 .msg-content.markdown .citation-source-copy :is(a, button.file-link) {
@@ -1059,9 +1059,9 @@
   z-index: auto;
   display: block;
   width: fit-content;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-2);
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   text-decoration: none;
 }
@@ -2246,8 +2246,8 @@
 }
 .minimal-diff-preview {
   --editor-font-family: var(--font-family-mono);
-  --editor-font-size: 12px;
-  --editor-line-height: 20px;
+  --editor-font-size: var(--font-size-xs);
+  --editor-line-height: calc(20 / 12);
 }
 
 @media (hover: none) {
