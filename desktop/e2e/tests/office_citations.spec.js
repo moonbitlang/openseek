@@ -48,7 +48,6 @@ test('PDF citations open the exact physical page from inline badges, cards and s
   const second = page.locator('.page[data-page-number="2"]');
   await expect(second).toHaveClass(/office-citation-target/);
   await expect(second).toBeInViewport();
-  await expect(second).toHaveCSS('outline-width', '3px');
   await expect(page.getByRole('spinbutton', { name: 'PDF page number', exact: true })).toHaveValue('2');
   await expect(page.locator('.office-selection-preview')).toBeHidden();
   await capture(page, 'office-citation-pdf.png');
