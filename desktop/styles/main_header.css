@@ -46,6 +46,7 @@ main {
 .editor-tabsbar > .tab-action,
 .right-panel-toggle {
   --icon-size: var(--titlebar-icon-size);
+  display: grid;
   place-items: center;
   flex: 0 0 auto;
   inline-size: var(--titlebar-control-size);
@@ -58,7 +59,6 @@ main {
 }
 
 .sidebar-toggle {
-  display: grid;
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -261,6 +261,8 @@ main > .conversation-load-state {
   inset-inline-start: var(--navigation-inline-inset);
   z-index: var(--z-titlebar-control);
   display: flex;
+  align-items: center;
+  height: var(--titlebar-control-size);
   gap: var(--titlebar-control-gap);
   -webkit-app-region: no-drag;
 }
