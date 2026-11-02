@@ -3,6 +3,7 @@ priv struct ArtifactOwner {
   channel : @interop.ChannelId?
   session : String
   workspace : @common.Uri?
+  checkout : @common.Uri?
   archived : Bool
 } derive(Eq)
 
@@ -12,6 +13,7 @@ fn Input::artifact_owner(self : Input) -> ArtifactOwner {
     channel: self.focused,
     session: self.active_session,
     workspace: self.current_project,
+    checkout: self.root,
     archived: self.archived,
   }
 }
@@ -21,6 +23,7 @@ fn ArtifactOwner::key(self : ArtifactOwner) -> String {
   Json([
     self.channel.map(channel => channel.uri_authority()).unwrap_or(""),
     self.workspace.map(workspace => workspace.to_string()).unwrap_or(""),
+    self.checkout.map(root => root.to_string()).unwrap_or(""),
     self.session,
     self.archived.to_string(),
   ]).stringify()
@@ -49,13 +52,8 @@ fn artifact_file_view(
   open : @cmd.Emit[String],
   owner : ArtifactOwner,
 ) -> @html.Html {
-  let reference = if reference.has_prefix("artifact://") {
-    reference
-  } else {
-    "artifact://" + reference
-  }
   guard @workspace_file_ref.parse(
-      @workspace_file_ref.FenceLanguage,
+      @workspace_file_ref.ArtifactFenceLanguage,
       reference,
       closed=true,
     )
@@ -116,13 +114,25 @@ fn ArtifactFileCache::begin_read(
   emit : @cmd.Emit[Msg],
 ) -> (ArtifactFileCache, @cmd.Cmd) {
   guard !self.0.contains(reference) &&
-    @workspace_file_ref.artifact_path(reference) is Some(_) else {
+    @workspace_file_ref.parse(
+      @workspace_file_ref.ArtifactFenceLanguage,
+      reference,
+      closed=true,
+    )
+    is Some(_) else {
     return (self, @cmd.none)
   }
   let files = self.0.copy()
   guard owner.channel is Some(channel) &&
-    owner.workspace is Some(workspace) &&
-    @resource.path_for(workspace, channel) is Some(workspace) else {
+    @transcript.file_target(
+      owner.workspace,
+      owner.checkout,
+      owner.session,
+      owner.archived,
+      reference,
+    )
+    is Some((root, path)) &&
+    @resource.path_for(root, channel) is Some(root) else {
     files[reference] = FailedArtifact("Artifact unavailable")
     return (ArtifactFileCache(files), @cmd.none)
   }
@@ -130,11 +140,10 @@ fn ArtifactFileCache::begin_read(
   let command = @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let result = Ok(
-        @interop.bridge_request(channel, @commands.session_artifact_file, {
-          session: owner.session,
-          workspace,
-          archived: owner.archived,
-          reference,
+        @interop.bridge_request(channel, @commands.fs_read_file, {
+          path,
+          root: Some(root),
+          max_bytes: Some(8 * 1024 * 1024),
         }),
       ) catch {
         error => Err(error.to_string())
@@ -150,12 +159,14 @@ fn ArtifactFileCache::begin_read(
 fn ArtifactFileCache::settle(
   self : ArtifactFileCache,
   reference : String,
-  result : Result[@protocol.ArtifactFileReply, String],
+  result : Result[@protocol.ReadFileReply, String],
 ) -> ArtifactFileCache {
   guard self.0.get(reference) is Some(LoadingArtifact) else { return self }
   let files = self.0.copy()
   files[reference] = match result {
-    Ok({ content: Some(content), .. }) => ReadyArtifact(content)
+    Ok(@protocol.Content(content~, ..)) => ReadyArtifact(content)
+    Ok(@protocol.Oversized) =>
+      FailedArtifact("File exceeds the 8 MiB preview limit")
     Ok(_) => FailedArtifact("Artifact preview unavailable")
     Err(error) => FailedArtifact(error)
   }

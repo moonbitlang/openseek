@@ -1,6 +1,10 @@
 ///|
-/// The fence language for referencing a workspace file or session artifact.
+/// The fence language for referencing an existing file.
 pub const FenceLanguage : String = "openseek-file"
+
+///|
+/// Explicitly render the referenced HTML/SVG as an interactive answer.
+pub const ArtifactFenceLanguage : String = "openseek-file artifact"
 
 ///|
 /// A coarse presentation category derived from the referenced item's final
@@ -25,8 +29,8 @@ pub extend FileKind with Eq::{equal, not_equal}
 pub extend FileKind with Debug::{to_repr}
 
 ///|
-/// A workspace-relative path or an `artifact://` reference extracted from a
-/// fenced block. Path resolution and file reads belong to the owning host.
+/// A relative file path and its presentation hint extracted from a fenced
+/// block. Path resolution and file reads belong to the owning host.
 pub struct WorkspaceFileRef {
   path : String
   name : String
@@ -89,7 +93,9 @@ pub fn parse(
   source : String,
   closed~ : Bool,
 ) -> WorkspaceFileRef? {
-  guard closed && language == FenceLanguage else { return None }
+  let info = language.trim().to_owned()
+  let artifact = info == ArtifactFenceLanguage
+  guard closed && (info == FenceLanguage || artifact) else { return None }
   let path = source.trim().to_owned()
   guard !path.is_empty() && !path.contains("\n") && !path.contains("\r") else {
     return None
@@ -97,15 +103,8 @@ pub fn parse(
   guard !path.contains_char('\u{0}') && !path.contains_char('\t') else {
     return None
   }
-  let artifact = path.has_prefix("artifact://")
-  let relative = if artifact { path[11:].to_owned() } else { path }
-  guard !relative.is_empty() &&
-    !is_absolute_or_uri(relative) &&
-    !relative.contains("://") &&
-    (!artifact || !relative.contains(":")) else {
-    return None
-  }
-  let normalized = relative.replace_all(old="\\", new="/")
+  guard !is_absolute_or_uri(path) && !path.contains("://") else { return None }
+  let normalized = path.replace_all(old="\\", new="/")
   guard !normalized.has_suffix("/") else { return None }
   let components = normalized.split("/").collect()
   guard !components.is_empty() && components.any(part => !part.is_empty()) else {
@@ -125,14 +124,15 @@ pub fn parse(
 }
 
 ///|
-/// Decode the relative file path of an artifact reference. The caller supplies
-/// the owning host, workspace and conversation for resolution.
+/// Decode the path inside the session's scratch/artifact directory.
+/// The presentation flag is independent of this storage location.
 pub fn artifact_path(reference : String) -> String? {
-  guard parse(FenceLanguage, reference, closed=true) is Some(file) &&
-    file.artifact else {
+  guard parse(FenceLanguage, reference, closed=true) is Some(file) else {
     return None
   }
-  Some(file.path[11:].to_owned().replace_all(old="\\", new="/"))
+  let path = file.path.replace_all(old="\\", new="/")
+  guard path.has_prefix("scratch/artifact/") else { return None }
+  Some(path.exact_view(start=17).to_owned())
 }
 
 ///|
@@ -148,11 +148,11 @@ pub fn markdown_parts(source : String) -> Array[MarkdownPart] {
   let mut index = 0
   while index < lines.length() {
     match opening_fence(lines[index]) {
-      Some(fence_length) =>
+      Some((fence_length, info)) =>
         match closing_fence(lines, index + 1, fence_length) {
           Some(close) => {
             let body = join_lines(lines, index + 1, close)
-            match parse(FenceLanguage, body, closed=true) {
+            match parse(info, body, closed=true) {
               Some(reference) => {
                 flush_text(parts, pending)
                 parts.push(File(reference))
@@ -192,8 +192,8 @@ fn join_lines(lines : Array[String], start : Int32, end : Int32) -> String {
 }
 
 ///|
-/// Return the opening backtick count for an exact `openseek-file` fence.
-fn opening_fence(line : String) -> Int32? {
+/// Return the opening backtick count and the recognized file fence info.
+fn opening_fence(line : String) -> (Int32, String)? {
   let candidate = line.trim_start()
   guard candidate.length() >= FenceLanguage.length() + 3 else { return None }
   guard candidate.has_prefix("```") else { return None }
@@ -203,8 +203,10 @@ fn opening_fence(line : String) -> Int32? {
   }
   guard count >= 3 else { return None }
   let info = candidate[count:].trim()
-  guard info == FenceLanguage else { return None }
-  Some(count)
+  guard info == FenceLanguage || info == ArtifactFenceLanguage else {
+    return None
+  }
+  Some((count, info.to_owned()))
 }
 
 ///|
@@ -295,21 +297,24 @@ test "workspace file references accept portable relative paths" {
 }
 
 ///|
-test "artifact references are distinct from workspace paths and cannot name another root" {
-  let file = parse(FenceLanguage, "artifact://charts/revenue.html", closed=true).unwrap()
-  assert_true(file.artifact)
-  assert_eq(file.name, "revenue.html")
-  assert_eq(artifact_path(file.path), Some("charts/revenue.html"))
-  assert_false(
-    parse(FenceLanguage, "artifact/revenue.html", closed=true).unwrap().artifact,
+test "file presentation is explicit and independent of its path" {
+  let path = "scratch/artifact/charts/revenue.html"
+  let card = parse(FenceLanguage, path, closed=true).unwrap()
+  let inline = parse(ArtifactFenceLanguage, path, closed=true).unwrap()
+  assert_false(card.artifact)
+  assert_true(inline.artifact)
+  assert_eq(card.path, inline.path)
+  assert_eq(artifact_path(path), Some("charts/revenue.html"))
+  assert_true(
+    parse(ArtifactFenceLanguage, "reports/page.html", closed=true).unwrap().artifact,
   )
-  for
-    path in [
-      "artifact://", "artifact:///etc/passwd", "artifact://../other/chart.html",
-      "artifact://C:/chart.html", "artifact://a\nb", "https://example.com/chart.html",
-    ] {
-    assert_true(parse(FenceLanguage, path, closed=true) is None, msg=path)
-  }
+  assert_true(parse(ArtifactFenceLanguage, path, closed=false) is None)
+  let parts = markdown_parts(
+    "```openseek-file artifact\nscratch/artifact/page.html\n```",
+  )
+  assert_true(
+    parts is [File({ artifact: true, path: "scratch/artifact/page.html", .. })],
+  )
 }
 
 ///|

@@ -178,5 +178,5 @@ async fn main {
   errdefer @fs.rmdir(sources, recursive=true)
   copy_source_files(snapshot, sources)
   @fs.write_text(output, html, create_mode=CreateNew)
-  println("```openseek-file\nartifact://\{filename}\n```")
+  println("```openseek-file artifact\nscratch/artifact/\{filename}\n```")
 }

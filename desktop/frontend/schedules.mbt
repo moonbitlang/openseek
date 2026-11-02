@@ -386,7 +386,7 @@ fn update_schedules(
               let reply = @interop.bridge_request(
                 channel,
                 @commands.fs_read_file,
-                { path, root: None, },
+                { path, root: None, max_bytes: None, },
               )
               match reply {
                 Content(content~, ..) => Ok(content)

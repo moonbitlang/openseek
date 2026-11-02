@@ -36,7 +36,7 @@ async test "generic file packaging retains editable sources without a UI library
     }
     let result = dispatch(tool, arguments)
     assert_false(result.is_error, msg=result.content)
-    assert_true(result.content.contains("artifact://answer-v1.html"))
+    assert_true(result.content.contains("scratch/artifact/answer-v1.html"))
     let html = @fs.read_file(output + "/answer-v1.html").text()
     assert_true(html.contains("The application has loaded"))
     assert_true(html.contains("<script>"))

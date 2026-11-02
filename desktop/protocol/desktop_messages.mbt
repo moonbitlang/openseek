@@ -604,6 +604,9 @@ pub(all) struct ReadFilePayload {
   // `path` is relative to it; the host validates that pair before opening.
   path : String
   root : String?
+  // fs.read_file callers may request a larger preview; absent uses the
+  // editor/Office default for the detected format.
+  max_bytes : Int32?
 } derive(Debug, Eq)
 
 ///|
@@ -1449,7 +1452,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 5
+pub const HostProtocolRevision : Int32 = 4
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads
@@ -3267,6 +3270,11 @@ pub impl FromJson for ReadFilePayload with fn from_json(json, path) {
       object.required_json("path"),
       path=path.add_key("path"),
     ),
+    max_bytes: match object.optional_json("max_bytes") {
+      None => None
+      Some(value) =>
+        Some(@json.from_json(value, path=path.add_key("max_bytes")))
+    },
     root: match object.optional_json("root") {
       None => None
       Some(value) => Some(@json.from_json(value, path=path.add_key("root")))
@@ -3280,6 +3288,9 @@ pub impl ToJson for ReadFilePayload with fn to_json(self) {
   fields["path"] = Json(self.path)
   if self.root is Some(value) {
     fields["root"] = Json(value)
+  }
+  if self.max_bytes is Some(value) {
+    fields["max_bytes"] = Json(value)
   }
   Json(fields)
 }

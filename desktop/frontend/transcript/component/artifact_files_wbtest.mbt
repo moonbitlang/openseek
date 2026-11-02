@@ -4,7 +4,7 @@ test "late artifact responses cannot update another session or workspace" {
     ..base_input(),
     current_project: @resource.of_path(Local, "/one"),
   }
-  let reference = "artifact://chart.html"
+  let reference = "scratch/artifact/chart.html"
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (files, _) = ArtifactFileCache::empty().begin_read(
     original.artifact_owner(),
@@ -18,7 +18,13 @@ test "late artifact responses cannot update another session or workspace" {
     ArtifactResolved(
       original.artifact_owner(),
       reference,
-      Ok({ path: "/old/chart.html", content: Some("old"), }),
+      Ok(
+        @protocol.Content(
+          content="old",
+          absolute="/work/page.html",
+          sig="fixture",
+        ),
+      ),
     ),
     emit,
   )
@@ -36,7 +42,13 @@ test "late artifact responses cannot update another session or workspace" {
     ArtifactResolved(
       original.artifact_owner(),
       reference,
-      Ok({ path: "/old/chart.html", content: Some("old"), }),
+      Ok(
+        @protocol.Content(
+          content="old",
+          absolute="/work/page.html",
+          sig="fixture",
+        ),
+      ),
     ),
     emit,
   )
@@ -50,7 +62,7 @@ test "one artifact read supplies all repeated references without replacing settl
     current_project: @resource.of_path(Local, "/work"),
   }.artifact_owner()
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let reference = "artifact://chart.html"
+  let reference = "scratch/artifact/chart.html"
   let (loading, _) = ArtifactFileCache::empty().begin_read(
     owner, reference, emit,
   )
@@ -58,13 +70,25 @@ test "one artifact read supplies all repeated references without replacing settl
   assert_true(duplicate == loading)
   let ready = loading.settle(
     reference,
-    Ok({ path: "/artifact/chart.html", content: Some("first"), }),
+    Ok(
+      @protocol.Content(
+        content="first",
+        absolute="/work/page.html",
+        sig="fixture",
+      ),
+    ),
   )
   assert_true(ready.0.get(reference) is Some(ReadyArtifact("first")))
   assert_true(
     ready.settle(
       reference,
-      Ok({ path: "/artifact/chart.html", content: Some("late"), }),
+      Ok(
+        @protocol.Content(
+          content="late",
+          absolute="/work/page.html",
+          sig="fixture",
+        ),
+      ),
     ) ==
     ready,
   )

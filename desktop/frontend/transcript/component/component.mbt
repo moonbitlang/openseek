@@ -221,7 +221,7 @@ priv enum Msg {
   ArtifactResolved(
     ArtifactOwner,
     String,
-    Result[@protocol.ArtifactFileReply, String]
+    Result[@protocol.ReadFileReply, String]
   )
   Overview(@transcript_overview.Msg)
 }

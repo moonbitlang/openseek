@@ -11,7 +11,7 @@ const sample = process.env.OPENSEEK_ARTIFACT_HTML
     <button aria-pressed="true">Actual</button><div role="tooltip" hidden>19</div>
     <script>const svg=document.querySelector('svg'),tip=document.querySelector('[role=tooltip]'),button=document.querySelector('button');svg.onpointermove=()=>tip.hidden=false;svg.onpointerleave=()=>tip.hidden=true;button.onclick=()=>{const show=button.getAttribute('aria-pressed')!=='true';button.setAttribute('aria-pressed',String(show));svg.querySelector('polyline').style.display=show?'':'none';tip.hidden=true;};</script></body></html>`;
 
-const fence = name => '```openseek-file\nartifact://' + name + '\n```';
+const fence = (name, inline = true) => '```openseek-file' + (inline ? ' artifact' : '') + '\nscratch/artifact/' + name + '\n```';
 function history(answer, finished = true) {
   return [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture: compare the weekly revenue.' } } },
@@ -24,8 +24,8 @@ function fixture(page, answer, finished = true) {
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = history(answer, finished);
   const ordinary = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'session.artifact_file'
-    ? { path: '/workspace/.openseek/sessions/session-1/scratch/artifact/' + request.params.reference.slice(11), content: request.params.reference.endsWith('.html') ? sample : null }
+  app.replyFor = request => request.method === 'fs.read_file'
+    ? { kind: 'content', absolute: request.params.root + '/' + request.params.path, content: request.params.path.endsWith('.html') ? sample : 'week,revenue\n1,19', sig: 'fixture' }
     : ordinary(request);
   return app;
 }
@@ -60,8 +60,8 @@ for (const minimal of [true, false]) {
     await frame.getByRole('button', { name: 'Actual', exact: true }).click();
     await page.locator('#task').fill('Keep the chart while I type.');
     await expect(frame.getByRole('button', { name: 'Actual', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    const request = app.requests.find(request => request.method === 'session.artifact_file');
-    expect(request.params).toEqual({ session: 'session-1', workspace: '/workspace', archived: false, reference: 'artifact://chart.html' });
+    const request = app.requests.find(request => request.method === 'fs.read_file');
+    expect(request.params).toEqual({ root: '/workspace', path: '.openseek/sessions/session-1/scratch/artifact/chart.html', max_bytes: 8 * 1024 * 1024 });
     expect(await frame.locator('body').evaluate(() => {
       try { void parent.document.body; return false; } catch { return true; }
     })).toBe(true);
@@ -95,7 +95,7 @@ test('intermediate artifact fences do not read or execute the page', async ({ pa
   const app = fixture(page, fence('chart.html'), false);
   await app.install(); await app.goto(); await app.openSession();
   await expect(page.locator('#transcript .chat-artifact-frame')).toHaveCount(0);
-  expect(app.requests.filter(request => request.method === 'session.artifact_file')).toHaveLength(0);
+  expect(app.requests.filter(request => request.method === 'fs.read_file')).toHaveLength(0);
 });
 
 test('repeated references share a file read but keep independent application state', async ({ page }) => {
@@ -108,7 +108,7 @@ test('repeated references share a file read but keep independent application sta
   await first.getByRole('button', { name: 'Actual', exact: true }).click();
   await expect(first.getByRole('button', { name: 'Actual', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await expect(second.getByRole('button', { name: 'Actual', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  expect(app.requests.filter(request => request.method === 'session.artifact_file')).toHaveLength(1);
+  expect(app.requests.filter(request => request.method === 'fs.read_file')).toHaveLength(1);
 });
 
 test('non-HTML artifact cards resolve their owning file before opening it', async ({ page }) => {
@@ -117,7 +117,8 @@ test('non-HTML artifact cards resolve their owning file before opening it', asyn
   await page.getByRole('button', { name: 'Open revenue.csv', exact: true }).click();
   await expect.poll(() => app.requests.filter(request => request.method === 'host.open_path' || request.method === 'host.open_path_preview').length).toBeGreaterThan(0);
   const open = app.requests.find(request => request.method === 'host.open_path' || request.method === 'host.open_path_preview');
-  expect(open.params.path).toBe('/workspace/.openseek/sessions/session-1/scratch/artifact/revenue.csv');
+  expect(open.params.path).toBe('.openseek/sessions/session-1/scratch/artifact/revenue.csv');
+  expect(open.params.cwd).toBe('/workspace');
 });
 
 test('same filenames in different conversations cannot replace each other through a late read', async ({ page }) => {
@@ -131,14 +132,14 @@ test('same filenames in different conversations cannot replace each other throug
     if (request.method === 'session.load' && request.params.session === 'session-2') {
       return { session: { version: 1, id: 'session-2', events: history(answer) }, prediction: null, watermark: 3 };
     }
-    if (request.method === 'session.artifact_file') {
-      if (request.params.session === 'session-1') await first;
-      return { path: `/workspace/.openseek/sessions/${request.params.session}/scratch/artifact/chart.html`, content: request.params.session === 'session-1' ? sample : '<h1>Second conversation result</h1>' };
+    if (request.method === 'fs.read_file') {
+      if (request.params.path.includes('/session-1/')) await first;
+      return { kind: 'content', absolute: request.params.root + '/' + request.params.path, sig: 'fixture', content: request.params.path.includes('/session-1/') ? sample : '<h1>Second conversation result</h1>' };
     }
     return ordinary(request);
   };
   await app.install(); await app.goto(); await app.openSession();
-  await expect.poll(() => app.requests.filter(request => request.method === 'session.artifact_file').length).toBe(1);
+  await expect.poll(() => app.requests.filter(request => request.method === 'fs.read_file').length).toBe(1);
   await page.getByRole('button', { name: 'Second artifact conversation', exact: true }).click();
   const frame = page.frameLocator('.chat-artifact-frame');
   await expect(frame.getByRole('heading', { name: 'Second conversation result' })).toBeVisible();
@@ -147,4 +148,50 @@ test('same filenames in different conversations cannot replace each other throug
   await expect(frame.locator('svg')).toHaveCount(0);
   await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
   await expect(page.frameLocator('.chat-artifact-frame').locator('svg')).toBeVisible();
+});
+
+
+test('ordinary HTML references remain file cards until explicitly marked for inline display', async ({ page }) => {
+  const app = fixture(page, fence('page.html', false));
+  await app.install(); await app.goto(); await app.openSession();
+  await expect(page.getByRole('button', { name: 'Open scratch/artifact/page.html', exact: true })).toBeVisible();
+  await expect(page.locator('.chat-artifact-frame')).toHaveCount(0);
+  expect(app.requests.filter(request => request.method === 'fs.read_file')).toHaveLength(0);
+  await page.getByRole('button', { name: 'Open scratch/artifact/page.html', exact: true }).click();
+  await expect.poll(() => app.requests.filter(request => request.method === 'host.open_path').length).toBeGreaterThan(0);
+  const open = app.requests.find(request => request.method === 'host.open_path');
+  expect(open.params).toMatchObject({ cwd: '/workspace', path: '.openseek/sessions/session-1/scratch/artifact/page.html' });
+});
+
+test('an explicit artifact marker can preview an ordinary workspace HTML path', async ({ page }) => {
+  const app = fixture(page, '```openseek-file artifact\nreports/page.html\n```');
+  await app.install(); await app.goto(); await app.openSession();
+  await expect(page.frameLocator('.chat-artifact-frame').locator('svg')).toBeVisible();
+  const read = app.requests.find(request => request.method === 'fs.read_file');
+  expect(read.params).toEqual({ root: '/workspace', path: 'reports/page.html', max_bytes: 8 * 1024 * 1024 });
+});
+
+test('an oversized file keeps its open card without executing partial HTML', async ({ page }) => {
+  const app = fixture(page, fence('large.html'));
+  const ordinary = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'fs.read_file' ? { kind: 'oversized' } : ordinary(request);
+  await app.install(); await app.goto(); await app.openSession();
+  await expect(page.getByRole('button', { name: 'Open large.html', exact: true })).toBeVisible();
+  await expect(page.locator('.chat-artifact-frame')).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('an explicitly marked HTML page larger than the editor default remains interactive', async ({ page }) => {
+  const app = fixture(page, fence('larger.html'));
+  const ordinary = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'fs.read_file'
+    ? { kind: 'content', absolute: '/workspace/larger.html', sig: 'fixture', content: sample + '<!--' + 'x'.repeat(1024 * 1024) + '-->' }
+    : ordinary(request);
+  await app.install(); await app.goto(); await app.openSession();
+  const frame = page.frameLocator('.chat-artifact-frame');
+  await expect(frame.locator('svg')).toBeVisible();
+  await frame.getByRole('button', { name: 'Actual', exact: true }).click();
+  await expect(frame.getByRole('button', { name: 'Actual', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  expect(app.requests.find(request => request.method === 'fs.read_file').params.max_bytes).toBe(8 * 1024 * 1024);
+  expect(app.pageErrors).toEqual([]);
 });

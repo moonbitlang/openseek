@@ -5915,35 +5915,30 @@ fn update_msg(
     RevealFile(path) => {
       guard model.is_desktop &&
         model.active_checkout() is Some(active) &&
-        active.owner.channel is Local &&
-        active.placement is Some(placement) &&
-        placement.checkout_root() is Some(cwd) else {
+        active.owner.channel is Local else {
         return (@cmd.none, model)
       }
+      let target = match model.session_file_target(path) {
+        Some(target) => Some(target)
+        None =>
+          active.placement
+          .bind(placement => placement.checkout_root())
+          .map(root => (root, path))
+      }
+      guard target is Some((cwd, relative)) else { return (@cmd.none, model) }
       (
         reveal_file(
           dispatch,
           active.owner.channel,
           active.owner.session,
           cwd,
-          path,
+          relative,
         ),
         model,
       )
     }
     OpenPathResolved(context, reply) =>
       finish_open_path(dispatch, model, context, reply)
-    ArtifactOpenResolved(context, reply) => {
-      guard context.generation == model.file_panel.file_link_generation &&
-        model.active_checkout() is Some(active) &&
-        active.owner == context.owner else {
-        return (@cmd.none, model)
-      }
-      match reply {
-        Ok(reply) => request_open_path(dispatch, model, reply.path, None)
-        Err(error) => model.notify_error(dispatch, error)
-      }
-    }
     ToggleGitDetails => {
       let opening = !model.git_details_open
       let model = { ..model, git_details_open: opening, }

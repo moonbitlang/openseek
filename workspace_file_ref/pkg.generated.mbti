@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub const ArtifactFenceLanguage : String = "openseek-file artifact"
+
 pub const FenceLanguage : String = "openseek-file"
 
 pub fn artifact_path(String) -> String?

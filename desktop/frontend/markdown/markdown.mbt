@@ -155,11 +155,14 @@ fn code_block(
   let source = lines_text(block.code)
   let language = code_block_language(block)
   let closed = code_block_is_closed(block)
+  let info = block.info_string
+    .map(info => info.v.trim().to_owned())
+    .unwrap_or(language)
   if language == @workspace_file_ref.FenceLanguage {
-    if defer_artifacts && source.trim_start().has_prefix("artifact:") {
+    if defer_artifacts && info == @workspace_file_ref.ArtifactFenceLanguage {
       return @html.nothing
     }
-    match @workspace_file_ref.parse(language, source, closed~) {
+    match @workspace_file_ref.parse(info, source, closed~) {
       Some(reference) => {
         if reference.artifact {
           if defer_artifacts {

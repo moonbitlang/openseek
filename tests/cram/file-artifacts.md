@@ -43,8 +43,8 @@ place in the answer. Its JavaScript is included in the generated HTML file.
 
 ````mooncram
 $ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" chart-v1.html
-```openseek-file
-artifact://chart-v1.html
+```openseek-file artifact
+scratch/artifact/chart-v1.html
 ```
 ````
 
@@ -144,8 +144,8 @@ $ cat > "$PROJECT/main.mbt" <<'EOF'
 
 ````mooncram
 $ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" answer-v2.html
-```openseek-file
-artifact://answer-v2.html
+```openseek-file artifact
+scratch/artifact/answer-v2.html
 ```
 ````
 
@@ -178,8 +178,8 @@ $ PROJECT="$PWD/restored-app"
 
 ````mooncram
 $ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" answer-v3.html
-```openseek-file
-artifact://answer-v3.html
+```openseek-file artifact
+scratch/artifact/answer-v3.html
 ```
 ````
 

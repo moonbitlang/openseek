@@ -20,30 +20,6 @@ async fn validate_artifact_directory(
 }
 
 ///|
-/// Resolve a regular file within this session's scratch/artifact subtree,
-/// checking canonical containment after resolving symlinks.
-pub async fn SessionStore::artifact_file(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-  reference : String,
-) -> String {
-  guard @workspace_file_ref.artifact_path(reference) is Some(relative) else {
-    fail("invalid artifact reference")
-  }
-  let directory = self.artifact_dir(id)
-  validate_artifact_directory(self.scratch_dir(id), directory)
-  let root = @fs.realpath(directory)
-  let target = @fs.realpath("\{root}/\{relative}")
-  guard target.has_prefix(root + "/") || target.has_prefix(root + "\\") else {
-    fail("artifact reference escapes its conversation")
-  }
-  guard @fs.kind(target) is Regular else {
-    fail("artifact is not a regular file")
-  }
-  target
-}
-
-///|
 async fn copy_artifact_tree(source : String, destination : String) -> Unit {
   for name in @fs.readdir(source, include_hidden=true) {
     let from = "\{source}/\{name}"

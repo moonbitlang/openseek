@@ -13,14 +13,16 @@ Use a new descriptive filename for every revision. Insert the finished file
 where it belongs in the answer:
 
 ````markdown
-```openseek-file
-artifact://answer-v1.html
+```openseek-file artifact
+scratch/artifact/answer-v1.html
 ```
 ````
 
-The URI contains a relative file path within the owning session's artifact
-directory. HTML and SVG render in an isolated iframe after the final answer is
-confirmed. Other types use ordinary file cards.
+Paths beginning with `scratch/artifact/` resolve within the owning session.
+An ordinary `openseek-file` fence displays a file card, including for HTML.
+Add `artifact` to the fence info to render self-contained HTML/SVG in an isolated
+iframe after the final answer is confirmed. The same marker works for files
+at ordinary workspace paths. Other types use file cards.
 
 The artifact subtree is retained across calls, saved-session restarts and
 archive/restore. A fork copies it into its own scratch directory; working

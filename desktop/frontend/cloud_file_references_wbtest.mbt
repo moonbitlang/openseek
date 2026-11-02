@@ -262,3 +262,22 @@ test "file sharing resolves relative and absolute paths only inside the owning c
     assert_true(model.workspace_file(path) is None)
   }
 }
+
+///|
+test "session file cards resolve menu actions against the same durable project path as Open" {
+  let model = test_model()
+  let path = "scratch/artifact/page.html"
+  let project = model.active().workspace.project()
+  let expected = @resource.join_relative(
+    project,
+    Relative(".openseek/sessions/desktop-test/scratch/artifact/page.html"),
+  )
+  assert_eq(model.workspace_file(path), Some(expected))
+  assert_eq(
+    model.session_file_target(path),
+    Some(
+      (project, ".openseek/sessions/desktop-test/scratch/artifact/page.html"),
+    ),
+  )
+  assert_true(model.workspace_file("scratch/artifact/../other.html") is None)
+}
