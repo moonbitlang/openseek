@@ -32,9 +32,9 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  min-height: 28px;
+  min-height: calc(var(--ui-font-size, 13px) * 28 / 13);
   box-sizing: border-box;
-  padding-right: 2px;
+  padding-right: calc(var(--ui-font-size, 13px) * 2 / 13);
   color: var(--vscode-peekViewTitleLabel-foreground, inherit);
   background: var(
     --vscode-peekViewTitle-background,
@@ -47,9 +47,9 @@
   flex: 1;
   align-items: baseline;
   min-width: 0;
-  margin-left: 20px;
+  margin-left: calc(var(--ui-font-size, 13px) * 20 / 13);
   overflow: hidden;
-  font-size: 13px;
+  font-size: var(--ui-font-size, 13px);
   white-space: nowrap;
 }
 
@@ -84,15 +84,15 @@
 }
 
 .moonbit-viewer-references-peek-close {
-  width: 24px;
-  height: 24px;
+  width: calc(var(--ui-font-size, 13px) * 24 / 13);
+  height: calc(var(--ui-font-size, 13px) * 24 / 13);
   padding: 0;
   border: 0;
   color: inherit;
   background: transparent;
   font: inherit;
-  font-size: 20px;
-  line-height: 20px;
+  font-size: calc(var(--ui-font-size, 13px) * 20 / 13);
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -146,16 +146,16 @@
   display: flex;
   align-items: center;
   width: 100%;
-  height: 23px;
+  height: calc(var(--ui-font-size, 13px) * 23 / 13);
   box-sizing: border-box;
   overflow: hidden;
-  padding: 0 8px;
+  padding: 0 calc(var(--ui-font-size, 13px) * 8 / 13);
   border: 0;
   color: inherit;
   background: transparent;
   font: inherit;
-  font-size: 12px;
-  line-height: 23px;
+  font-size: calc(var(--ui-font-size, 13px) * 12 / 13);
+  line-height: calc(23 / 12);
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -184,8 +184,8 @@
 
 .moonbit-viewer-reference-results-twistie {
   flex: 0 0 auto;
-  width: 16px;
-  margin-right: 2px;
+  width: calc(var(--ui-font-size, 13px) * 16 / 13);
+  margin-right: calc(var(--ui-font-size, 13px) * 2 / 13);
   color: var(--vscode-icon-foreground, inherit);
   text-align: center;
   transform-origin: center;
@@ -220,18 +220,18 @@
 
 .moonbit-viewer-reference-results-file-count {
   flex: 0 0 auto;
-  min-width: 18px;
+  min-width: calc(var(--ui-font-size, 13px) * 18 / 13);
   margin-left: auto;
-  padding: 0 5px;
+  padding: 0 calc(var(--ui-font-size, 13px) * 5 / 13);
   border-radius: 9px;
   color: var(--vscode-badge-foreground, #fff);
   background: var(--vscode-badge-background, #4d4d4d);
-  line-height: 18px;
+  line-height: 1.5;
   text-align: center;
 }
 
 .moonbit-viewer-reference-results-reference {
-  padding-left: 26px;
+  padding-left: calc(var(--ui-font-size, 13px) * 26 / 13);
 }
 
 .moonbit-viewer-reference-results-snippet {
@@ -317,14 +317,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
+  padding: calc(var(--ui-font-size, 13px) * 12 / 13);
   box-sizing: border-box;
   color: var(--vscode-descriptionForeground, rgba(180, 180, 180, 0.9));
   background: var(
     --vscode-peekViewEditor-background,
     var(--vscode-editor-background)
   );
-  font-size: 12px;
+  font-size: calc(var(--ui-font-size, 13px) * 12 / 13);
   text-align: center;
 }
 
@@ -353,5 +353,5 @@
 }
 
 .moonbit-viewer-reference-results-test-children {
-  padding-left: 12px;
+  padding-left: calc(var(--ui-font-size, 13px) * 12 / 13);
 }

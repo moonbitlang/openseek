@@ -47,10 +47,10 @@
   box-shadow: 0 8px 30px -8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.25));
   border-radius: 9px;
   box-sizing: border-box;
-  padding: 10px;
+  padding: calc(var(--ui-font-size, 13px) * 10 / 13);
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: calc(var(--ui-font-size, 13px) * 8 / 13);
   font: var(--ui-font-size, 13px) / 1.5 var(--ui-font-family, system-ui, sans-serif);
   white-space: normal;
   animation: agentFeedbackInputAppear 0.15s ease-out;
@@ -78,9 +78,9 @@
   box-sizing: border-box;
   flex: 1;
   min-width: 0;
-  min-height: 30px;
-  max-height: 140px;
-  padding: 4px 0;
+  min-height: calc(var(--ui-font-size, 13px) * 30 / 13);
+  max-height: calc(140em / 13);
+  padding: calc(var(--ui-font-size, 13px) * 4 / 13) 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -105,7 +105,7 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: calc(var(--ui-font-size, 13px) * 8 / 13);
 }
 
 .agent-feedback-input-widget .agent-feedback-input-action {
@@ -114,8 +114,8 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 30px;
-  height: 30px;
+  width: calc(var(--ui-font-size, 13px) * 30 / 13);
+  height: calc(var(--ui-font-size, 13px) * 30 / 13);
   padding: 0;
   border: 0;
   border-radius: 6px;
@@ -147,8 +147,8 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
-  min-height: 30px;
+  gap: calc(var(--ui-font-size, 13px) * 4 / 13);
+  min-height: calc(var(--ui-font-size, 13px) * 30 / 13);
   color: var(--vscode-descriptionForeground, var(--vscode-foreground));
   cursor: pointer;
   white-space: nowrap;
@@ -177,12 +177,12 @@
   position: absolute;
   pointer-events: auto;
   max-width: 280px;
-  min-width: 180px;
+  min-width: calc(var(--ui-font-size, 13px) * 180 / 13);
   background-color: var(--vscode-editorWidget-background);
   border: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, #454545));
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-size, 13px) * 12 / 13);
   line-height: 1.4;
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
@@ -204,12 +204,12 @@
 .agent-feedback-widget-header {
   display: flex;
   align-items: center;
-  padding: 4px 4px 4px 8px;
+  padding: calc(var(--ui-font-size, 13px) * 4 / 13) calc(var(--ui-font-size, 13px) * 4 / 13) calc(var(--ui-font-size, 13px) * 4 / 13) calc(var(--ui-font-size, 13px) * 8 / 13);
   border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
   border-radius: 6px 6px 0 0;
   overflow: hidden;
   cursor: pointer;
-  gap: 6px;
+  gap: calc(var(--ui-font-size, 13px) * 6 / 13);
 }
 
 .agent-feedback-widget.collapsed .agent-feedback-widget-header {
@@ -230,7 +230,7 @@
 
 .agent-feedback-widget-title {
   font-weight: 600;
-  line-height: 16px;
+  line-height: calc(16 / 12);
   color: var(--vscode-foreground);
   white-space: nowrap;
   overflow: hidden;
@@ -246,9 +246,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
+  width: calc(var(--ui-font-size, 13px) * 22 / 13);
+  height: calc(var(--ui-font-size, 13px) * 22 / 13);
+  min-width: calc(var(--ui-font-size, 13px) * 22 / 13);
   border-radius: 4px;
   cursor: pointer;
   color: var(--vscode-foreground);
@@ -289,11 +289,11 @@
 .agent-feedback-widget-item {
   display: flex;
   flex-direction: column;
-  padding: 4px 4px 8px 8px;
+  padding: calc(var(--ui-font-size, 13px) * 4 / 13) calc(var(--ui-font-size, 13px) * 4 / 13) calc(var(--ui-font-size, 13px) * 8 / 13) calc(var(--ui-font-size, 13px) * 8 / 13);
   border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
   cursor: pointer;
   position: relative;
-  gap: 6px;
+  gap: calc(var(--ui-font-size, 13px) * 6 / 13);
 }
 
 .agent-feedback-widget-item:last-child {
@@ -313,13 +313,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(var(--ui-font-size, 13px) * 8 / 13);
 }
 
 .agent-feedback-widget-item-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(var(--ui-font-size, 13px) * 6 / 13);
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -331,7 +331,7 @@
   visibility: hidden;
   pointer-events: none;
   display: flex;
-  gap: 2px;
+  gap: calc(var(--ui-font-size, 13px) * 2 / 13);
 }
 
 .agent-feedback-widget-item:hover .agent-feedback-widget-item-actions {
@@ -341,9 +341,9 @@
 }
 
 .agent-feedback-widget-action {
-  width: 16px;
-  height: 16px;
-  padding: 2px;
+  width: calc(var(--ui-font-size, 13px) * 16 / 13);
+  height: calc(var(--ui-font-size, 13px) * 16 / 13);
+  padding: calc(var(--ui-font-size, 13px) * 2 / 13);
   border: none;
   border-radius: 3px;
   background: transparent;
@@ -378,9 +378,9 @@
 .agent-feedback-widget-item-type {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: calc(var(--ui-font-size, 13px) * 2 / 13) calc(var(--ui-font-size, 13px) * 6 / 13);
   border-radius: 2px;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-size, 13px) * 10 / 13);
   font-weight: 600;
   letter-spacing: 0.2px;
   background: color-mix(in srgb, var(--vscode-charts-purple, #b180d7) 22%, var(--vscode-editorWidget-background));
@@ -388,7 +388,7 @@
 }
 
 .agent-feedback-widget-line-info {
-  font-size: 10px;
+  font-size: calc(var(--ui-font-size, 13px) * 10 / 13);
   font-weight: 600;
   color: var(--vscode-descriptionForeground);
   text-transform: uppercase;
@@ -411,8 +411,8 @@
 .agent-feedback-widget-text code,
 .agent-feedback-widget-reply-text code {
   font-family: var(--monaco-monospace-font, monospace);
-  font-size: 10px;
-  padding: 1px 4px;
+  font-size: calc(var(--ui-font-size, 13px) * 10 / 13);
+  padding: calc(var(--ui-font-size, 13px) * 1 / 13) calc(var(--ui-font-size, 13px) * 4 / 13);
   border-radius: 2px;
   background: color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 25%, transparent);
 }
@@ -439,19 +439,19 @@
 }
 
 .agent-feedback-widget-text.editing {
-  padding: 0 4px 0 0;
+  padding: 0 calc(var(--ui-font-size, 13px) * 4 / 13) 0 0;
 }
 
 .agent-feedback-widget-edit-textarea {
   width: 100%;
-  min-height: 22px;
-  padding: 4px 6px;
+  min-height: calc(var(--ui-font-size, 13px) * 22 / 13);
+  padding: calc(var(--ui-font-size, 13px) * 4 / 13) calc(var(--ui-font-size, 13px) * 6 / 13);
   border: 1px solid var(--vscode-focusBorder);
   border-radius: 2px;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-size, 13px) * 12 / 13);
   line-height: 1.4;
   resize: none;
   overflow: hidden;
@@ -466,11 +466,11 @@
 .agent-feedback-widget-replies {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(var(--ui-font-size, 13px) * 4 / 13);
 }
 
 .agent-feedback-widget-reply {
-  padding-top: 4px;
+  padding-top: calc(var(--ui-font-size, 13px) * 4 / 13);
   border-top: 1px dashed color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 60%, transparent);
 }
 
@@ -483,7 +483,7 @@
 }
 
 .agent-feedback-widget-add-reply {
-  padding-top: 4px;
+  padding-top: calc(var(--ui-font-size, 13px) * 4 / 13);
   border-top: 1px dashed color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 60%, transparent);
 }
 
@@ -494,16 +494,16 @@
 
 .agent-feedback-widget-actions-bar {
   display: flex;
-  gap: 6px;
-  margin-top: 4px;
+  gap: calc(var(--ui-font-size, 13px) * 6 / 13);
+  margin-top: calc(var(--ui-font-size, 13px) * 4 / 13);
 }
 
 .agent-feedback-widget-actions-bar button {
   flex: 1;
-  padding: 2px 10px;
+  padding: calc(var(--ui-font-size, 13px) * 2 / 13) calc(var(--ui-font-size, 13px) * 10 / 13);
   width: auto;
-  font-size: 11px;
-  line-height: 18px;
+  font-size: calc(var(--ui-font-size, 13px) * 11 / 13);
+  line-height: calc(18 / 11);
   border: none;
   border-radius: 2px;
   cursor: pointer;
