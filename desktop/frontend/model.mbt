@@ -369,13 +369,6 @@ fn AppFontSize::base_pixels(self : AppFontSize) -> Int32 {
 }
 
 ///|
-/// Measured monospace surfaces use one pixel less than the selected app base.
-/// Their larger-looking glyphs then align with surrounding system-sans text.
-fn AppFontSize::pixels(self : AppFontSize) -> Double {
-  (self.base_pixels() - 1).to_double()
-}
-
-///|
 const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
 
 ///|

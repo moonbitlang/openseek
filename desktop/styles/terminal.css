@@ -65,15 +65,15 @@ html.is-resizing-terminal * {
 .terminal-titlebar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
+  gap: calc(1rem * 10 / 14);
+  padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--color-separator);
   color: var(--color-text-secondary);
   font: 500 var(--font-size-sm)/var(--line-height-normal)
     var(--font-family-sans);
 }
 .terminal-title {
-  margin-right: 4px;
+  margin-right: var(--space-2);
   color: var(--color-text-primary);
 }
 .terminal-tab {
@@ -91,8 +91,8 @@ html.is-resizing-terminal * {
 .terminal-tab-select {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 4px 3px 8px;
+  gap: var(--space-3);
+  padding: calc(1rem * 3 / 14) var(--space-2) calc(1rem * 3 / 14) var(--space-4);
   border: 0;
   background: none;
   color: var(--color-text-secondary);
@@ -107,7 +107,7 @@ html.is-resizing-terminal * {
   color: var(--color-danger);
 }
 .terminal-tab-close {
-  padding: 3px 6px 3px 2px;
+  padding: calc(1rem * 3 / 14) var(--space-3) calc(1rem * 3 / 14) var(--space-1);
   border: 0;
   background: none;
   color: var(--color-text-muted);
@@ -118,7 +118,7 @@ html.is-resizing-terminal * {
   color: var(--color-text-primary);
 }
 .terminal-new {
-  padding: 2px 6px;
+  padding: var(--space-1) var(--space-3);
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
@@ -170,7 +170,7 @@ html.is-resizing-terminal * {
    full height, then subtracts the terminal element's inset. */
 .terminal-instance .xterm {
   height: 100%;
-  padding: 8px 12px 14px;
+  padding: var(--space-4) var(--space-5) 1rem;
   /* Keep body tracking out of xterm's hidden glyph-width measurements. */
   letter-spacing: normal;
 }

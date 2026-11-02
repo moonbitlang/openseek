@@ -323,14 +323,22 @@ test('new terminals and existing terminals use the current font size', async ({ 
   await app.openSession();
   await page.keyboard.press('Control+Backquote');
   await expect(page.locator('.terminal-instance:visible .xterm-helper-textarea')).toBeFocused();
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([17]);
+  const resolvedSize = () => page.evaluate(() => parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--font-size-sm'),
+  ));
+  expect(await resolvedSize()).toBeCloseTo(18 * 13 / 14, 3);
+  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize)))
+    .toEqual([await resolvedSize()]);
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await fontSize.fill('12');
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11]);
+  expect(await resolvedSize()).toBeCloseTo(12 * 13 / 14, 3);
+  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize)))
+    .toEqual([await resolvedSize()]);
   await app.openSession();
   await page.getByTitle('New terminal in this workspace', { exact: true }).click();
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11, 11]);
+  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize)))
+    .toEqual([await resolvedSize(), await resolvedSize()]);
   expect(app.pageErrors).toEqual([]);
 });
 

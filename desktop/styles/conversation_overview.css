@@ -31,7 +31,7 @@ main:has(> .conv-overview) {
   box-sizing: border-box;
   width: var(--conv-overview-width);
   max-width: calc(100% - 16px);
-  padding: 2px 14px;
+  padding: var(--space-1) 1rem;
   overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -42,7 +42,7 @@ main:has(> .conv-overview) {
 }
 
 .conv-overview-card {
-  padding: 10px 0;
+  padding: calc(1rem * 10 / 14) 0;
   border-bottom: 1px solid var(--color-border-subtle);
 }
 .conv-overview-card:last-child {
@@ -59,7 +59,7 @@ main:has(> .conv-overview) {
     margin-inline-end: var(--conv-overview-width);
   }
   main:has(> .conv-overview) > .transcript {
-    padding-inline-end: calc(24px + var(--conv-overview-width));
+    padding-inline-end: calc(var(--space-7) + var(--conv-overview-width));
   }
 
   /* The rail hangs from the transcript row, as tall as its cards and at
@@ -77,9 +77,9 @@ main:has(> .conv-overview) {
     max-height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: calc(1rem * 10 / 14);
     max-width: none;
-    padding: 12px 0 16px;
+    padding: var(--space-5) 0 var(--space-6);
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -88,7 +88,7 @@ main:has(> .conv-overview) {
 
   .conv-overview-card,
   .conv-overview-card:last-child {
-    padding: 10px 12px;
+    padding: calc(1rem * 10 / 14) var(--space-5);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     background: var(--color-bg-surface);
@@ -98,15 +98,15 @@ main:has(> .conv-overview) {
 .conv-overview-card-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 22px;
+  gap: var(--space-3);
+  min-height: calc(1rem * 22 / 14);
 }
 
 .conv-overview-card-title {
   --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   padding: 0;
   border: 0;
   background: transparent;
@@ -127,7 +127,7 @@ main:has(> .conv-overview) {
 .conv-overview-card-aside {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
   margin-inline-start: auto;
   color: var(--color-text-muted);
@@ -144,8 +144,8 @@ main:has(> .conv-overview) {
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: calc(1rem * 22 / 14);
+  height: calc(1rem * 22 / 14);
   padding: 0;
   border: 0;
   border-radius: var(--radius-xs);
@@ -168,15 +168,15 @@ main:has(> .conv-overview) {
 
 .conv-overview-card-rows {
   display: grid;
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .conv-overview-row {
   --icon-size: var(--icon-md);
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: calc(1rem * 9 / 14);
   min-width: 0;
   color: var(--color-text-primary);
 }
@@ -207,7 +207,7 @@ main:has(> .conv-overview) {
 
 .conv-overview-tag {
   flex: none;
-  padding: 0 7px;
+  padding: 0 calc(1rem * 7 / 14);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   color: var(--color-text-muted);
@@ -221,7 +221,7 @@ main:has(> .conv-overview) {
 .conv-changes-error {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -230,11 +230,11 @@ main:has(> .conv-overview) {
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 9px;
+  gap: calc(1rem * 9 / 14);
   min-width: 0;
   min-height: 22px;
-  margin-inline: -4px;
-  padding-inline: 4px;
+  margin-inline: calc(1rem * -4 / 14);
+  padding-inline: var(--space-2);
   border-radius: var(--radius-xs);
   color: var(--color-text-primary);
   text-decoration: none;
@@ -265,7 +265,7 @@ a.conv-changes-link:hover {
   display: flex;
   flex: 1 1 auto;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -293,7 +293,7 @@ a.conv-changes-link:hover {
 .conv-changes-diff {
   display: flex;
   flex: none;
-  gap: 5px;
+  gap: calc(1rem * 5 / 14);
   font-variant-numeric: tabular-nums;
 }
 .conv-changes-diff .added {
@@ -321,7 +321,7 @@ a.conv-changes-link:hover {
 
 .conv-changes-error > .run-dot {
   flex: none;
-  margin-inline: 5px;
+  margin-inline: calc(1rem * 5 / 14);
 }
 
 /* An attached branch's repository gives way before its name does. */

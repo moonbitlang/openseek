@@ -4,7 +4,7 @@
   display: grid;
   place-items: center;
   overflow: auto;
-  padding: 16px;
+  padding: var(--space-6);
 }
 
 .file-image-preview img {
@@ -43,9 +43,9 @@ button.panel-toggle:not(:disabled):hover {
 .file-reveal-button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(1rem * 5 / 14);
   flex-shrink: 0;
-  padding: 4px 8px;
+  padding: var(--space-2) var(--space-4);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -93,7 +93,7 @@ button.panel-toggle:not(:disabled):hover {
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(1rem * 10 / 14);
   flex: 0 0 auto;
   height: var(--topbar-height);
   padding: 0 var(--panel-toggle-reserved-width) 0 calc(var(--font-size-base) * 12 / 14);
@@ -106,7 +106,7 @@ button.panel-toggle:not(:disabled):hover {
 .editor-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
@@ -122,10 +122,10 @@ button.panel-toggle:not(:disabled):hover {
 .editor-tab {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   flex: 0 0 auto;
   max-width: min(200px, 100%);
-  padding: 4px 4px 4px 10px;
+  padding: var(--space-2) var(--space-2) var(--space-2) calc(1rem * 10 / 14);
   font-size: var(--font-size-sm);
   color: var(--color-text-faint);
   border-radius: var(--radius-sm);
@@ -216,10 +216,10 @@ button.panel-toggle:not(:disabled):hover {
   overflow: auto;
 }
 .office-viewer-surface.word-mode {
-  padding: 28px 24px 56px;
+  padding: 2rem var(--space-7) calc(1rem * 56 / 14);
 }
 .office-viewer-surface.sheet-mode {
-  padding: 20px 20px 44px;
+  padding: calc(1rem * 20 / 14) calc(1rem * 20 / 14) calc(1rem * 44 / 14);
 }
 .office-viewer-surface.office-viewer-surface-empty {
   display: none !important;
@@ -263,7 +263,7 @@ button.panel-toggle:not(:disabled):hover {
   box-sizing: border-box;
   max-width: 420px;
   margin: auto;
-  padding: 24px;
+  padding: var(--space-7);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-relaxed);
@@ -276,7 +276,7 @@ button.panel-toggle:not(:disabled):hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-7);
   text-align: center;
   font-size: var(--font-size-md);
   color: var(--color-text-secondary);
@@ -284,7 +284,7 @@ button.panel-toggle:not(:disabled):hover {
 }
 .viewer-notice.has-action {
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-5);
 }
 .viewer-notice.diff-transition-shield {
   color: transparent;
@@ -467,7 +467,7 @@ html:is(
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-7);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
@@ -522,7 +522,7 @@ html:is(
   position-area: block-end span-inline-start;
   position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
   inset: auto;
-  margin: 6px 0 0;
+  margin: var(--space-3) 0 0;
   width: 280px;
   max-width: calc(100dvw - 24px);
   max-height: min(360px, calc(100dvh - 24px), calc(100% - 12px));
@@ -535,8 +535,8 @@ html:is(
 }
 .dock-menu-row {
   grid-template-columns: 16px minmax(0, 1fr);
-  column-gap: 10px;
-  row-gap: 2px;
+  column-gap: calc(1rem * 10 / 14);
+  row-gap: var(--space-1);
 }
 .dock-menu .dock-launcher-hint {
   grid-column: 2;
@@ -561,15 +561,15 @@ html:is(
 .dock-launcher-menu {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 280px;
 }
 .dock-launcher-row {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: calc(1rem * 11 / 14);
   width: 100%;
-  padding: 9px 11px;
+  padding: calc(1rem * 9 / 14) calc(1rem * 11 / 14);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -606,9 +606,9 @@ html:is(
 .browser-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   flex: 0 0 auto;
-  padding: 7px 10px;
+  padding: calc(1rem * 7 / 14) calc(1rem * 10 / 14);
   border-bottom: 1px solid var(--color-separator);
 }
 .browser-nav-button {
@@ -654,11 +654,11 @@ html:is(
 }
 .browser-address {
   flex: 1 1 auto;
-  padding: 5px 10px;
+  padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14);
 }
 .browser-failure {
   flex: 0 0 auto;
-  padding: 6px 12px;
+  padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-danger);
   font-size: var(--font-size-sm);
@@ -695,20 +695,20 @@ html:is(
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px;
+  gap: calc(1rem * 3 / 14);
   flex: 0 0 auto;
-  padding: 10px 10px 6px 12px;
+  padding: calc(1rem * 10 / 14) calc(1rem * 10 / 14) var(--space-3) var(--space-5);
 }
 .search-query-row > input,
 .search-query-row > textarea,
 .search-semantic-source input,
 .search-semantic-source textarea {
-  flex: 1 1 120px;
-  min-width: 80px;
-  height: 28px;
-  min-height: 28px;
-  max-height: 140px;
-  padding: 4px 8px;
+  flex: 1 1 calc(1rem * 120 / 14);
+  min-width: calc(1rem * 80 / 14);
+  height: calc(28em / 13);
+  min-height: calc(1lh + 8em / 13 + calc(1rem * 2 / 14));
+  max-height: calc(140em / 13);
+  padding: calc(4em / 13) calc(8em / 13);
   border-radius: var(--radius-xs);
   font-size: var(--font-size-sm);
   line-height: 1.35;
@@ -718,9 +718,9 @@ html:is(
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 4px;
+  min-width: calc(1rem * 26 / 14);
+  height: calc(1rem * 26 / 14);
+  padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-xs);
   background: transparent;
@@ -739,8 +739,8 @@ html:is(
 }
 .search-option > svg {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: calc(1rem * 16 / 14);
+  height: calc(1rem * 16 / 14);
 }
 /* Mode selector: text vs semantic, mirroring semgrep's search-mode split. */
 .search-mode {
@@ -752,8 +752,8 @@ html:is(
   overflow: hidden;
 }
 .search-mode-button {
-  height: 26px;
-  padding: 0 8px;
+  min-height: calc(26em / 12);
+  padding: 0 calc(8em / 12);
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
@@ -777,7 +777,7 @@ html:is(
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: calc(1rem * 3 / 14);
 }
 /* Semantic hits: one structural match per block, semgrep-style. */
 .search-semantic-pattern-group {
@@ -786,10 +786,10 @@ html:is(
 .search-semantic-pattern-header {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-3);
   width: 100%;
   min-width: 0;
-  padding: 6px 10px 6px 8px;
+  padding: var(--space-3) calc(1rem * 10 / 14) var(--space-3) var(--space-4);
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
@@ -805,7 +805,7 @@ html:is(
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  padding: 1px 6px;
+  padding: calc(1rem * 1 / 14) var(--space-3);
   border-radius: var(--radius-xs);
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
@@ -815,21 +815,21 @@ html:is(
 }
 .search-semantic-pattern-results {
   min-width: 0;
-  margin-left: 12px;
+  margin-left: var(--space-5);
   border-left: 1px solid var(--color-border);
 }
 .search-semantic-pattern-results > .search-file-group {
-  margin-left: 8px;
+  margin-left: var(--space-4);
 }
 .search-semantic-pattern-results .search-file-results {
-  margin-left: 16px;
+  margin-left: var(--space-6);
   border-left: 1px solid var(--color-border);
 }
 .search-selection-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: var(--space-3);
+  padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
@@ -839,7 +839,7 @@ html:is(
 }
 .search-selection-toolbar button {
   margin-left: auto;
-  padding: 3px 7px;
+  padding: calc(1rem * 3 / 14) calc(1rem * 7 / 14);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
   background: var(--color-bg-subtle);
@@ -857,10 +857,10 @@ html:is(
 }
 .search-semantic-hit {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 1fr) calc(1rem * 24 / 14);
   align-items: start;
-  gap: 6px;
-  padding: 6px 10px 6px 10px;
+  gap: var(--space-3);
+  padding: var(--space-3) calc(1rem * 10 / 14) var(--space-3) calc(1rem * 10 / 14);
   cursor: pointer;
   border-radius: var(--radius-xs);
 }
@@ -869,8 +869,8 @@ html:is(
   grid-row: 1;
   justify-self: end;
   align-self: start;
-  width: 20px;
-  height: 20px;
+  width: calc(1rem * 20 / 14);
+  height: calc(1rem * 20 / 14);
   padding: 0;
   border: 0;
   background: transparent;
@@ -881,7 +881,7 @@ html:is(
 .search-semantic-group-select {
   display: inline-block;
   flex: 0 0 auto;
-  padding: 0 3px;
+  padding: 0 calc(1rem * 3 / 14);
   border: 0;
   background: transparent;
   color: var(--color-text-muted);
@@ -907,21 +907,21 @@ html:is(
 }
 .search-details {
   display: grid;
-  gap: 7px;
+  gap: calc(1rem * 7 / 14);
   flex: 0 0 auto;
-  padding: 2px 10px 8px 12px;
+  padding: var(--space-1) calc(1rem * 10 / 14) var(--space-4) var(--space-5);
 }
 .search-details label {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
 .search-details input {
-  height: 26px;
-  padding: 3px 7px;
+  min-height: calc(26em / 13);
+  padding: calc(3em / 13) calc(7em / 13);
   border-radius: var(--radius-xs);
   font-size: var(--font-size-sm);
 }
@@ -931,13 +931,13 @@ html:is(
 .search-semantic-source {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
 }
 .search-code-patterns {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 0 10px 6px 12px;
+  gap: calc(1rem * 3 / 14);
+  padding: 0 calc(1rem * 10 / 14) var(--space-3) var(--space-5);
   align-items: stretch;
 }
 .search-code-patterns .search-semantic-source {
@@ -947,7 +947,7 @@ html:is(
   align-self: flex-start;
 }
 .search-semantic-source > .search-option {
-  min-width: 58px;
+  min-width: calc(1rem * 58 / 14);
   justify-content: start;
   font-size: var(--font-size-xs);
 }
@@ -955,13 +955,13 @@ html:is(
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   flex: 0 0 auto;
-  padding: 0 10px 7px 12px;
+  padding: 0 calc(1rem * 10 / 14) calc(1rem * 7 / 14) var(--space-5);
   border-bottom: 1px solid var(--color-border);
 }
 .search-toolbar button {
-  padding: 3px 7px;
+  padding: calc(1rem * 3 / 14) calc(1rem * 7 / 14);
   border: 0;
   border-radius: var(--radius-xs);
   background: transparent;
@@ -978,16 +978,16 @@ html:is(
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding-bottom: 12px;
+  padding-bottom: var(--space-5);
 }
 .search-summary {
-  padding: 8px 12px 5px;
+  padding: var(--space-4) var(--space-5) calc(1rem * 5 / 14);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
 }
 .search-truncated {
-  margin: 2px 10px 7px;
-  padding: 7px 8px;
+  margin: var(--space-1) calc(1rem * 10 / 14) calc(1rem * 7 / 14);
+  padding: calc(1rem * 7 / 14) var(--space-4);
   border: 1px solid color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
   border-radius: var(--radius-xs);
   color: var(--color-text-secondary);
@@ -1000,10 +1000,10 @@ html:is(
 .search-file-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   width: 100%;
   min-width: 0;
-  padding: 5px 10px 5px 8px;
+  padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14) calc(1rem * 5 / 14) var(--space-4);
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
@@ -1043,12 +1043,12 @@ html:is(
 .search-file-count {
   flex: 0 0 auto;
   min-width: 18px;
-  padding: 0 5px;
+  padding: 0 calc(1rem * 5 / 14);
   border-radius: 9px;
   background: var(--color-bg-subtle);
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
-  line-height: 18px;
+  line-height: calc(18 / 12);
   text-align: center;
 }
 .search-file-results {
@@ -1056,7 +1056,7 @@ html:is(
 }
 .search-result-row {
   min-width: 0;
-  padding: 4px 0;
+  padding: var(--space-2) 0;
 }
 .search-preview-line:focus-visible {
   outline: 1px solid var(--color-accent);
@@ -1068,7 +1068,7 @@ html:is(
   align-items: baseline;
   width: 100%;
   min-width: 0;
-  padding: 0 10px 0 8px;
+  padding: 0 calc(1rem * 10 / 14) 0 var(--space-4);
   border: 0;
   background: transparent;
   color: var(--color-text-primary);
@@ -1083,7 +1083,7 @@ html:is(
   color: var(--color-text-secondary);
 }
 .search-result-line {
-  padding-right: 8px;
+  padding-right: var(--space-4);
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -1103,11 +1103,11 @@ html:is(
 .search-show-more {
   display: grid;
   justify-items: center;
-  gap: 4px;
-  padding: 12px 10px 4px;
+  gap: var(--space-2);
+  padding: var(--space-5) calc(1rem * 10 / 14) var(--space-2);
 }
 .search-show-more button {
-  padding: 5px 9px;
+  padding: calc(1rem * 5 / 14) calc(1rem * 9 / 14);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
   background: var(--color-bg-subtle);
@@ -1127,7 +1127,7 @@ html:is(
 }
 .search-empty,
 .search-no-workspace {
-  padding: 26px 20px;
+  padding: calc(1rem * 26 / 14) calc(1rem * 20 / 14);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   text-align: center;
@@ -1140,7 +1140,7 @@ html:is(
   color: var(--color-danger);
 }
 .search-empty-title {
-  margin-bottom: 5px;
+  margin-bottom: calc(1rem * 5 / 14);
   color: var(--color-text-primary);
   font-weight: 600;
 }
@@ -1152,9 +1152,9 @@ html:is(
 .search-pattern-repair-status {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 0 10px 8px 12px;
-  padding: 7px 9px;
+  gap: var(--space-3);
+  margin: 0 calc(1rem * 10 / 14) var(--space-4) var(--space-5);
+  padding: calc(1rem * 7 / 14) calc(1rem * 9 / 14);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
   background: var(--color-bg-subtle);
@@ -1176,11 +1176,11 @@ html:is(
   color: var(--color-text-secondary);
 }
 .search-pattern-repair-details summary {
-  margin-top: 4px;
+  margin-top: var(--space-2);
   cursor: pointer;
 }
 .search-pattern-repair-diagnostic {
-  margin: 5px 0 0;
+  margin: calc(1rem * 5 / 14) 0 0;
   max-height: 120px;
   overflow: auto;
   white-space: pre-wrap;
@@ -1188,18 +1188,18 @@ html:is(
 }
 .search-pattern-repair-candidate,
 .search-pattern-repair-trace {
-  margin-top: 8px;
+  margin-top: var(--space-4);
 }
 .search-pattern-repair-candidate-value {
-  margin: 4px 0 0;
+  margin: var(--space-2) 0 0;
   max-height: 100px;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .search-pattern-repair-trace-list {
-  margin: 4px 0 0;
-  padding-left: 20px;
+  margin: var(--space-2) 0 0;
+  padding-left: calc(1rem * 20 / 14);
   max-height: 180px;
   overflow: auto;
   color: var(--color-text-muted);
@@ -1212,7 +1212,7 @@ html:is(
   opacity: .72;
 }
 .search-fix-pattern-link {
-  margin-left: 8px;
+  margin-left: var(--space-4);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1224,7 +1224,7 @@ html:is(
 }
 .file-panel-error {
   flex: 0 0 auto;
-  padding: 8px 12px;
+  padding: var(--space-4) var(--space-5);
   font-size: var(--font-size-sm);
   color: var(--color-danger);
   background: var(--color-bg-subtle);
@@ -1233,20 +1233,20 @@ html:is(
 .explorer-tabs {
   display: flex;
   flex: 0 0 auto;
-  gap: 2px;
-  padding: 7px 4px 4px;
+  gap: var(--space-1);
+  padding: calc(1rem * 7 / 14) var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--color-separator);
 }
 
 .explorer-tab {
   flex: 0 0 auto;
-  min-width: 28px;
-  min-height: 28px;
+  min-width: 2rem;
+  min-height: 2rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 6px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: var(--radius-xs);
   color: var(--color-text-secondary);
@@ -1269,12 +1269,12 @@ html:is(
 
 .explorer-count {
   min-width: 16px;
-  padding: 0 4px;
+  padding: 0 var(--space-2);
   border-radius: 8px;
   color: var(--color-text-secondary);
   background: color-mix(in srgb, var(--color-text-primary) 9%, transparent);
   font-size: var(--font-size-xs);
-  line-height: 16px;
+  line-height: calc(16 / 12);
   text-align: center;
 }
 
@@ -1287,7 +1287,7 @@ html:is(
   min-height: 0;
   overflow: auto;
   scrollbar-gutter: stable;
-  padding: 4px 0 8px;
+  padding: var(--space-2) 0 var(--space-4);
 }
 
 /* Keep the tree directly beneath the existing Files tab. Its compact spacing
@@ -1296,7 +1296,7 @@ html:is(
   --tree-step: 14px;
   --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
   overscroll-behavior: contain;
-  padding: 4px max(0px, 4px - var(--scrollbar-lane)) 8px 4px;
+  padding: var(--space-2) max(0px, var(--space-2) - var(--scrollbar-lane)) var(--space-4) var(--space-2);
 }
 /* One continuous guide per ancestor, centered below its chevron. A root row
    has zero guide width, ending the preceding subtree without extra state. */
@@ -1367,11 +1367,11 @@ html:is(
 .review-section-header {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   flex: 0 0 auto;
   width: 100%;
-  min-height: 30px;
-  padding: 4px 8px;
+  min-height: calc(1rem * 30 / 14);
+  padding: var(--space-2) var(--space-4);
   border: 0;
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
@@ -1400,7 +1400,7 @@ button.review-section-header:hover,
 }
 
 .review-section-header > .explorer-count {
-  margin-left: 4px;
+  margin-left: var(--space-2);
 }
 
 .review-section-chevron,
@@ -1450,20 +1450,20 @@ html.is-resizing-review * {
 
 .git-graph-header {
   justify-content: flex-start;
-  gap: 2px;
-  height: 30px;
-  min-height: 30px;
-  padding: 0 4px 0 8px;
+  gap: var(--space-1);
+  height: calc(1rem * 30 / 14);
+  min-height: calc(1rem * 30 / 14);
+  padding: 0 var(--space-2) 0 var(--space-4);
 }
 
 .git-graph-collapse {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   flex: 0 1 auto;
   min-width: 0;
   align-self: stretch;
-  padding: 0 2px 0 0;
+  padding: 0 var(--space-1) 0 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -1488,7 +1488,7 @@ html.is-resizing-review * {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 2px;
+  gap: var(--space-1);
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
@@ -1498,16 +1498,16 @@ html.is-resizing-review * {
 .git-graph-context {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100px;
-  height: 22px;
-  padding: 0 2px;
+  height: calc(1rem * 22 / 14);
+  padding: 0 var(--space-1);
   overflow: hidden;
   color: var(--color-text-primary);
   font-size: var(--font-size-md);
-  line-height: 22px;
+  line-height: calc(22 / 14);
   white-space: nowrap;
 }
 
@@ -1521,9 +1521,9 @@ html.is-resizing-review * {
 
 .git-graph-context-icon {
   display: flex;
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
+  flex: 0 0 calc(1rem * 16 / 14);
+  width: calc(1rem * 16 / 14);
+  height: calc(1rem * 16 / 14);
   color: var(--color-text-secondary);
 }
 
@@ -1538,9 +1538,9 @@ html.is-resizing-review * {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
+  flex: 0 0 calc(1rem * 22 / 14);
+  width: calc(1rem * 22 / 14);
+  height: calc(1rem * 22 / 14);
   padding: 0;
   border: 0;
   border-radius: 4px;
@@ -1550,8 +1550,8 @@ html.is-resizing-review * {
 
 .git-graph-refresh-icon {
   display: flex;
-  width: 16px;
-  height: 16px;
+  width: calc(1rem * 16 / 14);
+  height: calc(1rem * 16 / 14);
 }
 
 .git-graph-body {
@@ -1576,15 +1576,15 @@ html.is-resizing-review * {
   align-items: center;
   width: 100%;
   min-width: 0;
-  height: 22px;
-  min-height: 22px;
-  padding: 0 4px 0 0;
+  height: calc(1rem * 22 / 14);
+  min-height: calc(1rem * 22 / 14);
+  padding: 0 var(--space-2) 0 0;
   overflow: hidden;
   border: 0;
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
-  line-height: 22px;
+  line-height: calc(22 / 14);
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -1613,14 +1613,17 @@ html.is-resizing-review * {
 .git-graph-cell {
   display: flex;
   flex: 0 0 auto;
-  height: 22px;
+  height: calc(1rem * 22 / 14);
   overflow: hidden;
 }
 
 .git-graph-svg {
   display: block;
   flex: none;
-  height: 22px;
+  /* The viewBox keeps the normalized graph coordinates; both display axes
+     follow the row height, including expanded-file continuation segments. */
+  width: auto;
+  height: calc(1rem * 22 / 14);
 }
 
 .git-graph-edge {
@@ -1665,12 +1668,12 @@ html.is-resizing-review * {
 .git-commit-label {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   flex: 1 1 auto;
   min-width: 0;
-  height: 22px;
+  height: calc(1rem * 22 / 14);
   overflow: hidden;
-  margin-left: 4px;
+  margin-left: var(--space-2);
 }
 
 .git-commit-subject,
@@ -1702,12 +1705,12 @@ html.is-resizing-review * {
 .git-ref-list {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   flex: 0 1 auto;
   min-width: 0;
   max-width: 46%;
-  height: 18px;
-  margin-left: 4px;
+  height: calc(1rem * 18 / 14);
+  margin-left: var(--space-2);
   overflow: hidden;
 }
 
@@ -1718,18 +1721,18 @@ html.is-resizing-review * {
 .git-ref {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: calc(1rem * 1 / 14);
   flex: 0 1 auto;
-  min-width: 18px;
+  min-width: 1.5em;
   max-width: 122px;
-  height: 18px;
+  height: 1.5em;
   overflow: hidden;
-  padding: 0 4px 0 2px;
+  padding: 0 var(--space-2) 0 var(--space-1);
   border-radius: 10px;
   color: var(--color-bg-surface);
   background: var(--git-graph-current);
   font-size: var(--font-size-xs);
-  line-height: 18px;
+  line-height: calc(18 / 12);
   white-space: nowrap;
 }
 
@@ -1741,15 +1744,15 @@ html.is-resizing-review * {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
+  flex: 0 0 1rem;
+  width: 1rem;
+  height: 1rem;
 }
 
 .git-ref-current .git-ref-icon svg,
 .git-ref-head .git-ref-icon svg {
-  width: 12px;
-  height: 12px;
+  width: calc(1rem * 12 / 14);
+  height: calc(1rem * 12 / 14);
 }
 
 .git-ref-name {
@@ -1764,9 +1767,9 @@ html.is-resizing-review * {
   display: none;
   align-items: center;
   justify-content: center;
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
+  flex: 0 0 calc(1rem * 22 / 14);
+  width: calc(1rem * 22 / 14);
+  height: calc(1rem * 22 / 14);
   color: var(--color-text-secondary);
 }
 
@@ -1776,8 +1779,8 @@ html.is-resizing-review * {
 }
 
 .git-commit-actions svg {
-  width: 16px;
-  height: 16px;
+  width: calc(1rem * 16 / 14);
+  height: calc(1rem * 16 / 14);
 }
 
 .git-commit-files {
@@ -1789,26 +1792,26 @@ html.is-resizing-review * {
 .git-history-graph-placeholder {
   display: flex;
   flex: 0 0 auto;
-  height: 22px;
+  height: calc(1rem * 22 / 14);
   overflow: hidden;
 }
 
 .git-history-file {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   width: 100%;
   min-width: 0;
-  height: 22px;
-  min-height: 22px;
-  padding: 0 4px 0 0;
+  height: calc(1rem * 22 / 14);
+  min-height: calc(1rem * 22 / 14);
+  padding: 0 var(--space-2) 0 0;
   overflow: hidden;
   border: 0;
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
   font-size: var(--font-size-sm);
-  line-height: 22px;
+  line-height: calc(22 / 13);
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -1840,8 +1843,8 @@ button.git-history-file.selected {
 
 .git-history-file-status {
   flex: 0 0 auto;
-  margin-left: 4px;
-  margin-right: 4px;
+  margin-left: var(--space-2);
+  margin-right: var(--space-2);
   font-weight: 600;
 }
 
@@ -1853,11 +1856,11 @@ button.git-history-file.selected {
 .git-commit-files-message,
 .git-graph-message,
 .git-graph-load-error {
-  min-height: 22px;
-  padding: 0 8px;
+  min-height: calc(1rem * 22 / 14);
+  padding: 0 var(--space-4);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-  line-height: 22px;
+  line-height: calc(22 / 13);
 }
 
 .git-commit-files-message {
@@ -1875,7 +1878,7 @@ button.git-history-file.selected {
 .git-commit-files-message-content {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   min-width: 0;
   overflow: hidden;
 }
@@ -1883,23 +1886,23 @@ button.git-history-file.selected {
 .git-graph-message {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding-top: 4px;
-  padding-bottom: 4px;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
   line-height: normal;
 }
 
 .git-graph-retry,
 .git-history-retry {
   align-self: flex-start;
-  padding: 0 4px;
+  padding: 0 var(--space-2);
   border: 0;
   border-radius: 2px;
   background: transparent;
   color: var(--color-accent-strong);
   font: inherit;
   font-size: var(--font-size-sm);
-  line-height: 20px;
+  line-height: calc(20 / 13);
   cursor: pointer;
 }
 
@@ -1913,7 +1916,7 @@ button.git-history-file.selected {
   align-items: center;
   width: 100%;
   min-width: 0;
-  height: 22px;
+  height: calc(1rem * 22 / 14);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1939,12 +1942,12 @@ button.git-history-file.selected {
   justify-content: center;
   flex: 1 1 auto;
   min-width: 0;
-  height: 22px;
+  height: calc(1rem * 22 / 14);
 }
 
 .git-graph-body > .file-panel-empty {
-  min-height: 22px;
-  padding: 4px 8px;
+  min-height: calc(1rem * 22 / 14);
+  padding: var(--space-2) var(--space-4);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1965,7 +1968,7 @@ button.git-history-file.selected {
 }
 
 .file-panel-empty {
-  padding: 12px;
+  padding: var(--space-5);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
@@ -1975,10 +1978,10 @@ button.git-history-file.selected {
   --tree-indent: calc(4px + var(--tree-depth) * var(--tree-step));
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   min-width: 0;
-  min-height: 24px;
-  padding: 0 4px 0 var(--tree-indent);
+  min-height: calc(1rem * 24 / 14);
+  padding: 0 var(--space-2) 0 var(--tree-indent);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
@@ -2005,13 +2008,13 @@ button.git-history-file.selected {
 .change-tree {
   --tree-step: 14px;
   --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
-  padding: 2px 4px 8px;
+  padding: var(--space-1) var(--space-2) var(--space-4);
 }
 
 .change-tree .tree-row {
-  min-height: 24px;
-  gap: 4px;
-  padding-right: 6px;
+  min-height: calc(1rem * 24 / 14);
+  gap: var(--space-2);
+  padding-right: var(--space-3);
 }
 
 .change-row.disabled {
@@ -2046,7 +2049,7 @@ button.git-history-file.selected {
 }
 
 .review-progress-summary {
-  padding: 4px 12px 6px;
+  padding: var(--space-2) var(--space-5) var(--space-3);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
 }
@@ -2080,7 +2083,7 @@ button.git-history-file.selected {
   width: 14px;
   height: 14px;
   padding: 0;
-  margin: 0 2px 0 0;
+  margin: 0 var(--space-1) 0 0;
   border: 1px solid color-mix(in srgb, var(--color-text-primary) 30%, transparent);
   border-radius: 3px;
   color: var(--color-accent-strong);
@@ -2129,12 +2132,12 @@ button.git-history-file.selected {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
+  flex: 0 0 calc(1rem * 16 / 14);
+  width: calc(1rem * 16 / 14);
+  height: calc(1rem * 16 / 14);
   color: var(--color-text-secondary);
 }
-.tree-entry-icon svg { width: 16px; height: 16px; }
+.tree-entry-icon svg { width: calc(1rem * 16 / 14); height: calc(1rem * 16 / 14); }
 
 .tree-name {
   overflow: hidden;
@@ -2155,10 +2158,10 @@ button.git-history-file.selected {
   z-index: 4;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   flex: 0 0 auto;
-  height: 34px;
-  padding: 0 18px 0 12px;
+  height: calc(1rem * 34 / 14);
+  padding: 0 calc(1rem * 18 / 14) 0 var(--space-5);
   border-bottom: 1px solid var(--color-separator);
   font-size: var(--font-size-xs);
   color: var(--color-text-faint);
@@ -2181,10 +2184,10 @@ button.git-history-file.selected {
 .review-command-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
-  min-height: 34px;
-  padding: 0 18px 0 12px;
+  min-height: calc(1rem * 34 / 14);
+  padding: 0 calc(1rem * 18 / 14) 0 var(--space-5);
 }
 
 .viewer-breadcrumb-row {
@@ -2196,9 +2199,9 @@ button.git-history-file.selected {
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
-  gap: 4px;
-  padding-block: 4px;
-  padding-right: 12px;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  padding-right: var(--space-5);
   background: var(--color-bg-subtle);
 }
 
@@ -2211,7 +2214,7 @@ button.git-history-file.selected {
 .crumb-path {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -2256,7 +2259,7 @@ button.git-history-file.selected {
 .office-viewer-toolbar {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   flex: 0 0 auto;
   min-width: 0;
   padding: 0;
@@ -2269,15 +2272,15 @@ button.git-history-file.selected {
 }
 .office-viewer-find > .icon {
   position: absolute;
-  inset-inline-start: 6px;
+  inset-inline-start: var(--space-3);
   pointer-events: none;
 }
 .office-viewer-find input {
   box-sizing: border-box;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  padding: 2px 4px 2px 28px;
+  width: calc(28em / 12);
+  min-width: calc(28em / 12);
+  height: calc(28em / 12);
+  padding: calc(2em / 12) calc(4em / 12) calc(2em / 12) calc(28em / 12);
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
   color: var(--color-text-primary);
@@ -2302,8 +2305,8 @@ button.git-history-file.selected {
 .office-viewer-control {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: calc(24em / 13);
+  height: calc(24em / 13);
   padding: 0;
   border: 0;
   border-radius: var(--radius-xs);
@@ -2342,7 +2345,7 @@ button.git-history-file.selected {
   z-index: 24;
   display: flex;
   flex-direction: column;
-  width: min(360px, calc(100% - 24px));
+  width: min(360px, calc(100% - var(--space-7)));
   max-height: min(380px, calc(100vh - 150px));
   overflow: hidden;
   border: 1px solid var(--color-border);
@@ -2356,10 +2359,10 @@ button.git-history-file.selected {
 .breadcrumb-picker-heading {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: calc(1rem * 7 / 14);
   flex: 0 0 auto;
-  min-height: 32px;
-  padding: 0 9px;
+  min-height: calc(1rem * 32 / 14);
+  padding: 0 calc(1rem * 9 / 14);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   background: var(--color-bg-subtle);
@@ -2371,14 +2374,14 @@ button.git-history-file.selected {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
+  width: calc(1rem * 16 / 14);
+  height: calc(1rem * 16 / 14);
 }
 
 .breadcrumb-picker-heading-icon svg,
 .breadcrumb-picker-icon svg {
-  width: 16px;
-  height: 16px;
+  width: calc(1rem * 16 / 14);
+  height: calc(1rem * 16 / 14);
 }
 
 .breadcrumb-picker-title {
@@ -2406,18 +2409,18 @@ button.git-history-file.selected {
 .breadcrumb-picker-list {
   min-height: 0;
   overflow: auto;
-  padding: 4px 0;
+  padding: var(--space-2) 0;
 }
 
 .breadcrumb-picker-row {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: calc(1rem * 7 / 14);
   width: 100%;
   min-width: 0;
-  height: 28px;
-  padding: 0 8px;
+  height: 2rem;
+  padding: 0 var(--space-4);
   border: 0;
   border-radius: 0;
   color: var(--color-text-secondary);
@@ -2466,7 +2469,7 @@ button.git-history-file.selected {
 }
 
 .breadcrumb-picker-empty {
-  padding: 14px 12px;
+  padding: 1rem var(--space-5);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -2483,13 +2486,13 @@ button.git-history-file.selected {
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 2px 7px;
+  padding: var(--space-1) calc(1rem * 7 / 14);
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   color: var(--color-text-muted);
   background: var(--color-control-surface);
   font-size: var(--font-size-xs);
-  line-height: 16px;
+  line-height: calc(16 / 12);
 }
 .review-badge.hidden {
   display: none;
@@ -2498,7 +2501,7 @@ button.git-history-file.selected {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .review-diff-navigation.hidden {
   display: none;
@@ -2506,8 +2509,8 @@ button.git-history-file.selected {
 .review-nav-button {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: calc(20em / 17);
+  height: calc(20em / 17);
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
@@ -2530,7 +2533,7 @@ button.git-history-file.selected {
 }
 .review-nav-position,
 .review-hunk-position {
-  min-width: 38px;
+  min-width: calc(1rem * 38 / 14);
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
   text-align: center;
@@ -2551,7 +2554,7 @@ button.git-history-file.selected {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  padding: 2px;
+  padding: var(--space-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-control-surface);
@@ -2568,15 +2571,15 @@ button.git-history-file.selected {
 .review-mode-button,
 .review-layout-button {
   appearance: none;
-  min-height: 22px;
-  padding: 2px 7px;
+  min-height: calc(22em / 12);
+  padding: calc(2em / 12) calc(7em / 12);
   border: 0;
   border-radius: var(--radius-xs);
   color: var(--color-text-secondary);
   background: transparent;
   font: inherit;
   font-size: var(--font-size-xs);
-  line-height: 16px;
+  line-height: calc(16 / 12);
   cursor: pointer;
 }
 
@@ -2602,11 +2605,11 @@ button.git-history-file.selected {
 }
 
 .review-mode-divider {
-  margin: 0 3px;
+  margin: 0 calc(1rem * 3 / 14);
 }
 
 .review-control-divider {
-  margin: 0 2px;
+  margin: 0 var(--space-1);
 }
 
 .review-layout-control.disabled {
@@ -2636,8 +2639,8 @@ button.git-history-file.selected {
 .review-tests-control {
   appearance: none;
   flex: 0 0 auto;
-  min-height: 28px;
-  padding: 3px 8px;
+  min-height: calc(28em / 12);
+  padding: calc(3em / 12) calc(8em / 12);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
@@ -2674,7 +2677,7 @@ button.git-history-file.selected {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   margin-left: auto;
 }
 
@@ -2752,7 +2755,7 @@ button.git-history-file.selected {
   width: 100%;
   height: 40px;
   margin: 0;
-  padding-top: 8px;
+  padding-top: var(--space-4);
   background: var(--vscode-editor-background, var(--color-bg-surface));
 }
 
@@ -2769,7 +2772,7 @@ button.git-history-file.selected {
   border-top: 1px solid var(--color-separator);
   border-bottom: 1px solid var(--color-separator);
   border-radius: 0;
-  padding: 4px 5px;
+  padding: var(--space-2) calc(1rem * 5 / 14);
   color: var(--vscode-editor-foreground, var(--color-text-primary));
   background: var(--color-bg-subtle);
   font: inherit;
@@ -2798,7 +2801,7 @@ button.git-history-file.selected {
 .semantic-review-host .semantic-entry-chevron {
   flex: 0 0 16px;
   width: 16px;
-  margin: 0 5px;
+  margin: 0 calc(1rem * 5 / 14);
   color: var(--color-text-secondary);
 }
 
@@ -2808,7 +2811,7 @@ button.git-history-file.selected {
   box-sizing: border-box;
   width: 13px;
   height: 16px;
-  margin-right: 7px;
+  margin-right: calc(1rem * 7 / 14);
   border: 1px solid currentColor;
   border-radius: 1px;
   color: var(--color-text-secondary);
@@ -2847,7 +2850,7 @@ button.git-history-file.selected {
 .semantic-review-host .semantic-entry-location {
   flex: 1 1 auto;
   min-width: 0;
-  margin-left: 8px;
+  margin-left: var(--space-4);
   overflow: hidden;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
@@ -2862,9 +2865,9 @@ button.git-history-file.selected {
 
 .semantic-review-host .semantic-entry-status {
   flex: 0 0 auto;
-  margin: 0 10px;
+  margin: 0 calc(1rem * 10 / 14);
   font-weight: 600;
-  line-height: 22px;
+  line-height: calc(22 / 14);
 }
 
 .semantic-review-host .semantic-entry-status.added {
@@ -2895,10 +2898,10 @@ button.git-history-file.selected {
 }
 
 .semantic-review-host .semantic-reorder {
-  margin: 8px 0 0;
+  margin: var(--space-4) 0 0;
   border-top: 1px solid var(--color-separator);
   border-bottom: 1px solid var(--color-separator);
-  padding: 7px 12px;
+  padding: calc(1rem * 7 / 14) var(--space-5);
   font-size: var(--font-size-xs);
   font-weight: 600;
   line-height: 1.45;
@@ -2907,8 +2910,8 @@ button.git-history-file.selected {
 .semantic-review-host .diff-notice {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-xs);
   line-height: 1.4;
@@ -2925,7 +2928,7 @@ button.git-history-file.selected {
   display: grid;
   min-height: 100%;
   place-items: center;
-  padding: 24px;
+  padding: var(--space-7);
   color: var(--color-text-secondary);
   font-family: var(--font-family-sans);
   text-align: center;
@@ -2979,10 +2982,10 @@ button.git-history-file.selected {
 .editor.mode-workflows .workflow-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-6);
   min-height: 0;
   overflow: auto;
-  padding: 12px 14px;
+  padding: var(--space-5) 1rem;
 }
 .workflow-empty {
   margin: 0;
@@ -2993,14 +2996,14 @@ button.git-history-file.selected {
 .workflow-run {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2);
 }
 .workflow-run-head {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 2px 4px;
+  gap: var(--space-4);
+  padding: 0 var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -3037,10 +3040,10 @@ button.git-history-file.selected {
   display: grid;
   grid-template-columns: 6px auto 1fr auto;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-4);
   width: 100%;
   min-width: 0;
-  padding: 5px 2px;
+  padding: calc(1rem * 5 / 14) var(--space-1);
   border: 0;
   border-radius: 4px;
   background: transparent;
@@ -3090,7 +3093,7 @@ button.git-history-file.selected {
   grid-column: 2 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-4);
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
@@ -3101,7 +3104,7 @@ button.git-history-file.selected {
 .moonbit-diff-hunk-action .review-hunk-marker {
   font-family: var(--font-family-sans);
   font-size: var(--font-size-sm);
-  line-height: 16px;
+  line-height: calc(16 / 13);
   color: var(--color-text-muted);
   border-color: var(--color-text-muted);
 }
@@ -3138,7 +3141,7 @@ button.git-history-file.selected {
 .editor.mode-github .browser-chrome { display: none; }
 .editor.mode-github .github-panel { display: flex; }
 .github-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: row; overflow: hidden; color: var(--color-text-primary); }
-.github-inventory { display: flex; flex-direction: column; flex: 0 0 min(260px, 40%); min-width: 0; min-height: 0; padding: 0 8px 8px; border-left: 1px solid var(--color-separator); background: var(--color-bg-surface); overflow: hidden; }
+.github-inventory { display: flex; flex-direction: column; flex: 0 0 min(260px, 40%); min-width: 0; min-height: 0; padding: 0 var(--space-4) var(--space-4); border-left: 1px solid var(--color-separator); background: var(--color-bg-surface); overflow: hidden; }
 .github-detail-host { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; container: github-detail / inline-size; }
 .github-detail {
   --gh-bg: light-dark(#ffffff, #0d1117);
@@ -3150,84 +3153,84 @@ button.git-history-file.selected {
   --gh-green: light-dark(#1a7f37, #3fb950);
   --gh-red: light-dark(#cf222e, #f85149);
   display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0;
-  overflow: hidden; background: var(--gh-bg); color: var(--gh-fg); font-size: 14px;
+  overflow: hidden; background: var(--gh-bg); color: var(--gh-fg); font-size: var(--font-size-md);
 }
-.github-detail-placeholder { align-items: center; justify-content: center; gap: 12px; padding: 24px; color: var(--gh-muted); text-align: center; }
+.github-detail-placeholder { align-items: center; justify-content: center; gap: var(--space-5); padding: var(--space-7); color: var(--gh-muted); text-align: center; }
 .github-detail-placeholder p { max-width: 280px; line-height: 1.6; }
 .github-detail-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
-.github-detail-content { max-width: 1360px; margin: 0 auto; padding: 28px 32px 48px; overflow-wrap: anywhere; }
-.github-pr-header { margin-bottom: 6px; }
-.github-detail-title { flex: 1; min-width: 0; margin: 0 0 16px; font-size: clamp(24px, 3.8cqw, 36px); font-weight: 400; line-height: 1.25; letter-spacing: -.4px; }
+.github-detail-content { max-width: 1360px; margin: 0 auto; padding: 2rem calc(1rem * 32 / 14) calc(1rem * 48 / 14); overflow-wrap: anywhere; }
+.github-pr-header { margin-bottom: var(--space-3); }
+.github-detail-title { flex: 1; min-width: 0; margin: 0 0 var(--space-6); font-size: clamp(calc(1rem * 24 / 14), 3.8cqw, calc(1rem * 36 / 14)); font-weight: 400; line-height: 1.25; letter-spacing: -.4px; }
 .github-detail-dismiss { flex: none; margin-left: auto; color: var(--gh-muted); }
 .github-detail-link { padding: 0; border: 0; background: transparent; color: var(--gh-link); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .github-detail-link:hover { text-decoration: underline; }
 .github-detail-link:focus-visible, .github-action-button:focus-visible, summary.github-checks-summary:focus-visible { outline: 2px solid var(--gh-link); outline-offset: 3px; }
 .github-title-number { display: inline; white-space: nowrap; font-weight: 300; }
-.github-detail-meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; color: var(--gh-muted); line-height: 1.8; }
-.github-merge-description { flex: 1; min-width: 180px; padding-top: 2px; }
-.github-pr-author { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
-.github-detail-meta code { padding: 2px 5px; border-radius: 4px; background: light-dark(#ddf4ff, #162b42); color: light-dark(#0550ae, #a5d6ff); font-size: 12px; overflow-wrap: anywhere; }
-.github-pr-state { display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border-radius: 20px; background: #59636e; color: #fff; font-weight: 500; line-height: 24px; }
+.github-detail-meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: calc(1rem * 10 / 14); color: var(--gh-muted); line-height: 1.8; }
+.github-merge-description { flex: 1; min-width: 180px; padding-top: var(--space-1); }
+.github-pr-author { display: inline-flex; align-items: center; gap: var(--space-3); vertical-align: middle; }
+.github-detail-meta code { padding: var(--space-1) calc(1rem * 5 / 14); border-radius: 4px; background: light-dark(#ddf4ff, #162b42); color: light-dark(#0550ae, #a5d6ff); font-size: var(--font-size-xs); overflow-wrap: anywhere; }
+.github-pr-state { display: inline-flex; flex: none; align-items: center; gap: var(--space-3); min-height: calc(1rem * 32 / 14); padding: var(--space-2) var(--space-5); border-radius: 20px; background: #59636e; color: #fff; font-weight: 500; line-height: calc(24 / 14); }
 .github-pr-state.open { background: #1f883d; }
 .github-pr-state.closed { background: #cf222e; }
 .github-pr-state.merged { background: #8250df; }
-.github-detail-actions { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 24px; padding: 10px 0 16px; border-bottom: 1px solid var(--gh-border); background: var(--gh-bg); }
-.github-action-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 5px 12px; border: 1px solid var(--gh-border); border-radius: 6px; background: var(--gh-subtle); color: var(--gh-fg); font: inherit; font-weight: 500; font-size: 13px; cursor: pointer; }
+.github-detail-actions { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-7); padding: calc(1rem * 10 / 14) 0 var(--space-6); border-bottom: 1px solid var(--gh-border); background: var(--gh-bg); }
+.github-action-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-3); min-height: calc(1rem * 32 / 14); padding: calc(1rem * 5 / 14) var(--space-5); border: 1px solid var(--gh-border); border-radius: 6px; background: var(--gh-subtle); color: var(--gh-fg); font: inherit; font-weight: 500; font-size: var(--font-size-sm); cursor: pointer; }
 .github-action-button:hover:not(:disabled) { background: light-dark(#eff2f5, #212830); border-color: var(--gh-muted); }
 .github-action-button:disabled { opacity: .6; cursor: default; }
-.github-pr-layout { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 28px; align-items: start; }
-.github-conversation { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.github-pr-layout { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 2rem; align-items: start; }
+.github-conversation { display: flex; flex-direction: column; gap: var(--space-7); min-width: 0; }
 .github-comment { min-width: 0; border: 1px solid var(--gh-border); border-radius: 6px; overflow: hidden; background: var(--gh-bg); }
-.github-comment-header { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 10px 16px; border-bottom: 1px solid var(--gh-border); background: var(--gh-subtle); }
-.github-comment-header .github-avatar { width: 24px; height: 24px; flex-basis: 24px; align-items: center; justify-content: center; }
-.github-comment-meta { display: flex; flex: 1; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 0 5px; font-size: 13px; line-height: 1.6; }
+.github-comment-header { display: flex; align-items: center; gap: var(--space-4); min-height: calc(1rem * 48 / 14); padding: calc(1rem * 10 / 14) var(--space-6); border-bottom: 1px solid var(--gh-border); background: var(--gh-subtle); }
+.github-comment-header .github-avatar { width: calc(1rem * 24 / 14); height: calc(1rem * 24 / 14); flex-basis: calc(1rem * 24 / 14); align-items: center; justify-content: center; }
+.github-comment-meta { display: flex; flex: 1; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 0 calc(1rem * 5 / 14); font-size: var(--font-size-sm); line-height: 1.6; }
 .github-comment-date { color: var(--gh-muted); }
-.github-author-badge { padding: 0 7px; border: 1px solid var(--gh-border); border-radius: 12px; color: var(--gh-muted); font-size: 12px; line-height: 20px; }
-.github-comment-body { padding: 20px; }
-.github-detail .msg-content { min-width: 0; max-width: 100%; font-size: 15px; line-height: 1.6; color: var(--gh-fg); }
+.github-author-badge { padding: 0 calc(1rem * 7 / 14); border: 1px solid var(--gh-border); border-radius: 12px; color: var(--gh-muted); font-size: var(--font-size-xs); line-height: calc(20 / 12); }
+.github-comment-body { padding: calc(1rem * 20 / 14); }
+.github-detail .msg-content { min-width: 0; max-width: 100%; font-size: calc(1rem * 15 / 14); line-height: 1.6; color: var(--gh-fg); }
 .github-detail .msg-content > :first-child { margin-top: 0; }
 .github-detail .msg-content > :last-child { margin-bottom: 0; }
 .github-detail .msg-content h1, .github-detail .msg-content h2 { padding-bottom: .3em; border-bottom: 1px solid var(--gh-border); font-weight: 600; line-height: 1.25; }
 .github-detail .msg-content h1 { font-size: 1.8em; }
 .github-detail .msg-content h2 { font-size: 1.5em; }
 .github-detail .msg-content h3 { font-size: 1.25em; }
-.github-detail .msg-content p, .github-detail .msg-content ul, .github-detail .msg-content ol { margin-bottom: 16px; }
-.github-detail .msg-content li + li { margin-top: 4px; }
+.github-detail .msg-content p, .github-detail .msg-content ul, .github-detail .msg-content ol { margin-bottom: var(--space-6); }
+.github-detail .msg-content li + li { margin-top: var(--space-2); }
 .github-detail .msg-content code { background: light-dark(#eff1f3, #262c36); color: inherit; border-radius: 4px; padding: .15em .35em; font-size: 85%; }
-.github-detail .msg-content pre { background: var(--gh-subtle); padding: 16px; border-radius: 6px; }
+.github-detail .msg-content pre { background: var(--gh-subtle); padding: var(--space-6); border-radius: 6px; }
 .github-detail .msg-content pre code { padding: 0; background: transparent; }
 .github-detail .msg-content a { color: var(--gh-link); }
 .github-detail .msg-content table { overflow-wrap: normal; }
 .github-detail .msg-content img { max-width: 100%; height: auto; }
-.github-detail-status { margin: 8px 0 16px; font-size: 14px; line-height: 1.5; color: var(--gh-muted); }
-.github-metadata { min-width: 0; padding-top: 3px; font-size: 13px; line-height: 1.6; }
+.github-detail-status { margin: var(--space-4) 0 var(--space-6); font-size: var(--font-size-md); line-height: 1.5; color: var(--gh-muted); }
+.github-metadata { min-width: 0; padding-top: calc(1rem * 3 / 14); font-size: var(--font-size-sm); line-height: 1.6; }
 .github-metadata-section { min-width: 0; }
-.github-metadata-section + .github-metadata-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gh-border); }
-.github-metadata-section h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.github-metadata-section + .github-metadata-section { margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--gh-border); }
+.github-metadata-section h2 { margin: 0 0 var(--space-4); font-size: var(--font-size-sm); font-weight: 600; }
 .github-metadata-section p { margin: 0; }
 .github-metadata-empty { color: var(--gh-muted); }
-.github-reviewer { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.github-reviewer { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
 .github-reviewer strong { font-weight: 500; }
-.github-review-state { color: var(--gh-muted); font-size: 12px; }
-.github-labels { display: flex; flex-wrap: wrap; gap: 4px; }
-.github-label { padding: 1px 8px; border: 1px solid var(--gh-border); border-radius: 12px; background: var(--gh-subtle); font-size: 12px; font-weight: 500; }
-.github-diffstat { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.github-review-state { color: var(--gh-muted); font-size: var(--font-size-xs); }
+.github-labels { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.github-label { padding: calc(1rem * 1 / 14) var(--space-4); border: 1px solid var(--gh-border); border-radius: 12px; background: var(--gh-subtle); font-size: var(--font-size-xs); font-weight: 500; }
+.github-diffstat { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .github-additions, .github-detail .passed { color: var(--gh-green); }
 .github-deletions, .github-detail .failed { color: var(--gh-red); }
 .github-detail .pending { color: light-dark(#9a6700, #d29922); }
 .github-checks-card { min-width: 0; border: 1px solid var(--gh-border); border-radius: 6px; overflow: hidden; }
-.github-checks-summary { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 12px 16px; background: var(--gh-subtle); font-size: 14px; line-height: 1.5; }
+.github-checks-summary { display: flex; align-items: center; gap: var(--space-5); min-height: calc(1rem * 52 / 14); padding: var(--space-5) var(--space-6); background: var(--gh-subtle); font-size: var(--font-size-md); line-height: 1.5; }
 summary.github-checks-summary { cursor: pointer; list-style: none; }
 summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-checks-details[open] > summary { border-bottom: 1px solid var(--gh-border); }
 .github-check-summary { flex: 1; min-width: 0; }
-.github-check-toggle { flex: none; padding: 3px 12px; border: 1px solid var(--gh-border); border-radius: 6px; background: light-dark(#eff2f5, #212830); color: var(--gh-fg); font-size: 13px; }
+.github-check-toggle { flex: none; padding: calc(1rem * 3 / 14) var(--space-5); border: 1px solid var(--gh-border); border-radius: 6px; background: light-dark(#eff2f5, #212830); color: var(--gh-fg); font-size: var(--font-size-sm); }
 .github-checks-summary:hover .github-check-toggle { border-color: var(--gh-muted); }
 .github-check-hide, .github-checks-details[open] .github-check-show { display: none; }
 .github-checks-details[open] .github-check-hide { display: inline; }
 .github-checks { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .github-checks:focus-visible { outline: 2px solid var(--gh-link); outline-offset: -2px; }
-.github-check { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 10px 16px; font-size: 14px; line-height: 1.5; }
+.github-check { display: flex; align-items: center; gap: var(--space-5); min-height: calc(46em / 14); padding: calc(1rem * 10 / 14) var(--space-6); font-size: var(--font-size-md); line-height: 1.5; }
 .github-check + .github-check { border-top: 1px solid var(--gh-border); }
 .github-check-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 16px; width: 16px; height: 20px; color: var(--gh-muted); }
 .github-check-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -3235,46 +3238,46 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-check-provider .icon, .github-check-provider svg { width: 20px; height: 20px; }
 .github-check-name { flex: 1; min-width: 0; color: var(--gh-fg); }
 .github-check-details { flex: none; white-space: nowrap; }
-.github-mergeability { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--gh-border); background: var(--gh-subtle); font-size: 14px; line-height: 1.5; }
-.github-detail .github-error { padding: 8px 0; }
+.github-mergeability { display: flex; align-items: center; gap: var(--space-5); padding: var(--space-5) var(--space-6); border-top: 1px solid var(--gh-border); background: var(--gh-subtle); font-size: var(--font-size-md); line-height: 1.5; }
+.github-detail .github-error { padding: var(--space-4) 0; }
 @container github-detail (max-width: 760px) {
-  .github-detail-content { padding: 24px; }
+  .github-detail-content { padding: var(--space-7); }
   .github-pr-layout { grid-template-columns: minmax(0, 1fr); }
-  .github-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; padding-top: 20px; border-top: 1px solid var(--gh-border); }
+  .github-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6) var(--space-7); padding-top: calc(1rem * 20 / 14); border-top: 1px solid var(--gh-border); }
   .github-metadata-section + .github-metadata-section { margin-top: 0; padding-top: 0; border-top: 0; }
 }
 @container github-detail (max-width: 420px) {
-  .github-detail-content { padding: 20px 14px; }
-  .github-detail-title { font-size: 24px; }
-  .github-merge-description { min-width: 0; flex-basis: 100%; font-size: 13px; }
-  .github-comment-header { padding: 10px; }
-  .github-comment-body { padding: 14px; }
-  .github-detail .msg-content { font-size: 14px; }
+  .github-detail-content { padding: calc(1rem * 20 / 14) 1rem; }
+  .github-detail-title { font-size: calc(1rem * 24 / 14); }
+  .github-merge-description { min-width: 0; flex-basis: 100%; font-size: var(--font-size-sm); }
+  .github-comment-header { padding: calc(1rem * 10 / 14); }
+  .github-comment-body { padding: 1rem; }
+  .github-detail .msg-content { font-size: var(--font-size-md); }
   .github-author-badge { display: none; }
-  .github-checks-summary { flex-wrap: wrap; gap: 8px; }
+  .github-checks-summary { flex-wrap: wrap; gap: var(--space-4); }
   .github-check-summary { flex-basis: calc(100% - 28px); }
-  .github-check-toggle { margin-left: 24px; }
-  .github-check { gap: 8px; }
+  .github-check-toggle { margin-left: var(--space-7); }
+  .github-check { gap: var(--space-4); }
   .github-check-provider { display: none; }
   .github-metadata { grid-template-columns: minmax(0, 1fr); }
 }
-.github-toolbar { flex: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 4px 0 8px; }
+.github-toolbar { flex: none; display: flex; align-items: center; gap: var(--space-4); min-height: calc(1rem * 36 / 14); padding: 0 var(--space-2) 0 var(--space-4); }
 .github-repository { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
 .github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-border); }
 .github-pulls.expanded { flex: 2 1 0; }
 .github-issues.expanded { flex: 1 1 0; }
-.github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 2px 0 8px; scrollbar-width: thin; }
-.github-heading, .github-group-heading { display: flex; align-items: center; gap: 5px; width: 100%; min-height: 32px; padding: 5px 6px; border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--space-1) 0 var(--space-4); scrollbar-width: thin; }
+.github-heading, .github-group-heading { display: flex; align-items: center; gap: calc(1rem * 5 / 14); width: 100%; min-height: calc(1rem * 32 / 14); padding: calc(1rem * 5 / 14) var(--space-3); border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .github-heading { flex: none; font-weight: 600; }
-.github-group-heading { padding-left: 16px; }
+.github-group-heading { padding-left: var(--space-6); }
 .github-heading:hover, .github-group-heading:hover, .github-item:hover { background: var(--color-hover-subtle); }
 .github-heading:focus-visible, .github-group-heading:focus-visible, .github-item-open:focus-visible, .github-checkout:focus-visible, .github-more:focus-visible { outline: 1px solid var(--color-accent); outline-offset: -1px; background: var(--color-hover-subtle); }
 .github-chevron { display: inline-flex; transform: rotate(-90deg); }
 .github-chevron.expanded { transform: none; }
-.github-item { display: flex; align-items: center; width: 100%; height: 26px; border-radius: 5px; color: inherit; }
-.github-item-open { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; height: 100%; padding: 3px 8px 3px 36px; border: 0; border-radius: 5px; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
-.github-issues .github-item-open { padding-left: 16px; }
-.github-checkout { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 22px; width: 22px; height: 22px; margin-right: 4px; padding: 3px; border: 0; border-radius: 4px; background: transparent; color: var(--color-text-secondary); cursor: pointer; opacity: 0; }
+.github-item { display: flex; align-items: center; width: 100%; height: calc(1rem * 26 / 14); border-radius: 5px; color: inherit; }
+.github-item-open { display: flex; align-items: center; gap: var(--space-3); flex: 1; min-width: 0; height: 100%; padding: calc(1rem * 3 / 14) var(--space-4) calc(1rem * 3 / 14) calc(1rem * 36 / 14); border: 0; border-radius: 5px; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.github-issues .github-item-open { padding-left: var(--space-6); }
+.github-checkout { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 calc(1rem * 22 / 14); width: calc(1rem * 22 / 14); height: calc(1rem * 22 / 14); margin-right: var(--space-2); padding: calc(1rem * 3 / 14); border: 0; border-radius: 4px; background: transparent; color: var(--color-text-secondary); cursor: pointer; opacity: 0; }
 .github-item:hover .github-checkout, .github-item:focus-within .github-checkout, .github-item.selected .github-checkout, .github-checkout.pending { opacity: 1; }
 .github-checkout:hover:not(:disabled) { background: var(--color-hover-subtle); color: var(--color-text-primary); }
 .github-checkout:disabled { cursor: default; }
@@ -3282,40 +3285,40 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-checkout-arrow { display: inline-flex; transform: rotate(90deg); }
 .github-checkout.pending .icon { animation: jobs-spin 1s linear infinite; }
 .github-current { display: inline-flex; flex: none; }
-.github-checkout-notification { width: min(380px, calc(100vw - 32px)); padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-overlay); font-size: var(--font-size-md); line-height: var(--line-height-normal); overflow-wrap: anywhere; }
-.github-checkout-message { display: flex; gap: 8px; align-items: flex-start; }
-.github-checkout-message > .icon { flex: none; margin-top: 2px; }
+.github-checkout-notification { width: min(calc(1rem * 380 / 14), calc(100vw - calc(1rem * 32 / 14))); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-overlay); font-size: var(--font-size-md); line-height: var(--line-height-normal); overflow-wrap: anywhere; }
+.github-checkout-message { display: flex; gap: var(--space-4); align-items: flex-start; }
+.github-checkout-message > .icon { flex: none; margin-top: var(--space-1); }
 .github-checkout-message > span { flex: 1; min-width: 0; }
 .github-checkout-message > .tab-action { flex: none; }
 .github-checkout-notification.failed .github-checkout-message > .icon { color: var(--color-danger); }
 .github-checkout-notification.pending .github-checkout-message > .icon { animation: jobs-spin 1s linear infinite; }
-.github-checkout-details { margin: 8px 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.github-checkout-dialog .github-checkout-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+.github-checkout-details { margin: var(--space-4) 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.github-checkout-dialog .github-checkout-choices { display: flex; flex-direction: column; gap: var(--space-4); margin-top: calc(1rem * 20 / 14); }
 .github-checkout-discard { color: var(--color-danger); }
 @media (prefers-reduced-motion: reduce) { .github-checkout.pending .icon, .github-checkout-notification.pending .icon { animation: none; } }
 @media (hover: none) { .github-checkout { opacity: 1; } }
 .github-avatar { position: relative; display: inline-flex; flex: 0 0 16px; width: 16px; height: 16px; border-radius: 50%; overflow: hidden; color: var(--color-text-secondary); }
 .github-avatar-image { position: absolute; inset: 0; border-radius: inherit; background-size: cover; background-position: center; }
-.github-item-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--font-size-sm); line-height: 20px; }
+.github-item-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--font-size-sm); line-height: calc(20 / 13); }
 .github-item.draft .github-item-title { font-style: italic; }
 .github-item.selected { background: var(--color-hover-subtle); color: var(--color-accent); }
-.github-empty, .github-error { padding: 10px 16px; font-size: var(--font-size-sm); line-height: 1.5; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.github-empty, .github-error { padding: calc(1rem * 10 / 14) var(--space-6); font-size: var(--font-size-sm); line-height: 1.5; color: var(--color-text-secondary); overflow-wrap: anywhere; }
 .github-error { color: var(--color-danger); }
-.github-more { margin: 6px 16px; padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--color-accent); font: inherit; font-size: var(--font-size-sm); cursor: pointer; }
-.github-error .github-more { margin: 6px 0 0; }
-.jobs-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: column; overflow: auto; padding: 18px; gap: 12px; color: var(--color-text-primary); }
-.jobs-heading, .jobs-row-head, .jobs-detail-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.jobs-heading h3 { margin: 0 0 8px; font-size: var(--font-size-lg); font-weight: 600; letter-spacing: -.2px; }
+.github-more { margin: var(--space-3) var(--space-6); padding: var(--space-2) var(--space-3); border: 0; border-radius: 4px; background: transparent; color: var(--color-accent); font: inherit; font-size: var(--font-size-sm); cursor: pointer; }
+.github-error .github-more { margin: var(--space-3) 0 0; }
+.jobs-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: column; overflow: auto; padding: calc(1rem * 18 / 14); gap: var(--space-5); color: var(--color-text-primary); }
+.jobs-heading, .jobs-row-head, .jobs-detail-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); }
+.jobs-heading h3 { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); font-weight: 600; letter-spacing: -.2px; }
 .jobs-summary, .jobs-host, .jobs-row-meta, .jobs-detail-meta, .jobs-output-note, .jobs-footnote { font-size: var(--font-size-xs); color: var(--color-text-secondary); overflow-wrap: anywhere; }
-.jobs-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
-.jobs-summary-active { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-primary); }
+.jobs-summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
+.jobs-summary-active { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--color-text-primary); }
 .jobs-summary-active::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
-.jobs-host { padding-bottom: 12px; border-bottom: 1px solid var(--color-border); }
-.jobs-list { display: flex; flex-direction: column; gap: 18px; max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: 2px; scrollbar-width: thin; }
+.jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border); }
+.jobs-list { display: flex; flex-direction: column; gap: calc(1rem * 18 / 14); max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: var(--space-1); scrollbar-width: thin; }
 .jobs-group { flex-shrink: 0; min-width: 0; }
-.jobs-group-title { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary); }
+.jobs-group-title { display: flex; align-items: center; gap: var(--space-4); margin: 0 0 calc(1rem * 10 / 14); font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary); }
 .jobs-history-toggle { width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; text-align: left; font-family: inherit; transition: margin-bottom var(--disclosure-duration) ease; }
-.jobs-history-toggle::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); margin: 0 3px; transition: transform var(--disclosure-duration) ease; }
+.jobs-history-toggle::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); margin: 0 calc(1rem * 3 / 14); transition: transform var(--disclosure-duration) ease; }
 .jobs-history-toggle[aria-expanded="true"]::before { transform: translateY(-2px) rotate(45deg); }
 .jobs-history-toggle[aria-expanded="false"] { margin-bottom: 0; }
 .jobs-history-toggle:hover { color: var(--color-text-primary); }
@@ -3336,19 +3339,19 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
     transition: none;
   }
 }
-.jobs-more { margin-top: 8px; }
+.jobs-more { margin-top: var(--space-4); }
 .jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-border); }
-.jobs-group-count { min-width: 20px; padding: 1px 6px; border-radius: 5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); font-size: var(--font-size-xs); text-align: center; font-variant-numeric: tabular-nums; }
-.jobs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18em,100%),1fr)); gap: 8px; }
-.jobs-row { display: flex; flex-direction: column; gap: 9px; text-align: left; padding: 12px; border: 1px solid var(--color-border); border-left: 3px solid color-mix(in srgb, var(--job-color) 55%, var(--color-border)); background: var(--color-bg-surface); border-radius: 8px; color: inherit; min-width: 0; cursor: pointer; }
+.jobs-group-count { min-width: 20px; padding: calc(1rem * 1 / 14) var(--space-3); border-radius: 5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); font-size: var(--font-size-xs); text-align: center; font-variant-numeric: tabular-nums; }
+.jobs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18em,100%),1fr)); gap: var(--space-4); }
+.jobs-row { display: flex; flex-direction: column; gap: calc(1rem * 9 / 14); text-align: left; padding: var(--space-5); border: 1px solid var(--color-border); border-left: 3px solid color-mix(in srgb, var(--job-color) 55%, var(--color-border)); background: var(--color-bg-surface); border-radius: 8px; color: inherit; min-width: 0; cursor: pointer; }
 .jobs-row.selected { border-color: color-mix(in srgb, var(--color-accent) 60%, var(--color-border)); border-left-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 7%, var(--color-bg-surface)); }
 .jobs-row:hover { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 4%, var(--color-bg-surface)); }
 .jobs-row:focus-visible, .jobs-action:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-.jobs-row-head { flex-wrap: wrap; gap: 6px; }
+.jobs-row-head { flex-wrap: wrap; gap: var(--space-3); }
 .jobs-id { min-width: 0; font-size: var(--font-size-xs); color: var(--color-text-secondary); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .jobs-command { overflow-wrap: anywhere; max-width: 100%; font-size: var(--font-size-md); font-weight: 500; }
 .jobs-row-meta { font-size: var(--font-size-xs); line-height: 1.5; font-variant-numeric: tabular-nums; }
-.jobs-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 5px; background: color-mix(in srgb, var(--job-color) 10%, transparent); color: var(--job-color); font-size: var(--font-size-xs); font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+.jobs-status { display: inline-flex; align-items: center; gap: calc(1rem * 5 / 14); padding: calc(1rem * 3 / 14) calc(1rem * 7 / 14); border-radius: 5px; background: color-mix(in srgb, var(--job-color) 10%, transparent); color: var(--job-color); font-size: var(--font-size-xs); font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 .jobs-status::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .jobs-row-running, .jobs-status-running { --job-color: var(--color-accent); }
 .jobs-row-stopping, .jobs-status-stopping { --job-color: light-dark(#925b10,#e7ba70); }
@@ -3362,19 +3365,19 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-status-stopped::before { border-radius: 1px; }
 @keyframes jobs-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .jobs-status-running::before { animation: none; } }
-.jobs-detail { display: flex; flex-direction: column; gap: 9px; flex: 1; min-height: 290px; min-width: 0; }
-.jobs-detail-title { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--color-border); padding-top: 16px; }
-.jobs-full-command { margin: 0; padding: 9px 11px; font: var(--font-size-sm)/var(--line-height-normal) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-bg-surface); border-radius: 5px; max-height: 110px; overflow: auto; }
+.jobs-detail { display: flex; flex-direction: column; gap: calc(1rem * 9 / 14); flex: 1; min-height: 290px; min-width: 0; }
+.jobs-detail-title { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--color-border); padding-top: var(--space-6); }
+.jobs-full-command { margin: 0; padding: calc(1rem * 9 / 14) calc(1rem * 11 / 14); font: var(--font-size-sm)/var(--line-height-normal) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-bg-surface); border-radius: 5px; max-height: 110px; overflow: auto; }
 .jobs-path { font-size: var(--font-size-sm); overflow-wrap: anywhere; line-height: var(--line-height-normal); }
-.jobs-toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
-.jobs-action { border: 1px solid var(--color-border); background: var(--color-bg-surface); color: inherit; border-radius: 5px; padding: 5px 8px; font-size: var(--font-size-sm); cursor: pointer; }
+.jobs-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.jobs-action { border: 1px solid var(--color-border); background: var(--color-bg-surface); color: inherit; border-radius: 5px; padding: calc(1rem * 5 / 14) var(--space-4); font-size: var(--font-size-sm); cursor: pointer; }
 .jobs-action.jobs-stop { color: light-dark(#b33732,#f09d94); }
 .jobs-action:disabled { opacity: .45; cursor: default; }
 .jobs-action:hover:not(:disabled) { border-color: var(--color-accent); }
-.jobs-error { font-size: var(--font-size-sm); line-height: var(--line-height-normal); padding: 8px 10px; border-radius: 5px; background: light-dark(#fff0e8,#452a20); color: light-dark(#934020,#edb798); overflow-wrap: anywhere; }
-.jobs-output { flex: 1; min-height: 170px; max-height: 60vh; overflow: auto; background: light-dark(#f7f8fa,#15181e); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; }
+.jobs-error { font-size: var(--font-size-sm); line-height: var(--line-height-normal); padding: var(--space-4) calc(1rem * 10 / 14); border-radius: 5px; background: light-dark(#fff0e8,#452a20); color: light-dark(#934020,#edb798); overflow-wrap: anywhere; }
+.jobs-output { flex: 1; min-height: 170px; max-height: 60vh; overflow: auto; background: light-dark(#f7f8fa,#15181e); border: 1px solid var(--color-border); border-radius: 8px; padding: 1rem; }
 .jobs-output pre { margin: 0; font: var(--font-size-sm)/var(--line-height-relaxed) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
-.jobs-empty { margin: auto; max-width: 330px; text-align: center; padding: 40px 12px; }
+.jobs-empty { margin: auto; max-width: 330px; text-align: center; padding: calc(1rem * 40 / 14) var(--space-5); }
 .jobs-empty h3 { font-size: var(--font-size-md); }
 .jobs-empty p { color: var(--color-text-secondary); font-size: var(--font-size-sm); line-height: var(--line-height-relaxed); }
 .jobs-panel > :not(.jobs-detail), .jobs-detail > :not(.jobs-output) { flex-shrink: 0; }
@@ -3382,18 +3385,18 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .review-path-filter {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--space-2);
+  padding: var(--space-2);
 }
 
 .review-path-filter > input {
   flex: 1 1 100%;
   width: 100%;
-  padding: 4px 6px;
+  padding: var(--space-2) var(--space-3);
 }
 
 .review-filter-count {
-  padding: 4px 8px;
+  padding: var(--space-2) var(--space-4);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -3407,7 +3410,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   anchor-name: --review-file-types;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   max-width: 100%;
 }
 
@@ -3424,12 +3427,12 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   top: anchor(bottom);
   left: anchor(left);
   position-try-fallbacks: flip-block, flip-inline;
-  margin: 4px 0;
+  margin: var(--space-2) 0;
   min-width: 180px;
   max-width: calc(100vw - 16px);
   max-height: min(320px, 60vh);
   overflow: auto;
-  padding: 6px;
+  padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
@@ -3439,15 +3442,15 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 
 .review-type-heading {
-  padding: 4px 6px;
+  padding: var(--space-2) var(--space-3);
   font-weight: 600;
 }
 
 .review-type-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
+  gap: var(--space-4);
+  padding: calc(1rem * 5 / 14) var(--space-3);
   cursor: pointer;
 }
 
@@ -3478,7 +3481,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 
 .review-filter-scope {
-  padding: 4px 8px 0;
+  padding: var(--space-2) var(--space-4) 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
@@ -3494,7 +3497,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .review-hunk-actions {
   position: relative;
   width: 100%;
-  height: var(--diff-hunk-height, 20px);
+  height: var(--diff-hunk-height, calc(1rem * 20 / 14));
   pointer-events: none;
 }
 
@@ -3503,8 +3506,8 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   left: 0;
   top: 2px;
   box-sizing: border-box;
-  width: 18px;
-  height: 18px;
+  width: calc(1rem * 18 / 14);
+  height: calc(1rem * 18 / 14);
   padding: 0;
   border: 1px solid;
   border-radius: 3px;
@@ -3548,14 +3551,14 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   grid-template-columns: 14px 0fr;
   align-items: center;
   column-gap: 0;
-  height: 27px;
-  padding: 0 6px;
+  height: calc(1rem * 27 / 14);
+  padding: 0 var(--space-3);
   border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
   background: var(--color-bg-surface);
   color: var(--color-accent);
   font-family: var(--font-family-sans);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   box-shadow: 0 1px 3px #0002;
   cursor: pointer;
   white-space: nowrap;
@@ -3571,8 +3574,8 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 
 .review-hunk-context-button:is(:hover, :focus-visible, [aria-expanded="true"]) {
   grid-template-columns: 14px 1fr;
-  column-gap: 6px;
-  padding: 0 10px;
+  column-gap: var(--space-3);
+  padding: 0 calc(1rem * 10 / 14);
 }
 
 .review-hunk-context-button:is(:hover, :focus-visible, [aria-expanded="true"]) .review-hunk-context-label {
@@ -3585,7 +3588,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 
 .review-hunk-context-button[aria-pressed="mixed"] .review-hunk-context-label::after {
   content: "⌄";
-  margin-left: 6px;
+  margin-left: var(--space-3);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3600,10 +3603,10 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   left: 0;
   top: calc(100% + 5px);
   width: max-content;
-  min-width: min(205px, var(--diff-hunk-width));
+  min-width: min(calc(1rem * 205 / 14), var(--diff-hunk-width));
   max-width: var(--diff-hunk-width);
   transform: translateX(min(0px, calc(var(--diff-hunk-width) - var(--diff-hunk-hover-left) - 2px - 100%)));
-  padding: 4px;
+  padding: var(--space-2);
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -3621,13 +3624,13 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   left: 0;
   right: 0;
   top: -6px;
-  height: 6px;
+  height: calc(1rem * 6 / 14);
 }
 
 .review-hunk-context-menu button {
   display: block;
   width: 100%;
-  padding: 8px;
+  padding: var(--space-4);
   border: 0;
   border-radius: 4px;
   background: none;
@@ -3635,7 +3638,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   text-align: left;
   cursor: pointer;
   font-family: var(--font-family-sans);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 
 .review-hunk-context-menu button:hover {
@@ -3658,61 +3661,61 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   z-index: 21;
 }
 /* GitHub review threads share the existing Review shell and diff geometry. */
-.github-review-controls { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
-.github-review-toggle { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border: 1px solid var(--color-separator); border-radius: 5px; font-size: 12px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
-.github-review-toggle svg { width: 14px; height: 14px; }
-.github-review-switch { display: inline-block; width: 26px; height: 15px; border-radius: 10px; background: var(--color-text-faint); padding: 2px; box-sizing: border-box; }
-.github-review-switch::after { content: ''; display: block; width: 11px; height: 11px; border-radius: 50%; background: white; }
+.github-review-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
+.github-review-toggle { display: flex; align-items: center; gap: calc(1rem * 7 / 14); height: 2rem; padding: 0 calc(1rem * 9 / 14); border: 1px solid var(--color-separator); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
+.github-review-toggle svg { width: 1rem; height: 1rem; }
+.github-review-switch { display: inline-block; width: calc(26em / 12); height: calc(15em / 12); border-radius: 10px; background: var(--color-text-faint); padding: calc(2em / 12); box-sizing: border-box; }
+.github-review-switch::after { content: ''; display: block; width: calc(11em / 12); height: calc(11em / 12); border-radius: 50%; background: white; }
 .github-review-switch.on { background: #0969da; }
-.github-review-switch.on::after { margin-left: 11px; }
-.github-review-refresh { font-size: 19px; padding: 0 4px; cursor: pointer; }
-.github-review-status { font-size: 12px; padding: 5px 10px; border-top: 1px solid var(--color-separator); color: var(--color-text-muted); white-space: normal; }
+.github-review-switch.on::after { margin-left: calc(11em / 12); }
+.github-review-refresh { font-size: calc(1rem * 19 / 14); padding: 0 var(--space-2); cursor: pointer; }
+.github-review-status { font-size: var(--font-size-xs); padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14); border-top: 1px solid var(--color-separator); color: var(--color-text-muted); white-space: normal; }
 .github-review-status.hidden { display: none; }
 .github-review-error { color: var(--color-danger, #cf222e); white-space: pre-wrap; overflow-wrap: anywhere; }
-.github-review-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 4px 0; }
+.github-review-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); padding: var(--space-2) 0; }
 .github-review-recovery > span { flex: 1 1 260px; }
-.github-review-update { flex: none; padding: 4px 10px; border: 1px solid var(--color-separator); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-update { flex: none; padding: var(--space-2) calc(1rem * 10 / 14); border: 1px solid var(--color-separator); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-update:disabled { opacity: .5; cursor: default; }
-.github-review-unplaced { margin-top: 4px; }
+.github-review-unplaced { margin-top: var(--space-2); }
 .github-review-unplaced summary { cursor: pointer; }
-.github-review-unplaced-body { max-height: 36vh; overflow: auto; padding: 8px 0; }
+.github-review-unplaced-body { max-height: 36vh; overflow: auto; padding: var(--space-4) 0; }
 .github-review-inline-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 12; }
 .semantic-entry-editor-parent { position: relative; }
-.github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: 6px 0 10px; }
-.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: 13px; line-height: 1.5; text-align: left; white-space: normal; }
-.github-review-thread + .github-review-thread { margin-top: 8px; }
-.github-review-thread-location { display: flex; align-items: center; gap: 8px; padding: 4px 12px; color: var(--color-text-muted); font-size: 11px; background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-separator); }
+.github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: var(--space-3) 0 calc(1rem * 10 / 14); }
+.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
+.github-review-thread + .github-review-thread { margin-top: var(--space-4); }
+.github-review-thread-location { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-text-muted); font-size: var(--font-size-caption); background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-separator); }
 .github-review-thread.resolved .github-review-thread-location { border-bottom: 0; }
 .github-review-resolved-toggle { margin-left: auto; cursor: pointer; color: var(--color-text-muted); }
 .github-review-comment + .github-review-comment { border-top: 1px solid var(--color-separator); }
-.github-review-comment-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; min-width: 0; }
+.github-review-comment-header { display: flex; align-items: center; gap: var(--space-4); padding: calc(1rem * 10 / 14) var(--space-5) var(--space-2); min-width: 0; }
 .github-review-avatar { width: 26px; height: 26px; border-radius: 50%; flex: 0 0 26px; }
 .github-review-avatar-fallback { display: flex; align-items: center; justify-content: center; background: var(--color-bg-subtle); }
 .github-review-avatar-fallback svg { width: 16px; height: 16px; }
-.github-review-time { font-size: 12px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.github-review-delete { margin-left: auto; color: var(--color-text-muted); cursor: pointer; padding: 3px; }
+.github-review-time { font-size: var(--font-size-xs); color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.github-review-delete { margin-left: auto; color: var(--color-text-muted); cursor: pointer; padding: calc(1rem * 3 / 14); }
 .github-review-delete svg { width: 14px; height: 14px; }
-.github-review-markdown { padding: 4px 12px 12px 46px; overflow-wrap: anywhere; font-size: 13px; }
+.github-review-markdown { padding: var(--space-2) var(--space-5) var(--space-5) calc(1rem * 46 / 14); overflow-wrap: anywhere; font-size: var(--font-size-sm); }
 .github-review-markdown > :first-child { margin-top: 0; }
 .github-review-markdown > :last-child { margin-bottom: 0; }
-.github-review-markdown pre { max-width: 100%; overflow: auto; padding: 8px; background: var(--color-bg-subtle); }
+.github-review-markdown pre { max-width: 100%; overflow: auto; padding: var(--space-4); background: var(--color-bg-subtle); }
 .github-review-markdown img { max-width: 100%; }
-.github-review-thread-footer { padding: 10px 12px; border-top: 1px solid var(--color-separator); background: var(--color-bg-subtle); }
-.github-review-composer { padding: 12px; }
+.github-review-thread-footer { padding: calc(1rem * 10 / 14) var(--space-5); border-top: 1px solid var(--color-separator); background: var(--color-bg-subtle); }
+.github-review-composer { padding: var(--space-5); }
 .github-review-thread-footer .github-review-composer { padding: 0; }
-.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 34px; resize: vertical; padding: 8px 12px; color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; font: inherit; line-height: 1.5; }
+.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: calc(1rem * 34 / 14); resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; font: inherit; line-height: 1.5; }
 .github-review-input:focus { border-color: #0969da; outline: 1px solid #0969da; outline-offset: -1px; }
-.github-review-composer-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; }
-.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: 5px 12px; border: 1px solid var(--color-separator); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-composer-actions { display: flex; justify-content: flex-end; gap: var(--space-4); padding-top: var(--space-5); }
+.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: calc(1rem * 5 / 14) var(--space-5); border: 1px solid var(--color-separator); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-composer-actions .github-review-send { color: white; background: #1f883d; border-color: #1a7f37; font-weight: 600; }
 .github-review-thread button:disabled { opacity: .5; cursor: default; }
-.github-review-resolve { margin-top: 12px; }
-.github-review-badge { padding: 0 6px; border: 1px solid var(--color-separator); border-radius: 9px; }
-.github-review-delete-confirm { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 8px 12px; }
+.github-review-resolve { margin-top: var(--space-5); }
+.github-review-badge { padding: 0 var(--space-3); border: 1px solid var(--color-separator); border-radius: 9px; }
+.github-review-delete-confirm { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
 .github-review-delete-confirm .danger { color: #cf222e; }
-.github-review-file-count { display: inline-flex; align-items: center; gap: 3px; color: var(--color-text-muted); font-size: 11px; padding-left: 4px; }
+.github-review-file-count { display: inline-flex; align-items: center; gap: calc(1rem * 3 / 14); color: var(--color-text-muted); font-size: var(--font-size-caption); padding-left: var(--space-2); }
 .github-review-file-count svg { width: 13px; height: 13px; }
 
-.browser-annotation { flex: 0 0 auto; padding: 12px; border-bottom: 1px solid var(--color-separator); display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.browser-annotation { flex: 0 0 auto; padding: var(--space-5); border-bottom: 1px solid var(--color-separator); display: flex; flex-direction: column; gap: calc(1rem * 10 / 14); font-size: var(--font-size-sm); }
 .browser-annotation.hidden { display: none; }
-.browser-annotation button { padding: 5px 10px; border: 1px solid var(--color-separator); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.browser-annotation button { padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14); border: 1px solid var(--color-separator); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }

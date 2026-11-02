@@ -66,8 +66,11 @@ encode component names into global tokens.
 
 ### Typography and appearance settings
 
-`Font size` sets `--font-size-base` (14px by default). Use the existing scale
-for all readable app text, including Jobs, Codex conversations, and dock UI:
+`Font size` sets `--font-size-base` (14px by default, supported range 12–18px).
+`html` consumes that token: it is the single root scale, not just a body-text
+setting. Type roles use proportional `rem` lengths, preserving their default
+14px density. Use the existing scale for all readable app text, including
+Jobs, Codex conversations, and dock UI:
 
 | Role | Token | Default |
 | --- | --- | --- |
@@ -75,6 +78,28 @@ for all readable app text, including Jobs, Codex conversations, and dock UI:
 | Controls and code | `--font-size-sm` | 13px |
 | Timestamps, status, and other metadata | `--font-size-xs` | 12px |
 | Panel headings | `--font-size-lg` | 17px |
+| Small badges and compact metadata | `--font-size-micro`, `--font-size-caption` | 10px, 11px |
+| Emphasized labels and dialog titles | `--font-size-emphasis` | 16px |
+| Section and page titles | `--font-size-title`, `--font-size-page-title` | 20px, 26px |
+
+Shared padding, margins and gaps use the `--space-1` through `--space-7`
+roles (2/4/6/8/12/16/24px at the default root size). Keep unusual dimensions
+local in `rem`; do not add a global token for every pixel value. Text-control
+height and internal padding can use `em` to follow the control's own type
+role. Use `%`, `fr` and viewport/container units for available layout space.
+
+Scale text, hit areas and surrounding whitespace together. Prefer minimum
+heights and content-driven sizing for wrapping text; relative units do not
+remove clipping from a restrictive ancestor. Git graph rows and displayed
+SVGs scale together, while their normalized viewBox coordinates stay intact.
+
+Thin borders, deliberate fixed icon grids, resize handles and native window
+geometry may remain in pixels. Document-authored Office typography, document
+zoom and measured document coordinates are separate from application UI.
+Keep the question input's 16px mobile focus floor. The narrow Composer's
+existing fixed 16px override is deferred pending a mobile-focus policy review;
+it is not part of this root-scale migration. Do not mechanically convert
+those exceptions.
 
 Do not hardcode text sizes in pixels. Markdown may size headings relative to
 its surrounding text; larger page headings may derive from the base. Use
@@ -107,17 +132,20 @@ tokens that bypass it. Task names may use weight 500 and headings 600 to
 express hierarchy.
 
 The code editor and terminal also need their measured options updated:
-`AppFontSize::apply` writes the root type scale and both widgets' measured
-sizes. Both resolve the monospace stack themselves — the editor's default is
+`AppFontSize::apply` writes the root type scale, then reads the registered
+`--font-size-sm` through CSSOM and updates both widgets' measured sizes.
+Never parse an unevaluated `rem` token as a pixel number or duplicate the
+CSS ratio in the model. Both resolve the monospace stack themselves — the editor's default is
 that stack, and a new terminal reads `--font-family-mono` through CSSOM when it
 mounts. New terminals read `--font-size-sm` through CSSOM too, so its
 registered `<length>` type must keep resolving to pixels. The Viewer theme's
 standalone defaults are overridden for every embedded app code surface in
 `tokens.css`.
 
-Verify changed typography at the minimum and maximum font settings, after
-reload, and in both light and dark themes; let content wrap or reduce columns
-as text grows.
+Verify changed typography at 12px, 14px and 18px, after reload, in existing
+and new editors/terminals, and in both light and dark themes. Include narrow
+panes, control whitespace, clipping, wrapping/scrolling and graph alignment;
+computed font-size assertions alone do not establish layout correctness.
 
 ## Form-field focus ownership
 

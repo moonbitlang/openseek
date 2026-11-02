@@ -19224,20 +19224,17 @@ test "theme settings switch fixed palettes and are idempotent" {
 }
 
 ///|
-test "font-size settings switch every text surface and are idempotent" {
-  assert_eq(AppFontSize(12).pixels(), 11.0)
-  assert_eq(AppFontSize(14).pixels(), 13.0)
-  assert_eq(AppFontSize(18).pixels(), 17.0)
+test "font-size settings preserve the selected root size and are idempotent" {
   let dispatch = test_dispatch()
   let model = test_model()
   let (_, first) = update(dispatch, FontSizeChanged("15"), model)
   let (_, second) = update(dispatch, FontSizeChanged("15"), first)
   assert_eq(first.app_font_size, AppFontSize(15))
   assert_eq(second.app_font_size, AppFontSize(15))
-  assert_eq(first.app_font_size.pixels(), 14.0)
+  assert_eq(first.app_font_size.base_pixels(), 15)
   let (_, largest) = update(dispatch, FontSizeChanged("18"), first)
   assert_eq(largest.app_font_size, AppFontSize(18))
-  assert_eq(largest.app_font_size.pixels(), 17.0)
+  assert_eq(largest.app_font_size.base_pixels(), 18)
   let (_, unchanged) = update(dispatch, FontSizeChanged("unknown"), model)
   assert_eq(unchanged.app_font_size, AppFontSize(14))
 }
