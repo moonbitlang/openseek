@@ -66,11 +66,10 @@ encode component names into global tokens.
 
 ### Typography and appearance settings
 
-`Font size` sets `--font-size-base` (14px by default, supported range 12–18px).
-`html` consumes that token: it is the single root scale, not just a body-text
-setting. Type roles use proportional `rem` lengths, preserving their default
-14px density. Use the existing scale for all readable app text, including
-Jobs, Codex conversations, and dock UI:
+#### Type roles
+
+`Font size` sets `--font-size-base` on `html` (14px by default, range 12–18px).
+Use the proportional type roles for readable application text:
 
 | Role | Token | Default |
 | --- | --- | --- |
@@ -82,74 +81,40 @@ Jobs, Codex conversations, and dock UI:
 | Emphasized labels and dialog titles | `--font-size-emphasis` | 16px |
 | Section and page titles | `--font-size-title`, `--font-size-page-title` | 20px, 26px |
 
-Shared padding, margins and gaps use the `--space-1` through `--space-7`
-roles (2/4/6/8/12/16/24px at the default root size). Consolidate nearby old
-pixel values into these roles rather than preserving each literal as a
-fraction: for example, 3/5px insets use `--space-2`, 7/9px use `--space-4`,
-and 10/11px use `--space-5`. Small density adjustments are intentional.
+Ordinary text inherits `--font-family-sans` and `--font-weight-regular` (400),
+with antialiased font smoothing on macOS. Task names may use weight 500 and
+headings 600; Markdown emphasis uses 600. Chat prose and composer input use
+normal letter spacing for mixed Chinese and Latin text. Code surfaces,
+including the editor and terminal, share `--font-family-mono`.
 
-Keep unusual dimensions local as simple `rem` values, usually in quarter-rem
-steps; do not add a global token for every measurement. Text-control height
-and internal padding use simple `em` values such as `2.25em` and
-`0.25em 0.75em`, following the control's own type role. Keep exact ratios in
-the typography/icon scales or genuinely coupled geometry, not scattered
-through ordinary padding and gaps. Use `%`, `fr` and viewport/container units
-for available layout space.
+#### Dimensions and ownership
 
-Scale text, hit areas and surrounding whitespace together. Prefer minimum
-heights and content-driven sizing for wrapping text; relative units do not
-remove clipping from a restrictive ancestor. Git graph rows and displayed
-SVGs share the local `--git-graph-row-height`, while their normalized viewBox
-coordinates stay intact.
+- Use `--space-1` through `--space-7` for shared padding, margins and gaps;
+  keep one-off dimensions local as simple `rem` values, not pixel-conversion
+  fractions. Exact ratios belong in shared scales or coupled geometry.
+- Use `em` for text-control geometry and unitless text line heights.
+  Markdown headings may size relative to their surrounding text.
+- Use `--icon-xs/sm/md/lg` for control glyphs, not text-size overrides.
+  Component classes own button geometry: scale text, hit areas and whitespace
+  together, including titlebar controls.
+- Use `%`, `fr` and viewport/container units for available space. Prefer
+  minimum heights and content-driven sizing so text can wrap without clipping.
+
+#### Exceptions
 
 Thin borders, deliberate fixed icon grids, resize handles and native window
-geometry may remain in pixels. Document-authored Office typography, document
-zoom and measured document coordinates are separate from application UI.
-Keep the question input's 16px mobile focus floor. The narrow Composer's
-existing fixed 16px override is deferred pending a mobile-focus policy review;
-it is not part of this root-scale migration. Do not mechanically convert
-those exceptions.
+geometry may remain in pixels. Native window-control insets set a lower bound
+on header geometry. Document-authored Office typography, zoom and measured
+document coordinates are separate from application UI.
 
-Do not hardcode text sizes in pixels. Markdown may size headings relative to
-its surrounding text; larger page headings may derive from the base. Use
-unitless line heights so text grows without clipping. Icon glyphs use the
-icon scale and do not acquire text-sizing rules merely to size an SVG. The
-`--icon-xs/sm/md/lg` roles scale with `--font-size-base`, preserving their
-10/12/14/16px sizes at the default 14px setting. Use those roles instead of
-local fixed sizes for control glyphs.
+Retain the question input's 16px mobile focus floor and the narrow Composer's
+existing 16px override until their mobile-focus policy is reviewed.
 
-The shared titlebar controls follow `--font-size-base`: their glyph size,
-button size, and inter-button gap scale together from the default 14px, 24px,
-and 4px geometry. This includes sidebar mode, navigation, conversation, and
-panel controls. The header height, horizontal insets, and sidebar mode-switch
-padding follow the same scale. Keep native window-control insets in platform
-pixels and let them set a lower bound on the header's height and insets.
+The editor and terminal require numerical font sizes for measured layout.
+Resolve those from CSSOM's computed `--font-size-sm`, keeping its registered
+`<length>` type; do not duplicate the CSS ratio in application code.
 
-Generic icon buttons, their compact and edit-copy variants, panel toggles,
-and tab actions scale their hit areas from the same base. Keep these dimensions
-owned by their component classes; changing an icon's font size alone does not
-resize its button.
-
-Ordinary text inherits `--font-family-sans` and `--font-weight-regular` from
-the app (400), with antialiased font smoothing on macOS. Markdown emphasis
-uses 600 rather than the browser's default bold weight. Chat prose and
-composer input use normal letter spacing for mixed Chinese and Latin text.
-Code blocks, commands, logs, and paths displayed as code use
-`--font-family-mono`, the one monospace stack the CSS code surfaces, the editor,
-and the terminal share. Avoid independent font stacks or misspelled fallback
-tokens that bypass it. Task names may use weight 500 and headings 600 to
-express hierarchy.
-
-The code editor and terminal also need their measured options updated:
-`AppFontSize::apply` writes the root type scale, then reads the registered
-`--font-size-sm` through CSSOM and updates both widgets' measured sizes.
-Never parse an unevaluated `rem` token as a pixel number or duplicate the
-CSS ratio in the model. Both resolve the monospace stack themselves — the editor's default is
-that stack, and a new terminal reads `--font-family-mono` through CSSOM when it
-mounts. New terminals read `--font-size-sm` through CSSOM too, so its
-registered `<length>` type must keep resolving to pixels. The Viewer theme's
-standalone defaults are overridden for every embedded app code surface in
-`tokens.css`.
+#### Verification
 
 Verify changed typography at 12px, 14px and 18px, after reload, in existing
 and new editors/terminals, and in both light and dark themes. Include narrow
