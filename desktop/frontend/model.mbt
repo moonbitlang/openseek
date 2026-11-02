@@ -1108,6 +1108,7 @@ priv struct DeviceState {
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
   projects : Array[@common.Uri]
+  project_catalog : Result[Unit, String]?
   chat_root : Result[@common.Uri, String]?
   // Each project's worktree registry rows, refreshed with the project list
   // and replaced wholesale by `worktree.changed`. The sidebar's name
@@ -1146,6 +1147,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     archived: [],
     archive_overrides: [],
     projects: [],
+    project_catalog: None,
     chat_root: None,
     worktrees: [],
     workspace_settings: [],

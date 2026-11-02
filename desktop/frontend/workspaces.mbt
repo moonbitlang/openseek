@@ -808,7 +808,13 @@ test "a project list failure preserves inventory and pending additions" {
     next.notifications[0].message,
     "Workspace error: workspace list is malformed",
   )
-  assert_true(next.dev() == model.dev())
+  assert_true(
+    next.dev() ==
+    {
+      ..model.dev(),
+      project_catalog: Some(Err("workspace list is malformed")),
+    },
+  )
   assert_true(next.conversations == model.conversations)
   assert_true(next.pending_project_adoption == model.pending_project_adoption)
   // A superseded request or connection must not display an obsolete error.

@@ -70,7 +70,7 @@ pub(all) struct Action {
 ///|
 pub(all) struct Input {
   id : Id
-  label : String
+  label : String?
   initially_collapsed : Bool
   // The active conversation's session id while this section holds the
   // focused chat; `None` otherwise. Same contract as
@@ -285,7 +285,9 @@ pub fn component(
     by=entry => entry.1.key(),
   )
   state.map4(input, entry_rows, search, (state, input, entry_rows, search) => {
-    let collapsed = search.query.is_blank() && state.folded(input)
+    let collapsed = input.label is Some(_) &&
+      search.query.is_blank() &&
+      state.folded(input)
     let mut class = if collapsed {
       "sidebar-heading section-heading collapsible collapsed"
     } else {
@@ -294,33 +296,44 @@ pub fn component(
     if input.activation is Some(_) {
       class += " active"
     }
-    let heading : Array[@html.Html] = [
-      @html.button(
-        class="section-disclosure",
-        type_="button",
-        on_click=emit(Toggle),
-        attrs=@html.Attrs::build()
-          .aria_expanded((!collapsed).to_string())
-          .aria_controls(input.id.key() + ":content"),
-        [
-          @html.span(class="sidebar-label", input.label),
-          @html.span(
-            class="section-chevron",
-            @icons.icon(@icons.icon_chevron_down),
-          ),
-        ],
-      ),
-    ]
-    if input.action is Some(action) {
+    let heading : Array[@html.Html] = []
+    if input.label is Some(label) {
       heading.push(
         @html.button(
-          class="section-primary-action",
+          class="section-disclosure",
+          type_="button",
+          on_click=emit(Toggle),
+          attrs=@html.Attrs::build()
+            .aria_expanded((!collapsed).to_string())
+            .aria_controls(input.id.key() + ":content"),
+          [
+            @html.span(class="sidebar-label", label),
+            @html.span(
+              class="section-chevron",
+              @icons.icon(@icons.icon_chevron_down),
+            ),
+          ],
+        ),
+      )
+    }
+    if input.action is Some(action) {
+      let content = [@icons.icon(@icons.icon_add)]
+      if input.label is None {
+        content.push(@html.span(class="sidebar-label", action.title))
+      }
+      heading.push(
+        @html.button(
+          class=if input.label is Some(_) {
+            "section-primary-action"
+          } else {
+            "sidebar-button"
+          },
           type_="button",
           title=action.title,
           disabled=action.disabled,
           attrs=@html.Attrs::build().aria_label(action.title),
           on_click=(actions.primary)(input.id),
-          @icons.icon(@icons.icon_add),
+          content,
         ),
       )
     }
@@ -340,7 +353,14 @@ pub fn component(
             "sidebar-group"
           },
           [
-            @html.div(class~, heading),
+            @html.div(
+              class=if input.label is Some(_) {
+                class
+              } else {
+                "sidebar-actions"
+              },
+              heading,
+            ),
             @html.div(
               id=input.id.key() + ":content",
               class="sidebar-group-content",

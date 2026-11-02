@@ -475,6 +475,8 @@ fn adopt_projects(
   guard model.device_state(channel) is Some(dev) else {
     return (@cmd.none, model)
   }
+  // Retired standalone chats remain on disk, outside the project catalog.
+  let paths = paths.filter(path => !dev.is_chat_workspace(path))
   // A pending add whose reply already resolved its registry row waits here
   // for that row to exist: the snapshot that contains it consumes the
   // pending and focuses. A snapshot without the row leaves it waiting —
@@ -561,6 +563,7 @@ fn adopt_projects(
       ..dev,
       sessions,
       projects: paths,
+      project_catalog: Some(Ok(())),
       active_project,
       worktrees,
       worktrees_request_generation,
@@ -6881,33 +6884,12 @@ fn update_msg(
       (command, { ..model, export_dialog, })
     }
     OpenSessionImport => {
-      let selected = if model.screen is Chat {
-        model.conversation_selection()
-      } else {
-        None
+      guard model.session_import_target() is Some(target) else {
+        return (@cmd.none, model)
       }
-      let workspace = match selected {
-        Some(selected) => Some(selected.workspace.path)
-        None =>
-          if model.sidebar_mode is WorkMode {
-            model
-            .device_state(model.focused)
-            .bind(dev => dev.active_project.map(p => p.path))
-          } else {
-            None
-          }
-      }
-      // Let the host's current registry choose placement even if this
-      // client's worktree inventory has not arrived yet.
-      let worktree_of = selected.map(selected => selected.session)
-      let (cmd, session_import_dialog) = model.session_import_dialog.open({
-        channel: model.focused,
-        connection_generation: model.focused_connection_generation(),
-        workspace: workspace.map_or(@session_import.Unplaced, path => {
-          @session_import.Registered(path)
-        }),
-        worktree_of,
-      })
+      let (cmd, session_import_dialog) = model.session_import_dialog.open(
+        target,
+      )
       (cmd, { ..model, session_import_dialog, })
     }
     SessionImport(msg) => {
@@ -7390,6 +7372,7 @@ fn update_device_msg(
         archived_request_generation,
         projects_request_generation,
         archive_overrides: [],
+        project_catalog: None,
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
         // list (or a newer `worktree.changed` broadcast) instead of trusting
@@ -7911,6 +7894,7 @@ fn update_device_msg(
           session: item.id,
           workspace: item.workspace,
         })
+        !dev.is_chat_workspace(item.workspace) &&
         disposition != Some(ArchiveStored) &&
         disposition != Some(ArchiveDeleted)
       })
@@ -8060,7 +8044,9 @@ fn update_device_msg(
       }
       // A failed read preserves the last inventory and any independent add
       // still waiting for its commit. Only mutation failures settle an add.
-      model.notify_error(
+      model
+      .replace_device({ ..dev, project_catalog: Some(Err(message)), })
+      .notify_error(
         dispatch,
         notice_text(model.locale, WorkspaceFailure(message)),
       )
@@ -8463,7 +8449,9 @@ fn update_device_msg(
           session: item.id,
           workspace: item.workspace,
         })
-        disposition != Some(ArchiveLive) && disposition != Some(ArchiveDeleted)
+        !dev.is_chat_workspace(item.workspace) &&
+        disposition != Some(ArchiveLive) &&
+        disposition != Some(ArchiveDeleted)
       })
       for fact in dev.archive_overrides {
         if fact.disposition is ArchiveStored &&
@@ -10274,6 +10262,7 @@ fn test_model() -> Model {
         ..empty_device_state(@interop.ChannelId::Local),
         bridge: Connected,
         projects: [@interop.ChannelId::Local.test_project()],
+        project_catalog: Some(Ok(())),
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
       },
     ],
@@ -16137,7 +16126,7 @@ test "Codex threads share the Projects section's project rows" {
   let sections = model.sidebar_component_sections(model.dev())
   // Work shows Projects, shared across both agents, above Archived.
   assert_eq(sections.length(), 2)
-  inspect(sections[0].label, content="Projects")
+  assert_eq(sections[0].label, Some("Projects"))
   assert_true(!sections[0].initially_collapsed)
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")

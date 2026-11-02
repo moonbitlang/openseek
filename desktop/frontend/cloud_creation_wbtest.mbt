@@ -23,7 +23,7 @@ test "new Cloud is an editable empty composer without a remote session" {
   assert_true(blank.cloud_selected())
   assert_true(blank.cloud_identity() is None)
   assert_eq(blank.cloud_title(), "New chat")
-  assert_true(blank.cloud_chat_section("local").activation is None)
+  assert_true(blank.chat_sidebar_sections("local")[0].activation is None)
   assert_true(
     blank.cloud.creation is Some(_) && !blank.cloud.creating_session(),
   )

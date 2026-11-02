@@ -8,17 +8,10 @@ struct Model {
 } derive(Eq, Debug)
 
 ///|
-pub(all) enum Workspace {
-  Unplaced
-  Allocated(String)
-  Registered(String)
-} derive(Eq, Debug)
-
-///|
 pub(all) struct Target {
   channel : @interop.ChannelId
   connection_generation : Int32
-  workspace : Workspace
+  workspace : String
   worktree_of : String?
 } derive(Eq, Debug)
 
@@ -44,7 +37,6 @@ pub(all) enum Msg {
   LinkChanged(String)
   ImportLink
   Picked(Int32, Result[String?, String])
-  WorkspaceChanged(Int32, Workspace)
   Imported(Int32, @protocol.SessionImportReply)
 }
 
@@ -77,7 +69,7 @@ fn Operation::busy(self : Operation) -> Bool {
 ///|
 fn Msg::generation(self : Msg) -> Int32? {
   match self {
-    Picked(g, _) | WorkspaceChanged(g, _) | Imported(g, _) => Some(g)
+    Picked(g, _) | Imported(g, _) => Some(g)
     _ => None
   }
 }
@@ -97,15 +89,6 @@ pub fn Model::update(
     Close => (@dialog.close(DialogId), { ..self, content: None, }, None)
     LinkChanged(link) =>
       (@cmd.none, { ..self, content: Some({ ..content, link, }), }, None)
-    WorkspaceChanged(_, workspace) if content.operation is Importing =>
-      (
-        @cmd.none,
-        {
-          ..self,
-          content: Some({ ..content, target: { ..content.target, workspace, }, }),
-        },
-        None,
-      )
     PickFile if !content.operation.busy() =>
       (
         pick_file(generation, emit),
@@ -181,9 +164,3 @@ pub extend Target with Eq::{equal, not_equal}
 
 ///|
 pub extend Target with @debug.Debug::{to_repr}
-
-///|
-pub extend Workspace with Eq::{equal, not_equal}
-
-///|
-pub extend Workspace with @debug.Debug::{to_repr}

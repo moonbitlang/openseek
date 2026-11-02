@@ -28,8 +28,7 @@ const DeviceSelectorTarget : String = "sidebar:device-selector"
 pub const ResizeHandleId : String = "sidebar-resize-handle"
 
 ///|
-/// Which conversations the list shows. Chats live in host-managed scratch
-/// workspaces; Work conversations belong to a project the user registered.
+/// Chats are Cloud conversations; Work conversations belong to registered projects.
 pub(all) enum Mode {
   ChatMode
   WorkMode

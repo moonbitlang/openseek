@@ -151,6 +151,25 @@ fn update_navigation(
     Browser(snapshot) => apply_browser_navigation(dispatch, snapshot, model)
     Link(request) => follow_navigation_link(dispatch, request, model)
     Retry => {
+      let (projects, model) = if model.focused_device() is Some(dev) &&
+        !(dev.project_catalog is Some(Ok(_))) {
+        let generation = dev.projects_request_generation + 1
+        (
+          fetch_projects(
+            dispatch,
+            model.focused,
+            dev.connection_generation,
+            generation,
+          ),
+          model.replace_device({
+            ..dev,
+            projects_request_generation: generation,
+            project_catalog: None,
+          }),
+        )
+      } else {
+        (@cmd.none, model)
+      }
       let (live, next) = request_sessions_refresh(
         dispatch,
         model.focused,
@@ -178,6 +197,7 @@ fn update_navigation(
       })
       (
         @cmd.batch([
+          projects,
           live,
           archived,
           skills,

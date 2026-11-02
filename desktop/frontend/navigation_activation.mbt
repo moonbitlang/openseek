@@ -117,6 +117,22 @@ fn activate_navigation(
     dev.bridge is Connected else {
     return (@cmd.none, model)
   }
+  // Session inventory can arrive before the workspace snapshot identifies
+  // retired standalone chats. Resolve their ownership before restoring a URL.
+  if location.target is (Session(_) | ChatDraft(_) | Thread(_) | CodexDraft(_)) {
+    match dev.project_catalog {
+      None => return (@cmd.none, model)
+      Some(Err(message)) =>
+        return (
+          @cmd.none,
+          {
+            ..model,
+            navigation: { ..model.navigation, phase: Failed(message), },
+          },
+        )
+      Some(Ok(_)) => ()
+    }
+  }
   let (command, next, phase) = match location.target {
     Cloud | CloudSession(..) | CloudDraft(..) | Settings =>
       (@cmd.none, model, Active)

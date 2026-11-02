@@ -113,7 +113,7 @@ pub fn State::pending_auth_url(Self) -> String?
 pub fn State::prepare_new_navigation(Self) -> Self
 pub fn State::project_activation(Self, SidebarContext, String) -> String?
 pub fn State::project_conversations(locale? : @i18n.Locale, Self, SidebarContext, String) -> Array[CodexProjectRow]
-pub fn State::project_draft(locale? : @i18n.Locale, Self, SidebarContext, String, include_selected? : Bool) -> @conversation.Input?
+pub fn State::project_draft(locale? : @i18n.Locale, Self, SidebarContext, String) -> @conversation.Input?
 pub fn State::reasoning_effort_chip(locale? : @i18n.Locale, Self, Bool) -> @composer.ReasoningSelect?
 pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::refresh_git(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)

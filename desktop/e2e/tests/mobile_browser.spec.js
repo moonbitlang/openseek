@@ -143,7 +143,7 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
-  await expect(page.getByRole('main').getByRole('heading', { name: 'Cloud', level: 2, exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Chats', level: 2, exact: true })).toBeVisible();
   await page.getByRole('main').getByRole('button', { name: 'New chat', exact: true }).click();
   await expect(page.locator('#task')).toBeVisible();
   await page.locator('#task').fill('A mobile browser Cloud message');

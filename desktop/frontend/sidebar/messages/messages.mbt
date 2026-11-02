@@ -6,8 +6,6 @@ pub(all) enum Message {
   SearchConversations
   NoMatchingConversations
   Chats
-  Cloud
-  Local
   CloudSignInHint
   Projects
   NewChat
@@ -58,23 +56,11 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, Chats) => "对话"
     (TraditionalChinese, Chats) => "對話"
     (Japanese, Chats) => "チャット"
-    (English, Cloud) => "Cloud"
-    (Spanish, Cloud) => "Nube"
-    (SimplifiedChinese, Cloud) => "云端"
-    (TraditionalChinese, Cloud) => "雲端"
-    (Japanese, Cloud) => "クラウド"
-    (English, Local) => "Local"
-    (Spanish, Local) => "Local"
-    (SimplifiedChinese, Local) => "本地"
-    (TraditionalChinese, Local) => "本機"
-    (Japanese, Local) => "ローカル"
-    (English, CloudSignInHint) => "Sign in to view Cloud conversations"
-    (Spanish, CloudSignInHint) =>
-      "Inicia sesión para ver tus conversaciones en la nube"
-    (SimplifiedChinese, CloudSignInHint) => "登录后查看云端对话"
-    (TraditionalChinese, CloudSignInHint) => "登入後查看雲端對話"
-    (Japanese, CloudSignInHint) =>
-      "ログインしてクラウドの会話を表示"
+    (English, CloudSignInHint) => "Sign in to view conversations"
+    (Spanish, CloudSignInHint) => "Inicia sesión para ver tus conversaciones"
+    (SimplifiedChinese, CloudSignInHint) => "登录后查看对话"
+    (TraditionalChinese, CloudSignInHint) => "登入後查看對話"
+    (Japanese, CloudSignInHint) => "ログインして会話を表示"
     (English, Projects) => "Projects"
     (Spanish, Projects) => "Proyectos"
     (SimplifiedChinese, Projects) => "项目"

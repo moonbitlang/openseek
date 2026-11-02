@@ -27,7 +27,7 @@ test('first Cloud creation locks duplicate submissions and sends the captured me
   await page.locator('#task').press('Enter');
   await expect.poll(() => creations(cloud).length).toBe(1);
   await expect(page.locator('#task')).toBeDisabled();
-  await expect(page.locator('.section-primary-action[aria-label="New chat"]')).toBeDisabled();
+  await expect(page.locator('aside button[aria-label="New chat"]')).toBeDisabled();
   expect(cloud.postCount).toBe(0);
   finish();
   await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');

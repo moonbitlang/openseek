@@ -380,7 +380,7 @@ for (const destination of ['settings', 'not-a-page']) {
     let complete;
     cloud.pauseCreate = new Promise(resolve => { complete = resolve; });
     try {
-      await page.locator('.section-primary-action[aria-label="New chat"]').click();
+      await page.locator('aside button[aria-label="New chat"]').click();
       await page.locator('#task').fill('First Cloud message');
       await page.locator('#task').press('Enter');
       await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);

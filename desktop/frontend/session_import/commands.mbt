@@ -1,9 +1,4 @@
 ///|
-priv suberror ImportError {
-  ImportError(String)
-}
-
-///|
 fn import_source(
   target : Target,
   source : @protocol.SessionImportSource,
@@ -12,43 +7,15 @@ fn import_source(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = try {
-        let workspace = match target.workspace {
-          Registered(path) | Allocated(path) => path
-          Unplaced => {
-            let path = match
-              @interop.bridge_request(
-                target.channel,
-                @commands.fs_create_unnamed_workspace,
-                @protocol.NoPayload,
-              ) {
-              Listing(path~, ..) => path
-              BrowseError(message) => raise ImportError(message)
-              Drives(_) => raise ImportError("Expected a chat workspace.")
-            }
-            scheduler.add(emit(WorkspaceChanged(generation, Allocated(path))))
-            path
-          }
-        }
-        if target.workspace is (Unplaced | Allocated(_)) {
-          match
-            @interop.bridge_request(target.channel, @commands.workspace_add, {
-              path: workspace,
-            }) {
-            Workspaces(_, ..) => ()
-            WorkspaceError(message) => raise ImportError(message)
-          }
-          scheduler.add(
-            emit(WorkspaceChanged(generation, Registered(workspace))),
-          )
-        }
-        @interop.bridge_request(target.channel, @commands.session_import, {
+      let reply = @interop.bridge_request(
+        target.channel,
+        @commands.session_import,
+        {
           source,
-          workspace,
+          workspace: target.workspace,
           worktree_of: target.worktree_of,
-        })
-      } catch {
-        ImportError(message) => @protocol.Failed(message)
+        },
+      ) catch {
         error => @protocol.Failed(@interop.bridge_error_text(error))
       }
       scheduler.add(emit(Imported(generation, reply)))

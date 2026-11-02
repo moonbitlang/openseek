@@ -145,8 +145,6 @@ pub let fs_clear_file_search_cache : Command[@protocol.ClearFileSearchCachePaylo
 
 pub let fs_create_directory : Command[@protocol.CreateDirectoryPayload, @protocol.BrowseDirectoryReply]
 
-pub let fs_create_unnamed_workspace : Command[@protocol.EmptyPayload, @protocol.BrowseDirectoryReply]
-
 pub let fs_import_attachment : Command[@protocol.PrepareAttachmentPayload, @protocol.ImportAttachmentReply]
 
 pub let fs_materialize_semantic_selection : Command[@protocol.MaterializeSemanticSelectionPayload, @protocol.MaterializeSemanticSelectionReply]
