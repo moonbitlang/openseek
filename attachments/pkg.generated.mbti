@@ -27,6 +27,7 @@ pub fn AttachmentStore::default() -> Self raise
 pub fn AttachmentStore::path(Self, @openseek_protocol.ImageRef) -> String
 pub async fn AttachmentStore::read(Self, @openseek_protocol.ImageRef) -> @openseek_protocol.Image
 pub async fn AttachmentStore::restore(Self, @openseek_protocol.Content) -> @openseek_protocol.Content
+pub fn AttachmentStore::root(Self) -> String
 pub async fn AttachmentStore::save(Self, @openseek_protocol.Image) -> @openseek_protocol.ImageRef
 pub fn AttachmentStore::to_repr(Self) -> @debug.Repr
 

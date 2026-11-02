@@ -101,10 +101,11 @@ The caller must select an image-capable model and an endpoint accepting file
 references; file IDs are scoped to the uploading API key.
 For `openseek-attachment:` references, the client reads the original bytes from
 its `attachments` store and resolves them through the Files API. The persistent
-mapping lives in `upload_index_dir` and is shared across clients; records are
-scoped by endpoint and credential digest. The defaults are
-`~/.openseek/attachments` and `~/.openseek/deepseek`. Applications should pass the
-same `AttachmentStore` used for content admission.
+mapping and its lock live at the root of that same store as `files-v1.json`
+and `files-v1.lock`, alongside `v1/objects`. The default root is
+`~/.openseek/attachments`. Records are shared across clients and scoped by
+endpoint and credential digest. Applications should pass the same
+`AttachmentStore` used for content admission.
 
 Uploads run outside the short index-write lock. Cached IDs refresh near expiry
 or once after an explicit invalid/expired file response. Local images retain
@@ -142,7 +143,6 @@ test "construct DeepSeek client configuration" {
       #|{
       #|  api_key: ...,
       #|  attachments: None,
-      #|  upload_index_dir: None,
       #|  model: Deepseek(V4Flash),
       #|  api_url: "https://api.deepseek.com/chat/completions",
       #|  thinking: Max,

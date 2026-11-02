@@ -14,6 +14,12 @@ pub fn AttachmentStore::AttachmentStore(root : String) -> AttachmentStore {
 }
 
 ///|
+/// Root shared by image objects and persistent upload records.
+pub fn AttachmentStore::root(self : AttachmentStore) -> String {
+  self.root
+}
+
+///|
 /// Construct the executing host's user-level attachment store.
 pub fn AttachmentStore::default() -> AttachmentStore raise {
   AttachmentStore(default_home() + "/attachments")

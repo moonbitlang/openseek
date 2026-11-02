@@ -69,9 +69,10 @@ Initial input, steering input, and tool results save image bytes in
 `~/.openseek/attachments` before constructing their session items. The persistence
 hook receives references and records the supplied content unchanged. The same
 content enters the live request buffer without reading back the last session event.
-`run_turn_in_scope` accepts an optional `AttachmentStore` and `upload_index_dir`
-for hosts using other storage locations. Admission and both provider clients use
-the same store; upload records default to `~/.openseek/deepseek/files-v1.json`.
+`run_turn_in_scope` accepts an optional `AttachmentStore` for hosts using other
+storage locations. Admission and both provider clients use the same store;
+upload records and their lock live at its root as `files-v1.json` and
+`files-v1.lock`, alongside the `v1/objects` image tree.
 
 `run_turn_in_scope` is the long-lived engine API. The caller owns the
 `AgentRuntime`, `AgentTaskScope`, and usually a `Tools` registry built once with

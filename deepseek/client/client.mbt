@@ -94,7 +94,6 @@ type API_KEY = String
 pub struct Client {
   priv api_key : API_KEY
   priv attachments : @attachments.AttachmentStore?
-  priv upload_index_dir : String?
   model : @deepseek.Model
   api_url : String
   thinking : @deepseek.ThinkingMode
@@ -131,10 +130,9 @@ pub struct Client {
 /// Defaults to 120s; it applies to the streaming path only (the mode the agent
 /// and TUI use).
 ///
-/// `attachments` supplies local image bytes; `upload_index_dir` holds this
-/// provider's persistent file-id index. They default lazily to the host's
-/// `~/.openseek/attachments` and `~/.openseek/deepseek` respectively. Applications
-/// should share the attachment store used for content admission with this client.
+/// `attachments` supplies local image bytes and the root for the persistent
+/// file-id index and its lock. It defaults lazily to `~/.openseek/attachments`.
+/// Applications should share the store used for content admission with this client.
 pub fn Client::Client(
   api_key~ : String,
   model~ : @deepseek.Model = default_model,
@@ -144,12 +142,10 @@ pub fn Client::Client(
   retry_backoff_ms~ : Int32 = 500,
   idle_timeout_ms~ : Int32 = 120_000,
   attachments? : @attachments.AttachmentStore,
-  upload_index_dir? : String,
 ) -> Client {
   {
     api_key,
     attachments,
-    upload_index_dir,
     model,
     api_url,
     thinking,

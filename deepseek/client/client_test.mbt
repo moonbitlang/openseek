@@ -37,7 +37,6 @@ test "client debug redacts api key" {
       #|{
       #|  api_key: ...,
       #|  attachments: None,
-      #|  upload_index_dir: None,
       #|  model: Deepseek(V4Pro),
       #|  api_url: "https://api.deepseek.com/chat/completions",
       #|  thinking: Max,

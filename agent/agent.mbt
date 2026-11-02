@@ -244,8 +244,8 @@ async test "run_turn_with_append closes failed persisted turns" {
 /// omitting a retry argument leaves that client default in place.
 /// Images are saved through `attachments` before their User/Tool items are
 /// constructed. Admission and both provider clients share this store; it defaults
-/// to `~/.openseek/attachments`. `upload_index_dir` defaults to
-/// `~/.openseek/deepseek` and stores reusable Files API upload records.
+/// to `~/.openseek/attachments`. Reusable Files API upload records and their
+/// lock file live at the root of the same store.
 /// The caller owns the lifetime of `runtime`, `scope`, and any shared
 /// `tools` registry passed here. Provider reasoning fragments always join the
 /// transient event stream; consumers choose whether and how to present them.
@@ -265,7 +265,6 @@ pub async fn[X] run_turn_in_scope(
   retry_backoff_ms? : Int32,
   tools? : @agent_tool.Tools,
   attachments? : @attachments.AttachmentStore,
-  upload_index_dir? : String,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> @agent_session.Session {
   let attachments = attachments.unwrap_or_else(() => {
@@ -279,7 +278,6 @@ pub async fn[X] run_turn_in_scope(
     retry_attempts?,
     retry_backoff_ms?,
     attachments~,
-    upload_index_dir?,
   )
   let summary_client = @client.Client(
     api_key~,
@@ -289,7 +287,6 @@ pub async fn[X] run_turn_in_scope(
     retry_attempts?,
     retry_backoff_ms?,
     attachments~,
-    upload_index_dir?,
   )
   let content = attachments.admit(content)
   let session = session

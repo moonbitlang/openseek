@@ -60,16 +60,14 @@ pub async fn Client::upload_attachment(
   reference : @protocol.ImageRef,
 ) -> String {
   guard self.supports_image_input() else { raise UnsupportedProvider }
-  let directory = self.upload_index_dir.unwrap_or_else(() => {
-    @attachments.default_home() + "/deepseek"
-  })
-  let path = "\{directory}/files-v1.json"
-  let scope = self.upload_scope()
   // Verify the durable source even on cache hits; corrupt/missing local history
   // must not silently become dependent on a temporary provider file.
   let store = self.attachments.unwrap_or_else(() => {
     @attachments.AttachmentStore::default()
   })
+  let directory = store.root()
+  let path = "\{directory}/files-v1.json"
+  let scope = self.upload_scope()
   let image = store.read(reference)
   if read_upload_index(path).lookup(scope, reference.attachment_id)
     is Some(record) {
@@ -203,9 +201,10 @@ async fn Client::invalidate_uploads(
   if ids.is_empty() {
     return
   }
-  let directory = self.upload_index_dir.unwrap_or_else(() => {
-    @attachments.default_home() + "/deepseek"
+  let store = self.attachments.unwrap_or_else(() => {
+    @attachments.AttachmentStore::default()
   })
+  let directory = store.root()
   let path = "\{directory}/files-v1.json"
   @fs.mkdir(directory, recursive=true, allow_exist=true, permission=0o700)
   let lock = @fs.open(

@@ -132,7 +132,6 @@ async fn cancel_after_picture(
         model~,
         api_url=url,
         attachments~,
-        upload_index_dir=home + "/deepseek",
         session=Session(SessionId("ptc-cancel"), system_prompt="system"),
         content=Content([Text("block")]),
         max_steps=3,

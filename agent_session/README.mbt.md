@@ -57,8 +57,8 @@ before encoding a provider request, uploading through the Files API and using
 `File(file_id=...)`. Normal turns and compaction share this path. Legacy inline
 records continue to use data URLs until migrated.
 
-Upload mappings are persisted separately in
-`~/.openseek/deepseek/files-v1.json`, scoped by a digest of endpoint and
+Upload mappings are persisted alongside the image objects in
+`~/.openseek/attachments/files-v1.json`, scoped by a digest of endpoint and
 credentials plus the image identity. Uploads request a one-day lifetime and
 refresh when fewer than five minutes remain. A short file lock covers index
 reread, merge and atomic replacement; it never covers network IO. Up to four

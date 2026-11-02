@@ -52,7 +52,6 @@ async test "persistent upload index survives clients, isolates credentials and r
       api_url~,
       model=Deepseek(V4Flash),
       attachments~,
-      upload_index_dir=home + "/deepseek",
     )
     assert_eq(client.upload_attachment(reference), "file-1")
     let resumed = @client.Client(
@@ -61,7 +60,6 @@ async test "persistent upload index survives clients, isolates credentials and r
       api_url~,
       model=Deepseek(V4Flash),
       attachments~,
-      upload_index_dir=home + "/deepseek",
     )
     assert_eq(resumed.upload_attachment(reference), "file-1")
     assert_eq(uploads.length(), 1)
@@ -70,7 +68,6 @@ async test "persistent upload index survives clients, isolates credentials and r
       api_url~,
       model=Deepseek(V4Flash),
       attachments~,
-      upload_index_dir=home + "/deepseek",
     )
     assert_eq(other.upload_attachment(reference), "file-2")
     let messages = [
@@ -86,7 +83,6 @@ async test "persistent upload index survives clients, isolates credentials and r
       model=Deepseek(V4Flash),
       api_url~,
       attachments~,
-      upload_index_dir=home + "/deepseek",
       thinking=No,
     )
     assert_eq(summary_client.thinking, No)
@@ -115,7 +111,11 @@ async test "persistent upload index survives clients, isolates credentials and r
     assert_eq(chats.length(), 3)
     assert_eq(resumed.upload_attachment(reference), "file-3")
     assert_eq(other.upload_attachment(reference), "file-2")
-    let index_text = @fs.read_file("\{home}/deepseek/files-v1.json").text()
+    // Index updates and their lock stay with the configured image objects.
+    let index_text = @fs.read_file("\{home}/image-data/files-v1.json").text()
+    assert_true(@fs.exists("\{home}/image-data/files-v1.lock"))
+    assert_false(@fs.exists("\{home}/deepseek"))
+    assert_eq(attachments.read(reference).bytes, b"GIF87a")
     assert_false(index_text.contains("first-secret"))
     assert_false(index_text.contains("other-secret"))
     assert_false(index_text.contains("GIF87a"))
@@ -130,7 +130,7 @@ async test "persistent upload index survives clients, isolates credentials and r
       }
     }
     @fs.write_file(
-      "\{home}/deepseek/files-v1.json",
+      "\{home}/image-data/files-v1.json",
       index.stringify(),
       create_mode=CreateOrTruncate,
     )
@@ -140,7 +140,6 @@ async test "persistent upload index survives clients, isolates credentials and r
       api_url="http://127.0.0.1:\{server.addr.port()}/v2/chat/completions",
       model=Deepseek(V4Flash),
       attachments~,
-      upload_index_dir=home + "/deepseek",
     )
     assert_eq(endpoint.upload_attachment(reference), "file-5")
   }
@@ -192,14 +191,12 @@ async test "different uploads overlap and commits merge under the short index lo
       api_url~,
       model=Deepseek(V4Flash),
       attachments~,
-      upload_index_dir=home + "/deepseek",
     )
     let b = @client.Client(
       api_key="key",
       api_url~,
       model=Deepseek(V4Flash),
       attachments~,
-      upload_index_dir=home + "/deepseek",
     )
     let ta = group.spawn(() => a.upload_attachment(first))
     let tb = group.spawn(() => b.upload_attachment(second))
@@ -211,7 +208,7 @@ async test "different uploads overlap and commits merge under the short index lo
     assert_eq(b.upload_attachment(second), idb)
     assert_eq(count, 2)
     let index = @json.parse(
-      @fs.read_file("\{home}/deepseek/files-v1.json").text(),
+      @fs.read_file("\{home}/image-data/files-v1.json").text(),
     )
     assert_true(
       index is { "records": Array(records), .. } && records.length() == 2,
@@ -221,7 +218,7 @@ async test "different uploads overlap and commits merge under the short index lo
     let right = group.spawn(() => b.upload_attachment(same))
     assert_eq(left.wait(), right.wait())
     let merged = @json.parse(
-      @fs.read_file("\{home}/deepseek/files-v1.json").text(),
+      @fs.read_file("\{home}/image-data/files-v1.json").text(),
     )
     assert_true(
       merged is { "records": Array(records), .. } && records.length() == 3,

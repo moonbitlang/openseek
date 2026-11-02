@@ -80,7 +80,6 @@ async test "images are admitted before append without reordering queued or arriv
       model=Deepseek(V4Flash),
       api_url=url,
       attachments~,
-      upload_index_dir=home + "/deepseek",
       session=Session(SessionId("images"), system_prompt="system"),
       content=Content([Image(image)]),
       submission_id="initial",
@@ -144,7 +143,6 @@ async test "images are admitted before append without reordering queued or arriv
         model=Deepseek(V4Flash),
         api_url=url,
         attachments~,
-        upload_index_dir=home + "/deepseek",
         session=resumed,
         content=Content([Text("replay")]),
         append_item=(session, item) => session.append(item),
@@ -178,7 +176,6 @@ async test "failed initial admission never reaches the session append hook" {
         api_key="unused",
         model=Deepseek(V4Flash),
         attachments~,
-        upload_index_dir=root + "/deepseek",
         session=initial,
         content=Content([Image(image)]),
         append_item=(session, item) => {
