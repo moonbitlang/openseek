@@ -1,4 +1,25 @@
 ///|
+fn tool_call_payload(name : String, args : Json) -> String {
+  let payload : Json = {
+    "choices": [
+      {
+        "delta": {
+          "tool_calls": [
+            {
+              "index": 0,
+              "id": "artifact-call",
+              "type": "function",
+              "function": { "name": name, "arguments": args.stringify() },
+            },
+          ],
+        },
+      },
+    ],
+  }
+  payload.stringify()
+}
+
+///|
 async test "interactive answer generation repairs script and component diagnostics before publishing" {
   @vfs.with_tmpdir(root => {
     @async.with_task_group(group => {
@@ -52,34 +73,35 @@ async test "interactive answer generation repairs script and component diagnosti
       }
       let answer = "```openseek-file artifact\nscratch/artifact/speedup-v1.html\n```"
       let bodies : Array[String] = []
-      guard goal_check_test_server(
-          group,
-          bodies,
-          [
-            wait_call_payload("mbtx", {
-              "description": "Prepare the answer",
-              "source": invalid,
-              "args": [scratch + "/invalid-executed"],
-              "ptc": false,
-            }),
-            wait_call_payload("mbtx", {
-              "description": "Repair the script and write the component",
-              "source": create,
-              "args": [project, ..sources.map(source => Json(source))],
-              "ptc": false,
-            }),
-            wait_call_payload("mbtx", build),
-            wait_call_payload("mbtx", {
-              "description": "Fix the component diagnostics",
-              "source": fix,
-              "args": [project, sources[2]],
-              "ptc": false,
-            }),
-            wait_call_payload("mbtx", build),
-            wait_call_payload("finish", { "answer": answer }),
-            wait_call_payload("finish", { "answer": "Selected state explained" }),
-          ],
-          on_request=() => {
+      let responses = [
+        tool_call_payload("mbtx", {
+          "description": "Prepare the answer",
+          "source": invalid,
+          "args": [scratch + "/invalid-executed"],
+          "ptc": false,
+        }),
+        tool_call_payload("mbtx", {
+          "description": "Repair the script and write the component",
+          "source": create,
+          "args": [project, ..sources.map(source => Json(source))],
+          "ptc": false,
+        }),
+        tool_call_payload("mbtx", build),
+        tool_call_payload("mbtx", {
+          "description": "Fix the component diagnostics",
+          "source": fix,
+          "args": [project, sources[2]],
+          "ptc": false,
+        }),
+        tool_call_payload("mbtx", build),
+        tool_call_payload("finish", { "answer": answer }),
+        tool_call_payload("finish", { "answer": "Selected state explained" }),
+      ]
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      group.spawn_bg(no_wait=true) <| () => {
+        server.run_forever(
+          (_request, body, conn) => {
+            bodies.push(body.read_all().text())
             assert_false(@fs.exists(scratch + "/invalid-executed"))
             if bodies.length() == 4 {
               assert_false(@fs.exists(scratch + "/artifact/speedup-v1.html"))
@@ -87,11 +109,16 @@ async test "interactive answer generation repairs script and component diagnosti
                 @fs.exists(scratch + "/artifact/speedup-v1.html.source"),
               )
             }
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            conn.write("data: \{responses[bodies.length() - 1]}\n\n")
+            conn.write("data: [DONE]\n\n")
           },
+          max_connections=responses.length(),
         )
-        is Some(url) else {
-        fail("offline model fixture unavailable")
       }
+      let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
       let runtime = @agent_runtime.AgentRuntime(workspace_root=workspace)
       let scope = @agent_runtime.AgentTaskScope(group)
       let tools = @agent.build_tools(

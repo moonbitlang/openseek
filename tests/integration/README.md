@@ -47,13 +47,11 @@ verdict.
 
 # Interactive answers
 
-The native test `moon test agent/interactive_answer_test.mbt --target native`
-drives a real agent turn with a scripted model and the actual mbtx tool. It
-first returns a script compile error, then a component check error, repairs
-both from the next model requests, packages the real Rabbita application and
-finishes with its artifact reference. It asserts that failed scripts execute
-no writes and failed component checks publish neither a page nor source
-revision. This exercises the repair loop through the scripted provider.
+The offline test
+`moon test tests/integration/artifact_generation/offline --target native` drives a
+scripted model through the actual mbtx tool, script and component compilation,
+repair, packaging and a selected-state follow-up. It runs with the standard native
+MoonBit test suite.
 
 Live acceptance is explicit and separate from offline CI:
 
