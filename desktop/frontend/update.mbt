@@ -16126,7 +16126,7 @@ test "Codex threads share the Projects section's project rows" {
   let sections = model.sidebar_component_sections(model.dev())
   // Work shows Projects, shared across both agents, above Archived.
   assert_eq(sections.length(), 2)
-  assert_eq(sections[0].label, Some("Projects"))
+  assert_eq(sections[0].label, "Projects")
   assert_true(!sections[0].initially_collapsed)
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")

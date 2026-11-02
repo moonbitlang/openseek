@@ -57,7 +57,7 @@ pub fn Id::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Input {
   id : Id
-  label : String?
+  label : String
   initially_collapsed : Bool
   activation : String?
   action : Action?

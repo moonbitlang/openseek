@@ -519,7 +519,7 @@ fn Model::sidebar_component_sections(
   )
   let work : @section.Input = {
     id: @section.Id(source="openseek.projects", channel~),
-    label: Some(@sidebar_messages.text(self.locale, Projects)),
+    label: @sidebar_messages.text(self.locale, Projects),
     initially_collapsed: false,
     activation: if openseek_section_activation is Some(_) {
       openseek_section_activation
@@ -655,11 +655,9 @@ fn Model::sidebar_component_sections(
   }
   sections.push({
     id: @section.Id(source="archived", channel~),
-    label: Some(
-      @sidebar_messages.text(
-        self.locale,
-        ArchivedChats(archived_entries.length()),
-      ),
+    label: @sidebar_messages.text(
+      self.locale,
+      ArchivedChats(archived_entries.length()),
     ),
     initially_collapsed: true,
     // Opening an archived transcript never force-reveals the section; its
@@ -3020,7 +3018,7 @@ fn Model::chat_sidebar_sections(
   }
   let chats : @section.Input = {
     id: @section.Id(source="cloud.chats", channel~),
-    label: None,
+    label: @sidebar_messages.text(self.locale, Chats),
     initially_collapsed: false,
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
@@ -3036,8 +3034,9 @@ fn Model::chat_sidebar_sections(
     chats,
     {
       id: @section.Id(source="archived", channel~),
-      label: Some(
-        @sidebar_messages.text(self.locale, ArchivedChats(archived.length())),
+      label: @sidebar_messages.text(
+        self.locale,
+        ArchivedChats(archived.length()),
       ),
       initially_collapsed: true,
       activation: None,

@@ -225,7 +225,7 @@ test "Back prevents a pending Cloud creation from taking foreground later" {
 }
 
 ///|
-test "Chats are a flat Cloud list with the existing ordering and create action" {
+test "Chats use the shared section with existing ordering and create action" {
   let channel = @interop.ChannelId::Local
   let root = channel.test_resource("/app-data/workspaces")
   let managed = channel.test_resource("/app-data/workspaces/old-chat")
@@ -282,10 +282,7 @@ test "Chats are a flat Cloud list with the existing ordering and create action" 
       }
     })
   }
-  assert_eq(sections.map(section => section.label), [
-    None,
-    Some("Archived chats"),
-  ])
+  assert_eq(sections.map(section => section.label), ["Chats", "Archived chats"])
   assert_eq(ids(sections[0]), ["cloud-b", "cloud-a"])
   assert_true(ids(sections[1]).is_empty())
   assert_true(sections[0].action is Some(_))

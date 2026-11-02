@@ -36,10 +36,10 @@ test "Chats exclude retired local history and user named workspaces remain proje
     model.sidebar_component_sections(model.dev()).map(section => section.label)
   }
   let work = { ..model, sidebar_mode: WorkMode, }
-  assert_eq(labels(work), [Some("Projects"), Some("Archived chats")])
+  assert_eq(labels(work), ["Projects", "Archived chats"])
   assert_eq(work.sidebar_component_sections(work.dev())[0].entries.length(), 2)
   let chat = { ..model, sidebar_mode: ChatMode, }
-  assert_eq(labels(chat), [None, Some("Archived chats")])
+  assert_eq(labels(chat), ["Chats", "Archived chats"])
   assert_true(chat.sidebar_component_sections(chat.dev())[0].entries is [_])
   assert_true(chat.sidebar_component_sections(chat.dev())[1].entries.is_empty())
   assert_true(chat.account is None)
