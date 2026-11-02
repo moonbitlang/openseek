@@ -217,16 +217,18 @@ main:has(> .conv-overview) {
 /* Changes card: the checkout first, then what the agent attached. Each row is
    its icon, tinted by the pull request's state, beside its name and menu over
    its details and checks. A row with a page links to it across its whole
-   area; the menu and the links at the end sit above that link. */
+   area; the menu and the links at the end sit above that link. The icon
+   centres on the title line. */
 .conv-changes-row {
   --icon-size: var(--icon-md);
+  --conv-changes-line: 1.5rem;
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: var(--space-4);
   min-width: 0;
-  margin-inline: -4px;
-  padding: 1px 4px;
+  margin-inline: calc(-1 * var(--space-2));
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-xs);
 }
 /* A whole row lights up like the sidebar's rows, not like a button. */
@@ -237,14 +239,15 @@ main:has(> .conv-overview) {
 .conv-changes-error {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .conv-changes-icon {
   display: inline-flex;
   flex: none;
-  padding-top: 3px;
+  align-items: center;
+  height: var(--conv-changes-line);
   color: var(--color-text-muted);
 }
 .conv-changes-icon.open {
@@ -271,11 +274,11 @@ main:has(> .conv-overview) {
 .conv-changes-details {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
 }
 .conv-changes-title {
-  min-height: 22px;
+  min-height: var(--conv-changes-line);
 }
 
 .conv-changes-link {
@@ -313,7 +316,7 @@ a.conv-changes-link::after {
 .conv-changes-meta {
   display: flex;
   flex: 1 1 auto;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
   overflow: hidden;
   color: var(--color-text-faint);
@@ -341,20 +344,20 @@ a.conv-changes-link::after {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .conv-changes-checks {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   font-variant-numeric: tabular-nums;
   text-decoration: none;
 }
 .conv-changes-checks.failed {
-  padding: 0 7px;
+  padding: 0 var(--space-4);
   border-radius: var(--radius-xs);
   background: var(--color-danger-soft);
   color: var(--color-danger);
@@ -370,7 +373,7 @@ a.conv-changes-link::after {
 }
 
 .conv-changes-create {
-  padding: 0 8px;
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
   background: var(--color-control-surface);
@@ -397,5 +400,5 @@ a.conv-changes-link::after {
 
 .conv-changes-error > .run-dot {
   flex: none;
-  margin: 7px 5px 0;
+  margin: calc((1lh - 7px) / 2) var(--space-2) 0;
 }
