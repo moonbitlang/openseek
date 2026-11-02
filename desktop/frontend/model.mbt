@@ -2771,7 +2771,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
 }
 
 ///|
-/// Launch authorization and Cloud sign-in are independent on this page.
+/// Local host access and Cloud sign-in are independent on this page.
 fn Model::is_local_console(self : Model) -> Bool {
   !self.is_desktop && self.console.page_device == Some("host")
 }

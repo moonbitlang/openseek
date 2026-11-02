@@ -18,10 +18,10 @@ fn notification_msg(
     SessionShareProgress(payload) =>
       Some(ExportDialog(HostProgress(channel, payload)))
     AuthChanged(payload) =>
-      // The Local Console inherits this host's account. The notification
-      // carries no credential; it triggers a fresh authorized HTTP read.
-      // Other remote devices never change this page's account.
-      if channel is (Local | Remote("host")) {
+      // The desktop window's own relay registration (Settings → Remote
+      // access). A remote device's auth changes are its host's business,
+      // never this page's UI.
+      if channel is Local {
         Some(RemoteStatusLoaded(RemoteAccess::from_status(payload)))
       } else {
         None
@@ -468,7 +468,7 @@ test "update download notifications control only the local desktop flow" {
 }
 
 ///|
-test "file-panel pushes carry their channel; relay auth changes do not change this account" {
+test "file-panel pushes carry their channel; auth.changed is Local-only" {
   let channel : @interop.ChannelId = Remote("d1")
   assert_true(
     notification_msg(
@@ -561,23 +561,6 @@ test "file-panel pushes carry their channel; relay auth changes do not change th
       }),
     )
     is None,
-  )
-}
-
-///|
-test "Local Console host account notifications request a credential reread" {
-  assert_true(
-    notification_msg(
-      Remote("host"),
-      @protocol.Notification::AuthChanged({
-        connected: false,
-        server_url: None,
-        managed_by_env: None,
-        user: None,
-        device: None,
-      }),
-    )
-    is Some(RemoteStatusLoaded(_)),
   )
 }
 

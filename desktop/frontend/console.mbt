@@ -131,11 +131,10 @@ fn local_console_state(login_return_to~ : String) -> ConsoleState {
 
 ///|
 /// The same-origin OAuth entry that restores this browser page afterwards.
-/// The local Dev console uses a v1 redirect back to its page.
+/// Both browser hosts use the independent account flow.
 /// Encoding the complete return target keeps its path and query as one value.
 fn ConsoleState::login_url(self : ConsoleState) -> String {
-  let version = if self.page_device == Some("host") { "v1" } else { "v2" }
-  "/\{version}/auth/login?prompt=select_account&return_to=\{@uri.encode_component(self.login_return_to)}"
+  "/v2/auth/login?prompt=select_account&return_to=\{@uri.encode_component(self.login_return_to)}"
 }
 
 ///|
@@ -177,7 +176,7 @@ test "browser sign-in returns to the same versioned console URL" {
 }
 
 ///|
-test "local Dev sign-in returns to its local page through v1" {
+test "local Console sign-in uses the browser account flow" {
   let console = empty_console_state(
     Some("host"),
     None,
@@ -185,7 +184,7 @@ test "local Dev sign-in returns to its local page through v1" {
   )
   assert_eq(
     console.login_url(),
-    "/v1/auth/login?prompt=select_account&return_to=%2Fdevice%2Fhost%2Fchat",
+    "/v2/auth/login?prompt=select_account&return_to=%2Fdevice%2Fhost%2Fchat",
   )
 }
 
@@ -304,9 +303,6 @@ fn update_console_msg(
       )
     }
     SignOutClicked => {
-      if model.is_local_console() {
-        return update_console_msg(dispatch, RefreshClicked, model)
-      }
       guard !model.console.busy else { return (@cmd.none, model) }
       (
         sign_out(dispatch),

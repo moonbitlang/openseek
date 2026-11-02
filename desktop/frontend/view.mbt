@@ -788,8 +788,8 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     RestartingForUpdate(..) => Some(shell_text(self.locale, RestartingLabel))
     _ => None
   }
-  // Launch authorization is not a Cloud account. The Local Console displays
-  // Desktop's inherited account, while a relay browser owns its own sign-in.
+  // Local host access is not a Cloud account. The Local Console displays
+  // its independent Cloud account, while a relay browser owns its own sign-in.
   let account_identity = if self.is_local_console() {
     self.account.map(account => (account.user.login, account.user.avatar_url))
   } else {
@@ -803,7 +803,6 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     avatar: identity.1,
     busy: self.console.busy,
     notice: self.console.notice,
-    managed_by_desktop: self.is_local_console(),
     device: self.console.page_device.bind(id => {
       self.console.roster
       .iter()
@@ -827,50 +826,6 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     settings_active: self.screen is Settings,
     account,
   }.filtered()
-}
-
-///|
-test "Local Console account chrome distinguishes Desktop account from launch authorization" {
-  let base = test_model()
-  let console_model = {
-    ..base,
-    is_desktop: false,
-    console: {
-      ..base.console,
-      page_device: Some("host"),
-      auth: AuthSignedIn(login="local", avatar=""),
-    },
-    account: Some({
-      token: "fixture-account",
-      user: { user_id: "fixture-user", login: "octocat", avatar_url: "", },
-    }),
-  }
-  guard console_model.sidebar_component_input().account is Some(account) else {
-    fail("the Local Console displays Desktop's inherited account")
-  }
-  assert_eq(account.login, "octocat")
-  assert_true(account.managed_by_desktop)
-  assert_true(
-    { ..console_model, account: None, }.sidebar_component_input().account
-    is None,
-  )
-  let relay = {
-    ..console_model,
-    console: {
-      ..console_model.console,
-      page_device: Some("device-a"),
-      auth: AuthSignedIn(login="relay-user", avatar=""),
-    },
-  }
-  guard relay.sidebar_component_input().account is Some(account) else {
-    fail("a relay browser displays its own signed-in account")
-  }
-  assert_eq(account.login, "relay-user")
-  assert_false(account.managed_by_desktop)
-  assert_true(
-    { ..console_model, is_desktop: true, }.sidebar_component_input().account
-    is None,
-  )
 }
 
 ///|
@@ -1077,24 +1032,15 @@ fn remote_access_rows(
         @html.img(src=account.user.avatar_url, alt="", class="console-avatar")
       },
       @html.span("@" + account.user.login),
-      if model.is_local_console() {
-        @html.span(
-          class="setting-desc",
-          @settings.text(model.locale, ManagedByDesktop),
-        )
-      } else {
-        @html.button(
-          class="button secondary",
-          attrs=@html.Attrs::build().disabled(
-            model.remote_connecting || model.console.busy,
-          ),
-          on_click=dispatch(RemoteDisconnectClicked),
-          @settings.text(model.locale, SignOut),
-        )
-      },
+      @html.button(
+        class="button secondary",
+        attrs=@html.Attrs::build().disabled(
+          model.remote_connecting || model.console.busy,
+        ),
+        on_click=dispatch(RemoteDisconnectClicked),
+        @settings.text(model.locale, SignOut),
+      ),
     ]
-  } else if model.is_local_console() {
-    [@html.span(@settings.text(model.locale, DesktopSignInHint))]
   } else if model.remote_connecting {
     [
       @html.span(
@@ -1121,27 +1067,7 @@ fn remote_access_rows(
       ),
     )
   }
-  if model.is_local_console() {
-    controls.push(
-      @html.button(
-        class="button secondary",
-        disabled=model.remote_connecting || model.console.busy,
-        on_click=dispatch(Console(RefreshClicked)),
-        shell_text(model.locale, RefreshLabel),
-      ),
-    )
-  }
-  rows.push(
-    @settings.row(
-      @settings.text(model.locale, Account),
-      controls,
-      desc?=if model.is_local_console() {
-        Some(@settings.text(model.locale, DesktopAccountDescription))
-      } else {
-        None
-      },
-    ),
-  )
+  rows.push(@settings.row(@settings.text(model.locale, Account), controls))
   if model.account is Some(_) {
     let preferences = model.account_preferences
     let controls : Array[@html.Html] = []
@@ -2199,27 +2125,16 @@ fn console_gate_view(
       }
       AuthSignedOut => {
         card.push(@html.h2(shell_text(locale, SignInLabel)))
-        if id == "host" {
-          card.push(@html.p(@settings.text(locale, LocalConsoleLaunchHint)))
-          card.push(
-            @html.button(
-              class="button primary",
-              on_click=dispatch(Console(RefreshClicked)),
-              shell_text(locale, RefreshLabel),
-            ),
-          )
-        } else {
-          card.push(@html.p(shell_text(locale, BrowserAccess)))
-          card.push(
-            // The relay's sign-in is a page load, not an application route.
-            @html.a(
-              class="portal-button-link",
-              href=console.login_url(),
-              escape=true,
-              shell_text(locale, SignInGitHub),
-            ),
-          )
-        }
+        card.push(@html.p(shell_text(locale, BrowserAccess)))
+        card.push(
+          // The relay's sign-in is a page load, not an application route.
+          @html.a(
+            class="portal-button-link",
+            href=console.login_url(),
+            escape=true,
+            shell_text(locale, SignInGitHub),
+          ),
+        )
       }
       AuthSignedIn(..) =>
         match console.roster_sync {
@@ -3088,20 +3003,12 @@ fn Model::chat_sidebar_sections(
     entries.push(
       @section.Placeholder({
         id: "cloud-sign-in",
-        label: if self.is_local_console() {
-          @settings.text(self.locale, DesktopSignInHint)
-        } else {
-          @sidebar_messages.text(self.locale, CloudSignInHint)
-        },
+        label: @sidebar_messages.text(self.locale, CloudSignInHint),
         class_name: "cloud-sign-in",
         nested: false,
         openable: false,
         action: Some({
-          title: if self.is_local_console() {
-            shell_text(self.locale, RefreshLabel)
-          } else {
-            @settings.text(self.locale, SignIn)
-          },
+          title: @settings.text(self.locale, SignIn),
           disabled: self.remote_connecting,
         }),
       }),
@@ -3144,16 +3051,7 @@ fn Model::chat_sidebar_sections(
 fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @html.section(class="cloud-home management-page", [
     @html.h2(@sidebar_messages.text(model.locale, Chats)),
-    if model.is_local_console() && model.remote_error is Some(error) {
-      @html.div([
-        @html.p(attrs=@html.Attrs::build().role("alert"), error),
-        @html.button(
-          class="button primary",
-          on_click=dispatch(Console(RefreshClicked)),
-          shell_text(model.locale, RefreshLabel),
-        ),
-      ])
-    } else if model.account is Some(_) {
+    if model.account is Some(_) {
       @html.button(
         class="button primary",
         on_click=dispatch(CloudAction(@cloud.Create)),
@@ -3175,15 +3073,6 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         } else {
           @html.nothing
         },
-      ])
-    } else if model.is_local_console() {
-      @html.div([
-        @html.p(@settings.text(model.locale, DesktopSignInHint)),
-        @html.button(
-          class="button primary",
-          on_click=dispatch(Console(RefreshClicked)),
-          shell_text(model.locale, RefreshLabel),
-        ),
       ])
     } else {
       @html.button(

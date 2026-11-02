@@ -1,0 +1,12 @@
+import {
+  "openseek_desktop/backend/entropy",
+  "moonbitlang/async/http",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/x/crypto",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unqualified_local_using"
+
+supported_targets = "+native"

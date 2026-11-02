@@ -34,8 +34,7 @@ priv struct DeviceRegistration {
 ///|
 /// See the package docs above. Constructed once at startup by
 /// `AuthStore::load` and shared by the dispatcher (auth.* ops) and the
-/// relay actor. Account credentials are exposed only to the local window and
-/// the launch-authorized development console's account endpoint;
+/// relay actor. Account credentials are exposed only to the local window;
 /// broadcasts carry presentation state without secrets.
 struct AuthStore {
   runtime_dir : @pathx.Path?
@@ -310,8 +309,7 @@ pub extend AuthError with Show::{output, to_string}
 pub extend ConnectorConfig with Eq::{equal, not_equal}
 
 ///|
-/// Read only by the native window and launch-authorized development console's
-/// credential endpoints, never auth.changed.
+/// Read only from the native window's credential endpoint, never auth.changed.
 pub fn AuthStore::account(self : AuthStore) -> @protocol.AccountSession? {
   self.session.map(session => session.account)
 }

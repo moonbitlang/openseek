@@ -4171,14 +4171,7 @@ fn update_msg(
       }
       expire_account(dispatch, model)
     }
-    RemoteStatusLoaded(status) => {
-      if model.is_local_console() {
-        let epoch = model.account_epoch + 1
-        return (
-          fetch_account(dispatch, false, epoch, local_console=true),
-          { ..model, account_epoch: epoch, },
-        )
-      }
+    RemoteStatusLoaded(status) =>
       (
         if model.is_desktop && !model.remote_connecting {
           fetch_account(dispatch, true, model.account_epoch)
@@ -4187,7 +4180,6 @@ fn update_msg(
         },
         { ..model, remote_access: Some(status), },
       )
-    }
     RemoteAccessSet(enabled) =>
       (set_remote_access(dispatch, enabled), { ..model, remote_error: None, })
     RemoteConnectClicked => begin_account_login(dispatch, model, create=false)
