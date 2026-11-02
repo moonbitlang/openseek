@@ -30,7 +30,7 @@ test "import follows the selected project and worktree while its transcript load
     let (_, expected) = model.session_import_dialog.open({
       channel: Local,
       connection_generation: model.focused_connection_generation(),
-      workspace: @session_import.Registered("/other"),
+      workspace: "/other",
       worktree_of: Some("desktop-other"),
     })
     assert_eq(opened.session_import_dialog, expected)
@@ -117,4 +117,29 @@ test "import waits for the normal catalog without patching inventory and ignores
   assert_true(
     listed.conversation_selection() is Some({ session: "imported", .. }),
   )
+}
+
+///|
+test "import requires a project and never allocates a standalone chat" {
+  let base = test_model().with_dev(dev => {
+    ..dev,
+    projects: [],
+    active_project: None,
+  })
+  assert_true(base.session_import_target() is None)
+  let (_, unchanged) = update(test_dispatch(), OpenSessionImport, base)
+  assert_false(unchanged.session_import_dialog.is_open())
+  let root = @interop.ChannelId::Local.test_resource("/app-data/workspaces")
+  let old = @interop.ChannelId::Local.test_resource("/app-data/workspaces/old")
+  let legacy = test_model()
+    .with_dev(dev => {
+      ..dev,
+      chat_root: Some(Ok(root)),
+      active_project: Some(old),
+    })
+    .replace_conversation({
+      ..test_model().active(),
+      workspace: Project(root=old),
+    })
+  assert_true(legacy.session_import_target() is None)
 }

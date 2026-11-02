@@ -258,7 +258,7 @@ export class CloudHarness {
           setBadge: params => window.cloudNotification('setBadge', params),
         },
         openseek: new Proxy({}, { get: (_, method) => async params => {
-          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 4 } });
+          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 5 } });
           return window.cloudHostRequest({ method, params });
         } }),
       };
@@ -597,7 +597,7 @@ export class CloudHarness {
   }
 
   async create() {
-    await this.page.locator('.section-primary-action[aria-label="New chat"]').click();
+    await this.page.locator('aside button[aria-label="New chat"]').click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
     await expect(this.page.locator('main [title="Export conversation"]')).toHaveCount(0);
     await expect(this.page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();

@@ -280,9 +280,6 @@ pub fn endpoints(
       Acknowledged
     }),
     Endpoint(@commands.fs_browse, payload => browse_directory_op(payload)),
-    Endpoint(@commands.fs_create_unnamed_workspace, _ => {
-      create_unnamed_workspace_op()
-    }),
     Endpoint(@commands.fs_create_directory, payload => {
       create_directory_op(payload)
     }),

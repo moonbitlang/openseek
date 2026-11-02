@@ -225,7 +225,7 @@ test "Back prevents a pending Cloud creation from taking foreground later" {
 }
 
 ///|
-test "Cloud and Local folders keep their own rows, ordering and create action" {
+test "Chats use the shared section with existing ordering and create action" {
   let channel = @interop.ChannelId::Local
   let root = channel.test_resource("/app-data/workspaces")
   let managed = channel.test_resource("/app-data/workspaces/old-chat")
@@ -282,15 +282,13 @@ test "Cloud and Local folders keep their own rows, ordering and create action" {
       }
     })
   }
-  assert_eq(sections.map(section => section.label), [
-    "Cloud", "Local", "Archived chats",
-  ])
+  assert_eq(sections.map(section => section.label), ["Chats", "Archived chats"])
   assert_eq(ids(sections[0]), ["cloud-b", "cloud-a"])
-  assert_eq(ids(sections[1]), ["local-b", "local-a"])
+  assert_true(ids(sections[1]).is_empty())
   assert_true(sections[0].action is Some(_))
   assert_true(sections[1].action is None)
   assert_true(
-    !sections[0].initially_collapsed && !sections[1].initially_collapsed,
+    !sections[0].initially_collapsed && sections[1].initially_collapsed,
   )
 }
 

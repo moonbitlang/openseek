@@ -11,7 +11,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 4;
+    this.hostProtocol = 5;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -1043,12 +1043,6 @@ export class DesktopBrowserHarness {
       }
       case 'fs.stage_attachments':
         return {};
-      case 'fs.create_unnamed_workspace':
-        return {
-          path: '/Users/test/Library/Application Support/SeekMoon/workspaces/Unnamed workspace',
-          parent: '/Users/test/Library/Application Support/SeekMoon/workspaces',
-          entries: [],
-        };
       case 'fs.browse':
         return {
           path: '/Users/test',
