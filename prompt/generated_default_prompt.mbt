@@ -419,7 +419,6 @@ fn default_prompt() -> String {
     #|serve as an interactive part of the answer. Ordinary references display file cards;
     #|read `<bundled-resources>/artifact/README.md` for storage, references and packaging.
     #|Save user-requested project files at the requested workspace paths.
-    #|Use ordinary code and cite data sources in the surrounding text.
     #|
     #|## Numbered Source Citations
     #|

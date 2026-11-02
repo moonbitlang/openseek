@@ -42,9 +42,9 @@ The optional `build.mbtx` recipe packages an ordinary MoonBit JS application:
 args=[PROJECT_DIRECTORY, "<session scratch>/artifact", "answer-v1.html"]
 ```
 
-Run the installed script by its absolute `filename` with `args`, omitting mbtx's
-`source` field. The recipe creates the output directory if needed and refuses a
-symlink there. Keep working projects and build caches outside `scratch/artifact/`.
+Run the installed script by its absolute `filename` with `args`.
+The recipe creates the output directory. Keep working projects and build caches
+outside `scratch/artifact/`.
 
 Use IIFE executable output. An optional `index.html` contains inline styles,
 the application's mount element and exactly one `<!-- openseek:script -->`
@@ -53,8 +53,8 @@ The default template supplies a minimal document with an `app` mount.
 
 The recipe snapshots regular source files, checks that exact snapshot with
 `moon check --target js --deny-warn`, builds it, escapes embedded script text,
-and enforces the size limit. A failed check/build publishes no page or source
-revision. Read diagnostics, repair the source and retry.
+and enforces the size limit. Successful builds publish the page and its source
+revision together.
 
 Every successful build publishes two sibling outputs:
 
@@ -63,8 +63,8 @@ answer-v1.html
 answer-v1.html.source/
 ```
 
-The retained source excludes dependency/build caches and rejects links or special
-files. Copy that source into a fresh working directory before editing a revision,
+The retained source contains regular files and directories, excluding caches.
+Copy that source into a fresh working directory before editing a revision,
 then publish a new filename. Both outputs follow the existing session lifecycle.
 Run the application's relevant tests before publishing.
 

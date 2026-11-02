@@ -769,7 +769,6 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 用于会话展示的产物写入 `<会话 scratch>/artifact/`。使用 Environment 中给出的实际 scratch 路径，并通过脚本参数显式传入输出路径；修改产物时使用新文件名。
 在最终回答需要的位置使用 `openseek-file` 代码块，内容为 `scratch/artifact/文件名`。普通引用显示文件卡片，使用 `openseek-file artifact` 标记可将 HTML/SVG 显示为交互页面；存储、引用和通用打包方式见 `<bundled-resources>/artifact/README.md`。
 用户要求保存在项目中的文件使用指定的工作区路径。
-使用正常代码生成文件，在周围正文引用数据来源。
 
 ## 编号来源引用
 

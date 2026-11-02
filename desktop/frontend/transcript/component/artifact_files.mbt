@@ -46,20 +46,11 @@ fn ArtifactFileCache::empty() -> ArtifactFileCache {
 
 ///|
 fn artifact_file_view(
-  reference : String,
-  _title : String,
+  file : @workspace_file_ref.WorkspaceFileRef,
   locale : @i18n.Locale,
   open : @cmd.Emit[String],
   owner : ArtifactOwner,
 ) -> @html.Html {
-  guard @workspace_file_ref.parse(
-      @workspace_file_ref.ArtifactFenceLanguage,
-      reference,
-      closed=true,
-    )
-    is Some(file) else {
-    return @html.nothing
-  }
   let card = @markdown.workspace_file_card(
     locale,
     file,
@@ -71,7 +62,7 @@ fn artifact_file_view(
   @html.div(
     class="chat-artifact-file",
     attrs=@html.Attrs::build()
-      .data_set("transcript-artifact", reference)
+      .data_set("transcript-artifact", file.path)
       .data_set("artifact-owner", owner.key()),
     [
       @html.div(
@@ -113,13 +104,7 @@ fn ArtifactFileCache::begin_read(
   reference : String,
   emit : @cmd.Emit[Msg],
 ) -> (ArtifactFileCache, @cmd.Cmd) {
-  guard !self.0.contains(reference) &&
-    @workspace_file_ref.parse(
-      @workspace_file_ref.ArtifactFenceLanguage,
-      reference,
-      closed=true,
-    )
-    is Some(_) else {
+  if self.0.contains(reference) {
     return (self, @cmd.none)
   }
   let files = self.0.copy()

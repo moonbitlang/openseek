@@ -120,8 +120,8 @@ test "non-paths are left alone" {
 ///|
 test "only a completed explicitly marked file invokes the interactive renderer" {
   let rendered : Array[String] = []
-  let render = (path, _title) => {
-    rendered.push(path)
+  let render = (file : @workspace_file_ref.WorkspaceFileRef) => {
+    rendered.push(file.path)
     @html.nothing
   }
   for

@@ -411,14 +411,8 @@ pub fn component(
             block.render(
               locale~,
               actions,
-              artifact_view=(reference, title) => {
-                artifact_file_view(
-                  reference,
-                  title,
-                  locale,
-                  actions.open,
-                  owner,
-                )
+              artifact_view=reference => {
+                artifact_file_view(reference, locale, actions.open, owner)
               },
               changes?=changes.control(block, changes_emit),
               editor?=editor.view(block, locale~, editor_emit),
