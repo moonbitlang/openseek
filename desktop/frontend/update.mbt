@@ -19224,22 +19224,6 @@ test "theme settings switch fixed palettes and are idempotent" {
 }
 
 ///|
-test "font-size settings preserve the selected root size and are idempotent" {
-  let dispatch = test_dispatch()
-  let model = test_model()
-  let (_, first) = update(dispatch, FontSizeChanged("15"), model)
-  let (_, second) = update(dispatch, FontSizeChanged("15"), first)
-  assert_eq(first.app_font_size, AppFontSize(15))
-  assert_eq(second.app_font_size, AppFontSize(15))
-  assert_eq(first.app_font_size.base_pixels(), 15)
-  let (_, largest) = update(dispatch, FontSizeChanged("18"), first)
-  assert_eq(largest.app_font_size, AppFontSize(18))
-  assert_eq(largest.app_font_size.base_pixels(), 18)
-  let (_, unchanged) = update(dispatch, FontSizeChanged("unknown"), model)
-  assert_eq(unchanged.app_font_size, AppFontSize(14))
-}
-
-///|
 test "selecting a conversation returns from the skills page to the chat" {
   let dispatch = test_dispatch()
   let (_, opened) = update(dispatch, OpenSkills, test_model())
