@@ -2,11 +2,10 @@
 
 ## Compile with the MoonBit Typst CLI
 
-Run the CLI directly with `moonx moonbitlang/typst/cli`. Include
-`--ignore-system-fonts` by default to use the bundled fonts:
+Run the CLI directly with `moonx moonbitlang/typst/cli`:
 
 ```sh
-moonx moonbitlang/typst/cli -- compile slide.typ slide.pdf --ignore-system-fonts
+moonx moonbitlang/typst/cli -- compile slide.typ slide.pdf
 ```
 
 Run this from the directory containing `slide.typ`. `moonx` resolves and runs
