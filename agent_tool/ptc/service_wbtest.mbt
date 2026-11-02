@@ -233,6 +233,13 @@ async test "incomplete HTTP headers cannot exhaust listener slots indefinitely" 
         client.write("POST /call HTTP/1.1\r\nAuthorization:")
       }
       @async.sleep(20)
+      let response = clients[0].read_all().text()
+      assert_true(
+        response.contains(
+          "PTC request receive timed out after 5 seconds; no tool executed",
+        ),
+      )
+      assert_true(program.calls.is_empty())
       assert_true(
         request(program.env(), "unavailable", {}) is { "is_error": true, .. },
       )
@@ -287,6 +294,86 @@ async test "HTTP admission rejects oversized headers and ambiguous framing witho
       request(program.env(), "probe", {}) is { "is_error": false, .. },
     )
     assert_eq(executed.val, 1)
+  })
+}
+
+///|
+async test "HTTP admission reports size limits and malformed input distinctly" {
+  @async.with_timeout(3000, () => {
+    @async.with_task_group(group => {
+      let executed = Ref(0)
+      let service = Service::start(
+        group,
+        Tools([
+          leaf(
+            name="probe",
+            execute=Sync(_ => {
+              executed.val += 1
+              @agent_tool.respond("ok")
+            }),
+          ),
+        ]),
+      )
+      let program = service.register()
+      let (_, token) = capability(program.env())
+      let head = "POST /call HTTP/1.1\r\nAuthorization: Bearer \{token}\r\n"
+      let chunked = head + "Transfer-Encoding: chunked\r\n\r\n"
+      // Exceed the wire cap by one byte, with a decoded body below 64 KiB.
+      // Send no excess unread bytes that could reset TCP and hide the reply.
+      let framing = "1\r\nx\r\n".repeat(22000)
+      let oversized = chunked +
+        framing[:131073 - @utf8.encode(chunked).length()].to_owned()
+      for
+        (input, reason) in [
+          (
+            head + "Content-Length: 65537\r\n\r\n",
+            "PTC request too large: Request exceeds 64 KiB",
+          ),
+          (
+            head + "Content-Length: 999999999999999999999999\r\n\r\n",
+            "PTC request too large: Request exceeds 64 KiB",
+          ),
+          (
+            chunked + "10001\r\n",
+            "PTC request too large: Request exceeds 64 KiB",
+          ),
+          (
+            chunked + "ffffffff\r\n",
+            "PTC request too large: Request exceeds 64 KiB",
+          ),
+          (
+            chunked + "8000\r\n" + "x".repeat(32768) + "\r\n8001\r\n",
+            "PTC request too large: Request exceeds 64 KiB",
+          ),
+          (oversized, "PTC request too large: Request framing too large"),
+          (head + "Content-Length: invalid\r\n\r\n", "Invalid Content-Length"),
+          (
+            head + "Content-Length: 0\r\ncontent-length: 0\r\n\r\n",
+            "Invalid or duplicate HTTP header",
+          ),
+          (
+            head + "Content-Length: 0\r\nTransfer-Encoding: chunked\r\n\r\n",
+            "Requires Content-Length or chunked transfer encoding",
+          ),
+          (chunked + "-1\r\n", "Invalid chunk size"),
+          (chunked + "1\r\nx!", "Invalid chunk terminator"),
+          (head + "Content-Length: 1\r\n\r\n{", "Unexpected end of file"),
+        ] {
+        let client = @socket.Tcp::connect(service.server.addr)
+        defer client.close()
+        client.write(input)
+        let response = client.read_all().text()
+        assert_true(response.contains(reason), msg=response)
+        assert_true(response.contains("no tool executed"))
+        assert_false(response.contains("timed out"))
+      }
+      assert_eq(executed.val, 0)
+      assert_true(program.calls.is_empty())
+      assert_true(
+        request(program.env(), "probe", {}) is { "is_error": false, .. },
+      )
+      assert_eq(executed.val, 1)
+    })
   })
 }
 
