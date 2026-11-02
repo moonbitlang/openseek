@@ -104,5 +104,12 @@ models, `KIMI` for Kimi models, and `GLM` for Z.AI GLM models. `--model`, `--api
 `--max-steps`, and `--thinking` mirror the engine's flags and are forwarded to
 it through the environment, alongside the session settings.
 
+`--system-prompt-file` and `--system-prompt-addendum-file` mirror the engine's
+prompt options and are forwarded on its `serve` command line. They choose the
+prompt of the session this launch creates — the engine writes it into a new
+session's header — so an existing session keeps the prompt it stored: the
+launch refuses these flags together with `--continue`, or with a `--session` id
+that is already in the store, and points at `openseek sessions fork` instead.
+
 The full flag reference lives in the executable help — verified verbatim in
 [`tests/cram/tui.md`](../../tests/cram/tui.md).

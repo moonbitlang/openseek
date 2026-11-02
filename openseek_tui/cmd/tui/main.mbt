@@ -1,8 +1,12 @@
 ///|
-/// UI-only options — meaningless to the headless `openseek` engine, so they live
-/// only on the `openseek_tui` command (never on the engine CLI). This keeps them
-/// out of `openseek`'s help and makes `openseek --prompt x run` a clean error
-/// instead of a silent no-op.
+/// Options the `openseek_tui` command declares beyond the shared agent ones.
+/// Most are UI-only — meaningless to the headless `openseek` engine — so they
+/// live only here, which keeps them out of `openseek`'s help and makes
+/// `openseek --prompt x run` a clean error instead of a silent no-op.
+/// `--system-prompt-file` and `--system-prompt-addendum-file` are the
+/// exception: they mirror the engine's own prompt options and are forwarded on
+/// its `serve` command line. They carry no env binding of their own, so an
+/// inherited `OPENSEEK_SYSTEM_PROMPT_*` still reaches the engine unchanged.
 pub fn tui_ui_options() -> Array[@argparse.OptionArg] {
   [
     OptionArg(
@@ -14,6 +18,16 @@ pub fn tui_ui_options() -> Array[@argparse.OptionArg] {
       "prompt",
       long="prompt",
       about="Initial prompt to send once the UI opens.",
+    ),
+    OptionArg(
+      "system-prompt-file",
+      long="system-prompt-file",
+      about="Read the system prompt of the session this launch creates from this file instead of the built-in prompt; a session that already exists keeps the prompt it stored.",
+    ),
+    OptionArg(
+      "system-prompt-addendum-file",
+      long="system-prompt-addendum-file",
+      about="Append this file to the system prompt of the session this launch creates; a session that already exists keeps the prompt it stored.",
     ),
     OptionArg(
       "change-directory",
@@ -142,6 +156,8 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
     engine_input,
     model_input,
     thinking_input,
+    prompt_file_input,
+    prompt_addendum_input,
   ) = match matches {
     {
       values: {
@@ -153,10 +169,17 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
         | (Some([]) | None with engine = ""),
         "model": [model, ..],
         "thinking": [thinking, ..],
+        "system-prompt-file"? : Some([prompt_file, ..])
+        | (Some([]) | None with prompt_file = ""),
+        "system-prompt-addendum-file"? : Some([prompt_addendum, ..])
+        | (Some([]) | None with prompt_addendum = ""),
         ..
       },
       ..
-    } => (api_url, session, session_root, engine, model, thinking)
+    } =>
+      (
+        api_url, session, session_root, engine, model, thinking, prompt_file, prompt_addendum,
+      )
     _ => fail("missing parsed TUI defaults")
   }
   let cwd = match @env.current_dir() {
@@ -228,6 +251,8 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
       None => generated_session_id(@env.now().reinterpret_as_int64())
     },
     session_root: session_root_value,
+    system_prompt_file: prompt_file_option(prompt_file_input),
+    system_prompt_addendum_file: prompt_file_option(prompt_addendum_input),
     engine,
     engine_args_prefix,
   }
@@ -457,6 +482,7 @@ pub async fn run(matches : @argparse.Matches) -> Unit {
   if continue_requested(matches) {
     config = with_latest_session(config)
   }
+  reject_prompt_for_existing_session(config)
   // Fail before the terminal UI takes over the screen if the engine is unusable,
   // rather than dropping the user into a UI that dies on the first task.
   let probe = probe_engine_with_notice(config)
@@ -742,4 +768,92 @@ test "engine_probe_error tailors its advice to the default engine" {
   let bad = engine_probe_error(explicit, NotLaunchable)
   assert_true(bad.contains("omit --engine"))
   assert_false(bad.contains("Install MoonBit"))
+}
+
+///|
+/// A prompt-file flag's value, or `None` when it is empty: the engine then
+/// keeps whichever prompt it would use without the flag.
+fn prompt_file_option(input : String) -> String? {
+  match input.trim() {
+    "" => None
+    path => Some(path.to_owned())
+  }
+}
+
+///|
+/// Whether the durable store already holds a session file for `config`'s id.
+/// `SessionStore::exists` tests only the directory, and the engine treats a
+/// directory left behind by an interrupted launch — one with no session file —
+/// as a fresh session, so the refusal must look at the file too.
+async fn session_is_stored(config : AppConfig) -> Bool {
+  let store = @store.SessionStore(config.session_root)
+  guard store.exists(config.session_id) else { return false }
+  let path = store.session_file(config.session_id) catch { _ => return false }
+  @fs.exists(path)
+}
+
+///|
+/// Refuse prompt files for a session that already exists. The engine assembles
+/// a prompt only when it writes a new session's header; a resumed session keeps
+/// the one it stored, so forwarding these files would silently do nothing.
+/// Forking is how an existing conversation changes its prompt, so the refusal
+/// names the fork that keeps this store and repeats the file that was refused.
+async fn reject_prompt_for_existing_session(config : AppConfig) -> Unit {
+  let (refused, fork_files) = match
+    (config.system_prompt_file, config.system_prompt_addendum_file) {
+    (Some(_), Some(_)) =>
+      (
+        "--system-prompt-file/--system-prompt-addendum-file", "--system-prompt-file <file> --system-prompt-addendum-file <file>",
+      )
+    (Some(_), None) => ("--system-prompt-file", "--system-prompt-file <file>")
+    (None, Some(_)) =>
+      ("--system-prompt-addendum-file", "--system-prompt-addendum-file <file>")
+    (None, None) => return
+  }
+  guard session_is_stored(config) else { return }
+  let id = config.session_id.value()
+  fail(
+    "\{refused} applies only when this launch creates the session, and session \{id} already exists with the system prompt it stored. Fork it to change the prompt:\n  openseek sessions fork \{id} --as <new-id> --dir \{config.cwd} --session-root \{config.session_root} \{fork_files}",
+  )
+}
+
+///|
+test "cli forwards system prompt files to the engine" {
+  let parsed = cli_command().parse(
+    argv=[
+      "--session", "demo", "--system-prompt-file", "prompts/base.md", "--system-prompt-addendum-file",
+      "prompts/extra.md",
+    ],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  let config = { ..parse_config(parsed), cwd: ".", }
+  assert_eq(config.system_prompt_file, Some("prompts/base.md"))
+  assert_eq(config.system_prompt_addendum_file, Some("prompts/extra.md"))
+  @debug.assert_eq(config.engine_serve_args(), [
+    "moonbitlang/openseek@\{EngineModuleVersion}",
+    "serve",
+    "--session=demo",
+    "--session-root=.openseek",
+    "--dir=.",
+    "--system-prompt-file=prompts/base.md",
+    "--system-prompt-addendum-file=prompts/extra.md",
+  ])
+  // Without the flags the engine keeps its built-in prompt.
+  let plain = {
+    ..parse_config(
+      cli_command().parse(argv=["--session", "demo"], env={
+        "DEEPSEEK": "test-key",
+      }),
+    ),
+    cwd: ".",
+  }
+  assert_true(plain.system_prompt_file is None)
+  assert_true(plain.system_prompt_addendum_file is None)
+  @debug.assert_eq(plain.engine_serve_args(), [
+    "moonbitlang/openseek@\{EngineModuleVersion}",
+    "serve",
+    "--session=demo",
+    "--session-root=.openseek",
+    "--dir=.",
+  ])
 }

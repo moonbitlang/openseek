@@ -51,7 +51,7 @@ html.is-resizing .sidebar-resize-handle {
     var(--titlebar-control-size) + 2 * var(--sidebar-mode-padding)
   );
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-end;
   height: var(--topbar-height);
   padding-inline: var(--sidebar-toggle-reserved-width) var(--sidebar-inset);
@@ -64,10 +64,6 @@ html.is-resizing .sidebar-resize-handle {
   gap: var(--titlebar-control-gap);
   box-sizing: border-box;
   height: var(--sidebar-mode-size);
-  margin-top: max(
-    0px,
-    calc((var(--topbar-height) - var(--sidebar-mode-size)) / 2)
-  );
   padding: var(--sidebar-mode-padding);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
@@ -76,8 +72,9 @@ html.is-resizing .sidebar-resize-handle {
   --icon-size: var(--titlebar-icon-size);
   display: grid;
   place-items: center;
+  flex: none;
   width: var(--titlebar-control-size);
-  height: 100%;
+  height: var(--titlebar-control-size);
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);

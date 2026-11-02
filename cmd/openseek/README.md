@@ -28,7 +28,8 @@ parsing, `--help`, and rejecting unknown or missing subcommands). There is **no
 free-form top-level prompt** and **no default action** — a bare `openseek` is
 rejected; launch the UI with `openseek_tui`. The options shared with the engine
 (`--api-key`, `--model`, …) sit on the root as globals; the UI's own options
-(`--prompt`, `--engine`, `--continue`) live on the `openseek_tui` binary.
+(`--prompt`, `--engine`, `--continue`) live on the `openseek_tui` binary, along
+with the prompt-file flags it forwards to `serve`.
 
 ## `openseek run`
 
