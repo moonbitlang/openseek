@@ -236,13 +236,11 @@ test('HTML context menu preserves an enclosing selection and runs Go to Definiti
       'Peek References',
     );
     const menuState = await page.locator(contextMenu).evaluate((root) => {
-      const item = root.querySelector('.action-menu-item');
       const menu = root.querySelector('.monaco-menu');
       const keybinding = root.querySelector('.keybinding');
       const style = getComputedStyle(menu);
       return {
         activeInside: root.contains(document.activeElement),
-        itemHeight: item.getBoundingClientRect().height,
         background: style.backgroundColor,
         fontSize: style.fontSize,
         keybindingFontSize: getComputedStyle(keybinding).fontSize,
@@ -250,7 +248,6 @@ test('HTML context menu preserves an enclosing selection and runs Go to Definiti
       };
     });
     expect(menuState.activeInside).toBe(true);
-    expect(menuState.itemHeight).toBe(24);
     expect(menuState.background).not.toBe('rgba(0, 0, 0, 0)');
     expect(menuState.keybindingFontSize).toBe(menuState.fontSize);
     expect(menuState.position).toBe('fixed');

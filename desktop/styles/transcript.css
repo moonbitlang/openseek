@@ -937,10 +937,10 @@
 .msg-content.markdown .citation-sources-heading {
   display: flex;
   align-items: center;
-  gap: calc(1rem * 7 / 14);
+  gap: var(--space-4);
   width: fit-content;
   min-height: 34px;
-  padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14) calc(1rem * 5 / 14) calc(1rem * 7 / 14);
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-bg-surface);
@@ -958,7 +958,7 @@
   color: var(--color-text-primary);
 }
 .msg-content.markdown .citation-sources[open] > .citation-sources-heading {
-  margin-bottom: calc(1rem * 10 / 14);
+  margin-bottom: var(--space-5);
 }
 .msg-content.markdown .citation-sources-heading:focus-visible {
   outline: 2px solid var(--color-accent);
@@ -966,7 +966,7 @@
 }
 .msg-content.markdown .citation-sources-count {
   min-width: 18px;
-  padding: calc(1rem * 1 / 14) var(--space-2);
+  padding: var(--space-1) var(--space-2);
   border-radius: 6px;
   background: var(--color-bg-subtle);
   color: var(--color-text-muted);
@@ -1003,7 +1003,7 @@
   border-radius: 50%;
 }
 .msg-content.markdown .citation-source-previews .citation-source-glyph + .citation-source-glyph {
-  margin-left: calc(1rem * -7 / 14);
+  margin-left: calc(-1 * var(--space-4));
 }
 .msg-content.markdown .citation-source-previews svg {
   width: 13px;
@@ -1022,7 +1022,7 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: start;
-  gap: calc(1rem * 9 / 14);
+  gap: var(--space-4);
   margin: 0;
   padding: var(--space-5);
   border: 1px solid var(--color-border);
@@ -1042,7 +1042,7 @@
   overflow-wrap: anywhere;
 }
 .msg-content.markdown .citation-source-origin {
-  margin-bottom: calc(1rem * 3 / 14);
+  margin-bottom: var(--space-2);
   font-size: var(--font-size-caption);
   line-height: 1.5;
 }

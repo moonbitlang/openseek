@@ -26,7 +26,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
-  padding: var(--space-4) calc(1rem * 10 / 14);
+  padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-surface);
 }
 
@@ -39,7 +39,7 @@
   flex: none;
   border-color: var(--color-border);
   background: var(--color-bg-canvas);
-  padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
 }
@@ -54,6 +54,9 @@
 .content.terminal-open .composer {
   display: flex;
   flex-direction: column;
+  /* Compact shared gaps leave room for the draft and actions when the
+     terminal reduces main to its minimum height. */
+  gap: var(--space-2);
   max-height: calc(100cqh - var(--topbar-height));
   padding: var(--space-2) var(--space-7);
 }
@@ -63,6 +66,7 @@
    unclipped, so menus anchored inside composer-inner can still open upward. */
 .content.terminal-open .composer-context {
   flex: 0 1 auto;
+  margin-bottom: 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -84,7 +88,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-bg-surface);
-  padding: var(--space-4) calc(1rem * 10 / 14);
+  padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-surface);
 }
 
@@ -94,7 +98,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
   gap: 0 var(--space-2);
-  padding: calc(1rem * 7 / 14) var(--space-4);
+  padding: var(--space-4) var(--space-4);
 }
 
 /* Fixed columns: the attachment slot collapses when attaching is unavailable,
@@ -136,12 +140,12 @@
 
   .content.terminal-open
     .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
-    grid-template-rows: minmax(calc(1rem * 34 / 14), 1fr) auto;
-    min-height: calc(1rem * 86 / 14);
+    grid-template-rows: minmax(2.5rem, 1fr) auto;
+    min-height: 6.25rem;
 
     &:has(.mention-tray:not(:empty)) {
       grid-template-rows: minmax(4.5rem, 1fr) auto;
-      min-height: calc(1rem * 115 / 14);
+      min-height: 8.25rem;
     }
   }
 }
@@ -171,15 +175,15 @@
   flex: 0 1 auto;
   /* One textarea line at either text size. The card minimum also includes
      the border and vertical padding. */
-  grid-template-rows: minmax(calc(1rem * 34 / 14), 1fr);
-  min-height: calc(1rem * 50 / 14);
+  grid-template-rows: minmax(2.5rem, 1fr);
+  min-height: 3.75rem;
   width: 100%;
 }
 
 .content.terminal-open .composer-inner:has(.mention-tray:not(:empty)) {
   /* One mention row above the line. */
   grid-template-rows: minmax(4.5rem, 1fr);
-  min-height: calc(1rem * 79 / 14);
+  min-height: 5.75rem;
 }
 
 .content.terminal-open .composer-input {
@@ -192,6 +196,7 @@
 
 .content.terminal-open .composer-toolbar {
   flex: none;
+  margin-top: 0;
 }
 
 .content.terminal-open .composer-input > .mention-tray {
@@ -226,7 +231,7 @@
 .mention-chip {
   display: inline-flex;
   align-items: center;
-  gap: calc(1rem * 5 / 14);
+  gap: var(--space-2);
   max-width: 260px;
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border: 1px solid var(--color-accent-border);
@@ -242,7 +247,7 @@
 .mention-jump {
   display: inline-flex;
   align-items: center;
-  gap: calc(1rem * 5 / 14);
+  gap: var(--space-2);
   min-width: 0;
 }
 .mention-jump {
@@ -309,7 +314,7 @@
   z-index: 20;
 }
 .completion-hint {
-  padding: calc(1rem * 5 / 14) calc(1rem * 9 / 14) var(--space-2);
+  padding: var(--space-2) var(--space-4) var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -338,7 +343,7 @@
 }
 /* state line for a # menu whose results are still loading or empty */
 .completion-empty {
-  padding: calc(1rem * 7 / 14) calc(1rem * 9 / 14);
+  padding: var(--space-4) var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
@@ -427,7 +432,7 @@
   border-color: var(--color-border);
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
-  padding: var(--space-2) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
@@ -463,7 +468,7 @@
    rather than truncating it so the complete operation can be inspected. */
 .composer-approval-body {
   margin: var(--space-4) 0 0;
-  padding: var(--space-4) calc(1rem * 10 / 14);
+  padding: var(--space-4) var(--space-5);
   max-height: 220px;
   overflow: auto;
   overscroll-behavior: contain;
@@ -491,7 +496,7 @@
    radius, and the cursor. */
 .composer-approval-action {
   flex: none;
-  padding: var(--space-2) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -524,7 +529,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
-  padding: var(--space-2) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
 }
 .pending-steer-row {
   display: flex;
@@ -564,7 +569,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
-  padding: var(--space-2) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
 }
 .queued-input-row {
   display: flex;
@@ -642,8 +647,8 @@
      composer stable and scroll the textarea's contents instead. */
   field-sizing: content;
   width: 100%;
-  min-height: calc(26em / 14);
-  max-height: calc(180em / 14);
+  min-height: 2em;
+  max-height: 13em;
   overflow-y: auto;
   border: 0;
   background: transparent;
@@ -656,7 +661,7 @@
 
 /* A single line of draft is exactly as tall as the buttons beside it. */
 .composer-input > textarea {
-  min-height: calc(30em / 14);
+  min-height: 2.25em;
   padding: var(--space-2) var(--space-3);
 }
 
@@ -708,7 +713,7 @@
   .composer-git-button,
   .composer-worktree
 ) {
-  height: calc(28em / 13);
+  height: 2.25em;
   background: transparent;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
@@ -764,12 +769,12 @@
 .composer-git-button {
   display: inline-flex;
   align-items: center;
-  gap: calc(1rem * 5 / 14);
+  gap: 0.5em;
   box-sizing: border-box;
   /* `.composer-git` is the shrinking flex item; follow its assigned width so
      the button label cannot overflow while its popover stays unclipped. */
   width: 100%;
-  height: calc(30em / 13);
+  height: 2.5em;
   max-width: 220px;
   min-width: 0;
   overflow: hidden;
@@ -778,7 +783,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-control-surface);
-  padding: 0 calc(1rem * 9 / 14);
+  padding: 0 0.75em;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
@@ -839,7 +844,7 @@
   bottom: calc(100% + 6px);
   left: 0;
   width: min(420px, 100%);
-  padding: calc(1rem * 5 / 14);
+  padding: var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
@@ -919,7 +924,7 @@
 }
 
 /* Model and reasoning use the same custom picker. The wrapper keeps the popup
-   outside the clipped pill, while the button retains the old 30px geometry. */
+   outside the clipped pill; its button follows the control's own type size. */
 .composer-picker {
   display: inline-flex;
   flex: 0 1 auto;
@@ -927,16 +932,16 @@
 .composer-model {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 0.5em;
   box-sizing: border-box;
-  height: calc(30em / 13);
+  height: 2.5em;
   max-width: 220px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   margin: 0;
-  padding: 0 calc(1rem * 9 / 14);
+  padding: 0 0.75em;
   background: var(--color-control-surface);
   color: var(--color-text-secondary);
   font: inherit;
@@ -973,7 +978,7 @@
 .composer-model-chevron {
   width: 5px;
   height: 5px;
-  margin: calc(1rem * -3 / 14) calc(1rem * 1 / 14) 0 calc(1rem * 3 / 14);
+  margin: calc(-1 * var(--space-2)) var(--space-1) 0 var(--space-2);
   border-right: 1px solid currentColor;
   border-bottom: 1px solid currentColor;
   color: var(--color-text-muted);
@@ -1094,9 +1099,9 @@
 }
 .composer-attach {
   box-sizing: border-box;
-  width: calc(1rem * 30 / 14);
-  min-width: calc(1rem * 30 / 14);
-  height: calc(1rem * 30 / 14);
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -1129,7 +1134,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: calc(1rem * 10 / 14);
+  padding: var(--space-5);
   border: 1px solid transparent;
   background: var(--color-control-surface);
   border-radius: var(--radius-sm);
@@ -1184,7 +1189,7 @@
   flex-direction: column;
   max-height: min(580px, 65vh);
   min-height: 0;
-  padding: var(--space-6) calc(1rem * 18 / 14) 0;
+  padding: var(--space-6) var(--space-6) 0;
   border: 1px solid var(--color-border);
   border-radius: 14px;
   background: var(--color-bg-surface);
@@ -1215,7 +1220,7 @@
   position-try-order: most-block-size;
   position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
   inset: auto;
-  margin: calc(1rem * 10 / 14) 0;
+  margin: var(--space-5) 0;
   width: min(640px, 100cqw, calc(100dvw - 32px));
   max-height: min(580px, calc(100dvh - 32px), calc(100% - 20px));
 }
@@ -1228,7 +1233,7 @@
 .changes-excerpt-header, .changes-file-header {
   display: flex;
   align-items: center;
-  gap: calc(1rem * 10 / 14);
+  gap: var(--space-5);
 }
 
 .changes-popup-header {
@@ -1256,7 +1261,7 @@
 }
 
 .changes-file {
-  padding-bottom: calc(1rem * 10 / 14);
+  padding-bottom: var(--space-5);
 }
 
 .changes-file-header {
@@ -1286,7 +1291,7 @@
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: calc(1rem * 3 / 14);
+  gap: var(--space-2);
 }
 
 .changes-file-path > * {
@@ -1310,12 +1315,12 @@
 .changes-excerpt {
   border: 1px solid var(--color-border);
   border-radius: 7px;
-  padding: calc(1rem * 10 / 14);
+  padding: var(--space-5);
   margin-bottom: var(--space-4);
 }
 
 .changes-excerpt-header {
-  margin-bottom: calc(1rem * 9 / 14);
+  margin-bottom: var(--space-4);
   font-size: var(--font-size-sm);
   flex-wrap: wrap;
   gap: var(--space-3);
@@ -1428,7 +1433,7 @@
 
 .composer-mode-chip {
   margin-top: var(--space-2);
-  padding: calc(1rem * 1 / 14) var(--space-4);
+  padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-sm);
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);

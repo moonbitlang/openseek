@@ -42,7 +42,7 @@ main:has(> .conv-overview) {
 }
 
 .conv-overview-card {
-  padding: calc(1rem * 10 / 14) 0;
+  padding: var(--space-5) 0;
   border-bottom: 1px solid var(--color-border-subtle);
 }
 .conv-overview-card:last-child {
@@ -77,7 +77,7 @@ main:has(> .conv-overview) {
     max-height: 100%;
     display: flex;
     flex-direction: column;
-    gap: calc(1rem * 10 / 14);
+    gap: var(--space-5);
     max-width: none;
     padding: var(--space-5) 0 var(--space-6);
     border: 0;
@@ -88,7 +88,7 @@ main:has(> .conv-overview) {
 
   .conv-overview-card,
   .conv-overview-card:last-child {
-    padding: calc(1rem * 10 / 14) var(--space-5);
+    padding: var(--space-5) var(--space-5);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     background: var(--color-bg-surface);
@@ -99,7 +99,7 @@ main:has(> .conv-overview) {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: calc(1rem * 22 / 14);
+  min-height: 1.75rem;
 }
 
 .conv-overview-card-title {
@@ -144,8 +144,8 @@ main:has(> .conv-overview) {
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: calc(1rem * 22 / 14);
-  height: calc(1rem * 22 / 14);
+  width: 1.75rem;
+  height: 1.75rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-xs);
@@ -176,7 +176,7 @@ main:has(> .conv-overview) {
   --icon-size: var(--icon-md);
   display: flex;
   align-items: center;
-  gap: calc(1rem * 9 / 14);
+  gap: var(--space-4);
   min-width: 0;
   color: var(--color-text-primary);
 }
@@ -207,7 +207,7 @@ main:has(> .conv-overview) {
 
 .conv-overview-tag {
   flex: none;
-  padding: 0 calc(1rem * 7 / 14);
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   color: var(--color-text-muted);
@@ -230,10 +230,10 @@ main:has(> .conv-overview) {
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: calc(1rem * 9 / 14);
+  gap: var(--space-4);
   min-width: 0;
   min-height: 22px;
-  margin-inline: calc(1rem * -4 / 14);
+  margin-inline: calc(-1 * var(--space-2));
   padding-inline: var(--space-2);
   border-radius: var(--radius-xs);
   color: var(--color-text-primary);
@@ -293,7 +293,7 @@ a.conv-changes-link:hover {
 .conv-changes-diff {
   display: flex;
   flex: none;
-  gap: calc(1rem * 5 / 14);
+  gap: var(--space-2);
   font-variant-numeric: tabular-nums;
 }
 .conv-changes-diff .added {
@@ -321,7 +321,7 @@ a.conv-changes-link:hover {
 
 .conv-changes-error > .run-dot {
   flex: none;
-  margin-inline: calc(1rem * 5 / 14);
+  margin-inline: var(--space-2);
 }
 
 /* An attached branch's repository gives way before its name does. */

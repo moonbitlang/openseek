@@ -235,7 +235,7 @@
 .pdf-password-dialog {
   display: grid;
   gap: var(--space-6);
-  width: min(calc(1rem * 320 / 14), 100%);
+  width: min(23rem, 100%);
   padding: var(--space-7);
   color: var(--color-text-primary);
   background: var(--color-bg-surface);
@@ -299,7 +299,7 @@
 }
 .viewer-breadcrumb:has(.excel-copy-controls) {
   height: auto;
-  min-height: calc(1rem * 34 / 14);
+  min-height: 2.5rem;
   flex-wrap: wrap;
   padding-block: var(--space-2);
 }
@@ -310,7 +310,7 @@
 }
 .excel-copy-controls .office-viewer-control {
   width: auto;
-  padding-inline: calc(1rem * 7 / 14);
+  padding-inline: var(--space-4);
   white-space: nowrap;
 }
 .excel-copy-feedback {
@@ -407,10 +407,10 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: calc(1rem * 10 / 14);
-  min-height: calc(1rem * 36 / 14);
+  gap: var(--space-5);
+  min-height: 2.75rem;
   margin: 0 0 var(--space-5);
-  padding: var(--space-4) calc(1rem * 10 / 14);
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-control-surface);
@@ -443,10 +443,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: calc(16em / 12);
-  min-height: calc(16em / 12);
+  min-width: 1.5em;
+  min-height: 1.5em;
   margin: 0;
-  padding: 0 calc(1rem * 3 / 14);
+  padding: 0 var(--space-2);
   border: 2px solid var(--color-bg-subtle);
   border-radius: 9px;
   background: var(--color-accent);
@@ -481,7 +481,7 @@
 }
 .office-viewer-surface .office-context-unplaced-heading,
 .office-viewer-surface .office-context-more {
-  margin: var(--space-5) 0 calc(1rem * 10 / 14) 2rem;
+  margin: var(--space-5) 0 var(--space-5) 2rem;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   line-height: 1.5;
@@ -528,7 +528,7 @@
   color: inherit;
 }
 .office-viewer-surface .office-context-reply {
-  padding-left: calc(1rem * 10 / 14);
+  padding-left: var(--space-5);
   border-left: 2px solid var(--color-border);
 }
 .office-viewer-surface .office-context-author { font-size: var(--font-size-sm); font-weight: 600; overflow-wrap: anywhere; }
@@ -541,7 +541,7 @@
   overflow-wrap: anywhere;
 }
 .office-viewer-surface .office-annotation-body {
-  margin: calc(1rem * 10 / 14) 0;
+  margin: var(--space-5) 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: var(--font-size-sm);
@@ -704,7 +704,7 @@
 }
 .office-viewer-surface .excel-sheet-tab {
   flex: 0 0 auto;
-  min-height: calc(1rem * 32 / 14);
+  min-height: 2.5rem;
   padding: var(--space-3) var(--space-5);
   border: 1px solid transparent;
   border-radius: 4px;

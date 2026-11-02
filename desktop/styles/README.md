@@ -83,15 +83,24 @@ Jobs, Codex conversations, and dock UI:
 | Section and page titles | `--font-size-title`, `--font-size-page-title` | 20px, 26px |
 
 Shared padding, margins and gaps use the `--space-1` through `--space-7`
-roles (2/4/6/8/12/16/24px at the default root size). Keep unusual dimensions
-local in `rem`; do not add a global token for every pixel value. Text-control
-height and internal padding can use `em` to follow the control's own type
-role. Use `%`, `fr` and viewport/container units for available layout space.
+roles (2/4/6/8/12/16/24px at the default root size). Consolidate nearby old
+pixel values into these roles rather than preserving each literal as a
+fraction: for example, 3/5px insets use `--space-2`, 7/9px use `--space-4`,
+and 10/11px use `--space-5`. Small density adjustments are intentional.
+
+Keep unusual dimensions local as simple `rem` values, usually in quarter-rem
+steps; do not add a global token for every measurement. Text-control height
+and internal padding use simple `em` values such as `2.25em` and
+`0.25em 0.75em`, following the control's own type role. Keep exact ratios in
+the typography/icon scales or genuinely coupled geometry, not scattered
+through ordinary padding and gaps. Use `%`, `fr` and viewport/container units
+for available layout space.
 
 Scale text, hit areas and surrounding whitespace together. Prefer minimum
 heights and content-driven sizing for wrapping text; relative units do not
 remove clipping from a restrictive ancestor. Git graph rows and displayed
-SVGs scale together, while their normalized viewBox coordinates stay intact.
+SVGs share the local `--git-graph-row-height`, while their normalized viewBox
+coordinates stay intact.
 
 Thin borders, deliberate fixed icon grids, resize handles and native window
 geometry may remain in pixels. Document-authored Office typography, document

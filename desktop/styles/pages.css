@@ -12,7 +12,7 @@
   --button-hover-background: var(--button-background);
   --button-disabled-opacity: 0.5;
 
-  padding: calc(6em / 13) calc(12em / 13);
+  padding: 0.5em 1em;
   border: 1px solid var(--button-border-color);
   border-radius: var(--radius-sm);
   background: var(--button-background);
@@ -22,8 +22,8 @@
   cursor: pointer;
 
   &:where(.compact) {
-    min-height: calc(28em / 13);
-    padding: calc(3em / 13) calc(9em / 13);
+    min-height: 2.25em;
+    padding: 0.25em 0.75em;
   }
 
   &:focus-visible {
@@ -139,7 +139,7 @@ a:where(.setting-link) {
 
 .settings-header {
   display: grid;
-  gap: calc(1rem * 7 / 14);
+  gap: var(--space-4);
   margin-bottom: var(--space-2);
 }
 
@@ -160,18 +160,18 @@ h2 {
 .settings {
   display: grid;
   align-content: start;
-  gap: calc(1rem * 26 / 14);
+  gap: var(--space-7);
 }
 
 .settings-group {
   display: grid;
-  gap: calc(1rem * 7 / 14);
+  gap: var(--space-4);
 }
 
 .settings-group-head {
   display: flex;
   align-items: center;
-  gap: calc(1rem * 9 / 14);
+  gap: var(--space-4);
 }
 
 .settings-group-head .icon {
@@ -188,7 +188,7 @@ h2 {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-1) calc(1rem * 18 / 14);
+  padding: var(--space-1) var(--space-6);
 }
 
 .setting-row {
@@ -215,7 +215,7 @@ h2 {
 .setting-text {
   flex: 1;
   display: grid;
-  gap: calc(1rem * 3 / 14);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -254,7 +254,7 @@ h2 {
   width: 100%;
   min-height: 140px;
   box-sizing: border-box;
-  padding: calc(1rem * 9 / 14);
+  padding: var(--space-4);
   resize: vertical;
   color: inherit;
   background: var(--color-bg-surface);
@@ -271,7 +271,7 @@ h2 {
 }
 
 .prompt-save-status {
-  flex: 1 1 calc(1rem * 192 / 14);
+  flex: 1 1 13.75rem;
   min-height: 1.5em;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
@@ -305,7 +305,7 @@ h2 {
 
 .setup-guide-step {
   display: flex;
-  gap: calc(1rem * 10 / 14);
+  gap: var(--space-5);
   align-items: baseline;
   font-size: var(--font-size-md);
 }
@@ -315,8 +315,8 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: calc(1rem * 20 / 14);
-  height: calc(1rem * 20 / 14);
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   background: var(--color-accent-soft);
   color: var(--color-accent);
@@ -345,7 +345,7 @@ h2 {
 }
 
 .setting-control input {
-  padding: calc(1rem * 7 / 14) calc(1rem * 10 / 14);
+  padding: var(--space-4) var(--space-5);
   font-size: var(--font-size-md);
 }
 
@@ -379,7 +379,7 @@ h2 {
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
-  padding: calc(1rem * 7 / 14) var(--space-4) calc(1rem * 7 / 14) calc(1rem * 10 / 14);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
   font-size: var(--font-size-md);
   letter-spacing: -0.01em;
   text-align: left;
@@ -413,12 +413,12 @@ h2 {
 
 /* ---------- skills page ---------- */
 .skills-page > .management-page-content {
-  gap: calc(1rem * 20 / 14);
+  gap: var(--space-7);
 }
 
 .skills-header {
   display: grid;
-  gap: calc(1rem * 7 / 14);
+  gap: var(--space-4);
   margin-bottom: var(--space-2);
 }
 
@@ -441,12 +441,12 @@ h2 {
 .skills-search {
   display: flex;
   align-items: center;
-  gap: calc(1rem * 10 / 14);
+  gap: var(--space-5);
   width: 100%;
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: calc(1rem * 9 / 14) calc(1rem * 13 / 14);
+  padding: var(--space-4) var(--space-5);
   color: var(--color-text-muted);
 }
 
@@ -666,7 +666,7 @@ h2 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-3) calc(1rem * 10 / 14);
+  gap: var(--space-3) var(--space-5);
 }
 
 .skill-operation {
@@ -678,8 +678,8 @@ h2 {
 .skill-update-badge {
   display: inline-flex;
   align-items: center;
-  gap: calc(1rem * 3 / 14);
-  padding: calc(1rem * 1 / 14) var(--space-3);
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
   border-radius: 4px;
   font-size: var(--font-size-xs);
   white-space: nowrap;
@@ -715,7 +715,7 @@ h2 {
 .skill-preview {
   display: grid;
   gap: 1rem;
-  padding: calc(1rem * 18 / 14) calc(1rem * 20 / 14);
+  padding: var(--space-6) var(--space-7);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
@@ -752,7 +752,7 @@ h2 {
 }
 
 .skill-metadata-title {
-  padding: var(--space-5) 1rem calc(1rem * 10 / 14);
+  padding: var(--space-5) 1rem var(--space-5);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -775,7 +775,7 @@ h2 {
 
 .skill-metadata-table th,
 .skill-metadata-table td {
-  padding: calc(1rem * 10 / 14) 1rem;
+  padding: var(--space-5) 1rem;
   border: 1px solid var(--color-border);
   line-height: var(--line-height-normal);
   text-align: left;
@@ -826,7 +826,7 @@ h2 {
 
 .skill-detail-card {
   min-width: 0;
-  padding: calc(1rem * 22 / 14) var(--space-7);
+  padding: var(--space-7) var(--space-7);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
@@ -838,8 +838,8 @@ h2 {
   justify-content: space-between;
   gap: var(--space-5);
   min-height: 40px;
-  margin: calc(1rem * -22 / 14) calc(1rem * -24 / 14) calc(1rem * 18 / 14);
-  padding: var(--space-3) calc(1rem * 10 / 14) var(--space-3) var(--space-6);
+  margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-7)) var(--space-6);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-6);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-subtle);
 }
@@ -856,7 +856,7 @@ h2 {
 
 .skill-copy-button {
   flex-shrink: 0;
-  padding: var(--space-2) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
   font-size: var(--font-size-xs);
 }
 
@@ -902,7 +902,7 @@ h2 {
 
 .skill-preview-markdown pre {
   margin: 0.55em 0;
-  padding: calc(1rem * 10 / 14) calc(1rem * 13 / 14);
+  padding: var(--space-5) var(--space-5);
   overflow: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -935,7 +935,7 @@ h2 {
 
 .skill-preview-markdown th,
 .skill-preview-markdown td {
-  padding: var(--space-2) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
   border: 1px solid var(--color-border);
 }
 
@@ -967,7 +967,7 @@ h2 {
 .pill {
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  padding: calc(1rem * 3 / 14) calc(1rem * 9 / 14);
+  padding: var(--space-2) var(--space-4);
   background: transparent;
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
@@ -977,16 +977,16 @@ h2 {
 /* Scheduled tasks share the Settings page's type scale and theme. */
 .schedules-page > .management-page-content { max-width: 900px; }
 .schedule-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-5) 0; }
-.schedule-card, .schedule-form { border: 1px solid var(--color-border); border-radius: 10px; padding: calc(1rem * 18 / 14); margin: var(--space-6) 0; }
+.schedule-card, .schedule-form { border: 1px solid var(--color-border); border-radius: 10px; padding: var(--space-6); margin: var(--space-6) 0; }
 .schedule-card h2, .schedule-card h3 { margin: 0 0 var(--space-4); font-size: var(--font-size-emphasis); }
 .schedule-meta, .schedule-log, .schedule-empty { color: var(--color-text-muted); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .schedule-task { white-space: pre-wrap; overflow-wrap: anywhere; }
 .schedule-field { display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-5) 0; }
-.schedule-field input, .schedule-field select, .schedule-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: calc(1rem * 9 / 14); color: inherit; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; font: inherit; }
+.schedule-field input, .schedule-field select, .schedule-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: var(--space-4); color: inherit; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; font: inherit; }
 .schedule-field textarea { min-height: 100px; resize: vertical; }
 .schedule-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
 .schedule-error { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-danger); }
-.schedule-history-title { margin-top: calc(1rem * 32 / 14); }
+.schedule-history-title { margin-top: 2.25rem; }
 @media (max-width: 640px) { .schedule-form-grid { grid-template-columns: 1fr; gap: 0; } }
 
 .schedule-log-content { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--font-size-sm) var(--font-mono); }

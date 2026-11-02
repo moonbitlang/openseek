@@ -43,7 +43,7 @@ button.panel-toggle:not(:disabled):hover {
 .file-reveal-button {
   display: inline-flex;
   align-items: center;
-  gap: calc(1rem * 5 / 14);
+  gap: var(--space-2);
   flex-shrink: 0;
   padding: var(--space-2) var(--space-4);
   border: 0;
@@ -93,7 +93,7 @@ button.panel-toggle:not(:disabled):hover {
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
   display: flex;
   align-items: center;
-  gap: calc(1rem * 10 / 14);
+  gap: var(--space-5);
   flex: 0 0 auto;
   height: var(--topbar-height);
   padding: 0 var(--panel-toggle-reserved-width) 0 calc(var(--font-size-base) * 12 / 14);
@@ -125,7 +125,7 @@ button.panel-toggle:not(:disabled):hover {
   gap: var(--space-1);
   flex: 0 0 auto;
   max-width: min(200px, 100%);
-  padding: var(--space-2) var(--space-2) var(--space-2) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
   color: var(--color-text-faint);
   border-radius: var(--radius-sm);
@@ -216,10 +216,10 @@ button.panel-toggle:not(:disabled):hover {
   overflow: auto;
 }
 .office-viewer-surface.word-mode {
-  padding: 2rem var(--space-7) calc(1rem * 56 / 14);
+  padding: 2rem var(--space-7) 4rem;
 }
 .office-viewer-surface.sheet-mode {
-  padding: calc(1rem * 20 / 14) calc(1rem * 20 / 14) calc(1rem * 44 / 14);
+  padding: var(--space-7) var(--space-7) 3.25rem;
 }
 .office-viewer-surface.office-viewer-surface-empty {
   display: none !important;
@@ -535,7 +535,7 @@ html:is(
 }
 .dock-menu-row {
   grid-template-columns: 16px minmax(0, 1fr);
-  column-gap: calc(1rem * 10 / 14);
+  column-gap: var(--space-5);
   row-gap: var(--space-1);
 }
 .dock-menu .dock-launcher-hint {
@@ -567,9 +567,9 @@ html:is(
 .dock-launcher-row {
   display: flex;
   align-items: center;
-  gap: calc(1rem * 11 / 14);
+  gap: var(--space-5);
   width: 100%;
-  padding: calc(1rem * 9 / 14) calc(1rem * 11 / 14);
+  padding: var(--space-4) var(--space-5);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -608,7 +608,7 @@ html:is(
   align-items: center;
   gap: var(--space-3);
   flex: 0 0 auto;
-  padding: calc(1rem * 7 / 14) calc(1rem * 10 / 14);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-separator);
 }
 .browser-nav-button {
@@ -654,7 +654,7 @@ html:is(
 }
 .browser-address {
   flex: 1 1 auto;
-  padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
 }
 .browser-failure {
   flex: 0 0 auto;
@@ -695,20 +695,20 @@ html:is(
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: calc(1rem * 3 / 14);
+  gap: var(--space-2);
   flex: 0 0 auto;
-  padding: calc(1rem * 10 / 14) calc(1rem * 10 / 14) var(--space-3) var(--space-5);
+  padding: var(--space-5) var(--space-5) var(--space-3) var(--space-5);
 }
 .search-query-row > input,
 .search-query-row > textarea,
 .search-semantic-source input,
 .search-semantic-source textarea {
-  flex: 1 1 calc(1rem * 120 / 14);
-  min-width: calc(1rem * 80 / 14);
-  height: calc(28em / 13);
-  min-height: calc(1lh + 8em / 13 + calc(1rem * 2 / 14));
-  max-height: calc(140em / 13);
-  padding: calc(4em / 13) calc(8em / 13);
+  flex: 1 1 8.75rem;
+  min-width: 5.75rem;
+  height: 2.25em;
+  min-height: calc(1lh + 0.5em + 2px);
+  max-height: 11em;
+  padding: 0.25em 0.5em;
   border-radius: var(--radius-xs);
   font-size: var(--font-size-sm);
   line-height: 1.35;
@@ -718,8 +718,8 @@ html:is(
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  min-width: calc(1rem * 26 / 14);
-  height: calc(1rem * 26 / 14);
+  min-width: 2rem;
+  height: 2rem;
   padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-xs);
@@ -739,8 +739,8 @@ html:is(
 }
 .search-option > svg {
   display: block;
-  width: calc(1rem * 16 / 14);
-  height: calc(1rem * 16 / 14);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 /* Mode selector: text vs semantic, mirroring semgrep's search-mode split. */
 .search-mode {
@@ -752,8 +752,8 @@ html:is(
   overflow: hidden;
 }
 .search-mode-button {
-  min-height: calc(26em / 12);
-  padding: 0 calc(8em / 12);
+  min-height: 2.25em;
+  padding: 0 0.75em;
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
@@ -777,7 +777,7 @@ html:is(
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: calc(1rem * 3 / 14);
+  gap: var(--space-2);
 }
 /* Semantic hits: one structural match per block, semgrep-style. */
 .search-semantic-pattern-group {
@@ -789,7 +789,7 @@ html:is(
   gap: var(--space-3);
   width: 100%;
   min-width: 0;
-  padding: var(--space-3) calc(1rem * 10 / 14) var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
@@ -805,7 +805,7 @@ html:is(
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  padding: calc(1rem * 1 / 14) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-xs);
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
@@ -829,7 +829,7 @@ html:is(
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14);
+  padding: var(--space-2) var(--space-5);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
@@ -839,7 +839,7 @@ html:is(
 }
 .search-selection-toolbar button {
   margin-left: auto;
-  padding: calc(1rem * 3 / 14) calc(1rem * 7 / 14);
+  padding: var(--space-2) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
   background: var(--color-bg-subtle);
@@ -857,10 +857,10 @@ html:is(
 }
 .search-semantic-hit {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) calc(1rem * 24 / 14);
+  grid-template-columns: minmax(0, 1fr) 1.75rem;
   align-items: start;
   gap: var(--space-3);
-  padding: var(--space-3) calc(1rem * 10 / 14) var(--space-3) calc(1rem * 10 / 14);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-5);
   cursor: pointer;
   border-radius: var(--radius-xs);
 }
@@ -869,8 +869,8 @@ html:is(
   grid-row: 1;
   justify-self: end;
   align-self: start;
-  width: calc(1rem * 20 / 14);
-  height: calc(1rem * 20 / 14);
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 0;
   background: transparent;
@@ -881,7 +881,7 @@ html:is(
 .search-semantic-group-select {
   display: inline-block;
   flex: 0 0 auto;
-  padding: 0 calc(1rem * 3 / 14);
+  padding: 0 var(--space-2);
   border: 0;
   background: transparent;
   color: var(--color-text-muted);
@@ -907,9 +907,9 @@ html:is(
 }
 .search-details {
   display: grid;
-  gap: calc(1rem * 7 / 14);
+  gap: var(--space-4);
   flex: 0 0 auto;
-  padding: var(--space-1) calc(1rem * 10 / 14) var(--space-4) var(--space-5);
+  padding: var(--space-1) var(--space-5) var(--space-4) var(--space-5);
 }
 .search-details label {
   display: grid;
@@ -920,8 +920,8 @@ html:is(
   font-size: var(--font-size-xs);
 }
 .search-details input {
-  min-height: calc(26em / 13);
-  padding: calc(3em / 13) calc(7em / 13);
+  min-height: 2em;
+  padding: 0.25em 0.5em;
   border-radius: var(--radius-xs);
   font-size: var(--font-size-sm);
 }
@@ -936,8 +936,8 @@ html:is(
 .search-code-patterns {
   display: flex;
   flex-direction: column;
-  gap: calc(1rem * 3 / 14);
-  padding: 0 calc(1rem * 10 / 14) var(--space-3) var(--space-5);
+  gap: var(--space-2);
+  padding: 0 var(--space-5) var(--space-3) var(--space-5);
   align-items: stretch;
 }
 .search-code-patterns .search-semantic-source {
@@ -947,7 +947,7 @@ html:is(
   align-self: flex-start;
 }
 .search-semantic-source > .search-option {
-  min-width: calc(1rem * 58 / 14);
+  min-width: 4.25rem;
   justify-content: start;
   font-size: var(--font-size-xs);
 }
@@ -957,11 +957,11 @@ html:is(
   align-items: center;
   gap: var(--space-2);
   flex: 0 0 auto;
-  padding: 0 calc(1rem * 10 / 14) calc(1rem * 7 / 14) var(--space-5);
+  padding: 0 var(--space-5) var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
 }
 .search-toolbar button {
-  padding: calc(1rem * 3 / 14) calc(1rem * 7 / 14);
+  padding: var(--space-2) var(--space-4);
   border: 0;
   border-radius: var(--radius-xs);
   background: transparent;
@@ -981,13 +981,13 @@ html:is(
   padding-bottom: var(--space-5);
 }
 .search-summary {
-  padding: var(--space-4) var(--space-5) calc(1rem * 5 / 14);
+  padding: var(--space-4) var(--space-5) var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
 }
 .search-truncated {
-  margin: var(--space-1) calc(1rem * 10 / 14) calc(1rem * 7 / 14);
-  padding: calc(1rem * 7 / 14) var(--space-4);
+  margin: var(--space-1) var(--space-5) var(--space-4);
+  padding: var(--space-4) var(--space-4);
   border: 1px solid color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
   border-radius: var(--radius-xs);
   color: var(--color-text-secondary);
@@ -1003,7 +1003,7 @@ html:is(
   gap: var(--space-3);
   width: 100%;
   min-width: 0;
-  padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14) calc(1rem * 5 / 14) var(--space-4);
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-4);
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
@@ -1043,7 +1043,7 @@ html:is(
 .search-file-count {
   flex: 0 0 auto;
   min-width: 18px;
-  padding: 0 calc(1rem * 5 / 14);
+  padding: 0 var(--space-2);
   border-radius: 9px;
   background: var(--color-bg-subtle);
   color: var(--color-text-faint);
@@ -1068,7 +1068,7 @@ html:is(
   align-items: baseline;
   width: 100%;
   min-width: 0;
-  padding: 0 calc(1rem * 10 / 14) 0 var(--space-4);
+  padding: 0 var(--space-5) 0 var(--space-4);
   border: 0;
   background: transparent;
   color: var(--color-text-primary);
@@ -1104,10 +1104,10 @@ html:is(
   display: grid;
   justify-items: center;
   gap: var(--space-2);
-  padding: var(--space-5) calc(1rem * 10 / 14) var(--space-2);
+  padding: var(--space-5) var(--space-5) var(--space-2);
 }
 .search-show-more button {
-  padding: calc(1rem * 5 / 14) calc(1rem * 9 / 14);
+  padding: var(--space-2) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
   background: var(--color-bg-subtle);
@@ -1127,7 +1127,7 @@ html:is(
 }
 .search-empty,
 .search-no-workspace {
-  padding: calc(1rem * 26 / 14) calc(1rem * 20 / 14);
+  padding: var(--space-7) var(--space-7);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   text-align: center;
@@ -1140,7 +1140,7 @@ html:is(
   color: var(--color-danger);
 }
 .search-empty-title {
-  margin-bottom: calc(1rem * 5 / 14);
+  margin-bottom: var(--space-2);
   color: var(--color-text-primary);
   font-weight: 600;
 }
@@ -1153,8 +1153,8 @@ html:is(
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin: 0 calc(1rem * 10 / 14) var(--space-4) var(--space-5);
-  padding: calc(1rem * 7 / 14) calc(1rem * 9 / 14);
+  margin: 0 var(--space-5) var(--space-4) var(--space-5);
+  padding: var(--space-4) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
   background: var(--color-bg-subtle);
@@ -1180,7 +1180,7 @@ html:is(
   cursor: pointer;
 }
 .search-pattern-repair-diagnostic {
-  margin: calc(1rem * 5 / 14) 0 0;
+  margin: var(--space-2) 0 0;
   max-height: 120px;
   overflow: auto;
   white-space: pre-wrap;
@@ -1199,7 +1199,7 @@ html:is(
 }
 .search-pattern-repair-trace-list {
   margin: var(--space-2) 0 0;
-  padding-left: calc(1rem * 20 / 14);
+  padding-left: var(--space-7);
   max-height: 180px;
   overflow: auto;
   color: var(--color-text-muted);
@@ -1234,7 +1234,7 @@ html:is(
   display: flex;
   flex: 0 0 auto;
   gap: var(--space-1);
-  padding: calc(1rem * 7 / 14) var(--space-2) var(--space-2);
+  padding: var(--space-4) var(--space-2) var(--space-2);
   border-bottom: 1px solid var(--color-separator);
 }
 
@@ -1340,6 +1340,8 @@ html:is(
 /* Mirrors the pinned VS Code `scmGraph.*` registry and the effective
    Light/Dark 2026 `charts.blue` and `charts.purple` theme overrides. */
 .git-graph-section {
+  /* Rows, graph cells and expanded-file continuations share one geometry. */
+  --git-graph-row-height: calc(1rem * 22 / 14);
   --git-graph-current: #1A5CFF;
   --git-graph-upstream: #652D90;
   --git-graph-base: #EA5C00;
@@ -1370,7 +1372,7 @@ html:is(
   gap: var(--space-1);
   flex: 0 0 auto;
   width: 100%;
-  min-height: calc(1rem * 30 / 14);
+  min-height: 2.25rem;
   padding: var(--space-2) var(--space-4);
   border: 0;
   background: var(--color-bg-surface);
@@ -1451,8 +1453,8 @@ html.is-resizing-review * {
 .git-graph-header {
   justify-content: flex-start;
   gap: var(--space-1);
-  height: calc(1rem * 30 / 14);
-  min-height: calc(1rem * 30 / 14);
+  height: 2.25rem;
+  min-height: 2.25rem;
   padding: 0 var(--space-2) 0 var(--space-4);
 }
 
@@ -1502,7 +1504,7 @@ html.is-resizing-review * {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100px;
-  height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
   padding: 0 var(--space-1);
   overflow: hidden;
   color: var(--color-text-primary);
@@ -1521,9 +1523,9 @@ html.is-resizing-review * {
 
 .git-graph-context-icon {
   display: flex;
-  flex: 0 0 calc(1rem * 16 / 14);
-  width: calc(1rem * 16 / 14);
-  height: calc(1rem * 16 / 14);
+  flex: 0 0 var(--icon-lg);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
   color: var(--color-text-secondary);
 }
 
@@ -1538,9 +1540,9 @@ html.is-resizing-review * {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 calc(1rem * 22 / 14);
-  width: calc(1rem * 22 / 14);
-  height: calc(1rem * 22 / 14);
+  flex: 0 0 var(--git-graph-row-height);
+  width: var(--git-graph-row-height);
+  height: var(--git-graph-row-height);
   padding: 0;
   border: 0;
   border-radius: 4px;
@@ -1550,8 +1552,8 @@ html.is-resizing-review * {
 
 .git-graph-refresh-icon {
   display: flex;
-  width: calc(1rem * 16 / 14);
-  height: calc(1rem * 16 / 14);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 
 .git-graph-body {
@@ -1576,8 +1578,8 @@ html.is-resizing-review * {
   align-items: center;
   width: 100%;
   min-width: 0;
-  height: calc(1rem * 22 / 14);
-  min-height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
+  min-height: var(--git-graph-row-height);
   padding: 0 var(--space-2) 0 0;
   overflow: hidden;
   border: 0;
@@ -1613,7 +1615,7 @@ html.is-resizing-review * {
 .git-graph-cell {
   display: flex;
   flex: 0 0 auto;
-  height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
   overflow: hidden;
 }
 
@@ -1623,7 +1625,7 @@ html.is-resizing-review * {
   /* The viewBox keeps the normalized graph coordinates; both display axes
      follow the row height, including expanded-file continuation segments. */
   width: auto;
-  height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
 }
 
 .git-graph-edge {
@@ -1671,7 +1673,7 @@ html.is-resizing-review * {
   gap: var(--space-2);
   flex: 1 1 auto;
   min-width: 0;
-  height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
   overflow: hidden;
   margin-left: var(--space-2);
 }
@@ -1709,7 +1711,7 @@ html.is-resizing-review * {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 46%;
-  height: calc(1rem * 18 / 14);
+  height: auto;
   margin-left: var(--space-2);
   overflow: hidden;
 }
@@ -1721,7 +1723,7 @@ html.is-resizing-review * {
 .git-ref {
   display: flex;
   align-items: center;
-  gap: calc(1rem * 1 / 14);
+  gap: var(--space-1);
   flex: 0 1 auto;
   min-width: 1.5em;
   max-width: 122px;
@@ -1751,8 +1753,8 @@ html.is-resizing-review * {
 
 .git-ref-current .git-ref-icon svg,
 .git-ref-head .git-ref-icon svg {
-  width: calc(1rem * 12 / 14);
-  height: calc(1rem * 12 / 14);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 .git-ref-name {
@@ -1767,9 +1769,9 @@ html.is-resizing-review * {
   display: none;
   align-items: center;
   justify-content: center;
-  flex: 0 0 calc(1rem * 22 / 14);
-  width: calc(1rem * 22 / 14);
-  height: calc(1rem * 22 / 14);
+  flex: 0 0 var(--git-graph-row-height);
+  width: var(--git-graph-row-height);
+  height: var(--git-graph-row-height);
   color: var(--color-text-secondary);
 }
 
@@ -1779,8 +1781,8 @@ html.is-resizing-review * {
 }
 
 .git-commit-actions svg {
-  width: calc(1rem * 16 / 14);
-  height: calc(1rem * 16 / 14);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 
 .git-commit-files {
@@ -1792,7 +1794,7 @@ html.is-resizing-review * {
 .git-history-graph-placeholder {
   display: flex;
   flex: 0 0 auto;
-  height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
   overflow: hidden;
 }
 
@@ -1802,8 +1804,8 @@ html.is-resizing-review * {
   gap: var(--space-2);
   width: 100%;
   min-width: 0;
-  height: calc(1rem * 22 / 14);
-  min-height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
+  min-height: var(--git-graph-row-height);
   padding: 0 var(--space-2) 0 0;
   overflow: hidden;
   border: 0;
@@ -1856,7 +1858,7 @@ button.git-history-file.selected {
 .git-commit-files-message,
 .git-graph-message,
 .git-graph-load-error {
-  min-height: calc(1rem * 22 / 14);
+  min-height: var(--git-graph-row-height);
   padding: 0 var(--space-4);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -1916,7 +1918,7 @@ button.git-history-file.selected {
   align-items: center;
   width: 100%;
   min-width: 0;
-  height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1942,11 +1944,11 @@ button.git-history-file.selected {
   justify-content: center;
   flex: 1 1 auto;
   min-width: 0;
-  height: calc(1rem * 22 / 14);
+  height: var(--git-graph-row-height);
 }
 
 .git-graph-body > .file-panel-empty {
-  min-height: calc(1rem * 22 / 14);
+  min-height: var(--git-graph-row-height);
   padding: var(--space-2) var(--space-4);
 }
 
@@ -1980,7 +1982,7 @@ button.git-history-file.selected {
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  min-height: calc(1rem * 24 / 14);
+  min-height: 1.75rem;
   padding: 0 var(--space-2) 0 var(--tree-indent);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
@@ -2012,7 +2014,7 @@ button.git-history-file.selected {
 }
 
 .change-tree .tree-row {
-  min-height: calc(1rem * 24 / 14);
+  min-height: 1.75rem;
   gap: var(--space-2);
   padding-right: var(--space-3);
 }
@@ -2132,12 +2134,12 @@ button.git-history-file.selected {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 calc(1rem * 16 / 14);
-  width: calc(1rem * 16 / 14);
-  height: calc(1rem * 16 / 14);
+  flex: 0 0 var(--icon-lg);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
   color: var(--color-text-secondary);
 }
-.tree-entry-icon svg { width: calc(1rem * 16 / 14); height: calc(1rem * 16 / 14); }
+.tree-entry-icon svg { width: var(--icon-lg); height: var(--icon-lg); }
 
 .tree-name {
   overflow: hidden;
@@ -2160,8 +2162,8 @@ button.git-history-file.selected {
   align-items: center;
   gap: var(--space-3);
   flex: 0 0 auto;
-  height: calc(1rem * 34 / 14);
-  padding: 0 calc(1rem * 18 / 14) 0 var(--space-5);
+  height: 2.5rem;
+  padding: 0 var(--space-6) 0 var(--space-5);
   border-bottom: 1px solid var(--color-separator);
   font-size: var(--font-size-xs);
   color: var(--color-text-faint);
@@ -2186,8 +2188,8 @@ button.git-history-file.selected {
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
-  min-height: calc(1rem * 34 / 14);
-  padding: 0 calc(1rem * 18 / 14) 0 var(--space-5);
+  min-height: 2.5rem;
+  padding: 0 var(--space-6) 0 var(--space-5);
 }
 
 .viewer-breadcrumb-row {
@@ -2277,10 +2279,10 @@ button.git-history-file.selected {
 }
 .office-viewer-find input {
   box-sizing: border-box;
-  width: calc(28em / 12);
-  min-width: calc(28em / 12);
-  height: calc(28em / 12);
-  padding: calc(2em / 12) calc(4em / 12) calc(2em / 12) calc(28em / 12);
+  width: 2.5em;
+  min-width: 2.5em;
+  height: 2.5em;
+  padding: 0.125em 0.25em 0.125em 2em;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
   color: var(--color-text-primary);
@@ -2305,8 +2307,8 @@ button.git-history-file.selected {
 .office-viewer-control {
   display: grid;
   place-items: center;
-  width: calc(24em / 13);
-  height: calc(24em / 13);
+  width: 2em;
+  height: 2em;
   padding: 0;
   border: 0;
   border-radius: var(--radius-xs);
@@ -2359,10 +2361,10 @@ button.git-history-file.selected {
 .breadcrumb-picker-heading {
   display: flex;
   align-items: center;
-  gap: calc(1rem * 7 / 14);
+  gap: var(--space-4);
   flex: 0 0 auto;
-  min-height: calc(1rem * 32 / 14);
-  padding: 0 calc(1rem * 9 / 14);
+  min-height: 2.5rem;
+  padding: 0 var(--space-4);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   background: var(--color-bg-subtle);
@@ -2374,14 +2376,14 @@ button.git-history-file.selected {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: calc(1rem * 16 / 14);
-  height: calc(1rem * 16 / 14);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 
 .breadcrumb-picker-heading-icon svg,
 .breadcrumb-picker-icon svg {
-  width: calc(1rem * 16 / 14);
-  height: calc(1rem * 16 / 14);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 
 .breadcrumb-picker-title {
@@ -2416,7 +2418,7 @@ button.git-history-file.selected {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: calc(1rem * 7 / 14);
+  gap: var(--space-4);
   width: 100%;
   min-width: 0;
   height: 2rem;
@@ -2486,7 +2488,7 @@ button.git-history-file.selected {
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: var(--space-1) calc(1rem * 7 / 14);
+  padding: var(--space-1) var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   color: var(--color-text-muted);
@@ -2509,8 +2511,8 @@ button.git-history-file.selected {
 .review-nav-button {
   display: grid;
   place-items: center;
-  width: calc(20em / 17);
-  height: calc(20em / 17);
+  width: 1.25em;
+  height: 1.25em;
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
@@ -2533,7 +2535,7 @@ button.git-history-file.selected {
 }
 .review-nav-position,
 .review-hunk-position {
-  min-width: calc(1rem * 38 / 14);
+  min-width: 2.75rem;
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
   text-align: center;
@@ -2571,8 +2573,8 @@ button.git-history-file.selected {
 .review-mode-button,
 .review-layout-button {
   appearance: none;
-  min-height: calc(22em / 12);
-  padding: calc(2em / 12) calc(7em / 12);
+  min-height: 2em;
+  padding: 0.25em 0.5em;
   border: 0;
   border-radius: var(--radius-xs);
   color: var(--color-text-secondary);
@@ -2605,7 +2607,7 @@ button.git-history-file.selected {
 }
 
 .review-mode-divider {
-  margin: 0 calc(1rem * 3 / 14);
+  margin: 0 var(--space-2);
 }
 
 .review-control-divider {
@@ -2639,8 +2641,8 @@ button.git-history-file.selected {
 .review-tests-control {
   appearance: none;
   flex: 0 0 auto;
-  min-height: calc(28em / 12);
-  padding: calc(3em / 12) calc(8em / 12);
+  min-height: 2.5em;
+  padding: 0.25em 0.75em;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
@@ -2772,7 +2774,7 @@ button.git-history-file.selected {
   border-top: 1px solid var(--color-separator);
   border-bottom: 1px solid var(--color-separator);
   border-radius: 0;
-  padding: var(--space-2) calc(1rem * 5 / 14);
+  padding: var(--space-2) var(--space-2);
   color: var(--vscode-editor-foreground, var(--color-text-primary));
   background: var(--color-bg-subtle);
   font: inherit;
@@ -2801,7 +2803,7 @@ button.git-history-file.selected {
 .semantic-review-host .semantic-entry-chevron {
   flex: 0 0 16px;
   width: 16px;
-  margin: 0 calc(1rem * 5 / 14);
+  margin: 0 var(--space-2);
   color: var(--color-text-secondary);
 }
 
@@ -2811,7 +2813,7 @@ button.git-history-file.selected {
   box-sizing: border-box;
   width: 13px;
   height: 16px;
-  margin-right: calc(1rem * 7 / 14);
+  margin-right: var(--space-4);
   border: 1px solid currentColor;
   border-radius: 1px;
   color: var(--color-text-secondary);
@@ -2865,7 +2867,7 @@ button.git-history-file.selected {
 
 .semantic-review-host .semantic-entry-status {
   flex: 0 0 auto;
-  margin: 0 calc(1rem * 10 / 14);
+  margin: 0 var(--space-5);
   font-weight: 600;
   line-height: calc(22 / 14);
 }
@@ -2901,7 +2903,7 @@ button.git-history-file.selected {
   margin: var(--space-4) 0 0;
   border-top: 1px solid var(--color-separator);
   border-bottom: 1px solid var(--color-separator);
-  padding: calc(1rem * 7 / 14) var(--space-5);
+  padding: var(--space-4) var(--space-5);
   font-size: var(--font-size-xs);
   font-weight: 600;
   line-height: 1.45;
@@ -3043,7 +3045,7 @@ button.git-history-file.selected {
   gap: var(--space-4);
   width: 100%;
   min-width: 0;
-  padding: calc(1rem * 5 / 14) var(--space-1);
+  padding: var(--space-2) var(--space-1);
   border: 0;
   border-radius: 4px;
   background: transparent;
@@ -3158,36 +3160,36 @@ button.git-history-file.selected {
 .github-detail-placeholder { align-items: center; justify-content: center; gap: var(--space-5); padding: var(--space-7); color: var(--gh-muted); text-align: center; }
 .github-detail-placeholder p { max-width: 280px; line-height: 1.6; }
 .github-detail-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
-.github-detail-content { max-width: 1360px; margin: 0 auto; padding: 2rem calc(1rem * 32 / 14) calc(1rem * 48 / 14); overflow-wrap: anywhere; }
+.github-detail-content { max-width: 1360px; margin: 0 auto; padding: 2rem 2.25rem 3.5rem; overflow-wrap: anywhere; }
 .github-pr-header { margin-bottom: var(--space-3); }
-.github-detail-title { flex: 1; min-width: 0; margin: 0 0 var(--space-6); font-size: clamp(calc(1rem * 24 / 14), 3.8cqw, calc(1rem * 36 / 14)); font-weight: 400; line-height: 1.25; letter-spacing: -.4px; }
+.github-detail-title { flex: 1; min-width: 0; margin: 0 0 var(--space-6); font-size: clamp(1.75rem, 3.8cqw, 2.5rem); font-weight: 400; line-height: 1.25; letter-spacing: -.4px; }
 .github-detail-dismiss { flex: none; margin-left: auto; color: var(--gh-muted); }
 .github-detail-link { padding: 0; border: 0; background: transparent; color: var(--gh-link); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .github-detail-link:hover { text-decoration: underline; }
 .github-detail-link:focus-visible, .github-action-button:focus-visible, summary.github-checks-summary:focus-visible { outline: 2px solid var(--gh-link); outline-offset: 3px; }
 .github-title-number { display: inline; white-space: nowrap; font-weight: 300; }
-.github-detail-meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: calc(1rem * 10 / 14); color: var(--gh-muted); line-height: 1.8; }
+.github-detail-meta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-5); color: var(--gh-muted); line-height: 1.8; }
 .github-merge-description { flex: 1; min-width: 180px; padding-top: var(--space-1); }
 .github-pr-author { display: inline-flex; align-items: center; gap: var(--space-3); vertical-align: middle; }
-.github-detail-meta code { padding: var(--space-1) calc(1rem * 5 / 14); border-radius: 4px; background: light-dark(#ddf4ff, #162b42); color: light-dark(#0550ae, #a5d6ff); font-size: var(--font-size-xs); overflow-wrap: anywhere; }
-.github-pr-state { display: inline-flex; flex: none; align-items: center; gap: var(--space-3); min-height: calc(1rem * 32 / 14); padding: var(--space-2) var(--space-5); border-radius: 20px; background: #59636e; color: #fff; font-weight: 500; line-height: calc(24 / 14); }
+.github-detail-meta code { padding: var(--space-1) var(--space-2); border-radius: 4px; background: light-dark(#ddf4ff, #162b42); color: light-dark(#0550ae, #a5d6ff); font-size: var(--font-size-xs); overflow-wrap: anywhere; }
+.github-pr-state { display: inline-flex; flex: none; align-items: center; gap: var(--space-3); min-height: 2.5rem; padding: var(--space-2) var(--space-5); border-radius: 20px; background: #59636e; color: #fff; font-weight: 500; line-height: calc(24 / 14); }
 .github-pr-state.open { background: #1f883d; }
 .github-pr-state.closed { background: #cf222e; }
 .github-pr-state.merged { background: #8250df; }
-.github-detail-actions { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-7); padding: calc(1rem * 10 / 14) 0 var(--space-6); border-bottom: 1px solid var(--gh-border); background: var(--gh-bg); }
-.github-action-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-3); min-height: calc(1rem * 32 / 14); padding: calc(1rem * 5 / 14) var(--space-5); border: 1px solid var(--gh-border); border-radius: 6px; background: var(--gh-subtle); color: var(--gh-fg); font: inherit; font-weight: 500; font-size: var(--font-size-sm); cursor: pointer; }
+.github-detail-actions { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-7); padding: var(--space-5) 0 var(--space-6); border-bottom: 1px solid var(--gh-border); background: var(--gh-bg); }
+.github-action-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-3); min-height: 2.5rem; padding: var(--space-2) var(--space-5); border: 1px solid var(--gh-border); border-radius: 6px; background: var(--gh-subtle); color: var(--gh-fg); font: inherit; font-weight: 500; font-size: var(--font-size-sm); cursor: pointer; }
 .github-action-button:hover:not(:disabled) { background: light-dark(#eff2f5, #212830); border-color: var(--gh-muted); }
 .github-action-button:disabled { opacity: .6; cursor: default; }
 .github-pr-layout { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 2rem; align-items: start; }
 .github-conversation { display: flex; flex-direction: column; gap: var(--space-7); min-width: 0; }
 .github-comment { min-width: 0; border: 1px solid var(--gh-border); border-radius: 6px; overflow: hidden; background: var(--gh-bg); }
-.github-comment-header { display: flex; align-items: center; gap: var(--space-4); min-height: calc(1rem * 48 / 14); padding: calc(1rem * 10 / 14) var(--space-6); border-bottom: 1px solid var(--gh-border); background: var(--gh-subtle); }
-.github-comment-header .github-avatar { width: calc(1rem * 24 / 14); height: calc(1rem * 24 / 14); flex-basis: calc(1rem * 24 / 14); align-items: center; justify-content: center; }
-.github-comment-meta { display: flex; flex: 1; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 0 calc(1rem * 5 / 14); font-size: var(--font-size-sm); line-height: 1.6; }
+.github-comment-header { display: flex; align-items: center; gap: var(--space-4); min-height: 3.5rem; padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--gh-border); background: var(--gh-subtle); }
+.github-comment-header .github-avatar { width: 1.75rem; height: 1.75rem; flex-basis: 1.75rem; align-items: center; justify-content: center; }
+.github-comment-meta { display: flex; flex: 1; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-2); font-size: var(--font-size-sm); line-height: 1.6; }
 .github-comment-date { color: var(--gh-muted); }
-.github-author-badge { padding: 0 calc(1rem * 7 / 14); border: 1px solid var(--gh-border); border-radius: 12px; color: var(--gh-muted); font-size: var(--font-size-xs); line-height: calc(20 / 12); }
-.github-comment-body { padding: calc(1rem * 20 / 14); }
-.github-detail .msg-content { min-width: 0; max-width: 100%; font-size: calc(1rem * 15 / 14); line-height: 1.6; color: var(--gh-fg); }
+.github-author-badge { padding: 0 var(--space-4); border: 1px solid var(--gh-border); border-radius: 12px; color: var(--gh-muted); font-size: var(--font-size-xs); line-height: calc(20 / 12); }
+.github-comment-body { padding: var(--space-7); }
+.github-detail .msg-content { min-width: 0; max-width: 100%; font-size: var(--font-size-md); line-height: 1.6; color: var(--gh-fg); }
 .github-detail .msg-content > :first-child { margin-top: 0; }
 .github-detail .msg-content > :last-child { margin-bottom: 0; }
 .github-detail .msg-content h1, .github-detail .msg-content h2 { padding-bottom: .3em; border-bottom: 1px solid var(--gh-border); font-weight: 600; line-height: 1.25; }
@@ -3203,7 +3205,7 @@ button.git-history-file.selected {
 .github-detail .msg-content table { overflow-wrap: normal; }
 .github-detail .msg-content img { max-width: 100%; height: auto; }
 .github-detail-status { margin: var(--space-4) 0 var(--space-6); font-size: var(--font-size-md); line-height: 1.5; color: var(--gh-muted); }
-.github-metadata { min-width: 0; padding-top: calc(1rem * 3 / 14); font-size: var(--font-size-sm); line-height: 1.6; }
+.github-metadata { min-width: 0; padding-top: var(--space-2); font-size: var(--font-size-sm); line-height: 1.6; }
 .github-metadata-section { min-width: 0; }
 .github-metadata-section + .github-metadata-section { margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--gh-border); }
 .github-metadata-section h2 { margin: 0 0 var(--space-4); font-size: var(--font-size-sm); font-weight: 600; }
@@ -3213,24 +3215,24 @@ button.git-history-file.selected {
 .github-reviewer strong { font-weight: 500; }
 .github-review-state { color: var(--gh-muted); font-size: var(--font-size-xs); }
 .github-labels { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.github-label { padding: calc(1rem * 1 / 14) var(--space-4); border: 1px solid var(--gh-border); border-radius: 12px; background: var(--gh-subtle); font-size: var(--font-size-xs); font-weight: 500; }
+.github-label { padding: var(--space-1) var(--space-4); border: 1px solid var(--gh-border); border-radius: 12px; background: var(--gh-subtle); font-size: var(--font-size-xs); font-weight: 500; }
 .github-diffstat { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .github-additions, .github-detail .passed { color: var(--gh-green); }
 .github-deletions, .github-detail .failed { color: var(--gh-red); }
 .github-detail .pending { color: light-dark(#9a6700, #d29922); }
 .github-checks-card { min-width: 0; border: 1px solid var(--gh-border); border-radius: 6px; overflow: hidden; }
-.github-checks-summary { display: flex; align-items: center; gap: var(--space-5); min-height: calc(1rem * 52 / 14); padding: var(--space-5) var(--space-6); background: var(--gh-subtle); font-size: var(--font-size-md); line-height: 1.5; }
+.github-checks-summary { display: flex; align-items: center; gap: var(--space-5); min-height: 3.75rem; padding: var(--space-5) var(--space-6); background: var(--gh-subtle); font-size: var(--font-size-md); line-height: 1.5; }
 summary.github-checks-summary { cursor: pointer; list-style: none; }
 summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-checks-details[open] > summary { border-bottom: 1px solid var(--gh-border); }
 .github-check-summary { flex: 1; min-width: 0; }
-.github-check-toggle { flex: none; padding: calc(1rem * 3 / 14) var(--space-5); border: 1px solid var(--gh-border); border-radius: 6px; background: light-dark(#eff2f5, #212830); color: var(--gh-fg); font-size: var(--font-size-sm); }
+.github-check-toggle { flex: none; padding: var(--space-2) var(--space-5); border: 1px solid var(--gh-border); border-radius: 6px; background: light-dark(#eff2f5, #212830); color: var(--gh-fg); font-size: var(--font-size-sm); }
 .github-checks-summary:hover .github-check-toggle { border-color: var(--gh-muted); }
 .github-check-hide, .github-checks-details[open] .github-check-show { display: none; }
 .github-checks-details[open] .github-check-hide { display: inline; }
 .github-checks { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .github-checks:focus-visible { outline: 2px solid var(--gh-link); outline-offset: -2px; }
-.github-check { display: flex; align-items: center; gap: var(--space-5); min-height: calc(46em / 14); padding: calc(1rem * 10 / 14) var(--space-6); font-size: var(--font-size-md); line-height: 1.5; }
+.github-check { display: flex; align-items: center; gap: var(--space-5); min-height: 3.5em; padding: var(--space-5) var(--space-6); font-size: var(--font-size-md); line-height: 1.5; }
 .github-check + .github-check { border-top: 1px solid var(--gh-border); }
 .github-check-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 16px; width: 16px; height: 20px; color: var(--gh-muted); }
 .github-check-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -3243,14 +3245,14 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 @container github-detail (max-width: 760px) {
   .github-detail-content { padding: var(--space-7); }
   .github-pr-layout { grid-template-columns: minmax(0, 1fr); }
-  .github-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6) var(--space-7); padding-top: calc(1rem * 20 / 14); border-top: 1px solid var(--gh-border); }
+  .github-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6) var(--space-7); padding-top: var(--space-7); border-top: 1px solid var(--gh-border); }
   .github-metadata-section + .github-metadata-section { margin-top: 0; padding-top: 0; border-top: 0; }
 }
 @container github-detail (max-width: 420px) {
-  .github-detail-content { padding: calc(1rem * 20 / 14) 1rem; }
-  .github-detail-title { font-size: calc(1rem * 24 / 14); }
+  .github-detail-content { padding: var(--space-7) 1rem; }
+  .github-detail-title { font-size: 1.75rem; }
   .github-merge-description { min-width: 0; flex-basis: 100%; font-size: var(--font-size-sm); }
-  .github-comment-header { padding: calc(1rem * 10 / 14); }
+  .github-comment-header { padding: var(--space-5); }
   .github-comment-body { padding: 1rem; }
   .github-detail .msg-content { font-size: var(--font-size-md); }
   .github-author-badge { display: none; }
@@ -3261,23 +3263,23 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   .github-check-provider { display: none; }
   .github-metadata { grid-template-columns: minmax(0, 1fr); }
 }
-.github-toolbar { flex: none; display: flex; align-items: center; gap: var(--space-4); min-height: calc(1rem * 36 / 14); padding: 0 var(--space-2) 0 var(--space-4); }
+.github-toolbar { flex: none; display: flex; align-items: center; gap: var(--space-4); min-height: 2.75rem; padding: 0 var(--space-2) 0 var(--space-4); }
 .github-repository { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
 .github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-border); }
 .github-pulls.expanded { flex: 2 1 0; }
 .github-issues.expanded { flex: 1 1 0; }
 .github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--space-1) 0 var(--space-4); scrollbar-width: thin; }
-.github-heading, .github-group-heading { display: flex; align-items: center; gap: calc(1rem * 5 / 14); width: 100%; min-height: calc(1rem * 32 / 14); padding: calc(1rem * 5 / 14) var(--space-3); border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.github-heading, .github-group-heading { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 2.5rem; padding: var(--space-2) var(--space-3); border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .github-heading { flex: none; font-weight: 600; }
 .github-group-heading { padding-left: var(--space-6); }
 .github-heading:hover, .github-group-heading:hover, .github-item:hover { background: var(--color-hover-subtle); }
 .github-heading:focus-visible, .github-group-heading:focus-visible, .github-item-open:focus-visible, .github-checkout:focus-visible, .github-more:focus-visible { outline: 1px solid var(--color-accent); outline-offset: -1px; background: var(--color-hover-subtle); }
 .github-chevron { display: inline-flex; transform: rotate(-90deg); }
 .github-chevron.expanded { transform: none; }
-.github-item { display: flex; align-items: center; width: 100%; height: calc(1rem * 26 / 14); border-radius: 5px; color: inherit; }
-.github-item-open { display: flex; align-items: center; gap: var(--space-3); flex: 1; min-width: 0; height: 100%; padding: calc(1rem * 3 / 14) var(--space-4) calc(1rem * 3 / 14) calc(1rem * 36 / 14); border: 0; border-radius: 5px; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.github-item { display: flex; align-items: center; width: 100%; height: 2rem; border-radius: 5px; color: inherit; }
+.github-item-open { display: flex; align-items: center; gap: var(--space-3); flex: 1; min-width: 0; height: 100%; padding: var(--space-2) var(--space-4) var(--space-2) 2.5rem; border: 0; border-radius: 5px; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
 .github-issues .github-item-open { padding-left: var(--space-6); }
-.github-checkout { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 calc(1rem * 22 / 14); width: calc(1rem * 22 / 14); height: calc(1rem * 22 / 14); margin-right: var(--space-2); padding: calc(1rem * 3 / 14); border: 0; border-radius: 4px; background: transparent; color: var(--color-text-secondary); cursor: pointer; opacity: 0; }
+.github-checkout { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 1.75rem; width: 1.75rem; height: 1.75rem; margin-right: var(--space-2); padding: var(--space-2); border: 0; border-radius: 4px; background: transparent; color: var(--color-text-secondary); cursor: pointer; opacity: 0; }
 .github-item:hover .github-checkout, .github-item:focus-within .github-checkout, .github-item.selected .github-checkout, .github-checkout.pending { opacity: 1; }
 .github-checkout:hover:not(:disabled) { background: var(--color-hover-subtle); color: var(--color-text-primary); }
 .github-checkout:disabled { cursor: default; }
@@ -3285,7 +3287,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-checkout-arrow { display: inline-flex; transform: rotate(90deg); }
 .github-checkout.pending .icon { animation: jobs-spin 1s linear infinite; }
 .github-current { display: inline-flex; flex: none; }
-.github-checkout-notification { width: min(calc(1rem * 380 / 14), calc(100vw - calc(1rem * 32 / 14))); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-overlay); font-size: var(--font-size-md); line-height: var(--line-height-normal); overflow-wrap: anywhere; }
+.github-checkout-notification { width: min(27.25rem, calc(100vw - 2.5rem)); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-overlay); font-size: var(--font-size-md); line-height: var(--line-height-normal); overflow-wrap: anywhere; }
 .github-checkout-message { display: flex; gap: var(--space-4); align-items: flex-start; }
 .github-checkout-message > .icon { flex: none; margin-top: var(--space-1); }
 .github-checkout-message > span { flex: 1; min-width: 0; }
@@ -3293,7 +3295,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-checkout-notification.failed .github-checkout-message > .icon { color: var(--color-danger); }
 .github-checkout-notification.pending .github-checkout-message > .icon { animation: jobs-spin 1s linear infinite; }
 .github-checkout-details { margin: var(--space-4) 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.github-checkout-dialog .github-checkout-choices { display: flex; flex-direction: column; gap: var(--space-4); margin-top: calc(1rem * 20 / 14); }
+.github-checkout-dialog .github-checkout-choices { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-7); }
 .github-checkout-discard { color: var(--color-danger); }
 @media (prefers-reduced-motion: reduce) { .github-checkout.pending .icon, .github-checkout-notification.pending .icon { animation: none; } }
 @media (hover: none) { .github-checkout { opacity: 1; } }
@@ -3302,11 +3304,11 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-item-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--font-size-sm); line-height: calc(20 / 13); }
 .github-item.draft .github-item-title { font-style: italic; }
 .github-item.selected { background: var(--color-hover-subtle); color: var(--color-accent); }
-.github-empty, .github-error { padding: calc(1rem * 10 / 14) var(--space-6); font-size: var(--font-size-sm); line-height: 1.5; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.github-empty, .github-error { padding: var(--space-5) var(--space-6); font-size: var(--font-size-sm); line-height: 1.5; color: var(--color-text-secondary); overflow-wrap: anywhere; }
 .github-error { color: var(--color-danger); }
 .github-more { margin: var(--space-3) var(--space-6); padding: var(--space-2) var(--space-3); border: 0; border-radius: 4px; background: transparent; color: var(--color-accent); font: inherit; font-size: var(--font-size-sm); cursor: pointer; }
 .github-error .github-more { margin: var(--space-3) 0 0; }
-.jobs-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: column; overflow: auto; padding: calc(1rem * 18 / 14); gap: var(--space-5); color: var(--color-text-primary); }
+.jobs-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: column; overflow: auto; padding: var(--space-6); gap: var(--space-5); color: var(--color-text-primary); }
 .jobs-heading, .jobs-row-head, .jobs-detail-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); }
 .jobs-heading h3 { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); font-weight: 600; letter-spacing: -.2px; }
 .jobs-summary, .jobs-host, .jobs-row-meta, .jobs-detail-meta, .jobs-output-note, .jobs-footnote { font-size: var(--font-size-xs); color: var(--color-text-secondary); overflow-wrap: anywhere; }
@@ -3314,11 +3316,11 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-summary-active { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--color-text-primary); }
 .jobs-summary-active::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
 .jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border); }
-.jobs-list { display: flex; flex-direction: column; gap: calc(1rem * 18 / 14); max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: var(--space-1); scrollbar-width: thin; }
+.jobs-list { display: flex; flex-direction: column; gap: var(--space-6); max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: var(--space-1); scrollbar-width: thin; }
 .jobs-group { flex-shrink: 0; min-width: 0; }
-.jobs-group-title { display: flex; align-items: center; gap: var(--space-4); margin: 0 0 calc(1rem * 10 / 14); font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary); }
+.jobs-group-title { display: flex; align-items: center; gap: var(--space-4); margin: 0 0 var(--space-5); font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary); }
 .jobs-history-toggle { width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; text-align: left; font-family: inherit; transition: margin-bottom var(--disclosure-duration) ease; }
-.jobs-history-toggle::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); margin: 0 calc(1rem * 3 / 14); transition: transform var(--disclosure-duration) ease; }
+.jobs-history-toggle::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); margin: 0 var(--space-2); transition: transform var(--disclosure-duration) ease; }
 .jobs-history-toggle[aria-expanded="true"]::before { transform: translateY(-2px) rotate(45deg); }
 .jobs-history-toggle[aria-expanded="false"] { margin-bottom: 0; }
 .jobs-history-toggle:hover { color: var(--color-text-primary); }
@@ -3341,9 +3343,9 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 .jobs-more { margin-top: var(--space-4); }
 .jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-border); }
-.jobs-group-count { min-width: 20px; padding: calc(1rem * 1 / 14) var(--space-3); border-radius: 5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); font-size: var(--font-size-xs); text-align: center; font-variant-numeric: tabular-nums; }
+.jobs-group-count { min-width: 20px; padding: var(--space-1) var(--space-3); border-radius: 5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); font-size: var(--font-size-xs); text-align: center; font-variant-numeric: tabular-nums; }
 .jobs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18em,100%),1fr)); gap: var(--space-4); }
-.jobs-row { display: flex; flex-direction: column; gap: calc(1rem * 9 / 14); text-align: left; padding: var(--space-5); border: 1px solid var(--color-border); border-left: 3px solid color-mix(in srgb, var(--job-color) 55%, var(--color-border)); background: var(--color-bg-surface); border-radius: 8px; color: inherit; min-width: 0; cursor: pointer; }
+.jobs-row { display: flex; flex-direction: column; gap: var(--space-4); text-align: left; padding: var(--space-5); border: 1px solid var(--color-border); border-left: 3px solid color-mix(in srgb, var(--job-color) 55%, var(--color-border)); background: var(--color-bg-surface); border-radius: 8px; color: inherit; min-width: 0; cursor: pointer; }
 .jobs-row.selected { border-color: color-mix(in srgb, var(--color-accent) 60%, var(--color-border)); border-left-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 7%, var(--color-bg-surface)); }
 .jobs-row:hover { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 4%, var(--color-bg-surface)); }
 .jobs-row:focus-visible, .jobs-action:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -3351,7 +3353,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-id { min-width: 0; font-size: var(--font-size-xs); color: var(--color-text-secondary); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .jobs-command { overflow-wrap: anywhere; max-width: 100%; font-size: var(--font-size-md); font-weight: 500; }
 .jobs-row-meta { font-size: var(--font-size-xs); line-height: 1.5; font-variant-numeric: tabular-nums; }
-.jobs-status { display: inline-flex; align-items: center; gap: calc(1rem * 5 / 14); padding: calc(1rem * 3 / 14) calc(1rem * 7 / 14); border-radius: 5px; background: color-mix(in srgb, var(--job-color) 10%, transparent); color: var(--job-color); font-size: var(--font-size-xs); font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+.jobs-status { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-radius: 5px; background: color-mix(in srgb, var(--job-color) 10%, transparent); color: var(--job-color); font-size: var(--font-size-xs); font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 .jobs-status::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .jobs-row-running, .jobs-status-running { --job-color: var(--color-accent); }
 .jobs-row-stopping, .jobs-status-stopping { --job-color: light-dark(#925b10,#e7ba70); }
@@ -3365,19 +3367,19 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-status-stopped::before { border-radius: 1px; }
 @keyframes jobs-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .jobs-status-running::before { animation: none; } }
-.jobs-detail { display: flex; flex-direction: column; gap: calc(1rem * 9 / 14); flex: 1; min-height: 290px; min-width: 0; }
+.jobs-detail { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-height: 290px; min-width: 0; }
 .jobs-detail-title { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--color-border); padding-top: var(--space-6); }
-.jobs-full-command { margin: 0; padding: calc(1rem * 9 / 14) calc(1rem * 11 / 14); font: var(--font-size-sm)/var(--line-height-normal) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-bg-surface); border-radius: 5px; max-height: 110px; overflow: auto; }
+.jobs-full-command { margin: 0; padding: var(--space-4) var(--space-5); font: var(--font-size-sm)/var(--line-height-normal) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-bg-surface); border-radius: 5px; max-height: 110px; overflow: auto; }
 .jobs-path { font-size: var(--font-size-sm); overflow-wrap: anywhere; line-height: var(--line-height-normal); }
 .jobs-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-.jobs-action { border: 1px solid var(--color-border); background: var(--color-bg-surface); color: inherit; border-radius: 5px; padding: calc(1rem * 5 / 14) var(--space-4); font-size: var(--font-size-sm); cursor: pointer; }
+.jobs-action { border: 1px solid var(--color-border); background: var(--color-bg-surface); color: inherit; border-radius: 5px; padding: var(--space-2) var(--space-4); font-size: var(--font-size-sm); cursor: pointer; }
 .jobs-action.jobs-stop { color: light-dark(#b33732,#f09d94); }
 .jobs-action:disabled { opacity: .45; cursor: default; }
 .jobs-action:hover:not(:disabled) { border-color: var(--color-accent); }
-.jobs-error { font-size: var(--font-size-sm); line-height: var(--line-height-normal); padding: var(--space-4) calc(1rem * 10 / 14); border-radius: 5px; background: light-dark(#fff0e8,#452a20); color: light-dark(#934020,#edb798); overflow-wrap: anywhere; }
+.jobs-error { font-size: var(--font-size-sm); line-height: var(--line-height-normal); padding: var(--space-4) var(--space-5); border-radius: 5px; background: light-dark(#fff0e8,#452a20); color: light-dark(#934020,#edb798); overflow-wrap: anywhere; }
 .jobs-output { flex: 1; min-height: 170px; max-height: 60vh; overflow: auto; background: light-dark(#f7f8fa,#15181e); border: 1px solid var(--color-border); border-radius: 8px; padding: 1rem; }
 .jobs-output pre { margin: 0; font: var(--font-size-sm)/var(--line-height-relaxed) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
-.jobs-empty { margin: auto; max-width: 330px; text-align: center; padding: calc(1rem * 40 / 14) var(--space-5); }
+.jobs-empty { margin: auto; max-width: 330px; text-align: center; padding: 2.75rem var(--space-5); }
 .jobs-empty h3 { font-size: var(--font-size-md); }
 .jobs-empty p { color: var(--color-text-secondary); font-size: var(--font-size-sm); line-height: var(--line-height-relaxed); }
 .jobs-panel > :not(.jobs-detail), .jobs-detail > :not(.jobs-output) { flex-shrink: 0; }
@@ -3450,7 +3452,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: calc(1rem * 5 / 14) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   cursor: pointer;
 }
 
@@ -3497,7 +3499,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .review-hunk-actions {
   position: relative;
   width: 100%;
-  height: var(--diff-hunk-height, calc(1rem * 20 / 14));
+  height: var(--diff-hunk-height, 1.5rem);
   pointer-events: none;
 }
 
@@ -3506,8 +3508,8 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   left: 0;
   top: 2px;
   box-sizing: border-box;
-  width: calc(1rem * 18 / 14);
-  height: calc(1rem * 18 / 14);
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 1px solid;
   border-radius: 3px;
@@ -3551,7 +3553,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   grid-template-columns: 14px 0fr;
   align-items: center;
   column-gap: 0;
-  height: calc(1rem * 27 / 14);
+  height: 2rem;
   padding: 0 var(--space-3);
   border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
@@ -3575,7 +3577,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .review-hunk-context-button:is(:hover, :focus-visible, [aria-expanded="true"]) {
   grid-template-columns: 14px 1fr;
   column-gap: var(--space-3);
-  padding: 0 calc(1rem * 10 / 14);
+  padding: 0 var(--space-5);
 }
 
 .review-hunk-context-button:is(:hover, :focus-visible, [aria-expanded="true"]) .review-hunk-context-label {
@@ -3603,7 +3605,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   left: 0;
   top: calc(100% + 5px);
   width: max-content;
-  min-width: min(calc(1rem * 205 / 14), var(--diff-hunk-width));
+  min-width: min(14.75rem, var(--diff-hunk-width));
   max-width: var(--diff-hunk-width);
   transform: translateX(min(0px, calc(var(--diff-hunk-width) - var(--diff-hunk-hover-left) - 2px - 100%)));
   padding: var(--space-2);
@@ -3624,7 +3626,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   left: 0;
   right: 0;
   top: -6px;
-  height: calc(1rem * 6 / 14);
+  height: 0.5rem;
 }
 
 .review-hunk-context-menu button {
@@ -3662,60 +3664,60 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 /* GitHub review threads share the existing Review shell and diff geometry. */
 .github-review-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
-.github-review-toggle { display: flex; align-items: center; gap: calc(1rem * 7 / 14); height: 2rem; padding: 0 calc(1rem * 9 / 14); border: 1px solid var(--color-separator); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
+.github-review-toggle { display: flex; align-items: center; gap: var(--space-4); height: 2rem; padding: 0 var(--space-4); border: 1px solid var(--color-separator); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
 .github-review-toggle svg { width: 1rem; height: 1rem; }
-.github-review-switch { display: inline-block; width: calc(26em / 12); height: calc(15em / 12); border-radius: 10px; background: var(--color-text-faint); padding: calc(2em / 12); box-sizing: border-box; }
-.github-review-switch::after { content: ''; display: block; width: calc(11em / 12); height: calc(11em / 12); border-radius: 50%; background: white; }
+.github-review-switch { display: inline-block; width: 2.25em; height: 1.25em; border-radius: 10px; background: var(--color-text-faint); padding: 0.125em; box-sizing: border-box; }
+.github-review-switch::after { content: ''; display: block; width: 1em; height: 1em; border-radius: 50%; background: white; }
 .github-review-switch.on { background: #0969da; }
-.github-review-switch.on::after { margin-left: calc(11em / 12); }
-.github-review-refresh { font-size: calc(1rem * 19 / 14); padding: 0 var(--space-2); cursor: pointer; }
-.github-review-status { font-size: var(--font-size-xs); padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14); border-top: 1px solid var(--color-separator); color: var(--color-text-muted); white-space: normal; }
+.github-review-switch.on::after { margin-left: 1em; }
+.github-review-refresh { font-size: var(--font-size-title); padding: 0 var(--space-2); cursor: pointer; }
+.github-review-status { font-size: var(--font-size-xs); padding: var(--space-2) var(--space-5); border-top: 1px solid var(--color-separator); color: var(--color-text-muted); white-space: normal; }
 .github-review-status.hidden { display: none; }
 .github-review-error { color: var(--color-danger, #cf222e); white-space: pre-wrap; overflow-wrap: anywhere; }
 .github-review-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); padding: var(--space-2) 0; }
 .github-review-recovery > span { flex: 1 1 260px; }
-.github-review-update { flex: none; padding: var(--space-2) calc(1rem * 10 / 14); border: 1px solid var(--color-separator); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-update { flex: none; padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-update:disabled { opacity: .5; cursor: default; }
 .github-review-unplaced { margin-top: var(--space-2); }
 .github-review-unplaced summary { cursor: pointer; }
 .github-review-unplaced-body { max-height: 36vh; overflow: auto; padding: var(--space-4) 0; }
 .github-review-inline-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 12; }
 .semantic-entry-editor-parent { position: relative; }
-.github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: var(--space-3) 0 calc(1rem * 10 / 14); }
+.github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: var(--space-3) 0 var(--space-5); }
 .github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
 .github-review-thread + .github-review-thread { margin-top: var(--space-4); }
 .github-review-thread-location { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-text-muted); font-size: var(--font-size-caption); background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-separator); }
 .github-review-thread.resolved .github-review-thread-location { border-bottom: 0; }
 .github-review-resolved-toggle { margin-left: auto; cursor: pointer; color: var(--color-text-muted); }
 .github-review-comment + .github-review-comment { border-top: 1px solid var(--color-separator); }
-.github-review-comment-header { display: flex; align-items: center; gap: var(--space-4); padding: calc(1rem * 10 / 14) var(--space-5) var(--space-2); min-width: 0; }
+.github-review-comment-header { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5) var(--space-5) var(--space-2); min-width: 0; }
 .github-review-avatar { width: 26px; height: 26px; border-radius: 50%; flex: 0 0 26px; }
 .github-review-avatar-fallback { display: flex; align-items: center; justify-content: center; background: var(--color-bg-subtle); }
 .github-review-avatar-fallback svg { width: 16px; height: 16px; }
 .github-review-time { font-size: var(--font-size-xs); color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.github-review-delete { margin-left: auto; color: var(--color-text-muted); cursor: pointer; padding: calc(1rem * 3 / 14); }
+.github-review-delete { margin-left: auto; color: var(--color-text-muted); cursor: pointer; padding: var(--space-2); }
 .github-review-delete svg { width: 14px; height: 14px; }
-.github-review-markdown { padding: var(--space-2) var(--space-5) var(--space-5) calc(1rem * 46 / 14); overflow-wrap: anywhere; font-size: var(--font-size-sm); }
+.github-review-markdown { padding: var(--space-2) var(--space-5) var(--space-5) 3.25rem; overflow-wrap: anywhere; font-size: var(--font-size-sm); }
 .github-review-markdown > :first-child { margin-top: 0; }
 .github-review-markdown > :last-child { margin-bottom: 0; }
 .github-review-markdown pre { max-width: 100%; overflow: auto; padding: var(--space-4); background: var(--color-bg-subtle); }
 .github-review-markdown img { max-width: 100%; }
-.github-review-thread-footer { padding: calc(1rem * 10 / 14) var(--space-5); border-top: 1px solid var(--color-separator); background: var(--color-bg-subtle); }
+.github-review-thread-footer { padding: var(--space-5) var(--space-5); border-top: 1px solid var(--color-separator); background: var(--color-bg-subtle); }
 .github-review-composer { padding: var(--space-5); }
 .github-review-thread-footer .github-review-composer { padding: 0; }
-.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: calc(1rem * 34 / 14); resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; font: inherit; line-height: 1.5; }
+.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; font: inherit; line-height: 1.5; }
 .github-review-input:focus { border-color: #0969da; outline: 1px solid #0969da; outline-offset: -1px; }
 .github-review-composer-actions { display: flex; justify-content: flex-end; gap: var(--space-4); padding-top: var(--space-5); }
-.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: calc(1rem * 5 / 14) var(--space-5); border: 1px solid var(--color-separator); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-composer-actions .github-review-send { color: white; background: #1f883d; border-color: #1a7f37; font-weight: 600; }
 .github-review-thread button:disabled { opacity: .5; cursor: default; }
 .github-review-resolve { margin-top: var(--space-5); }
 .github-review-badge { padding: 0 var(--space-3); border: 1px solid var(--color-separator); border-radius: 9px; }
 .github-review-delete-confirm { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
 .github-review-delete-confirm .danger { color: #cf222e; }
-.github-review-file-count { display: inline-flex; align-items: center; gap: calc(1rem * 3 / 14); color: var(--color-text-muted); font-size: var(--font-size-caption); padding-left: var(--space-2); }
+.github-review-file-count { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: var(--font-size-caption); padding-left: var(--space-2); }
 .github-review-file-count svg { width: 13px; height: 13px; }
 
-.browser-annotation { flex: 0 0 auto; padding: var(--space-5); border-bottom: 1px solid var(--color-separator); display: flex; flex-direction: column; gap: calc(1rem * 10 / 14); font-size: var(--font-size-sm); }
+.browser-annotation { flex: 0 0 auto; padding: var(--space-5); border-bottom: 1px solid var(--color-separator); display: flex; flex-direction: column; gap: var(--space-5); font-size: var(--font-size-sm); }
 .browser-annotation.hidden { display: none; }
-.browser-annotation button { padding: calc(1rem * 5 / 14) calc(1rem * 10 / 14); border: 1px solid var(--color-separator); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.browser-annotation button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }

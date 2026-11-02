@@ -289,7 +289,7 @@ html.is-resizing .sidebar-resize-handle {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: calc(1rem * 10 / 14);
+  gap: var(--space-5);
   min-height: 100%;
   color: var(--color-text-secondary);
 }
@@ -314,8 +314,8 @@ html.is-resizing .sidebar-resize-handle {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: calc(1rem * 20 / 14);
-  height: calc(1rem * 20 / 14);
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -434,7 +434,7 @@ html.is-resizing .sidebar-resize-handle {
   text-transform: none;
 }
 .sidebar-group:not(:first-child) > .section-heading {
-  margin-top: calc(1rem * 10 / 14);
+  margin-top: var(--space-5);
 }
 .section-disclosure {
   display: flex;
@@ -582,12 +582,12 @@ html.is-resizing .sidebar-resize-handle {
   --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
-  gap: calc(1rem * 5 / 14);
+  gap: var(--space-2);
   box-sizing: border-box;
   /* Same box as `.composer-model`, so the toolbar chips sit at one height. */
-  height: calc(1rem * 30 / 14);
+  height: 2.25rem;
   margin: 0;
-  padding: 0 calc(1rem * 9 / 14);
+  padding: 0 var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-control-surface);
@@ -617,7 +617,7 @@ button.composer-worktree:hover {
 }
 .project-show-more {
   width: 100%;
-  min-height: calc(26em / 14);
+  min-height: 2em;
   padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--radius-sm);
@@ -632,7 +632,7 @@ button.composer-worktree:hover {
    row indents its label 8 + 14 + 6 = 28px; a project's nested rows add their
    own 16px pad on top, landing at 36px. */
 .project-show-more {
-  padding-left: calc(1rem * 36 / 14);
+  padding-left: 2.5rem;
 }
 .project-show-more:hover {
   background: var(--color-bg-subtle);
@@ -745,7 +745,7 @@ button.row-twisty:hover {
   color: var(--color-text-muted);
 }
 .conversation-row.subrun.nested {
-  padding-left: calc(1rem * 36 / 14);
+  padding-left: 2.5rem;
 }
 .conversation-row.subrun.active {
   color: var(--color-accent-strong);
@@ -777,8 +777,8 @@ button.row-twisty:hover {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
-  min-height: calc(1rem * 62 / 14);
-  padding: calc(1rem * 10 / 14) 1rem calc(1rem * 10 / 14) var(--space-6);
+  min-height: 4.5rem;
+  padding: var(--space-5) 1rem var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-border-subtle);
   background: color-mix(
     in srgb,
@@ -790,7 +790,7 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: calc(1rem * 11 / 14);
+  gap: var(--space-5);
 }
 .picker-header-icon {
   --icon-size: var(--icon-lg);
@@ -813,7 +813,7 @@ button.row-twisty:hover {
   line-height: 1.3;
 }
 .picker-subtitle {
-  margin-top: calc(1rem * 1 / 14);
+  margin-top: var(--space-1);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   line-height: 1.35;
@@ -843,7 +843,7 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: calc(1rem * 9 / 14) var(--space-5);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-subtle);
 }
@@ -853,9 +853,9 @@ button.row-twisty:hover {
   align-items: center;
   min-width: 0;
   overflow-x: auto;
-  gap: calc(1rem * 1 / 14);
-  min-height: calc(1rem * 32 / 14);
-  padding: var(--space-1) calc(1rem * 5 / 14);
+  gap: var(--space-1);
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -867,12 +867,12 @@ button.row-twisty:hover {
 }
 .picker-path-editor {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) calc(1rem * 26 / 14);
+  grid-template-columns: 22px minmax(0, 1fr) 2rem;
   flex: 1 1 auto;
   align-items: center;
   min-width: 0;
-  min-height: calc(1rem * 32 / 14);
-  padding: var(--space-1) calc(1rem * 3 / 14) var(--space-1) calc(1rem * 7 / 14);
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border: 1px solid var(--color-focus-ring);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -887,8 +887,8 @@ button.row-twisty:hover {
 }
 .picker-path-editor input {
   width: 100%;
-  height: calc(1rem * 26 / 14);
-  padding: 0 calc(1rem * 5 / 14);
+  height: 2rem;
+  padding: 0 var(--space-2);
   border: 0;
   background: transparent;
   font-size: var(--font-size-sm);
@@ -897,8 +897,8 @@ button.row-twisty:hover {
   --icon-size: var(--icon-xs);
   display: grid;
   place-items: center;
-  width: calc(1rem * 24 / 14);
-  height: calc(1rem * 24 / 14);
+  width: 1.75rem;
+  height: 1.75rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -916,7 +916,7 @@ button.row-twisty:hover {
 }
 .picker-crumb {
   flex: none;
-  padding: calc(1rem * 3 / 14) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -949,8 +949,8 @@ button.row-twisty:hover {
   flex: none;
   align-items: center;
   gap: var(--space-3);
-  min-height: calc(1rem * 32 / 14);
-  padding: 0 calc(1rem * 9 / 14);
+  min-height: 2.5rem;
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -976,7 +976,7 @@ button.row-twisty:hover {
   background: var(--color-bg-surface);
 }
 .picker-list {
-  flex: 1 1 calc(1rem * 320 / 14);
+  flex: 1 1 23rem;
   min-height: 0;
   overflow-y: auto;
   border: 1px solid var(--color-border);
@@ -991,8 +991,8 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: calc(1rem * 30 / 14);
-  padding: 0 calc(1rem * 11 / 14) 0 calc(1rem * 42 / 14);
+  min-height: 2.25rem;
+  padding: 0 var(--space-5) 0 3rem;
   border-bottom: 1px solid var(--color-border);
   background: color-mix(
     in srgb,
@@ -1008,16 +1008,16 @@ button.row-twisty:hover {
   font-weight: var(--font-weight-regular);
 }
 .picker-list-rows {
-  min-height: calc(100% - calc(1rem * 30 / 14));
+  min-height: calc(100% - 2.25rem);
 }
 .picker-row {
   --icon-size: var(--icon-md);
   display: flex;
   align-items: center;
-  gap: calc(1rem * 9 / 14);
+  gap: var(--space-4);
   width: 100%;
-  min-height: calc(1rem * 38 / 14);
-  padding: 0 calc(1rem * 10 / 14) 0 calc(1rem * 11 / 14);
+  min-height: 2.75rem;
+  padding: 0 var(--space-5) 0 var(--space-5);
   border: 0;
   border-bottom: 1px solid var(--color-border-subtle);
   border-radius: 0;
@@ -1063,7 +1063,7 @@ button.row-twisty:hover {
   display: grid;
   place-items: center;
   flex: none;
-  width: calc(1rem * 18 / 14);
+  width: 1.5rem;
   color: var(--color-text-muted);
   opacity: 0;
   transform: rotate(-90deg);
@@ -1081,8 +1081,8 @@ button.row-twisty:hover {
   grid-template-columns: 28px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-4);
-  min-height: calc(1rem * 46 / 14);
-  padding: calc(1rem * 5 / 14) var(--space-4) calc(1rem * 5 / 14) calc(1rem * 11 / 14);
+  min-height: 3.5rem;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-5);
   border-bottom: 1px solid var(--color-accent-border);
   background: var(--color-accent-soft);
 }
@@ -1095,14 +1095,14 @@ button.row-twisty:hover {
 }
 .picker-create-row input {
   width: 100%;
-  height: calc(1rem * 34 / 14);
-  padding: 0 calc(1rem * 9 / 14);
+  height: 2.5rem;
+  padding: 0 var(--space-4);
   background: var(--color-bg-surface);
 }
 .picker-create-cancel,
 .picker-create-submit {
-  min-height: calc(1rem * 32 / 14);
-  padding: 0 calc(1rem * 9 / 14);
+  min-height: 2.5rem;
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -1129,7 +1129,7 @@ button.row-twisty:hover {
   place-items: center;
   align-content: center;
   min-height: 100%;
-  padding: calc(1rem * 32 / 14);
+  padding: 2.25rem;
   text-align: center;
 }
 .picker-empty-title {
@@ -1149,7 +1149,7 @@ button.row-twisty:hover {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
-  min-height: calc(1rem * 64 / 14);
+  min-height: 4.75rem;
   padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-subtle);
@@ -1159,7 +1159,7 @@ button.row-twisty:hover {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: calc(1rem * 9 / 14);
+  gap: var(--space-4);
 }
 .picker-current-icon {
   display: grid;
@@ -1204,11 +1204,11 @@ button.row-twisty:hover {
 
 @media (max-width: 600px) {
   .modal.picker-modal {
-    width: calc(100vw - calc(1rem * 24 / 14));
-    height: calc(100vh - calc(1rem * 24 / 14));
+    width: calc(100vw - 1.75rem);
+    height: calc(100vh - 1.75rem);
   }
   .picker-header {
-    padding: calc(1rem * 9 / 14) var(--space-5);
+    padding: var(--space-4) var(--space-5);
   }
   .picker-location-bar {
     flex-wrap: wrap;
@@ -1223,7 +1223,7 @@ button.row-twisty:hover {
     margin-left: auto;
   }
   .picker-list {
-    flex-basis: min(42vh, calc(1rem * 320 / 14));
+    flex-basis: min(42vh, 23rem);
   }
   .picker-create-row {
     grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr);
@@ -1323,10 +1323,10 @@ button.row-twisty:hover {
   align-items: center;
   gap: var(--space-4);
   box-sizing: border-box;
-  height: calc(1rem * 26 / 14);
-  margin: calc(1rem * 9 / 14) calc(1rem * 10 / 14) var(--space-5);
-  width: calc(100% - calc(1rem * 20 / 14));
-  padding: 0 calc(1rem * 9 / 14);
+  height: 2rem;
+  margin: var(--space-4) var(--space-5) var(--space-5);
+  width: calc(100% - 2 * var(--space-5));
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-separator);
   border-radius: 7px;
   background: var(--color-bg-surface);
@@ -1350,21 +1350,21 @@ button.row-twisty:hover {
   font: inherit;
 }
 .sidebar-search input::placeholder { color: var(--color-text-muted); }
-.sidebar-search-clear { --icon-size: var(--icon-sm); width: calc(1rem * 18 / 14); height: calc(1rem * 18 / 14); }
+.sidebar-search-clear { --icon-size: var(--icon-sm); width: 1.5rem; height: 1.5rem; }
 .conversation-row.search-selected { background: var(--color-bg-subtle); }
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
 
 /* Host identity and actions share the right edge without moving the title. */
 .workspace-row {
   gap: var(--space-4);
-  min-height: calc(1rem * 32 / 14);
+  min-height: 2.5rem;
 }
 .workspace-trailing {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   flex: 0 1 auto;
-  min-width: calc(1rem * 44 / 14);
+  min-width: 3.25rem;
   max-width: 42%;
 }
 .workspace-host,
@@ -1375,7 +1375,7 @@ button.row-twisty:hover {
 .workspace-host {
   display: inline-flex;
   align-items: center;
-  gap: calc(1rem * 7 / 14);
+  gap: var(--space-4);
   min-width: 0;
   max-width: 100%;
   color: var(--color-text-muted);

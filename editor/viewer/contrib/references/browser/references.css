@@ -1,6 +1,7 @@
 /* Shared Peek Definition/References shell and reference-results tree. */
 
 .moonbit-viewer-references-peek {
+  font-size: var(--ui-font-size, 13px);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -32,9 +33,9 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  min-height: calc(var(--ui-font-size, 13px) * 28 / 13);
+  min-height: 2.25em;
   box-sizing: border-box;
-  padding-right: calc(var(--ui-font-size, 13px) * 2 / 13);
+  padding-right: 0.25em;
   color: var(--vscode-peekViewTitleLabel-foreground, inherit);
   background: var(
     --vscode-peekViewTitle-background,
@@ -47,7 +48,7 @@
   flex: 1;
   align-items: baseline;
   min-width: 0;
-  margin-left: calc(var(--ui-font-size, 13px) * 20 / 13);
+  margin-left: 1.5em;
   overflow: hidden;
   font-size: var(--ui-font-size, 13px);
   white-space: nowrap;
@@ -84,14 +85,14 @@
 }
 
 .moonbit-viewer-references-peek-close {
-  width: calc(var(--ui-font-size, 13px) * 24 / 13);
-  height: calc(var(--ui-font-size, 13px) * 24 / 13);
+  width: 1.25em;
+  height: 1.25em;
   padding: 0;
   border: 0;
   color: inherit;
   background: transparent;
   font: inherit;
-  font-size: calc(var(--ui-font-size, 13px) * 20 / 13);
+  font-size: 1.5em;
   line-height: 1;
   cursor: pointer;
 }
@@ -146,16 +147,16 @@
   display: flex;
   align-items: center;
   width: 100%;
-  height: calc(var(--ui-font-size, 13px) * 23 / 13);
+  height: 2em;
   box-sizing: border-box;
   overflow: hidden;
-  padding: 0 calc(var(--ui-font-size, 13px) * 8 / 13);
+  padding: 0 0.75em;
   border: 0;
   color: inherit;
   background: transparent;
   font: inherit;
-  font-size: calc(var(--ui-font-size, 13px) * 12 / 13);
-  line-height: calc(23 / 12);
+  font-size: 0.9em;
+  line-height: 1.9;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -184,8 +185,8 @@
 
 .moonbit-viewer-reference-results-twistie {
   flex: 0 0 auto;
-  width: calc(var(--ui-font-size, 13px) * 16 / 13);
-  margin-right: calc(var(--ui-font-size, 13px) * 2 / 13);
+  width: 1.5em;
+  margin-right: 0.25em;
   color: var(--vscode-icon-foreground, inherit);
   text-align: center;
   transform-origin: center;
@@ -220,9 +221,9 @@
 
 .moonbit-viewer-reference-results-file-count {
   flex: 0 0 auto;
-  min-width: calc(var(--ui-font-size, 13px) * 18 / 13);
+  min-width: 1.5em;
   margin-left: auto;
-  padding: 0 calc(var(--ui-font-size, 13px) * 5 / 13);
+  padding: 0 0.5em;
   border-radius: 9px;
   color: var(--vscode-badge-foreground, #fff);
   background: var(--vscode-badge-background, #4d4d4d);
@@ -231,7 +232,7 @@
 }
 
 .moonbit-viewer-reference-results-reference {
-  padding-left: calc(var(--ui-font-size, 13px) * 26 / 13);
+  padding-left: 2.25em;
 }
 
 .moonbit-viewer-reference-results-snippet {
@@ -317,14 +318,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: calc(var(--ui-font-size, 13px) * 12 / 13);
+  padding: 1em;
   box-sizing: border-box;
   color: var(--vscode-descriptionForeground, rgba(180, 180, 180, 0.9));
   background: var(
     --vscode-peekViewEditor-background,
     var(--vscode-editor-background)
   );
-  font-size: calc(var(--ui-font-size, 13px) * 12 / 13);
+  font-size: 0.9em;
   text-align: center;
 }
 
@@ -353,5 +354,5 @@
 }
 
 .moonbit-viewer-reference-results-test-children {
-  padding-left: calc(var(--ui-font-size, 13px) * 12 / 13);
+  padding-left: 1em;
 }

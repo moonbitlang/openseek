@@ -9,20 +9,20 @@
 
 .composer-context:not(:empty) {
   gap: var(--space-4);
-  margin-bottom: calc(1rem * 10 / 14);
+  margin-bottom: var(--space-5);
 }
 
 .composer-context .composer-context-row {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: calc(1rem * 10 / 14);
+  gap: var(--space-5);
   width: 100%;
   min-width: 0;
-  min-height: calc(1rem * 42 / 14);
+  min-height: 3rem;
   max-width: none;
   margin: 0;
-  padding: calc(1rem * 10 / 14) 1rem;
+  padding: var(--space-5) 1rem;
   border: 0;
   border-radius: var(--radius-lg);
   background: var(--color-bg-subtle);
@@ -94,7 +94,7 @@
   min-height: 2rem;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
-  padding: calc(1rem * 3 / 14) calc(1rem * 9 / 14);
+  padding: var(--space-2) var(--space-4);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -138,9 +138,9 @@
 .composer-context-summary {
   display: flex;
   align-items: center;
-  gap: calc(1rem * 10 / 14);
-  min-height: calc(1rem * 42 / 14);
-  padding: calc(1rem * 10 / 14) 1rem;
+  gap: var(--space-5);
+  min-height: 3rem;
+  padding: var(--space-5) 1rem;
   border-radius: var(--radius-lg);
   list-style: none;
   cursor: pointer;
@@ -153,8 +153,8 @@
 .composer-context-summary::after {
   content: "";
   flex: none;
-  width: calc(1rem * 6 / 14);
-  height: calc(1rem * 6 / 14);
+  width: 0.5rem;
+  height: 0.5rem;
   margin-left: auto;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
@@ -183,7 +183,7 @@
 .composer-context-detail.followup-content {
   display: block;
   margin: 0 1rem 1rem;
-  padding: var(--space-4) calc(1rem * 10 / 14);
+  padding: var(--space-4) var(--space-5);
   max-height: 220px;
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -324,7 +324,7 @@
   align-items: flex-start;
   gap: var(--space-4);
   width: 100%;
-  padding: calc(1rem * 5 / 14) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   color: inherit;
   background: transparent;
   border: 1px solid transparent;
@@ -336,7 +336,7 @@
 
 .user-question-option-text {
   min-width: 0;
-  padding-top: calc(1rem * 1 / 14);
+  padding-top: var(--space-1);
   font-weight: 500;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -346,9 +346,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: calc(1rem * 22 / 14);
-  min-height: calc(1rem * 22 / 14);
-  padding: 0 calc(1rem * 3 / 14);
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0 var(--space-2);
   box-sizing: border-box;
   flex-shrink: 0;
   color: var(--color-text-muted);
@@ -374,7 +374,7 @@
 
 .user-question-response {
   gap: var(--space-5);
-  margin-top: calc(1rem * 10 / 14);
+  margin-top: var(--space-5);
 }
 
 .user-question-input {
@@ -394,7 +394,7 @@
   padding: var(--space-3) 0;
   resize: none;
   field-sizing: content;
-  min-height: calc(1rem * 32 / 14);
+  min-height: 2.5rem;
   max-height: 120px;
   background: transparent;
   border: 0;

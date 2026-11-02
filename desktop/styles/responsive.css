@@ -166,11 +166,11 @@
   /* Account entry uses the same small-screen layout in ordinary browsers and
      embedded hosts. Keep shell toolbar sizes shared. */
   .portal-inner {
-    padding: var(--space-7) calc(1rem * 20 / 14);
+    padding: var(--space-7) var(--space-7);
   }
   .portal-card {
     margin-top: var(--space-7);
-    padding: calc(1rem * 20 / 14);
+    padding: var(--space-7);
     align-items: stretch;
   }
   .portal-button-link {
@@ -193,7 +193,7 @@
   /* Portal: the header wraps instead of overflowing. */
   .portal-header {
     flex-wrap: wrap;
-    gap: calc(1rem * 10 / 14);
+    gap: var(--space-5);
   }
 }
 
