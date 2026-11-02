@@ -106,7 +106,6 @@ pub(all) enum SessionItem {
   Summary(SessionSummary)
   Terminal(TurnTerminal)
 } derive(Eq, @debug.Debug)
-pub fn SessionItem::has_image_refs(Self) -> Bool
 pub async fn SessionItem::map_content(Self, async (@openseek_protocol.Content) -> @openseek_protocol.Content) -> Self
 pub impl @json.FromJson for SessionItem
 

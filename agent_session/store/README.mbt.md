@@ -20,16 +20,15 @@ Each session lives under:
 ```
 
 `openseek_session-<session-id>.jsonl` contains the event log: its first
-line is a header record (`{"version":1,"id":...,"system_prompt":...}` for text
-logs, version 2 when images use attachment references) and
+line is a header record (`{"version":1,"id":...,"system_prompt":...}`) and
 every following line is one typed `SessionEvent`. Events are append-only.
 Loading replays the event lines into an immutable `agent_session.Session`.
 Message `content` is written as a string for one text part, and as an ordered
 array for all other content, including images. Loading accepts both forms,
 including files mixing strings and arrays.
-Normal append leaves existing complete lines unchanged, except the first
-attachment reference upgrades a version-1 header atomically. Full snapshot writes
-and torn-tail repair use the same string-or-array encoding.
+Normal append leaves existing complete lines unchanged, including when the
+first image reference is added. Full snapshot writes and torn-tail repair use
+the same version-1 header and string-or-array encoding.
 The file name carries the session id so files collected out of their
 directories — for cross-session visualization or comparison — stay
 self-naming.

@@ -40,16 +40,6 @@ pub async fn Session::map_content(
 }
 
 ///|
-/// Whether the item requires the attachment-aware session format.
-pub fn SessionItem::has_image_refs(self : SessionItem) -> Bool {
-  match self {
-    User(message) => message.content.0.any(part => part is ImageRef(_))
-    Tool(result) => result.content.0.any(part => part is ImageRef(_))
-    _ => false
-  }
-}
-
-///|
 /// Transform event content while retaining its original sequence and timestamp.
 pub async fn SessionEvent::map_content(
   self : SessionEvent,

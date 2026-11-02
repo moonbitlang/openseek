@@ -132,12 +132,7 @@ fn header_line(session : @agent_session.Session) -> String {
     id: session.id().value(),
     system_prompt: session.system_prompt(),
   }
-  let json = Json(header)
-  if session.events().iter().any(event => event.item().has_image_refs()) &&
-    json is Object(fields) {
-    fields["version"] = Json(2)
-  }
-  "\{json.stringify()}\n"
+  "\{Json(header).stringify()}\n"
 }
 
 ///|
@@ -213,7 +208,7 @@ fn parse_session_file(
     Header(header) => header
     UnsupportedVersion(version) =>
       fail(
-        "session file for \{requested_id.value()} uses unsupported session file version \{version}; this build reads versions 1 and 2",
+        "session file for \{requested_id.value()} uses unsupported session file version \{version}; this build reads version 1",
       )
     NotHeader =>
       fail(
@@ -363,19 +358,7 @@ async fn persist_event(
   repair_tail~ : Bool,
 ) -> Unit {
   let path = store.session_file_path(session.id())
-  let upgrade = if event.item().has_image_refs() && @fs.exists(path) {
-    let file = @fs.open(path, mode=ReadOnly)
-    defer file.close()
-    let first = file.read_until("\n")
-    if first is Some(first) {
-      @json.parse(first) is { "version": 1, .. }
-    } else {
-      true
-    }
-  } else {
-    false
-  }
-  if !repair_tail && !upgrade && @fs.exists(path) {
+  if !repair_tail && @fs.exists(path) {
     // `sync=Data` (fdatasync) is the durability policy for event appends: a
     // returned append survives an OS crash, not just a process crash. It is
     // also the `write_file` default today — stated explicitly so the policy

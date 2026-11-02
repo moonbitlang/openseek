@@ -48,8 +48,9 @@ across sessions and worktrees. Hash, size and MIME are verified on read.
 Legacy inline base64 records remain readable; migrate them explicitly with
 `openseek sessions migrate-images <id> --dir <workspace>` to reduce existing
 logs. Normal history reads do not rewrite files. Migration preserves sequences
-and timestamps. Logs containing references use header version 2; readers
-accept both versions 1 and 2. Single text content still serializes as a string.
+and timestamps. Session headers remain version 1 for both inline images and
+attachment references; the content decoder distinguishes them by the presence
+of `attachment_id`. Single text content still serializes as a string.
 
 `Session::chat_messages()` preserves order and projects references as internal
 `openseek-attachment:` addresses. `deepseek/client` resolves those addresses
