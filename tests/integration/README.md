@@ -45,6 +45,18 @@ permission question. The child's `allow` deletes the file and its `deny`
 keeps it; either way it saw the user's message and its transcript records the
 verdict.
 
+# File artifact scripts
+
+The bundled artifact scripts and example projects run through the real mbtx tool
+in an isolated scratch directory:
+
+```sh
+moon test tests/integration/artifact_generation/scripts --target native
+moon test tests/integration/artifact_generation/scripts --target wasm
+```
+
+Native and Wasm CI include this suite.
+
 # Interactive answers
 
 The offline test
