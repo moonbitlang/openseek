@@ -6,6 +6,7 @@ async test "file share capture preserves bytes and has no text preview limit" {
   let original = b"\x00\xff\xfe\r\noriginal\x00"
   @fs.write_file(path, original)
   let source : @protocol.ReadFilePayload = {
+    max_bytes: None,
     root: @pathx.Path(root).to_absolute().unwrap().to_uri_path(),
     path: "报告.bin",
   }

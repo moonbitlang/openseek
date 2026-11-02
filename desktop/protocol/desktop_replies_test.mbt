@@ -369,6 +369,7 @@ test "file reads use one absolute path and may return image bytes" {
   assert_eq(request.root, None)
   @debug.assert_eq(request.to_json(), { "path": "/work/readme.md" })
   let relative : @protocol.ReadFilePayload = {
+    max_bytes: None,
     path: "../image.png",
     root: Some("/work/project"),
   }
@@ -2067,4 +2068,34 @@ test "Moon IDE location classification round trips and rejects malformed fields"
       }),
     )
   }
+}
+
+///|
+test "file read limits are optional and round trip only when requested" {
+  for
+    payload in [
+      ({ "path": "/work/page.html" } : Json),
+      { "path": "/work/page.html", "max_bytes": null },
+    ] {
+    let request : @protocol.ReadFilePayload = @json.from_json(payload)
+    assert_eq(request.max_bytes, None)
+    @debug.assert_eq(request.to_json(), { "path": "/work/page.html" })
+  }
+  let request : @protocol.ReadFilePayload = @json.from_json({
+    "path": "page.html",
+    "root": "/work",
+    "max_bytes": Json(8 * 1024 * 1024),
+  })
+  assert_eq(request.max_bytes, Some(8 * 1024 * 1024))
+  @debug.assert_eq(@json.from_json(request.to_json()), request)
+  let malformed = try {
+    let _ : @protocol.ReadFilePayload = @json.from_json({
+      "path": "page.html",
+      "max_bytes": "large",
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(malformed)
 }

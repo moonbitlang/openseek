@@ -12,7 +12,7 @@ test("package checked-in docs and workflows; edits change the resource snapshot"
     const source = fileURLToPath(new URL("../../share/", import.meta.url));
     const staged = join(temp, "share");
     const hash = await stageResources(source, staged);
-    for (const path of ["doc/moonbit/index.md", "doc/moonbit.commit", "workflow/read.mbtx", "workflow/check.mbtx", "workflow/check-json.mbtx"]) {
+    for (const path of ["doc/moonbit/index.md", "doc/moonbit.commit", "workflow/read.mbtx", "workflow/check.mbtx", "workflow/check-json.mbtx", "artifact/README.md", "artifact/build.mbtx"]) {
       assert.deepEqual(await readFile(join(staged, path)), await readFile(join(source, path)));
     }
     assert.equal(hash, await stageResources(staged, join(temp, "copy")));

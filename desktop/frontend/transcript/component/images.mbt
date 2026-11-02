@@ -166,11 +166,11 @@ test "image read targets preserve absolute or rooted-relative paths" {
   }
   assert_eq(
     owner.read_target("../image.png"),
-    Some({ path: "../image.png", root: Some("/work/project"), }),
+    Some({ max_bytes: None, path: "../image.png", root: Some("/work/project"), }),
   )
   assert_eq(
     owner.read_target("/Users/me/image.png"),
-    Some({ path: "/Users/me/image.png", root: None, }),
+    Some({ max_bytes: None, path: "/Users/me/image.png", root: None, }),
   )
   let unresolved : ImageOwner = { ..owner, root: None, }
   assert_eq(unresolved.read_target("../image.png"), None)
@@ -201,13 +201,13 @@ fn ImageOwner::read_target(
 ) -> @protocol.ReadFilePayload? {
   guard self.channel is Some(channel) else { return None }
   if @resource.of_path(channel, path) is Some(target) {
-    return Some({ path: target.path, root: None, })
+    return Some({ max_bytes: None, path: target.path, root: None, })
   }
   guard self.root is Some(root) &&
     @resource.path_for(root, channel) is Some(root_path) else {
     return None
   }
-  Some({ path, root: Some(root_path), })
+  Some({ max_bytes: None, path, root: Some(root_path), })
 }
 
 ///|

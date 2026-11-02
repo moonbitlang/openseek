@@ -762,6 +762,7 @@ fn MinimalContent::render(
   self : MinimalContent,
   actions : Actions,
   active~ : Bool = false,
+  artifact_view? : (String, String) -> @html.Html,
 ) -> @html.Html {
   match self {
     Messages(parts, active_group~) => {
@@ -772,6 +773,7 @@ fn MinimalContent::render(
         children[part.identity] = part.content.render(
           locale~,
           actions,
+          artifact_view?,
           active=active_group is Some(identity) && identity == part.identity,
         )
       }
@@ -789,6 +791,7 @@ fn MinimalContent::render(
       ])
     Prose(text~, assistant~, finished~, live~, completed_at~, fork~) =>
       assistant_message_view(
+        artifact_view?,
         locale~,
         text,
         path => (actions.open)(path),
@@ -852,7 +855,11 @@ fn MinimalContent::render(
       } else {
         let children : Map[String, @html.Html] = Map([])
         for part in parts {
-          children[part.identity] = part.content.render(locale~, actions)
+          children[part.identity] = part.content.render(
+            locale~,
+            actions,
+            artifact_view?,
+          )
         }
         @html.div(class="minimal-process-body minimal-rows", children)
       }

@@ -5,6 +5,8 @@ fn answer_citations(source : String) -> Array[Citation] {
     locale: English,
     defs: doc.defs,
     open_file: None,
+    artifact_view: None,
+    defer_artifacts: false,
     citations: [],
     in_sources: false,
   }

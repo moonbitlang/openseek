@@ -5915,18 +5915,24 @@ fn update_msg(
     RevealFile(path) => {
       guard model.is_desktop &&
         model.active_checkout() is Some(active) &&
-        active.owner.channel is Local &&
-        active.placement is Some(placement) &&
-        placement.checkout_root() is Some(cwd) else {
+        active.owner.channel is Local else {
         return (@cmd.none, model)
       }
+      let target = match model.session_file_target(path) {
+        Some(target) => Some(target)
+        None =>
+          active.placement
+          .bind(placement => placement.checkout_root())
+          .map(root => (root, path))
+      }
+      guard target is Some((cwd, relative)) else { return (@cmd.none, model) }
       (
         reveal_file(
           dispatch,
           active.owner.channel,
           active.owner.session,
           cwd,
-          path,
+          relative,
         ),
         model,
       )

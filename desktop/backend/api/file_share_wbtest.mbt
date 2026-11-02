@@ -11,7 +11,7 @@ async test "file share RPC checks account authority before capturing workspace f
       .find_first(endpoint => endpoint.name() == "fs.share_file")
       .unwrap()
     let payload : @protocol.FileSharePayload = {
-      source: { root: None, path: "not-a-file", },
+      source: { root: None, path: "not-a-file", max_bytes: None, },
       idempotency_key: "a".repeat(64),
       authorization: LocalAccount(user_id~),
     }

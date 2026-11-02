@@ -2719,6 +2719,7 @@ pub impl @json.FromJson for ReadDirReply
 pub(all) struct ReadFilePayload {
   path : String
   root : String?
+  max_bytes : Int32?
 } derive(Eq, @debug.Debug)
 pub fn ReadFilePayload::equal(Self, Self) -> Bool
 pub fn ReadFilePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

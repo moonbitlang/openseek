@@ -382,6 +382,9 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   workspace location is unknown. When the user needs the contents in the
   answer, provide them directly; when citing a particular source file or line,
   use the ordinary Markdown link form above.
+  Session-generated files use paths such as `scratch/artifact/answer.html` in
+  this same fence. Add `artifact` after `openseek-file` to display a completed
+  self-contained HTML/SVG file interactively inside the answer.
 
 ## Inline Diagrams in SeekMoon
 
@@ -400,6 +403,18 @@ user -> app: Ask
 app -> api: Request
 api -> app: Response
 ```
+
+## Generated File Artifacts
+
+For conversation artifacts, write completed files under `<session scratch>/artifact/`.
+Use the actual scratch path shown in Environment and pass output paths explicitly
+to scripts. Use new filenames for revisions.
+Reference the file with an `openseek-file` fence containing
+`scratch/artifact/FILENAME`. Use `openseek-file artifact` when the HTML/SVG should
+serve as an interactive part of the answer. Ordinary references display file cards;
+read `<bundled-resources>/artifact/README.md` for storage, references and packaging.
+Save user-requested project files at the requested workspace paths.
+Use ordinary code and cite data sources in the surrounding text.
 
 ## Numbered Source Citations
 
