@@ -1121,7 +1121,7 @@
 .inline-code {
   border-radius: var(--radius-xs);
   background: var(--color-bg-subtle);
-  color: inherit;
+  color: var(--color-text-inline-code);
   /* Tone alone marks code in prose; the transparent edge keeps the geometry
      a file link's accent border recolors. */
   border: 1px solid transparent;
