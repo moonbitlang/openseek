@@ -35,7 +35,7 @@ fn deletion_state() -> State {
     token="fixture",
     navigation=0,
   )
-  state
+  state.replace("a", { ..state.conversations["a"], last_seq: Some(0), })
 }
 
 ///|

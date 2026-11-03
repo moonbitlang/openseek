@@ -65,6 +65,7 @@ fn State::load(
     ..conversation,
     request,
     history_reading: true,
+    history_refresh_after_read: false,
   })
   (
     { ..next, sequence: request, },
@@ -89,6 +90,7 @@ fn Conversation::fence_history(
     // A fresh observation baseline must be able to recover even if a
     // read from the previous connection is still waiting on the network.
     history_reading: false,
+    history_refresh_after_read: false,
   }
 }
 
@@ -220,6 +222,7 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   !conversation.controls.is_compacting() &&
   !conversation.controls.is_compact_queued() &&
   conversation.watch_status == Watching &&
+  (self.is_draft(id) || conversation.last_seq is Some(_)) &&
   !conversation.history_required
 }
 
@@ -263,6 +266,12 @@ pub fn update(
         state.conversations.get(id) is Some(conversation) &&
         conversation.request == request else {
         return (state, @cmd.none, None)
+      }
+      if conversation.history_refresh_after_read && token is Some(_) {
+        // The new observer saw a change the shared read may have missed.
+        // Reuse the connection's read until it settles, then validate again.
+        let (next, command) = state.load(id, token, emit)
+        return (next, command, None)
       }
     }
     _ => ()
@@ -568,6 +577,9 @@ pub fn update(
           let admitted = conversation.pending is Some(submitted) &&
             snapshot.task_id is Some(task) &&
             !submitted.known_tasks.contains(task)
+          let refresh_history = baseline &&
+            conversation.history_resume_baseline is Some((task, seq)) &&
+            (snapshot.task_id != task || seq != Some(snapshot.seq))
           let conversation = conversation.control_snapshot(
             snapshot.task_id,
             snapshot.data,
@@ -589,6 +601,9 @@ pub fn update(
               conversation.events
             },
             last_seq: Some(snapshot.seq),
+            history_resume_baseline: None,
+            history_refresh_after_read: conversation.history_refresh_after_read ||
+            (refresh_history && conversation.history_reading),
             generating: snapshot.data.active_task_id is Some(_),
             observed_task: match snapshot.data.active_task_id {
               Some(task) => Some(task)
@@ -631,7 +646,9 @@ pub fn update(
             let (next, command) = next.send_pending(id, token, emit)
             return (next, command, None)
           }
-          if admitted || (baseline && conversation.watch_status == Reconnecting) {
+          if admitted ||
+            (baseline && conversation.watch_status == Reconnecting) ||
+            (refresh_history && !conversation.history_reading) {
             let (next, command) = next.load(id, token, emit)
             (next, command, None)
           } else {
@@ -695,6 +712,7 @@ pub fn update(
         // Fence history reads from the interrupted connection. Only a fresh
         // snapshot can establish the run state for the following history read.
         stream: None,
+        history_resume_baseline: None,
         watch_request: conversation.watch_request + 1,
         watch_status: if retry {
           Reconnecting
@@ -744,6 +762,12 @@ pub fn update(
           loading: !conversation.history_cached,
           history_required: !conversation.history_cached ||
           conversation.history_required,
+          history_resume_baseline: if conversation.history_reading &&
+            conversation.history_resume_baseline is None {
+            Some((conversation.task, conversation.last_seq))
+          } else {
+            conversation.history_resume_baseline
+          },
           watch_request: conversation.watch_request + 1,
           watch_status: Watching,
           stream: None,

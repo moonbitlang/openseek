@@ -8,7 +8,12 @@ fn progress_test_state() -> State {
     conversations: Map([
       (
         "session",
-        { ..Conversation::empty(), loading: false, history_required: false, },
+        {
+          ..Conversation::empty(),
+          loading: false,
+          history_required: false,
+          last_seq: Some(0),
+        },
       ),
     ]),
   }

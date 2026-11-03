@@ -481,3 +481,71 @@ test "Cloud recovered history can release an observed task without replaying its
   assert_false(loaded.conversations["session"].needs_observation())
   assert_false(loaded.conversations["session"].unseen_finish)
 }
+
+///|
+test "Cloud cached revisits wait for the first snapshot before sending" {
+  let base = controls_fixture()
+  let control = {
+    ..base.conversations["session"].control.unwrap(),
+    active_task_id: None,
+    status: Idle,
+  }
+  let cached = base.replace("session", {
+    ..base.conversations["session"],
+    history_cached: true,
+    generating: false,
+    stream: None,
+    control: Some(control),
+  })
+  let opened = metadata_update(cached, Open("session"))
+  assert_false(opened.conversations["session"].loading)
+  assert_false(opened.can_send("session"))
+  let (watching, stream) = watch_fixture(opened)
+  assert_false(watching.can_send("session"))
+  let ready = watch_snapshot(watching, stream, Some("task"), 2, control)
+  assert_true(ready.can_send("session"))
+  assert_true(ready.conversations["session"].history_reading)
+}
+
+///|
+test "Cloud cached revisits revalidate a shared read after a changed baseline" {
+  let base = controls_fixture()
+  let idle = {
+    ..base.conversations["session"].control.unwrap(),
+    active_task_id: None,
+    status: Idle,
+  }
+  for changed in [false, true] {
+    for response_first in [false, true] {
+      let cached = base.replace("session", {
+        ..base.conversations["session"],
+        history_cached: true,
+        history_etag: Some("original"),
+        generating: false,
+        stream: None,
+        control: Some(idle),
+      })
+      let reading = metadata_update(cached, Open("session"))
+      let (reading, stream) = watch_fixture(reading)
+      let reading = watch_snapshot(reading, stream, Some("task"), 2, idle)
+      stream.close()
+      let reopened = metadata_update(reading, Open("session"))
+      let request = reading.conversations["session"].request
+      assert_eq(reopened.conversations["session"].request, request)
+      let (watching, stream) = watch_fixture(reopened)
+      let response = HistoryUnchanged(1, "session", request, "original")
+      let snapshot_task = Some(if changed { "remote" } else { "task" })
+      let next = if response_first {
+        let settled = metadata_update(watching, response)
+        watch_snapshot(settled, stream, snapshot_task, 2, idle)
+      } else {
+        let observed = watch_snapshot(watching, stream, snapshot_task, 2, idle)
+        assert_eq(observed.conversations["session"].request, request)
+        metadata_update(observed, response)
+      }
+      assert_eq(next.conversations["session"].history_reading, changed)
+      assert_eq(next.conversations["session"].request > request, changed)
+      assert_eq(next.conversations["session"].history_etag, Some("original"))
+    }
+  }
+}

@@ -61,6 +61,9 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
+  // Compare the first snapshot after a revisit that shares an earlier read.
+  history_resume_baseline : (String?, Int32?)?
+  history_refresh_after_read : Bool
   // Last task lifecycle event supplies status while canonical history reloads.
   events : Array[Event]
   document : @protocol.SessionDocument
@@ -111,6 +114,8 @@ fn Conversation::empty() -> Conversation {
     history_cached: false,
     history_etag: None,
     history_reading: false,
+    history_resume_baseline: None,
+    history_refresh_after_read: false,
     events: [],
     document: {
       version: None,

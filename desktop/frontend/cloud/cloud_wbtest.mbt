@@ -112,6 +112,10 @@ test "Busy cannot allow another send before authoritative history recovers" {
     token="ts_fixture",
     navigation=0,
   )
+  let loaded = loaded.replace("session", {
+    ..loaded.conversations["session"],
+    last_seq: Some(0),
+  })
   let owner = @interop.Cloud(account="user", session="session")
   let draft : @composer.Draft = { task: "question", images: [], mentions: [], }
   let (sending, _, _) = update(
@@ -186,6 +190,7 @@ test "history recovery clears a send error only when the pending submission was 
               ..Conversation::empty(),
               loading: false,
               history_required: false,
+              last_seq: Some(0),
             },
           ),
         ]),
@@ -272,7 +277,12 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     conversations: Map([
       (
         "session",
-        { ..Conversation::empty(), loading: false, history_required: false, },
+        {
+          ..Conversation::empty(),
+          loading: false,
+          history_required: false,
+          last_seq: Some(0),
+        },
       ),
     ]),
   }

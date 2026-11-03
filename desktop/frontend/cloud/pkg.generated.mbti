@@ -126,6 +126,8 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
+  history_resume_baseline : (String?, Int32?)?
+  history_refresh_after_read : Bool
   events : Array[Event]
   document : @protocol.SessionDocument
   prediction : @openseek_protocol.PredictionRecord?

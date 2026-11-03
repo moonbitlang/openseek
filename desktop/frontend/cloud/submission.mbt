@@ -53,9 +53,8 @@ fn State::send_pending(
   }
   let request = submission.request
   let conversation = {
-    ..conversation,
     // Fence history reads begun before this command, including its refusal.
-    request,
+    ..conversation.fence_history(request),
     outgoing: None,
     watch_status: Watching,
   }

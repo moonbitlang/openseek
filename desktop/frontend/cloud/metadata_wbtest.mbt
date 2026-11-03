@@ -328,6 +328,10 @@ test "a completed archive wins over an earlier history response's running flag" 
         generating: false,
       }),
     )
+    let ready = ready.replace("a", {
+      ..ready.conversations["a"],
+      last_seq: Some(0),
+    })
     assert_true(ready.can_send("a"))
     assert_eq(ready.conversations["a"].records[0].data, {
       "content": "Final answer",
@@ -394,6 +398,11 @@ test "externally archived inventory fences pending history through restoration" 
       generating: false,
     }),
   )
+  assert_false(ready.can_send("a"))
+  let ready = ready.replace("a", {
+    ..ready.conversations["a"],
+    last_seq: Some(0),
+  })
   assert_true(ready.can_send("a"))
   assert_false(
     ready.sessions.iter().find_first(item => item.id == "a").unwrap().generating,
