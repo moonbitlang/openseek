@@ -222,6 +222,7 @@ fn Entry::action_buttons(
 ) -> Array[ActionButton] {
   let goal_mode = input.goal.draft is Some(_)
   if goal_mode {
+    guard !self.goal_draft.unwrap_or("").is_blank() else { return [] }
     return [
       {
         id: "goal-set",
@@ -229,12 +230,15 @@ fn Entry::action_buttons(
         title: ui(locale, SetGoal),
         disabled: self.goal_draft.unwrap_or("").is_blank(),
         command: emit(SubmitRequested),
-        content: @icons.icon(@icons.icon_arrow_up),
+        content: @icons.icon(@icons.icon_newline),
       },
     ]
   }
   match input.presentation.primary_action {
-    Send(available~) | SaveQueuedInput(available~) =>
+    Send(available~) | SaveQueuedInput(available~) => {
+      guard !self.draft.is_blank() || !self.attachment_requests.is_empty() else {
+        return []
+      }
       [
         {
           id: "send",
@@ -255,9 +259,10 @@ fn Entry::action_buttons(
             command.is_blank()
           ),
           command: emit(SubmitRequested),
-          content: @icons.icon(@icons.icon_arrow_up),
+          content: @icons.icon(@icons.icon_newline),
         },
       ]
+    }
     Running(steer_available~, can_stop~, submit~, ..) => {
       let submit = self.running_submit(submit)
       let actions : Array[ActionButton] = [
@@ -288,7 +293,7 @@ fn Entry::action_buttons(
           },
           disabled: !self.can_send(input),
           command: emit(SubmitRequested),
-          content: @icons.icon(@icons.icon_arrow_up),
+          content: @icons.icon(@icons.icon_newline),
         })
       }
       actions
