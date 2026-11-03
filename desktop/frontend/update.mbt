@@ -1519,7 +1519,7 @@ fn desired_browser_view(model : Model) -> Int32? {
   let git_details_open = match model.screen {
     Chat => model.git_details_open
     Codex => model.codex.git_details_open()
-    Skills | Schedules | Settings => false
+    Skills | Schedules | Settings | ArchivedChats => false
   }
   guard model.is_desktop &&
     conversation_screen &&
@@ -1691,6 +1691,7 @@ fn update(
     | CodexOpenThread(_)
     | OpenCodex
     | OpenSetup
+    | OpenArchivedChats
     | OpenLocalApiSettings
     | OpenSkills
     | OpenSchedules
@@ -4414,6 +4415,10 @@ fn update_msg(
         @cmd.none,
         { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
       )
+    OpenArchivedChats =>
+      (@cmd.none, { ..model, screen: ArchivedChats, archived_filter: "", })
+    ArchivedChatsFilterChanged(query) =>
+      (@cmd.none, { ..model, archived_filter: query, })
     Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
       (
@@ -16129,9 +16134,10 @@ test "Codex threads share the Projects section's project rows" {
     ],
   })
   let sections = model.sidebar_component_sections(model.dev())
-  // Work shows Projects, shared across both agents, above Archived.
-  assert_eq(sections.length(), 2)
-  assert_eq(sections[0].label, "Projects")
+  // Work shows Projects, shared across both agents; archived conversations
+  // live on Settings' archived page.
+  assert_eq(sections.length(), 1)
+  inspect(sections[0].label, content="Projects")
   assert_true(!sections[0].initially_collapsed)
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")

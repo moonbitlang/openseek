@@ -673,3 +673,58 @@ test "deleting a conversation from this page retires its shown side chat" {
   let parent_gone = announce_deletion(side_chat_gone, parent)
   assert_true(parent_gone.deletes_in_flight.is_empty())
 }
+
+///|
+test "archived chats is a Settings page with its own history entry" {
+  let dispatch = test_dispatch()
+  let initial = { ..test_model(), is_desktop: true, }
+  let (_, settings) = update(dispatch, OpenSetup, initial)
+  let (_, archived) = update(dispatch, OpenArchivedChats, settings)
+  assert_true(archived.screen is ArchivedChats)
+  assert_true(
+    archived.navigation.location is Some({ target: ArchivedChats, .. }),
+  )
+  let (_, filtered) = update(
+    dispatch,
+    ArchivedChatsFilterChanged("old"),
+    archived,
+  )
+  assert_eq(filtered.archived_filter, "old")
+  assert_true(filtered.navigation.location == archived.navigation.location)
+  let (_, back) = update(dispatch, Navigation(Back), filtered)
+  assert_true(back.screen is Settings)
+  let (_, forward) = update(dispatch, Navigation(Forward), back)
+  assert_true(forward.screen is ArchivedChats)
+  // Reopening the page starts with an empty filter.
+  assert_eq(forward.archived_filter, "")
+  // The page's own way back is an explicit visit to Settings.
+  let (_, returned) = update(dispatch, OpenSetup, forward)
+  assert_true(returned.screen is Settings)
+  assert_true(!returned.navigation.can_forward)
+}
+
+///|
+test "device-less archived chats share the Settings entry" {
+  let model = test_model()
+  let model = {
+    ..model,
+    console: { ..model.console, page_device: None, },
+    screen: ArchivedChats,
+  }
+  assert_true(
+    model.navigation_location() is Some({ device: None, target: Settings, }),
+  )
+  // The browser re-announces that shared entry; the archived page stays.
+  let (_, kept) = apply_browser_navigation(
+    test_dispatch(),
+    { path: "/cloud", settings: true, can_back: true, can_forward: false, },
+    {
+      ..model,
+      navigation: {
+        ..model.navigation,
+        location: Some({ device: None, target: Settings, }),
+      },
+    },
+  )
+  assert_true(kept.screen is ArchivedChats)
+}

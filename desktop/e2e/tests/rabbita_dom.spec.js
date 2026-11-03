@@ -1493,7 +1493,6 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
   await expect(page.getByText('This destination no longer exists or is no longer attached.')).toHaveCount(0);
   await expect(page).toHaveURL(/\/chat\/new$/);
-  await expect(page.locator('.section-heading', { hasText: 'Archived chats (' })).toHaveCount(0);
   expect(sent('session.archive')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });

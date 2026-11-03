@@ -282,6 +282,77 @@ h2 {
   margin-inline-start: auto;
 }
 
+/* ---------- archived chats (a Settings page) ---------- */
+/* Titles do not wrap, so the page's and each group's columns must not grow to
+   a long title's width; the title truncates and the actions stay in view. */
+.archived-chats-page > .management-page-content,
+.archived-chats-page .settings-group {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.archived-chats-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-self: start;
+  margin-inline-start: -0.75em;
+  color: var(--color-text-secondary);
+}
+
+.archived-chats-empty {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.archived-chat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-4) 0;
+}
+
+.archived-chat-row + .archived-chat-row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* The title opens the read-only transcript; it reads as text, not a button. */
+.archived-chat-open {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--font-size-md);
+  text-align: start;
+}
+
+button.archived-chat-open {
+  cursor: pointer;
+}
+
+button.archived-chat-open:hover .archived-chat-title {
+  text-decoration: underline;
+}
+
+.archived-chat-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archived-chat-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-3);
+}
+
 /* The bring-your-own-key guide inside the API group's card: prose plus
    numbered steps, with its own padding since the card's default is
    row-shaped. */
@@ -438,7 +509,8 @@ h2 {
   font-size: var(--font-size-md);
 }
 
-.skills-search {
+.skills-search,
+.archived-chats-search {
   display: flex;
   align-items: center;
   gap: var(--space-5);
@@ -450,7 +522,8 @@ h2 {
   color: var(--color-text-muted);
 }
 
-.skills-search input {
+.skills-search input,
+.archived-chats-search input {
   flex: 1;
   border: none;
   background: transparent;

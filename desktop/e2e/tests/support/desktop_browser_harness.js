@@ -811,10 +811,30 @@ export class DesktopBrowserHarness {
           session => session.id === request.params?.session,
         );
         if (index >= 0) {
-          this.liveSessions.push(...this.archivedSessions.splice(index, 1));
+          const [restored] = this.archivedSessions.splice(index, 1);
+          this.liveSessions.push(restored);
+          // Like the host, announce the move once the record is live again,
+          // naming the store this fixture lists it under. A desktop-bridge
+          // fixture has no socket; its test delivers host events itself.
+          if (this.socket) this.notify('session.changed', {
+            change: 'unarchived',
+            session: restored.id,
+            workspace: this.sessionGroups([restored]).groups
+              .find(group => group.sessions.length > 0)?.workspace,
+          });
         }
         return this.sessionGroups(this.archivedSessions);
       }
+      case 'session.delete_archived':
+        this.archivedSessions = this.archivedSessions.filter(
+          session => session.id !== request.params?.session,
+        );
+        if (this.socket) this.notify('session.changed', {
+          change: 'deleted',
+          session: request.params?.session,
+          workspace: request.params?.workspace,
+        });
+        return this.sessionGroups(this.archivedSessions);
       case 'session.delete_check':
         return this.sessionCheckout ? { checkout: this.sessionCheckout } : {};
       case 'session.delete': {

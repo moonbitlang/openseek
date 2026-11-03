@@ -1,0 +1,68 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/archived_chats"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/sidebar/conversation",
+}
+
+// Values
+pub fn count(Array[Group]) -> Int32
+
+pub fn filtered(@i18n.Locale, Array[Group], String) -> Array[Group]
+
+pub fn text(@i18n.Locale, Message) -> String
+
+pub fn view(@i18n.Locale, Array[Group], query~ : String, Actions) -> @html.Html
+
+// Errors
+
+// Types and methods
+pub(all) struct Actions {
+  back : @cmd.Cmd
+  filter : (String) -> @cmd.Cmd
+  open : (@conversation.Id) -> @cmd.Cmd
+  restore : (@conversation.Id) -> @cmd.Cmd
+  delete : (@conversation.Id) -> @cmd.Cmd
+}
+
+pub(all) struct Group {
+  kind : GroupKind
+  rows : Array[@conversation.Input]
+} derive(Eq, @debug.Debug)
+pub fn Group::equal(Self, Self) -> Bool
+pub fn Group::not_equal(Self, Self) -> Bool
+pub fn Group::to_repr(Self) -> @debug.Repr
+
+pub(all) enum GroupKind {
+  Chats
+  Project(String)
+  Other
+} derive(Eq, @debug.Debug)
+pub fn GroupKind::equal(Self, Self) -> Bool
+pub fn GroupKind::not_equal(Self, Self) -> Bool
+pub fn GroupKind::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Message {
+  Title
+  Description
+  ArchivedCount(Int32)
+  Manage
+  BackToSettings
+  Filter
+  Chats
+  Other
+  Empty
+  NoMatches
+  Restore
+  Delete
+  CloudBadge
+  CodexBadge
+}
+
+// Type aliases
+
+// Traits

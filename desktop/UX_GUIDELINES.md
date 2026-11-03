@@ -157,8 +157,9 @@ reserve their space in the shared header. Disable arrows at the ends of the
 application's history; a direct link has no invented predecessor.
 
 History records destination identities: OpenSeek conversations, Codex threads,
-new-chat entry pages, local drafts, Settings, Skills lists and details, and Scheduled tasks. An
-explicit destination change adds an entry and discards the forward branch;
+new-chat entry pages, local drafts, Settings and its archived chats page, Skills
+lists and details, and Scheduled tasks. An explicit destination change adds an
+entry and discards the forward branch;
 selecting the same destination does not add a duplicate. Back and Forward
 restore the exact target while current application state continues to own
 content, unfinished input, running work and errors. Sending a draft for the
@@ -177,7 +178,8 @@ remain distinct and never create a replacement session. Direct links can display
 history before the session catalog arrives, but editing waits until the catalog
 confirms the session is live; archived sessions remain read only. Unsent drafts
 remain in memory. Device-less Settings covers the current URL in window history; refreshing
-restores that URL. Cross-device links open separately; traversing back from a
+restores that URL. Its archived chats page, which then lists only Cloud chats, shares that
+entry; a device's archived chats page is `/device/:device/settings/archived`. Cross-device links open separately; traversing back from a
 refreshed Cloud document to a device page reloads its device binding.
 
 Refresh restores the current target and known browser history segment. Desktop
@@ -203,7 +205,10 @@ it in the URL. First send then replaces the draft with its stored identity.
 
 Settings, Skills, and Scheduled tasks share the `page_shell` header with a
 single `h1` and one scrolling content column. Page actions live with their
-content. Skills sidebar navigation always opens its list; **Back to skills**
+content. Archived conversations leave the sidebar and its search; Settings
+links to their own page, which groups them like the sidebar (Cloud chats, then
+each project), filters by title, and offers Restore and Delete per row.
+**Back to settings** is an explicit Settings destination. Skills sidebar navigation always opens its list; **Back to skills**
 is an explicit list destination, while global Back restores the previous
 history entry, including a detail page. **Close log** and **Cancel editing**
 affect only Scheduled tasks. Editor and embedded-browser navigation remain

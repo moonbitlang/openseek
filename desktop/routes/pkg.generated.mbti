@@ -43,6 +43,7 @@ pub(all) enum Target {
   Thread(String)
   CodexDraft(String)
   Settings
+  ArchivedChats
   Skills
   InstalledSkill(String)
   MarketSkill(String)

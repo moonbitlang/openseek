@@ -89,6 +89,7 @@ pub fn parse(path : String) -> Result[Location, RouteError] {
     ["codex", "thread", id] => Thread(id)
     ["codex", "draft", id] => CodexDraft(id)
     ["settings"] => Settings
+    ["settings", "archived"] => ArchivedChats
     ["skills"] => Skills
     ["skills", "installed", id] => InstalledSkill(id)
     ["skills", "market", source] => MarketSkill(source)
@@ -126,6 +127,7 @@ pub fn Location::path(self : Location) -> String? {
     Thread(id) => "codex/thread/" + @percent.encode(id)
     CodexDraft(id) => "codex/draft/" + @percent.encode(id)
     Settings => "settings"
+    ArchivedChats => "settings/archived"
     Skills => "skills"
     InstalledSkill(id) => "skills/installed/" + @percent.encode(id)
     MarketSkill(source) => "skills/market/" + @percent.encode(source)

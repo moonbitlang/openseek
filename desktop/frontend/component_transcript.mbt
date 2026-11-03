@@ -126,7 +126,7 @@ fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
         Transcript(slot~, ..) | CloudTranscript(slot~) => Some(slot)
         LoadFailed(..) | Loading | Onboarding | CloudHome => None
       }
-    Skills | Schedules | Settings => None
+    Skills | Schedules | Settings | ArchivedChats => None
   }
 }
 

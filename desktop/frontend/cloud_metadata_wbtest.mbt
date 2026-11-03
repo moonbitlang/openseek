@@ -77,7 +77,7 @@ test "Cloud rename reuses the root draft and closes it only for the owning save"
 }
 
 ///|
-test "Cloud archived rows join the existing archived section even without a device" {
+test "Cloud archived rows join the archived page's chats even without a device" {
   let model = integrated_cloud_model()
   let model = {
     ..model,
@@ -94,17 +94,24 @@ test "Cloud archived rows join the existing archived section even without a devi
     rows[0].1.trailing is [@conversation.Restore(..), @conversation.Delete(..)],
   )
   assert_true(rows[0].1.rename is None)
+  // The sidebar no longer lists archived rows.
   let sections = model.sidebar_component_sections(model.dev())
   assert_true(
-    sections.last()
-    is Some({ entries: [@section.Conversation({ id, .. })], .. }) &&
+    !sections.any(section => {
+      section.entries.any(entry => {
+        entry is @section.Conversation({ id, .. }) &&
+        id.source() is @conversation.CloudArchived
+      })
+    }),
+  )
+  assert_true(
+    model.archived_chat_groups() is [{ kind: Chats, rows: [{ id, .. }], }] &&
     id.source() is @conversation.CloudArchived,
   )
   let disconnected = { ..model, devices: [], }
-  let input = disconnected.sidebar_component_input()
   assert_true(
-    input.sections.last()
-    is Some({ entries: [@section.Conversation({ id, .. })], .. }) &&
+    disconnected.archived_chat_groups()
+    is [{ kind: Chats, rows: [{ id, .. }], }] &&
     id.source() is @conversation.CloudArchived,
   )
 }

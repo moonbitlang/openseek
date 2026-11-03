@@ -16,6 +16,8 @@ pub(all) enum Target {
   Thread(String)
   CodexDraft(String)
   Settings
+  // Settings' archived-conversations page; it belongs to a device.
+  ArchivedChats
   Skills
   InstalledSkill(String)
   MarketSkill(String)

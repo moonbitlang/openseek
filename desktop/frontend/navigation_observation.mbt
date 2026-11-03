@@ -16,6 +16,7 @@ priv struct NavigationObservation {
 fn Msg::is_navigation_visit(self : Msg) -> Bool {
   match self {
     OpenSetup
+    | OpenArchivedChats
     | Ssh(Open)
     | OpenSchedules
     | OpenSkills
@@ -188,6 +189,7 @@ fn observe_navigation(
     explicit,
     repeat_visit: message
     is (OpenSetup
+    | OpenArchivedChats
     | Ssh(Open)
     | OpenSkills
     | OpenSchedules

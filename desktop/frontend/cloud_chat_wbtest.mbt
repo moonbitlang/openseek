@@ -291,14 +291,10 @@ test "Chats use the shared section with existing ordering and create action" {
       }
     })
   }
-  assert_eq(sections.map(section => section.label), ["Chats", "Archived chats"])
+  assert_eq(sections.map(section => section.label), ["Chats"])
   assert_eq(ids(sections[0]), ["cloud-b", "cloud-a"])
-  assert_true(ids(sections[1]).is_empty())
   assert_true(sections[0].action is Some(_))
-  assert_true(sections[1].action is None)
-  assert_true(
-    !sections[0].initially_collapsed && sections[1].initially_collapsed,
-  )
+  assert_true(!sections[0].initially_collapsed)
 }
 
 ///|

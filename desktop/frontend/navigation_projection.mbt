@@ -3,6 +3,7 @@ fn Model::navigation_location(self : Model) -> @routes.Location? {
   let device = self.console.page_device
   let target : @routes.Target = match self.screen {
     Settings => Settings
+    ArchivedChats => ArchivedChats
     Schedules => Schedules
     Skills =>
       match self.skills.detail() {
@@ -49,6 +50,9 @@ fn Model::navigation_location(self : Model) -> @routes.Location? {
   match target {
     Cloud | CloudSession(..) | CloudDraft(..) => Some({ device: None, target, })
     Settings => Some({ device, target, })
+    // Device-less Settings covers the current URL instead of owning one, and
+    // its archived page (Cloud chats only) shares that entry.
+    ArchivedChats if device is None => Some({ device, target: Settings, })
     _ => if device is Some(_) { Some({ device, target, }) } else { None }
   }
 }
@@ -65,6 +69,7 @@ fn navigation_screen(target : @routes.Target) -> Screen {
     | CloudDraft(..) => Chat
     Codex | CodexNew | Thread(_) | CodexDraft(_) => Codex
     Settings => Settings
+    ArchivedChats => ArchivedChats
     Skills | InstalledSkill(_) | MarketSkill(_) => Skills
     Schedules => Schedules
   }
@@ -85,8 +90,12 @@ fn Model::project_adoption_at(
     return None
   }
   match location.target {
-    Settings | Skills | InstalledSkill(_) | MarketSkill(_) | Schedules =>
-      self.pending_project_adoption
+    Settings
+    | ArchivedChats
+    | Skills
+    | InstalledSkill(_)
+    | MarketSkill(_)
+    | Schedules => self.pending_project_adoption
     CodexDraft(target) if target == id => self.pending_project_adoption
     CodexNew if self.codex.active_id() == Some(id) &&
       self.codex.navigation_target() is CodexNew =>

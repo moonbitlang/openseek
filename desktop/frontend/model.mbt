@@ -939,8 +939,8 @@ priv struct BufferedCommit {
 } derive(Eq)
 
 ///|
-/// What the main area shows: a conversation, Skills, Scheduled tasks, or
-/// Settings. Selecting a conversation (or rotating to a new one) always
+/// What the main area shows: a conversation, Skills, Scheduled tasks,
+/// Settings, or Settings' archived conversations. Selecting a conversation (or rotating to a new one) always
 /// returns to the chat. While the
 /// configured endpoint is unusable the chat stays reachable, the API-setup
 /// modal takes over until dismissed, and the composer keeps Send disabled.
@@ -950,6 +950,7 @@ priv enum Screen {
   Skills
   Schedules
   Settings
+  ArchivedChats
 } derive(Eq)
 
 ///|
@@ -1306,6 +1307,8 @@ priv struct Model {
   // and it closes the moment a usable endpoint arrives.
   api_setup_open : Bool
   session_search : @session_search.Model
+  // The archived-conversations page's filter text.
+  archived_filter : String
   session_import_dialog : @session_import.Model
   export_dialog : @export_dialog.Model
   file_share_dialog : @export_dialog.Model
@@ -1766,6 +1769,9 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
+  // Settings' "Manage" on archived conversations, and the page's way back.
+  OpenArchivedChats
+  ArchivedChatsFilterChanged(String)
   OpenLocalApiSettings
   Navigation(NavigationMsg)
   // The API-setup modal's "Not now" button and its backdrop click.
@@ -2755,6 +2761,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     update_ux: UpdateUnknown,
     api_setup_open: false,
     session_search: @session_search.Model(),
+    archived_filter: "",
     session_import_dialog: @session_import.Model(),
     export_dialog: @export_dialog.Model(),
     file_share_dialog: @export_dialog.Model(id_prefix="file-share"),

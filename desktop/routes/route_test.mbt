@@ -66,6 +66,7 @@ test "all targets roundtrip without interpreting encoded separators" {
     Thread("t-1"),
     CodexDraft("draft-2"),
     Settings,
+    ArchivedChats,
     Skills,
     InstalledSkill("local/技能"),
     MarketSkill("moonbitlang/tool/path@1.0"),
@@ -76,6 +77,18 @@ test "all targets roundtrip without interpreting encoded separators" {
     guard location.path() is Some(path) else { fail("device route missing") }
     assert_true(@routes.parse(path) is Ok(found) && found == location)
   }
+}
+
+///|
+test "archived chats is a device page under settings" {
+  assert_true(
+    @routes.parse("/device/d/settings/archived")
+    is Ok({ device: Some("d"), target: ArchivedChats, }),
+  )
+  assert_eq(
+    @routes.Location::{ device: None, target: ArchivedChats, }.path(),
+    None,
+  )
 }
 
 ///|

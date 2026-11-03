@@ -12,7 +12,7 @@ fn Screen::work_screen(self : Screen) -> WorkScreen? {
   match self {
     Chat => Some(OpenSeekWork)
     Codex => Some(CodexWork)
-    Settings | Skills | Schedules => None
+    Settings | ArchivedChats | Skills | Schedules => None
   }
 }
 

@@ -27,7 +27,14 @@ fn activate_navigation(
   guard model.navigation.location is Some(location) else {
     return (@cmd.none, model)
   }
-  let model = { ..model, screen: navigation_screen(location.target), }
+  // Device-less Settings and its archived page share one history entry, so
+  // arriving at that entry with the archived page up keeps it.
+  let screen = match location {
+    { device: None, target: Settings, } if model.screen is ArchivedChats =>
+      ArchivedChats
+    _ => navigation_screen(location.target)
+  }
+  let model = { ..model, screen, }
   guard model.navigation.phase is Waiting else { return (@cmd.none, model) }
   if location.target is Cloud {
     let next = {
@@ -106,6 +113,12 @@ fn activate_navigation(
     )
   }
   if location.target is Settings {
+    if model.screen is ArchivedChats {
+      return (
+        @cmd.none,
+        { ..model, navigation: { ..model.navigation, phase: Active, }, },
+      )
+    }
     let (command, next) = update_msg(dispatch, OpenSetup, model)
     return (
       command,
@@ -140,6 +153,10 @@ fn activate_navigation(
       (@cmd.none, model, Active)
     Schedules => {
       let (cmd, next) = open_schedules(dispatch, model)
+      (cmd, next, Active)
+    }
+    ArchivedChats => {
+      let (cmd, next) = update_msg(dispatch, OpenArchivedChats, model)
       (cmd, next, Active)
     }
     Skills => {

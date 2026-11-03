@@ -31,17 +31,20 @@ test "Chats exclude retired local history and user named workspaces remain proje
   assert_true(!model.dev().is_chat_workspace(prefix_sibling))
   assert_true(!model.can_choose_new_chat_project())
   assert_eq(model.transcript_projects().length(), 2)
-  // Each list is its own sidebar mode; Archived follows either.
+  // Each list is its own sidebar mode; archived conversations are on
+  // Settings' archived page.
   let labels = (model : Model) => {
     model.sidebar_component_sections(model.dev()).map(section => section.label)
   }
   let work = { ..model, sidebar_mode: WorkMode, }
-  assert_eq(labels(work), ["Projects", "Archived chats"])
+  assert_eq(labels(work), ["Projects"])
   assert_eq(work.sidebar_component_sections(work.dev())[0].entries.length(), 2)
   let chat = { ..model, sidebar_mode: ChatMode, }
-  assert_eq(labels(chat), ["Chats", "Archived chats"])
+  assert_eq(labels(chat), ["Chats"])
   assert_true(chat.sidebar_component_sections(chat.dev())[0].entries is [_])
-  assert_true(chat.sidebar_component_sections(chat.dev())[1].entries.is_empty())
+  // The retired chat's archive reaches neither the sidebar nor the archived
+  // page.
+  assert_true(chat.archived_chat_groups().is_empty())
   assert_true(chat.account is None)
 }
 
@@ -245,10 +248,10 @@ test "Host catalogs retain project history and exclude retired standalone histor
     model,
   )
   assert_eq(model.dev().archived.map(item => item.id), [archived.id])
-  let work = { ..model, sidebar_mode: WorkMode, }
-  assert_eq(work.sidebar_component_sections(work.dev())[1].entries.length(), 1)
-  let chat = { ..model, sidebar_mode: ChatMode, }
-  assert_true(chat.chat_sidebar_sections("local")[1].entries.is_empty())
+  assert_true(
+    model.archived_chat_groups() is [{ kind: Project(_), rows: [{ id, .. }], }] &&
+    id.conversation() == archived.id,
+  )
 }
 
 ///|

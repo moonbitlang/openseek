@@ -33,7 +33,9 @@ test('inline title search reuses project rows and keeps results when opening unl
   const app = fixture(page);
   const input = await openSearch(page, app);
   await input.fill('Unicode');
-  await expect(rows(page)).toHaveCount(3);
+  // Archived conversations are on Settings' archived page, not in search.
+  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page).filter({ hasText: 'Earlier Unicode discussion' })).toHaveCount(0);
   await expect(rows(page).filter({ hasText: 'Terminal rendering' })).toHaveCount(0);
   await expect(rows(page).filter({ hasText: 'Unicode terminal notes' }).locator('strong')).toHaveText('Unicode');
   await expect(page.locator('dialog[open]')).toHaveCount(0);
@@ -43,10 +45,7 @@ test('inline title search reuses project rows and keeps results when opening unl
   await input.press('Enter');
   await expect.poll(() => app.requests.some(r => r.method === 'session.load' && r.params.session === 'title-only')).toBe(true);
   await expect(input).toHaveValue('Unicode');
-  await expect(rows(page)).toHaveCount(3);
-  await rows(page).filter({ hasText: 'Earlier Unicode discussion' }).click();
-  await expect.poll(() => app.requests.some(r => r.method === 'session.load_archived' && r.params.session === 'archived-1')).toBe(true);
-  await expect(input).toHaveValue('Unicode');
+  await expect(rows(page)).toHaveCount(2);
   expect(app.requests.some(r => r.method === 'session.search')).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });
@@ -99,7 +98,7 @@ test('all matching rows bypass compact previews and the old global limit; keyboa
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Chat search includes Cloud live and archived titles, then removes them on sign-out', async ({ page }) => {
+test('Chat search includes Cloud live titles, leaves archived ones out, then removes them on sign-out', async ({ page }) => {
   const app = new CloudHarness(page, { desktop: true });
   app.titles.set(sessionA, 'Matching Cloud live');
   app.titles.set(sessionB, 'Matching Cloud archived');
@@ -109,10 +108,11 @@ test('Chat search includes Cloud live and archived titles, then removes them on 
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
   await input.fill('matching');
-  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page).filter({ hasText: 'Matching Cloud archived' })).toHaveCount(0);
   await rows(page).filter({ hasText: 'Matching Cloud live' }).click();
   await expect(input).toHaveValue('matching');
-  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page)).toHaveCount(1);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(rows(page)).toHaveCount(0);
@@ -121,7 +121,7 @@ test('Chat search includes Cloud live and archived titles, then removes them on 
 });
 
 
-test('Chat and Work searches isolate Cloud and project history, including archives', async ({ page }) => {
+test('Chat and Work searches isolate Cloud and project history and leave archives out', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.titles.set(sessionA, 'Matching Cloud live');
   cloud.titles.set(sessionB, 'Matching Cloud archive');
@@ -147,28 +147,21 @@ test('Chat and Work searches isolate Cloud and project history, including archiv
   await page.goto(`${authOrigin}/console/index.html?device=device-a`);
   const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
   await input.fill('matching');
-  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page)).toHaveCount(1);
   await expect(page.locator('.workspace-disclosure')).toHaveCount(1);
   await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
-  await rows(page).filter({ hasText: 'Matching work archive' }).click();
-  await expect(page.locator('.archived-read-only-text')).toBeVisible();
-  await expect(page.locator('#task')).toHaveCount(0);
-  await expect(input).toHaveValue('matching');
+  await expect(rows(page).filter({ hasText: 'Matching work archive' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await expect(input).toHaveValue('');
   await input.fill('matching');
-  await expect(rows(page)).toHaveText(['Matching Cloud live', 'Matching Cloud archive']);
+  await expect(rows(page)).toHaveText(['Matching Cloud live']);
   await expect(page.locator('.workspace-disclosure')).toHaveCount(0);
-  await rows(page).filter({ hasText: 'Matching Cloud archive' }).click();
-  await expect(page.locator('main .topbar-title')).toHaveText('Matching Cloud archive');
-  await expect(page.locator('.archived-read-only-text')).toBeVisible();
-  await expect(page.locator('#task')).toHaveCount(0);
-  await expect(input).toHaveValue('matching');
   await page.getByRole('button', { name: 'Work', exact: true }).click();
   await expect(input).toHaveValue('');
   await input.fill('matching');
-  await expect(rows(page)).toHaveText(['Matching work', 'Matching work archive']);
+  await expect(rows(page)).toHaveText(['Matching work']);
   await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
+  await expect(page.getByRole('complementary').getByRole('button', { name: /Archived chats/ })).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
