@@ -1,8 +1,27 @@
 
 /* ---------- composer ---------- */
 .composer {
+  position: relative;
   background: var(--color-bg-canvas);
-  padding: var(--space-3) var(--space-7) var(--space-4);
+  /* No leading inset: the first row starts on the fade's opaque edge, so the
+     transcript's last line dissolves into the card instead of into a strip of
+     empty canvas. */
+  padding: 0 var(--space-7) var(--space-4);
+}
+
+/* The transcript clips at this boundary, so a line of text stops on a hard
+   edge with nothing between it and the composer. Bleed the canvas colour up
+   over the last few pixels so it fades instead. Painted as an overlay rather
+   than a shadow on the bar: `.transcript` is positioned, so it would draw
+   above a sibling's box-shadow and hide the bleed under its text. */
+.composer::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 100%;
+  height: var(--space-6);
+  background: linear-gradient(to top, var(--color-bg-canvas), transparent);
+  pointer-events: none;
 }
 
 /* Archived transcripts occupy the composer's grid row but expose only their
@@ -49,7 +68,7 @@
      terminal reduces main to its minimum height. */
   gap: var(--space-2);
   max-height: calc(100cqh - var(--topbar-height));
-  padding: var(--space-2) var(--space-7);
+  padding: 0 var(--space-7) var(--space-2);
 }
 
 /* Notices and banners give up space before the input does. Keeping
