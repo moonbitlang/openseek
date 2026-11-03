@@ -1,9 +1,9 @@
 /* SeekMoon light palette. Replace this file with Theme Lab's CSS copy.
  * Semantic mappings stay in tokens.css. */
 :root {
-  --light-bg-canvas: #fcfbf8;
-  --light-bg-surface: #fcfbf8;
-  --light-bg-subtle: #f3f1ec;
+  --light-bg-canvas: #fcfcfb;
+  --light-bg-surface: #fbfbf9;
+  --light-bg-subtle: #f0f0ef;
   --light-text-primary: #121418;
   /* Secondary labels and metadata remain readable on the light surfaces. */
   --light-text-secondary: #3f444d;

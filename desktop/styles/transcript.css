@@ -498,14 +498,14 @@
   margin-top: 8px;
 }
 .user-bubble {
-  /* Tune each theme independently: a pale wash on paper, a muted blue on
-     dark canvas. Local text also keeps inline code legible on the fill. */
-  --color-text-primary: light-dark(#132748, #f1f5fc);
   min-width: 0;
   max-width: 85%;
   padding: 13px 17px;
   border-radius: 20px;
-  background: light-dark(#eaf3fd, #1c3e70);
+  /* Invariant: the bubble uses --color-bg-subtle, the background inline code
+     paints itself, so a code span inside a bubble has no fill to contrast
+     with and reads through its tone alone. */
+  background: var(--color-bg-subtle);
 }
 .session-message-source {
   margin-bottom: 6px;
