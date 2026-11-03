@@ -95,7 +95,8 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     await expect(heartbeat).toHaveCount(0);
     await expect(status).toHaveText('Finished');
     await expect(status.locator('.run-dot')).toHaveClass('run-dot ok');
-    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+    await expect(page.locator('#task')).toHaveValue('');
+    await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
     await expect(reasoning).toHaveCount(1);
     await expect(reasoning).toHaveText('Complete reasoning');
     await expect(page.locator('#transcript').getByText('Answer', { exact: true })).toHaveCount(1);

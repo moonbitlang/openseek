@@ -17,7 +17,7 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
   await task.press('Enter');
-  await expect(page.locator('#goal-set')).toBeVisible();
+  await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Ship the feature');
   await page.locator('#goal-set').click();
   await expect.poll(() => commands(app)).toEqual([{ command: { command: 'goal', action: 'set', text: 'Ship the feature' } }]);
@@ -144,7 +144,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
   await task.press('Enter');
-  await expect(page.locator('#goal-set')).toBeVisible();
+  await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Retain this goal');
   await page.locator('#goal-set').click();
   await expect(page.getByRole('main')).toContainText('Error');
@@ -309,7 +309,7 @@ for (const { status, body, notice, label } of [
         await page.locator('#task').fill('/goal');
         await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
         await page.locator('#task').press('Enter');
-        await expect(page.locator('#goal-set')).toBeVisible();
+        await expect(page.locator('#goal-cancel')).toBeVisible();
         await page.locator('#task').fill('Keep this goal');
         await page.locator('#goal-set').click();
         await expect(page.locator('#goal-set')).toBeVisible();
@@ -389,7 +389,7 @@ for (const command of ['goal', 'compact']) {
       await page.locator('#task').fill('/goal');
       await expect(page.locator('.completion-item').filter({hasText: '/goal'})).toBeVisible();
       await page.locator('#task').press('Enter');
-      await expect(page.locator('#goal-set')).toBeVisible();
+      await expect(page.locator('#goal-cancel')).toBeVisible();
       await page.locator('#task').fill('Recover this goal');
       await page.locator('#goal-set').click();
     }

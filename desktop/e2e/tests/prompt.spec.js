@@ -140,7 +140,7 @@ test('the first native goal carries the same custom prompt as a first message', 
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
   await task.press('Enter');
-  await expect(page.locator('#goal-set')).toBeVisible();
+  await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Complete the requested work');
   await page.locator('#goal-set').click();
   const requests = () => app.requests.filter(request => request.method === 'agent.command');
