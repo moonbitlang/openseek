@@ -885,6 +885,12 @@
 }
 .msg-content a {
   color: var(--color-accent);
+  text-decoration-thickness: 0.1em;
+  text-underline-offset: 0.16em;
+  text-decoration-color: color-mix(in srgb, currentColor 38%, transparent);
+}
+.msg-content a:hover {
+  text-decoration-color: currentColor;
 }
 .msg-content.markdown img {
   max-width: 100%;
