@@ -446,7 +446,7 @@
 }
 .office-viewer-surface .office-context-unplaced-heading[hidden] { display: none; }
 .office-viewer-surface .office-context-active {
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 2px var(--color-accent-soft);
 }
 .office-viewer-surface .office-context-header {
@@ -565,13 +565,13 @@
   border-left: 10px solid transparent;
 }
 .office-viewer-surface td.office-has-annotation { position: relative; }
-.office-viewer-surface td.office-annotation-focus { box-shadow: inset 0 0 0 2px var(--color-accent-strong); }
+.office-viewer-surface td.office-annotation-focus { box-shadow: inset 0 0 0 2px var(--color-accent); }
 .office-viewer-surface .office-context-heading:focus-visible,
 .office-viewer-surface .office-context-select:focus-visible,
 .office-viewer-surface .office-comment-marker:focus-visible,
 .office-viewer-surface .office-note-marker:focus-visible,
 .office-viewer-surface .office-annotation-body:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-.office-viewer-surface .office-annotation-focus { paint-order: stroke; stroke: var(--color-accent-strong); stroke-width: 4px; stroke-opacity: .5; }
+.office-viewer-surface .office-annotation-focus { paint-order: stroke; stroke: var(--color-accent); stroke-width: 4px; stroke-opacity: .5; }
 .office-viewer-surface .office-context-entry.office-annotation-selected > .office-annotation-body {
   background: var(--color-accent-soft);
   box-shadow: 0 0 0 4px var(--color-accent-soft);
@@ -676,7 +676,7 @@
 .office-viewer-surface .excel-sheet-tab:hover { background: var(--color-bg-subtle); color: var(--color-text-primary); }
 .office-viewer-surface .excel-sheet-tab.is-active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-weight: 600;
 }
 .office-viewer-surface .excel-sheet-tab:focus-visible {

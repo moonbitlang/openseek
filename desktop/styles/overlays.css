@@ -17,7 +17,7 @@
 .selection-actions .action-menu-item:focus-visible {
   outline: none;
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .selection-actions .action-menu-item:disabled {
   cursor: default;
@@ -349,7 +349,7 @@
 .composer-goal.editing {
   border-color: var(--color-accent-border);
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 /* Sent but not yet durably confirmed: quieter than a standing goal, since
    the record may still never carry it. */
@@ -386,7 +386,7 @@
   color: var(--color-text-primary);
 }
 .composer-goal.editing .composer-goal-action {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .composer-goal.editing .composer-goal-action:hover {
   background: var(--color-bg-surface);
@@ -488,8 +488,8 @@
   display: inline-block;
   padding: var(--space-4) 1rem;
   border-radius: var(--radius-sm);
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent-strong);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   text-decoration: none;
   font-size: var(--font-size-md);
 }
@@ -561,7 +561,7 @@
 
 .quick-open-row.selected .quick-open-kind,
 .quick-open-row:hover .quick-open-kind {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .quick-open-row-text {

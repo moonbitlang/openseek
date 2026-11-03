@@ -100,7 +100,7 @@
 }
 .jump-latest:hover {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   border-color: var(--color-accent-border);
 }
 
@@ -338,7 +338,7 @@
 }
 .empty-project-trigger:hover,
 .empty-project-trigger.open {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .empty-project-trigger:focus-visible {
   outline: 2px solid var(--color-focus-ring);

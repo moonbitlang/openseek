@@ -48,9 +48,9 @@
 }
 
 .codex-request-action-primary:not(:disabled):hover {
-  border-color: var(--color-accent-strong);
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent-strong);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .codex-request-action-danger {

@@ -208,7 +208,7 @@ samp,
 }
 
 .custom-select-option-check {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-size: var(--font-size-md);
   line-height: 1;
   text-align: center;

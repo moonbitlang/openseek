@@ -244,7 +244,7 @@
   border: 1px solid var(--color-accent-border);
   border-radius: var(--radius-pill);
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-size: var(--font-size-sm);
 }
 /* Wraps the glyph+label: a plain span for a chip with no jump target, or
@@ -293,7 +293,7 @@
   border: none;
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-size: var(--font-size-md);
   line-height: var(--line-height-tight);
   cursor: pointer;
@@ -630,7 +630,7 @@
   color: var(--color-text-primary);
 }
 .queued-input-action.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .queued-input-action:focus-visible {
   outline: 1px solid var(--color-focus-ring);
@@ -721,7 +721,7 @@
   border-color: var(--color-accent-border);
   border-radius: var(--radius-md);
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 /* Toolbar pickers read as their selected value alone. */
@@ -1412,7 +1412,7 @@
   padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-sm);
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-size: var(--font-size-sm);
   font-weight: 600;
   line-height: 1.6;

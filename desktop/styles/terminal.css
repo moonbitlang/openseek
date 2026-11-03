@@ -101,7 +101,7 @@ html.is-resizing-terminal * {
   cursor: pointer;
 }
 .terminal-tab.active .terminal-tab-select {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .terminal-tab-failed {
   color: var(--color-danger);

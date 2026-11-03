@@ -41,7 +41,7 @@
   --vscode-menu-background: var(--color-bg-surface);
   --vscode-menu-foreground: var(--color-text-primary);
   --vscode-menu-selectionBackground: var(--color-accent-soft);
-  --vscode-menu-selectionForeground: var(--color-accent-strong);
+  --vscode-menu-selectionForeground: var(--color-accent);
   --vscode-menu-separatorBackground: var(--color-border);
   --vscode-menu-border: var(--color-border);
 
@@ -94,7 +94,7 @@
     var(--color-text-muted) 45%,
     transparent
   );
-  --vscode-editorLink-activeForeground: var(--color-accent-strong);
+  --vscode-editorLink-activeForeground: var(--color-accent);
   /* One step below the documentation prose (`--color-text-secondary`), so a
      lens reads as a footnote rather than part of the doc above it. */
   --vscode-editorCodeLens-foreground: var(--color-text-muted);
@@ -167,7 +167,7 @@
   --vscode-inputValidation-infoBorder: var(--color-accent);
   --vscode-button-background: var(--color-accent);
   --vscode-button-foreground: var(--color-on-accent);
-  --vscode-button-hoverBackground: var(--color-accent-strong);
+  --vscode-button-hoverBackground: var(--color-accent);
   --vscode-button-border: transparent;
   --vscode-button-secondaryBackground: var(--color-bg-subtle);
   --vscode-button-secondaryForeground: var(--color-text-primary);
@@ -193,13 +193,13 @@
     transparent
   );
   --vscode-textLink-foreground: var(--color-accent);
-  --vscode-textLink-activeForeground: var(--color-accent-strong);
+  --vscode-textLink-activeForeground: var(--color-accent);
   --vscode-textCodeBlock-background: var(--color-bg-subtle);
   --vscode-badge-background: var(--color-accent-soft);
-  --vscode-badge-foreground: var(--color-accent-strong);
+  --vscode-badge-foreground: var(--color-accent);
   --vscode-list-hoverBackground: var(--color-hover-subtle);
   --vscode-list-activeSelectionBackground: var(--color-accent-soft);
-  --vscode-list-activeSelectionForeground: var(--color-accent-strong);
+  --vscode-list-activeSelectionForeground: var(--color-accent);
 
   /* Scrollbars derive from the muted text tone at increasing strengths. */
   --vscode-scrollbarSlider-background: color-mix(

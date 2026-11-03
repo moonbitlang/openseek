@@ -37,7 +37,7 @@ button.panel-toggle:not(:disabled):hover {
 
 .panel-toggle.active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .file-reveal-button {
@@ -143,7 +143,7 @@ button.panel-toggle:not(:disabled):hover {
 .editor-tab.active {
   /* Match the selected conversation in the left sidebar. */
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 /* A tab whose file vanished from disk keeps its place, struck through
    until the file reappears or the tab is closed. */
@@ -497,7 +497,7 @@ html:is(
 }
 .tab-action:hover:not(:disabled) {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .tab-action:disabled {
   opacity: 0.4;
@@ -576,7 +576,7 @@ html:is(
 }
 .dock-launcher-row:hover {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .dock-launcher-name {
   font-weight: 600;
@@ -622,7 +622,7 @@ html:is(
 }
 .browser-nav-button:hover {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .browser-nav-button.browser-annotate:not(.active):hover {
   color: var(--color-text-secondary);
@@ -630,7 +630,7 @@ html:is(
 }
 .browser-nav-button.browser-annotate.active,
 .browser-nav-button.browser-annotate.active:hover {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -731,7 +731,7 @@ html:is(
 }
 .search-option.pressed {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-option > svg {
   display: block;
@@ -767,7 +767,7 @@ html:is(
 }
 .search-mode-button.pressed {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-mode-options {
   flex: 0 0 auto;
@@ -804,7 +804,7 @@ html:is(
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-xs);
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-family: var(--font-family-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -888,7 +888,7 @@ html:is(
   background: var(--color-accent-soft);
 }
 .search-semantic-hit.selected .search-semantic-select {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-semantic-hit:hover {
   background: var(--color-bg-hover, var(--color-bg-surface));
@@ -1158,7 +1158,7 @@ html:is(
   font-size: var(--font-size-xs);
 }
 .search-pattern-repair-status svg {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   flex: 0 0 auto;
 }
 .search-pattern-repair-status.error {
@@ -1212,7 +1212,7 @@ html:is(
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: inherit;
   text-decoration: underline;
@@ -1259,7 +1259,7 @@ html:is(
 }
 
 .explorer-tab.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -1822,7 +1822,7 @@ button.git-history-file:focus-visible {
 }
 
 button.git-history-file.selected {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -1849,7 +1849,7 @@ button.git-history-file.selected {
 .git-history-file-status.status-added { color: var(--color-success); }
 .git-history-file-status.status-deleted { color: var(--color-danger); }
 .git-history-file-status.status-renamed,
-.git-history-file-status.status-copied { color: var(--color-accent-strong); }
+.git-history-file-status.status-copied { color: var(--color-accent); }
 
 .git-commit-files-message,
 .git-graph-message,
@@ -1897,7 +1897,7 @@ button.git-history-file.selected {
   border: 0;
   border-radius: 2px;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: var(--font-size-sm);
   line-height: calc(20 / 13);
@@ -1918,7 +1918,7 @@ button.git-history-file.selected {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: var(--font-size-sm);
   cursor: pointer;
@@ -1990,7 +1990,7 @@ button.git-history-file.selected {
 }
 
 .tree-row:focus-visible {
-  outline: 2px solid var(--color-accent-strong);
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -2000,7 +2000,7 @@ button.git-history-file.selected {
 
 .tree-row.selected {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .change-tree {
@@ -2034,7 +2034,7 @@ button.git-history-file.selected {
 
 .change-row.renamed .change-path,
 .change-status.renamed {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .change-row.modified .change-path,
@@ -2084,19 +2084,19 @@ button.git-history-file.selected {
   margin: 0 var(--space-1) 0 0;
   border: 1px solid color-mix(in srgb, var(--color-text-primary) 30%, transparent);
   border-radius: 3px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: transparent;
   cursor: pointer;
 }
 
 .change-review-checkbox[aria-checked="true"],
 .change-review-checkbox[aria-checked="mixed"] {
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
 .change-review-checkbox:hover:not(:disabled) {
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
 }
 
 .change-review-checkbox:disabled {
@@ -2317,7 +2317,7 @@ button.git-history-file.selected {
 }
 .office-viewer-control:hover:not(:disabled),
 .office-viewer-control.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 .office-viewer-control:disabled {
@@ -2436,7 +2436,7 @@ button.git-history-file.selected {
 }
 
 .breadcrumb-picker-row.selected {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -2589,7 +2589,7 @@ button.git-history-file.selected {
 
 .review-mode-button.active,
 .review-layout-button.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 20%, transparent);
   font-weight: 600;
 }
@@ -2657,7 +2657,7 @@ button.git-history-file.selected {
 
 .review-comments-control.active,
 .review-tests-control.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 

@@ -60,8 +60,8 @@ let crash_style : String =
   #|      cursor: pointer;
   #|    }
   #|    #frontend-crash button:hover {
-  #|      border-color: var(--color-accent-strong, #2a55cc);
-  #|      background: var(--color-accent-strong, #2a55cc);
+  #|      border-color: var(--color-accent, #315fd5);
+  #|      background: var(--color-accent, #315fd5);
   #|    }
   #|    #frontend-crash button:focus-visible,
   #|    #frontend-crash summary:focus-visible {

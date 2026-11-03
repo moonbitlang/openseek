@@ -159,7 +159,7 @@ main:has(> .conv-overview) {
 }
 .conv-overview-mini.active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .conv-overview-mini:disabled {
   opacity: 0.5;

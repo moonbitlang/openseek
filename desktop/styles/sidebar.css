@@ -276,7 +276,7 @@ html.is-resizing .sidebar-resize-handle {
 
 .conversation-row.active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .conversation-row.load-failed {
@@ -287,7 +287,7 @@ html.is-resizing .sidebar-resize-handle {
   width: 12px;
   height: 12px;
   border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent-strong);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: conversation-load-spin 0.8s linear infinite;
 }
@@ -604,7 +604,7 @@ button.composer-worktree:hover {
 }
 .composer-worktree.on {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 /* A conversation nested under its workspace row: the twisty cell and the row
@@ -741,7 +741,7 @@ button.row-twisty:hover {
   padding-left: 2.5rem;
 }
 .conversation-row.subrun.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 #project-picker-dialog {
@@ -763,7 +763,7 @@ button.row-twisty:hover {
   border: 1px solid var(--color-accent-border);
   border-radius: 10px;
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-header-copy {
   min-width: 0;
@@ -818,7 +818,7 @@ button.row-twisty:hover {
   --icon-size: var(--icon-sm);
   display: grid;
   place-items: center;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-path-editor input {
   width: 100%;
@@ -982,11 +982,11 @@ button.row-twisty:hover {
   place-items: center;
   flex: none;
   width: 20px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-row:not(:disabled):hover .picker-row-icon,
 .picker-row:not(:disabled):focus-visible .picker-row-icon {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-row-name {
   flex: 1 1 auto;
@@ -1027,7 +1027,7 @@ button.row-twisty:hover {
   place-items: center;
   width: 28px;
   height: 28px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-create-row input {
   width: 100%;
@@ -1056,9 +1056,9 @@ button.row-twisty:hover {
   color: var(--color-text-primary);
 }
 .picker-create-submit:not(:disabled):hover {
-  border-color: var(--color-accent-strong);
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent-strong);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 .picker-empty {
   display: grid;
@@ -1100,7 +1100,7 @@ button.row-twisty:hover {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-current-copy {
   display: grid;
@@ -1232,8 +1232,8 @@ button.row-twisty:hover {
     }
 
     &:not(:disabled):hover {
-      background: var(--color-accent-strong);
-      color: var(--color-on-accent-strong);
+      background: var(--color-accent);
+      color: var(--color-on-accent);
     }
   }
 }
