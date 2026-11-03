@@ -2255,16 +2255,12 @@ fn view(
             @html.nothing
           },
           if model.cloud_identity() is Some(_) {
-            if model.narrow {
-              conversation_transfer_button(model.locale, narrow=true)
-            } else {
-              @html.button(
-                class="panel-toggle",
-                title=shell_text(model.locale, ExportConversation),
-                on_click=dispatch(OpenCloudExport),
-                icon(icon_chat_export),
-              )
-            }
+            @html.button(
+              class="panel-toggle",
+              title=shell_text(model.locale, ExportConversation),
+              on_click=dispatch(OpenCloudExport),
+              icon(icon_chat_export),
+            )
           } else {
             @html.nothing
           },

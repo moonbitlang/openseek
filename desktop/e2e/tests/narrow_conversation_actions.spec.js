@@ -5,8 +5,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 const actions = page => page.locator('main > .topbar').getByRole('button', { name: 'Conversation actions', exact: true });
 const actionsMenu = page => page.getByRole('menu', { name: 'Conversation actions', exact: true });
 
-async function expectSeparateHeaderControls(page) {
-  const menuButton = actions(page);
+async function expectSeparateHeaderControls(page, menuButton = actions(page)) {
   const panelButton = page.locator('.right-panel-toggle');
   await expect(menuButton).toBeVisible();
   await expect(panelButton).toBeVisible();
@@ -44,25 +43,23 @@ async function cloudConversation(page) {
   return cloud;
 }
 
-test('narrow Cloud conversation actions preserve export, full-screen files and the current conversation across resizing', async ({ page }) => {
+test('narrow Cloud conversations keep the inline export beside the panel toggle across resizing', async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 851 });
   const cloud = await cloudConversation(page);
   const header = page.locator('main > .topbar');
   const conversationURL = page.url();
+  const inlineExport = header.getByRole('button', { name: 'Export', exact: true });
   await page.locator('#task').fill('Unsent Cloud draft');
-  await expectSeparateHeaderControls(page);
+  await expectSeparateHeaderControls(page, inlineExport);
   await expect(header.locator('button:visible')).toHaveCount(1);
-  await expect(header.getByRole('button', { name: 'Export', exact: true })).toHaveCount(0);
+  await expect(actions(page)).toHaveCount(0);
+  await expect(inlineExport).not.toHaveAttribute('aria-haspopup', 'menu');
 
-  await actions(page).click();
-  await expect(actionsMenu(page).getByRole('menuitem', { name: 'Export', exact: true })).toBeEnabled();
-  await expect(actionsMenu(page).getByRole('menuitem', { name: /^(Show|Hide) panel$/ })).toHaveCount(0);
-  await actionsMenu(page).getByRole('menuitem', { name: 'Export', exact: true }).click();
+  await inlineExport.click();
   const exportDialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
   await expect(exportDialog).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(exportDialog).not.toBeVisible();
-  await expect(actions(page)).toBeFocused();
 
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
@@ -80,18 +77,10 @@ test('narrow Cloud conversation actions preserve export, full-screen files and t
   await expect(page.locator('#task')).toHaveValue('Unsent Cloud draft');
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(actions(page)).toHaveCount(0);
-  const inlineExport = header.getByRole('button', { name: 'Export', exact: true });
   await expect(inlineExport).toBeVisible();
-  await expect(inlineExport).not.toHaveAttribute('aria-haspopup', 'menu');
-  await inlineExport.click();
-  await expect(exportDialog).toBeVisible();
-  await expect(actionsMenu(page)).not.toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(exportDialog).not.toBeVisible();
   await expect(page.locator('.right-panel-toggle')).toBeVisible();
   await page.setViewportSize({ width: 393, height: 851 });
-  await expectSeparateHeaderControls(page);
+  await expectSeparateHeaderControls(page, inlineExport);
   await expect(header.locator('button:visible')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('Unsent Cloud draft');
   expect(cloud.device.pageErrors).toEqual([]);
@@ -152,8 +141,10 @@ test('narrow Host conversation actions retain import, export, overview and files
 });
 
 test('conversation actions fit the viewport, dismiss on Escape and outside clicks, and close at the wide-layout boundary', async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 393, height: 851 });
-  const cloud = await cloudConversation(page);
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
   for (const width of [393, 760]) {
     await page.setViewportSize({ width, height: 851 });
     await expectSeparateHeaderControls(page);
@@ -181,8 +172,8 @@ test('conversation actions fit the viewport, dismiss on Escape and outside click
   await expect(actionsMenu(page)).toBeVisible();
   await page.setViewportSize({ width: 761, height: 851 });
   await expect(actions(page)).toHaveCount(0);
-  await expect(actionsMenu(page)).not.toBeVisible();
-  await expect(page.locator('main > .topbar').getByRole('button', { name: 'Export', exact: true })).toBeVisible();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.locator('main > .topbar').getByRole('button', { name: 'Export and import', exact: true })).toBeVisible();
   await expect(page.locator('.right-panel-toggle')).toBeVisible();
   await page.setViewportSize({ width: 760, height: 851 });
   await expectSeparateHeaderControls(page);
@@ -190,5 +181,5 @@ test('conversation actions fit the viewport, dismiss on Escape and outside click
   await actions(page).click();
   await expect(actionsMenu(page).getByRole('menuitem', { name: /^(Show|Hide) panel$/ })).toHaveCount(0);
   await expect(actionsMenu(page).getByRole('menuitem', { name: 'Export', exact: true })).toBeEnabled();
-  expect(cloud.device.pageErrors).toEqual([]);
+  expect(app.pageErrors).toEqual([]);
 });
