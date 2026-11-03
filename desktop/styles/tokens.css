@@ -100,9 +100,9 @@
   /* Structural seams should recede behind content. Persistent control
      grouping comes from a quiet fill; the stronger border remains available
      for fields, overlays, focus, and actions whose boundary carries meaning. */
-  --color-separator: color-mix(
+  --color-seam: color-mix(
     in srgb,
-    light-dark(var(--light-border-subtle), var(--dark-border-subtle)) 68%,
+    light-dark(var(--light-seam), var(--dark-seam)) 68%,
     transparent
   );
   --color-control-surface: color-mix(

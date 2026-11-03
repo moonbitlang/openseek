@@ -33,7 +33,7 @@ main {
   padding-inline-start: var(--main-titlebar-leading-inset);
   padding-inline-end: var(--main-titlebar-trailing-inset);
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
 }
 

@@ -71,7 +71,7 @@ let crash_style : String =
   #|    #frontend-crash details {
   #|      margin-top: 20px;
   #|      padding-top: 14px;
-  #|      border-top: 1px solid var(--color-border-subtle, #f0efea);
+  #|      border-top: 1px solid var(--color-divider, #f0efea);
   #|      color: var(--color-text-muted, #565d68);
   #|      font-size: var(--font-size-sm, 13px);
   #|    }
@@ -80,7 +80,7 @@ let crash_style : String =
   #|      max-height: 240px;
   #|      overflow: auto;
   #|      padding: 12px;
-  #|      border: 1px solid var(--color-border-subtle, #f0efea);
+  #|      border: 1px solid var(--color-border, #f0efea);
   #|      border-radius: var(--radius-sm, 6px);
   #|      background: var(--color-bg-subtle, #f6f6f3);
   #|      color: var(--color-code, #2b2f36);

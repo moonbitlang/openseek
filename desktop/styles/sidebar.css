@@ -15,7 +15,7 @@ aside {
   min-height: 0;
   overflow: hidden;
   padding-bottom: 1rem;
-  border-right: 1px solid var(--color-separator);
+  border-right: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   /* The width-resize grab strip on the right edge positions against the
@@ -90,7 +90,7 @@ html.is-resizing .sidebar-resize-handle {
 .sidebar-mode-option.active {
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
-  box-shadow: 0 0 0 1px var(--color-separator);
+  box-shadow: 0 0 0 1px var(--color-seam);
 }
 .sidebar-mode-option:focus-visible {
   outline: 2px solid var(--color-focus-ring);
@@ -1248,7 +1248,7 @@ button.row-twisty:hover {
   margin: var(--space-4) var(--space-5) var(--space-5);
   width: calc(100% - 2 * var(--space-5));
   padding: 0 var(--space-4);
-  border: 1px solid var(--color-separator);
+  border: 1px solid var(--color-seam);
   border-radius: 7px;
   background: var(--color-bg-surface);
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
