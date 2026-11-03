@@ -106,6 +106,8 @@ pub fn icon_more() -> @html.Html
 
 pub fn icon_new_chat() -> @html.Html
 
+pub fn icon_newline() -> @html.Html
+
 pub fn icon_organization() -> @html.Html
 
 pub fn icon_package() -> @html.Html

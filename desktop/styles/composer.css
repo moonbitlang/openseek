@@ -1014,17 +1014,15 @@
   border-radius: var(--radius-sm);
 }
 
-.send-button {
-  border-color: transparent;
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+.composer-actions .send-button {
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
 }
-.send-button:not(:disabled):hover {
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent-strong);
-}
-.send-button:disabled {
+.composer-actions .send-button:not(:disabled):hover {
   background: var(--color-bg-subtle);
+}
+.composer-actions .send-button:disabled {
   color: var(--color-text-muted);
 }
 
