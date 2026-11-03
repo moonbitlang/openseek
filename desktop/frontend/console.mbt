@@ -422,7 +422,8 @@ fn apply_roster(
     (@cmd.none, reconciled)
   }
   commands.push(focus_cmd)
-  let reconciled = if model.cloud_identity() is Some(_) {
+  let reconciled = if model.cloud_identity() is Some(_) ||
+    model.cloud_draft_identity() is Some(_) {
     { ..reconciled, selected_conversation: model.selected_conversation, }
   } else {
     reconciled
