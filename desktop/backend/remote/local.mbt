@@ -1,6 +1,7 @@
 // The development console: a `.dev` build serves its own frontend bundle on
 // plain `http://127.0.0.1:<port>/` to the system browser, answering the
-// console's account routes for the one machine it is — `/v1/auth/me`, a
+// console's account routes for the one machine it is — `/v1/auth/me`,
+// independent browser account login via `/v2/auth/login` and `/cb`,
 // `/v1/devices` roster naming this host as device `host`, and
 // `/v1/devices/host/ws` upgraded into the JSON-RPC connection a relayed
 // browser gets (docs/remote-protocol.md). The page is the same bundle and
@@ -22,6 +23,8 @@ pub struct LocalConsole {
   server : @http.Server
   // How the roster names this machine.
   name : String
+  priv account_origin : String
+  priv sign_in : @browser_signin.Flow
 }
 
 ///|
@@ -43,6 +46,9 @@ fn LocalConsole::port(self : LocalConsole) -> Int32 {
 priv enum Route {
   Home
   AuthMe
+  AccountLogin
+  AccountCallback
+  AccountLogout
   Devices
   // Compatibility routes for the shared console's account controls.
   Login
@@ -62,6 +68,9 @@ fn route(meth : @http.RequestMethod, path : String, entry~ : String) -> Route {
     (Get, "/") => Home
     (Get, path) if @routes.is_application_path(path) => ApplicationPage
     (Get, "/v1/auth/me") => AuthMe
+    (Get, "/v2/auth/login") => AccountLogin
+    (Get, "/cb") => AccountCallback
+    (Post, "/v2/auth/logout") => AccountLogout
     (Get, "/v1/devices") => Devices
     (Get, "/v1/auth/login") => Login
     (Post, "/v1/auth/logout") => Logout
@@ -105,6 +114,48 @@ async fn LocalConsole::handle(
     // No account stands behind the local console, so it has no avatar; the
     // field is absent rather than empty.
     AuthMe => respond_json(conn, { "login": "local" })
+    AccountLogin => {
+      let (_, query) = split_path_query(request.path)
+      let location = self.sign_in.begin(decoded_query_param(query, "return_to")) catch {
+        error => {
+          respond_account_page(conn, "\{error}", code=500, html=false)
+          return
+        }
+      }
+      respond_redirect(conn, location)
+    }
+    // The one-time state and PKCE verifier bind the callback to a login
+    // started on this console.
+    AccountCallback => {
+      let (_, query) = split_path_query(request.path)
+      match
+        self.sign_in.finish(
+          decoded_query_param(query, "state"),
+          decoded_query_param(query, "code"),
+          decoded_query_param(query, "error"),
+        ) {
+        Ok(html) => respond_account_page(conn, html, code=200, html=true)
+        Err((code, message)) =>
+          respond_account_page(conn, message, code~, html=false)
+      }
+    }
+    AccountLogout => {
+      guard request.headers.get("authorization") is Some(authorization) else {
+        respond_status(conn, 401, "Unauthorized")
+        return
+      }
+      let (response, body) = @http.post(
+        self.account_origin + "/v2/auth/logout",
+        "",
+        headers={ "Authorization": authorization },
+      ) catch {
+        _ => {
+          respond_status(conn, 502, "Bad Gateway")
+          return
+        }
+      }
+      respond_account_page(conn, body.text(), code=response.code, html=false)
+    }
     Devices =>
       respond_json(conn, {
         "devices": [
@@ -143,8 +194,15 @@ async fn LocalConsole::handle(
       respond_redirect(conn, target)
     }
     Logout => respond_status(conn, 204, "No Content")
-    Static(relative) => serve_static(root, relative, conn)
-    ApplicationPage => serve_static(root, entry, conn)
+    Static(relative) =>
+      serve_static(
+        root,
+        relative,
+        conn,
+        local_console_document=relative == entry,
+      )
+    ApplicationPage =>
+      serve_static(root, entry, conn, local_console_document=true)
     Unknown => respond_status(conn, 404, "Not Found")
     MethodNotAllowed => respond_status(conn, 405, "Method Not Allowed")
   }
@@ -190,6 +248,7 @@ async fn serve_static(
   root : String,
   relative : String,
   conn : @http.ServerConnection,
+  local_console_document~ : Bool = false,
 ) -> Unit {
   // Only an absent file is 404; an unreadable one is the bundle being broken,
   // which the log names and the browser sees as a server failure.
@@ -208,6 +267,19 @@ async fn serve_static(
       respond_status(conn, 500, "Internal Server Error")
       return
     }
+  }
+  // The marker identifies this host independently of its current CSR route.
+  // It carries no account credentials and does not change local access.
+  let body = if local_console_document {
+    let html = @utf8.decode_lossy(body, ignore_bom=true)
+    @utf8.encode(
+      html.replace_all(
+        old="<head>",
+        new="<head>\n<meta name=\"seekmoon-local-console\" />",
+      ),
+    )
+  } else {
+    body
   }
   conn.send_response(200, "OK", extra_headers={
     "Content-Type": content_type(relative),
@@ -410,4 +482,30 @@ test "stable application paths serve the application document" {
   assert_true(
     route(Get, "/frontend.js", entry="index.html") is Static("frontend.js"),
   )
+}
+
+///|
+fn decoded_query_param(query : String, name : String) -> String? {
+  query_param(query, name).map(value => @uri.decode_component(value))
+}
+
+///|
+async fn respond_account_page(
+  conn : @http.ServerConnection,
+  body : String,
+  code~ : Int32,
+  html~ : Bool,
+) -> Unit {
+  conn.send_response(code, "Account", extra_headers={
+    "Content-Type": if html {
+      "text/html; charset=utf-8"
+    } else {
+      "text/plain; charset=utf-8"
+    },
+    "Content-Length": @utf8.encode(body).length().to_string(),
+    "Cache-Control": "no-store",
+    "Connection": "close",
+  })
+  conn.write(body)
+  conn.end_response()
 }

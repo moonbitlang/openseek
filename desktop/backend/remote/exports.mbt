@@ -12,7 +12,10 @@
 /// console usable; the Settings page shows whichever origin was bound.
 ///
 /// Exported for `desktop/app`, which binds the console in a development build.
-pub async fn LocalConsole::bind(port~ : Int32) -> LocalConsole {
+pub async fn LocalConsole::bind(
+  port~ : Int32,
+  account_origin~ : String = @auth.AccountOrigin,
+) -> LocalConsole {
   let server = @http.Server(
     @socket.Addr::parse("127.0.0.1:\{port}"),
     reuse_addr=true,
@@ -32,7 +35,12 @@ pub async fn LocalConsole::bind(port~ : Int32) -> LocalConsole {
     Some(hostname) => hostname
     None => "This device"
   }
-  { server, name, }
+  {
+    server,
+    account_origin,
+    sign_in: Flow(relay=account_origin, port=server.addr.port()),
+    name,
+  }
 }
 
 ///|

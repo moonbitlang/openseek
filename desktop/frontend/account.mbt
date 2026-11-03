@@ -1,10 +1,11 @@
 ///|
-/// Desktop credentials come only from its own native window. A browser uses
-/// its own same-origin account cookie, never the computer it is connected to.
+/// The native window reads its account through the bridge; browsers own
+/// their independent account in this origin's storage.
 fn fetch_account(
   dispatch : @cmd.Emit[Msg],
   desktop : Bool,
   epoch : Int32,
+  local_console~ : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -21,6 +22,7 @@ fn fetch_account(
           match load_browser_account() {
             Err(message) => Err(message)
             Ok(Some(account)) => Ok(Some(account))
+            Ok(None) if local_console => Ok(None)
             Ok(None) => {
               let base = match resolve_browser_url("/v2/auth/me") {
                 Ok((url, _)) => url
@@ -125,7 +127,7 @@ fn account_loaded(
           remote_connecting: false,
           account_login_create: None,
           remote_error: Some(message),
-          console: if model.is_desktop {
+          console: if model.is_desktop || model.is_local_console() {
             model.console
           } else {
             { ..model.console, notice: Some(message), }
@@ -155,8 +157,11 @@ fn account_loaded(
     account_login_create: None,
     remote_connecting: false,
     remote_error: None,
+    console: { ..model.console, busy: false, notice: None, },
   }
-  let (retire_command, next) = if changed && !model.is_desktop {
+  let (retire_command, next) = if changed &&
+    !model.is_desktop &&
+    !model.is_local_console() {
     console_signed_out(dispatch, next)
   } else {
     (@cmd.none, next)
@@ -185,7 +190,8 @@ fn account_loaded(
       }
     })
   }
-  let (console_command, next) = if !model.is_desktop {
+  let (console_command, next) = if !model.is_desktop &&
+    !model.is_local_console() {
     match account {
       Some(account) =>
         update_console_msg(
@@ -280,4 +286,39 @@ fn expire_account(
       Ok(None),
     )
   }
+}
+
+///|
+test "a local browser account reset preserves the host and rejects stale results" {
+  let base = test_model()
+  let channel : @interop.ChannelId = Remote("host")
+  let account : @protocol.AccountSession = {
+    token: "ts_browser-token",
+    user: { user_id: "browser", login: "browser", avatar_url: "", },
+  }
+  let model = {
+    ..base,
+    is_desktop: false,
+    account: Some(account),
+    account_epoch: 2,
+    devices: [{ ..empty_device_state(channel), bridge: Connected, }],
+    focused: channel,
+    conversations: [{ ..test_conversation(), device: channel, }],
+    console: {
+      ..base.console,
+      page_device: Some("host"),
+      auth: AuthSignedIn(login="local", avatar=""),
+      busy: true,
+    },
+  }
+  let (_, stale) = account_loaded(test_dispatch(), model, 1, Ok(None))
+  assert_true(stale == model)
+  let (_, signed_out) = account_loaded(test_dispatch(), model, 2, Ok(None))
+  let (_, repeated) = account_loaded(test_dispatch(), model, 2, Ok(None))
+  assert_true(signed_out == repeated)
+  assert_true(signed_out.account is None)
+  assert_false(signed_out.console.busy)
+  assert_true(signed_out.devices == model.devices)
+  assert_true(signed_out.conversations == model.conversations)
+  assert_true(signed_out.console.auth == model.console.auth)
 }

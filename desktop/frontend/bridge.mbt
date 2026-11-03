@@ -366,7 +366,7 @@ fn DeviceState::bridge_subscription(
         websocket_epoch=self.websocket_epoch,
         reconnect_attempt=self.reconnect_attempt,
         dispatch=bridge_dispatch,
-        account~,
+        account=if device == "host" { None } else { account },
       )
     }
   }

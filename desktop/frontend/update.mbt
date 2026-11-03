@@ -2196,7 +2196,12 @@ fn update_msg(
       }
       (
         @cmd.batch([
-          fetch_account(dispatch, model.is_desktop, model.account_epoch),
+          fetch_account(
+            dispatch,
+            model.is_desktop,
+            model.account_epoch,
+            local_console=model.is_local_console(),
+          ),
           @cmd.custom_cmd(_ => @cloud.discard_legacy_credential()),
           device,
           load_saved_settings(is_desktop=model.is_desktop, dispatch),

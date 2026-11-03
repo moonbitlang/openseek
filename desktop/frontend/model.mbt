@@ -2582,7 +2582,7 @@ fn empty_conversation(
 /// `desktop` is whether this page runs inside the proton window rather than
 /// as a browser console: one bundle serves both, and `main` reads the
 /// difference once from the bridge the host installs before any page script.
-fn initial_model(desktop~ : Bool) -> Model {
+fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
   // Read once here (main runs before the first render); afterwards the
   // resize subscription keeps the flag current through `ViewportResized`.
   // No window (a headless test runtime) reads as the wide layout.
@@ -2596,6 +2596,8 @@ fn initial_model(desktop~ : Bool) -> Model {
   // optional `?workspace=` places that device's first conversation.
   let page_device = if desktop {
     Some(@interop.LocalDeviceId)
+  } else if local_console {
+    Some("host")
   } else if navigation_device_from_location() is Some(device) {
     Some(device)
   } else {
@@ -2766,6 +2768,12 @@ fn initial_model(desktop~ : Bool) -> Model {
     remote_connecting: false,
     remote_error: None,
   }
+}
+
+///|
+/// Local host access and Cloud sign-in are independent on this page.
+fn Model::is_local_console(self : Model) -> Bool {
+  !self.is_desktop && self.console.page_device == Some("host")
 }
 
 ///|

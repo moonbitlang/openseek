@@ -788,29 +788,31 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     RestartingForUpdate(..) => Some(shell_text(self.locale, RestartingLabel))
     _ => None
   }
-  // The browser console's account row: who is signed in, a roster refresh,
-  // and the sign-out — with the last account-level failure inline beneath
-  // it. The desktop window's session is its own host's, with nothing to sign
-  // out of, so it shows no account.
-  let account : @sidebar.Account? = match self.console.auth {
-    AuthSignedIn(login~, avatar~) if !self.is_desktop =>
-      Some({
-        login,
-        avatar,
-        busy: self.console.busy,
-        notice: self.console.notice,
-        device: self.console.page_device.bind(id => {
-          self.console.roster
-          .iter()
-          .find_first(meta => meta.id == id)
-          .map(meta => meta.device_choice())
-        }),
-        online_devices: self.console.roster
-        .filter(meta => meta.online)
-        .map(meta => meta.device_choice()),
-      })
-    _ => None
+  // Local host access is not a Cloud account. The Local Console displays
+  // its independent Cloud account, while a relay browser owns its own sign-in.
+  let account_identity = if self.is_local_console() {
+    self.account.map(account => (account.user.login, account.user.avatar_url))
+  } else {
+    match self.console.auth {
+      AuthSignedIn(login~, avatar~) if !self.is_desktop => Some((login, avatar))
+      _ => None
+    }
   }
+  let account : @sidebar.Account? = account_identity.map(identity => {
+    login: identity.0,
+    avatar: identity.1,
+    busy: self.console.busy,
+    notice: self.console.notice,
+    device: self.console.page_device.bind(id => {
+      self.console.roster
+      .iter()
+      .find_first(meta => meta.id == id)
+      .map(meta => meta.device_choice())
+    }),
+    online_devices: self.console.roster
+    .filter(meta => meta.online)
+    .map(meta => meta.device_choice()),
+  })
   @sidebar.Input::{
     search: self.session_search,
     notices,
@@ -3049,7 +3051,16 @@ fn Model::chat_sidebar_sections(
 fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @html.section(class="cloud-home management-page", [
     @html.h2(@sidebar_messages.text(model.locale, Chats)),
-    if model.account is Some(_) {
+    if model.is_local_console() && model.remote_error is Some(message) {
+      @html.div([
+        @html.p(message),
+        @html.button(
+          class="button",
+          on_click=dispatch(Console(RefreshClicked)),
+          shell_text(model.locale, TryAgain),
+        ),
+      ])
+    } else if model.account is Some(_) {
       @html.button(
         class="button primary",
         on_click=dispatch(CloudAction(@cloud.Create)),
