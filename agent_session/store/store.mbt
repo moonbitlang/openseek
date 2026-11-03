@@ -999,3 +999,25 @@ pub fn SessionStore::inbox_path(
 ) -> String raise {
   "\{self.session_dir(id)}/inbox.jsonl"
 }
+
+///|
+/// Explicitly migrate legacy inline images while holding the session write lock.
+/// Event sequences and timestamps are preserved; normal reads never rewrite.
+pub async fn SessionStore::migrate_images(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+  attachments~ : @attachments.AttachmentStore,
+) -> @agent_session.Session {
+  with_existing_session_lock(self, id, Exclusive, () => {
+    let session = read_session_file(self, id).session.map_content(content => {
+      attachments.admit(content)
+    })
+    write_text_atomic(
+      self.session_file_path(id),
+      session_file_text(session),
+      dirs=self.session_dir_chain(id),
+    )
+    record_mark(self, session)
+    session
+  })
+}

@@ -36,6 +36,7 @@ test "client debug redacts api key" {
     content=(
       #|{
       #|  api_key: ...,
+      #|  attachments: None,
       #|  model: Deepseek(V4Pro),
       #|  api_url: "https://api.deepseek.com/chat/completions",
       #|  thinking: Max,

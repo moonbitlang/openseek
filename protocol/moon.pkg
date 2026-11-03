@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/string",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/encoding/hex",
   "moonbitlang/core/json",

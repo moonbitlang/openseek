@@ -5,6 +5,7 @@ import {
 } for "wbtest"
 
 import {
+  "moonbitlang/openseek/attachments",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/viz_export",
   "moonbitlang/async",
