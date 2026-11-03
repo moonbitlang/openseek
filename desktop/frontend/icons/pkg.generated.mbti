@@ -140,6 +140,8 @@ pub fn icon_shield() -> @html.Html
 
 pub fn icon_sparkle() -> @html.Html
 
+pub fn icon_stop_circle() -> @html.Html
+
 pub fn icon_sync() -> @html.Html
 
 pub fn icon_target() -> @html.Html
