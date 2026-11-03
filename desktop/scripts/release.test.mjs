@@ -256,7 +256,9 @@ async function githubFixture(t, { published = false } = {}) {
     switch (subcommand) {
       case "create":
         assert.equal(found, undefined);
-        releases.set(tag, { tag_name: tag, draft: args.includes("--draft"), assets: [] });
+        releases.set(tag, {
+          tag_name: tag, target_commitish: args[args.indexOf("--target") + 1], draft: args.includes("--draft"), assets: [],
+        });
         return "";
       case "upload": {
         assert.ok(found.draft, "public assets are never replaced");
@@ -269,6 +271,11 @@ async function githubFixture(t, { published = false } = {}) {
         for (const asset of found.assets) writeFileSync(join(args[args.indexOf("--dir") + 1], asset.name), asset.bytes);
         return "";
       case "edit":
+        if (args.includes("--target")) {
+          assert.ok(found.draft, "a public release's tag already exists");
+          found.target_commitish = args[args.indexOf("--target") + 1];
+          return "";
+        }
         assert.ok(args.includes("--draft=false") && args.includes("--latest"));
         found.draft = false;
         return "";
@@ -281,7 +288,10 @@ async function githubFixture(t, { published = false } = {}) {
 }
 
 function publicRelease(tag, bytesFor = file => Buffer.from(`canonical ${file}`)) {
-  return { tag_name: tag, draft: false, assets: Object.values(ReleaseFiles).map(file => asset(file, bytesFor(file))) };
+  return {
+    tag_name: tag, target_commitish: "0123456789abcdef", draft: false,
+    assets: Object.values(ReleaseFiles).map(file => asset(file, bytesFor(file))),
+  };
 }
 
 function ghCalls(gh, subcommand) {
@@ -323,6 +333,33 @@ test("upload refuses assets GitHub reports differently before staging the Browse
   });
   const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage the Browser"));
   await assert.rejects(release.upload("v0.1.9"), /GitHub asset does not match the built artifact: android/);
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("upload moves an earlier commit's draft to the built commit before replacing its assets", async t => {
+  const { release, releases, gh } = await githubFixture(t);
+  releases.set("v0.1.9", { tag_name: "v0.1.9", target_commitish: "fedcba9876543210", draft: true, assets: [] });
+  t.mock.method(release, "fetchJson", async (path, options) =>
+    ({ sha256: createHash("sha256").update(options.body).digest("hex") }));
+  await release.upload("v0.1.9");
+  const [edit] = ghCalls(gh, "edit");
+  assert.equal(edit[edit.indexOf("--target") + 1], "0123456789abcdef");
+  const uploads = gh.mock.calls.map(call => call.arguments[0]);
+  assert.ok(uploads.indexOf(edit) < uploads.findIndex(args => args[1] === "upload"), "the target moves before any asset");
+  assert.equal(releases.get("v0.1.9").target_commitish, "0123456789abcdef");
+  assert.deepEqual(releases.get("v0.1.9").assets.map(asset => asset.name), Object.values(ReleaseFiles));
+});
+
+test("upload refuses a public release built from another commit", async t => {
+  const { release, releases, gh } = await githubFixture(t);
+  releases.set("v0.1.9", { ...publicRelease("v0.1.9"), target_commitish: "fedcba9876543210" });
+  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage the Browser"));
+  await assert.rejects(release.upload("v0.1.9"),
+    /v0\.1\.9 is public on GitHub from fedcba9876543210, not 0123456789abcdef/);
+  assert.deepEqual(gh.mock.calls.map(call => call.arguments[0][0]), ["api"], "nothing is downloaded or changed");
+  for (const file of Object.values(ReleaseFiles)) {
+    assert.equal(await fs.readFile(join(release.dist, file), "utf8"), `built ${file}`);
+  }
   assert.equal(request.mock.callCount(), 0);
 });
 

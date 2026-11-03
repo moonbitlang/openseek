@@ -224,8 +224,17 @@ export class Release {
   async upload(version) {
     await this.checkoutVersion(version);
     const repository = this.repository();
+    const commit = this.env("GITHUB_SHA");
     let release = this.githubRelease(version);
     if (release && !release.draft) {
+      // Publish makes the release public just before the API publish, so a
+      // public release may never have reached latest.json. The next scheduled
+      // run then resolves the same version from a newer commit, and adopting
+      // the older assets would ship that commit's version without its changes.
+      if (release.target_commitish !== commit) {
+        throw new Error(`${version} is public on GitHub from ${release.target_commitish}, not ${commit}; ` +
+          `publish it by re-running the run that built it, or release this commit under an unused version`);
+      }
       // A public release serves its assets under immutable URLs that CDNs may
       // already cache. A retry after that point adopts those bytes instead of
       // replacing them with a nondeterministic rebuild.
@@ -235,11 +244,14 @@ export class Release {
       for (const artifact of Artifacts) this.githubAsset(release, artifact, await this.localArtifact(artifact));
     } else {
       // Until the release is public, a retry replaces the provisional assets
-      // of an earlier attempt.
+      // of an earlier attempt, and the tag it will create follows them to
+      // this run's commit.
       if (!release) {
         this.gh(["release", "create", version, "--repo", repository, "--draft",
-          "--target", this.env("GITHUB_SHA"), "--title", `SeekMoon ${version}`,
+          "--target", commit, "--title", `SeekMoon ${version}`,
           "--notes", `SeekMoon Desktop ${version}.`]);
+      } else if (release.target_commitish !== commit) {
+        this.gh(["release", "edit", version, "--repo", repository, "--target", commit]);
       }
       for (const artifact of Artifacts) {
         const local = await this.localArtifact(artifact);
