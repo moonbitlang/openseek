@@ -664,29 +664,14 @@
 .msg-content.markdown p {
   margin: 0.55em 0;
 }
-.msg-content.markdown h1,
-.msg-content.markdown h2,
-.msg-content.markdown h3,
-.msg-content.markdown h4,
-.msg-content.markdown h5,
-.msg-content.markdown h6 {
+/* A reply's headings mark sections inside prose, so they stay at body size
+   and are told apart by weight and the space above them rather than by size.
+   `1em` also overrides the browser's own h1-h6 sizes. */
+.msg-content.markdown :is(h1, h2, h3, h4, h5, h6) {
   margin: 0.95em 0 0.45em;
   line-height: 1.35;
-  font-weight: 600;
-}
-.msg-content.markdown h1 {
-  font-size: 1.3em;
-}
-.msg-content.markdown h2 {
-  font-size: 1.18em;
-}
-.msg-content.markdown h3 {
-  font-size: 1.08em;
-}
-.msg-content.markdown h4,
-.msg-content.markdown h5,
-.msg-content.markdown h6 {
   font-size: 1em;
+  font-weight: 600;
 }
 .msg-content.markdown ul,
 .msg-content.markdown ol {
