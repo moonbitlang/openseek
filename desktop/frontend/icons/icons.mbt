@@ -1,12 +1,10 @@
-// Inline SVG icons for the app chrome, taken from Microsoft's
-// vscode-codicons (https://github.com/microsoft/vscode-codicons),
-// licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/);
-// the path data is unmodified, transcribed into `@svg` element builders.
-// They render through `icon`, sized by the surrounding control and tinted
-// via `currentColor`. Built as virtual-DOM nodes rather than `inner_html`
-// markup: an innerHTML-bearing element cannot be safely morphed by the
-// positional child diff (assigning the property silently drops the real
-// children the runtime still tracks).
+// Prefer the bundled Codicon font for app chrome icons; use SVG when the
+// required icon is unavailable in the font.
+// Codicons source: Microsoft's vscode-codicons
+// (https://github.com/microsoft/vscode-codicons), licensed CC BY 4.0
+// (https://creativecommons.org/licenses/by/4.0/).
+// Render SVG fallbacks as virtual-DOM nodes rather than `inner_html`:
+// assigning innerHTML drops children tracked by the positional child diff.
 
 ///|
 /// An icon in a fixed-size span. Icons are functions, not shared constants:
@@ -91,6 +89,11 @@ pub fn icon_arrow_up() -> @html.Html {
 }
 
 ///|
+pub fn icon_newline() -> @html.Html {
+  @html.span(class="codicon codicon-newline", "")
+}
+
+///|
 pub fn icon_chevron_down() -> @html.Html {
   codicon(
     "M3.14598 5.85423L7.64598 10.3542C7.84098 10.5492 8.15798 10.5492 8.35298 10.3542L12.853 5.85423C13.048 5.65923 13.048 5.34223 12.853 5.14723C12.658 4.95223 12.341 4.95223 12.146 5.14723L7.99998 9.29323L3.85398 5.14723C3.65898 4.95223 3.34198 4.95223 3.14698 5.14723C2.95198 5.34223 2.95098 5.65923 3.14598 5.85423Z",
@@ -139,6 +142,11 @@ pub fn icon_copy() -> @html.Html {
   codicon(
     "M3 5V12.73C2.4 12.38 2 11.74 2 11V5C2 2.79 3.79 1 6 1H9C9.74 1 10.38 1.4 10.73 2H6C4.35 2 3 3.35 3 5ZM11 15H6C4.897 15 4 14.103 4 13V5C4 3.897 4.897 3 6 3H11C12.103 3 13 3.897 13 5V13C13 14.103 12.103 15 11 15ZM12 5C12 4.448 11.552 4 11 4H6C5.448 4 5 4.448 5 5V13C5 13.552 5.448 14 6 14H11C11.552 14 12 13.552 12 13V5Z",
   )
+}
+
+///|
+pub fn icon_stop_circle() -> @html.Html {
+  @html.span(class="codicon codicon-stop-circle", "")
 }
 
 ///|
