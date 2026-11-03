@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './desktop_browser_harness.js';
 
@@ -268,7 +269,7 @@ export class CloudHarness {
   async cloudRequest(route) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Expose-Headers': 'x-fixture-admission-bytes, x-fixture-event-boundaries, x-fixture-disconnect-after' };
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, If-None-Match', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Expose-Headers': 'ETag, x-fixture-admission-bytes, x-fixture-event-boundaries, x-fixture-disconnect-after' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     this.requests.push({ side: 'cloud', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
@@ -390,8 +391,16 @@ export class CloudHarness {
     const session = match[1];
     if (request.method() === 'GET') {
       const history = this.histories.get(session) || { messages: [], generating: false, outcome: null };
+      const body = JSON.stringify(history.session ? history : { ...history, ...this.nativeHistory(session, history) });
+      const etag = '"' + createHash('sha256').update(body).digest('hex') + '"';
+      const status = this.historyStatus;
       if (this.pauseHistory) await this.pauseHistory;
-      return json(history.session ? history : { ...history, ...this.nativeHistory(session, history) }, this.historyStatus);
+      if (status !== 200) return route.fulfill({ status, headers, contentType: 'application/json', body });
+      const cacheHeaders = { ...headers, ETag: etag, 'Cache-Control': 'no-store' };
+      if ((await request.headerValue('If-None-Match')) === etag) {
+        return route.fulfill({ status: 304, headers: cacheHeaders });
+      }
+      return route.fulfill({ status, headers: cacheHeaders, contentType: 'application/json', body });
     }
     throw new Error('Messages are read-only; use the native commands endpoint');
   }

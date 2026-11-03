@@ -179,3 +179,32 @@ test "Cloud missing model credentials reject compact without retaining a queued 
     )
   }
 }
+
+///|
+test "Cloud revisits can revalidate after a compact rejection fences a read" {
+  let base = controls_fixture()
+  let idle = base.replace("session", {
+    ..base.conversations["session"],
+    history_cached: true,
+    generating: false,
+  })
+  let reading = metadata_update(idle, Open("session"))
+  let old_request = reading.conversations["session"].request
+  let requested = request_compact(reading)
+  let request = requested.conversations["session"].controls.compact_request.unwrap()
+  let refused = metadata_update(
+    requested,
+    CommandFinished(1, "session", request, @wire.Compact, Rejected("busy")),
+  )
+  let late = metadata_update(
+    refused,
+    HistoryUnchanged(1, "session", old_request, "stale"),
+  )
+  assert_true(late == refused)
+  let reopened = metadata_update(late, Open("session"))
+  assert_true(reopened.conversations["session"].history_reading)
+  assert_true(
+    reopened.conversations["session"].request >
+    refused.conversations["session"].request,
+  )
+}

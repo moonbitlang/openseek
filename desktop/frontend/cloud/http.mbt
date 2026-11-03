@@ -26,15 +26,32 @@ async fn delete_session(token : String, session : String) -> Unit {
 }
 
 ///|
-async fn load_history(token : String, session : String) -> History {
-  decode_history(
-    request(
-      CloudOrigin,
-      "/v1/sessions/\{@uri.encode_component(session)}/messages",
-      Get,
-      token~,
-    ),
-  )
+async fn load_history(
+  token : String,
+  session : String,
+  etag : String?,
+  epoch : Int32,
+  request : Int32,
+) -> Msg {
+  let headers : @http.Headers = { "Authorization": "Bearer " + token }
+  if etag is Some(etag) {
+    headers["If-None-Match"] = etag
+  }
+  let (response, body) = @http.get(
+    CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}/messages",
+    headers~,
+  ) catch {
+    _ => raise @cloud_client.RequestError(Unreachable)
+  }
+  let validator = response.headers.get("ETag")
+  if response.code == 304 && etag is Some(sent) {
+    return HistoryUnchanged(epoch, session, request, validator.unwrap_or(sent))
+  }
+  check_status(response.code)
+  let json = body.json() catch {
+    _ => raise @cloud_client.RequestError(Malformed)
+  }
+  Loaded(epoch, session, request, { ..decode_history(json), etag: validator, })
 }
 
 ///|

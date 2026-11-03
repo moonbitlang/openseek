@@ -52,6 +52,7 @@ fn integrated_cloud_model() -> Model {
             },
           ]),
         },
+        etag: None,
         messages: [
           {
             task_id: "finished-task",
@@ -66,7 +67,14 @@ fn integrated_cloud_model() -> Model {
     ),
     model,
   )
-  model
+  model.with_cloud_baseline("cloud-a")
+}
+
+///|
+fn Model::with_cloud_baseline(self : Model, session : String) -> Model {
+  let conversations = self.cloud.conversations.copy()
+  conversations[session] = { ..conversations[session], last_seq: Some(0), }
+  { ..self, cloud: { ..self.cloud, conversations, }, }
 }
 
 ///|
@@ -402,6 +410,7 @@ test "same-account sign-out retires old composer actions, while the new entry ca
           system_prompt: None,
           events: Some([]),
         },
+        etag: None,
         messages: [],
         generating: false,
       }),
@@ -420,6 +429,7 @@ test "same-account sign-out retires old composer actions, while the new entry ca
   )
   assert_eq(stale.cloud.sequence, loaded.cloud.sequence)
   assert_false(stale.cloud.conversations.get("cloud-a").unwrap().sending)
+  let loaded = loaded.with_cloud_baseline("cloud-a")
   let current = loaded.composer_input().identity
   let (_, sent) = update(
     test_dispatch(),
