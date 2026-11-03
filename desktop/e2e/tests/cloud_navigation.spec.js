@@ -4,26 +4,27 @@ import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './suppor
 const sessionURL = id => `${authOrigin}/cloud/session/${id}`;
 const creations = cloud => cloud.requests.filter(r => r.side === 'cloud' && r.path === '/v1/sessions' && r.method === 'POST');
 
-test('Cloud home refresh is passive and first send promotes the draft URL to its session', async ({ page }, testInfo) => {
+test('Cloud home opens the composer and creates a session only on first send', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
-  await expect(page.locator('.cloud-home')).toBeVisible();
-  await expect(page.locator('.cloud-home button')).toHaveText('New chat');
+  const composer = page.locator('#task');
+  await expect(composer).toBeEnabled();
+  await expect(page).toHaveURL(`${authOrigin}/cloud`);
   await page.reload();
-  await expect(page.locator('.cloud-home button')).toHaveText('New chat');
+  await expect(composer).toBeEnabled();
+  await expect(page).toHaveURL(`${authOrigin}/cloud`);
   expect(creations(cloud)).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('cloud-home.png'), fullPage: true });
-  await page.locator('.cloud-home button').click();
-  await expect(page).toHaveURL(new RegExp(`^${authOrigin}/cloud/draft/[^/]+$`));
+  await composer.fill('First Cloud message');
   expect(creations(cloud)).toEqual([]);
-  await page.locator('#task').fill('First Cloud message');
-  await page.locator('#task').press('Enter');
+  await composer.press('Enter');
   await expect(page).toHaveURL(sessionURL(sessionC));
   expect(creations(cloud)).toHaveLength(1);
   await page.goBack();
   await expect(page).toHaveURL(`${authOrigin}/cloud`);
-  await expect(page.locator('.cloud-home')).toBeVisible();
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue('');
   expect(creations(cloud)).toHaveLength(1);
   expect(cloud.device.ticketRequests).toHaveLength(0);
   expect(cloud.device.pageErrors).toEqual([]);
@@ -47,6 +48,19 @@ test('Cloud session direct access and refresh do not depend on catalog membershi
   expect(creations(cloud)).toEqual([]);
   expect(cloud.device.ticketRequests).toHaveLength(0);
   expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud home opens the composer after sign-in', async ({ page }) => {
+  const cloud = new CloudHarness(page, { cached: false });
+  await cloud.install();
+  await page.goto(`${authOrigin}/cloud`);
+  const login = page.locator('main').getByRole('button', { name: 'Sign in with GitHub' });
+  await expect(login).toBeVisible();
+  await expect(page.locator('#task')).toHaveCount(0);
+  await login.click();
+  await expect(page.locator('#task')).toBeEnabled();
+  await expect(page).toHaveURL(`${authOrigin}/cloud`);
+  expect(creations(cloud)).toEqual([]);
 });
 
 test('Cloud login returns to the exact deep link without creating a session', async ({ page }) => {
@@ -262,11 +276,24 @@ test('malformed Cloud destinations show invalid route rather than creating a ses
 test('Cloud landing remains selected while a retained device connects', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
+  let releaseRoster;
+  const rosterReady = new Promise(resolve => { releaseRoster = resolve; });
+  await page.route('**/v2/devices', async route => {
+    await rosterReady;
+    await route.fallback();
+  });
   await page.goto(`${authOrigin}/cloud?device=device-a`);
-  await expect(page.locator('.cloud-home')).toBeVisible();
+  const composer = page.locator('#task');
+  try {
+    await expect(composer).toBeEnabled();
+    await composer.fill('Cloud draft while the device connects');
+  } finally {
+    releaseRoster();
+  }
   await expect.poll(() => cloud.device.requests.some(request => request.method === 'session.list')).toBe(true);
-  await expect(page.locator('.cloud-home')).toBeVisible();
-  await expect(page.locator('#task')).toHaveCount(0);
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue('Cloud draft while the device connects');
+  await expect(page.locator('main h1')).toHaveText('New chat');
   expect(creations(cloud)).toEqual([]);
 });
 
