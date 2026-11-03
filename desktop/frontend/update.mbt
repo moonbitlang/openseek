@@ -4530,7 +4530,17 @@ fn update_msg(
         channel,
         url => open_external_link(dispatch, url),
       )
-      (cmd, model.with_codex(codex))
+      let model = model.with_codex(codex)
+      // The Codex transcript renders a failed restore as its notice; on any
+      // other screen, such as the archived page Restore runs from, it is a
+      // toast.
+      match msg.restore_failure(locale=model.locale) {
+        Some(message) if !(model.screen is Codex) => {
+          let (toast, model) = model.notify_error(dispatch, message)
+          (@cmd.batch([cmd, toast]), model)
+        }
+        _ => (cmd, model)
+      }
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })

@@ -2829,3 +2829,38 @@ test "shared Codex question card scopes drafts, submission and retry by response
     apply(initial, Submit(skip=true)).pending_requests[0].question_draft.is_sending(),
   )
 }
+
+///|
+/// The notice a failed restore leaves. The Codex transcript renders it; a
+/// shell showing another screen — Settings' archived page, where Restore
+/// runs — reports it on its own.
+pub fn Msg::restore_failure(
+  self : Msg,
+  locale~ : @i18n.Locale = English,
+) -> String? {
+  guard self is Failed(kind=CodexUnarchiveReply(_), message~) else {
+    return None
+  }
+  Some("\{notice_text(locale, RestoreNotice)}: \{message}")
+}
+
+///|
+test "only a failed restore reports a restore failure" {
+  let failed = Failed(kind=CodexUnarchiveReply("thread-1"), message="denied")
+  let (_, state) = update(
+    @cmd.Emit(_ => @cmd.none),
+    failed,
+    State(),
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(failed.restore_failure(), Some(state.notice))
+  assert_eq(
+    Failed(kind=CodexArchiveReply("thread-1"), message="denied").restore_failure(),
+    None,
+  )
+  assert_eq(
+    Reply(kind=CodexUnarchiveReply("thread-1"), value={}).restore_failure(),
+    None,
+  )
+}
