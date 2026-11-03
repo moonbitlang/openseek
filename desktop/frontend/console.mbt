@@ -9,7 +9,7 @@
 // (`local_console_state`) and never asks the relay anything.
 
 ///|
-/// Who the relay says we are (`/v2/auth/me`), or the local Dev launch session.
+/// Who the relay says we are (`/v2/auth/me`), or the local Dev host.
 priv enum ConsoleAuth {
   // The check is in flight (or failed — `notice` carries the failure and
   // the gate card offers a retry).
@@ -131,7 +131,7 @@ fn local_console_state(login_return_to~ : String) -> ConsoleState {
 
 ///|
 /// The same-origin OAuth entry that restores this browser page afterwards.
-/// The local Dev console retains its private launch-cookie login route.
+/// The local Dev console uses a v1 redirect back to its page.
 /// Encoding the complete return target keeps its path and query as one value.
 fn ConsoleState::login_url(self : ConsoleState) -> String {
   let version = if self.page_device == Some("host") { "v1" } else { "v2" }
@@ -177,15 +177,15 @@ test "browser sign-in returns to the same versioned console URL" {
 }
 
 ///|
-test "local Dev sign-in retains its private v1 launch-cookie route" {
+test "local Dev sign-in returns to its local page through v1" {
   let console = empty_console_state(
     Some("host"),
     None,
-    login_return_to="/?device=host&token=fixture",
+    login_return_to="/device/host/chat",
   )
   assert_eq(
     console.login_url(),
-    "/v1/auth/login?prompt=select_account&return_to=%2F%3Fdevice%3Dhost%26token%3Dfixture",
+    "/v1/auth/login?prompt=select_account&return_to=%2Fdevice%2Fhost%2Fchat",
   )
 }
 

@@ -8,25 +8,11 @@
 // it would against the relay, with the relay out of the loop. The window
 // itself never uses this origin; it stays on the proton bridge.
 //
-// The session cookie is the capability boundary: the launch token minted at
-// bind time rides the entry URL (`/?device=host&token=…`), the document
-// response to that URL sets the cookie, and every account route and the
-// WebSocket require it. The entry URL can be reused in another browser
-// for as long as this launch lasts. Client navigation changes the address
-// to a stable device path and subsequent requests use the cookie. The
-// session is that launch, not an account: sign-out returns to the gate
-// and sign-in restores the requested page without revealing the token. A present `Origin`
-// header must be our own origin, which keeps foreign web pages (whose
-// browsers always send one) out even though they can reach loopback.
-// Release builds never open this port.
-//
-// Browsers key cookies by host, not port, so the session cookie also
-// reaches any other server on 127.0.0.1 the developer browses to while it
-// exists. That is inherent to loopback cookies and shared by every local
-// development tool that uses one; a recipient would have to be a listener
-// that is not already running as the user (a container's forwarded port,
-// another account's service), and this development-only surface does not
-// defend against that.
+// Local access needs no launch token or browser cookie. A bookmark or a new
+// browser can open the same stable URL directly. The listener binds only to
+// loopback; Host must name that bound address, and a present Origin must be
+// our own. Together these keep unrelated web origins out, including a domain
+// rebound to loopback. Release builds never open this port.
 
 ///|
 /// The loopback HTTP+WebSocket listener owning the development console's
@@ -34,11 +20,6 @@
 /// entry URL; served once the state does.
 pub struct LocalConsole {
   server : @http.Server
-  token : String
-  // Browsers key cookies by host, not port, so two development hosts on
-  // one machine must not share a cookie name: each names its session after
-  // its own port.
-  cookie_name : String
   // How the roster names this machine.
   name : String
 }
@@ -60,13 +41,10 @@ fn LocalConsole::port(self : LocalConsole) -> Int32 {
 /// One request, classified by route. Everything the console page fetches
 /// from the relay's origin exists here too, answered for this one machine.
 priv enum Route {
-  // `GET /?…token=…`: the entry document, whose response sets the session.
-  Entry(String)
+  Home
   AuthMe
   Devices
-  // The gate's sign-in link (`GET /v1/auth/login`) and the page's sign-out
-  // (`POST /v1/auth/logout`): the console page leaves and comes back, while
-  // the session stays with the launch.
+  // Compatibility routes for the shared console's account controls.
   Login
   Logout
   // The protocol WebSocket for device `host`.
@@ -79,9 +57,9 @@ priv enum Route {
 
 ///|
 fn route(meth : @http.RequestMethod, path : String, entry~ : String) -> Route {
-  let (route, query) = split_path_query(path)
+  let (route, _) = split_path_query(path)
   match (meth, route) {
-    (Get, "/") if query_param(query, "token") is Some(token) => Entry(token)
+    (Get, "/") => Home
     (Get, path) if @routes.is_application_path(path) => ApplicationPage
     (Get, "/v1/auth/me") => AuthMe
     (Get, "/v1/devices") => Devices
@@ -109,36 +87,21 @@ async fn LocalConsole::handle(
   defer conn.close()
   let request = conn.read_request()
   let route = route(request.meth, request.path, entry~)
-  // The account routes and the socket are the session's; the page and its
-  // files are not, since the entry document is what grants the session.
-  let needs_session = route is AuthMe ||
-    route is Devices ||
-    route is DeviceSocket ||
-    route is Logout
-  if needs_session && !self.session_authorized(request) {
-    respond_status(conn, 401, "Unauthorized")
+  // Check the document as well as APIs: a foreign hostname resolving to
+  // loopback must not load this frontend under its own origin.
+  if !self.request_allowed(request) {
+    respond_status(conn, 403, "Forbidden")
     return
   }
   match route {
-    Entry(token) =>
-      if token == self.token {
-        // The document itself carries the session: every load of the entry
-        // URL renews the cookie, so the URL remains a working capability.
-        serve_static(
-          root,
-          entry,
-          conn,
-          cookie=Cookie(
-            self.cookie_name,
-            self.token,
-            path="/",
-            http_only=true,
-            extensions=["SameSite=Strict"],
-          ),
-        )
-      } else {
-        respond_status(conn, 403, "Forbidden")
-      }
+    Home => {
+      let (_, query) = split_path_query(request.path)
+      respond_redirect(
+        conn,
+        "/device/\{LocalConsoleDevice}/chat" +
+        (if query.is_empty() { "" } else { "?" + query }),
+      )
+    }
     // No account stands behind the local console, so it has no avatar; the
     // field is absent rather than empty.
     AuthMe => respond_json(conn, { "login": "local" })
@@ -155,11 +118,8 @@ async fn LocalConsole::handle(
       } else {
         respond_status(conn, 400, "Bad Request")
       }
-    // Sign-out sends the page to its gate; the session stays with the
-    // launch, so nothing is cleared. Redirecting the gate's sign-in to the
-    // token-bearing entry URL would hand the token to any local client that
-    // asked, so it returns to the page as it is: the cookie, still present,
-    // signs it back in.
+    // The local host has no account session to establish or clear. Returning
+    // to a local page always restores access.
     Login => {
       let (_, query) = split_path_query(request.path)
       let destination = query_param(query, "return_to").map(value => {
@@ -191,51 +151,21 @@ async fn LocalConsole::handle(
 }
 
 ///|
-/// Whether a request carries the session and comes from our own origin (or
-/// none — a non-browser debugging client has no `Origin`; the cookie remains
-/// its capability).
-fn LocalConsole::session_authorized(
+/// Browsers must address this listener directly and use its origin. Local
+/// debugging clients and document navigations may omit Origin.
+fn LocalConsole::request_allowed(
   self : LocalConsole,
   request : @http.Request,
 ) -> Bool {
-  session_authorized(
-    request.headers.get("cookie"),
-    request.headers.get("origin"),
-    cookie=self.cookie_name,
-    token=self.token,
-    origin=self.origin(),
-  )
-}
-
-///|
-fn session_authorized(
-  cookie_header : String?,
-  request_origin : String?,
-  cookie~ : String,
-  token~ : String,
-  origin~ : String,
-) -> Bool {
-  guard cookie_header is Some(cookies) &&
-    cookie_value(cookies, cookie) == Some(token) else {
+  guard request.headers.get("host") is Some(host) &&
+    "http://" + host == self.origin() else {
     return false
   }
-  match request_origin {
-    None => true
-    Some(request_origin) => request_origin == origin
+  if request.headers.get("origin") is Some(origin) {
+    origin == self.origin()
+  } else {
+    true
   }
-}
-
-///|
-/// One cookie's value out of a `Cookie` request header. The session value is
-/// plain hex, so nothing needs decoding.
-fn cookie_value(header : String, name : String) -> String? {
-  for pair in header.split(";") {
-    let pair = pair.trim()
-    if pair.split_once("=") is Some((key, value)) && key == name {
-      return Some(value.to_owned())
-    }
-  }
-  None
 }
 
 ///|
@@ -255,13 +185,11 @@ async fn serve_ws(
 }
 
 ///|
-/// One bundled file; the entry document additionally carries the session
-/// cookie when the request presented the token.
+/// One bundled file, including the application document.
 async fn serve_static(
   root : String,
   relative : String,
   conn : @http.ServerConnection,
-  cookie? : @http.Cookie,
 ) -> Unit {
   // Only an absent file is 404; an unreadable one is the bundle being broken,
   // which the log names and the browser sees as a server failure.
@@ -281,22 +209,14 @@ async fn serve_static(
       return
     }
   }
-  conn.send_response(
-    200,
-    "OK",
-    extra_headers={
-      "Content-Type": content_type(relative),
-      "Content-Length": body.length().to_string(),
-      // A development bundle changes in place between launches; make every
-      // load revalidate rather than trust a stale browser cache.
-      "Cache-Control": "no-cache",
-      "Connection": "close",
-    },
-    cookies=match cookie {
-      Some(cookie) => [cookie]
-      None => []
-    },
-  )
+  conn.send_response(200, "OK", extra_headers={
+    "Content-Type": content_type(relative),
+    "Content-Length": body.length().to_string(),
+    // A development bundle changes in place between launches; make every
+    // load revalidate rather than trust a stale browser cache.
+    "Cache-Control": "no-cache",
+    "Connection": "close",
+  })
   conn.write(body)
   conn.end_response()
 }
@@ -400,8 +320,7 @@ fn split_path_query(path : String) -> (String, String) {
 }
 
 ///|
-/// A raw query parameter. Values are compared byte-for-byte — the launch
-/// token is plain hex, so nothing needs percent-decoding.
+/// A raw query parameter; the caller decodes its value when needed.
 fn query_param(query : String, name : String) -> String? {
   for pair in query.split("&") {
     if pair.split_once("=") is Some((key, value)) && key == name {
@@ -414,17 +333,11 @@ fn query_param(query : String, name : String) -> String? {
 ///|
 test "routes: the entry, the console's account routes, then the bundle" {
   assert_true(
-    route(Get, "/?device=host&token=sesame", entry="index.html")
-    is Entry("sesame"),
+    route(Get, "/?device=host&token=sesame", entry="index.html") is Home,
   )
-  assert_true(
-    route(Get, "/?token=sesame", entry="index.html") is Entry("sesame"),
-  )
-  assert_true(route(Get, "/", entry="index.html") is Static("index.html"))
-  assert_true(
-    route(Get, "/?device=host", entry="desktop-dev.html")
-    is Static("desktop-dev.html"),
-  )
+  assert_true(route(Get, "/?token=sesame", entry="index.html") is Home)
+  assert_true(route(Get, "/", entry="index.html") is Home)
+  assert_true(route(Get, "/?device=host", entry="desktop-dev.html") is Home)
   assert_true(route(Get, "/v1/auth/me", entry="index.html") is AuthMe)
   assert_true(route(Get, "/v1/devices", entry="index.html") is Devices)
   assert_true(route(Post, "/v1/auth/logout", entry="index.html") is Logout)
@@ -466,58 +379,6 @@ test "static routes reject traversal and hidden names" {
   assert_true(
     static_asset_route("/frontend.js:stream", entry="index.html") is None,
   )
-}
-
-///|
-test "account routes and the socket require the session and our own origin" {
-  let cookie = "seekmoon_session"
-  let token = "sesame"
-  let origin = "http://127.0.0.1:4100"
-  let session = "seekmoon_session=sesame"
-  assert_true(session_authorized(Some(session), None, cookie~, token~, origin~))
-  assert_true(
-    session_authorized(Some(session), Some(origin), cookie~, token~, origin~),
-  )
-  assert_true(
-    session_authorized(
-      Some("other=1; seekmoon_session=sesame; more=2"),
-      Some(origin),
-      cookie~,
-      token~,
-      origin~,
-    ),
-  )
-  assert_false(
-    session_authorized(
-      Some(session),
-      Some("https://evil.example"),
-      cookie~,
-      token~,
-      origin~,
-    ),
-  )
-  assert_false(
-    session_authorized(
-      Some(session),
-      Some("http://127.0.0.1:4101"),
-      cookie~,
-      token~,
-      origin~,
-    ),
-  )
-  assert_false(
-    session_authorized(
-      Some("seekmoon_session=wrong"),
-      None,
-      cookie~,
-      token~,
-      origin~,
-    ),
-  )
-  assert_false(
-    session_authorized(Some("other=1"), None, cookie~, token~, origin~),
-  )
-  assert_false(session_authorized(None, None, cookie~, token~, origin~))
 }
 
 ///|

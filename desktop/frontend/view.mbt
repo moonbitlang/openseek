@@ -1004,8 +1004,7 @@ fn remote_access_rows(
   let rows : Array[@html.Html] = []
   // A development build serves this very frontend on loopback for the
   // system browser, so the console can be worked on against this host with
-  // no relay in between. Open carries the launch token that grants the
-  // browser its session.
+  // no relay in between. Open uses a stable URL with no browser authorization.
   if model.is_desktop && model.console_url is Some(url) {
     rows.push(
       @settings.row(

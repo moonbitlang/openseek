@@ -21054,12 +21054,12 @@ test "AppInfoLoaded replaces the displayed package version idempotently" {
   let dispatch = test_dispatch()
   let info = AppInfoLoaded(
     version="0.2.0",
-    console_url=Some("http://127.0.0.1:27183/?token=sesame"),
+    console_url=Some("http://127.0.0.1:27183/device/host/chat"),
   )
   let (_, once) = update(dispatch, info, test_model())
   let (_, twice) = update(dispatch, info, once)
   assert_eq(once.app_version, "0.2.0")
-  assert_eq(once.console_url, Some("http://127.0.0.1:27183/?token=sesame"))
+  assert_eq(once.console_url, Some("http://127.0.0.1:27183/device/host/chat"))
   assert_eq(twice.app_version, once.app_version)
   assert_eq(twice.notification_seq, once.notification_seq)
 }
