@@ -412,33 +412,38 @@ fn ContextComponent::render(
   self : ContextComponent,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
-) -> @html.Html {
+) -> @html.Html? {
   ignore(locale)
   match self {
     ConnectionBanner(device_name~) =>
-      match device_name {
-        Some(name) =>
-          @html.div(
-            class="composer-context-row composer-banner",
-            attrs=@html.Attrs::build().role("status"),
-            dynamic_text(locale, DReconnecting(name.to_string())),
-          )
-        None =>
-          @html.div(class="composer-context-row composer-banner hidden", "")
+      device_name.map(name => {
+        @html.div(
+          class="composer-context-row composer-banner",
+          attrs=@html.Attrs::build().role("status"),
+          dynamic_text(locale, DReconnecting(name.to_string())),
+        )
+      })
+    SubrunDock(lanes~) =>
+      if lanes.is_empty() {
+        None
+      } else {
+        Some(@subrun.dock(lanes))
       }
-    SubrunDock(lanes~) => @subrun.dock(lanes)
     ApiSetupNotice(text~) =>
-      @html.div(class="composer-context-row composer-notice", [
-        @html.span(class="composer-notice-text", text),
-        @html.button(
-          class="composer-notice-btn",
-          type_="button",
-          title=ui(locale, ConfigureEndpoint),
-          on_click=action_emit(ApiSetupRequested(identity~)),
-          ui(locale, SetupLabel),
-        ),
-      ])
-    ApprovalRequest(approval) => approval.render(locale~, identity, action_emit)
+      Some(
+        @html.div(class="composer-context-row composer-notice", [
+          @html.span(class="composer-notice-text", text),
+          @html.button(
+            class="composer-notice-btn",
+            type_="button",
+            title=ui(locale, ConfigureEndpoint),
+            on_click=action_emit(ApiSetupRequested(identity~)),
+            ui(locale, SetupLabel),
+          ),
+        ]),
+      )
+    ApprovalRequest(approval) =>
+      Some(approval.render(locale~, identity, action_emit))
     CodexRequests(requests~) => {
       // A resolved sibling must not replace a surviving request's focused
       // control. The response token identifies one request lifetime, even
@@ -451,7 +456,7 @@ fn ContextComponent::render(
           action_emit,
         )
       }
-      @html.div(class="codex-pending", rendered)
+      Some(@html.div(class="codex-pending", rendered))
     }
     PendingSteerPanel(items~) => {
       let rows : Map[String, @html.Html] = Map([])
@@ -474,7 +479,7 @@ fn ContextComponent::render(
           ],
         )
       }
-      @html.div(class="pending-steers", rows)
+      Some(@html.div(class="pending-steers", rows))
     }
     QueuedInputPanel(items~, enabled~) => {
       let rows : Map[String, @html.Html] = Map([])
@@ -576,66 +581,77 @@ fn ContextComponent::render(
           ],
         )
       }
-      @html.div(class="queued-inputs", rows)
+      Some(@html.div(class="queued-inputs", rows))
     }
     ShellCommandsRunning(commands~) =>
-      @html.div(
-        class="shell-commands-running",
-        commands.mapi((index, command) => {
-          @html.div(
-            class="composer-context-row composer-notice",
-            title=command,
-            [
-              @html.span(
-                class="composer-notice-icon",
-                @icons.icon(@icons.icon_terminal),
-              ),
-              @html.span(class="composer-notice-text", [
-                @html.code(class="shell-command-text", "$ \{command}"),
-                @html.text(" "),
+      Some(
+        @html.div(
+          class="shell-commands-running",
+          commands.mapi((index, command) => {
+            @html.div(
+              class="composer-context-row composer-notice",
+              title=command,
+              [
                 @html.span(
-                  class="shell-command-state",
-                  ui(locale, ShellRunning),
+                  class="composer-notice-icon",
+                  @icons.icon(@icons.icon_terminal),
                 ),
-              ]),
-              // The command runs in a terminal tab that stays out of the way
-              // until asked for: this is where it is watched and interrupted.
-              @html.button(
-                class="composer-notice-btn",
-                type_="button",
-                title=ui(locale, ShellShowTerminalHint),
-                on_click=action_emit(ShellTerminalRequested(identity~, index~)),
-                ui(locale, ShellShowTerminal),
-              ),
-            ],
-          )
-        }),
+                @html.span(class="composer-notice-text", [
+                  @html.code(class="shell-command-text", "$ \{command}"),
+                  @html.text(" "),
+                  @html.span(
+                    class="shell-command-state",
+                    ui(locale, ShellRunning),
+                  ),
+                ]),
+                // The command runs in a terminal tab that stays out of the way
+                // until asked for: this is where it is watched and interrupted.
+                @html.button(
+                  class="composer-notice-btn",
+                  type_="button",
+                  title=ui(locale, ShellShowTerminalHint),
+                  on_click=action_emit(
+                    ShellTerminalRequested(identity~, index~),
+                  ),
+                  ui(locale, ShellShowTerminal),
+                ),
+              ],
+            )
+          }),
+        ),
       )
     CompactionNotice(queued~) =>
-      @html.div(class="composer-context-row composer-notice", [
-        @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_fold)),
-        @html.span(
-          class="composer-notice-text",
-          if queued {
-            ui(locale, CompactionQueued)
-          } else {
-            ui(locale, CompactingContext)
-          },
-        ),
-      ])
+      Some(
+        @html.div(class="composer-context-row composer-notice", [
+          @html.span(
+            class="composer-notice-icon",
+            @icons.icon(@icons.icon_fold),
+          ),
+          @html.span(
+            class="composer-notice-text",
+            if queued {
+              ui(locale, CompactionQueued)
+            } else {
+              ui(locale, CompactingContext)
+            },
+          ),
+        ]),
+      )
     WorktreePlacementNotice =>
-      @html.div(class="composer-context-row composer-notice", [
-        @html.span(class="composer-notice-text", ui(locale, WaitingPlacement)),
-        @html.button(
-          class="composer-notice-btn",
-          type_="button",
-          title=ui(locale, RetryWorktreeList),
-          on_click=action_emit(WorktreePlacementRetried(identity~)),
-          ui(locale, RetryLabel),
-        ),
-      ])
+      Some(
+        @html.div(class="composer-context-row composer-notice", [
+          @html.span(class="composer-notice-text", ui(locale, WaitingPlacement)),
+          @html.button(
+            class="composer-notice-btn",
+            type_="button",
+            title=ui(locale, RetryWorktreeList),
+            on_click=action_emit(WorktreePlacementRetried(identity~)),
+            ui(locale, RetryLabel),
+          ),
+        ]),
+      )
     MissingWorktreeNoticeComponent(notice) =>
-      notice.render(locale~, identity, action_emit)
+      Some(notice.render(locale~, identity, action_emit))
   }
 }
 
@@ -999,30 +1015,25 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
 ///|
 /// The open turn's heartbeat, docked directly above the textarea: what it is
 /// doing, how long it has been at it, and what it has spent.
-///
-/// Always a slot, empty when idle and collapsed by `.composer-running:empty`,
-/// the same shape as the plan panel's and for the same reason: the context
-/// column is diffed by position, so a row that came and went would shift the
-/// goal row below it on every run start and end.
 fn running_row(
   locale~ : @i18n.Locale = English,
   run : RunHeartbeat?,
   clock_ms~ : Double,
-) -> @html.Html {
+) -> @html.Html? {
   ignore(locale)
-  guard run is Some(run) else {
-    return @html.div(class="composer-running", ([] : Array[@html.Html]))
-  }
-  @html.div(
-    class=if run.stage is Retrying(..) {
-      "composer-context-row composer-running error"
-    } else {
-      "composer-running"
-    },
-    [
-      @html.span(class="composer-running-mark", ""),
-      @html.span(class="composer-running-text", run.label(locale~, clock_ms~)),
-    ],
+  guard run is Some(run) else { None }
+  Some(
+    @html.div(
+      class=if run.stage is Retrying(..) {
+        "composer-context-row composer-running error"
+      } else {
+        "composer-running"
+      },
+      [
+        @html.span(class="composer-running-mark", ""),
+        @html.span(class="composer-running-text", run.label(locale~, clock_ms~)),
+      ],
+    ),
   )
 }
 

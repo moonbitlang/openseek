@@ -5,15 +5,6 @@
   padding: var(--space-3) var(--space-7) var(--space-4);
 }
 
-/* Caller-owned notices and approval panels remain a stable DOM sibling above
-   the focus-holding composer card. When present, space them from each other
-   and from the input so their borders do not visually merge. */
-.composer-context:not(:empty) {
-  display: grid;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
-}
-
 /* Archived transcripts occupy the composer's grid row but expose only their
    immutable state and the explicit action that returns the record to live. */
 .archived-read-only-bar {
@@ -363,22 +354,11 @@
   line-height: var(--line-height-normal);
   overflow-wrap: anywhere;
 }
-.composer-banner.hidden {
-  display: none;
-}
-
 /* The open turn's heartbeat, docked directly above the textarea. Aligned to
    the same 820px column as the notices but deliberately without their card:
    it is the only row up here that repaints every second, and a bordered box
    doing that reads as an alarm. The mark's pulse is the signal; the text is
-   detail for whoever looks.
-
-   Like `.plan-panel-slot`, the element is always in the DOM and collapses
-   when idle, so the goal row below it keeps its child index across the run
-   starts and ends that would otherwise shift it twice a turn. */
-.composer-running:empty {
-  display: none;
-}
+   detail for whoever looks. */
 .composer-running {
   display: flex;
   align-items: center;

@@ -1,12 +1,15 @@
 /* One surface for every persistent row above the draft. Content-specific
    classes retain their behavior; geometry and tone belong to this column. */
 .composer-context {
+  display: grid;
   width: 100%;
   max-width: 820px;
   min-width: 0;
   margin-inline: auto;
 }
 
+/* The column is empty unless a state renders something, so this spacing
+   appears exactly when a row does. */
 .composer-context:not(:empty) {
   gap: var(--space-4);
   margin-bottom: var(--space-5);
@@ -36,11 +39,6 @@
 .composer-context .composer-context-row:is(.error, .blocked) {
   background: var(--color-danger-soft);
   color: var(--color-danger);
-}
-
-.composer-context .composer-context-row.hidden,
-.composer-context .composer-running:empty {
-  display: none;
 }
 
 /* Grouping containers never draw another card around individual rows. */

@@ -110,28 +110,34 @@ fn GoalInput::first_line(_self : GoalInput, text : String) -> String {
 }
 
 ///|
-/// Render the stable standing-goal row. All user operations leave the package
-/// as owner-bound actions instead of dispatching root messages directly.
+/// Render the standing-goal row, or nothing when no goal stands. All user
+/// operations leave the package as owner-bound actions instead of dispatching
+/// root messages directly.
 fn GoalInput::view(
   locale~ : @i18n.Locale = English,
   self : GoalInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
-) -> @html.Html {
+) -> @html.Html? {
   ignore(locale)
   if self.draft is Some(_) {
-    return @html.div(class="composer-context-row composer-goal editing", [
-      @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_target)),
-      @html.span(class="composer-goal-text", ui(locale, EditingGoal)),
-      @html.button(
-        id="goal-cancel",
-        class="composer-goal-action",
-        type_="button",
-        title=ui(locale, CancelGoalEditing),
-        on_click=action_emit(GoalCancelled(identity~)),
-        @icons.icon(@icons.icon_close),
-      ),
-    ])
+    return Some(
+      @html.div(class="composer-context-row composer-goal editing", [
+        @html.span(
+          class="composer-notice-icon",
+          @icons.icon(@icons.icon_target),
+        ),
+        @html.span(class="composer-goal-text", ui(locale, EditingGoal)),
+        @html.button(
+          id="goal-cancel",
+          class="composer-goal-action",
+          type_="button",
+          title=ui(locale, CancelGoalEditing),
+          on_click=action_emit(GoalCancelled(identity~)),
+          @icons.icon(@icons.icon_close),
+        ),
+      ]),
+    )
   }
   let (row_class, text, title, editable) = if self.pending is Some(pending) {
     match pending {
@@ -151,9 +157,7 @@ fn GoalInput::view(
         )
     }
   } else {
-    guard self.standing is Some(goal) else {
-      return @html.div(class="composer-context-row composer-goal hidden", "")
-    }
+    guard self.standing is Some(goal) else { return None }
     if goal.blocked is Some(reason) {
       (
         "composer-context-row composer-goal blocked",
@@ -186,20 +190,25 @@ fn GoalInput::view(
   } else {
     []
   }
-  @html.div(
-    class=row_class,
-    [
-      @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_target)),
-      @html.span(class="composer-goal-text", title~, text),
-      ..edit,
-      @html.button(
-        class="composer-goal-action",
-        type_="button",
-        title=ui(locale, ClearGoal),
-        on_click=action_emit(GoalCleared(identity~)),
-        @icons.icon(@icons.icon_close),
-      ),
-    ],
+  Some(
+    @html.div(
+      class=row_class,
+      [
+        @html.span(
+          class="composer-notice-icon",
+          @icons.icon(@icons.icon_target),
+        ),
+        @html.span(class="composer-goal-text", title~, text),
+        ..edit,
+        @html.button(
+          class="composer-goal-action",
+          type_="button",
+          title=ui(locale, ClearGoal),
+          on_click=action_emit(GoalCleared(identity~)),
+          @icons.icon(@icons.icon_close),
+        ),
+      ],
+    ),
   )
 }
 
@@ -317,13 +326,19 @@ fn Entry::view(
       WorktreePlacementNotice => "worktree-placement"
       MissingWorktreeNoticeComponent(_) => "missing-worktree"
     }
-    context[key] = component.render(locale~, self.identity(), action_emit)
+    if component.render(locale~, self.identity(), action_emit) is Some(html) {
+      context[key] = html
+    }
   }
   // Closest to the textarea: the turn's own liveness is what the person
   // waiting is watching for, and the wait is spent looking here rather than
   // at the top bar.
-  context["running"] = running_row(locale~, input.run, clock_ms~)
-  context["goal"] = input.goal.view(locale~, self.identity(), action_emit)
+  if running_row(locale~, input.run, clock_ms~) is Some(row) {
+    context["running"] = row
+  }
+  if input.goal.view(locale~, self.identity(), action_emit) is Some(row) {
+    context["goal"] = row
+  }
   let image_emit = emit.map(event => {
     ImageRead(self.identity(), self.root, event)
   })
