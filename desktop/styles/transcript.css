@@ -887,6 +887,9 @@
 .msg-content.markdown td {
   border-top: 1px solid var(--color-divider);
 }
+.msg-content.markdown :is(th, td) + :is(th, td) {
+  border-left: 1px solid var(--color-divider);
+}
 .msg-content.markdown th {
   font-weight: 600;
 }

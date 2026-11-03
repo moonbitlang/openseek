@@ -97,14 +97,7 @@
   --color-border: light-dark(var(--light-border), var(--dark-border));
   --color-divider: light-dark(var(--light-border), var(--dark-border));
 
-  /* Structural seams should recede behind content. Persistent control
-     grouping comes from a quiet fill; the stronger border remains available
-     for fields, overlays, focus, and actions whose boundary carries meaning. */
-  --color-seam: color-mix(
-    in srgb,
-    light-dark(var(--light-seam), var(--dark-seam)) 68%,
-    transparent
-  );
+  --color-seam: light-dark(var(--light-seam), var(--dark-seam));
   --color-control-surface: color-mix(
     in srgb,
     var(--color-bg-subtle) 74%,
