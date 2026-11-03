@@ -83,13 +83,13 @@ fn sync_account_preferences(
     model
   }
   let preferences = model.account_preferences
-  guard model.screen is Settings &&
+  guard model.management_dialog is Some(Settings) &&
     !model.remote_connecting &&
     !model.console.busy &&
     !preferences.pending &&
     (
       changed ||
-      previous.screen != Settings ||
+      previous.management_dialog != Some(Settings) ||
       (preferences.value is None && preferences.error is None)
     ) &&
     model.account is Some(account) else {

@@ -2,8 +2,6 @@
 
 ///|
 priv enum ShellMessage {
-  NavigateBack
-  NavigateForward
   NavigationLoading
   NavigationMissing
   NavigationInvalid
@@ -102,16 +100,6 @@ priv enum ShellMessage {
 ///|
 fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
   match (locale, message) {
-    (English, NavigateBack) => "Back"
-    (Spanish, NavigateBack) => "Atrás"
-    (SimplifiedChinese, NavigateBack) => "后退"
-    (TraditionalChinese, NavigateBack) => "返回"
-    (Japanese, NavigateBack) => "戻る"
-    (English, NavigateForward) => "Forward"
-    (Spanish, NavigateForward) => "Adelante"
-    (SimplifiedChinese, NavigateForward) => "前进"
-    (TraditionalChinese, NavigateForward) => "前進"
-    (Japanese, NavigateForward) => "進む"
     (English, NavigationLoading) => "Loading destination…"
     (Spanish, NavigationLoading) => "Cargando destino…"
     (SimplifiedChinese, NavigationLoading) => "正在加载目标…"

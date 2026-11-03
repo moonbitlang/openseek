@@ -169,20 +169,8 @@ fn update_cloud(
         device: None,
         target: CloudSession(account=Some(account), session~),
       }
-      let history = navigation.history.forget(location)
       navigation = {
         ..navigation,
-        history,
-        can_back: if navigation.browser_ready {
-          navigation.can_back
-        } else {
-          history.can_back()
-        },
-        can_forward: if navigation.browser_ready {
-          navigation.can_forward
-        } else {
-          history.can_forward()
-        },
         location: if deleted {
           navigation.location.filter(current => current != location)
         } else {

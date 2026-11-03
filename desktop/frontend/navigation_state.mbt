@@ -1,7 +1,5 @@
 ///|
 priv enum NavigationMsg {
-  Back
-  Forward
   Browser(@navigation_browser.Snapshot)
   Link(@url.UrlRequest)
   Retry
@@ -23,9 +21,6 @@ priv enum NavigationPhase {
 priv struct AppNavigation {
   location : @routes.Location?
   phase : NavigationPhase
-  history : @navigation.History
-  can_back : Bool
-  can_forward : Bool
   browser_ready : Bool
   sessions : Result[Unit, String]?
   archived : Result[Unit, String]?
@@ -39,9 +34,6 @@ fn AppNavigation::empty() -> AppNavigation {
   {
     location: None,
     phase: Active,
-    history: @navigation.History::empty(),
-    can_back: false,
-    can_forward: false,
     browser_ready: false,
     sessions: None,
     archived: None,

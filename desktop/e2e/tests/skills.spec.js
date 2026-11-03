@@ -138,7 +138,7 @@ test('uninstall failure is visible in the detail page and can be retried', async
     };
     await app.openDetails();
     const detail = page.locator('.skill-detail-page');
-    const back = page.getByRole('button', { name: 'Back', exact: true });
+    const back = page.getByRole('dialog').getByRole('button', { name: 'Skills', exact: true });
     await app.performAction(actionName);
     await expect(detail.locator('.skill-detail-action')).toBeDisabled();
     await back.click();
@@ -180,7 +180,7 @@ test('skill enablement comes from the host and survives list/detail navigation a
   expect(app.requests.filter(r => r.method === 'skills.installed_content')).toHaveLength(contentReads);
   expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params))
     .toEqual([{ id: installed.id, enabled: false }]);
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Skills', exact: true }).click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await page.reload();
   await page.getByRole('button', { name: 'Skills', exact: true }).click();
@@ -279,7 +279,7 @@ test('failed builtin startup stays visible with an empty library and recovers th
   release();
   await expect(page.getByRole('switch')).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Skills', exact: true }).click();
   await expect(page.locator('.skills-notice')).toHaveCount(0);
   await expect(page.locator('.skill-row').getByText('Built-in', { exact: true })).toBeVisible();
   expect(app.pageErrors).toEqual([]);

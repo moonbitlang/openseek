@@ -1489,6 +1489,7 @@ fn sync_file_panel(
 /// swallowing the clicks that land there.
 fn covering_overlay(model : Model) -> Bool {
   (model.narrow && model.sidebar_open) ||
+  model.management_dialog is Some(_) ||
   model.project_picker is Some(_) ||
   model.ssh_ui.editor_open ||
   model.ssh_ui.details is Some(_) ||
@@ -1519,7 +1520,6 @@ fn desired_browser_view(model : Model) -> Int32? {
   let git_details_open = match model.screen {
     Chat => model.git_details_open
     Codex => model.codex.git_details_open()
-    Skills | Schedules | Settings => false
   }
   guard model.is_desktop &&
     conversation_screen &&
@@ -1690,11 +1690,9 @@ fn update(
     | CloudAction(@cloud.Create)
     | CodexOpenThread(_)
     | OpenCodex
-    | OpenSetup
-    | OpenLocalApiSettings
-    | OpenSkills
-    | OpenSchedules
-    | Navigation(Back | Forward)
+    | NotificationClicked(..)
+    | NewChatRequested
+    | ExplorerRequested(_)
     | SidebarModeSelected(_) => true
     _ => false
   }
@@ -1708,19 +1706,22 @@ fn update(
   }
   let (cmd, model) = update_msg(dispatch, msg, model)
   let model = model.restore_message_approvals()
-  let model = {
-    ..model,
-    management_return: if model.screen.work_screen() is Some(_) {
-      None
-    } else if previous.screen.work_screen() is Some(origin) {
-      Some(origin)
-    } else {
-      previous.management_return
-    },
+  let model = if navigates {
+    { ..model, management_dialog: None, }
+  } else {
+    model
   }
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
+  let dialog_cmd = if previous.management_dialog == model.management_dialog {
+    @cmd.none
+  } else if model.management_dialog is Some(_) {
+    @dialog.show("management-dialog")
+  } else {
+    @dialog.close("management-dialog")
+  }
+  let cmd = @cmd.batch([cmd, dialog_cmd])
   let (preferences_cmd, model) = sync_account_preferences(
     dispatch, previous, model,
   )
@@ -1802,7 +1803,8 @@ fn update(
     (
       model.active_session != previous.active_session ||
       model.focused != previous.focused ||
-      model.screen != previous.screen
+      model.screen != previous.screen ||
+      model.management_dialog != previous.management_dialog
     ) {
     { ..model, sidebar_open: false, }
   } else {
@@ -4403,7 +4405,7 @@ fn update_msg(
         cmd,
         {
           ..focused,
-          screen: Settings,
+          management_dialog: Some(Settings),
           setup_api_key: "",
           api_setup_open: false,
         },
@@ -4412,8 +4414,23 @@ fn update_msg(
     OpenSetup =>
       (
         @cmd.none,
-        { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
+        {
+          ..model,
+          management_dialog: Some(Settings),
+          setup_api_key: "",
+          api_setup_open: false,
+        },
       )
+    CloseManagementDialog => {
+      let next = { ..model, management_dialog: None, }
+      if model.navigation.location.map_or(false, location => {
+          management_link_dialog(location.target) is Some(_)
+        }) {
+        finish_management_link(next)
+      } else {
+        (@cmd.none, next)
+      }
+    }
     Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
       (
@@ -4645,7 +4662,7 @@ fn update_msg(
       )
       (
         @cmd.batch([page_cmd, fetch_installed_skills(dispatch, model.focused)]),
-        { ..model, screen: Skills, skills, },
+        { ..model, management_dialog: Some(Skills), skills, },
       )
     }
     Skills(msg) => {
@@ -6987,8 +7004,7 @@ fn update_msg(
       // it wants the browser where the user is already signed in.
       if !model.is_desktop {
         (open_browser_link(url), model)
-      } else if (model.screen is Chat || model.screen is Codex) &&
-        @preview.is_web_url(url) {
+      } else if model.management_dialog is None && @preview.is_web_url(url) {
         // Opening or reusing a Browser tab is a newer dock navigation than a
         // transcript text-file link still waiting on `host.open_path`. Spend the
         // shared token before either branch so its delayed reply cannot put a
@@ -11570,7 +11586,7 @@ test "a finish in an unfocused window still needs attention" {
 ///|
 test "a finish behind settings stays unread until the chat is reopened" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), screen: Settings, }
+  let model = { ..running_model(), management_dialog: Some(Settings), }
   let (_, next) = update_dev(
     dispatch,
     Finished(run_id="r7", status="finished", answer=Some("done")),
@@ -11578,12 +11594,7 @@ test "a finish behind settings stays unread until the chat is reopened" {
   )
   inspect(next.active().unseen_finish, content="true")
   inspect(next.notification_badge_count(), content="1")
-  let (_, opened) = open_session_on(
-    dispatch,
-    @interop.ChannelId::Local,
-    next,
-    "desktop-test",
-  )
+  let (_, opened) = update(dispatch, CloseManagementDialog, next)
   assert_true(opened.screen is Chat)
   inspect(opened.active().unseen_finish, content="false")
   inspect(opened.notification_badge_count(), content="0")
@@ -13084,7 +13095,7 @@ test "returning to a fresh active chat does not load a missing session" {
       ..test_conversation(),
       task: "unsent draft",
     }),
-    screen: Skills,
+    management_dialog: Some(Skills),
   }
   let (_, next) = update(
     dispatch,
@@ -16092,7 +16103,7 @@ test "the Codex group's placeholder row opens Settings" {
     test_model(),
   )
   // Sign-in and connection state live in the Settings page's Codex group.
-  assert_true(opened.screen is Settings)
+  assert_true(opened.management_dialog is Some(Settings))
   // A placeholder pick is a doorway, not a model: nothing was selected.
   assert_true(opened.default_agent is OpenSeekAgent)
 }
@@ -16453,7 +16464,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     ..broken,
     api_setup_open: true,
   })
-  assert_true(on_settings.screen is Settings)
+  assert_true(on_settings.management_dialog is Some(Settings))
   assert_true(!on_settings.api_setup_open)
   // Breaking while the Settings page is open does not pop the modal over
   // the form; the guide there already explains it.
@@ -16465,7 +16476,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     ),
     {
       ..test_model(),
-      screen: Settings,
+      management_dialog: Some(Settings),
       host_settings_revision: 0,
       api_provider: Custom,
       custom_api_url: "https://ok.example/chat",
@@ -16680,13 +16691,13 @@ test "saving from the setup modal stays on the page it opened over" {
   // yank the user to Chat.
   let over_skills = {
     ..test_model(),
-    screen: Skills,
+    management_dialog: Some(Skills),
     api_setup_open: true,
     deepseek_key_saved: false,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), over_skills)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
-  assert_true(saved.screen is Skills)
+  assert_true(saved.management_dialog is Some(Skills))
   assert_true(!saved.api_setup_open)
   // A save that leaves the setup incomplete (Custom, no URL yet) keeps the
   // modal up mid-setup instead of dumping the user on Settings.
@@ -16741,7 +16752,7 @@ test "a settled host save that completes the setup closes the modal" {
   // owned by the Settings page rather than an open setup modal.
   let page = {
     ..typing,
-    screen: Settings,
+    management_dialog: Some(Settings),
     api_setup_open: false,
     select_menu: Some(ApiProviderMenu),
   }.flush_host_settings()
@@ -16959,7 +16970,7 @@ test "saving a key marks the active provider credential only" {
     api_provider: Deepseek,
     deepseek_key_saved: false,
     setup_api_key: "  sk-new  ",
-    screen: Settings,
+    management_dialog: Some(Settings),
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
   assert_true(saved_deepseek.deepseek_key_saved)
@@ -16968,7 +16979,7 @@ test "saving a key marks the active provider credential only" {
   inspect(saved_deepseek.settings_saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
   // user on the form they were filling in.
-  assert_true(saved_deepseek.screen is Settings)
+  assert_true(saved_deepseek.management_dialog is Some(Settings))
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
@@ -16977,12 +16988,12 @@ test "saving a key marks the active provider credential only" {
     deepseek_key_saved: false,
     custom_api_url: "https://proxy.example/chat/completions",
     setup_api_key: "  sk-custom-new  ",
-    screen: Settings,
+    management_dialog: Some(Settings),
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
   assert_false(saved_custom.deepseek_key_saved)
   assert_true(saved_custom.custom_key_saved)
-  assert_true(saved_custom.screen is Settings)
+  assert_true(saved_custom.management_dialog is Some(Settings))
   // A GLM key lands in the GLM slot alone.
   let glm = {
     ..test_model(),
@@ -16990,20 +17001,20 @@ test "saving a key marks the active provider credential only" {
     deepseek_key_saved: false,
     glm_key_saved: false,
     setup_api_key: "  glm-new  ",
-    screen: Settings,
+    management_dialog: Some(Settings),
   }
   let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
   assert_true(saved_glm.glm_key_saved)
   assert_false(saved_glm.deepseek_key_saved)
   assert_false(saved_glm.custom_key_saved)
-  assert_true(saved_glm.screen is Settings)
+  assert_true(saved_glm.management_dialog is Some(Settings))
   let openrouter = {
     ..test_model(),
     api_provider: OpenRouter,
     deepseek_key_saved: false,
     custom_key_saved: false,
     setup_api_key: "  sk-openrouter-new  ",
-    screen: Settings,
+    management_dialog: Some(Settings),
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
   assert_true(saved_openrouter.custom_key_saved)
@@ -17015,7 +17026,11 @@ test "saving a key marks the active provider credential only" {
 /// even while the endpoint is unusable (the composer blocks sending then).
 test "sidebar navigation leaves the settings page" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), api_provider: Deepseek, screen: Settings, }
+  let model = {
+    ..test_model(),
+    api_provider: Deepseek,
+    management_dialog: Some(Settings),
+  }
   let (_, next) = update(
     dispatch,
     SessionRotated({ channel: Local, session: "s-fresh", }),
@@ -19221,7 +19236,7 @@ test "theme settings switch fixed palettes and are idempotent" {
 test "selecting a conversation returns from the skills page to the chat" {
   let dispatch = test_dispatch()
   let (_, opened) = update(dispatch, OpenSkills, test_model())
-  assert_true(opened.screen is Skills)
+  assert_true(opened.management_dialog is Some(Skills))
 
   // Re-selecting the active conversation is enough to switch back…
   let (_, back) = update(
@@ -19352,18 +19367,19 @@ test "Codex sidebar actions close only the narrow drawer" {
   assert_true(opened.screen is Codex)
   assert_false(opened.sidebar_open)
 
-  // A "New chat" from a management page uses the default agent and still
-  // closes only the narrow drawer. An already blank chat is a no-op.
+  // Opening a dialog does not turn the underlying blank chat into a
+  // different destination. New chat dismisses it without replacing the draft.
   let (_, ready) = update(
     dispatch,
     Codex(
       channel=narrow.focused,
       @codex.Msg::status_changed({ "status": "ready" }),
     ),
-    { ..narrow, screen: Settings, default_agent: CodexAgent, },
+    { ..narrow, management_dialog: Some(Settings), default_agent: CodexAgent, },
   )
   let (_, creating) = update(dispatch, NewChat, ready)
-  assert_true(creating.screen is Codex)
+  assert_true(creating.screen is Chat)
+  assert_true(creating.management_dialog is None)
   assert_false(creating.sidebar_open)
 
   // Archiving from the shared sidebar acts on that row without changing the
@@ -19511,8 +19527,12 @@ test "file editor context reports the file body actual visibility" {
   assert_false(file_ctx(browser_model).panel_open)
   let launcher_model = file_model.with_dock_state(@dock.DockState::empty())
   assert_false(file_ctx(launcher_model).panel_open)
-  assert_false(file_ctx({ ..file_model, screen: Skills, }).panel_open)
-  assert_false(file_ctx({ ..file_model, screen: Settings, }).panel_open)
+  assert_true(
+    file_ctx({ ..file_model, management_dialog: Some(Skills), }).panel_open,
+  )
+  assert_true(
+    file_ctx({ ..file_model, management_dialog: Some(Settings), }).panel_open,
+  )
 }
 
 ///|
@@ -22939,7 +22959,7 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
   let (_, settings) = update(
     dispatch,
     ExternalLinkClicked("https://openseek.test/d/abc"),
-    { ..model, screen: Settings, },
+    { ..model, management_dialog: Some(Settings), },
   )
   assert_eq(settings.dock_state().tabs.length(), 3)
   assert_eq(settings.preview.pages.length(), 3)

@@ -107,10 +107,11 @@ test('Cloud blank stays selected across sidebar browsing, shortcuts and Settings
   await expect(sidebar('Chat')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(heading).toHaveText('New chat');
   await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await sidebar('Work').click();
   await page.keyboard.press(shortcut);
   await expect(sidebar('Chat')).toHaveAttribute('aria-pressed', 'true');

@@ -40,7 +40,6 @@ main {
 /* Both ends of the titlebar share one control grid. Panel buttons elsewhere
    keep their own geometry. */
 .sidebar-toggle,
-.navigation-controls .icon-button,
 .topbar > .panel-toggle,
 .editor-tabsbar > .panel-toggle,
 .editor-tabsbar > .tab-action,
@@ -251,28 +250,8 @@ main > .conversation-load-state {
   grid-row: 2 / -1;
 }
 
-/* Compact history arrows follow the sidebar toggle on the header's centerline. */
-.navigation-controls {
-  position: fixed;
-  inset-block-start: max(
-    0px,
-    calc((var(--topbar-height) - var(--titlebar-control-size)) / 2)
-  );
-  inset-inline-start: var(--navigation-inline-inset);
-  z-index: var(--z-titlebar-control);
-  display: flex;
-  align-items: center;
-  height: var(--titlebar-control-size);
-  gap: var(--titlebar-control-gap);
-  -webkit-app-region: no-drag;
-}
-.navigation-controls .icon-button {
-  color: var(--color-text-muted);
-}
-.navigation-controls button:disabled { opacity: 0.5; cursor: default; }
 .navigation-notice { padding: 24px; color: var(--color-text-muted); }
 
-.navigation-forward svg { transform: rotate(180deg); }
 
 /* The main pane can be narrow even in a wide window with the editor open.
    Keep SSH recovery controls reachable before secondary header metadata. */

@@ -939,14 +939,14 @@ priv struct BufferedCommit {
 } derive(Eq)
 
 ///|
-/// What the main area shows: a conversation, Skills, Scheduled tasks, or
-/// Settings. Selecting a conversation (or rotating to a new one) always
-/// returns to the chat. While the
-/// configured endpoint is unusable the chat stays reachable, the API-setup
-/// modal takes over until dismissed, and the composer keeps Send disabled.
+/// The work surface remains mounted beneath management dialogs.
 priv enum Screen {
   Chat
   Codex
+} derive(Eq)
+
+///|
+priv enum ManagementDialog {
   Skills
   Schedules
   Settings
@@ -1455,8 +1455,7 @@ priv struct Model {
   // A confirmed add waiting for its registry snapshot; None otherwise.
   pending_project_adoption : ProjectAdoption?
   screen : Screen
-  // Which work surface management pages cover; independent of back history.
-  management_return : WorkScreen?
+  management_dialog : ManagementDialog?
   // Destination identities and history; page data stays in its owning state.
   navigation : AppNavigation
   navigation_initial : String?
@@ -1766,6 +1765,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
+  CloseManagementDialog
   OpenLocalApiSettings
   Navigation(NavigationMsg)
   // The API-setup modal's "Not now" button and its backdrop click.
@@ -2723,7 +2723,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     selected_conversation: None,
     conversation_load_failure: None,
     screen: Chat,
-    management_return: None,
+    management_dialog: None,
     navigation: AppNavigation::empty(),
     navigation_initial: if desktop {
       None
@@ -3084,7 +3084,7 @@ fn Model::settle_api_setup(self : Model) -> Model {
   if self.api_ready() {
     { ..self, api_setup_open: false, api_setup_dismissed: false, select_menu, }
   } else if self.api_setup_dismissed ||
-    self.screen is Settings ||
+    self.management_dialog is Some(Settings) ||
     self.cloud_selected() {
     { ..self, api_setup_open: false, select_menu, }
   } else {
@@ -3768,7 +3768,7 @@ fn Model::file_panel_visible(self : Model) -> Bool {
 ///|
 fn Model::transcript_is_visible(self : Model) -> Bool {
   self.window_focused &&
-  (self.screen is Chat || self.screen is Codex) &&
+  self.management_dialog is None &&
   !(self.terminal_panel_visible() && self.terminal.is_maximized()) &&
   !(self.file_panel_visible() && (self.right_panel_expanded || self.narrow))
 }

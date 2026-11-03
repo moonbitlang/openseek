@@ -1,9 +1,6 @@
 ///|
 pub(all) struct Snapshot {
   path : String
-  settings : Bool
-  can_back : Bool
-  can_forward : Bool
 } derive(Eq)
 
 ///|
@@ -27,9 +24,7 @@ fn loader(payload : Error, scheduler : &@cmd.Scheduler) -> @sub.RunningSub? {
     return None
   }
   let mut emit = original_emit
-  let handle = install(initial_path, (path, settings, can_back, can_forward) => {
-    scheduler.add(emit({ path, settings, can_back, can_forward, }))
-  })
+  let handle = install(initial_path, path => scheduler.add(emit({ path, })))
   Some({
     unload: _ => dispose(handle),
     update_tagger: payload => {
@@ -43,11 +38,6 @@ fn loader(payload : Error, scheduler : &@cmd.Scheduler) -> @sub.RunningSub? {
 ///|
 pub fn visit(path : String, replace~ : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => visit_raw(path, replace))
-}
-
-///|
-pub fn visit_settings(replace~ : Bool) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => visit_settings_raw(replace))
 }
 
 ///|
@@ -98,10 +88,7 @@ fn write_entry(
 ///|
 /// Only the effect/subscription runtime reads browser globals. History
 /// transitions and persisted-data validation are pure MoonBit operations.
-fn install(
-  initial_path : String,
-  emit : (String, Bool, Bool, Bool) -> Unit,
-) -> @js.Value {
+fn install(initial_path : String, emit : (String) -> Unit) -> @js.Value {
   let marker = read_marker()
   let stored = @browser_history.storage_group(marker).map(read_stored)
   let restored = stored.bind(value => {
@@ -112,17 +99,10 @@ fn install(
   })
   history = write_entry(history, history.path() + search(), replace=true)
   persist(history)
-  let report = () => {
-    emit(
-      history.path() + search(),
-      history.settings(),
-      history.can_back(),
-      history.can_forward(),
-    )
-  }
+  let report = () => emit(history.path() + search())
   let handle = install_handlers(
     (path, replace) => {
-      if path == history.path() && !history.settings() {
+      if path == history.path() {
         report()
         return
       }
@@ -131,14 +111,6 @@ fn install(
       }
       history = write_entry(next, path, replace~)
       persist(history)
-      report()
-    },
-    replace => {
-      let next = history.visit_settings(replace~, key=random_id())
-      if next != history {
-        history = write_entry(next, next.path() + search(), replace~)
-        persist(history)
-      }
       report()
     },
     (old_path, new_path) => {

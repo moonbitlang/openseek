@@ -19,11 +19,9 @@ pub fn History::path(Self) -> String
 pub fn History::promote(Self, String, String) -> Self?
 pub fn History::restore(String, String, Json, Json) -> Self?
 pub fn History::select(Self, String, Json) -> Self?
-pub fn History::settings(Self) -> Bool
 pub fn History::storage_group(Self) -> String
 pub fn History::stored(Self) -> Json
 pub fn History::visit(Self, String, replace~ : Bool, key~ : String) -> Self?
-pub fn History::visit_settings(Self, replace~ : Bool, key~ : String) -> Self
 pub fn History::written(Self) -> Self
 
 // Type aliases

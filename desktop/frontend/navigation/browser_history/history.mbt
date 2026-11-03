@@ -3,8 +3,6 @@ priv struct Entry {
   key : String
   path : String
   original : String
-  // Device-less Settings covers the current addressable page until refresh.
-  settings : Bool
 } derive(Eq)
 
 ///|
@@ -41,7 +39,7 @@ pub fn History::History(
     device: @routes.device(path),
     group,
     previous: [],
-    current: { key, path, original, settings: false, },
+    current: { key, path, original, },
     following: [],
   }
 }
@@ -55,36 +53,6 @@ pub fn History::owns(self : History, path : String) -> Bool {
 ///|
 pub fn History::path(self : History) -> String {
   self.current.path
-}
-
-///|
-pub fn History::settings(self : History) -> Bool {
-  self.current.settings
-}
-
-///|
-pub fn History::visit_settings(
-  self : History,
-  replace~ : Bool,
-  key~ : String,
-) -> History {
-  if self.current.settings {
-    self
-  } else if replace {
-    { ..self, current: { ..self.current, settings: true, }, }
-  } else {
-    {
-      ..self,
-      previous: [..self.previous, self.current],
-      current: {
-        key,
-        path: self.current.path,
-        original: self.current.path,
-        settings: true,
-      },
-      following: [],
-    }
-  }
 }
 
 ///|
@@ -172,7 +140,7 @@ pub fn History::restore(
         return None
       }
     }
-    entries.push({ key, path: canonical_path(path), original, settings: false, })
+    entries.push({ key, path: canonical_path(path), original, })
   }
   select_entry(device, group, entries, key, pathname)
 }
@@ -231,18 +199,15 @@ pub fn History::visit(
 ) -> History? {
   let path = canonical_path(path)
   guard self.owns(path) else { return None }
-  if path == self.current.path && !self.current.settings {
+  if path == self.current.path {
     Some(self)
   } else if replace {
-    Some({
-      ..self,
-      current: { ..self.current, path, original: path, settings: false, },
-    })
+    Some({ ..self, current: { ..self.current, path, original: path, }, })
   } else {
     Some({
       ..self,
       previous: [..self.previous, self.current],
-      current: { key, path, original: path, settings: false, },
+      current: { key, path, original: path, },
       following: [],
     })
   }

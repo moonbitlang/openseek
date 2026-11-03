@@ -937,32 +937,25 @@ test "a Codex project add preserves its draft in either reply order" {
         Codex(channel~, @codex.Msg::start_draft("codex-add-project", "")),
         { ..test_model(), screen: Codex, default_agent: CodexAgent, },
       )
-      for initial_screen in [Screen::Codex, Settings, Skills, Schedules] {
+      for
+        initial_dialog in [None, Some(Settings), Some(Skills), Some(Schedules)] {
         let (_, confirmed) = adopt_picked_directory(
           dispatch,
           channel,
           picked.path,
-          {
-            ..started,
-            screen: initial_screen,
-            management_return: Some(CodexWork),
-          },
+          { ..started, management_dialog: initial_dialog, },
         )
         let (_, repeated) = adopt_picked_directory(
           dispatch,
           channel,
           picked.path,
-          {
-            ..started,
-            screen: initial_screen,
-            management_return: Some(CodexWork),
-          },
+          { ..started, management_dialog: initial_dialog, },
         )
         assert_true(confirmed.codex_project_adoption_pending())
         assert_true(repeated.codex_project_adoption_pending())
         assert_true(confirmed.codex == repeated.codex)
-        assert_true(confirmed.screen == initial_screen)
-        if initial_screen is Codex {
+        assert_true(confirmed.management_dialog == initial_dialog)
+        if initial_dialog is None {
           assert_true(confirmed.codex_model_chip().disabled)
           let switch_agent = ModelPicked("openseek:deepseek-v4-pro", draft={
             task: "Keep this draft",
@@ -976,8 +969,14 @@ test "a Codex project add preserves its draft in either reply order" {
           assert_true(repeated.codex == confirmed.codex)
           assert_true(unchanged.codex_project_adoption_pending())
         }
-        for screen in [Screen::Codex, Settings, Skills, Schedules] {
-          let confirmed = { ..confirmed, screen, }
+        for
+          management_dialog in [
+            None,
+            Some(Settings),
+            Some(Skills),
+            Some(Schedules),
+          ] {
+          let confirmed = { ..confirmed, management_dialog, }
           for
             action in [
               @codex.Msg::login(),
@@ -1025,7 +1024,7 @@ test "a Codex project add preserves its draft in either reply order" {
           if detach_previous {
             assert_true(focused.conversation_selection() is None)
           }
-          assert_true(focused.screen == screen)
+          assert_true(focused.management_dialog == management_dialog)
           assert_eq(focused.codex.active_id(), Some("codex-add-project"))
           assert_eq(focused.codex.new_thread_cwd(), picked.path)
           assert_eq(focused.dev().active_project, Some(picked))
@@ -1047,8 +1046,8 @@ test "OpenSeek selection supersedes retained Codex project ownership" {
     { ..test_model(), screen: Codex, },
   )
   assert_false(started.can_pick_project(channel))
-  for screen in [Screen::Chat, Settings, Skills, Schedules] {
-    let selected = { ..started, screen, management_return: Some(OpenSeekWork), }
+  for management_dialog in [None, Some(Settings), Some(Skills), Some(Schedules)] {
+    let selected = { ..started, screen: Chat, management_dialog, }
     assert_true(selected.can_pick_project(channel))
     let (_, focused) = focus_added_project(
       dispatch,

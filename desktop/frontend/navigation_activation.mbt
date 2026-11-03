@@ -29,6 +29,11 @@ fn activate_navigation(
   }
   let model = { ..model, screen: navigation_screen(location.target), }
   guard model.navigation.phase is Waiting else { return (@cmd.none, model) }
+  let model = if management_link_dialog(location.target) is Some(dialog) {
+    { ..model, management_dialog: Some(dialog), }
+  } else {
+    model
+  }
   if location.target is Cloud {
     return (
       @cmd.none,
@@ -105,10 +110,8 @@ fn activate_navigation(
   }
   if location.target is Settings {
     let (command, next) = update_msg(dispatch, OpenSetup, model)
-    return (
-      command,
-      { ..next, navigation: { ..next.navigation, phase: Active, }, },
-    )
+    let (replace, next) = finish_management_link(next)
+    return (@cmd.batch([command, replace]), next)
   }
   // Browser authentication and device gates own connectivity UI. Do not turn
   // an unconnected or not-yet-listed target into a missing target.
@@ -311,7 +314,7 @@ fn activate_navigation(
       )
       (
         cmd,
-        { ..model, skills, },
+        { ..model, skills, management_dialog: Some(Skills), },
         match resolution {
           Waiting => Waiting
           Opened => Active
@@ -321,5 +324,20 @@ fn activate_navigation(
       )
     }
   }
-  (command, { ..next, navigation: { ..next.navigation, phase, }, })
+  let next = { ..next, navigation: { ..next.navigation, phase, }, }
+  if phase is Active &&
+    location.target is (Schedules | Skills | InstalledSkill(_) | MarketSkill(_)) {
+    let (replace, next) = finish_management_link(next)
+    return (@cmd.batch([command, replace]), next)
+  }
+  (command, next)
+}
+
+///|
+// Old management links open a dialog, then leave only the work URL in history.
+fn finish_management_link(model : Model) -> (@cmd.Cmd, Model) {
+  guard model.navigation_location() is Some(location) else {
+    return (@cmd.none, model)
+  }
+  navigation_visit(model, location, replace=true)
 }

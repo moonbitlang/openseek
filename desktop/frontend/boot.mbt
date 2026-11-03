@@ -168,7 +168,6 @@ fn Model::quote_screen(self : Model) -> QuoteScreen? {
           !self.scheduled_session_read_only(conv) => Some(ChatQuote)
         _ => None
       }
-    Skills | Schedules | Settings => None
   }
 }
 
@@ -531,9 +530,6 @@ fn main {
             emit.map(message => CloudAction(message)),
           ),
         ]
-        if model.screen.work_screen() is None && !model.is_console_gated() {
-          subs.push(management_navigation_subscription(emit))
-        }
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
         subs.push(

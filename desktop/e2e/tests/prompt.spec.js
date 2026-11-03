@@ -32,7 +32,8 @@ async function saveCustom(page, app, text) {
   await expect(page.locator('.prompt-save-status')).toHaveText('');
 }
 
-async function newChat(page) {
+async function newChat(page, fromSettings = true) {
+  if (fromSettings) await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await page.locator('.workspace-row').hover();
   await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
   await expect(page.locator('#task')).toBeVisible();
@@ -60,6 +61,7 @@ test('custom prompt persists and both sources send complete system prompts', asy
   const editor = page.getByRole('textbox', { name: 'Custom prompt', exact: true });
   await saveCustom(page, app, custom);
   await page.reload();
+  await settings(page);
   await expect(editor).toHaveValue(custom);
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('custom-prompt-light.png') });
   await newChat(page);
@@ -68,6 +70,7 @@ test('custom prompt persists and both sources send complete system prompts', asy
   expect(complete.endsWith('\n\n' + custom)).toBe(true);
   await choose(page, 'MoonBit guide');
   await page.reload();
+  await settings(page);
   await expect(page.getByRole('button', { name: 'Additional prompt', exact: true })).toContainText('MoonBit guide');
   await newChat(page);
   expect((await send(page, app, 'Use the builtin again')).system_prompt).toBe(builtin);
@@ -90,12 +93,12 @@ test('changing the default preserves an existing unsent draft', async ({ page })
   await app.goto();
   await app.openSession();
   const builtin = (await send(page, app, 'Remember the builtin text')).system_prompt;
-  await newChat(page);
+  await newChat(page, false);
   await page.locator('#task').fill('Keep this draft');
   const draft = new URL(page.url()).pathname;
   await choose(page, 'Custom prompt');
   await saveCustom(page, app, 'New default');
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(draft);
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   expect((await send(page, app, 'Send the existing draft')).system_prompt).toBe(builtin);
@@ -132,6 +135,7 @@ test('the first native goal carries the same custom prompt as a first message', 
   const app = new PromptHarness(page);
   await app.install();
   await app.goto();
+  await app.openSession();
   await choose(page, 'Custom prompt');
   const custom = '  Goal instructions\n中文\n';
   await saveCustom(page, app, custom);
@@ -140,8 +144,8 @@ test('the first native goal carries the same custom prompt as a first message', 
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
   await task.press('Enter');
-  await expect(page.locator('#goal-set')).toBeVisible();
   await task.fill('Complete the requested work');
+  await expect(page.locator('#goal-set')).toBeVisible();
   await page.locator('#goal-set').click();
   const requests = () => app.requests.filter(request => request.method === 'agent.command');
   await expect.poll(() => requests().length).toBe(1);

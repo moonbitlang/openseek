@@ -113,7 +113,42 @@ a:where(.setting-link) {
   font-size: var(--font-size-md);
 }
 
-/* ---------- shared management-page shell ---------- */
+/* ---------- management dialogs ---------- */
+dialog.management-dialog {
+  width: min(960px, calc(100vw - 32px));
+  height: min(800px, calc(100dvh - 48px));
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  color: var(--color-text-primary);
+  overflow: hidden;
+}
+.management-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.management-dialog::backdrop {
+  background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
+}
+.management-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-7);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.management-dialog > .management-page {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  .management-dialog > .management-page { padding: var(--space-5); }
+}
+
+/* ---------- shared management content ---------- */
 .management-page {
   grid-row: 2 / -1;
   min-height: 0;

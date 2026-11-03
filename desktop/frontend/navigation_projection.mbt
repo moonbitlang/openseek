@@ -2,14 +2,6 @@
 fn Model::navigation_location(self : Model) -> @routes.Location? {
   let device = self.console.page_device
   let target : @routes.Target = match self.screen {
-    Settings => Settings
-    Schedules => Schedules
-    Skills =>
-      match self.skills.detail() {
-        Some(InstalledRef(id)) => InstalledSkill(id)
-        Some(MarketRef(source)) => MarketSkill(source)
-        None => Skills
-      }
     Codex => self.codex.navigation_target()
     Chat =>
       if self.cloud_draft_identity()
@@ -59,9 +51,7 @@ fn navigation_screen(target : @routes.Target) -> Screen {
     | CloudSession(..)
     | CloudDraft(..) => Chat
     Codex | CodexNew | Thread(_) | CodexDraft(_) => Codex
-    Settings => Settings
-    Skills | InstalledSkill(_) | MarketSkill(_) => Skills
-    Schedules => Schedules
+    Settings | Skills | InstalledSkill(_) | MarketSkill(_) | Schedules => Chat
   }
 }
 

@@ -15,10 +15,7 @@ priv struct NavigationObservation {
 ///|
 fn Msg::is_navigation_visit(self : Msg) -> Bool {
   match self {
-    OpenSetup
-    | Ssh(Open)
-    | OpenSchedules
-    | OpenSkills
+    Ssh(Open)
     | OpenCodex
     | OpenCloudConversation(..)
     | CloudAction(@cloud.Create)
@@ -31,7 +28,6 @@ fn Msg::is_navigation_visit(self : Msg) -> Bool {
     | QuickOpen(_)
     | SchedulePage(_)
     | ProjectPicker(_) => true
-    Skills(PreviewInstalled(_) | PreviewMarket(_) | BackToList) => true
     _ => false
   }
 }
@@ -187,10 +183,7 @@ fn observe_navigation(
     session_rotated: message is SessionRotated(_),
     explicit,
     repeat_visit: message
-    is (OpenSetup
-    | Ssh(Open)
-    | OpenSkills
-    | OpenSchedules
+    is (Ssh(Open)
     | OpenCodex
     | OpenSession(_, _)
     | OpenSessionHere(_)

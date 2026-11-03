@@ -15,19 +15,15 @@ test "Cloud URLs share browser history and restore across Cloud and device docum
     .unwrap()
   assert_eq(cloud.path(), "/cloud/session/session")
   assert_true(cloud.can_back())
-  let covered = cloud.visit_settings(replace=false, key="c")
-  assert_true(covered.settings())
-  let back = covered.select(cloud.path(), cloud.marker()).unwrap()
-  assert_false(back.settings())
+  let back = cloud.select(Settings, initial.marker()).unwrap()
   assert_true(back.can_forward())
   let restored = @browser_history.History::restore(
     cloud.path(),
     cloud.path(),
     cloud.marker(),
-    covered.stored(),
+    cloud.stored(),
   ).unwrap()
   assert_eq(restored.path(), cloud.path())
-  assert_false(restored.settings())
   assert_eq(
     restored.select(Settings, initial.marker()).unwrap().path(),
     Settings,

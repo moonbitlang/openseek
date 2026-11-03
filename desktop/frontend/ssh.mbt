@@ -951,7 +951,7 @@ fn update_ssh(
           }
           if pending.generation == model.chat_navigation_generation &&
             model.focused == channel {
-            let (open, model) = update(dispatch, pending.message(), model)
+            let (open, model) = update_msg(dispatch, pending.message(), model)
             return (@cmd.batch([ready, open]), model)
           }
           return (ready, model)

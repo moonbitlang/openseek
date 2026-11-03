@@ -1,25 +1,20 @@
 ///|
-test "global navigation preserves the visit sequence and is pure" {
+test "management dialogs preserve the work destination" {
   let dispatch = test_dispatch()
   let initial = { ..test_model(), is_desktop: true, }
   let (_, initial) = update(dispatch, ToggleSidebar, initial)
   let (_, settings) = update(dispatch, OpenSetup, initial)
   let (_, skills) = update(dispatch, OpenSkills, settings)
-  let (_, back) = update(dispatch, Navigation(Back), skills)
-  let (_, again) = update(dispatch, Navigation(Back), skills)
-  assert_true(back.screen is Settings)
-  assert_true(back.navigation == again.navigation)
-  assert_true(skills.navigation.location is Some({ target: Skills, .. }))
-  let (_, conversation) = update(dispatch, Navigation(Back), back)
+  assert_true(settings.management_dialog is Some(Settings))
+  assert_true(skills.management_dialog is Some(Skills))
+  assert_true(skills.navigation == initial.navigation)
+  let (_, conversation) = update(dispatch, CloseManagementDialog, skills)
   assert_true(conversation.screen is Chat)
+  assert_true(conversation.management_dialog is None)
   assert_eq(conversation.active_session, "desktop-test")
-  let (_, forward) = update(dispatch, Navigation(Forward), conversation)
-  assert_true(forward.screen is Settings)
-  let (_, branch) = update(dispatch, OpenSchedules, forward)
-  assert_true(!branch.navigation.can_forward)
   let (_, home) = apply_browser_navigation(
     dispatch,
-    { path: "/cloud", settings: false, can_back: false, can_forward: false, },
+    { path: "/cloud", },
     initial,
   )
   let (_, rotated) = update(
@@ -115,7 +110,7 @@ test "returning to a cached conversation fences a slower foreground read" {
   }
   let (_, base) = update(dispatch, ToggleSidebar, base)
   let (_, reading) = update(dispatch, OpenSession(Local, "second"), base)
-  let (_, back) = update(dispatch, Navigation(Back), reading)
+  let (_, back) = update(dispatch, OpenSession(Local, "desktop-test"), reading)
   assert_eq(back.active_session, "desktop-test")
   assert_true(back.loading_conversation is None)
   let (_, settled) = update_dev(
@@ -158,12 +153,10 @@ test "opening a thread does not promote a different Codex draft" {
     draft,
   )
   let (_, thread) = update(dispatch, CodexOpenThread("existing-thread"), draft)
-  let (_, back) = update(dispatch, Navigation(Back), thread)
   assert_true(
-    back.navigation.location is Some({ target: CodexDraft("local-draft"), .. }),
+    thread.navigation.location
+    is Some({ target: Thread("existing-thread"), .. }),
   )
-  assert_true(back.codex.composing_draft())
-  assert_eq(back.codex.active_id(), Some("local-draft"))
 }
 
 ///|
@@ -178,16 +171,14 @@ test "background rotations do not replace an explicit management destination" {
     SessionRotated({ channel: Local, session: "late", }),
     settings,
   )
-  assert_true(late.screen is Settings)
-  assert_true(late.navigation.location == settings.navigation.location)
-  assert_true(late.navigation.history == settings.navigation.history)
+  assert_true(late.management_dialog is Some(Settings))
 }
 
 ///|
 test "allocated drafts cannot overtake a newer navigation intent" {
   let dispatch = test_dispatch()
   let (_, settings) = update(dispatch, OpenSetup, {
-    ..test_model(),
+    ..running_model(),
     is_desktop: true,
   })
   let (_, first) = update(dispatch, NewChat, settings)
@@ -217,8 +208,7 @@ test "allocated drafts cannot overtake a newer navigation intent" {
     ),
     settings,
   )
-  assert_true(late.screen is Settings)
-  assert_true(late.codex == settings.codex)
+  assert_true(late.management_dialog is Some(Settings))
 }
 
 ///|
@@ -251,7 +241,6 @@ test "blank new entries gain a stable draft identity only after content" {
   assert_true(
     draft.navigation.location is Some({ target: ChatDraft("desktop-test"), .. }),
   )
-  assert_true(!draft.navigation.can_back)
   let (_, cleared) = update(
     dispatch,
     ComposerAction(
@@ -294,7 +283,6 @@ test "expired draft replaces its entry with a fresh new page" {
       ..AppNavigation::empty(),
       location: Some(expired),
       phase: Waiting,
-      history: @navigation.History::empty().visit(expired, replace=true),
     },
   }
   let (_, pending) = activate_navigation(dispatch, base)
@@ -315,7 +303,6 @@ test "expired draft replaces its entry with a fresh new page" {
   assert_eq(fresh.active_session, "fresh")
   assert_true(fresh.host_selection() is Some({ session: "fresh", .. }))
   assert_true(fresh.active_conversation() is Some(conv) && conv.draft_empty())
-  assert_true(!fresh.navigation.can_back)
   assert_true(
     fresh.find_conversation(Local, "desktop-test") is Some(conv) &&
     conv.task == "Keep existing input",
@@ -412,7 +399,6 @@ fn deletion_model(
       ..AppNavigation::empty(),
       location: Some(location),
       phase: Active,
-      history: @navigation.History::empty().visit(location, replace=true),
     },
   }
 }
@@ -453,7 +439,7 @@ fn announce_deletion(model : Model, key : ArchiveRecordKey) -> Model {
 fn shows_new_draft(model : Model) -> Bool {
   model.navigation.location is Some({ target: ChatNew, .. }) &&
   model.navigation.phase is Active &&
-  model.navigation.history.current() == model.navigation.location
+  model.navigation_location() == model.navigation.location
 }
 
 ///|

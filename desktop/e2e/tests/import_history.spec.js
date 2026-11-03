@@ -147,7 +147,7 @@ test('leaving while the imported catalog loads prevents a late navigation', asyn
   await chooseJson(page, dialog);
   await expect(page.locator('.navigation-notice')).toContainText('Loading destination');
   expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'desktop-import-0')).toBe(false);
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.goBack();
   await expect(page.getByRole('button', { name: 'Imported fixture', exact: true })).toBeVisible();
   await expect(page.locator('#transcript')).toContainText('Show the browser fixture');
   expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'desktop-import-0')).toBe(false);

@@ -73,7 +73,6 @@ fn promote_navigation(
       ..model,
       navigation: {
         ..navigation,
-        history: navigation.history.promote(old, promoted),
         location: navigation.location.map(location => {
           if location == old {
             promoted

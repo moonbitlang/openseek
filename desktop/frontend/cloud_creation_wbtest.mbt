@@ -94,7 +94,11 @@ test "first Cloud submit creates once and sends its snapshot after creation" {
     created,
   )
   assert_false(late.cloud.sessions.any(item => item.id == "duplicate"))
-  let (_, back) = update(test_dispatch(), Navigation(Back), created)
+  let (_, back) = update(
+    test_dispatch(),
+    OpenCloudConversation(account="fixture-user", session="cloud-a"),
+    created,
+  )
   assert_true(
     back.cloud_identity() is Some(@interop.Cloud(session="cloud-a", ..)),
   )
@@ -178,7 +182,7 @@ test "Cloud blank selection survives sidebar browsing and Settings over a Work p
   assert_true(repeated.cloud_selected())
   assert_eq(repeated.composer_input().identity.owner, identity)
   let (_, settings) = update(test_dispatch(), OpenSetup, browsed)
-  let (_, back) = update(test_dispatch(), Navigation(Back), settings)
+  let (_, back) = update(test_dispatch(), CloseManagementDialog, settings)
   assert_true(back.screen is Chat && back.cloud_selected())
   assert_eq(back.composer_input().identity.owner, identity)
   let (_, repeated) = update(test_dispatch(), NewChatRequested, settings)
@@ -211,8 +215,8 @@ test "Cloud creation behind Settings promotes its navigation without leaving Set
     ),
     settings,
   )
-  assert_true(created.screen is Settings)
-  let (_, back) = update(test_dispatch(), Navigation(Back), created)
+  assert_true(created.management_dialog is Some(Settings))
+  let (_, back) = update(test_dispatch(), CloseManagementDialog, created)
   assert_true(
     back.cloud_identity() is Some(@interop.Cloud(session="new-cloud", ..)),
   )
