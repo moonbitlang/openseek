@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend/archived_chats"
 
 import {
+  "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
@@ -10,13 +11,13 @@ import {
 }
 
 // Values
+pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Array[Group]], Actions) -> @rabbita.Val[@html.Html]
+
 pub fn count(Array[Group]) -> Int32
 
 pub fn filtered(@i18n.Locale, Array[Group], String) -> Array[Group]
 
 pub fn text(@i18n.Locale, Message) -> String
-
-pub fn view(@i18n.Locale, Array[Group], State, @cmd.Emit[Msg], Actions) -> @html.Html
 
 // Errors
 

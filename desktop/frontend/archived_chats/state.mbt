@@ -1,6 +1,6 @@
 ///|
 /// What the page itself holds: the filter box's text. The rows come from the
-/// stores the root owns, so they are inputs to the view, not page state.
+/// stores the shell owns, so they are inputs, not page state.
 pub struct State {
   query : String
 } derive(Eq, Debug)

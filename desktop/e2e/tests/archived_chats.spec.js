@@ -39,7 +39,7 @@ test('archived chats live on a Settings page with filter, read-only open, restor
   await expect(main.getByRole('button', { name: 'Parser notes', exact: true })).toHaveCount(0);
   await filter.fill('nothing');
   await expect(main.getByText('No archived chats match.', { exact: true })).toBeVisible();
-  await filter.fill('');
+  await filter.fill('parser');
 
   await main.getByRole('button', { name: 'Parser notes', exact: true }).click();
   await expect(page.getByText('Archived conversation · Read only', { exact: true })).toBeVisible();
@@ -47,6 +47,9 @@ test('archived chats live on a Settings page with filter, read-only open, restor
   await expect.poll(() => app.requests.some(r => r.method === 'session.load_archived' && r.params.session === 'work-archive')).toBe(true);
   await page.goBack();
   await expect(main.locator('.topbar-title')).toHaveText('Archived chats');
+  // Each visit starts unfiltered.
+  await expect(filter).toHaveValue('');
+  await expect(main.getByRole('button', { name: 'Trip plan', exact: true })).toBeVisible();
 
   await archivedRow(page, 'Parser notes').getByRole('button', { name: 'Restore', exact: true }).click();
   await expect(archivedRow(page, 'Parser notes')).toHaveCount(0);

@@ -139,7 +139,7 @@ fn row_view(
 ///|
 /// The page body: a way back to Settings, the filter, then each group as a
 /// settings card.
-pub fn view(
+fn view(
   locale : @i18n.Locale,
   groups : Array[Group],
   state : State,

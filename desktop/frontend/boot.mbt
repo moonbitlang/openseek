@@ -996,10 +996,31 @@ fn main {
     )
     // `Val::view9` is rabbita's widest composition. Stable overlay pairs share
     // one slot each without moving their state into the root model.
-    let skills_and_workspace_settings = @rabbita.Val::map2(
+    // One archived page per visit: leaving it disposes the component with
+    // its filter, so every visit starts unfiltered.
+    let archived_chats_html = state
+      .map(model => model.screen is ArchivedChats)
+      .switch_by(
+        open => {
+          if open {
+            @archived_chats.component(
+              state.map(model => model.locale),
+              state.map(model => model.archived_chat_groups()),
+              archived_chats_actions(emit),
+            )
+          } else {
+            @rabbita.Val::constant(@html.nothing)
+          }
+        },
+        by=open => if open { "open" } else { "closed" },
+      )
+    let management_pages = @rabbita.Val::map3(
       skills_html,
       workspace_settings_html,
-      (skills, workspace_settings) => (skills, workspace_settings),
+      archived_chats_html,
+      (skills, workspace_settings, archived_chats) => {
+        (skills, workspace_settings, archived_chats)
+      },
     )
     let quick_open_and_context_menu = @rabbita.Val::map3(
       quick_open_html,
@@ -1017,7 +1038,7 @@ fn main {
       codex_composer_html,
       sidebar_html,
       quick_open_and_context_menu,
-      skills_and_workspace_settings,
+      management_pages,
       (
         model,
         terminal_html,
@@ -1027,7 +1048,7 @@ fn main {
         codex_composer_html,
         sidebar_html,
         quick_open_and_context_menu,
-        skills_and_workspace_settings,
+        management_pages,
       ) => {
         view(
           emit,
@@ -1041,7 +1062,7 @@ fn main {
           codex_composer_html,
           sidebar_html,
           quick_open_and_context_menu,
-          skills_and_workspace_settings,
+          management_pages,
         )
       },
     )
