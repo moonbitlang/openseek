@@ -60,7 +60,10 @@ fn Model::conversation_transfer_input(
     locale: self.locale,
     visible: self.screen is Chat,
     narrow: self.narrow,
-    overview_available: self.screen is Chat && self.active_conversation() is Some(_),
+    // Match the wide titlebar, which offers the overview only beside a
+    // transcript it can describe.
+    overview_available: self.screen is Chat &&
+    self.chat_column() is Transcript(..),
     overview_open: self.overview_open,
     export_source: source,
   }
@@ -136,4 +139,32 @@ fn conversation_transfer_menu(
     )
   }
   Some({ label: shell_text(locale, ConversationTransfer), entries, })
+}
+
+///|
+test "the narrow actions menu offers the overview only beside a transcript" {
+  let base = test_model()
+  guard base.active_conversation() is Some(conv) else {
+    fail("conversation expected")
+  }
+  let target = {
+    channel: conv.device,
+    session: conv.session_id,
+    workspace: conv.project(),
+    record: LiveRecord,
+  }
+  let model = {
+    ..base,
+    narrow: true,
+    selected_conversation: Some(HostSelection(target)),
+  }
+  assert_true(model.chat_column() is Transcript(..))
+  assert_true(model.conversation_transfer_input().overview_available)
+  let failed = {
+    ..model,
+    conversation_load_failure: Some({ target, message: "load failed", }),
+  }
+  assert_true(failed.active_conversation() is Some(_))
+  assert_true(failed.chat_column() is LoadFailed(..))
+  assert_false(failed.conversation_transfer_input().overview_available)
 }
