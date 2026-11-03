@@ -132,7 +132,7 @@
   .content.terminal-open
     .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
     grid-template-rows: minmax(2.25rem, 1fr) auto;
-    min-height: calc(4.5rem + var(--space-3) + 2 * var(--space-4) + 2px);
+    min-height: 6.25rem;
 
     &:has(.mention-tray:not(:empty)) {
       grid-template-rows: minmax(4.5rem, 1fr) auto;
@@ -164,11 +164,10 @@
    context. */
 .content.terminal-open .composer-inner {
   flex: 0 1 auto;
-  /* Match the ordinary single-line draft and attachment button. Extra row
-     height would become top whitespace because their content aligns below.
-     The card minimum also includes its border and vertical padding. */
+  /* Match the ordinary single-line draft and attachment button. Keep a
+     compact floor while long drafts shrink beside a tall terminal. */
   grid-template-rows: minmax(2.25rem, 1fr);
-  min-height: calc(2.25rem + 2 * var(--space-4) + 2px);
+  min-height: 3.5rem;
   width: 100%;
 }
 
