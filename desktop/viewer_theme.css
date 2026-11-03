@@ -48,7 +48,6 @@
   /* The code surface. file_panel.css paints the surrounding editor panel
      with --color-bg-surface; sharing it keeps the seam invisible. */
   --vscode-editor-background: var(--color-bg-surface);
-  --vscode-editor-foreground: var(--color-code);
   --vscode-editorLineNumber-foreground: var(--color-text-muted);
   --vscode-editorLineNumber-activeForeground: var(--color-text-secondary);
   --vscode-editorCursor-foreground: var(--color-text-primary);
@@ -227,6 +226,12 @@
   --vscode-shadow-lg: var(--shadow-overlay);
   --vscode-editorUnnecessaryCode-opacity: 1;
 
+  /* `editor.foreground` (color id 1, the Plain token) is a theme color, so it
+     lives here with the other syntax values rather than in the app palette:
+     Dark Modern's default foreground. The light block below carries Light
+     Modern's. */
+  --vscode-editor-foreground: #cccccc;
+
   --vscode-token-keyword: #569cd6;
   --vscode-token-variable: #9cdcfe;
   --vscode-token-string: #ce9178;
@@ -276,6 +281,8 @@
   --vscode-peekViewEditor-matchHighlightBackground: #f5d802de;
   --vscode-widget-shadow: rgb(0 0 0 / 16%);
   --vscode-shadow-hover: rgb(0 0 0 / 16%);
+
+  --vscode-editor-foreground: #3b3b3b;
 
   --vscode-token-keyword: #0000ff;
   --vscode-token-variable: #001080;

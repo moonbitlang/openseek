@@ -692,7 +692,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   white-space: pre;
@@ -1626,7 +1626,7 @@
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
@@ -1704,7 +1704,7 @@
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
 }
@@ -1813,7 +1813,7 @@
 .read-moonbit-code,
 .moonbit-code {
   min-width: 0;
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font: inherit;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

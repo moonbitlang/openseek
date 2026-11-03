@@ -82,7 +82,7 @@
   overflow: auto;
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: 1.5;
   white-space: pre-wrap;
@@ -116,14 +116,14 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: 1.5;
   white-space: pre-wrap;
 }
 
 .codex-request-value {
-  color: var(--color-code);
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   overflow-wrap: anywhere;
 }

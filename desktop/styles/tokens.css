@@ -128,8 +128,6 @@
   );
   --color-warning: light-dark(var(--light-warning), var(--dark-warning));
 
-  --color-code: light-dark(var(--light-code), var(--dark-code));
-
   /* Keyboard focus must be obvious without turning every interactive surface
      into another accent claim. Blue remains for selection and primary action. */
   --color-focus-ring: color-mix(

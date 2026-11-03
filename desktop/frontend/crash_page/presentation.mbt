@@ -83,7 +83,7 @@ let crash_style : String =
   #|      border: 1px solid var(--color-border, #f0efea);
   #|      border-radius: var(--radius-sm, 6px);
   #|      background: var(--color-bg-subtle, #f6f6f3);
-  #|      color: var(--color-code, #2b2f36);
+  #|      color: var(--color-text-primary, #2b2f36);
   #|      font: 400 var(--font-size-sm, 13px)/var(--line-height-normal, 1.5)
   #|        var(--font-family-mono, ui-monospace, SFMono-Regular, Menlo, Monaco,
   #|          Consolas, "Liberation Mono", "Courier New", monospace);

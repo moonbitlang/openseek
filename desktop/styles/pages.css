@@ -979,7 +979,7 @@ button.archived-chat-open:hover .archived-chat-title {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   white-space: pre;
 }
 
