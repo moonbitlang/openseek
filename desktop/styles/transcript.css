@@ -1365,7 +1365,7 @@
    rows above and below — reading the gaps between steps is the whole point of
    showing them. */
 .activity-time {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
 }
@@ -1459,7 +1459,7 @@
 }
 .tool-flow {
   flex: 0 0 1em;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   text-align: center;
 }
 /* Keep status at the far right, after the summary's ::after disclosure arrow.

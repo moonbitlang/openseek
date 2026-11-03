@@ -93,7 +93,6 @@
     var(--dark-text-secondary)
   );
   --color-text-muted: light-dark(var(--light-text-muted), var(--dark-text-muted));
-  --color-text-faint: light-dark(var(--light-text-faint), var(--dark-text-faint));
   --color-border: light-dark(var(--light-border), var(--dark-border));
   --color-divider: light-dark(var(--light-border), var(--dark-border));
 

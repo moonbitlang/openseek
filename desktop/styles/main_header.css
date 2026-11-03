@@ -103,7 +103,7 @@ main {
   max-width: 28%;
   white-space: nowrap;
   font-size: var(--font-size-sm);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 
 .topbar-workspace-label {
@@ -122,7 +122,7 @@ main {
   align-items: center;
   gap: 7px;
   font-size: var(--font-size-sm);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 .run-status.accent .run-text {

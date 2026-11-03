@@ -130,7 +130,7 @@ button.panel-toggle:not(:disabled):hover {
   max-width: min(200px, 100%);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
@@ -1042,7 +1042,7 @@ html:is(
   padding: 0 var(--space-2);
   border-radius: 9px;
   background: var(--color-bg-subtle);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   line-height: calc(18 / 12);
   text-align: center;
@@ -2162,7 +2162,7 @@ button.git-history-file.selected {
   padding: 0 var(--space-6) 0 var(--space-5);
   border-bottom: 1px solid var(--color-seam);
   font-size: var(--font-size-xs);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   white-space: nowrap;
   overflow: visible;
   background: var(--color-bg-surface);
@@ -2245,7 +2245,7 @@ button.git-history-file.selected {
 }
 .crumb-sep {
   flex: 0 0 auto;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 
 /* The tab already identifies an Office file. Keep its folder breadcrumb and
@@ -2327,7 +2327,7 @@ button.git-history-file.selected {
 }
 .office-viewer-zoom-value {
   min-width: 38px;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -2532,7 +2532,7 @@ button.git-history-file.selected {
 .review-nav-position,
 .review-hunk-position {
   min-width: 2.75rem;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   text-align: center;
 }
@@ -3662,7 +3662,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
 .github-review-toggle { display: flex; align-items: center; gap: var(--space-4); height: 2rem; padding: 0 var(--space-4); border: 1px solid var(--color-seam); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
 .github-review-toggle svg { width: 1rem; height: 1rem; }
-.github-review-switch { display: inline-block; width: 2.25em; height: 1.25em; border-radius: 10px; background: var(--color-text-faint); padding: 0.125em; box-sizing: border-box; }
+.github-review-switch { display: inline-block; width: 2.25em; height: 1.25em; border-radius: 10px; background: var(--color-text-muted); padding: 0.125em; box-sizing: border-box; }
 .github-review-switch::after { content: ''; display: block; width: 1em; height: 1em; border-radius: 50%; background: white; }
 .github-review-switch.on { background: #0969da; }
 .github-review-switch.on::after { margin-left: 1em; }

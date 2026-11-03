@@ -1041,7 +1041,7 @@ button.archived-chat-open:hover .archived-chat-title {
   border-radius: var(--radius-pill);
   padding: var(--space-2) var(--space-4);
   background: transparent;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   white-space: nowrap;
 }
