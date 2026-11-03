@@ -90,6 +90,9 @@ button.panel-toggle:not(:disabled):hover {
    on the right. Always rendered — the editor's child order is
    structural (see panel_view). */
 .editor-tabsbar {
+  /* Keep the launcher attached to + as the panel and tab strip resize. */
+  position: relative;
+  anchor-scope: --dock-menu-trigger;
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
   display: flex;
   align-items: center;
@@ -478,10 +481,6 @@ html:is(
 .editor.mode-picker.mode-search-picker .viewer-stack::after {
   content: "Select a search result to open";
 }
-/* Keep the launcher attached to + as the panel and tab strip resize. */
-.editor-tabsbar {
-  position: relative;
-}
 .tab-action {
   --tab-action-size: calc(var(--font-size-base) * 26 / 14);
   flex: 0 0 auto;
@@ -506,9 +505,6 @@ html:is(
 }
 .tab-add.hidden {
   display: none;
-}
-.editor-tabsbar {
-  anchor-scope: --dock-menu-trigger;
 }
 .tab-add {
   anchor-name: --dock-menu-trigger;

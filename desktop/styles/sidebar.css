@@ -264,7 +264,7 @@ html.is-resizing .sidebar-resize-handle {
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-primary);
+  background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: inherit;
   outline: 1px solid var(--color-accent-border);
@@ -509,7 +509,7 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  min-height: 2em;
+  min-height: 2.5rem;
   padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
@@ -568,8 +568,6 @@ html.is-resizing .sidebar-resize-handle {
    pointer moves into the floating surface. */
 .workspace-menu-button[aria-expanded="true"] {
   visibility: visible;
-}
-.workspace-menu-button[aria-expanded="true"] {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
@@ -618,7 +616,8 @@ button.composer-worktree:hover {
 .project-show-more {
   width: 100%;
   min-height: 2em;
-  padding: 0 var(--space-4);
+  /* Align beneath titles: 2.5rem includes the leading twisty cell. */
+  padding: 0 var(--space-4) 0 2.5rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -627,12 +626,6 @@ button.composer-worktree:hover {
   font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
-}
-/* It sits under the titles of the rows it reveals. A top-level conversation
-   row indents its label 8 + 14 + 6 = 28px; a project's nested rows add their
-   own 16px pad on top, landing at 36px. */
-.project-show-more {
-  padding-left: 2.5rem;
 }
 .project-show-more:hover {
   background: var(--color-bg-subtle);
@@ -1283,10 +1276,6 @@ button.row-twisty:hover {
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
 
 /* Host identity and actions share the right edge without moving the title. */
-.workspace-row {
-  gap: var(--space-4);
-  min-height: 2.5rem;
-}
 .workspace-trailing {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
