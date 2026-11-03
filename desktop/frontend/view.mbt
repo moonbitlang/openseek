@@ -3060,12 +3060,6 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           shell_text(model.locale, TryAgain),
         ),
       ])
-    } else if model.account is Some(_) {
-      @html.button(
-        class="button primary",
-        on_click=dispatch(CloudAction(@cloud.Create)),
-        shell_text(model.locale, NewChatLabel),
-      )
     } else if model.console.auth is AuthChecking {
       @html.div([
         @html.p(

@@ -109,7 +109,8 @@ test "Cloud selection after Settings wins over the previous navigation destinati
     direct,
   )
   assert_true(home.cloud_selected() && home.cloud_identity() is None)
-  assert_true(home.cloud.creation is None)
+  assert_true(home.cloud_draft_identity() is Some(_))
+  assert_false(home.cloud.creating_session())
 }
 
 ///|

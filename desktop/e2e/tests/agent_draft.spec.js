@@ -143,7 +143,7 @@ test('editing a goal protects its text until the editor is closed', async ({ pag
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({ hasText: 'goal' }).first()).toBeVisible();
   await task.press('Enter');
-  await expect(page.locator('#goal-set')).toBeVisible();
+  await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Do not lose this goal');
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
   await expect(task).toHaveValue('Do not lose this goal');
@@ -259,7 +259,7 @@ test('Local native goal and compact commands share input and wait for engine con
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({hasText: '/goal'})).toBeVisible();
   await task.press('Enter');
-  await expect(page.locator('#goal-set')).toBeVisible();
+  await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Finish the shared command work');
   await page.locator('#goal-set').click();
   await expect.poll(() => requests().length).toBe(1);
