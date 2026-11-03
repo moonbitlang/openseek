@@ -43,7 +43,7 @@ main:has(> .conv-overview) {
 
 .conv-overview-card {
   padding: var(--space-5) 0;
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-divider);
 }
 .conv-overview-card:last-child {
   border-bottom: 0;

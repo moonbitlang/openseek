@@ -655,7 +655,7 @@ html:is(
 .browser-failure {
   flex: 0 0 auto;
   padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-danger);
   font-size: var(--font-size-sm);
 }
@@ -759,7 +759,7 @@ html:is(
   cursor: pointer;
 }
 .search-mode-button + .search-mode-button {
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-mode-button:hover {
   background: var(--color-bg-subtle);
@@ -812,21 +812,21 @@ html:is(
 .search-semantic-pattern-results {
   min-width: 0;
   margin-left: var(--space-5);
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-semantic-pattern-results > .search-file-group {
   margin-left: var(--space-4);
 }
 .search-semantic-pattern-results .search-file-results {
   margin-left: var(--space-6);
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-selection-toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
@@ -954,7 +954,7 @@ html:is(
   gap: var(--space-2);
   flex: 0 0 auto;
   padding: 0 var(--space-5) var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
 }
 .search-toolbar button {
   padding: var(--space-2) var(--space-4);
@@ -2361,7 +2361,7 @@ button.git-history-file.selected {
   flex: 0 0 auto;
   min-height: 2.5rem;
   padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   background: var(--color-bg-subtle);
   font-size: var(--font-size-xs);
@@ -2599,7 +2599,7 @@ button.git-history-file.selected {
   flex: 0 0 auto;
   width: 1px;
   height: 18px;
-  background: var(--color-border);
+  background: var(--color-divider);
 }
 
 .review-mode-divider {
@@ -3002,7 +3002,7 @@ button.git-history-file.selected {
   flex-wrap: wrap;
   gap: var(--space-4);
   padding: 0 var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -3261,7 +3261,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 .github-toolbar { flex: none; display: flex; align-items: center; gap: var(--space-4); min-height: 2.75rem; padding: 0 var(--space-2) 0 var(--space-4); }
 .github-repository { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
-.github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-border); }
+.github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-divider); }
 .github-pulls.expanded { flex: 2 1 0; }
 .github-issues.expanded { flex: 1 1 0; }
 .github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--space-1) 0 var(--space-4); scrollbar-width: thin; }
@@ -3311,7 +3311,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
 .jobs-summary-active { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--color-text-primary); }
 .jobs-summary-active::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
-.jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border); }
+.jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-divider); }
 .jobs-list { display: flex; flex-direction: column; gap: var(--space-6); max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: var(--space-1); scrollbar-width: thin; }
 .jobs-group { flex-shrink: 0; min-width: 0; }
 .jobs-group-title { display: flex; align-items: center; gap: var(--space-4); margin: 0 0 var(--space-5); font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary); }
@@ -3338,7 +3338,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   }
 }
 .jobs-more { margin-top: var(--space-4); }
-.jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-border); }
+.jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-divider); }
 .jobs-group-count { min-width: 20px; padding: var(--space-1) var(--space-3); border-radius: 5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); font-size: var(--font-size-xs); text-align: center; font-variant-numeric: tabular-nums; }
 .jobs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18em,100%),1fr)); gap: var(--space-4); }
 .jobs-row { display: flex; flex-direction: column; gap: var(--space-4); text-align: left; padding: var(--space-5); border: 1px solid var(--color-border); border-left: 3px solid color-mix(in srgb, var(--job-color) 55%, var(--color-border)); background: var(--color-bg-surface); border-radius: 8px; color: inherit; min-width: 0; cursor: pointer; }
@@ -3364,7 +3364,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 @keyframes jobs-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .jobs-status-running::before { animation: none; } }
 .jobs-detail { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-height: 290px; min-width: 0; }
-.jobs-detail-title { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--color-border); padding-top: var(--space-6); }
+.jobs-detail-title { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--color-divider); padding-top: var(--space-6); }
 .jobs-full-command { margin: 0; padding: var(--space-4) var(--space-5); font: var(--font-size-sm)/var(--line-height-normal) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-bg-surface); border-radius: 5px; max-height: 110px; overflow: auto; }
 .jobs-path { font-size: var(--font-size-sm); overflow-wrap: anywhere; line-height: var(--line-height-normal); }
 .jobs-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); }
@@ -3470,7 +3470,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 
 .review-filter-controls {
   flex: 0 0 auto;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .review-filter-layout > .review-git-layout {

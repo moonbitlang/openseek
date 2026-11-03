@@ -95,17 +95,14 @@
   --color-text-muted: light-dark(var(--light-text-muted), var(--dark-text-muted));
   --color-text-faint: light-dark(var(--light-text-faint), var(--dark-text-faint));
   --color-border: light-dark(var(--light-border), var(--dark-border));
-  --color-border-subtle: light-dark(
-    var(--light-border-subtle),
-    var(--dark-border-subtle)
-  );
+  --color-divider: light-dark(var(--light-border), var(--dark-border));
 
   /* Structural seams should recede behind content. Persistent control
      grouping comes from a quiet fill; the stronger border remains available
      for fields, overlays, focus, and actions whose boundary carries meaning. */
   --color-separator: color-mix(
     in srgb,
-    var(--color-border-subtle) 68%,
+    light-dark(var(--light-border-subtle), var(--dark-border-subtle)) 68%,
     transparent
   );
   --color-control-surface: color-mix(

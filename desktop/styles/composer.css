@@ -519,7 +519,7 @@
   line-height: var(--line-height-normal);
 }
 .pending-steer-row + .pending-steer-row {
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--color-divider);
 }
 .pending-steer-icon {
   color: var(--color-text-secondary);
@@ -559,7 +559,7 @@
   line-height: var(--line-height-normal);
 }
 .queued-input-row + .queued-input-row {
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--color-divider);
 }
 .queued-input-icon {
   flex: none;
@@ -882,7 +882,7 @@
 .composer-git-rule {
   height: 1px;
   margin: var(--space-2) var(--space-4);
-  background: var(--color-border-subtle);
+  background: var(--color-divider);
 }
 .composer-git-diff {
   display: inline-flex;
@@ -1213,7 +1213,7 @@
 .changes-popup-files {
   overflow-y: auto;
   min-height: 0;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
   overscroll-behavior: contain;
 }
 
@@ -1318,7 +1318,7 @@
 .changes-popup-footer {
   justify-content: space-between;
   flex-wrap: wrap;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
   padding: var(--space-5) 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);

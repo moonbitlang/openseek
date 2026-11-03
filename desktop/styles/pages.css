@@ -219,7 +219,7 @@ h2 {
 .settings-group-card .skill-row + .skill-row,
 .settings-group-card .setup-guide + .setting-row,
 .setup-modal-form .setup-guide + .setting-row {
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--color-divider);
 }
 
 .setting-row.stack {
@@ -863,7 +863,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-metadata-table th,
 .skill-metadata-table td {
   padding: var(--space-5) 1rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-divider);
   line-height: var(--line-height-normal);
   text-align: left;
   vertical-align: top;
@@ -913,7 +913,7 @@ button.archived-chat-open:hover .archived-chat-title {
   gap: var(--space-5);
   min-height: 40px;
   padding-block: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .skill-file-name {
@@ -992,7 +992,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-preview-markdown blockquote {
   margin: 0.55em 0;
   padding: var(--space-1) var(--space-5);
-  border-left: 3px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-divider);
   color: var(--color-text-secondary);
 }
 
@@ -1008,7 +1008,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-preview-markdown th,
 .skill-preview-markdown td {
   padding: var(--space-2) var(--space-5);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-divider);
 }
 
 .skill-preview-markdown th {

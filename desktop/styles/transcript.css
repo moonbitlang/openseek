@@ -250,7 +250,7 @@
 .overview-preview-reply {
   margin-top: 7px;
   padding-left: 8px;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
   color: var(--color-text-secondary);
@@ -288,7 +288,7 @@
   height: 52px;
   border-radius: var(--radius-lg);
   background: var(--color-control-surface);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
 }
 .empty-title {
@@ -465,7 +465,7 @@
   margin-top: 6px;
   padding: 9px;
   border: 0;
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--color-divider);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   background: transparent;
   color: var(--color-text-secondary);
@@ -858,7 +858,7 @@
 .msg-content.markdown blockquote {
   margin: 0.55em 0;
   padding: 2px 12px;
-  border-left: 3px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-divider);
   color: var(--color-text-secondary);
 }
 .msg-content.markdown .chat-table-scroll {
@@ -885,16 +885,15 @@
   padding: 4px 10px;
 }
 .msg-content.markdown td {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
 }
 .msg-content.markdown th {
-  /* background: var(--color-bg-subtle); */
   font-weight: 600;
 }
 .msg-content.markdown hr {
   margin: 0.9em 0;
   border: none;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
 }
 .msg-content a {
   color: var(--color-accent);
@@ -1350,7 +1349,7 @@
   color: var(--color-text-secondary);
 }
 .activity:has(> .activity-summary .activity-step) > .activity-body {
-  border-left-color: var(--color-border);
+  border-left-color: var(--color-divider);
 }
 
 /* The step heading when the step went straight to tools: the same ordinal and
@@ -1387,7 +1386,7 @@
   display: grid;
   gap: 14px;
   padding: 12px 0 4px 16px;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
 }
 
 /* compaction checkpoint between turns: a quiet labeled fold with the
@@ -1448,7 +1447,7 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   padding: 2px 0 2px 16px;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
 }
 
 .tool-exchange {
@@ -1750,7 +1749,7 @@
 .tool-argument-object {
   margin: 3px 0 3px 2px;
   padding-left: 10px;
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .tool-argument-array {
   margin: 3px 0 3px 2px;
@@ -1758,7 +1757,7 @@
 .tool-argument-item {
   margin: 4px 0;
   padding-left: 10px;
-  border-left: 2px solid var(--color-border);
+  border-left: 2px solid var(--color-divider);
 }
 /* ---------- custom tool cards ----------
    One tool's arguments rendered in the shape a reader wants — an `mbtx`
@@ -1865,7 +1864,7 @@
 .edit-entry + .edit-entry {
   margin-top: 10px;
   padding-top: 4px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-divider);
 }
 .edit-omitted {
   color: var(--color-text-muted);
@@ -2238,7 +2237,7 @@
   gap: 8px;
   min-width: 0;
   padding: 4px 4px 4px 13px;
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-divider);
   font-size: var(--font-size-sm);
 }
 .edit-path,
