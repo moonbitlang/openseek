@@ -272,7 +272,7 @@ fn Entry::action_buttons(
           title: ui(locale, StopLabel),
           disabled: !can_stop,
           command: action_emit(StopRequested(identity=self.identity())),
-          content: @icons.icon(@icons.icon_debug_stop),
+          content: @icons.icon(@icons.icon_stop_circle),
         },
       ]
       if steer_available &&

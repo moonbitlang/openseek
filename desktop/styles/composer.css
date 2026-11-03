@@ -725,7 +725,11 @@
 }
 
 .composer-actions .icon-button {
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
+}
+
+.composer-actions .icon-button:disabled {
+  color: var(--color-text-muted);
 }
 
 /* A flex box, so the picker inside can shrink its label in a narrow row. */
@@ -1012,28 +1016,6 @@
 .icon-button.icon-button-compact {
   --icon-button-size: calc(var(--font-size-base) * 24 / 14);
   border-radius: var(--radius-sm);
-}
-
-.composer-actions .send-button {
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
-}
-.composer-actions .send-button:not(:disabled):hover {
-  background: var(--color-bg-subtle);
-}
-.composer-actions .send-button:disabled {
-  color: var(--color-text-muted);
-}
-
-.stop-button {
-  border-color: transparent;
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-  font-size: var(--font-size-md);
-}
-.stop-button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--color-danger-soft) 78%, var(--color-bg-surface));
 }
 
 .composer-image {
