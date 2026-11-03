@@ -4416,9 +4416,19 @@ fn update_msg(
         { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
       )
     OpenArchivedChats =>
-      (@cmd.none, { ..model, screen: ArchivedChats, archived_filter: "", })
-    ArchivedChatsFilterChanged(query) =>
-      (@cmd.none, { ..model, archived_filter: query, })
+      (
+        @cmd.none,
+        {
+          ..model,
+          screen: ArchivedChats,
+          archived_chats: @archived_chats.State::empty(),
+        },
+      )
+    ArchivedChats(msg) =>
+      (
+        @cmd.none,
+        { ..model, archived_chats: model.archived_chats.update(msg), },
+      )
     Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
       (

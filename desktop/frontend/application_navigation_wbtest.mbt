@@ -686,17 +686,17 @@ test "archived chats is a Settings page with its own history entry" {
   )
   let (_, filtered) = update(
     dispatch,
-    ArchivedChatsFilterChanged("old"),
+    ArchivedChats(QueryChanged("old")),
     archived,
   )
-  assert_eq(filtered.archived_filter, "old")
+  assert_eq(filtered.archived_chats.query, "old")
   assert_true(filtered.navigation.location == archived.navigation.location)
   let (_, back) = update(dispatch, Navigation(Back), filtered)
   assert_true(back.screen is Settings)
   let (_, forward) = update(dispatch, Navigation(Forward), back)
   assert_true(forward.screen is ArchivedChats)
   // Reopening the page starts with an empty filter.
-  assert_eq(forward.archived_filter, "")
+  assert_eq(forward.archived_chats.query, "")
   // The page's own way back is an explicit visit to Settings.
   let (_, returned) = update(dispatch, OpenSetup, forward)
   assert_true(returned.screen is Settings)

@@ -1307,8 +1307,7 @@ priv struct Model {
   // and it closes the moment a usable endpoint arrives.
   api_setup_open : Bool
   session_search : @session_search.Model
-  // The archived-conversations page's filter text.
-  archived_filter : String
+  archived_chats : @archived_chats.State
   session_import_dialog : @session_import.Model
   export_dialog : @export_dialog.Model
   file_share_dialog : @export_dialog.Model
@@ -1771,7 +1770,8 @@ priv enum Msg {
   OpenSetup
   // Settings' "Manage" on archived conversations, and the page's way back.
   OpenArchivedChats
-  ArchivedChatsFilterChanged(String)
+  // Everything the archived page does with itself once it is open.
+  ArchivedChats(@archived_chats.Msg)
   OpenLocalApiSettings
   Navigation(NavigationMsg)
   // The API-setup modal's "Not now" button and its backdrop click.
@@ -2761,7 +2761,7 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     update_ux: UpdateUnknown,
     api_setup_open: false,
     session_search: @session_search.Model(),
-    archived_filter: "",
+    archived_chats: @archived_chats.State::empty(),
     session_import_dialog: @session_import.Model(),
     export_dialog: @export_dialog.Model(),
     file_share_dialog: @export_dialog.Model(id_prefix="file-share"),

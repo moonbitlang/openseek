@@ -52,3 +52,10 @@ test "the filter keeps matching rows and whole matching groups" {
   ])
   assert_eq(@archived_chats.filtered(English, groups, "missing"), [])
 }
+
+///|
+test "the page opens with an empty filter and keeps what is typed" {
+  let state = @archived_chats.State::empty()
+  assert_eq(state.query, "")
+  assert_eq(state.update(QueryChanged("trip")).query, "trip")
+}

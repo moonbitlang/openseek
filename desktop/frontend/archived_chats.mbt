@@ -118,10 +118,10 @@ fn archived_chats_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @archived_chats.view(
     model.locale,
     model.archived_chat_groups(),
-    query=model.archived_filter,
+    model.archived_chats,
+    dispatch.map(msg => ArchivedChats(msg)),
     {
       back: dispatch(OpenSetup),
-      filter: query => dispatch(ArchivedChatsFilterChanged(query)),
       open: id => sidebar.conversation_open(id),
       restore: id => sidebar.conversation_restore(id),
       delete: id => sidebar.conversation_delete(id),

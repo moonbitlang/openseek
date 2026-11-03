@@ -31,7 +31,7 @@ fn activate_navigation(
   // arriving at that entry with the archived page up keeps it.
   let screen = match location {
     { device: None, target: Settings, } if model.screen is ArchivedChats =>
-      ArchivedChats
+      model.screen
     _ => navigation_screen(location.target)
   }
   let model = { ..model, screen, }

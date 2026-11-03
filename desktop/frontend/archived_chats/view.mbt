@@ -24,7 +24,6 @@ pub(all) struct Group {
 ///|
 pub(all) struct Actions {
   back : @cmd.Cmd
-  filter : (String) -> @cmd.Cmd
   open : (@conversation.Id) -> @cmd.Cmd
   restore : (@conversation.Id) -> @cmd.Cmd
   delete : (@conversation.Id) -> @cmd.Cmd
@@ -143,7 +142,8 @@ fn row_view(
 pub fn view(
   locale : @i18n.Locale,
   groups : Array[Group],
-  query~ : String,
+  state : State,
+  emit : @cmd.Emit[Msg],
   actions : Actions,
 ) -> @html.Html {
   let content : Array[@html.Html] = [
@@ -172,9 +172,9 @@ pub fn view(
         @icons.icon(@icons.icon_search),
         @html.input(
           input_type=@html.InputType::Search,
-          value=query,
+          value=state.query,
           placeholder=text(locale, Filter),
-          on_input=@cmd.Emit(actions.filter),
+          on_input=emit.map(query => QueryChanged(query)),
           attrs=@html.Attrs::build()
             .aria_label(text(locale, Filter))
             .data_set("focus-target", ""),
@@ -182,7 +182,7 @@ pub fn view(
       ],
     ),
   )
-  let shown = filtered(locale, groups, query)
+  let shown = filtered(locale, groups, state.query)
   if shown.is_empty() {
     content.push(
       @html.div(class="archived-chats-empty", text(locale, NoMatches)),
