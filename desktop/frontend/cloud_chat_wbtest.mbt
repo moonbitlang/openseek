@@ -52,6 +52,7 @@ fn integrated_cloud_model() -> Model {
             },
           ]),
         },
+        etag: None,
         messages: [
           {
             task_id: "finished-task",
@@ -401,6 +402,7 @@ test "same-account sign-out retires old composer actions, while the new entry ca
           system_prompt: None,
           events: Some([]),
         },
+        etag: None,
         messages: [],
         generating: false,
       }),

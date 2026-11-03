@@ -51,21 +51,45 @@ fn State::load(
   id : String,
   token : String?,
   emit : @cmd.Emit[Msg],
+  reuse~ : Bool = false,
 ) -> (State, @cmd.Cmd) {
   guard token is Some(token) else { return (self, @cmd.none) }
   let conversation = self.conversations.get(id).unwrap_or(Conversation::empty())
+  guard !reuse || !conversation.history_reading else {
+    return (self, @cmd.none)
+  }
+  // A revisit shares the read. A durable SSE event needs a newer
+  // snapshot and supersedes the earlier response through the request id.
   let request = self.sequence + 1
-  let next = self.replace(id, { ..conversation, request, })
+  let next = self.replace(id, {
+    ..conversation,
+    request,
+    history_reading: true,
+  })
   (
     { ..next, sequence: request, },
     run(emit, () => {
-      Loaded(self.epoch, id, request, load_history(token, id)) catch {
+      load_history(token, id, conversation.history_etag, self.epoch, request) catch {
         @cloud_client.RequestError(error) =>
           LoadFailed(self.epoch, id, request, error)
         _ => LoadFailed(self.epoch, id, request, Unreachable)
       }
     }),
   )
+}
+
+///|
+fn Conversation::fence_history(
+  self : Conversation,
+  request : Int32,
+) -> Conversation {
+  {
+    ..self,
+    request,
+    // A fresh observation baseline must be able to recover even if a
+    // read from the previous connection is still waiting on the network.
+    history_reading: false,
+  }
 }
 
 ///|
@@ -83,17 +107,18 @@ fn State::fence_archived_history(
   }
   // Fence pre-archive reads even after a later restore. Replace an unfinished
   // read through the existing loader so the retained transcript can complete.
-  let loading = conversation.loading ||
+  let refresh = conversation.history_reading ||
+    conversation.loading ||
     conversation.generating ||
     conversation.history_required
+  let loading = refresh && !conversation.history_cached
   let next = self.replace(id, {
-    ..conversation,
-    request,
+    ..conversation.fence_history(request),
     generating: false,
     loading,
     history_required: conversation.history_required || loading,
   })
-  if loading {
+  if refresh {
     next.load(id, token, emit)
   } else {
     (next, @cmd.none)
@@ -230,6 +255,18 @@ pub fn update(
   token? : String,
   navigation~ : Int32,
 ) -> (State, @cmd.Cmd, String?) {
+  match msg {
+    Loaded(epoch, id, request, _)
+    | HistoryUnchanged(epoch, id, request, _)
+    | LoadFailed(epoch, id, request, _) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.request == request else {
+        return (state, @cmd.none, None)
+      }
+    }
+    _ => ()
+  }
   if state.update_command(msg, emit, token, navigation) is Some((next, command)) {
     return (next, command, None)
   }
@@ -654,10 +691,9 @@ pub fn update(
       let retry = retry_observation(error)
       let request = state.sequence + 1
       let next = state.replace(id, {
-        ..conversation.clear_progress(),
+        ..conversation.clear_progress().fence_history(request),
         // Fence history reads from the interrupted connection. Only a fresh
         // snapshot can establish the run state for the following history read.
-        request,
         stream: None,
         watch_request: conversation.watch_request + 1,
         watch_status: if retry {
@@ -705,8 +741,9 @@ pub fn update(
       } else {
         state.replace(id, {
           ..conversation.clear_progress(),
-          loading: true,
-          history_required: true,
+          loading: !conversation.history_cached,
+          history_required: !conversation.history_cached ||
+          conversation.history_required,
           watch_request: conversation.watch_request + 1,
           watch_status: Watching,
           stream: None,
@@ -714,15 +751,11 @@ pub fn update(
           notice: None,
         })
       }
-      let (next, command) = next.load(id, token, emit)
+      let (next, command) = next.load(id, token, emit, reuse=true)
       (next, command, None)
     }
     Loaded(epoch, id, request, history) => {
-      guard epoch == state.epoch &&
-        state.conversations.get(id) is Some(conversation) &&
-        conversation.request == request else {
-        return (state, @cmd.none, None)
-      }
+      let conversation = state.conversations[id]
       let accepted = conversation.pending is Some(submission) &&
         history.messages.any(record => {
           record.kind == "user" &&
@@ -747,6 +780,9 @@ pub fn update(
         ..settled.restore_goal(history.session),
         control,
         records: history.messages,
+        history_cached: true,
+        history_etag: history.etag,
+        history_reading: false,
         events: conversation.events.filter(event => {
           !history.messages.any(record => {
             record.task_id == event.task_id &&
@@ -828,12 +864,33 @@ pub fn update(
         None,
       )
     }
+    HistoryUnchanged(epoch, id, request, etag) => {
+      let conversation = state.conversations[id]
+      let observing = conversation.stream is Some({ active: true, .. })
+      let next = state.replace(id, {
+        ..conversation,
+        history_etag: Some(etag),
+        history_reading: false,
+        loading: false,
+        history_required: false,
+        watch_status: if observing && conversation.last_seq is Some(_) {
+          Watching
+        } else {
+          conversation.watch_status
+        },
+      })
+      (
+        next,
+        if conversation.generating && !observing {
+          poll(epoch, id, request, emit)
+        } else {
+          @cmd.none
+        },
+        None,
+      )
+    }
     LoadFailed(epoch, id, request, error) => {
-      guard epoch == state.epoch &&
-        state.conversations.get(id) is Some(conversation) &&
-        conversation.request == request else {
-        return (state, @cmd.none, None)
-      }
+      let conversation = state.conversations[id]
       if error is Http(404) {
         return (state.forget(id), @cmd.none, None)
       }
@@ -844,6 +901,7 @@ pub fn update(
       }
       let next = state.replace(id, {
         ..conversation,
+        history_reading: false,
         loading: false,
         watch_status: if recovering && !retry {
           Disconnected
@@ -1038,14 +1096,13 @@ pub fn update(
         return (state, @cmd.none, None)
       }
       let configuration = error is ServiceNotConfigured
+      let conversation = if configuration {
+        conversation.fence_history(state.sequence + 1)
+      } else {
+        conversation
+      }
       let next = state.replace(id, {
         ..conversation.clear_progress(),
-        // A definite refusal supersedes history reads started for admission.
-        request: if configuration {
-          state.sequence + 1
-        } else {
-          conversation.request
-        },
         sending: false,
         notice: Some(error.label()),
         history_required: if configuration {

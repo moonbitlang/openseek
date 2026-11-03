@@ -123,6 +123,9 @@ pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool
 
 pub(all) struct Conversation {
   records : Array[Record]
+  history_cached : Bool
+  history_etag : String?
+  history_reading : Bool
   events : Array[Event]
   document : @protocol.SessionDocument
   prediction : @openseek_protocol.PredictionRecord?
@@ -192,6 +195,7 @@ pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 
 pub(all) struct History {
+  etag : String?
   prediction : @openseek_protocol.PredictionRecord?
   session : @protocol.SessionDocument
   messages : Array[Record]
@@ -224,6 +228,7 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
+  HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, @cloud_client.Failure)
   WatchOpened(Int32, String, StreamLease)
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)

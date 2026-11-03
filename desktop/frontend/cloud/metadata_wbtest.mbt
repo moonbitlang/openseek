@@ -250,6 +250,7 @@ test "a completed archive wins over an earlier history response's running flag" 
   let old_history = Loaded(2, "a", pending.conversations["a"].request, {
     prediction: None,
     session: native_document([]),
+    etag: None,
     messages: [],
     generating: true,
   })
@@ -274,6 +275,7 @@ test "a completed archive wins over an earlier history response's running flag" 
     let old_history = Loaded(2, "a", state.conversations["a"].request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [],
       generating: true,
     })
@@ -281,7 +283,11 @@ test "a completed archive wins over an earlier history response's running flag" 
       state,
       Edited(2, "a", state.metadata_saves["a"].request),
     )
-    assert_true(archived.conversations["a"].loading)
+    assert_true(archived.conversations["a"].history_reading)
+    assert_eq(
+      archived.conversations["a"].loading,
+      !state.conversations["a"].history_cached,
+    )
     assert_false(archived.sessions[0].generating)
     assert_false(archived.conversations["a"].generating)
     assert_true(archived.can_edit("a", Archive(false)))
@@ -309,6 +315,7 @@ test "a completed archive wins over an earlier history response's running flag" 
       Loaded(2, "a", late.conversations["a"].request, {
         prediction: None,
         session: native_document([]),
+        etag: None,
         messages: [
           {
             task_id: "finished",
@@ -359,6 +366,7 @@ test "externally archived inventory fences pending history through restoration" 
   let old_history = Loaded(2, "a", old_request, {
     prediction: None,
     session: native_document([]),
+    etag: None,
     messages: [],
     generating: true,
   })
@@ -381,6 +389,7 @@ test "externally archived inventory fences pending history through restoration" 
     Loaded(2, "a", restored.conversations["a"].request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [],
       generating: false,
     }),

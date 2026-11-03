@@ -183,6 +183,7 @@ test "Cloud observer failure retains the confirmed queue as read-only" {
     Loaded(1, "session", conversation.request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [],
       generating: true,
     }),
@@ -265,6 +266,7 @@ test "Cloud steer receipts settle input without duplicating the durable user mes
     session: native_document([
       { "kind": "user", "payload": { "content": "Follow up" } },
     ]),
+    etag: None,
     messages: [
       {
         task_id: "task",
@@ -301,6 +303,7 @@ test "Cloud reconnect fences old history and synchronizes after its new baseline
     Loaded(1, "session", old_request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [],
       generating: false,
     }),
@@ -324,6 +327,7 @@ test "Cloud reconnect fences old history and synchronizes after its new baseline
     Loaded(1, "session", event.conversations["session"].request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [],
       generating: false,
     }),
@@ -461,6 +465,7 @@ test "Cloud recovered history can release an observed task without replaying its
     Loaded(1, "session", idle.conversations["session"].request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [
         {
           task_id: "task",
