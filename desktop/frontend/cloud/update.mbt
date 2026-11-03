@@ -34,7 +34,16 @@ fn State::list(
   guard token is Some(token) else { return (self, @cmd.none) }
   let request = self.sequence + 1
   (
-    { ..self, sequence: request, list_request: request, },
+    {
+      ..self,
+      sequence: request,
+      list_request: request,
+      list_status: if self.list_status is Idle {
+        Idle
+      } else {
+        Retrying
+      },
+    },
     run(emit, () => {
       Listed(self.epoch, request, list_sessions(token)) catch {
         @cloud_client.RequestError(error) =>
@@ -248,7 +257,10 @@ pub fn update(
       (next, command, None)
     }
     Refresh => {
-      let (next, command) = { ..state, notice: None, }.list(token, emit)
+      guard !(state.list_status is Retrying) else {
+        return (state, @cmd.none, None)
+      }
+      let (next, command) = state.list(token, emit)
       (next, command, None)
     }
     Listed(epoch, request, sessions) => {
@@ -277,14 +289,18 @@ pub fn update(
           history.push(command)
         }
       }
-      ({ ..next, sessions, }, @cmd.batch(history), None)
+      ({ ..next, sessions, list_status: Idle, }, @cmd.batch(history), None)
     }
     ListFailed(epoch, request, error) => {
       guard epoch == state.epoch && request == state.list_request else {
         return (state, @cmd.none, None)
       }
-      let (next, command) = state.failed(error)
-      (next, command, None)
+      if error is Unauthorized {
+        let (next, command) = state.failed(error)
+        (next, command, None)
+      } else {
+        ({ ..state, list_status: Failed, }, @cmd.none, None)
+      }
     }
     Create => {
       if state.creation is Some(creation) {
