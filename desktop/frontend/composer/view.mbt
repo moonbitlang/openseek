@@ -912,14 +912,7 @@ priv struct View {
 ///|
 fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   ignore(locale)
-  let actions : Array[@html.Html] = []
-  for action in self.actions {
-    if action.id != "stop" {
-      continue
-    }
-    actions.push(action.render(locale~))
-  }
-  actions.push(
+  let actions : Array[@html.Html] = [
     @html.div(
       class="composer-followup",
       match self.followup_menu {
@@ -927,13 +920,8 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
         None => []
       },
     ),
-  )
-  for action in self.actions {
-    if action.id == "stop" {
-      continue
-    }
-    actions.push(action.render(locale~))
-  }
+    ..self.actions.map(action => action.render(locale~)),
+  ]
   let inner : Array[@html.Html] = [
     self.attach,
     // Keep the input wrapper and its two children permanently mounted. Rabbita
