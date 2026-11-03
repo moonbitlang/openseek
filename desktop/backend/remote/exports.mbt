@@ -13,10 +13,6 @@
 ///
 /// Exported for `desktop/app`, which binds the console in a development build.
 pub async fn LocalConsole::bind(port~ : Int32) -> LocalConsole {
-  guard @entropy.random_hex(32) is Some(token) else {
-    // No OS entropy is a hard failure, never weak randomness.
-    raise @host.HostError("no OS entropy available for the console token")
-  }
   let server = @http.Server(
     @socket.Addr::parse("127.0.0.1:\{port}"),
     reuse_addr=true,
@@ -36,12 +32,7 @@ pub async fn LocalConsole::bind(port~ : Int32) -> LocalConsole {
     Some(hostname) => hostname
     None => "This device"
   }
-  {
-    server,
-    token,
-    cookie_name: "seekmoon_session_\{server.addr.port()}",
-    name,
-  }
+  { server, name, }
 }
 
 ///|
@@ -53,13 +44,12 @@ pub fn LocalConsole::origin(self : LocalConsole) -> String {
 }
 
 ///|
-/// The URL a browser opens: the console page pinned to this host, with the
-/// token that makes its document response set the session cookie.
+/// The stable URL a browser opens directly to this host's console page.
 ///
 /// Exported for `desktop/app`, which hands it to the API state as the
 /// Settings page's console URL.
 pub fn LocalConsole::entry_url(self : LocalConsole) -> String {
-  "\{self.origin()}/?device=\{LocalConsoleDevice}&token=\{self.token}"
+  "\{self.origin()}/device/\{LocalConsoleDevice}/chat"
 }
 
 ///|

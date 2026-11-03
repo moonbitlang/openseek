@@ -8,7 +8,6 @@ import {
   "openseek_desktop/backend/broadcast",
   "openseek_desktop/backend/engine",
   "openseek_desktop/backend/endpoint",
-  "openseek_desktop/backend/entropy",
   "openseek_desktop/backend/host",
   "openseek_desktop/backend/platform",
   "openseek_desktop/protocol",

@@ -1,5 +1,5 @@
 // The console uses its own account Bearer for relay operations; the local
-// development console retains its launch-scoped cookie. Async's browser
+// development console needs no credentials. Async's browser
 // transport preserves HTTP status codes, including the signed-out 401 signal.
 
 ///|

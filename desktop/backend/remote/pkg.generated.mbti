@@ -15,8 +15,6 @@ pub async fn serve_app_server(@api.ApiState, &@io.Reader, &@io.Writer) -> Unit
 // Types and methods
 pub struct LocalConsole {
   server : @http.Server
-  token : String
-  cookie_name : String
   name : String
 }
 pub async fn LocalConsole::bind(port~ : Int32) -> Self
