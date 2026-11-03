@@ -43,6 +43,13 @@ pub(all) enum Message {
   NoDevicesOnline
   Refresh
   SignOut
+  NotificationsOff
+  NotificationsOn
+  NotificationsBlocked
+  NotificationsNeedInstall
+  TurnOn
+  TurnOff
+  SendTest
 }
 
 // Type aliases

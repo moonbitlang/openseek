@@ -27,6 +27,7 @@ pub fn ApiState::auth_store(Self) -> @auth.AuthStore
 pub fn ApiState::host_state(Self) -> @host.HostState
 pub fn ApiState::manager(Self) -> @engine.EngineManager
 pub fn ApiState::publish(Self, @protocol.Notification) -> Unit
+pub fn ApiState::runs(Self) -> @protocol.RunsReply
 pub fn ApiState::sink(Self) -> @engine.EventSink
 pub async fn[G] ApiState::start_services(Self, @async.TaskGroup[G]) -> Unit
 pub fn[T] ApiState::subscribe(Self, @aqueue.Queue[T], map~ : (@protocol.Notification) -> T?, on_lag~ : (@broadcast.Subscription[@protocol.Notification]) -> Unit) -> @broadcast.Subscription[@protocol.Notification]

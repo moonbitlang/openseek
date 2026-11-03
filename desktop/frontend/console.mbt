@@ -304,7 +304,11 @@ fn update_console_msg(
       guard token == model.account.map(account => account.token) else {
         return (@cmd.none, model)
       }
-      console_signed_out(dispatch, model)
+      // Signing out on purpose also stops this browser's pushes. The relay
+      // dropped its row with the session; this drops the browser's side.
+      // An expired sign-in keeps it, so signing in again resumes them.
+      let (command, next) = console_signed_out(dispatch, model)
+      (@cmd.batch([command, @web_push.forget()]), next)
     }
   }
 }

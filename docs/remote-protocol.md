@@ -930,11 +930,12 @@ Control-channel frames (JSON text over the `/v1/tunnel` WebSocket):
 | `registered` | relay → host | `{device}` — the stable public id; reconnects with the same token reuse it |
 | `fail` | relay → host | `{message}` — registration rejected. A bad or revoked device token is terminal for that remote registration: the host stops retrying and surfaces it (`auth.changed`), preserving the account |
 | `open` | relay → host | `{stream}` — a client connected to `/v2/devices/<device>/ws`; the host dials `GET /v1/tunnel/<stream>` (upgrade) back |
+| `notify` | host → relay | `{event}` — something the account's installed consoles should hear about while closed; the relay sends it as Web Push to each of the account's subscriptions. `event` is `{kind:"finished", session, status, answer?}` when a run settles with any status but `cancelled`, or `{kind:"approval", session, tool, detail}` when a run newly asks permission. `answer` and `detail` are cut to 180 characters. The host sends it only while registered and never replays one; a relay that does not know the frame drops it like any other host message |
 
 The data WebSocket (④) carries client protocol frames untouched. On the
 host side each data connection is served by the same JSON-RPC dispatch the
 bridge feeds — the host has no tunnel-specific protocol handling beyond the
-four control frames. Either side closing a spliced socket closes its twin;
+control frames. Either side closing a spliced socket closes its twin;
 a dropped control connection closes every stream of that device.
 
 The relay serves the frontend bundle itself, at `/` (sign-in + the

@@ -1,8 +1,8 @@
 # Tunnel control frames
 
-This package defines the four JSON messages exchanged between the desktop
-process and the public OpenSeek service while arranging a remote browser
-connection. It contains no HTTP server, authentication, socket ownership, or
+This package defines the JSON control messages exchanged between the desktop
+process and the public OpenSeek service: the four that arrange a remote
+browser connection, and `notify`, which asks the service to send a Web Push. It contains no HTTP server, authentication, socket ownership, or
 retry loop.
 
 The server implementation lives in the `openseek-api` repository. The desktop
@@ -19,16 +19,21 @@ side is implemented in `desktop/backend/remote`.
 4. The desktop process opens `/v1/tunnel/<stream>`. The service then copies
    frames between that data WebSocket and the browser WebSocket.
 
-Only the four messages in steps 1–3 are encoded by this package. After the data
+5. While registered, the desktop process sends `notify` when a run settles
+   (any status but `cancelled`) or newly asks permission. The service sends
+   it as Web Push to the account's installed consoles.
+
+Only these control messages are encoded by this package. After the data
 WebSocket is paired, it carries the normal JSON-RPC client protocol unchanged;
 `desktop/backend/tunnel` does not inspect those messages.
 
 ## Code ownership
 
 - `frame.mbt` owns the JSON shape and strict decoder for `register`,
-  `registered`, `open`, and `fail`.
+  `registered`, `open`, `fail`, and `notify`.
 - `desktop/backend/remote/connect.mbt` owns the desktop's WebSockets,
   reconnect behavior, registration state, and one data task per browser.
+  `push_notifier.mbt` decides which hub notifications become `notify`.
 - `openseek-api` owns the public service, authentication, device ownership,
   stream pairing, and browser-facing endpoints.
 - `docs/remote-protocol.md#relay-tunnel` is the full protocol contract and must
