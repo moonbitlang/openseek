@@ -10,6 +10,34 @@ async function openLocalWork(page, local) {
 
 const storedAccount = page => page.evaluate(() => JSON.parse(localStorage.getItem('seekmoon.account.v1')));
 
+test('local Console shows account storage failures and retries without reconnecting the local host', async ({ page, baseURL }, testInfo) => {
+  const local = new LocalConsoleHarness(page, baseURL);
+  await local.install();
+  await page.addInitScript(() => {
+    window.accountStorageUnavailable = true;
+    const original = Storage.prototype.getItem;
+    Storage.prototype.getItem = function(key) {
+      if (window.accountStorageUnavailable && key === 'seekmoon.account.v1') {
+        throw new Error('Fixture storage unavailable');
+      }
+      return original.call(this, key);
+    };
+  });
+  await local.goto();
+  const home = page.locator('.cloud-home');
+  await expect(home.getByText(/Could not read account storage:/)).toBeVisible();
+  await expect(home.getByRole('button', { name: 'Sign in with GitHub' })).toHaveCount(0);
+  await expect.poll(() => local.localSockets.length).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath('account-storage-error.png') });
+  await page.evaluate(() => { window.accountStorageUnavailable = false; });
+  await home.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(home.getByText(/Could not read account storage:/)).toHaveCount(0);
+  await expect(home.getByRole('button', { name: 'Sign in with GitHub' })).toBeVisible();
+  await openLocalWork(page, local);
+  expect(local.localSockets).toHaveLength(1);
+  expect(local.device.pageErrors).toEqual([]);
+});
+
 test('local Console signs in independently and keeps its account across reload and Desktop auth changes', async ({ page, baseURL }) => {
   const local = new LocalConsoleHarness(page, baseURL);
   await local.install();

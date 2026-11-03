@@ -3051,7 +3051,16 @@ fn Model::chat_sidebar_sections(
 fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @html.section(class="cloud-home management-page", [
     @html.h2(@sidebar_messages.text(model.locale, Chats)),
-    if model.account is Some(_) {
+    if model.is_local_console() && model.remote_error is Some(message) {
+      @html.div([
+        @html.p(message),
+        @html.button(
+          class="button",
+          on_click=dispatch(Console(RefreshClicked)),
+          shell_text(model.locale, TryAgain),
+        ),
+      ])
+    } else if model.account is Some(_) {
       @html.button(
         class="button primary",
         on_click=dispatch(CloudAction(@cloud.Create)),
