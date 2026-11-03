@@ -285,6 +285,16 @@ html {
   height: 100%;
 }
 
+.icon > .codicon {
+  font-size: var(--icon-size, var(--icon-lg));
+}
+.codicon-newline::before {
+  content: "\ebea";
+}
+.codicon-stop-circle::before {
+  content: "\eba5";
+}
+
 /* The heartbeat shared by every "still working" mark: the sub-run lanes in
    the transcript tail and the composer's running row. One definition so two
    components that can be on screen at once never pulse out of step, and so

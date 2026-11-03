@@ -1,12 +1,10 @@
-// Inline SVG icons for the app chrome, taken from Microsoft's
-// vscode-codicons (https://github.com/microsoft/vscode-codicons),
-// licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/);
-// the path data is unmodified, transcribed into `@svg` element builders.
-// They render through `icon`, sized by the surrounding control and tinted
-// via `currentColor`. Built as virtual-DOM nodes rather than `inner_html`
-// markup: an innerHTML-bearing element cannot be safely morphed by the
-// positional child diff (assigning the property silently drops the real
-// children the runtime still tracks).
+// Prefer the bundled Codicon font for app chrome icons; use SVG when the
+// required icon is unavailable in the font.
+// Codicons source: Microsoft's vscode-codicons
+// (https://github.com/microsoft/vscode-codicons), licensed CC BY 4.0
+// (https://creativecommons.org/licenses/by/4.0/).
+// Render SVG fallbacks as virtual-DOM nodes rather than `inner_html`:
+// assigning innerHTML drops children tracked by the positional child diff.
 
 ///|
 /// An icon in a fixed-size span. Icons are functions, not shared constants:
@@ -92,9 +90,7 @@ pub fn icon_arrow_up() -> @html.Html {
 
 ///|
 pub fn icon_newline() -> @html.Html {
-  codicon(
-    "M14 3.49999V6.49999C14 7.87899 12.879 8.99999 11.5 8.99999H3.70703L6.35303 11.646C6.54803 11.841 6.54803 12.158 6.35303 12.353C6.25503 12.451 6.12703 12.499 5.99903 12.499C5.87103 12.499 5.74303 12.45 5.64503 12.353L2.14503 8.85299C1.95003 8.65799 1.95003 8.34099 2.14503 8.14599L5.64503 4.64599C5.84003 4.45099 6.15703 4.45099 6.35203 4.64599C6.54703 4.84099 6.54703 5.15799 6.35203 5.35299L3.70603 7.99899H11.499C12.326 7.99899 12.999 7.32599 12.999 6.49899V3.49899C12.999 3.22299 13.223 2.99899 13.499 2.99899C13.775 2.99899 13.999 3.22299 13.999 3.49899L14 3.49999Z",
-  )
+  @html.span(class="codicon codicon-newline", "")
 }
 
 ///|
@@ -150,9 +146,7 @@ pub fn icon_copy() -> @html.Html {
 
 ///|
 pub fn icon_stop_circle() -> @html.Html {
-  codicon(
-    "M6 5C5.44772 5 5 5.44772 5 6V10C5 10.5523 5.44772 11 6 11H10C10.5523 11 11 10.5523 11 10V6C11 5.44772 10.5523 5 10 5H6ZM1 8C1 4.13401 4.13401 1 8 1C11.866 1 15 4.13401 15 8C15 11.866 11.866 15 8 15C4.13401 15 1 11.866 1 8ZM8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2Z",
-  )
+  @html.span(class="codicon codicon-stop-circle", "")
 }
 
 ///|
