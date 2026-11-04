@@ -383,8 +383,9 @@ fn wrap_bullet(bullet : String) -> String {
 /// Build the `moonrun --policy` document for one snippet run.
 ///
 /// Deny-by-default: moonrun denies every surface a policy does not name. Writes
-/// name only the two roots a snippet has business in — its own temp directory
-/// and a read-only role's lab — while reads are open.
+/// name the roots a snippet has business in — its own temp directory, the lab
+/// or session scratch, and, when `workspace` is given, that workspace minus its
+/// MoonBit sources, manifests and git metadata — while reads are open.
 ///
 /// Reads are open because bounding them stops nothing this agent cannot already
 /// do more easily, and costs steps to enforce. The read workflow accepts any
@@ -400,6 +401,26 @@ fn wrap_bullet(bullet : String) -> String {
 /// outside the tree is INVISIBLE in the transcript, where a `write` tool call
 /// naming the same path is right there to read. The asymmetry is legibility,
 /// not access.
+///
+/// Inside the workspace that legibility matters most for source, so source is
+/// what the `workspace` grant keeps out: `!`-globs from
+/// `protected_source_globs` refuse every `.mbt`/`.mbti`/`.mbt.md` file and
+/// every `moon.*` manifest at any depth, and `.git` is refused alongside them.
+/// moonrun lets an exclusion override every grant in its list, whatever the
+/// order, so these patterns also bind the other write roots when one of them
+/// lies inside the workspace — a session scratch under `.openseek` cannot
+/// receive a `.mbt` file either. Everything else in the tree is a plain
+/// generated file, data file or output, and is writable.
+///
+/// What that grant gives up, and was accepted to get it:
+/// - `remove`'s approval gate does not bind a snippet: `@fs.remove` on a
+///   non-source workspace file goes through with no question asked. Source is
+///   still refused, and so is a recursive `@fs.rmdir` of a tree that holds
+///   any, because the library walks it and each file is checked.
+/// - A glob cannot tell a directory from a file, so renaming a directory is
+///   checked at its two endpoints only. `@fs.rename("src", "moved")` carries
+///   the sources inside it along. The `sandbox-exec` profile closes that with
+///   a directory rule; nothing here can.
 ///
 /// What this binds is the SNIPPET, on every platform. It does not reach the
 /// child processes its `process` rules let the snippet start: those run with the
@@ -421,27 +442,40 @@ fn wrap_bullet(bullet : String) -> String {
 /// runtime plus the exact module path this host chose, with the prefix doing
 /// the pinning there. moonrun matches the entry exactly, so an absolute rule
 /// admits only that exact binary and no same-named one earlier in PATH.
+///
+/// `workspace` must be CANONICAL. moonrun canonicalizes a plain root itself,
+/// but compiles a glob without touching the filesystem and matches it against
+/// the resolved target, so an exclusion spelled through a symlink (`/tmp` for
+/// `/private/tmp`) would match nothing and leave source writable.
 fn wasm_policy_document(
   tmp_dir~ : String,
   extra_roots~ : Array[String],
+  workspace? : String,
   inject~ : Map[String, String],
 ) -> Json {
-  // A snippet cannot directly write ordinary project files. It does not need to: the file
+  // A snippet never writes source directly. It does not need to: the file
   // tools make the edits, and the commands whose job is to rewrite source
   // (`moon fmt`, `moon info`, `git checkout`) are child processes, which no `fs`
-  // rule here reaches. What granting the workspace did buy was a documented way
-  // around `remove`'s provenance and approval checks — `remove_path`, `rename_path` and
-  // `rmdir_path` are all gated on `fs.write`, so a snippet could delete a file
-  // the guarded tool exists to refuse.
+  // rule here reaches.
   //
-  // Writable roots include per-execution temp space, session-owned scratch,
-  // and a read-only role's experimental lab when supplied. Project write
-  // permissions remain the file tools' responsibility.
-  //
-  // Every entry must be an EXISTING path: moonrun canonicalizes each root when
-  // it loads the policy and fails the whole file otherwise. Both of these are
-  // created before this runs.
-  let write_roots = [tmp_dir, ..extra_roots]
+  // Every plain root must be an EXISTING path: moonrun canonicalizes each one
+  // when it loads the policy and fails the whole file otherwise. The temp
+  // directory and lab are created before this runs; the workspace exists.
+  let write_rules : Array[Json] = [
+    for root in [tmp_dir, ..extra_roots] => Json(root)
+  ]
+  if workspace is Some(root) {
+    write_rules.push(Json(root))
+    let root = glob_literal(@workspace_path.strip_trailing_slash(root))
+    for
+      pattern in [
+        ..@source_write_policy.protected_source_globs(),
+        "**/.git",
+        "**/.git/**",
+      ] {
+      write_rules.push({ "glob": "!\{root}/\{pattern}" })
+    }
+  }
   let allow : Array[Json] = []
   for entry in spawnable_commands {
     let (program, args_prefix) = entry
@@ -474,7 +508,7 @@ fn wasm_policy_document(
     "env": { "from_host": ["*"], "set": Json(env_set(tmp_dir, inject)) },
     // `"*"` is moonrun's every-host-path wildcard — see the header for why
     // reads are open where writes are not.
-    "fs": { "read": ["*"], "write": json_strings(write_roots) },
+    "fs": { "read": ["*"], "write": Json(write_rules) },
     // Snippets may resolve names and connect out, but may listen only on the
     // exact IPv4 and IPv6 loopback addresses. moonrun requires IP literals in
     // bind rules, so `localhost` itself is not a valid spelling here.
@@ -536,6 +570,21 @@ fn json_strings(values : Array[String]) -> Json {
 }
 
 ///|
+/// `path` as a glob that matches only itself: each glob metacharacter becomes
+/// a one-character class (`*` → `[*]`), which `globset` reads literally.
+/// Separators pass through, so the result stays a path moonrun can anchor.
+fn glob_literal(path : String) -> String {
+  let escaped = StringBuilder()
+  for ch in path {
+    match ch {
+      '*' | '?' | '[' | ']' | '{' | '}' => escaped <+ "[\{ch}]"
+      _ => escaped <+ "\{ch}"
+    }
+  }
+  escaped.to_string()
+}
+
+///|
 test "a policy clears any inherited handoff and admits no engine" {
   let policy = wasm_policy_document(
     tmp_dir="/run/tmp",
@@ -572,4 +621,36 @@ test "a policy clears any inherited handoff and admits no engine" {
     guard rule is { "program": String(program), .. } else { continue }
     assert_false(program.contains("openseek"))
   }
+}
+
+///|
+/// The workspace grant is the root plus one exclusion per protected pattern,
+/// each anchored at the root spelled as a literal glob. Without the grant the
+/// write list is the plain roots alone and no exclusion narrows them.
+test "a workspace grant writes the root minus sources and git" {
+  guard wasm_policy_document(
+      tmp_dir="/run/tmp",
+      extra_roots=["/lab"],
+      workspace="/w[1]*{a,b}?/",
+      inject=Map([]),
+    )
+    is { "fs": { "write": write, .. }, .. } else {
+    fail("policy lost its fs section")
+  }
+  assert_eq(write, [
+    "/run/tmp",
+    "/lab",
+    "/w[1]*{a,b}?/",
+    { "glob": "!/w[[]1[]][*][{]a,b[}][?]/**/*{.mbt.md,.mbt,.mbti}" },
+    {
+      "glob": "!/w[[]1[]][*][{]a,b[}][?]/**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+    },
+    { "glob": "!/w[[]1[]][*][{]a,b[}][?]/**/.git" },
+    { "glob": "!/w[[]1[]][*][{]a,b[}][?]/**/.git/**" },
+  ])
+  guard wasm_policy_document(tmp_dir="/run/tmp", extra_roots=[], inject=Map([]))
+    is { "fs": { "write": write, .. }, .. } else {
+    fail("policy lost its fs section")
+  }
+  assert_eq(write, ["/run/tmp"])
 }

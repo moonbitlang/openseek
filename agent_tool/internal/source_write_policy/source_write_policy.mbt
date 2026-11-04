@@ -54,9 +54,7 @@ fn workspace_compare_path(path : String) -> String {
 /// purely lexical, and accepts either a basename or a full path.
 pub fn is_protected_source_path(path : String) -> Bool {
   let path = path.replace_all(old="\\", new="/")
-  path.has_suffix(".mbt.md") ||
-  path.has_suffix(".mbt") ||
-  path.has_suffix(".mbti") ||
+  protected_source_suffixes.any(suffix => path.has_suffix(suffix)) ||
   // A bare basename and a full path are both accepted, so each manifest name
   // is matched either whole or as the last component. Deliberately NOT via
   // `path_basename`: that strips a trailing slash, and callers hand this raw
@@ -67,8 +65,31 @@ pub fn is_protected_source_path(path : String) -> Bool {
 }
 
 ///|
+/// The filename suffixes `is_protected_source_path` guards: sources, literate
+/// sources, and generated interfaces.
+let protected_source_suffixes : Array[String] = [".mbt.md", ".mbt", ".mbti"]
+
+///|
 /// The manifest filenames `is_protected_source_path` guards, current and
 /// legacy-JSON spellings alike.
 let protected_manifest_names : Array[String] = [
   "moon.mod", "moon.pkg", "moon.work", "moon.mod.json", "moon.pkg.json",
 ]
+
+///|
+/// Glob patterns, relative to a workspace root, matching every path
+/// `is_protected_source_path` names below that root at any depth.
+///
+/// They are built from the same suffix and manifest lists as the predicate,
+/// so a policy written with them protects exactly the names this package
+/// does. They use `globset` syntax (`**` crosses directories, `{a,b}` lists
+/// alternatives), the syntax of moonrun's `fs` globs. Unlike
+/// `is_protected_workspace_source_path` they carry no `_build` or
+/// `.mooncakes` carve-out: a glob cannot exempt a subtree from another
+/// pattern, so a caller using them protects generated sources as well.
+pub fn protected_source_globs() -> Array[String] {
+  [
+    "**/*{\{protected_source_suffixes.join(",")}}",
+    "**/{\{protected_manifest_names.join(",")}}",
+  ]
+}

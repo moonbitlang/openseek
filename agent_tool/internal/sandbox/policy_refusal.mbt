@@ -44,9 +44,9 @@ pub fn output_reports_policy_refusal(output : String) -> Bool {
 pub let policy_refusal_feedback : String =
   #|mbtx sandbox: that failure is this tool's policy refusing something, not a
   #|filesystem problem to debug — either the program is not on the spawn allowlist, or
-  #|the snippet tried to write outside its own `@fs.tmpdir()`. Reach for the
-  #|MoonBit replacement of the utility you wanted rather than another program, and
-  #|for the file tools to change a file.
+  #|the snippet tried to write outside its own write roots, or onto a MoonBit source,
+  #|manifest or `.git` path. Reach for the MoonBit replacement of the utility you
+  #|wanted rather than another program, and for the file tools to change a file.
 
 ///|
 /// The sanctioned way past the line, named AT the line.

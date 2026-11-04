@@ -155,6 +155,7 @@ pub fn definition(
         auto_background_after_ms~,
         foreground_timeout_ms~,
         build_timeout_ms~,
+        workspace_writes=!read_only && worker_sandbox is None,
       ) +
       (if scratch_dir is Some(_) {
         "\nFile artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
@@ -648,7 +649,29 @@ async fn execute(
   }
   // `cwd` is deliberately NOT a write root: naming where a program runs should
   // not also grant writing there, and reads are open, so a snippet can still
-  // work in a directory it may not modify.
+  // work in a directory it may not modify. What a snippet may write in the
+  // tree comes from the workspace grant below, whatever its `cwd`.
+  //
+  // Only the main agent holds that grant. A read-only role is defined by
+  // writing nothing in the workspace, and a worker's writes are bounded by its
+  // write scope, whose allowed prefixes a whole-tree grant would ignore; both
+  // keep writing only their temp directory and lab. The root is canonicalized
+  // here because moonrun matches the source exclusions against resolved paths
+  // and does not canonicalize a glob (see `wasm_policy_document`).
+  let workspace_grant = if read_only || worker_sandbox is Some(_) {
+    None
+  } else {
+    Some(
+      @fs.realpath(workspace_root) catch {
+        error =>
+          return @agent_tool.respond(
+            "mbtx: could not resolve the workspace root \{workspace_root} (\{error}).",
+            is_error=true,
+            brief="mbtx",
+          )
+      },
+    )
+  }
   let injected : Map[String, String] = Map([])
   if mcp_service is Some(service) {
     for key, value in service.env() {
@@ -663,6 +686,7 @@ async fn execute(
   let policy = wasm_policy_document(
     tmp_dir=snippet_tmp,
     extra_roots=scratch_dir.map(l => [l]).unwrap_or([]),
+    workspace?=workspace_grant,
     inject=injected,
   )
   @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
@@ -790,11 +814,10 @@ async fn execute(
   }
   // An approved escalation is exactly this: the policy file is still
   // written, and simply not passed. Widening the document instead was
-  // not available — its `fs.write` roots are canonicalized existing
-  // paths with no wildcard, and "any program" has no spelling in
-  // `process.allow` short of enumerating one — so "no policy" is both
-  // the honest description of what was approved and the only one the
-  // runtime can express.
+  // not available — "any program" has no spelling in `process.allow`
+  // short of enumerating one — so "no policy" is both the honest
+  // description of what was approved and the only one the runtime can
+  // express.
   let run_argv : Array[String] = [
     ..if policy_active {
       ["--policy", policy_path]
@@ -1666,6 +1689,7 @@ fn description(
   auto_background_after_ms~ : Int32,
   foreground_timeout_ms~ : Int32,
   build_timeout_ms~ : Int32,
+  workspace_writes~ : Bool,
 ) -> String {
   // The one sentence here that depends on what this build can actually do.
   //
@@ -1775,13 +1799,34 @@ fn description(
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
-    #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`
-    #|  and the configured session scratch directory shown in Environment. Use the
-    #|  actual scratch path for cross-call files, binary data, and command output.
-    #|  Temporary files must be consumed before the execution ends. Changing a
-    #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
-    #|  checkout` and friends are child processes and run normally. A write refusal
-    #|  is that rule firing, not a filesystem fault to debug or route around.
+  // Which roots a snippet writes depends on the role: only the main agent's
+  // policy grants the workspace (see `execute`).
+  let write_rule = if workspace_writes {
+    (
+      #|- Direct filesystem IO READS anywhere. It WRITES its own `@fs.tmpdir()`, the
+      #|  configured session scratch directory shown in Environment, and workspace
+      #|  files — data, fixtures, logs, generated output — EXCEPT MoonBit sources and
+      #|  manifests (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`
+      #|  and their `.json` forms) and `.git`. Use the actual scratch path for
+      #|  cross-call files, binary data, and command output. Temporary files must be
+      #|  consumed before the execution ends. Changing source is the file tools' job,
+      #|  or a command's — `moon fmt`, `git checkout` and friends are child processes
+      #|  and run normally. Deleting a workspace file is `remove`'s job. A write
+      #|  refusal is that rule firing, not a filesystem fault to debug or route
+      #|  around.
+    )
+  } else {
+    (
+      #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`
+      #|  and the configured session scratch directory shown in Environment. Use the
+      #|  actual scratch path for cross-call files, binary data, and command output.
+      #|  Temporary files must be consumed before the execution ends. Changing a
+      #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
+      #|  checkout` and friends are child processes and run normally. A write refusal
+      #|  is that rule firing, not a filesystem fault to debug or route around.
+    )
+  }
+  let base_rest =
     #|- DNS and outbound connections are allowed. A snippet may bind/listen only on
     #|  IPv4 or IPv6 localhost; wildcard and external-interface binds are refused.
     #|  These network rules do not constrain an allowed child process.
@@ -1801,6 +1846,8 @@ fn description(
     $|\{refusal_advice}
     $|
     $|\{base_tail}
+    $|\{write_rule}
+    $|\{base_rest}
   // The escalation paragraph goes BEFORE the background one so it sits next to
   // the refusal rules it qualifies.
   let base = if !escalation {
