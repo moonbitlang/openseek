@@ -129,35 +129,6 @@ dialog.management-dialog {
 .management-dialog[open]::backdrop {
   background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
 }
-@media (prefers-reduced-motion: no-preference) {
-  dialog.management-dialog {
-    opacity: 0;
-    transition:
-      opacity 70ms linear,
-      display 70ms allow-discrete,
-      overlay 70ms allow-discrete;
-  }
-  .management-dialog[open] {
-    opacity: 1;
-  }
-  @starting-style {
-    .management-dialog[open] {
-      opacity: 0;
-    }
-  }
-  .management-dialog::backdrop {
-    background: transparent;
-    transition:
-      background-color 70ms linear,
-      display 70ms allow-discrete,
-      overlay 70ms allow-discrete;
-  }
-  @starting-style {
-    .management-dialog[open]::backdrop {
-      background: transparent;
-    }
-  }
-}
 .management-dialog-header {
   display: flex;
   align-items: center;
