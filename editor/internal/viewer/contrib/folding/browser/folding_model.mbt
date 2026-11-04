@@ -11,13 +11,14 @@
 /// One persisted fold range — Monaco's private `ILineMemento`
 /// (`foldingModel.ts:21`). Optional fields retain the source's compatibility
 /// defaults even though states produced by this version fill all three.
+#derive(Debug)
 priv struct FoldingLineMemento {
   start_line_number : Int32
   end_line_number : Int32
   checksum : Int32?
   is_collapsed : Bool?
   source : FoldSource?
-} derive(Debug)
+}
 
 ///|
 /// The exact decoration capabilities `FoldingModel` writes through — Monaco's

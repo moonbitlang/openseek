@@ -29,10 +29,11 @@ pub fn CachedDomNode::set_position(Self, String) -> Unit
 pub fn CachedDomNode::set_top(Self, CssLength) -> Unit
 pub fn CachedDomNode::set_width(Self, CssLength) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CssLength {
   Pixels(Double)
   Raw(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn CssLength::equal(Self, Self) -> Bool
 pub fn CssLength::not_equal(Self, Self) -> Bool
 pub fn CssLength::to_repr(Self) -> @debug.Repr

@@ -50,7 +50,8 @@ pub(all) struct Actions {
   tab_menu_changed : @cmd.Emit[Bool]
 }
 
-type Input derive(Eq)
+#derive(Eq)
+type Input
 pub fn Input::Input(dock~ : @dock.DockState, file_panel~ : @fileeditor.State, preview~ : @preview.State, annotation~ : @preview.Annotation, file_ctx~ : @fileeditor.Ctx, is_desktop~ : Bool, menu_open~ : Bool, expanded~ : Bool, reveal_label~ : String?, github~ : @github.State, jobs~ : @jobs.State, workflows~ : Array[@workflow.Run]) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool

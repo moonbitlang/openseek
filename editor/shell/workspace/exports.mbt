@@ -1,32 +1,36 @@
 ///|
 /// Root-relative source path accepted from UI or protocol input after
 /// normalization rejects absolute paths, parent traversal, and NUL bytes.
+#derive(Eq, Debug)
 struct SourcePath {
   value : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Validation failures for user-facing source paths and document URIs.
+#derive(Eq, Debug)
 pub(all) enum SourceError {
   MissingPath
   InvalidPath
-} derive(Eq, Debug)
+}
 
 ///|
 /// Result wrapper used instead of raising while normalizing source paths.
+#derive(Eq, Debug)
 pub enum SourcePathResult {
   ParsedSourcePath(SourcePath)
   SourcePathError(SourceError)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Raw file text plus metadata needed to construct a `DocumentSnapshot`.
+#derive(Debug)
 struct DocumentContent {
   text : String
   display_name : String
   language_id : String
   revision : String
-} derive(Debug)
+}
 
 ///|
 /// Builds file content while allowing providers to omit derived metadata.
@@ -106,6 +110,7 @@ pub fn DocumentSnapshot::line_text(
 ///|
 /// Host-neutral error codes used by file providers and remote workspace
 /// responses.
+#derive(Eq, Debug)
 pub(all) enum FileSystemProviderErrorCode {
   FileNotFound
   FileExists
@@ -115,54 +120,60 @@ pub(all) enum FileSystemProviderErrorCode {
   Unavailable
   InvalidUri
   InvalidData
-} derive(Eq, Debug)
+}
 
 ///|
 /// File-provider failure with optional URI context.
+#derive(Debug)
 pub struct FileSystemProviderError {
   code : FileSystemProviderErrorCode
   message : String
   uri : @base_common.Uri?
-} derive(Debug)
+}
 
 ///|
 /// Document-level failure with optional URI context.
+#derive(Debug)
 pub struct DocumentError {
   code : FileSystemProviderErrorCode
   message : String
   uri : @base_common.Uri?
-} derive(Debug)
+}
 
 ///|
 /// Provider read result without exceptions, so browser and native providers can
 /// share the same contract.
+#derive(Debug)
 pub(all) enum FileReadResult {
   FileReadOk(DocumentContent)
   FileReadError(FileSystemProviderError)
-} derive(Debug)
+}
 
 ///|
 /// File-watch event kind. Providers may coalesce events before delivering
 /// them.
+#derive(Eq, Debug)
 pub(all) enum FileChangeType {
   Created
   Changed
   Deleted
-} derive(Eq, Debug)
+}
 
 ///|
 /// One changed document URI reported by a file watch.
+#derive(Debug)
 pub(all) struct FileChange {
   uri : @base_common.Uri
   change_type : FileChangeType
-} derive(Debug)
+}
 
 ///|
 /// Watch behavior requested from a provider.
+#derive(Debug)
 pub struct WatchOptions {
   recursive : Bool
   excludes : Array[String]
-} derive(Debug)
+}
 
 ///|
 /// Disposable watch handle. Calling `dispose` must stop future callbacks for

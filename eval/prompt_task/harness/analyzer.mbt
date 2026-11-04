@@ -1,11 +1,12 @@
 ///|
 /// Verdict of one behavioral probe run against a trial's workspace, with the
 /// `reason` it failed ("ok" when it passed).
+#derive(ToJson)
 priv struct ProbeResult {
   name : String
   passed : Bool
   reason : String
-} derive(ToJson)
+}
 
 ///|
 /// Build one validation probe result.
@@ -19,6 +20,7 @@ fn ProbeResult::ProbeResult(
 
 ///|
 /// Validation verdict for one trial's finished workspace.
+#derive(ToJson)
 priv struct ValidationResult {
   ran : Bool
   passed : Bool
@@ -29,7 +31,7 @@ priv struct ValidationResult {
   stdin_probe : Bool
   duplicate_probe : Bool
   probes : Array[ProbeResult]
-} derive(ToJson)
+}
 
 ///|
 /// Validation probes used by the historical TOML parser prompt task.
@@ -82,6 +84,7 @@ pub fn default_toml_validation_probes() -> Array[ValidationProbeSpec] {
 /// Everything recorded about one analyzed agent session. Harness metadata and
 /// workspace validation are attached when the session came from a prompt-task
 /// trial.
+#derive(ToJson)
 priv struct EvalResult {
   index : Int32
   prompt_label : String
@@ -117,7 +120,7 @@ priv struct EvalResult {
   result_style_mentions : Int32
   try_mentions : Int32
   warnings : String
-} derive(ToJson)
+}
 
 ///|
 /// One prompt-task eval analysis report.

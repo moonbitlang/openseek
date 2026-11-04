@@ -97,7 +97,8 @@ pub const METADATA_BACKGROUND_OFFSET : Int32 = 24
 /// One packed 32-bit token metadata word. The distinct type keeps semantic APIs
 /// from accidentally accepting offsets or unrelated `UInt` values while its
 /// public scalar representation remains available at raw storage seams.
-pub(all) struct TokenMetadata(UInt32) derive(Eq)
+#derive(Eq)
+pub(all) struct TokenMetadata(UInt32)
 
 ///|
 /// Returns the raw word for flat encoded-token storage or transport.

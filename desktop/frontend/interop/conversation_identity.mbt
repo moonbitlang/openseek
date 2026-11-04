@@ -1,10 +1,11 @@
 ///|
 /// UI ownership is independent of the host transport. Cloud conversations
 /// have an account and session, but no device or local filesystem host.
+#derive(Eq, Hash, Debug)
 pub(all) enum ConversationIdentity {
   Host(ConversationKey)
   Cloud(account~ : String, session~ : String)
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn ConversationIdentity::host(

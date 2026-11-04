@@ -28,9 +28,10 @@ pub fn safe_session_id(String) -> Bool
 pub async fn workspace_of(String) -> @pathx.Absolute?
 
 // Errors
+#derive(@debug.Debug)
 pub suberror StoreError {
   StoreError(String)
-} derive(@debug.Debug)
+}
 pub fn StoreError::to_repr(Self) -> @debug.Repr
 
 // Types and methods

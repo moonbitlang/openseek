@@ -4,10 +4,11 @@
 /// A command takes no static argument candidates: argument pickers are opened by
 /// the command handler with freshly-fetched items (see `Ui::open_picker`), so the
 /// spec only names the command and describes it for the name-completion menu.
+#derive(Eq, Debug)
 struct SlashCommandSpec {
   name : String
   description : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Build a slash command spec. `name` does not include the leading slash.
@@ -48,10 +49,11 @@ pub fn SlashCommands::completion_items(
 /// A slash command reference parsed from input text: the command name (without
 /// the leading slash) and its trimmed argument string. Parsing is syntactic
 /// only; resolve the name against a `SlashCommands` set to know if it is known.
+#derive(Eq, Debug)
 struct SlashCommandInvocation {
   name : String
   arguments : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Parse `text` as a single `/name arguments` entry. Returns None unless `text`

@@ -2,6 +2,7 @@
 /// A minimal call retains presentation text, image URLs and derived edit
 /// previews, never raw parameters or text output. Categories describe the
 /// operation, not its success.
+#derive(Eq)
 priv struct MinimalCall {
   call_id : String
   tool_name : String
@@ -10,7 +11,7 @@ priv struct MinimalCall {
   status : ToolStatus
   changes : EditChanges?
   image_urls : Array[String]
-} derive(Eq)
+}
 
 ///|
 fn MinimalCall::from_tool(
@@ -177,18 +178,20 @@ fn argument_description(call : @transcript.ToolCall) -> String? {
 }
 
 ///|
+#derive(Eq)
 priv struct MinimalPart {
   identity : String
   content : MinimalContent
-} derive(Eq)
+}
 
 ///|
 /// Background notifications share the ordered work log, but are not tool
 /// calls and must never increase the failed-tool count.
+#derive(Eq)
 priv enum MinimalActivity {
   Call(MinimalCall)
   Notice(identity~ : String, text~ : String, error~ : Bool)
-} derive(Eq)
+}
 
 ///|
 /// Count pending and failed calls represented by a group, including waits.
@@ -239,6 +242,7 @@ fn MinimalToolStatus::view(
 }
 
 ///|
+#derive(Eq)
 priv enum MinimalContent {
   Prose(
     text~ : String,
@@ -258,7 +262,7 @@ priv enum MinimalContent {
   ContextSummary(String)
   Completed(Array[MinimalPart])
   Messages(Array[MinimalPart], active_group~ : String?)
-} derive(Eq)
+}
 
 ///|
 /// This accumulator exists only while projecting an input. None of its mutable

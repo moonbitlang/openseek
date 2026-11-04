@@ -3,10 +3,11 @@ package "moonbitlang/openseek/mcp/config"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn decode(Json, env? : Map[String, String]) -> Array[McpServer] raise
+pub fn decode(@json.Json, env? : Map[String, String]) -> Array[McpServer] raise
 
 pub fn merge(Array[Array[McpServer]]) -> Array[McpServer]
 
@@ -16,10 +17,11 @@ pub suberror ConfigError {
 }
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum McpServer {
   Stdio(name~ : String, command~ : String, args~ : Array[String], env~ : Map[String, String])
   Http(name~ : String, url~ : String, headers~ : Map[String, String])
-} derive(Eq, @debug.Debug)
+}
 pub fn McpServer::name(Self) -> String
 pub fn McpServer::target(Self) -> String
 

@@ -1,11 +1,12 @@
 ///|
 /// Auxiliary completion, distinct from a durable conversation event.
+#derive(Eq, Debug)
 pub(all) enum PredictionOutcome {
   Completed(text~ : String?, input_tokens~ : Int32, output_tokens~ : Int32)
   Skipped
   Cancelled
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PredictionOutcome with Eq::{equal, not_equal}
@@ -75,10 +76,11 @@ pub impl FromJson for PredictionOutcome with fn from_json(json, path) {
 
 ///|
 /// Durable auxiliary result, saved only after a prediction completes.
+#derive(Eq, Debug)
 pub(all) struct PredictionRecord {
   source_sequence : Int32
   outcome : PredictionOutcome
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl ToJson for PredictionRecord with fn to_json(self) {

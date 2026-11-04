@@ -5,12 +5,13 @@
 // `offsetWidth / 256`, remove).
 
 ///|
+#derive(Eq)
 #warnings("-unused_value")
 priv enum CharWidthRequestType {
   Regular
   Italic
   Bold
-} derive(Eq)
+}
 
 ///|
 priv struct CharWidthRequest {

@@ -1,9 +1,10 @@
 ///|
+#derive(Eq)
 priv struct UserEditAction {
   sequence : Int32
   disabled : Bool
   sending : Bool
-} derive(Eq)
+}
 
 ///|
 fn Input::user_edit_action(
@@ -63,10 +64,11 @@ fn UserEditAction::render(
 }
 
 ///|
+#derive(Eq)
 priv enum MessageEditor {
   EditorClosed
   EditorDraft(@composer.Draft)
-} derive(Eq)
+}
 
 ///|
 priv enum MessageEditorMsg {
@@ -135,7 +137,8 @@ fn MessageEditor::update(
 }
 
 ///|
-priv struct MessageEditors(Map[String, MessageEditor]) derive(Eq)
+#derive(Eq)
+priv struct MessageEditors(Map[String, MessageEditor])
 
 ///|
 fn MessageEditors::for_block(

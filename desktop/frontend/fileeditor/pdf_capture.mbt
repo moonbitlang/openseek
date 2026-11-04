@@ -46,6 +46,7 @@ pub fn capture_submission_declined_message(locale : @i18n.Locale) -> String {
 }
 
 ///|
+#derive(Eq)
 pub(all) struct PdfCapturePreview {
   id : Int64
   owner : @interop.ConversationIdentity
@@ -54,13 +55,14 @@ pub(all) struct PdfCapturePreview {
   sig : String
   generation : Int32
   capture : @pdf_capture.Capture
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct PdfCaptureDraft {
   preview : PdfCapturePreview
   comment : String
-} derive(Eq)
+}
 
 ///|
 pub fn State::pending_pdf_capture(self : State, ctx : Ctx) -> PdfCaptureDraft? {

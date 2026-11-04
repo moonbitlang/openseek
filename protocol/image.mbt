@@ -2,19 +2,21 @@
 /// Immutable image bytes. JSONL stores base64; no path or provider ID is needed
 /// to replay the image. Constructors check size and raster signatures, not a
 /// full pixel decode. Images are never resized or re-encoded by this module.
+#derive(Eq)
 pub struct Image {
   media_type : String
   bytes : Bytes
-} derive(Eq)
+}
 
 ///|
 /// Invalid image input, distinguished without retaining the base64 payload.
+#derive(Debug, Eq)
 pub(all) suberror ImageError {
   TooLarge
   InvalidBase64
   UnsupportedFormat
   MediaTypeMismatch(expected~ : String, actual~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 impl Show for ImageError with fn output(self, logger) {

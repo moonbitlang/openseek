@@ -8,6 +8,7 @@
 ///
 /// `parameters` is a JSON Schema object describing the arguments the model may
 /// generate for this function.
+#derive(Debug)
 pub struct ToolDefinition {
   /// The function name exposed to the model. A later `ToolCall.name` should
   /// match one of these names.
@@ -19,7 +20,7 @@ pub struct ToolDefinition {
   parameters : Json
   /// Whether DeepSeek should enforce strict schema adherence for this function.
   strict : Bool
-} derive(Debug)
+}
 
 ///|
 /// Constructs a typed DeepSeek tool definition.
@@ -43,6 +44,7 @@ pub fn ToolDefinition::ToolDefinition(
 ///
 /// `arguments` is the raw JSON string returned by DeepSeek and should be parsed
 /// and validated by the caller before executing a local function.
+#derive(Debug)
 pub struct ToolCall {
   /// The DeepSeek-generated tool call id. Use it as the `tool_call_id` when
   /// sending the corresponding `Tool(id)` result message back to the API.
@@ -53,7 +55,7 @@ pub struct ToolCall {
   /// The raw JSON argument string returned by DeepSeek for this function call.
   /// Parse and validate it before executing a local tool.
   arguments : String
-} derive(Debug)
+}
 
 ///|
 /// Constructs a typed DeepSeek tool call value.

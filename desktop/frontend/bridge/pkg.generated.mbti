@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/bridge"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/sub",
+  "moonbitlang/core/json",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
 }
@@ -17,7 +18,7 @@ pub fn remote_connection(device_id~ : String, websocket_epoch~ : Int32, reconnec
 
 // Types and methods
 pub enum Event {
-  Ssh(Json)
+  Ssh(@json.Json)
   Notification(channel~ : @interop.ChannelId, notification~ : @protocol.Notification)
   Unavailable(channel~ : @interop.ChannelId, message~ : String)
   ChannelDown(channel~ : @interop.ChannelId, websocket_epoch~ : Int32)

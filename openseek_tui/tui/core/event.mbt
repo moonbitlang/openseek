@@ -1,12 +1,13 @@
 ///|
 /// A user-driven UI event handed to the application loop.
+#derive(Eq, Debug)
 pub(all) enum Event {
   Queue(Input)
   Steer(Input)
   SlashCommand(name~ : String, arguments~ : String)
   Interrupt
   Quit
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Event with Debug::{to_repr}

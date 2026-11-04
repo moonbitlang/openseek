@@ -25,11 +25,11 @@ pub fn bridge_error_text(Error) -> String
 
 pub fn bridge_failure(Error) -> BridgeFailure
 
-pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(ChannelId, @commands.Command[Payload, Reply], Payload) -> Reply
+pub async fn[Payload : @json.ToJson, Reply : @json.FromJson] bridge_request(ChannelId, @commands.Command[Payload, Reply], Payload) -> Reply
 
-pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(ChannelId, @commands.Command[Payload, Reply], Payload, lane? : String) -> Reply
+pub async fn[Payload : @json.ToJson, Reply : @json.FromJson] bridge_request_in_order(ChannelId, @commands.Command[Payload, Reply], Payload, lane? : String) -> Reply
 
-pub async fn[Payload : ToJson, Reply : @json.FromJson] codex_request(ChannelId, @commands.Command[Payload, @protocol.CodexCommandReply[Reply]], Payload) -> Reply
+pub async fn[Payload : @json.ToJson, Reply : @json.FromJson] codex_request(ChannelId, @commands.Command[Payload, @protocol.CodexCommandReply[Reply]], Payload) -> Reply
 
 pub fn current_ssh_epoch(ChannelId) -> Int32?
 
@@ -76,10 +76,11 @@ pub(all) enum BridgeFailure {
   Unknown
 }
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum ChannelId {
   Local
   Remote(String)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn ChannelId::device_id(Self) -> String
 pub fn ChannelId::equal(Self, Self) -> Bool
 pub fn ChannelId::from_uri_authority(String) -> Self?
@@ -90,12 +91,13 @@ pub fn ChannelId::of_device(String) -> Self
 pub fn ChannelId::to_repr(Self) -> @debug.Repr
 pub fn ChannelId::uri_authority(Self) -> String
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CheckoutPlacement {
   Scratch(root~ : @common.Uri?)
   WorkspaceRoot(root~ : @common.Uri)
   Worktree(project~ : @common.Uri, name~ : String, root~ : @common.Uri)
   MissingWorktree(project~ : @common.Uri, name~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn CheckoutPlacement::checkout_root(Self) -> @common.Uri?
 pub fn CheckoutPlacement::equal(Self, Self) -> Bool
 pub fn CheckoutPlacement::is_ready(Self) -> Bool
@@ -105,10 +107,11 @@ pub fn CheckoutPlacement::same_identity(Self, Self) -> Bool
 pub fn CheckoutPlacement::to_repr(Self) -> @debug.Repr
 pub fn CheckoutPlacement::worktree_name(Self) -> String?
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) enum ConversationIdentity {
   Host(ConversationKey)
   Cloud(account~ : String, session~ : String)
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn ConversationIdentity::equal(Self, Self) -> Bool
 pub fn ConversationIdentity::hash(Self) -> Int32
 pub fn ConversationIdentity::hash_combine(Self, Hasher) -> Unit
@@ -118,10 +121,11 @@ pub fn ConversationIdentity::not_equal(Self, Self) -> Bool
 pub fn ConversationIdentity::session(Self) -> String
 pub fn ConversationIdentity::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) struct ConversationKey {
   channel : ChannelId
   session : String
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn ConversationKey::equal(Self, Self) -> Bool
 pub fn ConversationKey::hash(Self) -> Int32
 pub fn ConversationKey::hash_combine(Self, Hasher) -> Unit

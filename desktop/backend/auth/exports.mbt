@@ -8,11 +8,12 @@
 /// in `desktop/app`, a module outside this workspace: `relay_settings` in
 /// `desktop/app/main.mbt` builds the override with a `ConnectorConfig`
 /// struct literal.
+#derive(Eq)
 pub(all) struct ConnectorConfig {
   relay_url : String
   device_token : String
   device_name : String
-} derive(Eq)
+}
 
 ///|
 /// Load the persisted sign-in (when there is a runtime dir to read from).

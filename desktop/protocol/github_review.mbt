@@ -2,6 +2,7 @@
 // this boundary; only an explicit Send produces a mutation.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum GithubReviewAction {
   Post(
     path~ : String,
@@ -13,7 +14,7 @@ pub(all) enum GithubReviewAction {
   Reply(comment~ : String, body~ : String)
   Delete(comment~ : String)
   Resolve(thread~ : String, resolved~ : Bool)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewAction with fn from_json(json, path) {
@@ -69,10 +70,11 @@ pub extend GithubReviewAction with Eq::{equal, not_equal}
 pub extend GithubReviewAction with Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum GithubReviewReply {
   ReviewLoaded(GithubReview?)
   ReviewLoadFailed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewReply with fn from_json(json, path) {
@@ -97,10 +99,11 @@ pub impl ToJson for GithubReviewReply with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum GithubReviewMutationReply {
   ReviewMutationSuccess
   ReviewMutationFailure(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewMutationReply with fn from_json(json, path) {
@@ -121,6 +124,7 @@ pub impl ToJson for GithubReviewMutationReply with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubReviewComment {
   id : String
   body_html : String
@@ -129,7 +133,7 @@ pub(all) struct GithubReviewComment {
   avatar_url : String?
   created_at : String
   can_delete : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewComment with fn from_json(json, path) {
@@ -170,6 +174,7 @@ pub extend GithubReviewComment with Eq::{equal, not_equal}
 pub extend GithubReviewComment with Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubReviewThread {
   id : String
   path : String
@@ -182,7 +187,7 @@ pub(all) struct GithubReviewThread {
   can_resolve : Bool
   can_unresolve : Bool
   comments : Array[GithubReviewComment]
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewThread with fn from_json(json, path) {
@@ -231,11 +236,12 @@ pub extend GithubReviewThread with Eq::{equal, not_equal}
 pub extend GithubReviewThread with Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubReviewFile {
   path : String
   original : String?
   modified : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewFile with fn from_json(json, path) {
@@ -266,12 +272,13 @@ pub extend GithubReviewFile with Eq::{equal, not_equal}
 pub extend GithubReviewFile with Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubReviewFilePayload {
   cwd : String
   path : String
   base : String
   head : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewFilePayload with fn from_json(json, path) {
@@ -290,10 +297,11 @@ pub impl ToJson for GithubReviewFilePayload with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum GithubReviewFileReply {
   ReviewFileLoaded(GithubReviewFile?)
   ReviewFileFailed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewFileReply with fn from_json(json, path) {
@@ -342,13 +350,14 @@ pub extend GithubReviewFileReply with FromJson::{from_json}
 pub extend GithubReviewFileReply with ToJson::{to_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubReview {
   url : String
   head : String
   base : String
   threads : Array[GithubReviewThread]
   commentable : Array[GithubCommentableFile]
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReview with fn from_json(json, path) {
@@ -380,11 +389,12 @@ pub extend GithubReview with Eq::{equal, not_equal}
 pub extend GithubReview with Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubReviewMutationPayload {
   cwd : String
   url : String
   action : GithubReviewAction
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewMutationPayload with fn from_json(json, path) {

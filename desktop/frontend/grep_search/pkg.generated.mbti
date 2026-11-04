@@ -20,25 +20,28 @@ pub fn focus_query_after_render() -> @cmd.Cmd
 // Errors
 
 // Types and methods
-type EditorHighlights derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type EditorHighlights
 pub fn EditorHighlights::equal(Self, Self) -> Bool
 pub fn EditorHighlights::not_equal(Self, Self) -> Bool
 pub fn EditorHighlights::ranges(Self) -> Array[@common.Range]
 pub fn EditorHighlights::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct Input {
   model : String
   thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationIdentity
   root : @common.Uri?
   cloud_access : @cloud_client.Access?
-} derive(Eq)
+}
 pub fn Input::Input(model~ : String, thinking~ : @protocol.OpenSeekThinking?, owner~ : @interop.ConversationKey, root~ : @common.Uri?) -> Self
 pub fn Input::cloud(owner~ : @interop.ConversationIdentity, access~ : @cloud_client.Access, root~ : @common.Uri) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
-type Mode derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Mode
 pub fn Mode::equal(Self, Self) -> Bool
 pub fn Mode::not_equal(Self, Self) -> Bool
 pub fn Mode::to_repr(Self) -> @debug.Repr
@@ -74,35 +77,43 @@ pub(all) enum Msg {
   RequestFailed(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32, code~ : String, message~ : String)
 }
 
-type Page derive(Eq)
+#derive(Eq)
+type Page
 pub fn Page::equal(Self, Self) -> Bool
 pub fn Page::not_equal(Self, Self) -> Bool
 
-type PatternRepairPhase derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type PatternRepairPhase
 pub fn PatternRepairPhase::equal(Self, Self) -> Bool
 pub fn PatternRepairPhase::not_equal(Self, Self) -> Bool
 pub fn PatternRepairPhase::to_repr(Self) -> @debug.Repr
 
-type Phase derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Phase
 pub fn Phase::equal(Self, Self) -> Bool
 pub fn Phase::not_equal(Self, Self) -> Bool
 pub fn Phase::to_repr(Self) -> @debug.Repr
 
-type SearchRequestIdentity derive(Eq)
+#derive(Eq)
+type SearchRequestIdentity
 
-type SearchResultSummary derive(Eq)
+#derive(Eq)
+type SearchResultSummary
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SemanticResultFilter {
   AllSemanticResults
   SelectedSemanticResults
-} derive(Eq, @debug.Debug)
+}
 pub fn SemanticResultFilter::equal(Self, Self) -> Bool
 pub fn SemanticResultFilter::not_equal(Self, Self) -> Bool
 pub fn SemanticResultFilter::to_repr(Self) -> @debug.Repr
 
-type SemanticSearchState derive(Eq)
+#derive(Eq)
+type SemanticSearchState
 
-type State derive(Eq)
+#derive(Eq)
+type State
 pub fn State::editor_highlights(Self, String) -> EditorHighlights?
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
@@ -114,7 +125,8 @@ pub fn State::reset_checkout(Self, text_only? : Bool) -> Self
 pub fn State::selected_semantic_reference(Self, String) -> @mention_context.SemanticSearchReference?
 pub fn State::subscription(Self, Input, @cmd.Emit[Msg]) -> @sub.Sub
 
-type TextSearchState derive(Eq)
+#derive(Eq)
+type TextSearchState
 
 // Type aliases
 

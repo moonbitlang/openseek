@@ -1,14 +1,16 @@
 ///|
 /// Normalized page coordinates keep feedback attached through scrolling and zoom.
+#derive(Eq)
 pub(all) struct Region {
   page : Int32
   x : Double
   y : Double
   width : Double
   height : Double
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct Capture {
   url : String
   // PDF identity and geometry in unrotated PDF user space, independent of zoom.
@@ -16,7 +18,7 @@ pub(all) struct Capture {
   regions : Array[Region]
   rotation : Int32
   text : String?
-} derive(Eq)
+}
 
 ///|
 pub extend Region with Eq::{equal, not_equal}

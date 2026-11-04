@@ -1,35 +1,40 @@
 ///|
 /// Each opening captures its source and advances a generation. Late replies
 /// from a dismissed dialog cannot overwrite a later conversation's dialog.
+#derive(Eq, Debug)
 struct Model {
   id_prefix : String
   generation : Int32
   visible : Bool
   content : Content?
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 priv enum Source {
   Host(@interop.ChannelId, @protocol.SessionExportPayload)
   Cloud(session~ : String)
   File(FileSource)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FileSource {
   HostFile(@interop.ChannelId, @protocol.ReadFilePayload)
   CloudFile(account~ : String, session~ : String, path~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 priv struct Content {
   source : Source
   operation : Operation
   // A completed link survives subsequent downloads and their errors.
   publication : Publication?
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 priv enum Operation {
   Ready
   Downloading
@@ -39,20 +44,22 @@ priv enum Operation {
   SignInFailed(String)
   Saved(path~ : String, opened~ : Bool)
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 priv struct Publication {
   url : String
   copy : CopyState
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 priv enum CopyState {
   Available
   Copied
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub(all) enum Msg {

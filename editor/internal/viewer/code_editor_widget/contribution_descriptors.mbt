@@ -3,6 +3,7 @@
 /// registry. This is deliberately not an editor "role": construction selects
 /// an immutable set of independent capabilities, and runtime feature code
 /// discovers availability from the installed contribution itself.
+#derive(Eq)
 priv enum CodeEditorContributionKind {
   AgentFeedbackInput
   AgentFeedbackWidget
@@ -14,7 +15,7 @@ priv enum CodeEditorContributionKind {
   Definition
   References
   CodeLens
-} derive(Eq)
+}
 
 ///|
 /// Explicit contribution set for one code-editor kernel. The fields stay

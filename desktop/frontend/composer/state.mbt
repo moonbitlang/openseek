@@ -1,14 +1,16 @@
 ///|
 /// Which provider owns the visible completion token.
+#derive(Eq)
 priv enum CompletionKind {
   SlashCommands
   SkillMentions
   Symbols
   Files
-} derive(Eq)
+}
 
 ///|
 /// One completion row and the payload applied when it is accepted.
+#derive(Eq)
 priv struct CompletionItem {
   label : String
   detail : String
@@ -17,24 +19,26 @@ priv struct CompletionItem {
   prompt : String?
   path : String?
   range : @common.Range?
-} derive(Eq)
+}
 
 ///|
 /// The open completion menu for one local composer entry.
+#derive(Eq)
 priv struct Completion {
   kind : CompletionKind
   menu : Menu[CompletionItem]
-} derive(Eq)
+}
 
 ///|
 /// Results from the last workspace-symbol request. Owner, root, and query are
 /// all part of the cache identity so navigation cannot reuse stale rows.
+#derive(Eq)
 priv struct SymbolCache {
   owner : @interop.ConversationIdentity?
   root : @common.Uri?
   query : String
   items : Array[CompletionItem]
-} derive(Eq)
+}
 
 ///|
 fn SymbolCache::SymbolCache() -> SymbolCache {

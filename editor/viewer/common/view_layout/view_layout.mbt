@@ -21,19 +21,21 @@ pub struct ViewLayout {
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct Viewport {
   top : Double
   left : Double
   width : Double
   height : Double
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub struct SavedScrollState {
   scroll_top : Double
   scroll_top_without_view_zones : Double
   scroll_left : Double
-} derive(Eq, Debug)
+}
 
 ///|
 let smooth_scrolling_time : Double = 125.0

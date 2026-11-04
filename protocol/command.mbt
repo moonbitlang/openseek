@@ -14,6 +14,7 @@
 ///
 /// One type, one encoder, one decoder — the same shape the event direction now
 /// has.
+#derive(Eq, Debug)
 pub(all) enum Command {
   /// `submission_id` is the submitting controller's tag for this prompt. The
   /// engine records it on the turn's durable `User` item, so a delivery can
@@ -44,7 +45,7 @@ pub(all) enum Command {
   /// commands like this one") would have to say what the grant's equivalence
   /// class is, which nothing on either end of this wire can currently define.
   ApprovalDecision(id~ : String, allow~ : Bool)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The command as the line a controller writes.

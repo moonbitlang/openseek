@@ -20,6 +20,7 @@ impl Show for McpError with fn output(self, logger) {
 
 ///|
 /// A tool advertised by an MCP server via `tools/list`.
+#derive(Eq, Debug)
 pub struct McpTool {
   /// The tool's name as the server exposes it (before openseek namespaces it).
   name : String
@@ -31,12 +32,13 @@ pub struct McpTool {
   /// The JSON Schema of the tool's `structuredContent`, when the server
   /// declares one (`outputSchema`, since 2025-06-18) as an object.
   output_schema : Json?
-} derive(Eq, Debug)
+}
 
 ///|
 /// One block of a `tools/call` result's `content` array. Text and image blocks
 /// keep their payload; other blocks are kept as compact descriptors — audio
 /// bytes are noted, not forwarded.
+#derive(Eq, Debug)
 pub enum ContentBlock {
   /// A text block and its text.
   Text(String)
@@ -46,7 +48,7 @@ pub enum ContentBlock {
   Resource(uri~ : String, text~ : String?)
   /// Any other block type (audio, resource_link, unknown): its `type` tag.
   Other(kind~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The result of a `tools/call`: its content blocks, any structured output, and
@@ -54,22 +56,24 @@ pub enum ContentBlock {
 /// JSON-RPC error). Since 2025-06-18 a server may return the real result in
 /// `structuredContent` and leave `content` empty (or a generic status), so the
 /// structured value is kept rather than dropped.
+#derive(Eq, Debug)
 pub struct CallToolResult {
   content : Array[ContentBlock]
   structured_content : Json?
   is_error : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// What discovery or legacy initialization reported: the selected protocol version
 /// and identity. `server_name`/`server_version` are absent when the server omits
 /// `serverInfo`.
+#derive(Eq, Debug)
 pub struct InitializeResult {
   protocol_version : String
   server_name : String?
   server_version : String?
   instructions : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Decode an `initialize` result. Raises `Protocol` when `protocolVersion` is

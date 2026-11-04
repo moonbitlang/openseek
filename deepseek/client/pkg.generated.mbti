@@ -10,6 +10,7 @@ import {
 // Values
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror FileUploadError {
   UnsupportedImageFormat
   ImageTooLarge(bytes~ : Int32, limit~ : Int32)
@@ -28,17 +29,19 @@ pub(all) suberror FileUploadError {
   InvalidCreatedAt(Double)
   InvalidExpiresAt(Double)
   MissingExpiresAt
-} derive(Eq, @debug.Debug)
+}
 pub fn FileUploadError::equal(Self, Self) -> Bool
 pub fn FileUploadError::not_equal(Self, Self) -> Bool
 pub fn FileUploadError::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) suberror ImageRequestError {
   UnsupportedProvider
-} derive(@debug.Debug)
+}
 pub fn ImageRequestError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct Client {
   model : @deepseek.Model
   api_url : String
@@ -47,7 +50,7 @@ pub struct Client {
   retry_backoff_ms : Int32
   idle_timeout_ms : Int32
   // private fields
-} derive(@debug.Debug)
+}
 pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode, retry_attempts? : Int32, retry_backoff_ms? : Int32, idle_timeout_ms? : Int32) -> Self
 pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat, max_tokens? : Int32, stream? : StreamHandler) -> @deepseek.ChatResponse
 pub fn Client::supports_image_input(Self) -> Bool
@@ -56,13 +59,14 @@ pub async fn Client::upload_image(Self, Bytes, filename~ : String, expires_after
 type StreamHandler
 pub fn StreamHandler::StreamHandler(on_content_delta~ : async (String) -> Unit, on_reasoning_delta? : async (String) -> Unit, on_retry? : (Int32, Int32, String) -> Unit) -> Self
 
+#derive(@debug.Debug)
 pub struct UploadedFile {
   id : String
   bytes : Int64
   created_at : Int64
   filename : String
   expires_at : Int64?
-} derive(@debug.Debug)
+}
 pub fn UploadedFile::to_repr(Self) -> @debug.Repr
 
 // Type aliases

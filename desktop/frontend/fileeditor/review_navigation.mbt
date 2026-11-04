@@ -84,12 +84,13 @@ fn reveal_review_editor_hunk(
 }
 
 ///|
+#derive(Eq)
 struct ReviewNavigationDestination {
   change : ChangedFile
   generation : Int32
   last : Bool
   cross_file : Bool
-} derive(Eq)
+}
 
 ///|
 pub extend ReviewNavigationDestination with Eq::{equal, not_equal}
@@ -335,12 +336,13 @@ fn review_diff_navigation_subscription(
 
 ///|
 /// Only small presentation values are retained, never an old State or callbacks.
+#derive(Eq)
 pub struct ReviewNavigationDisplay {
   priv file_position : (Int32, Int32)?
   priv position : ReviewHunkPosition?
   priv hunk_toggle : (ReviewHunkState, Bool)?
   priv enabled : Bool
-} derive(Eq)
+}
 
 ///|
 fn review_navigation_complete(state : State, ctx : Ctx) -> Bool {

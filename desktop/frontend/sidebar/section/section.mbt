@@ -1,8 +1,9 @@
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) struct Id {
   source : String
   channel : String
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn Id::Id(source~ : String, channel~ : String) -> Id {
@@ -27,6 +28,7 @@ pub fn Id::key(self : Id) -> String {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Placeholder {
   id : String
   label : String
@@ -34,14 +36,15 @@ pub(all) struct Placeholder {
   nested : Bool
   openable : Bool
   action : Action?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Entry {
   Project(@project.Input)
   Conversation(@conversation.Input)
   Placeholder(Placeholder)
-} derive(Debug, Eq)
+}
 
 ///|
 fn Entry::key(self : Entry) -> String {
@@ -62,12 +65,14 @@ fn Entry::kind(self : Entry) -> String {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Action {
   title : String
   disabled : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
   label : String
@@ -78,7 +83,7 @@ pub(all) struct Input {
   activation : String?
   action : Action?
   entries : Array[Entry]
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn Input::id(self : Input) -> Id {
@@ -102,15 +107,17 @@ priv enum Msg {
 /// A fold is stamped with the activation it was made under, so revealing is
 /// edge-triggered without watching input transitions: only an activation
 /// different from the stamped one forces the section open.
+#derive(Eq)
 priv enum Fold {
   Open
   Folded(during~ : String?)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct State {
   fold : Fold
-} derive(Eq)
+}
 
 ///|
 /// Whether the section renders folded. A stored fold holds — including while

@@ -1,40 +1,45 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum SemanticReviewStatus {
   Identical
   Changed
   Reordered
   NoStructuralChanges
   IgnoredOnly
-} derive(Eq, Debug)
+}
 
 ///|
 /// One physical source range owned by a semantic section. Line numbers are
 /// one-based for display; section DiffEditors use local model coordinates.
+#derive(Eq, Debug)
 pub(all) struct SemanticReviewSourceRange {
   start_line_number : Int32
   line_count : Int32
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum SemanticReviewSectionKind {
   Whole
   Matched
   Deleted
   Inserted
-} derive(Eq, Debug)
+}
 
 ///|
 /// The provider used inside one section DiffEditor. Inserted and deleted
 /// declarations use Line because one model is intentionally empty; matched
 /// and whole fragments retain MoonDiff's local intraline result.
+#derive(Eq, Debug)
 pub(all) enum SemanticReviewDiff {
   Line
   Fragment(@diff.DocumentDiff)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One independently rendered semantic section. It carries source slices and
 /// a fragment-local diff only; no global two-sided line order is synthesized.
+#derive(Eq, Debug)
 pub(all) struct SemanticReviewSection {
   key : String
   identity : Int32?
@@ -47,19 +52,20 @@ pub(all) struct SemanticReviewSection {
   original_source : String
   modified_source : String
   diff : SemanticReviewDiff
-} derive(Eq, Debug)
+}
 
 ///|
 /// Main sections follow MoonDiff's new-side order. Deleted sections remain a
 /// separate old-side ordered group, so reordered identities never cross in a
 /// single DiffEditor mapping.
+#derive(Eq, Debug)
 pub(all) struct SectionedSemanticReviewPlan {
   requested : MoonDiffMode
   status : SemanticReviewStatus
   reordered : Bool
   main_sections : Array[SemanticReviewSection]
   deleted_sections : Array[SemanticReviewSection]
-} derive(Eq, Debug)
+}
 
 ///|
 fn semantic_status(status : @mbtdiff.DiffStatus) -> SemanticReviewStatus {

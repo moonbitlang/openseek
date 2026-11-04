@@ -2,18 +2,20 @@
 /// The concrete presentation used by a diff editor. `SideBySide` renders one
 /// code editor per pane; `Inline` keeps the modified editor as the primary
 /// surface and projects original-only content into managed view zones.
+#derive(Eq, Debug)
 pub(all) enum DiffEditorLayout {
   SideBySide
   Inline
-} derive(Eq, Debug)
+}
 
 ///|
 /// Diff panes normally inherit the host's code-editor wrapping policy. `Off`
 /// is retained for hosts that require horizontally stable comparison rows.
+#derive(Eq, Debug)
 pub(all) enum DiffWordWrap {
   Inherit
   Off
-} derive(Eq, Debug)
+}
 
 ///|
 /// Diff-level options. Code-editor presentation details remain owned by the

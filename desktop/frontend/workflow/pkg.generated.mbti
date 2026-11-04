@@ -28,6 +28,7 @@ pub(all) struct Actions {
   open_child : (String) -> @cmd.Cmd
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Entry {
   workflow : String
   session : String
@@ -43,11 +44,12 @@ pub(all) struct Entry {
   unaccounted : String?
   started_at : Double?
   finished_at : Double?
-} derive(Eq, @debug.Debug)
+}
 pub fn Entry::equal(Self, Self) -> Bool
 pub fn Entry::not_equal(Self, Self) -> Bool
 pub fn Entry::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct Row {
   child : String
   ordinal : Int32
@@ -61,11 +63,12 @@ pub struct Row {
   unaccounted : String?
   started_at : Double?
   finished_at : Double?
-} derive(Eq, @debug.Debug)
+}
 pub fn Row::equal(Self, Self) -> Bool
 pub fn Row::not_equal(Self, Self) -> Bool
 pub fn Row::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct Run {
   id : String
   session : String
@@ -73,7 +76,7 @@ pub struct Run {
   child_count : Int32
   closed : Bool
   rows : Array[Row]
-} derive(Eq, @debug.Debug)
+}
 pub fn Run::cost_usd(Self) -> Double?
 pub fn Run::equal(Self, Self) -> Bool
 pub fn Run::not_equal(Self, Self) -> Bool

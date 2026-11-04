@@ -1,12 +1,13 @@
 ///|
 /// Where a pull request stands. A draft is an open pull request that is not
 /// ready to merge; the card colors it apart from one that is.
+#derive(Eq, Debug)
 pub(all) enum PullRequestState {
   Open
   Draft
   Merged
   Closed
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PullRequestState with Eq::{equal, not_equal}
@@ -16,12 +17,13 @@ pub extend PullRequestState with Debug::{to_repr}
 
 ///|
 /// The checked-out branch's pull request, as GitHub reported it.
+#derive(Eq, Debug)
 pub(all) struct PullRequest {
   number : Int32
   title : String
   state : PullRequestState
   url : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PullRequest with Eq::{equal, not_equal}
@@ -32,12 +34,13 @@ pub extend PullRequest with Debug::{to_repr}
 ///|
 /// The branch's line delta, measured locally. `partial` marks a count that
 /// stopped short of every untracked file, so it is a floor, not a total.
+#derive(Eq, Debug)
 pub(all) struct Diff {
   added : Int32
   removed : Int32
   files : Int32
   partial : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Diff with Eq::{equal, not_equal}
@@ -49,13 +52,14 @@ pub extend Diff with Debug::{to_repr}
 /// The checkout the conversation works in, as the root knows it: always its
 /// first row, and never removable — it follows the checkout rather than a
 /// saved list.
+#derive(Eq, Debug)
 pub(all) struct Checkout {
   branch : String
   /// The branch's pull request; while there is none, the row is the branch
   /// and its local diff.
   pull_request : PullRequest?
   diff : Diff?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Checkout with Eq::{equal, not_equal}

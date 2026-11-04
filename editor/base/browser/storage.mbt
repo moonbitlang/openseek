@@ -1,10 +1,11 @@
 ///|
 /// Storage access failures are distinct from a missing key. Hosts decide
 /// whether persistence is optional or must be reported to the user.
+#derive(Debug)
 pub(all) enum StorageFailure {
   Unavailable
   AccessFailed(String)
-} derive(Debug)
+}
 
 ///|
 fn[T] with_local_storage(

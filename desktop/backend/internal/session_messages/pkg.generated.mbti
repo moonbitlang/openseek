@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/backend/internal/session_messages"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
 
 // Errors
@@ -20,7 +24,7 @@ pub struct Message {
   request_id : String
   // private fields
 }
-pub fn Message::status(Self) -> Json
+pub fn Message::status(Self) -> @json.Json
 
 type Service
 pub fn Service::Service() -> Self
@@ -30,7 +34,7 @@ pub fn Service::detach(Self, String) -> Unit
 pub fn Service::get(Self, String, String) -> Message raise MessageError
 pub fn Service::request(Self, String, String, String, String) -> (Message, Bool) raise
 pub async fn Service::run(Self, async (String, String, String) -> Unit, (String, String) -> Unit) -> Unit
-pub async fn Service::wait(Self, Message, wait_ms? : Int32, delivery_wait_ms? : Int32) -> Json
+pub async fn Service::wait(Self, Message, wait_ms? : Int32, delivery_wait_ms? : Int32) -> @json.Json
 
 // Type aliases
 

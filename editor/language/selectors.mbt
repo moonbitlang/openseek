@@ -1,18 +1,20 @@
 ///|
 /// Monaco-shaped language selector filter.
+#derive(Debug)
 struct LanguageFilter {
   language : String?
   scheme : String?
   pattern : String?
-} derive(Debug)
+}
 
 ///|
 /// Monaco-shaped language selector used during provider dispatch.
+#derive(Debug)
 pub(all) enum LanguageSelector {
   LanguageId(String)
   LanguageFilter(LanguageFilter)
   LanguageSelectorList(Array[LanguageSelector])
-} derive(Debug)
+}
 
 ///|
 /// Builds a selector filter with optional fields.

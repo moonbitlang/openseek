@@ -12,11 +12,12 @@ let usual_word_separators : String = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?"
 ///|
 /// A word inside a model, `IWordAtPosition` (`wordHelper.ts:16`). Columns are
 /// 1-based.
+#derive(Eq, Debug)
 pub struct WordAtPosition {
   word : String
   start_column : Int32
   end_column : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 fn is_ascii_digit(code : UInt16) -> Bool {

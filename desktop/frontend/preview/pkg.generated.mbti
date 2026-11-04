@@ -43,11 +43,12 @@ pub fn update(Msg, State) -> State
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) enum Annotation {
   Idle
   Selecting
   Failed(String)
-} derive(Eq)
+}
 pub fn Annotation::equal(Self, Self) -> Bool
 pub fn Annotation::not_equal(Self, Self) -> Bool
 
@@ -57,7 +58,8 @@ pub(all) enum AnnotationMsg {
   Picked(request~ : String, Result[@protocol.BrowserPickReply, String])
 }
 
-type FileObservation derive(Eq)
+#derive(Eq)
+type FileObservation
 pub fn FileObservation::equal(Self, Self) -> Bool
 pub fn FileObservation::not_equal(Self, Self) -> Bool
 
@@ -70,30 +72,33 @@ pub(all) enum Msg {
   ReloadFailed(id~ : Int32, url~ : String, message~ : String)
 }
 
+#derive(Eq)
 pub(all) struct PageState {
   url : String?
   input : String
   title : String
   loading : Bool
   failure : String?
-} derive(Eq)
+}
 pub fn PageState::equal(Self, Self) -> Bool
 pub fn PageState::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct Rect {
   x : Int32
   y : Int32
   width : Int32
   height : Int32
-} derive(Eq)
+}
 pub fn Rect::equal(Self, Self) -> Bool
 pub fn Rect::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct State {
   pages : Map[Int32, PageState]
   next_id : Int32
   files : Map[Int32, FileObservation]
-} derive(Eq)
+}
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::files_to_check(Self) -> Array[@common.Uri]

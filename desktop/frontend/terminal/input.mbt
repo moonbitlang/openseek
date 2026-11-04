@@ -5,40 +5,45 @@ const InputByteLimit : Int32 = 4 * 1024 * 1024
 const InputChunkLimit = 4096
 
 ///|
+#derive(Eq)
 priv struct InputChunk {
   data : String
   binary : Bool
   bytes : Int32
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct InputBatch {
   token : String
   chunk : InputChunk
-} derive(Eq)
+}
 
 ///|
 /// Keep transport loss distinct until the terminal state handles the reply.
+#derive(Eq)
 pub(all) enum InputWriteFailure {
   ConnectionLost
   WriteFailed(String)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum InputPause {
   Reconnecting
   Failed(String)
-} derive(Eq)
+}
 
 ///|
 /// Exactly one write is in flight for each PTY. Pending input belongs to the
 /// tab generation and is discarded with it, never replayed after reconnect.
+#derive(Eq)
 priv struct InputQueue {
   pending : Array[InputChunk]
   pending_bytes : Int32
   active : InputBatch?
   failure : InputPause?
-} derive(Eq)
+}
 
 ///|
 fn InputQueue::empty() -> InputQueue {

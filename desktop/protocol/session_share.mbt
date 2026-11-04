@@ -1,11 +1,12 @@
 ///|
 /// Publication finishes before the desktop receives a link. Explicit failures
 /// preserve actionable messages across Proton's otherwise generic RPC errors.
+#derive(Debug, Eq)
 pub(all) enum SessionShareReply {
   Shared(url~ : String)
   SignInRequired
   Failed(message~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// Required fields must be strings; missing, null and unknown status values
@@ -43,18 +44,20 @@ pub extend SessionShareReply with ToJson::{to_json}
 
 ///|
 /// Publication stages; no client claims unobservable upload byte progress.
+#derive(Debug, Eq)
 pub(all) enum ShareProgress {
   Preparing
   Connecting(attempt~ : Int32)
   Uploading(attempt~ : Int32)
   Waiting(attempt~ : Int32)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionShareProgress {
   generation : Int32
   progress : ShareProgress
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend ShareProgress with Debug::{to_repr}
@@ -143,19 +146,21 @@ pub impl ToJson for SessionShareProgress with fn to_json(self) {
 
 ///|
 /// Native-window account authority or a single remote upload permission.
+#derive(Eq, Debug)
 pub(all) enum ShareAuthorization {
   LocalAccount(user_id~ : String)
   UploadGrant(upload_token~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A share request carries source metadata; the owning host captures the files.
+#derive(Eq, Debug)
 pub(all) struct SessionSharePayload {
   generation : Int32
   source : SessionExportPayload
   idempotency_key : String
   authorization : ShareAuthorization
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for ShareAuthorization with fn from_json(json, path) {
@@ -235,11 +240,12 @@ pub extend SessionSharePayload with ToJson::{to_json}
 
 ///|
 /// The owning host reads the original file; no preview data crosses this request.
+#derive(Eq, Debug)
 pub(all) struct FileSharePayload {
   source : ReadFilePayload
   idempotency_key : String
   authorization : ShareAuthorization
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for FileSharePayload with fn from_json(json, path) {

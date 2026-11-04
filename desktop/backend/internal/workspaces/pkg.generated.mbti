@@ -35,9 +35,10 @@ pub fn store_root(@pathx.Absolute) -> @pathx.Absolute
 pub async fn update_settings(String, (@protocol.WorkspaceSettingsPayload) -> Unit, worktree_mode? : Bool, checkout_submodules? : Bool, submodule_checkout_timeout_seconds? : Int32) -> @protocol.WorkspaceSettingsPayload
 
 // Errors
+#derive(@debug.Debug)
 pub suberror WorkspaceError {
   WorkspaceError(String)
-} derive(@debug.Debug)
+}
 pub fn WorkspaceError::to_repr(Self) -> @debug.Repr
 
 // Types and methods

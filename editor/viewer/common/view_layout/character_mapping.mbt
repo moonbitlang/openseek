@@ -1,25 +1,28 @@
 ///|
 /// DOM span/character coordinate for a rendered line.
+#derive(Eq, Debug)
 pub(all) struct DomPosition {
   part_index : Int32
   char_index : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Mapping entry from one line column to rendered DOM coordinates and visible
 /// monospace column.
+#derive(Eq, Debug)
 pub struct CharacterMappingEntry {
   part_index : Int32
   char_index : Int32
   visible_column : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Column-to-DOM mapping produced while rendering a line.
+#derive(Eq, Debug)
 pub struct CharacterMapping {
   length : Int32
   entries : Array[CharacterMappingEntry]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Creates a mapping with `length` column slots.
@@ -175,18 +178,20 @@ fn mapping_rank_entry(entry : CharacterMappingEntry) -> Int32 {
 
 ///|
 /// Render output when the caller owns the output builder.
+#derive(Eq, Debug)
 pub struct RenderLineOutput {
   character_mapping : CharacterMapping
   contains_foreign_elements : ForeignElementType
-} derive(Eq, Debug)
+}
 
 ///|
 /// Render output including generated HTML.
+#derive(Eq, Debug)
 pub struct RenderLineOutput2 {
   html : String
   character_mapping : CharacterMapping
   contains_foreign_elements : ForeignElementType
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend CharacterMapping with Debug::{to_repr}

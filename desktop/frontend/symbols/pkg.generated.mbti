@@ -20,13 +20,14 @@ pub fn searching(@interop.ConversationKey, String, root~ : @common.Uri, loaded~ 
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Symbol {
   name : String
   kind : Int32?
   container : String?
   path : String
   range : @common.Range
-} derive(Eq, @debug.Debug)
+}
 pub fn Symbol::detail(Self) -> String
 pub fn Symbol::equal(Self, Self) -> Bool
 pub fn Symbol::not_equal(Self, Self) -> Bool

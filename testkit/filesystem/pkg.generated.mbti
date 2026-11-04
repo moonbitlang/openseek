@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek/testkit/filesystem"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
 pub async fn[T] with_tmpdir(async (String) -> T, prefix? : String) -> T
 
@@ -14,9 +18,9 @@ pub struct FileEntry {
   content : String
 }
 
-pub(all) struct FileSystem(Json)
+pub(all) struct FileSystem(@json.Json)
 pub fn FileSystem::entries(Self) -> Array[FileEntry] raise
-pub fn FileSystem::from_json(Json) -> Self raise
+pub fn FileSystem::from_json(@json.Json) -> Self raise
 pub fn FileSystem::from_pairs(Array[(String, String)]) -> Self raise
 pub fn FileSystem::get(Self, String) -> String? raise
 pub async fn FileSystem::mismatch_on_disk(Self, String) -> String

@@ -15,11 +15,12 @@ pub fn normalize_and_validate_document_diff(DocumentDiff, @model.TextSnapshot, @
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct DetailedLineRangeMapping {
   original : @common.LineRange
   modified : @common.LineRange
   inner_changes : Array[RangeMapping]?
-} derive(Eq, @debug.Debug)
+}
 pub fn DetailedLineRangeMapping::DetailedLineRangeMapping(@common.LineRange, @common.LineRange, Array[RangeMapping]?) -> Self
 pub fn DetailedLineRangeMapping::equal(Self, Self) -> Bool
 pub fn DetailedLineRangeMapping::get_inner_changes(Self) -> Array[(@common.Range, @common.Range)]?
@@ -27,40 +28,45 @@ pub fn DetailedLineRangeMapping::line_mapping(Self) -> LineRangeMapping
 pub fn DetailedLineRangeMapping::not_equal(Self, Self) -> Bool
 pub fn DetailedLineRangeMapping::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DocumentDiff {
   changes : Array[DocumentDiffChange]
-} derive(Eq, @debug.Debug)
+}
 pub fn DocumentDiff::equal(Self, Self) -> Bool
 pub fn DocumentDiff::not_equal(Self, Self) -> Bool
 pub fn DocumentDiff::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DocumentDiffChange {
   kind : DocumentDiffChangeKind
   mapping : DetailedLineRangeMapping
-} derive(Eq, @debug.Debug)
+}
 pub fn DocumentDiffChange::DocumentDiffChange(DetailedLineRangeMapping, kind? : DocumentDiffChangeKind) -> Self
 pub fn DocumentDiffChange::equal(Self, Self) -> Bool
 pub fn DocumentDiffChange::not_equal(Self, Self) -> Bool
 pub fn DocumentDiffChange::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DocumentDiffChangeKind {
   Visible
   Ignored
-} derive(Eq, @debug.Debug)
+}
 pub fn DocumentDiffChangeKind::equal(Self, Self) -> Bool
 pub fn DocumentDiffChangeKind::not_equal(Self, Self) -> Bool
 pub fn DocumentDiffChangeKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DocumentDiffOptions {
   ignore_trim_whitespace : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn DocumentDiffOptions::equal(Self, Self) -> Bool
 pub fn DocumentDiffOptions::not_equal(Self, Self) -> Bool
 pub fn DocumentDiffOptions::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct LineDocumentDiffProvider {
   _unit : Unit
-} derive(Eq, @debug.Debug)
+}
 pub fn LineDocumentDiffProvider::LineDocumentDiffProvider() -> Self
 pub fn LineDocumentDiffProvider::compute_diff(Self, @model.TextSnapshot, @model.TextSnapshot, DocumentDiffOptions) -> DocumentDiff
 pub fn LineDocumentDiffProvider::equal(Self, Self) -> Bool
@@ -69,19 +75,21 @@ pub fn LineDocumentDiffProvider::on_did_change(Self, () -> Unit) -> @common.Disp
 pub fn LineDocumentDiffProvider::to_repr(Self) -> @debug.Repr
 pub impl DocumentDiffProvider for LineDocumentDiffProvider
 
+#derive(Eq, @debug.Debug)
 pub(all) struct LineRangeMapping {
   original : @common.LineRange
   modified : @common.LineRange
-} derive(Eq, @debug.Debug)
+}
 pub fn LineRangeMapping::LineRangeMapping(@common.LineRange, @common.LineRange) -> Self
 pub fn LineRangeMapping::equal(Self, Self) -> Bool
 pub fn LineRangeMapping::not_equal(Self, Self) -> Bool
 pub fn LineRangeMapping::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RangeMapping {
   original : @common.Range
   modified : @common.Range
-} derive(Eq, @debug.Debug)
+}
 pub fn RangeMapping::RangeMapping(@common.Range, @common.Range) -> Self
 pub fn RangeMapping::equal(Self, Self) -> Bool
 pub fn RangeMapping::not_equal(Self, Self) -> Bool

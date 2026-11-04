@@ -3,6 +3,7 @@ package "moonbitlang/openseek/agent_tool/internal/auto_check"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -27,17 +28,18 @@ pub async fn package_graph(String) -> PackageGraph?
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) struct CheckErrors {
   error_count : Int32
   warning_count : Int32
   errors : Array[ErrorSite]
   warnings : Array[ErrorSite]
   truncated : Bool
-} derive(@debug.Debug)
+}
 pub fn CheckErrors::first_errors(Self) -> Array[String]
 pub fn CheckErrors::merged(Self, Self) -> Self
-pub fn CheckErrors::summary_json(Self) -> Json
-pub fn CheckErrors::to_json(Self) -> Json
+pub fn CheckErrors::summary_json(Self) -> @json.Json
+pub fn CheckErrors::to_json(Self) -> @json.Json
 
 pub(all) enum CheckOutcome {
   NotApplicable
@@ -46,15 +48,16 @@ pub(all) enum CheckOutcome {
   Checked(CheckErrors)
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ErrorSite {
   path : String?
   loc : String
   code : Int32?
   message : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ErrorSite::identity(Self) -> String
 pub fn ErrorSite::line(Self) -> String
-pub fn ErrorSite::to_json(Self) -> Json
+pub fn ErrorSite::to_json(Self) -> @json.Json
 
 pub(all) struct Introduced {
   errors : Array[ErrorSite]
@@ -62,23 +65,26 @@ pub(all) struct Introduced {
   complete : Bool
 }
 
+#derive(@debug.Debug)
 pub(all) struct PackageGraph {
   dirs : Array[String?]
   edges : Array[(Int32, Int32)]
-} derive(@debug.Debug)
+}
 pub fn PackageGraph::depends_on(Self, Int32, Array[Int32]) -> Bool
 pub fn PackageGraph::package_of(Self, String) -> Int32?
 
+#derive(@debug.Debug)
 pub(all) struct ParseGate {
   errors : Array[ParseGateError]
   truncated : Bool
-} derive(@debug.Debug)
+}
 
+#derive(@debug.Debug)
 pub(all) struct ParseGateError {
   loc : String
   message : String
   context : String
-} derive(@debug.Debug)
+}
 
 // Type aliases
 

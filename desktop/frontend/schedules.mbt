@@ -1,4 +1,5 @@
 ///|
+#derive(Eq)
 priv struct ScheduleForm {
   id : String?
   name : String
@@ -9,7 +10,7 @@ priv struct ScheduleForm {
   once_at : Int64?
   minutes : String
   timeout : String
-} derive(Eq)
+}
 
 ///|
 fn ScheduleForm::empty() -> ScheduleForm {
@@ -27,6 +28,7 @@ fn ScheduleForm::empty() -> ScheduleForm {
 }
 
 ///|
+#derive(Eq)
 priv struct SchedulePage {
   owner : @interop.ChannelId?
   snapshot : @protocol.SchedulesReply
@@ -35,7 +37,7 @@ priv struct SchedulePage {
   sequence : Int32
   error : String?
   log : (String, String)?
-} derive(Eq)
+}
 
 ///|
 fn SchedulePage::empty() -> SchedulePage {

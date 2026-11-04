@@ -1,19 +1,21 @@
 ///|
+#derive(Eq)
 priv enum AttachmentPhase {
   AttachmentPreparing
   AttachmentConfirming(name~ : String)
   AttachmentImporting
   AttachmentStaged(name~ : String)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct AttachmentRequest {
   id : Int32
   source : @protocol.AttachmentSource
   root : @common.Uri?
   cloud_access : @cloud_client.Access?
   phase : AttachmentPhase
-} derive(Eq)
+}
 
 ///|
 fn pick_attachments(

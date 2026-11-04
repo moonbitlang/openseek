@@ -36,19 +36,21 @@ pub fn sessions_from_reply(
 ///|
 /// One sidebar row of a session group: a conversation and the sub-run
 /// transcripts it spawned, in sub-run order.
+#derive(Eq)
 pub struct SessionTreeRow {
   item : SessionListItem
   children : Array[SessionListItem]
-} derive(Eq)
+}
 
 ///|
 /// A session id is unique only inside one host session store. Keeping the
 /// workspace beside it prevents a child or duplicate id from folding under a
 /// parent row owned by another project.
+#derive(Eq, Hash)
 priv struct SessionTreeKey {
   session : String
   workspace : String
-} derive(Eq, Hash)
+}
 
 ///|
 fn SessionListItem::tree_key(

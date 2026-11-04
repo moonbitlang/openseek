@@ -5,7 +5,8 @@
 
 ///|
 /// A workspace-relative URI path with forward-slash separators.
-pub(all) struct Relative(String) derive(Debug, Eq, Hash)
+#derive(Debug, Eq, Hash)
+pub(all) struct Relative(String)
 
 ///|
 /// Render the relative spelling at protocol and URI boundaries.

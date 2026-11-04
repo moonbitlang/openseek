@@ -2,6 +2,7 @@
 package "moonbitlang/openseek/eval/prompt_task/harness"
 
 import {
+  "moonbitlang/core/json",
   "moonbitlang/openseek/deepseek",
 }
 
@@ -46,27 +47,30 @@ pub fn EvalReport::failure_message(Self) -> String
 pub fn EvalReport::markdown(Self) -> String
 pub fn EvalReport::passed(Self) -> Bool
 
+#derive(@json.ToJson)
 pub struct RunManifest {
   out_dir : String
   // private fields
-} derive(ToJson)
-pub fn RunManifest::to_json(Self) -> Json
+}
+pub fn RunManifest::to_json(Self) -> @json.Json
 
 type SuiteConfig
 
+#derive(@json.ToJson)
 pub struct SuiteManifest {
   out_dir : String
   // private fields
-} derive(ToJson)
-pub fn SuiteManifest::to_json(Self) -> Json
+}
+pub fn SuiteManifest::to_json(Self) -> @json.Json
 
 type SuiteReport
 pub fn SuiteReport::failure_message(Self) -> String
 pub fn SuiteReport::markdown(Self) -> String
 pub fn SuiteReport::passed(Self) -> Bool
 
-type ValidationProbeSpec derive(ToJson)
-pub fn ValidationProbeSpec::to_json(Self) -> Json
+#derive(@json.ToJson)
+type ValidationProbeSpec
+pub fn ValidationProbeSpec::to_json(Self) -> @json.Json
 
 // Type aliases
 

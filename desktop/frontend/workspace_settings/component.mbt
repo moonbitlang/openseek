@@ -6,6 +6,7 @@
 /// first authoritative read for this workspace has not landed yet; the
 /// controls render disabled with display-only placeholder values until a
 /// `Loaded` snapshot arrives.
+#derive(Eq)
 pub(all) enum SettingsSnapshot {
   Unloaded
   Loaded(
@@ -13,21 +14,23 @@ pub(all) enum SettingsSnapshot {
     checkout_submodules~ : Bool,
     submodule_checkout_timeout_seconds~ : Int32
   )
-} derive(Eq)
+}
 
 ///|
 /// The workspace being configured, independent of the conversation underneath.
+#derive(Eq)
 pub(all) struct Target {
   channel : @interop.ChannelId
   workspace : @common.Uri
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct Input {
   target : Target?
   settings : SettingsSnapshot
   error : String?
-} derive(Eq)
+}
 
 ///|
 pub fn Input::inactive() -> Input {
@@ -52,17 +55,19 @@ pub(all) struct Actions {
 /// The dialog's three select menus. Identity is local to the component: the
 /// root model's `select_menu` keeps the composer and Settings-page menus,
 /// this one keeps the Workspace Settings menus.
+#derive(Eq)
 priv enum Menu {
   DefaultMode
   Submodules
   Timeout
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct Model {
   key : Target?
   menu : Menu?
-} derive(Eq)
+}
 
 ///|
 priv enum Msg {

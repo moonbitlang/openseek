@@ -17,20 +17,23 @@ pub async fn run_approval_review(request~ : ReviewRequest, api_key~ : String, mo
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Decision {
   Allow
   Deny
   Escalate
-} derive(Eq, @debug.Debug)
+}
 
-type ReviewRequest derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type ReviewRequest
 pub fn ReviewRequest::ReviewRequest(@agent_runtime.ApprovalAsk, intent~ : Array[String]) -> Self
-pub fn ReviewRequest::parse(Json) -> Result[Self, String]
+pub fn ReviewRequest::parse(@json.Json) -> Result[Self, String]
 
-type Verdict derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Verdict
 pub fn Verdict::decision(Self) -> Decision
-pub fn Verdict::parse(Json) -> Result[Self, String]
-pub impl ToJson for Verdict
+pub fn Verdict::parse(@json.Json) -> Result[Self, String]
+pub impl @json.ToJson for Verdict
 
 // Type aliases
 

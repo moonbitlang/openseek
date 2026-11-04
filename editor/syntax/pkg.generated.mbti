@@ -16,6 +16,7 @@ pub let tokenization_registry : TokenizationRegistry
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum HighlightTag {
   Keyword
   Identifier
@@ -36,7 +37,7 @@ pub(all) enum HighlightTag {
   Tag
   Attribute
   Invalid
-} derive(Eq, @debug.Debug)
+}
 pub fn HighlightTag::equal(Self, Self) -> Bool
 pub fn HighlightTag::not_equal(Self, Self) -> Bool
 pub fn HighlightTag::output(Self, &Logger) -> Unit
@@ -44,11 +45,12 @@ pub fn HighlightTag::to_repr(Self) -> @debug.Repr
 pub fn HighlightTag::to_string(Self) -> String
 pub impl Show for HighlightTag
 
+#derive(Eq, @debug.Debug)
 pub(all) struct LineToken {
   start : Int32
   end : Int32
   tag : HighlightTag
-} derive(Eq, @debug.Debug)
+}
 pub fn LineToken::equal(Self, Self) -> Bool
 pub fn LineToken::not_equal(Self, Self) -> Bool
 pub fn LineToken::to_repr(Self) -> @debug.Repr
@@ -69,7 +71,8 @@ pub fn TokenizationRegistry::on_did_change(Self, (TokenizationChangedEvent) -> U
 pub fn TokenizationRegistry::register(Self, String, &LineTokenizer) -> @common.Disposable
 pub fn TokenizationRegistry::set_color_map(Self, Array[String]) -> Unit
 
-type TokenizerState derive(Eq)
+#derive(Eq)
+type TokenizerState
 pub fn TokenizerState::TokenizerState() -> Self
 pub fn TokenizerState::equal(Self, Self) -> Bool
 pub fn TokenizerState::last_mode(Self) -> Byte?

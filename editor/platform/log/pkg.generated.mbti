@@ -10,12 +10,13 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct LogEntry {
   level : LogLevel
   category : String
   message : String
   details : Array[(String, String)]
-} derive(Eq, @debug.Debug)
+}
 pub fn LogEntry::equal(Self, Self) -> Bool
 pub fn LogEntry::not_equal(Self, Self) -> Bool
 pub fn LogEntry::to_repr(Self) -> @debug.Repr
@@ -24,6 +25,7 @@ type LogHandle
 pub fn LogHandle::error(Self, String, String, details? : Array[(String, String)]) -> Unit
 pub fn LogHandle::warn(Self, String, String, details? : Array[(String, String)]) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) enum LogLevel {
   Off
   Trace
@@ -31,7 +33,7 @@ pub(all) enum LogLevel {
   Info
   Warning
   Error
-} derive(Eq, @debug.Debug)
+}
 pub fn LogLevel::equal(Self, Self) -> Bool
 pub fn LogLevel::is_warning_or_error(Self) -> Bool
 pub fn LogLevel::label(Self) -> String

@@ -16,9 +16,10 @@ pub fn DiffEditorModel::DiffEditorModel(
 ///|
 /// The exact modified model range passed to one diff navigation reveal.
 /// MultiDiff hosts can re-measure this range after their item layout settles.
+#derive(Eq, Debug)
 pub(all) struct DiffEditorRevealEvent {
   modified_range : @base_common.Range
-} derive(Eq, Debug)
+}
 
 ///|
 /// One F7/Shift+F7 hunk, retaining only its real changed mappings. Joined
@@ -33,16 +34,18 @@ fn DiffHunk::from_internal(hunk : @diff_editor.DiffHunk) -> DiffHunk {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum DiffEditorLayout {
   SideBySide
   Inline
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum DiffWordWrap {
   Inherit
   Off
-} derive(Eq, Debug)
+}
 
 ///|
 /// Public construction options for the comparison widget. Standalone editor

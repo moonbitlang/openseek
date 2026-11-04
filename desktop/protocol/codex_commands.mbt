@@ -3,120 +3,139 @@
 // documents remain JSON where their schema is versioned independently.
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexDraftOpenPayload {
   draft_id : String
   cwd : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexDraftClosePayload {
   draft_id : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexServerRequestRespondPayload {
   response_token : String
   request_id : Json
   result : Json
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub struct CodexFileSearchPayload {
   thread_id : String
   cwd : String
   query : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexSkillsListPayload {
   thread_id : String
   cwd : String
   force_reload : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexAccountReadPayload {
   refresh_token : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexAccountLoginStartPayload {
   kind_ : String
   use_hosted_login_success_page : Bool
   app_brand : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexAccountLoginCancelPayload {
   login_id : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexModelListPayload {
   limit : Int32
   include_hidden : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// The three user-facing Codex autonomy choices. Desktop keeps this small
 /// vocabulary stable and lets the native host translate it to the current
 /// app-server approval reviewer and permission-profile fields.
+#derive(Debug, Eq)
 pub(all) enum CodexPermissionMode {
   RequestApproval
   AutoReview
   FullAccess
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexThreadStartPayload {
   cwd : String?
   model : String?
   draft_id : String?
   permission_mode : CodexPermissionMode
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexThreadPayload {
   thread_id : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexThreadResumePayload {
   thread_id : String
   permission_mode : CodexPermissionMode
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub struct CodexThreadReadPayload {
   thread_id : String
   include_turns : Bool?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexThreadListPayload {
   limit : Int32
   archived : Bool
   cursor : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexThreadArchivePayload {
   thread_id : String
   force : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexReviewTarget {
   kind_ : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexReviewStartPayload {
   thread_id : String
   target : CodexReviewTarget
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexTurnStartPayload {
   thread_id : String
   input : Array[Json]
@@ -124,68 +143,77 @@ pub(all) struct CodexTurnStartPayload {
   effort : String?
   cwd : String?
   permission_mode : CodexPermissionMode
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexTurnSteerPayload {
   thread_id : String
   input : Array[Json]
   expected_turn_id : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexTurnInterruptPayload {
   thread_id : String
   turn_id : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub struct CodexStatusReply {
   status : String
   message : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexDraftOpenReply {
   draft_id : String
   // Desktop resource URI paths, encoded by the host from native Codex paths.
   cwd : String
   project_root : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// The list envelope is stable across app-server catalogs. Individual rows
 /// remain JSON because Codex can add fields without changing this Desktop API.
+#derive(Debug, Eq)
 pub struct CodexDataReply {
   data : Array[Json]
   next_cursor : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Reverse-request snapshots carry the actor's ordering generation. Unlike a
 /// catalog cursor, this value orders the snapshot against live request and
 /// resolution notifications delivered on the same app-server connection.
+#derive(Debug, Eq)
 pub struct CodexServerRequestsReply {
   data : Array[Json]
   generation : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub struct CodexAccountReply {
   account : Json?
   requires_openai_auth : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub struct CodexLoginStartReply {
   login_id : String
   auth_url : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexThreadReply {
   thread : Json
-} derive(Debug, Eq)
+}
 
 ///|
 /// The reply shared by every `codex.*` Desktop command. Successful replies keep
@@ -200,10 +228,11 @@ pub(all) enum CodexCommandReply[Reply] {
 ///|
 /// A start reply may contain the complete turn while a steer reply may contain
 /// only `turnId`. Both are successful deliveries of the same composer action.
+#derive(Debug, Eq)
 pub struct CodexTurnReply {
   turn : Json?
   turn_id : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for CodexDraftOpenPayload with fn from_json(json, path) {

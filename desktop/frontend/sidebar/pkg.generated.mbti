@@ -20,6 +20,7 @@ pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Account {
   login : String
   avatar : String
@@ -27,7 +28,7 @@ pub(all) struct Account {
   notice : String?
   device : DeviceChoice?
   online_devices : Array[DeviceChoice]
-} derive(Eq, @debug.Debug)
+}
 pub fn Account::equal(Self, Self) -> Bool
 pub fn Account::not_equal(Self, Self) -> Bool
 pub fn Account::to_repr(Self) -> @debug.Repr
@@ -45,14 +46,16 @@ pub(all) struct Actions {
   section : @section.Actions
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DeviceChoice {
   id : String
   name : String
-} derive(Eq, @debug.Debug)
+}
 pub fn DeviceChoice::equal(Self, Self) -> Bool
 pub fn DeviceChoice::not_equal(Self, Self) -> Bool
 pub fn DeviceChoice::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Input {
   search : @session_search.Model
   locale : @i18n.Locale
@@ -66,17 +69,18 @@ pub(all) struct Input {
   skills_active : Bool
   settings_active : Bool
   account : Account?
-} derive(Eq, @debug.Debug)
+}
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::filtered(Self) -> Self
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::search_results(Self) -> Array[@conversation.Id]
 pub fn Input::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Mode {
   ChatMode
   WorkMode
-} derive(Eq, @debug.Debug)
+}
 pub fn Mode::equal(Self, Self) -> Bool
 pub fn Mode::not_equal(Self, Self) -> Bool
 pub fn Mode::to_repr(Self) -> @debug.Repr

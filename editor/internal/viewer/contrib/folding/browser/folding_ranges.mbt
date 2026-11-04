@@ -7,31 +7,34 @@
 
 ///|
 /// A plain line range — Monaco's `ILineRange` (`foldingRanges.ts:8`).
+#derive(Eq, Debug)
 pub(all) struct LineRange {
   start_line_number : Int32
   end_line_number : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where a fold range came from — `FoldSource` (`foldingRanges.ts:13`).
+#derive(Eq, Debug)
 priv enum FoldSource {
   Provider
   UserDefined
   Recovered
-} derive(Eq, Debug)
+}
 
 ///|
 /// One fold range with its state — Monaco's `FoldRange`
 /// (`foldingRanges.ts:25`). `type_` is Monaco's `type` (a MoonBit keyword),
 /// the `FoldingRangeKind` id a provider attached. `is_collapsed` and
 /// `source` are mutable because `sanitizeAndMerge` rewrites them in place.
+#derive(Eq, Debug)
 struct FoldRange {
   start_line_number : Int32
   end_line_number : Int32
   type_ : String?
   mut is_collapsed : Bool
   mut source : FoldSource
-} derive(Eq, Debug)
+}
 
 ///|
 /// Creates a fold range for callers that compose provider ranges before

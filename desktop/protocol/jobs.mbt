@@ -16,11 +16,12 @@ fn jobs_uint(
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct JobsScope {
   session : String
   workspace : String?
   archived : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for JobsScope with fn from_json(json, path) {
@@ -67,11 +68,12 @@ pub extend JobsScope with ToJson::{to_json}
 pub extend JobsScope with FromJson::{from_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct JobsListPayload {
   scope : JobsScope
   offset : Int32
   selected : JobTarget?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for JobsListPayload with fn from_json(json, path) {
@@ -123,11 +125,12 @@ pub extend JobsListPayload with ToJson::{to_json}
 pub extend JobsListPayload with FromJson::{from_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct JobTarget {
   scope : JobsScope
   generation : String
   job_id : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for JobTarget with fn from_json(json, path) {
@@ -173,11 +176,12 @@ pub extend JobTarget with ToJson::{to_json}
 pub extend JobTarget with FromJson::{from_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct JobReadPayload {
   target : JobTarget
   offset : Int64?
   limit : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for JobReadPayload with fn from_json(json, path) {
@@ -227,12 +231,13 @@ pub extend JobReadPayload with ToJson::{to_json}
 pub extend JobReadPayload with FromJson::{from_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct JobView {
   job : @wire.JobRecord
   output_path : String?
   controllable : Bool
   error : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for JobView with fn from_json(json, path) {
@@ -284,12 +289,13 @@ pub extend JobView with ToJson::{to_json}
 pub extend JobView with FromJson::{from_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct JobsListReply {
   jobs : Array[JobView]
   next_offset : Int32?
   errors : Array[String]
   selected : JobView?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for JobsListReply with fn from_json(json, path) {
@@ -349,6 +355,7 @@ pub extend JobsListReply with ToJson::{to_json}
 pub extend JobsListReply with FromJson::{from_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct JobReadReply {
   text : String
   start_offset : Int64
@@ -356,7 +363,7 @@ pub(all) struct JobReadReply {
   size : Int64
   more : Bool
   output_path : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for JobReadReply with fn from_json(json, path) {
@@ -410,9 +417,10 @@ pub extend JobReadReply with ToJson::{to_json}
 pub extend JobReadReply with FromJson::{from_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct JobStopReply {
   outcome : @wire.JobStopOutcome
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for JobStopReply with fn from_json(json, path) {

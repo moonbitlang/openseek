@@ -84,11 +84,12 @@ async fn start_viewer(
 
 ///|
 /// What the viewer's output says so far.
+#derive(Eq, Debug)
 priv enum ViewerOutput {
   Opened(String)
   Failed(String)
   Pending
-} derive(Eq, Debug)
+}
 
 ///|
 /// Read the viewer's output: its URL once `openseek viz: open <url>` appears,

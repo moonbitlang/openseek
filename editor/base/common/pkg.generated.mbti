@@ -61,9 +61,10 @@ pub fn starts_with_ignore_case(String, String) -> Bool
 pub fn uri_to_fs_path(Uri, Bool) -> String
 
 // Errors
+#derive(@debug.Debug)
 pub suberror UriError {
   UriError(String)
-} derive(@debug.Debug)
+}
 pub fn UriError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
@@ -107,10 +108,11 @@ pub fn ExtUri::relative_path(Self, Uri, Uri) -> String?
 pub fn ExtUri::remove_trailing_path_separator(Self, Uri, sep? : String) -> Uri
 pub fn ExtUri::resolve_path(Self, Uri, String) -> Uri
 
+#derive(Eq, @debug.Debug)
 pub(all) struct LineRange {
   start_line_number : Int32
   end_line_number_exclusive : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn LineRange::LineRange(Int32, Int32) -> Self
 pub fn LineRange::contains(Self, Int32) -> Bool
 pub fn LineRange::equal(Self, Self) -> Bool
@@ -134,10 +136,11 @@ pub fn[T] MicrotaskEmitter::dispose(Self[T]) -> Unit
 pub fn[T] MicrotaskEmitter::event(Self[T], (T) -> Unit) -> Disposable
 pub fn[T] MicrotaskEmitter::fire(Self[T], T) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub struct OffsetRange {
   start : Int32
   end_exclusive : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn OffsetRange::OffsetRange(Int32, Int32) -> Self
 pub fn OffsetRange::add_range(Self, Array[Self]) -> Unit
 pub fn OffsetRange::contains(Self, Int32) -> Bool
@@ -151,10 +154,11 @@ pub fn OffsetRange::not_equal(Self, Self) -> Bool
 pub fn OffsetRange::of_length(Int32) -> Self
 pub fn OffsetRange::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Position {
   line_number : Int32
   column : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn Position::Position(Int32, Int32) -> Self
 pub fn Position::compare(Self, Self) -> Int32
 pub fn Position::delta(Self, delta_line_number? : Int32, delta_column? : Int32) -> Self
@@ -178,12 +182,13 @@ pub fn Posix::relative(String, String) -> String
 pub fn Posix::resolve(Array[String]) -> String
 pub fn Posix::sep() -> String
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Range {
   start_line_number : Int32
   start_column : Int32
   end_line_number : Int32
   end_column : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn Range::Range(Int32, Int32, Int32, Int32) -> Self
 pub fn Range::are_intersecting(Self, Self) -> Bool
 pub fn Range::are_intersecting_or_touching(Self, Self) -> Bool

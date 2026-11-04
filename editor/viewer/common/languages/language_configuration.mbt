@@ -9,10 +9,11 @@
 ///|
 /// Normalized line-comment configuration. `no_indent` corresponds to Monaco's
 /// optional `LineCommentConfig.noIndent` and defaults to false.
+#derive(Eq, Debug)
 pub struct LineCommentRule {
   comment : String
   priv no_indent : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Convenience construction corresponding to Monaco's string line-comment
@@ -26,17 +27,19 @@ fn new_line_comment_rule(
 
 ///|
 /// Opening and closing delimiters for one block-comment form.
+#derive(Eq, Debug)
 pub(all) struct CharacterPair {
   open : String
   close : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Normalized comment rules for one language.
+#derive(Eq, Debug)
 pub(all) struct CommentRule {
   line_comment : LineCommentRule?
   block_comment : CharacterPair?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Describes start/end markers of language-specific folding regions (e.g.

@@ -1,9 +1,10 @@
 ///|
+#derive(Eq)
 priv struct ForkAction {
   through : Int32
   pending : Bool
   disabled : Bool
-} derive(Eq)
+}
 
 ///|
 fn Input::fork_action(

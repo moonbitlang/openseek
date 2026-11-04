@@ -1,8 +1,9 @@
 ///|
+#derive(Eq)
 struct HoverView {
   range : @base_common.Range
   parts : Array[HoverPart]
-} derive(Eq)
+}
 
 ///|
 /// Monaco `IHoverPart.isValidForHoverAnchor` (markdown + marker participants):
@@ -55,12 +56,13 @@ let hover_hiding_delay_ms = 300
 
 ///|
 /// Source-shaped options retained by one hover operation.
+#derive(Eq, Debug)
 pub struct HoverOperationOptions {
   priv should_focus : Bool
   priv anchor : HoverAnchor
   source : HoverStartSource
   priv insist_on_keeping_hover_visible : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds one immutable operation-options snapshot with source defaults.
@@ -169,13 +171,14 @@ priv enum HoverOperationStartEffect {
 /// `WaitingForAsync*` states cover the post-delay window while the async compute
 /// is still in flight (the second one shows the loading message); `Idle` is the
 /// complete (or quiescent) state.
+#derive(Eq, Debug)
 priv enum HoverOpState {
   HoverOpIdle
   HoverOpFirstWait
   HoverOpSecondWait
   HoverOpWaitingForAsync
   HoverOpWaitingForAsyncShowingLoading
-} derive(Eq, Debug)
+}
 
 ///|
 /// Monaco `HoverOperation`: the fine-tuned hover timing / aggregation core. It
@@ -185,13 +188,14 @@ priv enum HoverOpState {
 /// methods. `parts` is Monaco's accumulating `_result`; `token` rotates per
 /// anchor so stale timers and streamed async results are dropped at their guards
 /// (the role Monaco's scheduler / iterable cancellation plays).
+#derive(Eq, Debug)
 pub struct HoverOperation {
   priv state : HoverOpState
   token : Int32
   priv parts : Array[HoverPart]
   priv async_done : Bool
   options : HoverOperationOptions?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Whether the current operation is displaying its delayed loading message.
@@ -275,13 +279,14 @@ fn HoverOperation::result(self : HoverOperation) -> HoverResult? {
 /// Pure latest-options half of Monaco's `Debouncer`. The browser controller
 /// owns the clearable timer handle; this value owns the deterministic schedule
 /// generation, selected delay, and latest options read by the callback.
+#derive(Eq, Debug)
 struct HoverDebouncer {
   default_delay_ms : Int32
   generation : Int32
   scheduled : Bool
   delay_ms : Int32
   options : HoverOperationOptions?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Creates an idle latest-options debouncer with a caller-selected fallback
@@ -357,6 +362,7 @@ pub(all) enum HoverEffect {
 /// and whether it was complete). Placement (above/below, sizing) is the
 /// content-hover widget's own state, as in the source
 /// (`ContentHoverWidget._positionPreference`).
+#derive(Eq)
 pub struct HoverController {
   /// Monaco `_hoverOperation.options.anchor`: the anchor the operation is
   /// currently computing for (`None` once cleared).
@@ -373,7 +379,7 @@ pub struct HoverController {
   view : HoverView?
   priv current_anchor : HoverAnchor?
   priv current_complete : Bool
-} derive(Eq)
+}
 
 ///|
 /// Creates an idle controller with generation zero and no shown result.
@@ -889,10 +895,11 @@ pub fn HoverController::highlight_decorations(
 /// a `RenderedContentHover` and drives the content-hover widget's `show` /
 /// `hide` when it changes — Monaco's `_setCurrentResult` →
 /// `_showHover`/`_hideHover` seam. Placement is the widget's own concern.
+#derive(Eq)
 pub struct HoverWidgetView {
   anchor_range : @base_common.Range
   parts : Array[HoverPart]
-} derive(Eq)
+}
 
 ///|
 /// Host-selected loading augmentation. The live Viewer obtains this from the

@@ -3,19 +3,21 @@ package "moonbitlang/openseek/agent_tool/write/internal/decode"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn decode(Json) -> WriteInput raise
+pub fn decode(@json.Json) -> WriteInput raise
 
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct WriteInput {
   path : String
   content : String
   revert_on_parse_errors : Bool
-} derive(@debug.Debug)
+}
 
 // Type aliases
 

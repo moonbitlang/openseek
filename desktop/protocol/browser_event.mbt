@@ -3,6 +3,7 @@
 /// NotificationKind: relay clients do not own native WebContents. Keep the
 /// wire codecs here so the native producer and frontend consumer share the
 /// same contract, including the request that precedes allocation of a tab id.
+#derive(Debug, Eq)
 pub(all) enum BrowserEventPayload {
   OpenRequested(request~ : String, session~ : String, url~ : String)
   Navigated(id~ : Int32, url~ : String)
@@ -15,7 +16,7 @@ pub(all) enum BrowserEventPayload {
     code~ : Int32,
     text~ : String
   )
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl @json.FromJson for BrowserEventPayload with fn from_json(json, path) {

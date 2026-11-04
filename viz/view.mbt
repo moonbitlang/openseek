@@ -3,10 +3,11 @@
 /// event in file order, grouped into turns) or `ModelView` — exactly the
 /// messages `Session::chat_messages` feeds the model, with summaries substituted
 /// for the events they cover and dangling tool calls healed.
+#derive(Eq, Debug)
 pub(all) enum ViewMode {
   RawLog
   ModelView
-} derive(Eq, Debug)
+}
 
 ///|
 /// Render a session under the chosen view mode.

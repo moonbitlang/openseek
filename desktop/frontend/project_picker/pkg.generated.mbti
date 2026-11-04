@@ -17,13 +17,15 @@ pub fn view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, location? : @html.Htm
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) enum Location {
   Directory(String)
   DriveList
-} derive(Eq)
+}
 pub fn Location::equal(Self, Self) -> Bool
 pub fn Location::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum Msg {
   Navigate(String)
   Loaded(channel~ : @interop.ChannelId, location~ : Location, entries~ : Array[String], generation~ : Int32)
@@ -41,7 +43,7 @@ pub(all) enum Msg {
   CreateFolder
   Confirm
   Close
-} derive(Eq)
+}
 pub fn Msg::equal(Self, Self) -> Bool
 pub fn Msg::not_equal(Self, Self) -> Bool
 
@@ -50,7 +52,8 @@ pub enum Outcome {
   Failed(String)
 }
 
-type State derive(Eq)
+#derive(Eq)
+type State
 pub fn State::channel(Self) -> @interop.ChannelId
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self?, Outcome?)

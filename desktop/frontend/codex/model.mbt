@@ -5,28 +5,31 @@
 // one transcript renderer without pretending their persistence models match.
 
 ///|
+#derive(Eq)
 priv enum CodexConnection {
   CodexStarting
   CodexReady
   CodexUnavailable(String)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum CodexAccount {
   CodexAccountUnknown
   CodexSignedOut(Bool)
   CodexSignedIn(kind~ : String, plan~ : String?)
-} derive(Eq)
+}
 
 ///|
 /// The permission picker keeps its current choice while Full access waits for
 /// confirmation; it cannot become active until that transition completes.
 /// Whether the menu is open belongs to the shell, like every other composer
 /// select, so one menu is open at a time and overlays close it.
+#derive(Eq)
 priv enum CodexPermissionPicker {
   CodexPermissionClosed(@protocol.CodexPermissionMode)
   CodexPermissionConfirmingFullAccess(@protocol.CodexPermissionMode)
-} derive(Eq)
+}
 
 ///|
 fn CodexPermissionPicker::mode(
@@ -84,24 +87,27 @@ fn CodexPermissionPicker::cancel_full_access(
 }
 
 ///|
+#derive(Eq)
 priv struct CodexModelOption {
   id : String
   label : String
   is_default : Bool
   reasoning_efforts : Array[CodexReasoningEffort]
   default_reasoning_effort : String?
-} derive(Eq)
+}
 
 ///|
 /// One effort advertised by app-server for one exact model. Values remain
 /// catalog-owned strings so newer Codex releases can add a level without a
 /// SeekMoon protocol release.
+#derive(Eq)
 priv struct CodexReasoningEffort {
   value : String
   description : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct CodexThreadRow {
   id : String
   title : String?
@@ -113,35 +119,39 @@ priv struct CodexThreadRow {
   // directly comparable with OpenSeek's session mtimes when the shared
   // sidebar interleaves the two sources by recency.
   updated_at_ms : Double?
-} derive(Eq)
+}
 
 ///|
 /// App-server's durable thread status, reduced to the distinction the sidebar
 /// needs. Unknown future variants remain absent instead of being guessed idle.
+#derive(Eq)
 priv enum CodexThreadRuntime {
   ThreadActive
   ThreadInactive
-} derive(Eq)
+}
 
 ///|
 /// A worktree explicitly owned by this Codex thread in SeekMoon's registry.
 /// The annotation comes from the native host; cwd shape alone never claims an
 /// external Codex App or manually-created Git worktree.
+#derive(Eq)
 priv struct CodexWorktree {
   name : String
   path : String
   present : Bool
-} derive(Eq)
+}
 
 ///|
 /// A dirty Codex-owned checkout waits here while the shared composer dialog
 /// asks whether archiving may discard its local-only changes.
+#derive(Eq)
 priv struct CodexArchiveConfirm {
   thread_id : String
   refusal : @protocol.ArchiveNeedsForceReply
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct CodexItem {
   id : String
   kind : String
@@ -149,9 +159,10 @@ priv struct CodexItem {
   // Deltas are presentation-only. `item/completed` replaces `value` and
   // clears this field because the completed item is authoritative.
   streamed : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct CodexTurn {
   id : String
   status : String
@@ -168,7 +179,7 @@ priv struct CodexTurn {
   // that predates the field.
   items_view : String?
   error : String?
-} derive(Eq)
+}
 
 ///|
 /// Whether this turn envelope's `items` may replace what the client already
@@ -179,6 +190,7 @@ fn CodexTurn::items_authoritative(self : CodexTurn) -> Bool {
 }
 
 ///|
+#derive(Eq)
 priv struct CodexThread {
   id : String
   title : String?
@@ -191,13 +203,14 @@ priv struct CodexThread {
   branch : String?
   runtime : CodexThreadRuntime?
   turns : Array[CodexTurn]
-} derive(Eq)
+}
 
 ///|
 /// A Codex task before its first prompt. The id is client-local: it isolates
 /// Files and Terminal exactly like OpenSeek's fresh session id, but it is never
 /// sent to app-server as a thread id. `cwd` is the project chosen by the add
 /// button; the host confirms `project_root` before filesystem panels use it.
+#derive(Eq)
 priv struct CodexDraftTask {
   id : String
   cwd : String
@@ -205,29 +218,32 @@ priv struct CodexDraftTask {
   // A lost thread/start reply may still leave a host-cached thread for this
   // identity and cwd. Retrying must keep that pair even after an error.
   thread_start_attempted : Bool
-} derive(Eq)
+}
 
 ///|
 /// The Codex page selects either a local draft or an app-server thread, never
 /// both. Keeping that distinction in one enum prevents an empty draft from
 /// accidentally entering resume, archive, polling, or turn APIs.
+#derive(Eq)
 priv enum CodexSelection {
   CodexNoTask
   CodexDraftTask(CodexDraftTask)
   CodexStoredTask(CodexThread)
-} derive(Eq)
+}
 
 ///|
 /// The current checkout and pull request shown beside Codex's model selector.
 /// `thread_id` fences a slow GitHub reply after the user selects another task.
+#derive(Eq)
 priv struct CodexGitStatus {
   thread_id : String
   branch : String?
   pull_request : @protocol.GitPullRequest?
   compare_url : String?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct CodexPendingRequest {
   response_token : String
   expanded : Bool
@@ -241,7 +257,7 @@ priv struct CodexPendingRequest {
   question_draft : @question_card.Model
   // MCP form elicitation uses the reserved `__content` entry as its JSON editor.
   answers : Map[String, String]
-} derive(Eq)
+}
 
 ///|
 /// A display-only receipt for input submitted through `turn/steer`.
@@ -251,22 +267,24 @@ priv struct CodexPendingRequest {
 /// disappears only on a definite request failure or when the corresponding
 /// canonical item is observed under the single-client FIFO rule documented in
 /// `State::with_observed_steer_item`.
+#derive(Eq)
 priv struct CodexSteerReceipt {
   submission_id : Int32
   turn_id : String
   submitted : @composer.Draft
   known_user_item_ids : Array[String]
   delivery : CodexSteerDelivery
-} derive(Eq)
+}
 
 ///|
 /// RPC acceptance and transcript durability are separate facts. A successful
 /// `turn/steer` reply advances Sending to Accepted, but only the later
 /// app-server item notification removes the receipt from the display.
+#derive(Eq)
 priv enum CodexSteerDelivery {
   CodexSteerSending
   CodexSteerAccepted
-} derive(Eq)
+}
 
 ///|
 /// The request-time identity and activity cut for one half of the paged
@@ -323,6 +341,7 @@ priv enum CodexReplyKind {
 /// Reply kinds with different payload shapes normalize to the same owner, so
 /// worktree creation still settles the turn that launched it without allowing
 /// unrelated replies to release the lock.
+#derive(Eq)
 priv enum CodexForeground {
   CodexDraftOpenForeground(String, cwd~ : String)
   CodexThreadForeground(String)
@@ -337,7 +356,7 @@ priv enum CodexForeground {
   CodexUnarchiveForeground(String)
   CodexCompactForeground(String)
   CodexReviewForeground(String)
-} derive(Eq)
+}
 
 ///|
 /// All Codex-local state transitions. The root frontend wraps this message as
@@ -572,6 +591,7 @@ pub fn Msg::server_request(
 }
 
 ///|
+#derive(Eq)
 struct State {
   connection : CodexConnection
   account : CodexAccount
@@ -638,7 +658,7 @@ struct State {
   loading : Bool
   foreground : CodexForeground?
   notice : String
-} derive(Eq)
+}
 
 ///|
 pub fn State::State(loading~ : Bool = false) -> State {

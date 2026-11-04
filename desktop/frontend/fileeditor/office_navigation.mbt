@@ -1,11 +1,12 @@
 ///|
+#derive(Eq, Debug)
 pub struct OfficeCitationNavigation {
   owner : @interop.ConversationIdentity
   epoch : Int32
   generation : Int32
   path : @common.Uri
   target : @office_location.Target
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend OfficeCitationNavigation with Eq::{equal, not_equal}
