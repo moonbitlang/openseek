@@ -98,6 +98,7 @@ async fn main {
   // The environment override is independent and controls only the relay.
   let auth = @auth.AuthStore::load(
     runtime_dir?=if development { None } else { runtime_dir },
+    cloud_history_runtime?=runtime_dir,
     env_override?=relay_settings(matches),
   )
   // A development build serves its own frontend on loopback for the system

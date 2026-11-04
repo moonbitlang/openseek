@@ -410,6 +410,9 @@ pub fn openseek_capability(
     },
   )
   let window_only = [
+    WindowEndpoint(@commands.cloud_history_cache, (_, payload) => {
+      state.auth_store().cloud_history_cache(payload)
+    }),
     WindowEndpoint(@commands.cloud_file_download, (_, payload) => {
       let directory = downloads() catch {
         error => return Failed(message="Could not locate Downloads: \{error}")

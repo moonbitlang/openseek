@@ -38,6 +38,8 @@ priv struct DeviceRegistration {
 /// broadcasts carry presentation state without secrets.
 struct AuthStore {
   runtime_dir : @pathx.Path?
+  cloud_history_runtime : @pathx.Path?
+  cloud_history_deleted : Set[(String, String)]
   env_override : ConnectorConfig?
   // The relay actor's coalescing poke channel: `DiscardOldest(1)` never
   // blocks a producer and buffers at most one pending wakeup.
@@ -64,6 +66,8 @@ struct AuthStore {
 pub fn AuthStore::empty() -> AuthStore {
   {
     runtime_dir: None,
+    cloud_history_runtime: None,
+    cloud_history_deleted: Set([]),
     env_override: None,
     wakeups: Queue(kind=DiscardOldest(1)),
     session: None,
@@ -291,14 +295,26 @@ async fn AuthStore::clear_local_session(
 ///|
 /// The caller holds persist_mutex across the state transition and file write.
 async fn AuthStore::clear_session_locked(self : AuthStore) -> Unit {
+  let account = self.account()
   self.session = None
   self.remote_generation += 1
   if self.env_override is None {
     self.connected = false
     self.poke()
   }
+  // Keep cache retirement ordered with cache writes and retire the credential
+  // even if the cache could not be removed.
+  let cleanup = try {
+    self.clear_cloud_history(account)
+    None
+  } catch {
+    error => Some(error)
+  }
   if self.runtime_dir is Some(dir) {
     delete_session_file(dir)
+  }
+  if cleanup is Some(error) {
+    raise AuthError("could not clear the Cloud history cache: \{error}")
   }
 }
 
