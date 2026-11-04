@@ -46,7 +46,7 @@ pub async fn askpass_main() -> Unit {
     _ => false
   }
   if !result {
-    askpass_exit(1)
+    @sys.exit(1)
   }
 }
 

@@ -25,4 +25,4 @@ warnings = "+implicit_impl_as_method+test_unqualified_package"
 
 preferred_target = "native"
 
-supported_targets = "native"
+supported_targets = "native+wasm"

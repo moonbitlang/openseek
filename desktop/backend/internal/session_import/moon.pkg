@@ -15,4 +15,4 @@ import {
   "moonbitlang/openseek/viz_export",
 } for "test"
 
-supported_targets = "native"
+supported_targets = "+native+wasm"
