@@ -24,7 +24,6 @@ priv struct AppNavigation {
   browser_ready : Bool
   sessions : Result[Unit, String]?
   archived : Result[Unit, String]?
-  skills : Result[Unit, String]?
   new_chat_requested : Bool
   revision : Int32
 } derive(Eq)
@@ -37,7 +36,6 @@ fn AppNavigation::empty() -> AppNavigation {
     browser_ready: false,
     sessions: None,
     archived: None,
-    skills: None,
     new_chat_requested: false,
     revision: 0,
   }

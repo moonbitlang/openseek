@@ -4421,16 +4421,7 @@ fn update_msg(
           api_setup_open: false,
         },
       )
-    CloseManagementDialog => {
-      let next = { ..model, management_dialog: None, }
-      if model.navigation.location.map_or(false, location => {
-          management_link_dialog(location.target) is Some(_)
-        }) {
-        finish_management_link(next)
-      } else {
-        (@cmd.none, next)
-      }
-    }
+    CloseManagementDialog => (@cmd.none, { ..model, management_dialog: None, })
     Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
       (

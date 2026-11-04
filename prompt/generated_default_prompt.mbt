@@ -720,6 +720,7 @@ fn default_prompt() -> String {
     #|```text
     #|.
     #|├── artifact
+    #|│   └── rabbita
     #|├── desktop-proton
     #|├── diagrams
     #|├── doc

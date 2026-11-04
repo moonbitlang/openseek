@@ -38,23 +38,23 @@ test "Cloud routes resolve accounts at activation" {
 test "device identity is independent of target validity" {
   for
     path in [
-      "/device/%68ost/settings", "/device/%68ost/unknown", "/device/host/chat/session/%GG",
+      "/device/%68ost/chat", "/device/%68ost/unknown", "/device/host/chat/session/%GG",
     ] {
     assert_eq(@routes.device(path), Some("host"))
   }
-  assert_eq(@routes.device("/device/a%2fb/skills"), Some("a/b"))
-  assert_eq(@routes.device("/device/a%252Fb/skills"), Some("a%2Fb"))
+  assert_eq(@routes.device("/device/a%2fb/chat"), Some("a/b"))
+  assert_eq(@routes.device("/device/a%252Fb/chat"), Some("a%2Fb"))
   for
     path in [
-      "/console/", "/device//skills", "/device/%GG/skills", "/device/%00/skills",
-      "/device/%2e/skills", "/device/host?other/skills", "/device/host\\other/skills",
+      "/console/", "/device//chat", "/device/%GG/chat", "/device/%00/chat",
+      "/device/%2e/chat", "/device/host?other/chat", "/device/host\\other/chat",
     ] {
     assert_eq(@routes.device(path), None)
   }
 }
 
 ///|
-test "work targets roundtrip and legacy management targets are input-only" {
+test "work targets roundtrip without interpreting encoded separators" {
   let targets : Array[@routes.Target] = [
     Chat,
     ChatNew,
@@ -70,18 +70,6 @@ test "work targets roundtrip and legacy management targets are input-only" {
     guard location.path() is Some(path) else { fail("device route missing") }
     assert_true(@routes.parse(path) is Ok(found) && found == location)
   }
-  for
-    (suffix, target) in [
-      ("settings", @routes.Settings),
-      ("skills", @routes.Skills),
-      ("skills/installed/local%2Fskill", @routes.InstalledSkill("local/skill")),
-      ("skills/market/acme%2Ftool%401.0", @routes.MarketSkill("acme/tool@1.0")),
-      ("schedules", @routes.Schedules),
-    ] {
-    let location : @routes.Location = { device: Some("d_1"), target, }
-    assert_true(@routes.parse("/device/d_1/" + suffix) == Ok(location))
-    assert_eq(location.path(), None)
-  }
 }
 
 ///|
@@ -91,7 +79,8 @@ test "invalid routes remain distinct from unrelated links" {
     path in [
       "/device/d/chat/session/", "/device/d/chat/session/%GG", "/device/d/chat/session/%FF",
       "/device/d/chat/session/%00", "/device/d/chat/session/..", "/device/d/unknown",
-      "/device//skills",
+      "/device//chat", "/device/d/settings", "/device/d/skills", "/device/d/schedules",
+      "/device/d/skills/installed/local%2Fskill", "/device/d/skills/market/acme%2Ftool%401.0",
     ] {
     assert_true(@routes.parse(path) is Err(InvalidRoute))
   }

@@ -30,7 +30,8 @@ test('an incompatible host is reported on Settings, not only in a conversation',
   const app = new DesktopBrowserHarness(page);
   app.hostProtocol = 0;
   await app.install();
-  await page.goto('/device/device-a/settings');
+  await app.goto();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const gate = page.getByRole('dialog', { name: 'Settings', exact: true });
   await expect(gate.getByRole('heading', { name: 'Device unavailable', exact: true })).toBeVisible();
   await expect(gate.getByText("This computer runs a SeekMoon version this page can't control.", { exact: false })).toBeVisible();

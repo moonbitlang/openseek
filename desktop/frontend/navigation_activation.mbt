@@ -29,11 +29,6 @@ fn activate_navigation(
   }
   let model = { ..model, screen: navigation_screen(location.target), }
   guard model.navigation.phase is Waiting else { return (@cmd.none, model) }
-  let model = if management_link_dialog(location.target) is Some(dialog) {
-    { ..model, management_dialog: Some(dialog), }
-  } else {
-    model
-  }
   if location.target is Cloud {
     let next = {
       ..model,
@@ -110,11 +105,6 @@ fn activate_navigation(
       },
     )
   }
-  if location.target is Settings {
-    let (command, next) = update_msg(dispatch, OpenSetup, model)
-    let (replace, next) = finish_management_link(next)
-    return (@cmd.batch([command, replace]), next)
-  }
   // Browser authentication and device gates own connectivity UI. Do not turn
   // an unconnected or not-yet-listed target into a missing target.
   guard location.device is Some(_) &&
@@ -139,16 +129,7 @@ fn activate_navigation(
     }
   }
   let (command, next, phase) = match location.target {
-    Cloud | CloudSession(..) | CloudDraft(..) | Settings =>
-      (@cmd.none, model, Active)
-    Schedules => {
-      let (cmd, next) = open_schedules(dispatch, model)
-      (cmd, next, Active)
-    }
-    Skills => {
-      let (cmd, next) = update_msg(dispatch, OpenSkills, model)
-      (cmd, next, Active)
-    }
+    Cloud | CloudSession(..) | CloudDraft(..) => (@cmd.none, model, Active)
     Chat | Codex => {
       let target : @routes.Target = if location.target is Chat {
         ChatNew
@@ -290,56 +271,7 @@ fn activate_navigation(
       } else {
         return replace_with_new_navigation(dispatch, model, CodexNew)
       }
-    InstalledSkill(id) | MarketSkill(id) as target => {
-      let detail : @skills.Detail = if target is InstalledSkill(_) {
-        InstalledRef(id)
-      } else {
-        MarketRef(id)
-      }
-      if target is InstalledSkill(_) && model.navigation.skills is None {
-        return (@cmd.none, model)
-      }
-      if target is InstalledSkill(_) &&
-        model.navigation.skills is Some(Err(message)) {
-        return (
-          @cmd.none,
-          {
-            ..model,
-            navigation: { ..model.navigation, phase: Failed(message), },
-          },
-        )
-      }
-      let (cmd, skills, resolution) = model.skills.open_detail(
-        dispatch.map(msg => Skills(msg)),
-        model.skills_input(),
-        detail,
-      )
-      (
-        cmd,
-        { ..model, skills, management_dialog: Some(Skills), },
-        match resolution {
-          Waiting => Waiting
-          Opened => Active
-          Missing => Missing
-          Failed(message) => Failed(message)
-        },
-      )
-    }
   }
   let next = { ..next, navigation: { ..next.navigation, phase, }, }
-  if phase is Active &&
-    location.target is (Schedules | Skills | InstalledSkill(_) | MarketSkill(_)) {
-    let (replace, next) = finish_management_link(next)
-    return (@cmd.batch([command, replace]), next)
-  }
   (command, next)
-}
-
-///|
-// Old management links open a dialog, then leave only the work URL in history.
-fn finish_management_link(model : Model) -> (@cmd.Cmd, Model) {
-  guard model.navigation_location() is Some(location) else {
-    return (@cmd.none, model)
-  }
-  navigation_visit(model, location, replace=true)
 }

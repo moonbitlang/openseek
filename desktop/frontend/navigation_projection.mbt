@@ -55,13 +55,11 @@ fn navigation_screen(target : @routes.Target) -> Screen {
     | CloudSession(..)
     | CloudDraft(..) => Chat
     Codex | CodexNew | Thread(_) | CodexDraft(_) => Codex
-    Settings | Skills | InstalledSkill(_) | MarketSkill(_) | Schedules => Chat
   }
 }
 
 ///|
-/// Legacy management links open a dialog without abandoning a pending draft.
-/// A different work destination cancels its project adoption.
+/// A different work destination cancels the pending draft's project adoption.
 fn Model::project_adoption_at(
   self : Model,
   location : @routes.Location,
@@ -74,8 +72,6 @@ fn Model::project_adoption_at(
     return None
   }
   match location.target {
-    Settings | Skills | InstalledSkill(_) | MarketSkill(_) | Schedules =>
-      self.pending_project_adoption
     CodexDraft(target) if target == id => self.pending_project_adoption
     CodexNew if self.codex.active_id() == Some(id) &&
       self.codex.navigation_target() is CodexNew =>

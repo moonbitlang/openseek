@@ -123,11 +123,6 @@ fn update_navigation(
         model.focused,
         next,
       )
-      let (skills, next) = update_msg(
-        dispatch,
-        Skills(@skills.RefreshCatalog),
-        next,
-      )
       let (activate, next) = activate_navigation(dispatch, {
         ..next,
         navigation: {
@@ -135,20 +130,9 @@ fn update_navigation(
           phase: Waiting,
           sessions: None,
           archived: None,
-          skills: None,
         },
       })
-      (
-        @cmd.batch([
-          projects,
-          live,
-          archived,
-          skills,
-          fetch_installed_skills(dispatch, model.focused),
-          activate,
-        ]),
-        next,
-      )
+      (@cmd.batch([projects, live, archived, activate]), next)
     }
   }
 }

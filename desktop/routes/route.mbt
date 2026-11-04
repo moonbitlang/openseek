@@ -88,11 +88,6 @@ pub fn parse(path : String) -> Result[Location, RouteError] {
     ["codex", "new"] => CodexNew
     ["codex", "thread", id] => Thread(id)
     ["codex", "draft", id] => CodexDraft(id)
-    ["settings"] => Settings
-    ["skills"] => Skills
-    ["skills", "installed", id] => InstalledSkill(id)
-    ["skills", "market", source] => MarketSkill(source)
-    ["schedules"] => Schedules
     _ => return Err(InvalidRoute)
   }
   Ok({ device: Some(device), target, })
@@ -105,8 +100,7 @@ pub fn device_entry_path(device : String) -> String {
 }
 
 ///|
-/// Encode a work destination; legacy management links are accepted only on input.
-/// Account identity never enters the URL.
+/// Encode a work destination; account identity never enters the URL.
 pub fn Location::path(self : Location) -> String? {
   match self.target {
     Cloud => return Some("/cloud")
@@ -126,8 +120,6 @@ pub fn Location::path(self : Location) -> String? {
     CodexNew => "codex/new"
     Thread(id) => "codex/thread/" + @percent.encode(id)
     CodexDraft(id) => "codex/draft/" + @percent.encode(id)
-    Settings | Skills | InstalledSkill(_) | MarketSkill(_) | Schedules =>
-      return None
   }
   Some("/device/" + @percent.encode(device) + "/" + suffix)
 }

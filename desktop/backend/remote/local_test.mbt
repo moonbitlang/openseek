@@ -24,7 +24,7 @@ async test "local console opens pages and command sockets without credentials" {
     // no prior visit to a special entry URL or retained browser state.
     for
       path in [
-        "/device/host/chat", "/device/host/chat/new", "/device/host/settings",
+        "/device/host/chat", "/device/host/chat/new", "/device/host/codex/new",
       ] {
       let (response, body) = @http.get(origin + path)
       assert_eq(response.code, 200)
@@ -123,20 +123,22 @@ async test "local login returns canonical shared routes for this device only" {
     let origin = console.origin()
     for
       (destination, expected) in [
-        ("/device/host/settings", "/device/host/settings"),
-        ("/device/%68ost/%73kills", "/device/host/skills"),
-        (
-          "/device/host/skills/market/acme%2ftool%401.0", "/device/host/skills/market/acme%2Ftool%401.0",
-        ),
+        ("/device/host/settings", "/device/host/chat"),
+        ("/device/%68ost/%73kills", "/device/host/chat"),
+        ("/device/host/schedules", "/device/host/chat"),
+        ("/device/host/skills/installed/local%2Fskill", "/device/host/chat"),
+        ("/device/host/skills/market/acme%2ftool%401.0", "/device/host/chat"),
+        ("/device/%68ost/%63hat", "/device/host/chat"),
+        ("/device/host/chat/session/a%2fb", "/device/host/chat/session/a%2Fb"),
         (
           "/device/host/chat/session/not-loaded", "/device/host/chat/session/not-loaded",
         ),
         (
           "/device/host/chat/new?workspace=%2Fwork%2Bspace", "/device/host/chat/new?workspace=%2Fwork%2Bspace",
         ),
-        ("/device/other/skills", "/device/host/chat"),
-        ("https://example.com/device/host/skills", "/device/host/chat"),
-        ("//example.com/device/host/skills", "/device/host/chat"),
+        ("/device/other/chat", "/device/host/chat"),
+        ("https://example.com/device/host/chat", "/device/host/chat"),
+        ("//example.com/device/host/chat", "/device/host/chat"),
         ("/device/host/not-a-page", "/device/host/chat"),
         ("/device/host/chat/session/%2e%2e", "/device/host/chat"),
         ("/device/host/chat/session/a\\b", "/device/host/chat"),
@@ -158,7 +160,7 @@ async test "local login returns canonical shared routes for this device only" {
     let (invalid_header, _) = @http.get(
       origin +
       "/v1/auth/login?return_to=" +
-      @uri.encode_component("/device/host/settings?x=\r\nInjected: yes"),
+      @uri.encode_component("/device/host/chat?x=\r\nInjected: yes"),
     )
     assert_eq(invalid_header.code, 400)
     assert_eq(invalid_header.headers.get("Location"), None)

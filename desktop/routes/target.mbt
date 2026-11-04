@@ -15,11 +15,6 @@ pub(all) enum Target {
   CodexNew
   Thread(String)
   CodexDraft(String)
-  Settings
-  Skills
-  InstalledSkill(String)
-  MarketSkill(String)
-  Schedules
 } derive(Eq)
 
 ///|

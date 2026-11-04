@@ -476,7 +476,7 @@ test "stable application paths serve the application document" {
     is ApplicationPage,
   )
   assert_true(
-    route(Get, "/device/host/skills/market/a%2Fb%401", entry="index.html")
+    route(Get, "/device/host/chat/session/a%2Fb%401", entry="index.html")
     is ApplicationPage,
   )
   assert_true(

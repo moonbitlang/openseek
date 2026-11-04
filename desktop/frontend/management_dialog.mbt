@@ -1,14 +1,4 @@
 ///|
-fn management_link_dialog(target : @routes.Target) -> ManagementDialog? {
-  match target {
-    Settings => Some(Settings)
-    Skills | InstalledSkill(_) | MarketSkill(_) => Some(Skills)
-    Schedules => Some(Schedules)
-    _ => None
-  }
-}
-
-///|
 fn Model::codex_work_selected(self : Model) -> Bool {
   self.screen is Codex
 }
@@ -43,7 +33,7 @@ fn management_dialog_view(
       @html.div(class="management-dialog-header", [
         @html.div(class="management-dialog-heading", [
           if model.management_dialog is Some(Skills) &&
-            model.skills.detail() is Some(_) {
+            model.skills.detail_open() {
             @html.button(
               class="icon-button",
               attrs=@html.Attrs::build().aria_label(
@@ -77,15 +67,7 @@ fn management_dialog_view(
             ),
           ]
         Some(Settings) => [settings_page(dispatch, model)]
-        Some(Skills) =>
-          if model.navigation.location.map_or(false, location => {
-              management_link_dialog(location.target) is Some(_)
-            }) &&
-            navigation_notice(dispatch, model) is Some(notice) {
-            [notice]
-          } else {
-            [skills_html]
-          }
+        Some(Skills) => [skills_html]
         Some(Schedules) => [schedules_page(dispatch, model)]
         None => []
       },

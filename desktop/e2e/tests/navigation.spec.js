@@ -48,56 +48,35 @@ test('management dialogs preserve the work surface, draft and browser entry', as
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const target of ['settings', 'skills', 'schedules', 'skills/market/example%2Froute-skill%401.0.0']) {
-  test(`old ${target} links open dialogs without retaining a management page`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page); skills(app);
-    await app.install(); await page.goto(path(target));
-    await expect(dialog(page)).toBeVisible();
-    if (target.includes('/market/')) await expect(page.locator('.skill-preview-markdown')).toContainText('Detail reached.');
-    await expect(page).toHaveURL(/\/chat\/(new|draft\/[^/]+)$/);
-    const url = page.url();
-    await page.keyboard.press('Escape');
-    await expect(dialog(page)).not.toBeVisible();
-    await expect(page.locator('#task')).toBeVisible();
-    await page.reload();
-    await expect(dialog(page)).not.toBeVisible();
-    await expect(page).toHaveURL(url);
-    expect(app.pageErrors).toEqual([]);
+test('local console opens a session without a device query', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  let signInChecks = 0;
+  await page.route('**/v2/auth/**', route => route.fulfill({ status: 404 }));
+  await page.route('**/v1/auth/me', route => {
+    signInChecks += 1;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ login: 'local' }) });
   });
-}
-
-for (const target of ['settings', 'chat/session/session-1', 'skills/market/example%2Froute-skill%401.0.0']) {
-  test(`local console opens ${target} without a device query`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page); skills(app);
-    await app.install();
-    let signInChecks = 0;
-    await page.route('**/v2/auth/**', route => route.fulfill({ status: 404 }));
-    await page.route('**/v1/auth/me', route => {
-      signInChecks += 1;
-      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ login: 'local' }) });
+  await page.route('**/v1/devices', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ devices: [{ id: 'host', name: 'Local test host', online: true }] }) }));
+  await page.routeWebSocket('**/v1/devices/host/ws', socket => {
+    app.socketURLs.push(socket.url());
+    socket.onMessage(async message => {
+      const request = JSON.parse(message.toString()); app.requests.push(request);
+      if (request.id !== undefined) socket.send(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: await app.replyFor(request) }));
     });
-    await page.route('**/v1/devices', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ devices: [{ id: 'host', name: 'Local test host', online: true }] }) }));
-    await page.routeWebSocket('**/v1/devices/host/ws', socket => {
-      app.socketURLs.push(socket.url());
-      socket.onMessage(async message => {
-        const request = JSON.parse(message.toString()); app.requests.push(request);
-        if (request.id !== undefined) socket.send(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: await app.replyFor(request) }));
-      });
-      socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: app.hostProtocol } }));
-    });
-    await page.goto(`/device/host/${target}`);
-    await expect.poll(() => signInChecks).toBe(1);
-    if (target.startsWith('chat/')) await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
-    else await expect(dialog(page)).toBeVisible();
-    await page.reload();
-    await expect.poll(() => signInChecks).toBe(2);
-    await expect(page.locator('#task')).toBeVisible();
-    expect(new URL(page.url()).search).toBe('');
-    await expect.poll(() => app.socketURLs.length).toBe(2);
-    expect(app.ticketRequests).toEqual([]);
-    expect(app.pageErrors).toEqual([]);
+    socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: app.hostProtocol } }));
   });
-}
+  await page.goto('/device/host/chat/session/session-1');
+  await expect.poll(() => signInChecks).toBe(1);
+  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect.poll(() => signInChecks).toBe(2);
+  await expect(page.locator('#task')).toBeVisible();
+  expect(new URL(page.url()).search).toBe('');
+  await expect.poll(() => app.socketURLs.length).toBe(2);
+  expect(app.ticketRequests).toEqual([]);
+  expect(app.pageErrors).toEqual([]);
+});
 
 for (const restored of [false, true]) {
   test(`encoded device conversation links share canonical browser history (restored=${restored})`, async ({ page }) => {
@@ -171,19 +150,6 @@ test('session deep links wait for catalogs and distinguish missing from failed l
   await page.goto(path('chat/session/does-not-exist'));
   await expect(page.locator('.navigation-notice')).toContainText('catalog unavailable');
   await expect(page.locator('.navigation-notice')).not.toContainText('no longer exists');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('market detail reports catalog failure and retries only on request', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page); skills(app);
-  app.rpcErrors.set('skills.catalog', 'catalog unavailable');
-  await app.install(); await page.goto(path('skills/market/example%2Froute-skill%401.0.0'));
-  await expect(dialog(page).locator('.navigation-notice')).toContainText('catalog unavailable');
-  expect(app.requests.filter(r => r.method === 'skills.catalog')).toHaveLength(1);
-  app.rpcErrors.delete('skills.catalog');
-  await dialog(page).getByRole('button', { name: 'Retry', exact: true }).click();
-  await expect(page.locator('.skill-preview-markdown')).toContainText('Detail reached.');
-  expect(app.requests.filter(r => r.method === 'skills.catalog')).toHaveLength(2);
   expect(app.pageErrors).toEqual([]);
 });
 
