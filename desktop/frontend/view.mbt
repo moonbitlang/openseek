@@ -535,137 +535,6 @@ fn Model::sidebar_component_sections(
     entries: projects,
   }
   sections.push(work)
-  // Archived conversations fold behind a collapsed section at the end of the
-  // list. Their records live in the store's `archived` twin, so they come
-  // from the host's archived reply, not the live list; each row carries a
-  // restore control and the permanent delete instead of the archive one.
-  // A parent and its archived sub-run records are one conversation: restore
-  // or delete the root row and the host moves the complete family together.
-  // An old orphan child still owns a row and can therefore be restored.
-  let archived_entries : Array[@section.Entry] = []
-  let archived = dev.archived.filter(item => {
-    !dev.is_chat_workspace(item.workspace)
-  })
-  for tree in @transcript.session_tree(archived) {
-    let item = tree.item
-    let active = self.focused == dev.channel &&
-      self.active_session == item.id &&
-      self.find_conversation(dev.channel, item.id) is Some(conv) &&
-      conv.is_archived_read_only()
-    archived_entries.push(
-      @section.Conversation(
-        self.decorate_conversation_input({
-          id: @conversation.Id(
-            source=@conversation.OpenSeekArchived,
-            channel~,
-            conversation=item.id,
-            root=item.workspace.path,
-          ),
-          title: item.id,
-          label: session_item_label(item),
-          nested: false,
-          subrun: false,
-          active,
-          loading: false,
-          load_failed: false,
-          running: false,
-          openable: true,
-          rename: None,
-          run_mark: @conversation.NoRunMark,
-          trailing: [
-            @conversation.Restore(title=shell_text(self.locale, RestoreHint)),
-            @conversation.Delete(
-              title=shell_text(self.locale, DeleteArchivedHint),
-            ),
-          ],
-          children: [],
-        }),
-      ),
-    )
-  }
-  if dev.channel == self.focused {
-    for
-      entry in self.codex.archived_sidebar_entries(
-        locale=self.locale,
-        dev.channel,
-      ) {
-      if entry is @section.Conversation(row) &&
-        row.id
-        .root()
-        .bind(path => @resource.of_path(dev.channel, path))
-        .map_or(false, path => dev.is_chat_workspace(path)) {
-        continue
-      }
-      archived_entries.push(
-        match entry {
-          @section.Conversation(input) =>
-            @section.Conversation(self.decorate_conversation_input(input))
-          other => other
-        },
-      )
-    }
-  }
-  if !self.session_search.query().is_blank() {
-    for entry in archived_entries {
-      guard entry is @section.Conversation(row) else { continue }
-      let root = row.id().root()
-      if root is Some(root) {
-        let row = { ..row, nested: true, }
-        let mut found = false
-        for index, entry in projects {
-          if entry is @section.Project(project) && project.id().root() == root {
-            projects[index] = @section.Project({
-              ..project,
-              conversations: [..project.conversations, row],
-            })
-            found = true
-            break
-          }
-        }
-        if !found {
-          projects.push(
-            @section.Project({
-              id: @project.Id(source="openseek.projects", channel~, root~),
-              title: root,
-              label: @resource.of_path(dev.channel, root).map_or(root, path => {
-                @resource.label(path)
-              }),
-              host: if dev.channel == Local {
-                None
-              } else {
-                Some({
-                  name: self.console.roster
-                  .iter()
-                  .find_first(host => host.id == dev.channel.device_id())
-                  .map_or("Remote", host => host.name),
-                  online: dev.bridge is Connected,
-                  details: @interop.is_native_ssh(dev.channel),
-                })
-              },
-              activation: None,
-              can_start: false,
-              managed: false,
-              conversations: [row],
-            }),
-          )
-        }
-      }
-    }
-    archived_entries.clear()
-  }
-  sections.push({
-    id: @section.Id(source="archived", channel~),
-    label: @sidebar_messages.text(
-      self.locale,
-      ArchivedChats(archived_entries.length()),
-    ),
-    initially_collapsed: true,
-    // Opening an archived transcript never force-reveals the section; its
-    // fold stays purely user-controlled, as before.
-    activation: None,
-    action: None,
-    entries: archived_entries,
-  })
   sections
 }
 
@@ -823,7 +692,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
     schedules_active: self.management_dialog is Some(Schedules),
     skills_active: self.management_dialog is Some(Skills),
-    settings_active: self.management_dialog is Some(Settings),
+    settings_active: self.management_dialog is Some(Settings | ArchivedChats),
     account,
   }.filtered()
 }
@@ -1756,6 +1625,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     ]),
   ]
+  groups.push(archived_chats_settings(dispatch, model))
   // Self-update swaps the bundle under the desktop process, and the relay
   // sign-in registers the machine the host runs on; from a browser both
   // sections could only break things for whoever is at the machine.
@@ -2333,10 +2203,10 @@ fn view(
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
   quick_open_and_context_menu : (@html.Html, @html.Html, @html.Html),
-  skills_and_workspace_settings : (@html.Html, @html.Html),
+  management_pages : (@html.Html, @html.Html, @html.Html),
 ) -> @html.Html {
   let (quick_open_html, context_menu_html, transfer_menu_html) = quick_open_and_context_menu
-  let (skills_html, workspace_settings_html) = skills_and_workspace_settings
+  let (skills_html, workspace_settings_html, archived_chats_html) = management_pages
   // Until the relay session and its device exist, the console frame —
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
   // receive UI work.
@@ -2652,7 +2522,7 @@ fn view(
       right_panel_html,
       terminal_html,
     ]),
-    management_dialog_view(dispatch, model, skills_html),
+    management_dialog_view(dispatch, model, skills_html, archived_chats_html),
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,
@@ -2737,7 +2607,8 @@ fn view(
       }.render(locale=model.locale),
     )
   }
-  if model.delete_confirm is Some(confirm) {
+  if !(model.management_dialog is Some(ArchivedChats)) &&
+    model.delete_confirm is Some(confirm) {
     children.push(
       delete_modal(locale=model.locale, dispatch, confirm, model.cloud),
     )
@@ -2883,18 +2754,11 @@ test "archived families collapse while a live orphan child stays archivable" {
     ..dev,
     archived: [archived_item("chat"), archived_item("chat-sr-1")],
   })
-  let archived_sections = archived_model.sidebar_component_sections(
-    archived_model.dev(),
-  )
-  let mut archived_entries : Array[@section.Entry] = []
-  for section in archived_sections {
-    if section.id().source() == "archived" {
-      archived_entries = section.entries
-    }
-  }
-  assert_eq(archived_entries.length(), 1)
-  guard archived_entries[0] is @section.Conversation(archived) else {
-    fail("expected archived parent conversation")
+  // The archived family is one row on the archived page, filed under the
+  // project its record belongs to.
+  guard archived_model.archived_chat_groups()
+    is [{ kind: Project(_), rows: [archived], }] else {
+    fail("expected one archived parent conversation")
   }
   assert_eq(archived.id().conversation(), "chat")
   assert_true(
@@ -3068,6 +2932,7 @@ fn Model::chat_sidebar_sections(
   for row in ordered_by_recency(self.cloud_chat_rows()) {
     entries.push(@section.Conversation(row))
   }
+  // Archived Cloud chats live on Settings' archived page.
   let chats : @section.Input = {
     id: @section.Id(source="cloud.chats", channel~),
     label: @sidebar_messages.text(self.locale, Chats),
@@ -3079,23 +2944,7 @@ fn Model::chat_sidebar_sections(
     }),
     entries,
   }
-  let archived = ordered_by_recency(self.cloud_chat_rows(archived=true)).map(row => {
-    @section.Conversation(row)
-  })
-  [
-    chats,
-    {
-      id: @section.Id(source="archived", channel~),
-      label: @sidebar_messages.text(
-        self.locale,
-        ArchivedChats(archived.length()),
-      ),
-      initially_collapsed: true,
-      activation: None,
-      action: None,
-      entries: archived,
-    },
-  ]
+  [chats]
 }
 
 ///|

@@ -615,6 +615,22 @@ export class CloudHarness {
     return this.page.locator(`[id="conversation:cloud.live:${this.userId}:${id}::open"], [id="conversation:cloud.archived:${this.userId}:${id}::open"]`);
   }
 
+  // Archived conversations are managed within the Settings dialog.
+  async openArchivedChats() {
+    await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await this.page.getByRole('button', { name: 'Manage', exact: true }).click();
+    await expect(this.page.getByRole('dialog', { name: 'Archived chats', exact: true })).toBeVisible();
+  }
+
+  archivedRow(id) {
+    return this.page.getByRole('dialog', { name: 'Archived chats', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
+  }
+
+  async openArchived(id) {
+    await this.openArchivedChats();
+    await this.archivedRow(id).getByRole('button', { name: new RegExp(`^${this.titles.get(id)}`) }).click();
+  }
+
   async open(id = sessionA) {
     await this.row(id).click();
     await expect(this.row(id)).toHaveAttribute('aria-current', 'true');

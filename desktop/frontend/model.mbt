@@ -947,6 +947,7 @@ priv enum ManagementDialog {
   Skills
   Schedules
   Settings
+  ArchivedChats
 } derive(Eq)
 
 ///|
@@ -1767,6 +1768,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
+  OpenArchivedChats
   CloseManagementDialog
   OpenLocalApiSettings
   Navigation(NavigationMsg)
