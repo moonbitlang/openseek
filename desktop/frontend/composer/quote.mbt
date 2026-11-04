@@ -123,6 +123,8 @@ fn Model::quote_replied(
   let draft = match reply.content {
     OfficeSelection(materialized) =>
       entry.draft.with_office_selection(Some(materialized))
+    Annotation({ ref_: @mention_context.InteractiveAnswer(snapshot), .. }) =>
+      entry.draft.with_artifact_snapshot(snapshot)
     Annotation(mention) => entry.draft.with_mention(mention)
     Text(..) => entry.draft
   }

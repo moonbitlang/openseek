@@ -131,7 +131,7 @@
 
   .content.terminal-open
     .composer-inner:has(> .composer-actions :is(.stop-button, .composer-followup:not(:empty))) {
-    grid-template-rows: minmax(2.5rem, 1fr) auto;
+    grid-template-rows: minmax(2.25rem, 1fr) auto;
     min-height: 6.25rem;
 
     &:has(.mention-tray:not(:empty)) {
@@ -164,10 +164,10 @@
    context. */
 .content.terminal-open .composer-inner {
   flex: 0 1 auto;
-  /* One textarea line at either text size. The card minimum also includes
-     the border and vertical padding. */
-  grid-template-rows: minmax(2.5rem, 1fr);
-  min-height: 3.75rem;
+  /* Match the ordinary single-line draft and attachment button. Keep a
+     compact floor while long drafts shrink beside a tall terminal. */
+  grid-template-rows: minmax(2.25rem, 1fr);
+  min-height: 3.5rem;
   width: 100%;
 }
 
@@ -203,9 +203,6 @@
 
 .content.terminal-open .composer-input > textarea {
   flex: 0 1 auto;
-  /* Exactly one line plus the vertical padding, at desktop or mobile text
-     size (33.6px for 16px text, the row minimum above). */
-  min-height: calc(1lh + var(--space-4));
 }
 
 /* mention chips ($ skills, # symbols) above the textarea; the tray is

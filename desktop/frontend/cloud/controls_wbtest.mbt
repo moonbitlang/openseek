@@ -181,6 +181,7 @@ test "Cloud dropped queued steer restores its complete editable content" {
         attachments: [],
         acknowledged: true,
         unknown: false,
+        result_id: None,
       },
     ],
   }

@@ -17,7 +17,7 @@ pub fn file_target(
     is Some(file) else {
     return None
   }
-  if @workspace_file_ref.artifact_path(file.path) is Some(relative) {
+  if file.artifact_path() is Some(relative) {
     guard workspace is Some(root) &&
       !session.is_empty() &&
       session != "." &&

@@ -817,6 +817,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     notices,
     locale: self.locale,
     mode: self.sidebar_mode,
+    has_host: self.has_host(),
     sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
@@ -1505,6 +1506,7 @@ fn api_settings_rows(
 /// saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let locale = model.locale
+  let has_host = model.has_host()
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
   // All providers use the composer's model selector; API setup only chooses
@@ -1558,8 +1560,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       []
     },
-    @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
-    @settings.group(icon_key, "API", api_rows),
+    ..if has_host {
+      [
+        @settings.group(
+          icon_sparkle,
+          @settings.text(locale, Engine),
+          engine_rows,
+        ),
+        @settings.group(icon_key, "API", api_rows),
+      ]
+    },
     @settings.group(
       icon_key,
       @settings.text(locale, Account) +
@@ -1567,11 +1577,15 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @settings.text(locale, RemoteAccess),
       remote_access_rows(dispatch, model),
     ),
-    @settings.group(
-      icon_extensions,
-      "Codex",
-      codex_account_rows(dispatch, model),
-    ),
+    ..if has_host {
+      [
+        @settings.group(
+          icon_extensions,
+          "Codex",
+          codex_account_rows(dispatch, model),
+        ),
+      ]
+    },
     @settings.group(icon_layout, @settings.text(locale, Interface), [
       @settings.row(
         @settings.text(locale, Language),
@@ -1778,21 +1792,27 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @page_shell.body(class="settings-page", [
     @html.div(class="settings-header", [
       @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
-      @html.div(
-        class="settings-subtitle",
-        if !settings_loaded {
-          @settings.text(locale, LoadingSettings)
-        } else if ready {
-          @settings.text(locale, RuntimeSettings)
-        } else {
-          match model.api_provider {
-            Deepseek => @settings.text(locale, DeepseekKey)
-            Glm => @settings.text(locale, GlmKey)
-            OpenRouter => @settings.text(locale, OpenRouterKey)
-            Custom => @settings.text(locale, CustomEndpoint)
-          }
-        },
-      ),
+      // The subtitle describes host runtime settings, which a page without a
+      // host never loads.
+      if has_host {
+        @html.div(
+          class="settings-subtitle",
+          if !settings_loaded {
+            @settings.text(locale, LoadingSettings)
+          } else if ready {
+            @settings.text(locale, RuntimeSettings)
+          } else {
+            match model.api_provider {
+              Deepseek => @settings.text(locale, DeepseekKey)
+              Glm => @settings.text(locale, GlmKey)
+              OpenRouter => @settings.text(locale, OpenRouterKey)
+              Custom => @settings.text(locale, CustomEndpoint)
+            }
+          },
+        )
+      } else {
+        @html.nothing
+      },
     ]),
     @html.div(class="settings", groups),
   ])
@@ -1967,6 +1987,27 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
 }
 
 ///|
+fn Model::terminal_toggle(self : Model, toggle : @cmd.Cmd) -> @html.Html {
+  @html.button(
+    class=if self.terminal.is_open() {
+      "panel-toggle terminal-toggle active"
+    } else {
+      "panel-toggle terminal-toggle"
+    },
+    title=shell_text(
+      self.locale,
+      if self.terminal.is_open() {
+        HideTerminal
+      } else {
+        ShowTerminal
+      },
+    ),
+    on_click=toggle,
+    icon(icon_terminal),
+  )
+}
+
+///|
 /// Top bar: conversation identity on the left (session id and workspace in
 /// the tooltip), live run state and conversation controls on the right.
 fn conversation_header(
@@ -2004,22 +2045,7 @@ fn conversation_header(
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
   if !model.narrow {
-    items.push(
-      @html.button(
-        class=if model.terminal.is_open() {
-          "panel-toggle terminal-toggle active"
-        } else {
-          "panel-toggle terminal-toggle"
-        },
-        title=if model.terminal.is_open() {
-          shell_text(model.locale, HideTerminal)
-        } else {
-          shell_text(model.locale, ShowTerminal)
-        },
-        on_click=toggle_terminal,
-        icon(icon_terminal),
-      ),
-    )
+    items.push(model.terminal_toggle(toggle_terminal))
   }
   // The overview is the only place the conversation's connectors are shown,
   // so the narrow layout keeps it: there it is always the panel over the
@@ -2226,8 +2252,12 @@ fn app_shell_class(sidebar_open : Bool) -> String {
 /// navigation never closes terminal state or PTYs, but non-conversation pages
 /// have no active workspace surface to place the panel under.
 fn Model::terminal_panel_visible(self : Model) -> Bool {
-  !self.cloud_selected() &&
   self.terminal.is_open() &&
+  (
+    !self.cloud_selected() ||
+    self.cloud_identity() is Some(_) ||
+    self.cloud_draft_identity() is Some(_)
+  ) &&
   (
     self.screen is Chat ||
     (
@@ -2356,6 +2386,17 @@ fn view(
           },
           if model.cloud_identity() is Some(_) && !model.narrow {
             model.detail_toggle(dispatch)
+          } else {
+            @html.nothing
+          },
+          if !model.narrow &&
+            model.account is Some(_) &&
+            !model.cloud_archived() &&
+            (
+              model.cloud_identity() is Some(_) ||
+              model.cloud_draft_identity() is Some(_)
+            ) {
+            model.terminal_toggle(toggle_terminal)
           } else {
             @html.nothing
           },
@@ -2997,6 +3038,29 @@ fn Model::chat_sidebar_sections(
         action: Some({
           title: @settings.text(self.locale, SignIn),
           disabled: self.remote_connecting,
+        }),
+      }),
+    )
+  } else if self.cloud.list_status is (@cloud.Retrying | @cloud.Failed) {
+    let loading = self.cloud.list_status is @cloud.Retrying
+    let label = shell_text(
+      self.locale,
+      if loading {
+        LoadingConversations
+      } else {
+        CannotLoadConversations
+      },
+    )
+    entries.push(
+      @section.Placeholder({
+        id: "cloud-list-status",
+        label,
+        class_name: "",
+        nested: false,
+        openable: false,
+        action: Some({
+          title: shell_text(self.locale, RetryLabel),
+          disabled: loading,
         }),
       }),
     )

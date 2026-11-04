@@ -27,17 +27,32 @@ visual treatment merely because the engine supports it.
 
 ### Palette playground
 
-Open [`../dev/theme-lab.html`](../dev/theme-lab.html) directly in a browser
-to compare light and dark presets, edit colors, and copy a replacement
-[`palette-light.css`](palette-light.css) or
-[`palette-dark.css`](palette-dark.css). No build step or network is needed;
-keep the HTML inside the checkout so its relative stylesheet link resolves.
-Drafts are saved in the browser's local storage; copy CSS to share a palette.
+From the repository root, run:
 
-The preview is an illustrative layout, not the production frontend. Its
-current presets read both palette files when the page loads. Other presets
-adapt their reference palettes to SeekMoon's semantic roles. Reset the current
-preset to discard a saved browser draft and see the file's colors.
+```sh
+node desktop/dev/theme-lab.mjs
+```
+
+The launcher builds the current browser frontend and opens
+[`../dev/theme-lab.html`](../dev/theme-lab.html) in Chromium (or installed
+Google Chrome when only the headless test browser is available). It reuses the
+[browser-test setup](../e2e/README.md) and transport fixtures: Rabbita renders
+the real application, including its composer, settings, menus, file viewer,
+and xterm terminal. Only the data sources are simulated; no real account,
+Host, shell, or model is connected. Native window chrome and system dialogs
+are outside this browser preview. The launcher's profile and palette drafts
+stay in the ignored `desktop/target/theme-lab-profile/` directory.
+
+The palette editor applies the existing CSS variables to that frontend
+without reloading it. Light/dark changes use the browser's system appearance;
+the development adapter also refreshes existing xterm instances when colors
+change within one mode. The application bundle itself is unchanged.
+
+Opening the HTML directly still allows editing presets and copying CSS, but
+shows launch instructions in place of the application preview. Current
+presets read both palette files when the page loads; other presets adapt
+their reference palettes to SeekMoon's semantic roles. Reset the current
+preset to discard its saved draft and see the file's colors.
 
 Copying does not modify the application. Replace the entire contents of
 the matching `palette-light.css` or `palette-dark.css` with the copied CSS,

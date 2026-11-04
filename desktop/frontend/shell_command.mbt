@@ -84,11 +84,12 @@ fn run_shell_command(
 ) -> (@cmd.Cmd, Model) {
   // The tab belongs to the command's conversation, which need not be the one
   // on screen by now: project that conversation, as a send does.
+  guard model.find_conversation(channel, session) is Some(conv) else {
+    return (@cmd.none, model)
+  }
   let target = {
-    ..model,
+    ..model.activate(channel, session, conv.project()),
     screen: Chat,
-    focused: channel,
-    active_session: session,
   }
   match
     model.terminal.run_command(
@@ -97,8 +98,11 @@ fn run_shell_command(
       shell=id,
       command~,
       on_screen=model.screen is Chat &&
-        model.focused == channel &&
-        model.active_session == session,
+        model
+        .conversation_selection()
+        .map_or(false, selected => {
+          selected.channel == channel && selected.session == session
+        }),
     ) {
     @terminal.CommandStarted(cmd, terminal) => (cmd, { ..model, terminal, })
     // A worktree created a moment ago is bound before its registry row
@@ -179,23 +183,53 @@ fn shell_command_finished(
   output : String,
   truncated : Bool,
 ) -> (@cmd.Cmd, Model) {
-  guard model.conversation_by_shell(shell) is Some(conv) &&
-    conv.shell_commands.iter().find_first(pending => pending.id == shell)
-    is Some(pending) else {
+  let host = model.conversation_by_shell(shell)
+  let cloud = model.cloud.conversations
+    .iter()
+    .find_first(pair => pair.1.shell_commands.any(p => p.id == shell))
+  let (owner, pending, model) = if host is Some(conv) {
+    let pending = conv.shell_commands
+      .iter()
+      .find_first(p => p.id == shell)
+      .unwrap()
+    (
+      @interop.Host({ channel: conv.device, session: conv.session_id, }),
+      pending,
+      model.replace_conversation({
+        ..conv,
+        shell_commands: conv.shell_commands.filter(p => p.id != shell),
+      }),
+    )
+  } else if cloud is Some((session, conv)) &&
+    model.cloud.user_id is Some(account) {
+    let pending = conv.shell_commands
+      .iter()
+      .find_first(p => p.id == shell)
+      .unwrap()
+    let conversations = model.cloud.conversations.copy()
+    conversations[session] = {
+      ..conv,
+      shell_commands: conv.shell_commands.filter(p => p.id != shell),
+    }
+    (
+      @interop.Cloud(account~, session~),
+      pending,
+      { ..model, cloud: { ..model.cloud, conversations, }, },
+    )
+  } else {
     return (@cmd.none, model)
   }
-  let conv = {
-    ..conv,
-    shell_commands: conv.shell_commands.filter(other => other.id != shell),
-  }
-  send_shell_result(
-    dispatch,
-    model.replace_conversation(conv),
-    conv,
-    @command_context.encode(
-      pending.command,
-      Ok({ exit_code, text: output, output_limit_reached: truncated, }),
-    ),
+  let text = @command_context.encode(
+    pending.command,
+    Ok({ exit_code, text: output, output_limit_reached: truncated, }),
+  )
+  (
+    model
+    .command_result_input(owner)
+    .map_or(@cmd.none, input => {
+      dispatch(ComposerCommandResult(@composer.Ready(input, shell, text)))
+    }),
+    model,
   )
 }
 
@@ -216,6 +250,7 @@ fn send_shell_result(
   model : Model,
   conv : Conversation,
   envelope : String,
+  recover~ : Bool = true,
 ) -> (@cmd.Cmd, Model) {
   let held = {
     ..conv,
@@ -235,7 +270,10 @@ fn send_shell_result(
     },
   }
   guard model.focused == conv.device else {
-    return (@cmd.none, model.replace_conversation(held))
+    return (
+      @cmd.none,
+      model.replace_conversation(if recover { held } else { conv }),
+    )
   }
   let target = {
     ..model.replace_conversation({
@@ -266,7 +304,11 @@ fn send_shell_result(
   }
   let after = if after.task == envelope {
     // `Send` declined and left the draft where it was.
-    held
+    if recover {
+      held
+    } else {
+      conv
+    }
   } else {
     {
       ..after,

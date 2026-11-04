@@ -24,7 +24,7 @@ pub fn markdown_nodes(
   locale~ : @i18n.Locale = English,
   source : String,
   open_file? : (String) -> @cmd.Cmd,
-  artifact_view? : (String, String) -> @html.Html,
+  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
@@ -56,7 +56,7 @@ priv struct MarkdownRender {
   defs : Map[String, @cmark.LabelDef]
   // How to make a file path clickable; `None` renders paths inertly.
   open_file : ((String) -> @cmd.Cmd)?
-  artifact_view : ((String, String) -> @html.Html)?
+  artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?
   defer_artifacts : Bool
   // Per-render state: repeated references share one entry, and message-local
   // source actions never depend on document-global fragment IDs.
@@ -149,7 +149,7 @@ fn code_block(
   locale~ : @i18n.Locale = English,
   block : @cmark.CodeBlock,
   open_file : ((String) -> @cmd.Cmd)?,
-  artifact_view? : (String, String) -> @html.Html,
+  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
   defer_artifacts~ : Bool = false,
 ) -> @html.Html {
   let source = lines_text(block.code)
@@ -169,7 +169,7 @@ fn code_block(
             return @html.nothing
           }
           if artifact_view is Some(render) {
-            return render(reference.path, reference.name)
+            return render(reference)
           }
         }
         return workspace_file_card(locale, reference, open_file)
@@ -1092,6 +1092,7 @@ fn is_known_extension(ext : String) -> Bool {
     | "json"
     | "md"
     | "markdown"
+    | "typ"
     | "toml"
     | "yaml"
     | "yml"

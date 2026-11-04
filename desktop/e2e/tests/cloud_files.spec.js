@@ -321,6 +321,8 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   expect(JSON.parse(request.body).command.content).toBe('Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>');
   await expect(page.locator('main .run-status')).toHaveText('Finished');
   await expect(input).toHaveValue('');
+  // Wait for the post-send history record before recalling its prompt.
+  await expect(page.locator('#transcript').getByText('Update the heading', { exact: true })).toBeVisible();
   await input.press('ArrowUp');
   await expect(input).toHaveValue('Update the heading');
   await expect(chip).toContainText('index.html');

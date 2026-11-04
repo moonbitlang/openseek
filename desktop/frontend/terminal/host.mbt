@@ -39,11 +39,11 @@ priv struct TermHost {
   /// Root-owned terminal state projected into the imperative output path.
   /// The projection is refreshed only after terminal lifecycle transitions;
   /// raw output reads it without publishing a Rabbita message.
-  mut owners : Map[String, (@interop.ChannelId, String)]
-  mut opening_channels : Array[@interop.ChannelId]
+  mut owners : Map[(Connection, String), String]
+  mut opening_channels : Array[Connection]
   /// Output that arrived before `terminal_open` identified its tab:
   /// `(sequence, base64_data)`.
-  pending : Map[String, (@interop.ChannelId, Array[(Int32, String)])]
+  pending : Map[(Connection, String), Array[(Int32, String)]]
   /// Command-tab reports issued but not yet delivered, by tab key: each is
   /// waiting for its emulator to finish rendering what the PTY sent. A tab
   /// disposed meanwhile keeps its emulator until the report has read it, so
@@ -388,12 +388,12 @@ pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
 /// `opening_channels` always describe the same accepted State without making
 /// raw output enter the root update loop.
 fn State::sync_host_routes(self : State) -> @cmd.Cmd {
-  let owners : Map[String, (@interop.ChannelId, String)] = Map([])
-  let opening_channels : Array[@interop.ChannelId] = []
+  let owners : Map[(Connection, String), String] = Map([])
+  let opening_channels : Array[Connection] = []
   for tab in self.tabs {
     match tab.id {
-      Some(id) => owners[id] = (tab.workspace.channel(), tab.key)
-      None if tab.status is TabOpening => {
+      Some(id) => owners[(tab.workspace.channel(), id)] = tab.key
+      None if tab.status is TabOpening(..) => {
         let channel = tab.workspace.channel()
         if !opening_channels.contains(channel) {
           opening_channels.push(channel)
@@ -415,7 +415,7 @@ fn State::sync_host_routes(self : State) -> @cmd.Cmd {
 fn TermHost::write_now(
   self : TermHost,
   scheduler : &@cmd.Scheduler,
-  channel : @interop.ChannelId,
+  channel : Connection,
   key : String,
   id : String,
   sequence : Int32,
@@ -438,7 +438,7 @@ fn TermHost::write_now(
 ///|
 fn TermHost::write_to_tab(
   self : TermHost,
-  channel : @interop.ChannelId,
+  channel : Connection,
   key : String,
   id : String,
   sequence : Int32,
@@ -455,25 +455,20 @@ fn TermHost::write_to_tab(
 /// channel has an opening tab; an unrelated/stale session is acknowledged and
 /// dropped so it cannot consume the host's flow-control window.
 pub fn output(
-  channel : @interop.ChannelId,
+  channel : Connection,
   id : String,
   sequence : Int32,
   data : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    match term_host.owners.get(id) {
-      Some((owner_channel, key)) =>
-        scheduler.add(
-          term_host.write_to_tab(owner_channel, key, id, sequence, data),
-        )
+    match term_host.owners.get((channel, id)) {
+      Some(key) =>
+        scheduler.add(term_host.write_to_tab(channel, key, id, sequence, data))
       None =>
         if term_host.opening_channels.contains(channel) {
-          let (pending_channel, chunks) = match term_host.pending.get(id) {
-            Some(pending) => pending
-            None => (channel, [])
-          }
+          let chunks = term_host.pending.get((channel, id)).unwrap_or([])
           chunks.push((sequence, data))
-          term_host.pending[id] = (pending_channel, chunks)
+          term_host.pending[(channel, id)] = chunks
         } else {
           scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
         }
@@ -487,10 +482,10 @@ pub fn output(
 /// acknowledged as it renders. The writes are queued in the emulator by the
 /// time this command returns, so a command tab's report issued right behind
 /// it reads a screen that includes them.
-fn flush_pending(key : String, id : String) -> @cmd.Cmd {
+fn flush_pending(channel : Connection, key : String, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard term_host.pending.get(id) is Some((channel, chunks)) else { return }
-    term_host.pending.remove(id)
+    guard term_host.pending.get((channel, id)) is Some(chunks) else { return }
+    term_host.pending.remove((channel, id))
     for chunk in chunks {
       // The accepted Opened transition supplies the key directly; its route
       // projection is scheduled by reconciliation immediately afterward.
@@ -502,10 +497,10 @@ fn flush_pending(key : String, id : String) -> @cmd.Cmd {
 ///|
 /// Drop any buffer for a session that ended unclaimed, acknowledging the
 /// bytes so the host's window is released before the session's teardown.
-fn drop_pending(id : String) -> @cmd.Cmd {
+fn drop_pending(channel : Connection, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard term_host.pending.get(id) is Some((channel, chunks)) else { return }
-    term_host.pending.remove(id)
+    guard term_host.pending.get((channel, id)) is Some(chunks) else { return }
+    term_host.pending.remove((channel, id))
     for chunk in chunks {
       scheduler.add(TerminalAck::{ channel, id, sequence: chunk.0, }.send())
     }
@@ -516,16 +511,13 @@ fn drop_pending(id : String) -> @cmd.Cmd {
 /// Forget pre-open output owned by a dead WebSocket. Its host-side PTYs and
 /// flow-control window disappeared with that connection, so these chunks need
 /// neither rendering nor acknowledgement on the replacement connection.
-fn TermHost::clear_pending(
-  self : TermHost,
-  channel : @interop.ChannelId,
-) -> @cmd.Cmd {
+fn TermHost::clear_pending(self : TermHost, channel : Connection) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    term_host.owners.retain((_, owner) => owner.0 != channel)
+    term_host.owners.retain((owner, _) => owner.0 != channel)
     term_host.opening_channels = term_host.opening_channels.filter(existing => {
       existing != channel
     })
-    self.pending.retain((_, pending) => pending.0 != channel)
+    self.pending.retain((owner, _) => owner.0 != channel)
   })
 }
 
@@ -629,7 +621,7 @@ fn report_command(
 /// output xterm has not parsed yet.
 fn dispose_tab(key : String) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    term_host.owners.retain((_, owner) => owner.1 != key)
+    term_host.owners.retain((_, owner) => owner != key)
     guard term_host.entries.get(key) is Some(entry) else { return }
     term_host.entries.remove(key)
     let destroy = () => {

@@ -157,7 +157,7 @@ pub fn definition(
         build_timeout_ms~,
       ) +
       (if scratch_dir is Some(_) {
-        "\nFile artifacts: write completed files under the artifact/ subdirectory of the session scratch path shown in Environment. Use that actual path as an explicit script argument and new filenames for revisions, then reference scratch/artifact/FILENAME in an openseek-file fence in the final answer. Add the artifact marker to display completed HTML/SVG interactively. Read <bundled-resources>/artifact/README.md for normal MoonBit/Rabbita interactive HTML generation."
+        "\nFile artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
       } else {
         ""
       }),

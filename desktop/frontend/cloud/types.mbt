@@ -41,6 +41,7 @@ pub(all) struct Event {
 pub struct Submission {
   content : @wire.Content
   known_tasks : Array[String]
+  result_id : String?
 } derive(Eq)
 
 ///|
@@ -88,6 +89,7 @@ pub(all) struct Conversation {
   initial_submission : @composer.Draft?
   initial_attachments : Array[@protocol.AttachmentSource]
   uploads : Array[UploadedAttachment]
+  shell_commands : Array[@composer.ShellCommand]
   pending : Submission?
   // One command waiting for session creation or the first SSE snapshot.
   outgoing : PendingCommand?
@@ -138,6 +140,7 @@ fn Conversation::empty() -> Conversation {
     initial_submission: None,
     initial_attachments: [],
     uploads: [],
+    shell_commands: [],
     pending: None,
     outgoing: None,
     stream: None,
@@ -174,6 +177,7 @@ pub struct PendingCommand {
 ///|
 pub enum CommandInput {
   Native(@wire.Command)
+  Terminal(@composer.ShellCommand?)
   Prompt(
     content~ : @wire.Content,
     draft~ : @composer.Draft,
@@ -209,6 +213,16 @@ pub extend SessionEdit with Eq::{equal, not_equal}
 pub extend MetadataSave with Eq::{equal, not_equal}
 
 ///|
+pub(all) enum SessionListStatus {
+  Idle
+  Retrying
+  Failed
+} derive(Eq)
+
+///|
+pub extend SessionListStatus with Eq::{equal, not_equal}
+
+///|
 pub(all) struct State {
   user_id : String?
   epoch : Int32
@@ -217,6 +231,7 @@ pub(all) struct State {
   conversations : Map[String, Conversation]
   sequence : Int32
   list_request : Int32
+  list_status : SessionListStatus
   deletions : Map[String, Int32]
   metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
@@ -234,6 +249,7 @@ pub fn State::empty() -> State {
     conversations: Map([]),
     sequence: 0,
     list_request: 0,
+    list_status: Idle,
     deletions: {},
     metadata_saves: {},
     retired: [],
@@ -258,6 +274,8 @@ pub(all) enum Msg {
   Edited(Int32, String, Int32)
   EditFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
+  TerminalRequested(@interop.ConversationIdentity, @composer.ShellCommand?)
+  TerminalReady(Int32, String, @composer.ShellCommand?)
   SubmitAttachments(
     @interop.ConversationIdentity,
     @composer.Draft,
