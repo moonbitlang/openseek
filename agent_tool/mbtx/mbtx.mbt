@@ -684,9 +684,16 @@ async fn execute(
       injected[key] = value
     }
   }
+  // Canonical like the workspace root, so a scratch inside the workspace is
+  // recognized as such and stays writable for source (see
+  // `source_exclusions`).
+  let extra_roots = match scratch_dir {
+    Some(lab) => [@fs.realpath(lab) catch { _ => lab }]
+    None => []
+  }
   let policy = wasm_policy_document(
     tmp_dir=snippet_tmp,
-    extra_roots=scratch_dir.map(l => [l]).unwrap_or([]),
+    extra_roots~,
     workspace?=workspace_grant,
     inject=injected,
   )
