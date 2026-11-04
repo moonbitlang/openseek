@@ -520,7 +520,6 @@ fn Model::sidebar_component_sections(
   let work : @section.Input = {
     id: @section.Id(source="openseek.projects", channel~),
     label: @sidebar_messages.text(self.locale, Projects),
-    initially_collapsed: false,
     activation: if openseek_section_activation is Some(_) {
       openseek_section_activation
     } else if codex_context is Some(context) && context.selected {
@@ -2936,7 +2935,6 @@ fn Model::chat_sidebar_sections(
   let chats : @section.Input = {
     id: @section.Id(source="cloud.chats", channel~),
     label: @sidebar_messages.text(self.locale, Chats),
-    initially_collapsed: false,
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
       title: @sidebar_messages.text(self.locale, NewChat),

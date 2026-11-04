@@ -25,12 +25,8 @@ for (const legacy of [false, true]) {
     await cloud.open();
     await expect(hint).toHaveCount(0);
     await expect(page.locator('#task')).toBeVisible();
-    await expect(page.locator('aside .section-disclosure')).toHaveText(['Chats']);
+    await expect(page.locator('aside .section-label')).toHaveText(['Chats']);
     const row = cloud.row(sessionA);
-    const chats = page.locator('aside').getByRole('button', { name: 'Chats', exact: true });
-    await chats.click();
-    await expect(row).not.toBeInViewport();
-    await chats.click();
     await expect(row).toBeInViewport();
     await row.hover();
     await page.getByRole('button', { name: 'Conversation actions' }).click();
