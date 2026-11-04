@@ -12,38 +12,42 @@ pub fn devtools_highlight() -> HighlightConfig
 pub async fn list_targets(Int32) -> Array[Target]
 
 // Errors
+#derive(@debug.Debug)
 pub suberror CDPError {
   Protocol(String)
-  CommandFailed(code~ : Int32, message~ : String, data~ : Json?)
+  CommandFailed(code~ : Int32, message~ : String, data~ : @json.Json?)
   JavaScriptException(String)
   MissingValue
   ConcurrentRead
-} derive(@debug.Debug)
+}
 pub fn CDPError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct AxNode {
   id : AxNodeId
   ignored : Bool
   role : String?
   name : String?
-  value : Json?
-  properties : Map[String, Json]
+  value : @json.Json?
+  properties : Map[String, @json.Json]
   children : Array[AxNodeId]
   dom_node : BackendNodeId?
-} derive(Eq, @debug.Debug)
+}
 pub fn AxNode::equal(Self, Self) -> Bool
 pub fn AxNode::not_equal(Self, Self) -> Bool
 pub fn AxNode::to_repr(Self) -> @debug.Repr
 
-pub struct AxNodeId(String) derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+pub struct AxNodeId(String)
 pub fn AxNodeId::equal(Self, Self) -> Bool
 pub fn AxNodeId::hash(Self) -> Int32
 pub fn AxNodeId::hash_combine(Self, Hasher) -> Unit
 pub fn AxNodeId::not_equal(Self, Self) -> Bool
 pub fn AxNodeId::to_repr(Self) -> @debug.Repr
 
-pub(all) struct BackendNodeId(Int32) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct BackendNodeId(Int32)
 pub fn BackendNodeId::equal(Self, Self) -> Bool
 pub fn BackendNodeId::not_equal(Self, Self) -> Bool
 pub fn BackendNodeId::to_repr(Self) -> @debug.Repr
@@ -93,20 +97,22 @@ pub(all) enum ContrastAlgorithm {
   Apca
 }
 
+#derive(Eq, @debug.Debug)
 pub struct Evaluation {
   result : RemoteObject
   exception : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn[T : @json.FromJson] Evaluation::decode_value(Self) -> T raise
 pub fn Evaluation::equal(Self, Self) -> Bool
 pub fn Evaluation::not_equal(Self, Self) -> Bool
 pub fn Evaluation::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Event {
   InspectNodeRequested(BackendNodeId)
   InspectModeCanceled
   BindingCalled(name~ : String, payload~ : String, execution_context_id~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 pub fn Event::to_repr(Self) -> @debug.Repr
@@ -197,23 +203,26 @@ pub(all) struct MouseEvent {
   at : Point
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Point {
   x : Double
   y : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn Point::equal(Self, Self) -> Bool
 pub fn Point::not_equal(Self, Self) -> Bool
 pub fn Point::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct RemoteObject {
   object_id : RemoteObjectId?
-  value : Json?
-} derive(Eq, @debug.Debug)
+  value : @json.Json?
+}
 pub fn RemoteObject::equal(Self, Self) -> Bool
 pub fn RemoteObject::not_equal(Self, Self) -> Bool
 pub fn RemoteObject::to_repr(Self) -> @debug.Repr
 
-pub struct RemoteObjectId(String) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub struct RemoteObjectId(String)
 pub fn RemoteObjectId::equal(Self, Self) -> Bool
 pub fn RemoteObjectId::not_equal(Self, Self) -> Bool
 pub fn RemoteObjectId::to_repr(Self) -> @debug.Repr
