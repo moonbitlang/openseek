@@ -36,36 +36,8 @@ jobs:
       - name: Check all bundled workflow scripts
         run: moon run scripts/check-workflows.mbtx
 
-  sandbox-macos:
-    name: sandbox (macOS, native)
-    runs-on: macos-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    env:
-      # Fail if sandbox enforcement disappears; guarded tests must not silently
-      # turn this platform-specific regression job green without running.
-      OPENSEEK_REQUIRE_SANDBOX_TESTS: "1"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Set up MoonBit
-        run: |
-          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
-          test -n "$version"
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-          "$HOME/.moon/bin/moon" version --all
-
-      - name: Update MoonBit package registry
-        run: moon update
-
-      - name: Test sandbox enforcement and oversized profiles
-        run: moon test agent_tool/internal/sandbox --target native
-
-      - name: Test reviewer printing and file reads
-        run: moon test agent_tool/mbtx --target native --filter 'read-only snippets can print and read workspace source'
+  # The macOS sandbox job lives in sandbox.yml, which skips pull requests that
+  # only change other applications.
 
   check:
     name: check (${{ matrix.moonbit-channel }}, ${{ matrix.target }})
