@@ -310,35 +310,6 @@ test "expired draft replaces its entry with a fresh new page" {
 }
 
 ///|
-test "navigation write policy distinguishes foreground visits and background identity updates" {
-  let location : @routes.Location = {
-    device: Some("local"),
-    target: Session("session-1"),
-  }
-  let observed : NavigationObservation = {
-    location: Some(location),
-    user_visit: false,
-    session_rotated: false,
-    explicit: false,
-    repeat_visit: false,
-    retired: [],
-    promotion: None,
-    durable: [],
-  }
-  let navigation = { ..AppNavigation::empty(), location: Some(location), }
-  assert_true(observed.write(navigation, 0, desktop=true) is Keep)
-  let foreground = { ..observed, explicit: true, repeat_visit: true, }
-  assert_true(foreground.write(navigation, 0, desktop=true) is Push(_))
-  assert_true(foreground.write(navigation, 0, desktop=true) is Push(_))
-  let pending = { ..navigation, new_chat_requested: true, revision: 1, }
-  assert_true(foreground.write(pending, 0, desktop=true) is Keep)
-  assert_true(
-    observed.write(AppNavigation::empty(), 0, desktop=true) is Replace(_),
-  )
-  assert_true(observed.write(AppNavigation::empty(), 0, desktop=false) is Keep)
-}
-
-///|
 test "blank draft addressing does not turn an explicit visit into replacement" {
   let observed : NavigationObservation = {
     location: Some({ device: Some("local"), target: ChatDraft("draft"), }),

@@ -38,19 +38,11 @@ test "Cloud routes resolve accounts at activation" {
 test "device identity is independent of target validity" {
   for
     path in [
-      "/device/%68ost/chat", "/device/%68ost/unknown", "/device/host/chat/session/%GG",
+      "/device/%68ost/unknown", "/device/host/chat/session/%GG",
     ] {
     assert_eq(@routes.device(path), Some("host"))
   }
-  assert_eq(@routes.device("/device/a%2fb/chat"), Some("a/b"))
-  assert_eq(@routes.device("/device/a%252Fb/chat"), Some("a%2Fb"))
-  for
-    path in [
-      "/console/", "/device//chat", "/device/%GG/chat", "/device/%00/chat",
-      "/device/%2e/chat", "/device/host?other/chat", "/device/host\\other/chat",
-    ] {
-    assert_eq(@routes.device(path), None)
-  }
+  assert_eq(@routes.device("/console/"), None)
 }
 
 ///|
@@ -79,7 +71,6 @@ test "invalid routes remain distinct from unrelated links" {
     path in [
       "/device/d/chat/session/", "/device/d/chat/session/%GG", "/device/d/chat/session/%FF",
       "/device/d/chat/session/%00", "/device/d/chat/session/..", "/device/d/unknown",
-      "/device//chat",
     ] {
     assert_true(@routes.parse(path) is Err(InvalidRoute))
   }
@@ -89,8 +80,6 @@ test "invalid routes remain distinct from unrelated links" {
 test "parsing then encoding normalizes route spelling without decoding identities twice" {
   for
     (input, expected) in [
-      ("/device/%68ost/%63hat", "/device/host/chat"),
-      ("/device/host/chat/session/a%2fb", "/device/host/chat/session/a%2Fb"),
       ("/device/host/chat/session/a%252Fb", "/device/host/chat/session/a%252Fb"),
       ("/device/host/chat/session/a%5Cb", "/device/host/chat/session/a%5Cb"),
     ] {

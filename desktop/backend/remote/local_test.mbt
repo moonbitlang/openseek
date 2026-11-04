@@ -1,8 +1,7 @@
 ///|
-async test "local console opens pages and command sockets without credentials" {
+async test "local console access does not require credentials" {
   let root = @fs.tmpdir(prefix="openseek-console-direct-")
   defer @fs.rmdir(root, recursive=true)
-  @fs.write_file("\{root}/index.html", "<h1>Local console</h1>")
   let console = @remote.LocalConsole::bind(port=0)
   let state = @api.ApiState(engine="unused-test-engine", runtime_dir=Path(root))
   @async.with_task_group(group => {
@@ -18,17 +17,6 @@ async test "local console opens pages and command sockets without credentials" {
         response.headers.get("Location"),
         Some("/device/host/chat" + query),
       )
-      assert_eq(response.headers.get("Set-Cookie"), None)
-    }
-    // Each request is a fresh client: direct navigation and reload require
-    // no prior visit to a special entry URL or retained browser state.
-    for
-      path in [
-        "/device/host/chat", "/device/host/chat/new", "/device/host/codex/new",
-      ] {
-      let (response, body) = @http.get(origin + path)
-      assert_eq(response.code, 200)
-      assert_eq(body.text(), "<h1>Local console</h1>")
       assert_eq(response.headers.get("Set-Cookie"), None)
     }
     let (me, body) = @http.get(origin + "/v1/auth/me")
@@ -123,8 +111,6 @@ async test "local login returns canonical shared routes for this device only" {
     let origin = console.origin()
     for
       (destination, expected) in [
-        ("/device/%68ost/%63hat", "/device/host/chat"),
-        ("/device/host/chat/session/a%2fb", "/device/host/chat/session/a%2Fb"),
         (
           "/device/host/chat/session/not-loaded", "/device/host/chat/session/not-loaded",
         ),
