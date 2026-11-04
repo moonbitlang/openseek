@@ -1820,8 +1820,10 @@ fn description(
   let write_rule = match workspace_writes {
     ExceptSource =>
       (
-        #|- Direct filesystem IO READS anywhere. It WRITES its own `@fs.tmpdir()`, the
-        #|  configured session scratch directory shown in Environment, and workspace
+        #|- Direct filesystem IO READS anywhere. It WRITES anything in its own
+        #|  `@fs.tmpdir()` and the configured session scratch directory shown in
+        #|  Environment, MoonBit sources and manifests included, even when that
+        #|  directory sits inside the workspace. Elsewhere in the workspace it WRITES
         #|  files — data, fixtures, logs, generated output — EXCEPT MoonBit sources and
         #|  manifests (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`
         #|  and their `.json` forms, in any letter case), `*.mbtx` scripts (save one
