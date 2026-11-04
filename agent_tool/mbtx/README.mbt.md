@@ -151,7 +151,9 @@ reported by the wasm compiler through normal build diagnostics. The snippet
 may read anywhere. It may write inside its own `@fs.tmpdir()` and any
 caller-provided scratch lab, and — for the main agent only — anywhere in the
 workspace except MoonBit sources, manifests, `.mbtx` scripts and `.git`, in
-any letter case. Read-only and worker roles get no workspace grant. Changing
+any letter case. A scratch lab inside the workspace (the default session
+store is `<workspace>/.openseek`) keeps its own source writes; the exclusions
+skip its subtree. Read-only and worker roles get no workspace grant. Changing
 source belongs to the file tools.
 Process spawning is checked against the
 implementation's allowlist; the

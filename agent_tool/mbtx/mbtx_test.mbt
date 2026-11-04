@@ -632,6 +632,67 @@ async test "a snippet writes the workspace except its sources" {
 }
 
 ///|
+/// The default session store lives at `<workspace>/.openseek`, so the main
+/// agent's scratch is inside the workspace grant. Its sources stay writable as
+/// they are for a scratch outside it; every other directory along the way — the
+/// scratch's parents, a sibling session, a workspace package, names sharing a
+/// prefix with `.openseek` — keeps refusing source.
+async test "a scratch inside the workspace keeps its source writes" {
+  @vfs.with_tmpdir(ws => {
+    let scratch = "\{ws}/.openseek/sessions/s1/scratch"
+    for
+      dir in [
+        scratch,
+        "\{ws}/.openseek/sessions/s2",
+        "\{ws}/src",
+        "\{ws}/.o",
+        "\{ws}/.openseekx",
+      ] {
+      @fs.mkdir(dir, recursive=true)
+    }
+    let source = (
+      #|---
+      #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs" }
+      #|---
+      #|
+      #|async fn attempt(label : String, path : String) -> Unit {
+      #|  let ok = try {
+      #|    @fs.write_text(path, "x", create_mode=CreateOrTruncate)
+      #|    true
+      #|  } catch { _ => false }
+      #|  println("\{label}=\{ok}")
+      #|}
+      #|
+      #|async fn main {
+      #|  attempt("scratch_source", "SCRATCH/probe.mbt")
+      #|  @fs.mkdir("SCRATCH/lab")
+      #|  attempt("scratch_manifest", "SCRATCH/lab/moon.pkg")
+      #|  attempt("session_dir", ".openseek/sessions/s1/probe.mbt")
+      #|  attempt("sibling_session", ".openseek/sessions/s2/probe.mbt")
+      #|  attempt("store_root", ".openseek/probe.mbt")
+      #|  attempt("workspace_root", "probe.mbt")
+      #|  attempt("package", "src/probe.mbt")
+      #|  attempt("short_prefix", ".o/probe.mbt")
+      #|  attempt("long_prefix", ".openseekx/probe.mbt")
+      #|  attempt("scratch_data", "SCRATCH/data.json")
+      #|}
+    ).replace_all(old="SCRATCH", new=scratch)
+    let tool = @mbtx.definition(workspace_root=ws, scratch_dir=scratch)
+    let out = dispatch(tool, { "source": source, "ptc": false })
+    for
+      line in [
+        "scratch_source=true", "scratch_manifest=true", "session_dir=false", "sibling_session=false",
+        "store_root=false", "workspace_root=false", "package=false", "short_prefix=false",
+        "long_prefix=false", "scratch_data=true",
+      ] {
+      assert_true(out.content.contains(line), msg=out.content)
+    }
+    assert_true(@fs.exists("\{scratch}/probe.mbt"))
+    assert_false(@fs.exists("\{ws}/src/probe.mbt"))
+  })
+}
+
+///|
 /// Reads are NOT bounded the way writes are, and that asymmetry is deliberate:
 /// the read workflow accepts any absolute path with no scope, so a read root list
 /// buys no confidentiality — it only turns a wrong guess at where the toolchain
