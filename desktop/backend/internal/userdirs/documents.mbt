@@ -2,6 +2,9 @@
 // Only Documents is consulted today.
 
 ///|
+extern "C" fn known_folder_documents() -> Bytes = "openseek_desktop_documents_dir"
+
+///|
 /// The user's Documents folder — where it is supposed to be, not whether it
 /// exists: the Windows known folder (which OneDrive's folder move or group
 /// policy may relocate), the XDG user-dirs override on Linux desktops, or
@@ -9,10 +12,12 @@
 /// directory is known.
 ///
 /// On Windows, we use `SHGetKnownFolderPath(FOLDERID_Documents)`, the
-/// authority on Windows. `None` when the lookup fails.
+/// authority on Windows. `None` when the lookup fails — and always off
+/// Windows, where the native stub returns empty bytes.
 pub async fn documents_dir() -> @pathx.Path? {
   if @async.platform is Windows {
-    guard known_folder_documents_utf8() is Some(path) else { return None }
+    let path = known_folder_documents()
+    guard path.length() > 0 else { return None }
     Some(@utf8.decode_lossy(path))
   } else {
     guard @home.dir() is Some(home) else { return None }
