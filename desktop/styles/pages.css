@@ -183,13 +183,15 @@ dialog.management-dialog::backdrop {
     3vw,
     calc(var(--space-7) * 1.5)
   );
-  padding: var(--management-content-padding);
-  padding-bottom: calc(var(--management-content-padding) * 1.5);
+  padding: max(
+    var(--management-content-padding),
+    calc((100% - 72rem) / 2)
+  );
 }
 .management-dialog > .management-page > .management-page-content {
   width: 100%;
-  max-width: 72rem;
-  margin-inline: auto;
+  max-width: none;
+  margin-inline: 0;
 }
 /* ---------- shared management content ---------- */
 .management-page {
