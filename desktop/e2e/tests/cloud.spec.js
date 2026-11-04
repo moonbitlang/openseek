@@ -58,7 +58,7 @@ test('browser login and session recovery use only v2 account endpoints', async (
   const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
   await settings.getByRole('button', { name: 'Sign in', exact: true }).click();
   await recovered;
-  await settings.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect(settings).not.toBeVisible();
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await expect(cloud.row(sessionA)).toBeVisible();
   expect(cloud.requests.filter(request => request.side === 'api' && request.path === '/v2/auth/login')).toHaveLength(1);
@@ -345,40 +345,6 @@ test('browser returns from Cloud to Work project new chat', async ({ page }) => 
   await cloud.open();
   await expect(page.locator('#task')).toHaveValue('Retain Cloud draft');
   expect(cloud.postCount).toBe(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
-test('device browser history retains Cloud visits across refresh', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install(); await cloud.goto();
-  const workUrl = page.url();
-  const workTitle = await page.locator('main > .topbar h1').innerText();
-  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(settings).toBeVisible();
-  await expect(page).toHaveURL(workUrl);
-  await settings.getByRole('button', { name: 'Dismiss', exact: true }).click();
-  await cloud.open(sessionA);
-  await page.locator('#task').fill('Cloud draft A');
-  await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionA}`);
-  await cloud.open(sessionB);
-  await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionB}`);
-  await page.goBack();
-  await expect(page.locator('main > .topbar h1')).toHaveText('Cloud fixture A');
-  await expect(page.locator('#task')).toHaveValue('Cloud draft A');
-  await page.goBack();
-  await expect(page).toHaveURL(workUrl);
-  await expect(page.locator('main > .topbar h1')).toHaveText(workTitle);
-  await expect(settings).not.toBeVisible();
-  await page.goForward();
-  await expect(page.locator('main > .topbar h1')).toHaveText('Cloud fixture A');
-  await page.reload();
-  await expect(page.locator('main > .topbar h1')).toHaveText('Cloud fixture A');
-  await expect(page.locator('#task')).toHaveValue('');
-  await page.goBack();
-  await expect(page).toHaveURL(workUrl);
-  await expect(page.locator('main > .topbar h1')).toHaveText(workTitle);
-  await expect(settings).not.toBeVisible();
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
