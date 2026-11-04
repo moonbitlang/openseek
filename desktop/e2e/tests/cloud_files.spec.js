@@ -1534,6 +1534,30 @@ test('Cloud Quick Open finds files without a host and keeps unsupported Symbols 
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
+test('Cloud Quick Open opens the exact indexed path rather than a Markdown file reference', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  const names = [['notes.txt ', 'trailing space', 'notes'], ['file:notes.txt', 'scheme-like name', 'file:notes']];
+  for (const [path, content] of names) {
+    cloud.contents.set(`${sessionA}:${path}`, { kind: 'content', content, sig: `literal:${content}`, absolute: `/${path}` });
+  }
+  await cloud.install(); await page.goto(`${authOrigin}/cloud`);
+  await expect(page.locator('#task')).toBeEnabled();
+  await cloud.open();
+  const palette = page.getByRole('dialog', { name: 'Search workspace files', exact: true });
+  for (const [path, content, query] of names) {
+    // Index only this file: neither its trimmed nor its link-parsed form exists.
+    cloud.indexes.set(sessionA, [path]);
+    await page.keyboard.press('ControlOrMeta+p');
+    await palette.getByRole('combobox').fill(query);
+    await expect(palette.getByRole('option')).toHaveCount(1);
+    await palette.getByRole('combobox').press('Enter');
+    await expect(palette).toHaveCount(0);
+    await expect(source(page)).toContainText(content);
+  }
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
 test('Cloud Quick Open closes on a session switch and ignores the previous index response', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
   cloud.indexes.set(sessionB, ['second-only.txt']);
