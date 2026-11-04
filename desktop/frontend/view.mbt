@@ -818,6 +818,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     notices,
     locale: self.locale,
     mode: self.sidebar_mode,
+    has_host: self.has_host(),
     sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
@@ -1507,6 +1508,7 @@ fn api_settings_rows(
 /// saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let locale = model.locale
+  let has_host = model.has_host()
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
   // All providers use the composer's model selector; API setup only chooses
@@ -1560,8 +1562,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       []
     },
-    @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
-    @settings.group(icon_key, "API", api_rows),
+    ..if has_host {
+      [
+        @settings.group(
+          icon_sparkle,
+          @settings.text(locale, Engine),
+          engine_rows,
+        ),
+        @settings.group(icon_key, "API", api_rows),
+      ]
+    },
     @settings.group(
       icon_key,
       @settings.text(locale, Account) +
@@ -1569,11 +1579,15 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @settings.text(locale, RemoteAccess),
       remote_access_rows(dispatch, model),
     ),
-    @settings.group(
-      icon_extensions,
-      "Codex",
-      codex_account_rows(dispatch, model),
-    ),
+    ..if has_host {
+      [
+        @settings.group(
+          icon_extensions,
+          "Codex",
+          codex_account_rows(dispatch, model),
+        ),
+      ]
+    },
     @settings.group(icon_layout, @settings.text(locale, Interface), [
       @settings.row(
         @settings.text(locale, Language),
@@ -1780,21 +1794,27 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @page_shell.body(class="settings-page", [
     @html.div(class="settings-header", [
       @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
-      @html.div(
-        class="settings-subtitle",
-        if !settings_loaded {
-          @settings.text(locale, LoadingSettings)
-        } else if ready {
-          @settings.text(locale, RuntimeSettings)
-        } else {
-          match model.api_provider {
-            Deepseek => @settings.text(locale, DeepseekKey)
-            Glm => @settings.text(locale, GlmKey)
-            OpenRouter => @settings.text(locale, OpenRouterKey)
-            Custom => @settings.text(locale, CustomEndpoint)
-          }
-        },
-      ),
+      // The subtitle describes host runtime settings, which a page without a
+      // host never loads.
+      if has_host {
+        @html.div(
+          class="settings-subtitle",
+          if !settings_loaded {
+            @settings.text(locale, LoadingSettings)
+          } else if ready {
+            @settings.text(locale, RuntimeSettings)
+          } else {
+            match model.api_provider {
+              Deepseek => @settings.text(locale, DeepseekKey)
+              Glm => @settings.text(locale, GlmKey)
+              OpenRouter => @settings.text(locale, OpenRouterKey)
+              Custom => @settings.text(locale, CustomEndpoint)
+            }
+          },
+        )
+      } else {
+        @html.nothing
+      },
     ]),
     @html.div(class="settings", groups),
   ])

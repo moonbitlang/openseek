@@ -2694,7 +2694,11 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     minimal_transcript: true,
     narrow,
     sidebar_open: !narrow,
-    sidebar_mode: WorkMode,
+    sidebar_mode: if !desktop && page_device is None {
+      ChatMode
+    } else {
+      WorkMode
+    },
     sidebar_revealed: None,
     right_panel_open: false,
     right_panel_menu_open: false,
@@ -2789,6 +2793,13 @@ fn Model::device_state(
   channel : @interop.ChannelId,
 ) -> DeviceState? {
   self.devices.iter().find_first(dev => dev.channel == channel)
+}
+
+///|
+/// Whether this page owns host features, including while its selected device
+/// is offline. A browser Cloud page has no device; Desktop always owns its host.
+fn Model::has_host(self : Model) -> Bool {
+  self.is_desktop || self.console.page_device is Some(_)
 }
 
 ///|
