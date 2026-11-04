@@ -406,9 +406,12 @@ fn wrap_bullet(bullet : String) -> String {
 /// matters most: `!`-globs refuse MoonBit sources, manifests, `.mbtx` scripts
 /// and `.git` at any depth and in any letter case (macOS and Windows file
 /// systems ignore case; moonrun does not). An exclusion overrides every grant
-/// in the list, so it also binds a lab inside the workspace. Accepted costs: a
-/// snippet removes plain workspace files without `remove`'s approval, and a
-/// directory rename carries the sources inside it.
+/// in the list, so the exclusions are shaped around the temp directory and
+/// extra roots instead: a root inside the workspace (a session scratch under
+/// `<workspace>/.openseek`) keeps the source writes it would have outside it
+/// (see `source_exclusions`). Accepted costs: a snippet removes plain
+/// workspace files without `remove`'s approval, and a directory rename
+/// carries the sources inside it.
 ///
 /// What this binds is the SNIPPET, on every platform. It does not reach the
 /// child processes its `process` rules let the snippet start: those run with the
@@ -432,7 +435,8 @@ fn wrap_bullet(bullet : String) -> String {
 /// admits only that exact binary and no same-named one earlier in PATH.
 ///
 /// `workspace` must be canonical: moonrun matches a glob against the resolved
-/// target without resolving the glob itself.
+/// target without resolving the glob itself. A root is recognized as inside it
+/// only when spelled in the same canonical form.
 fn wasm_policy_document(
   tmp_dir~ : String,
   extra_roots~ : Array[String],
@@ -447,18 +451,12 @@ fn wasm_policy_document(
   // Every plain root must be an EXISTING path: moonrun canonicalizes each one
   // when it loads the policy and fails the whole file otherwise. The temp
   // directory and lab are created before this runs; the workspace exists.
-  let write_rules : Array[Json] = [
-    for root in [tmp_dir, ..extra_roots] => Json(root)
-  ]
-  if workspace is Some(root) {
-    write_rules.push(Json(root))
-    let root = glob_literal(@workspace_path.strip_trailing_slash(root))
-    for
-      pattern in [
-        "**/*{.mbt.md,.mbt,.mbti,.mbtx}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
-        "**/.git", "**/.git/**",
-      ] {
-      write_rules.push({ "glob": "!\{root}/\{case_insensitive_glob(pattern)}" })
+  let roots = [tmp_dir, ..extra_roots]
+  let write_rules : Array[Json] = [ for root in roots => Json(root) ]
+  if workspace is Some(workspace) {
+    write_rules.push(Json(workspace))
+    for glob in source_exclusions(workspace, roots) {
+      write_rules.push({ "glob": "!\{glob}" })
     }
   }
   let allow : Array[Json] = []
@@ -572,16 +570,147 @@ fn case_insensitive_glob(pattern : String) -> String {
 }
 
 ///|
-/// `path` as a glob matching only itself (`*` → `[*]`).
+/// `path` as a glob matching only itself (`*` → `[*]`). `,` is escaped too, so
+/// the result stays one alternative inside `{...}`.
 fn glob_literal(path : String) -> String {
   let escaped = StringBuilder()
   for ch in path {
     match ch {
-      '*' | '?' | '[' | ']' | '{' | '}' => escaped <+ "[\{ch}]"
+      '*' | '?' | '[' | ']' | '{' | '}' | ',' => escaped <+ "[\{ch}]"
       _ => escaped <+ "\{ch}"
     }
   }
   escaped.to_string()
+}
+
+///|
+/// What the workspace grant refuses, relative to the directory it guards: names
+/// moon treats as source or a manifest, and git metadata. Each applies at any
+/// depth and in any letter case.
+let source_tails : Array[String] = [
+  "*{.mbt.md,.mbt,.mbti,.mbtx}", "{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+  ".git", ".git/**",
+]
+
+///|
+/// The globs (without their `!`) refusing source under `workspace` everywhere
+/// except in the write `roots` that lie inside it. Both are canonical absolute
+/// paths, as the policy names them; a root outside the workspace needs no
+/// carve-out and is ignored.
+///
+/// moonrun has no rule that outranks an exclusion, so a root is kept writable
+/// by never excluding it: along each root's path, a directory excludes its own
+/// direct entries and every child NOT on a root's path, then descends only
+/// into the children that are. A root's subtree gets no exclusion at all —
+/// what the policy grants a root outside the workspace. With no root inside,
+/// this is the plain `<workspace>/**/<tail>` set.
+fn source_exclusions(
+  workspace : String,
+  roots : Array[String],
+) -> Array[String] {
+  let workspace = @workspace_path.strip_trailing_slash(workspace)
+  // Each root inside, as its path components below the workspace.
+  let inside : Array[ArrayView[String]] = []
+  for root in roots {
+    let root = @workspace_path.strip_trailing_slash(root)
+    if root == workspace {
+      inside.push([])
+    } else if root.strip_prefix("\{workspace}/") is Some(relative) {
+      let parts : Array[String] = relative
+        .split("/")
+        .filter(part => part != "")
+        .map(part => part.to_owned())
+        .collect()
+      inside.push(parts)
+    }
+  }
+  let globs = []
+  let tails = source_tails.map(case_insensitive_glob)
+  fn exclude_below(prefix : String, inside : Array[ArrayView[String]]) {
+    if inside.iter().any(path => path.is_empty()) {
+      return
+    }
+    if inside.is_empty() {
+      for tail in tails {
+        globs.push("\{prefix}/**/\{tail}")
+      }
+      return
+    }
+    let children : Map[String, Array[ArrayView[String]]] = Map([])
+    for path in inside {
+      if path is [child, .. rest] {
+        children.get_or_init(child, () => []).push(rest)
+      }
+    }
+    let others = segment_complement(children.keys().collect())
+    for tail in tails {
+      globs.push("\{prefix}/\{tail}")
+      globs.push("\{prefix}/\{others}/**/\{tail}")
+    }
+    for child, rest in children {
+      exclude_below("\{prefix}/\{glob_literal(child)}", rest)
+    }
+  }
+
+  exclude_below(glob_literal(workspace), inside)
+  globs
+}
+
+///|
+/// A one-segment glob matching every nonempty name except those in `names`
+/// (`["ab"]` → `{[!a]*,a,a[!b]*,ab?*}`): a name differs from all of them at
+/// some first character, stops short of them, or runs past one.
+///
+/// Byte-exact on purpose. A name that differs only in letter case matches, so
+/// on a case-insensitive file system that spelling stays excluded: the
+/// complement errs toward refusing, never toward granting.
+fn segment_complement(names : Array[String]) -> String {
+  let alternatives = []
+  fn differ_after(prefix : String, rests : Array[ArrayView[Char]]) {
+    if prefix != "" && !rests.iter().any(rest => rest.is_empty()) {
+      alternatives.push(prefix)
+    }
+    let next : Map[Char, Array[ArrayView[Char]]] = Map([])
+    for rest in rests {
+      if rest is [ch, .. rest] {
+        next.get_or_init(ch, () => []).push(rest)
+      }
+    }
+    if next.is_empty() {
+      alternatives.push("\{prefix}?*")
+      return
+    }
+    alternatives.push("\{prefix}[!\{class_body(next.keys().collect())}]*")
+    for ch, rests in next {
+      differ_after(prefix + glob_literal(ch.to_string()), rests)
+    }
+  }
+
+  differ_after("", names.map(name => name.to_array()))
+  if alternatives is [single] {
+    single
+  } else {
+    "{\{alternatives.join(",")}}"
+  }
+}
+
+///|
+/// The inside of a `[...]` class listing exactly `chars`: `]` goes first and
+/// `-` last, the two places globset reads them literally.
+fn class_body(chars : Array[Char]) -> String {
+  let body = StringBuilder()
+  if chars.contains(']') {
+    body <+ "]"
+  }
+  for ch in chars {
+    if ch != ']' && ch != '-' {
+      body <+ "\{ch}"
+    }
+  }
+  if chars.contains('-') {
+    body <+ "-"
+  }
+  body.to_string()
 }
 
 ///|
@@ -634,7 +763,7 @@ test "a workspace grant writes the root minus sources, scripts and git" {
     is { "fs": { "write": write, .. }, .. } else {
     fail("policy lost its fs section")
   }
-  let root = "/w[[]1[]][*][{]a,b[}][?]"
+  let root = "/w[[]1[]][*][{]a[,]b[}][?]"
   assert_eq(
     write,
     [
@@ -663,5 +792,66 @@ test "case widening covers letters and leaves glob syntax alone" {
   assert_eq(
     case_insensitive_glob("**/*{.Mbt,moon.pkg}"),
     "**/*{.[mM][bB][tT],[mM][oO][oO][nN].[pP][kK][gG]}",
+  )
+}
+
+///|
+test "a segment complement excludes exactly the given names" {
+  assert_eq(segment_complement(["ab"]), "{[!a]*,a,a[!b]*,ab?*}")
+  // A name that is a prefix of another is still excluded itself.
+  assert_eq(segment_complement(["a", "ab"]), "{[!a]*,a[!b]*,ab?*}")
+  assert_eq(segment_complement(["x", "y"]), "{[!xy]*,x?*,y?*}")
+  // Glob syntax in a name stays literal, inside and outside a class.
+  assert_eq(segment_complement(["*,"]), "{[!*]*,[*],[*][!,]*,[*][,]?*}")
+  assert_eq(class_body(['-', 'a', ']']), "]a-")
+}
+
+///|
+test "a write root inside the workspace is never excluded" {
+  let tails = source_tails.map(case_insensitive_glob)
+  // With no root inside, the plain any-depth set.
+  assert_eq(source_exclusions("/w", []), tails.map(tail => "/w/**/\{tail}"))
+  // Along the root's path each level excludes its own entries and the other
+  // children; the root itself gets nothing.
+  let expected = []
+  for level in [("/w", "{[!s]*,s,s[!c]*,sc?*}"), ("/w/sc", "{[!a]*,a?*}")] {
+    let (prefix, others) = level
+    for tail in tails {
+      expected.push("\{prefix}/\{tail}")
+      expected.push("\{prefix}/\{others}/**/\{tail}")
+    }
+  }
+  assert_eq(source_exclusions("/w", ["/w/sc/a/"]), expected)
+  // Roots outside the workspace, or merely sharing its name as a prefix, need
+  // no carve-out.
+  assert_eq(
+    source_exclusions("/w/", ["/run/tmp", "/w2/lab"]),
+    source_exclusions("/w", []),
+  )
+  // A root at the workspace itself leaves nothing to exclude.
+  assert_eq(source_exclusions("/w", ["/w"]), [])
+}
+
+///|
+test "the policy carves out only roots under the workspace" {
+  guard wasm_policy_document(
+      tmp_dir="/run/tmp",
+      extra_roots=["/w/.openseek/s/scratch/", "/w2/lab"],
+      workspace="/w/",
+      inject=Map([]),
+    )
+    is { "fs": { "write": Array(write), .. }, .. } else {
+    fail("policy lost its fs section")
+  }
+  let globs = source_exclusions("/w", ["/w/.openseek/s/scratch"])
+  assert_eq(
+    write,
+    [
+      "/run/tmp",
+      "/w/.openseek/s/scratch/",
+      "/w2/lab",
+      "/w/",
+      ..globs.map(glob => Json::object({ "glob": Json::string("!\{glob}") })),
+    ],
   )
 }
