@@ -116,8 +116,8 @@ a:where(.setting-link) {
 /* ---------- management dialogs ---------- */
 dialog.management-dialog {
   box-sizing: border-box;
-  width: min(1180px, 86vw);
-  height: min(900px, 84dvh);
+  width: min(84rem, 86vw);
+  height: min(64rem, 84dvh);
   max-height: 84dvh;
   padding: 0;
   border-radius: var(--radius-md);
@@ -178,15 +178,18 @@ dialog.management-dialog::backdrop {
   flex: 1;
   width: 100%;
   box-sizing: border-box;
-  padding: var(--space-7) var(--topbar-inline-padding) var(--space-7);
+  --management-content-padding: clamp(
+    var(--space-6),
+    3vw,
+    calc(var(--space-7) * 1.5)
+  );
+  padding: var(--management-content-padding);
+  padding-bottom: calc(var(--management-content-padding) * 1.5);
 }
-.management-dialog .management-page-content {
-  max-width: 100%;
-}
-@media (max-width: 720px) {
-  .management-dialog > .management-page {
-    padding: var(--space-5) var(--space-5) var(--space-6);
-  }
+.management-dialog > .management-page > .management-page-content {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
 }
 /* ---------- shared management content ---------- */
 .management-page {
