@@ -123,11 +123,6 @@ async test "local login returns canonical shared routes for this device only" {
     let origin = console.origin()
     for
       (destination, expected) in [
-        ("/device/host/settings", "/device/host/chat"),
-        ("/device/%68ost/%73kills", "/device/host/chat"),
-        ("/device/host/schedules", "/device/host/chat"),
-        ("/device/host/skills/installed/local%2Fskill", "/device/host/chat"),
-        ("/device/host/skills/market/acme%2ftool%401.0", "/device/host/chat"),
         ("/device/%68ost/%63hat", "/device/host/chat"),
         ("/device/host/chat/session/a%2fb", "/device/host/chat/session/a%2Fb"),
         (

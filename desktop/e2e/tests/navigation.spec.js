@@ -78,35 +78,6 @@ test('local console opens a session without a device query', async ({ page }) =>
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const restored of [false, true]) {
-  test(`encoded device conversation links share canonical browser history (restored=${restored})`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page); await app.install();
-    if (restored) await page.addInitScript(() => {
-      if (sessionStorage.getItem('encoded-history-seeded')) return;
-      sessionStorage.setItem('encoded-history-seeded', 'yes');
-      const initial = '/device/device-a/chat/new';
-      const session = '/device/%64evice-a/chat/session/session-1';
-      const marker = key => ({ seekmoonNavigation: { group: 'encoded-group', key }, foreignState: 'keep' });
-      history.replaceState(marker('initial'), '', initial);
-      history.pushState(marker('session'), '', session);
-      sessionStorage.setItem('seekmoon.history.v1.encoded-group', JSON.stringify({ entries: [
-        { key: 'initial', path: initial, original: initial }, { key: 'session', path: session, original: session },
-      ] }));
-    });
-    await page.goto('/device/%64evice-a/chat/session/session-1');
-    await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(path('chat/session/session-1') + '$'));
-    if (restored) expect(await page.evaluate(() => history.state.foreignState)).toBe('keep');
-    await page.reload();
-    await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
-    if (restored) {
-      await page.goBack(); await expect(page).toHaveURL(new RegExp(path('chat/new') + '$'));
-      await page.goForward(); await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
-    }
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
 test('dialogs can open over an invalid route without changing it', async ({ page }) => {
   const app = new DesktopBrowserHarness(page); await app.install();
   const invalid = '/device/%64evice-a/not-a-page';
@@ -116,28 +87,6 @@ test('dialogs can open over an invalid route without changing it', async ({ page
   await page.keyboard.press('Escape'); await expect(page.locator('.navigation-notice')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
-
-for (const storage of ['malformed', 'unavailable']) {
-  test(`conversation history remains usable when persisted storage is ${storage}`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page); await app.install();
-    if (storage === 'unavailable') await page.addInitScript(() => {
-      for (const name of ['getItem', 'setItem']) {
-        const original = Storage.prototype[name];
-        Storage.prototype[name] = function (key, ...args) {
-          if (key.startsWith('seekmoon.history.v1.')) throw new DOMException('Storage denied', 'SecurityError');
-          return original.call(this, key, ...args);
-        };
-      }
-    });
-    await page.goto(path('chat/new')); await app.openSession();
-    await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
-    if (storage === 'malformed') await page.evaluate(() => sessionStorage.setItem('seekmoon.history.v1.' + history.state.seekmoonNavigation.group, '{broken'));
-    await page.reload(); await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
-    await page.goBack(); await expect(page).toHaveURL(new RegExp(path('chat/new') + '$'));
-    await page.goForward(); await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
-  });
-}
 
 test('session deep links wait for catalogs and distinguish missing from failed loading', async ({ page }) => {
   const app = new DesktopBrowserHarness(page); app.rpcDelays.set('session.list', 500);

@@ -79,8 +79,7 @@ test "invalid routes remain distinct from unrelated links" {
     path in [
       "/device/d/chat/session/", "/device/d/chat/session/%GG", "/device/d/chat/session/%FF",
       "/device/d/chat/session/%00", "/device/d/chat/session/..", "/device/d/unknown",
-      "/device//chat", "/device/d/settings", "/device/d/skills", "/device/d/schedules",
-      "/device/d/skills/installed/local%2Fskill", "/device/d/skills/market/acme%2Ftool%401.0",
+      "/device//chat",
     ] {
     assert_true(@routes.parse(path) is Err(InvalidRoute))
   }
