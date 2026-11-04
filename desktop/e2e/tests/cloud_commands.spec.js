@@ -147,7 +147,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
   await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Retain this goal');
   await page.locator('#goal-set').click();
-  await expect(page.getByRole('main')).toContainText('Error');
+  await expect(page.locator('#transcript')).toContainText('Cloud answered HTTP 503.');
   await expect(task).toHaveValue('Retain this goal');
   await expect(page.locator('#goal-set')).toBeEnabled();
   expect(commands(app)).toEqual([]);

@@ -451,10 +451,19 @@ pub fn update(
           )
         Prompt(..) | Terminal(_) => conversation.controls
       }
-      let (next, command) = state
-        .replace(creation.id, { ..conversation, outgoing: None, controls, })
-        .failed(error)
-      (next, command, None)
+      let next = { ..state, needs_sign_in: error is Unauthorized, }.replace(
+        creation.id,
+        {
+          ..conversation,
+          outgoing: None,
+          controls,
+          notice: match submission.input {
+            Prompt(..) | Native(_) => Some(error.label())
+            Terminal(_) => None
+          },
+        },
+      )
+      (next, @cmd.none, None)
     }
     Edit(account~, session=id, edit~) => {
       let edit = match edit {
@@ -998,22 +1007,14 @@ pub fn update(
           Some(error.label())
         },
       })
-      let (next, command) = if recovering && retry {
-        (next, @cmd.none)
-      } else {
-        next.failed(error)
-      }
       (
-        next,
-        @cmd.batch([
-          command,
-          if (recovering && retry) ||
-            (!recovering && conversation.generating && !(error is Unauthorized)) {
-            poll(epoch, id, request, emit)
-          } else {
-            @cmd.none
-          },
-        ]),
+        { ..next, needs_sign_in: error is Unauthorized, },
+        if (recovering && retry) ||
+          (!recovering && conversation.generating && !(error is Unauthorized)) {
+          poll(epoch, id, request, emit)
+        } else {
+          @cmd.none
+        },
         None,
       )
     }
@@ -1208,14 +1209,10 @@ pub fn update(
         },
       })
       if configuration {
-        return (
-          { ..next, sequence: state.sequence + 1, notice: Some(error.label()), },
-          @cmd.none,
-          None,
-        )
+        return ({ ..next, sequence: state.sequence + 1, }, @cmd.none, None)
       }
       let (next, command) = if error is Unauthorized {
-        next.failed(error)
+        ({ ..next, needs_sign_in: true, }, @cmd.none)
       } else {
         next.load(id, token, emit)
       }
@@ -1297,14 +1294,10 @@ fn State::submit(
   let content = prompt_content(draft) catch {
     @cloud_client.RequestError(failure) =>
       return (
-        if state.draft_identity() == Some(owner) {
-          { ..state, notice: Some(failure.label()), }
-        } else {
-          state.replace(id, {
-            ..state.conversations[id],
-            notice: Some(failure.label()),
-          })
-        },
+        state.replace(id, {
+          ..state.conversations[id],
+          notice: Some(failure.label()),
+        }),
         @cmd.none,
         None,
       )

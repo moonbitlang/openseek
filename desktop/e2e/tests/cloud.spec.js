@@ -175,10 +175,10 @@ test('missing service credentials show a server configuration error without aski
   await cloud.open();
   await page.locator('#task').fill('Keep this draft');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  const notice = page.locator('.sidebar-notice').filter({ hasText: 'Cloud model credentials are not configured. Contact the service administrator.' });
-  await expect(notice).toHaveText('Cloud model credentials are not configured. Contact the service administrator.');
-  await expect(notice).toHaveAttribute('title', 'Cloud model credentials are not configured. Contact the service administrator.');
-  expect(await notice.evaluate(element => getComputedStyle(element).whiteSpace)).toBe('normal');
+  const message = 'Cloud model credentials are not configured. Contact the service administrator.';
+  const notice = page.locator('#transcript').getByText(message, { exact: true });
+  await expect(notice).toBeVisible();
+  await expect(page.locator('aside')).not.toContainText(message);
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Set API key', exact: true })).toHaveCount(0);
