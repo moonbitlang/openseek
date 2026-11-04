@@ -1771,7 +1771,7 @@ fn language_id(name : String) -> String {
     "javascript"
   } else if lower.has_suffix(".json") || lower.has_suffix(".jsonl") {
     "json"
-  } else if lower.has_suffix(".md") {
+  } else if lower.has_suffix(".md") || lower.has_suffix(".typ") {
     "markdown"
   } else {
     "plaintext"

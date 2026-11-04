@@ -3,10 +3,13 @@ test "desktop selects Markdown presentation and resource kind explicitly" {
   assert_true(uses_markdown_presentation("README.md"))
   assert_true(uses_markdown_presentation("Guide.MD"))
   assert_true(uses_markdown_presentation("tour.mbt.md"))
+  assert_true(uses_markdown_presentation("notes.typ"))
+  assert_true(uses_markdown_presentation("notes.TYP"))
   assert_false(uses_markdown_presentation("main.mbt"))
   assert_eq(language_id("README.md"), "markdown")
   assert_eq(language_id("tour.mbt.md"), "moonbit")
   assert_true(markdown_resource_kind("README.md") is @viewer.OrdinaryMarkdown)
+  assert_true(markdown_resource_kind("notes.typ") is @viewer.OrdinaryMarkdown)
   assert_true(markdown_resource_kind("tour.MBT.MD") is @viewer.MoonBitMarkdown)
 }
 
