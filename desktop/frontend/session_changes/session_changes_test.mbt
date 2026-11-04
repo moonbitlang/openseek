@@ -237,11 +237,15 @@ test "the folded summary counts the checkout and what is attached" {
     title: "Add the changes card",
     state: Open,
     url: pull(1).url,
+    additions: 3,
+    deletions: 1,
+    checks: None,
   }
   let on_branch : @session_changes.Checkout = {
     branch: "feature",
     pull_request: None,
     diff: Some({ added: 3, removed: 1, files: 2, partial: false, }),
+    compare_url: None,
   }
   let on_pull_request = { ..on_branch, pull_request: Some(current), }
   // Nothing to describe: the card stays away, even while the list is read.
@@ -432,4 +436,176 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
     @session_changes.summary(one, None, merged) ==
     @session_changes.summary(one, None, asked),
   )
+}
+
+///|
+fn labels(definition : @action_menu.Definition?) -> Array[(String, Bool)] {
+  guard definition is Some(definition) else { return [] }
+  definition.entries.filter_map(entry => {
+    guard entry is Action(item) else { return None }
+    Some((item.label, item.enabled))
+  })
+}
+
+///|
+test "a row's menu opens it, copies its address, and removes an attached item" {
+  let one = conversation("s-1")
+  let current : @session_changes.PullRequest = {
+    number: 1,
+    title: "Add the changes card",
+    state: Open,
+    url: pull(1).url,
+    additions: 3,
+    deletions: 1,
+    checks: Some({ passed: 8, failed: 1, pending: 0, }),
+  }
+  let checkout : @session_changes.Checkout = {
+    branch: "feature",
+    pull_request: Some(current),
+    diff: None,
+    compare_url: None,
+  }
+  let state = loaded(one, [pull(1), pull(2), branch("feature")])
+  fn menu(
+    checkout : @session_changes.Checkout?,
+    state : @session_changes.State,
+    target : String,
+  ) -> @action_menu.Definition? {
+    @session_changes.menu(
+      one,
+      checkout,
+      state,
+      quiet(),
+      open_link=_ => @cmd.none,
+      target,
+    )
+  }
+
+  // The checkout's pull request can be opened and copied, never removed.
+  assert_eq(labels(menu(Some(checkout), state, "conv-changes:checkout")), [
+    ("Open on GitHub", true),
+    ("Copy link", true),
+  ])
+  // A checkout with no pull request has no page, so no menu.
+  assert_true(
+    menu(
+      Some({ ..checkout, pull_request: None, }),
+      state,
+      "conv-changes:checkout",
+    )
+    is None,
+  )
+  let target = "conv-changes:pull_request:" + pull(2).url
+  assert_eq(labels(menu(Some(checkout), state, target)), [
+    ("Open on GitHub", true),
+    ("Copy link", true),
+    ("Remove from this conversation", true),
+  ])
+  // While its removal is out, the item cannot be removed again.
+  let (_, removing) = @session_changes.update(
+    quiet(),
+    Remove(one, pull(2)),
+    state,
+  )
+  assert_true(
+    labels(menu(Some(checkout), removing, target)).contains(
+      ("Remove from this conversation", false),
+    ),
+  )
+  // The checkout's own pull request is its row, not an attached one; and an
+  // item that is gone has no menu.
+  assert_true(
+    menu(Some(checkout), state, "conv-changes:pull_request:" + pull(1).url)
+    is None,
+  )
+  assert_true(
+    menu(Some(checkout), state, "conv-changes:pull_request:" + pull(9).url)
+    is None,
+  )
+}
+
+///|
+test "past five rows the rest wait behind show more, until another conversation" {
+  let one = conversation("s-1")
+  let state = loaded(one, [
+    pull(1),
+    pull(2),
+    pull(3),
+    pull(4),
+    pull(5),
+    pull(6),
+    branch("feature"),
+  ])
+  // Five rows and the toggle.
+  assert_eq(@session_changes.rows(one, None, state, quiet()).length(), 6)
+  let (_, expanded) = @session_changes.update(quiet(), ShowAll(true), state)
+  // Every row and the toggle back.
+  assert_eq(@session_changes.rows(one, None, expanded, quiet()).length(), 8)
+  let (_, folded) = @session_changes.update(quiet(), ShowAll(false), expanded)
+  assert_eq(@session_changes.rows(one, None, folded, quiet()).length(), 6)
+  // A handful of rows needs no toggle.
+  assert_eq(
+    @session_changes.rows(one, None, loaded(one, [pull(1)]), quiet()).length(),
+    1,
+  )
+  let (_, other) = @session_changes.update(
+    quiet(),
+    Opened(conversation("s-2")),
+    expanded,
+  )
+  assert_true(!other.expanded)
+}
+
+///|
+test "a summary carries GitHub's line totals" {
+  let one = conversation("s-1")
+  let state = loaded(one, [pull(1)])
+  let (_, summarized) = @session_changes.update(
+    quiet(),
+    Summarized(
+      url=pull(1).url,
+      generation=state.generation,
+      described(1, "open"),
+    ),
+    state,
+  )
+  assert_true(
+    summarized.summary(pull(1).url)
+    is Some({ additions: 1, deletions: 0, checks: None, .. }),
+  )
+}
+
+///|
+test "a pull request and a branch at one address each have their own menu" {
+  let one = conversation("s-1")
+  let url = pull(1).url
+  let as_branch : @protocol.SessionArtifact = @json.from_json({
+    "type": "branch",
+    "url": Json(url),
+  }) catch {
+    error => abort(error.to_string())
+  }
+  let state = loaded(one, [pull(1), as_branch])
+  let mut removed : @session_changes.Msg? = None
+  let emit : @cmd.Emit[@session_changes.Msg] = Emit(msg => {
+    removed = Some(msg)
+    @cmd.none
+  })
+  guard @session_changes.menu(
+      one,
+      None,
+      state,
+      emit,
+      open_link=_ => @cmd.none,
+      "conv-changes:branch:" + url,
+    )
+    is Some(definition) else {
+    fail("the branch's row has no menu")
+  }
+  guard definition.entries is [.., Action(remove)] else {
+    fail("the menu ends without Remove")
+  }
+  ignore(remove.command)
+  // Building the command names the artifact it removes.
+  assert_true(removed is Some(Remove(_, artifact)) && artifact == as_branch)
 }

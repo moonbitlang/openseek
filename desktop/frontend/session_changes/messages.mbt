@@ -13,6 +13,16 @@ priv enum UiMessage {
   StateDraft
   StateMerged
   StateClosed
+  MoreActions
+  OpenOnGitHub
+  CopyLink
+  CreatePullRequest
+  ShowMore(Int32)
+  ShowLess
+  ChecksFailing(Int32)
+  ChecksFailedCount(Int32)
+  ChecksPendingCount(Int32)
+  ChecksPassedCount(Int32)
 }
 
 ///|
@@ -79,5 +89,58 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, StateClosed) => "已关闭"
     (TraditionalChinese, StateClosed) => "已關閉"
     (Japanese, StateClosed) => "クローズ"
+    (English, MoreActions) => "More actions"
+    (Spanish, MoreActions) => "Más acciones"
+    (SimplifiedChinese, MoreActions) => "更多操作"
+    (TraditionalChinese, MoreActions) => "更多動作"
+    (Japanese, MoreActions) => "その他の操作"
+    (English, OpenOnGitHub) => "Open on GitHub"
+    (Spanish, OpenOnGitHub) => "Abrir en GitHub"
+    (SimplifiedChinese, OpenOnGitHub) => "在 GitHub 上打开"
+    (TraditionalChinese, OpenOnGitHub) => "在 GitHub 上開啟"
+    (Japanese, OpenOnGitHub) => "GitHub で開く"
+    (English, CopyLink) => "Copy link"
+    (Spanish, CopyLink) => "Copiar enlace"
+    (SimplifiedChinese, CopyLink) => "复制链接"
+    (TraditionalChinese, CopyLink) => "複製連結"
+    (Japanese, CopyLink) => "リンクをコピー"
+    (English, CreatePullRequest) => "Create PR"
+    (Spanish, CreatePullRequest) => "Crear PR"
+    (SimplifiedChinese, CreatePullRequest) => "创建 PR"
+    (TraditionalChinese, CreatePullRequest) => "建立 PR"
+    (Japanese, CreatePullRequest) => "PR を作成"
+    (English, ShowMore(count)) => "Show \{count} more"
+    (Spanish, ShowMore(count)) => "Mostrar \{count} más"
+    (SimplifiedChinese, ShowMore(count)) => "显示其余 \{count} 项"
+    (TraditionalChinese, ShowMore(count)) => "顯示其餘 \{count} 項"
+    (Japanese, ShowMore(count)) => "残り \{count} 件を表示"
+    (English, ShowLess) => "Show less"
+    (Spanish, ShowLess) => "Mostrar menos"
+    (SimplifiedChinese, ShowLess) => "收起"
+    (TraditionalChinese, ShowLess) => "收合"
+    (Japanese, ShowLess) => "折りたたむ"
+    (English, ChecksFailing(count)) => "\{count} failing"
+    (Spanish, ChecksFailing(1)) => "1 fallida"
+    (Spanish, ChecksFailing(count)) => "\{count} fallidas"
+    (SimplifiedChinese, ChecksFailing(count)) => "\{count} 项失败"
+    (TraditionalChinese, ChecksFailing(count)) => "\{count} 項失敗"
+    (Japanese, ChecksFailing(count)) => "\{count} 件失敗"
+    (English, ChecksFailedCount(count)) => "\{count} failed"
+    (Spanish, ChecksFailedCount(1)) => "1 fallida"
+    (Spanish, ChecksFailedCount(count)) => "\{count} fallidas"
+    (SimplifiedChinese, ChecksFailedCount(count)) => "失败 \{count}"
+    (TraditionalChinese, ChecksFailedCount(count)) => "失敗 \{count}"
+    (Japanese, ChecksFailedCount(count)) => "失敗 \{count}"
+    (English, ChecksPendingCount(count)) => "\{count} running"
+    (Spanish, ChecksPendingCount(count)) => "\{count} en curso"
+    (SimplifiedChinese, ChecksPendingCount(count)) => "进行中 \{count}"
+    (TraditionalChinese, ChecksPendingCount(count)) => "進行中 \{count}"
+    (Japanese, ChecksPendingCount(count)) => "実行中 \{count}"
+    (English, ChecksPassedCount(count)) => "\{count} passed"
+    (Spanish, ChecksPassedCount(1)) => "1 superada"
+    (Spanish, ChecksPassedCount(count)) => "\{count} superadas"
+    (SimplifiedChinese, ChecksPassedCount(count)) => "已通过 \{count}"
+    (TraditionalChinese, ChecksPassedCount(count)) => "已通過 \{count}"
+    (Japanese, ChecksPassedCount(count)) => "成功 \{count}"
   }
 }

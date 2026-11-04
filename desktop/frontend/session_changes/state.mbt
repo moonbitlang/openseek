@@ -33,6 +33,8 @@ pub(all) enum Msg {
     @protocol.SessionArtifact,
     Result[@protocol.SessionArtifacts, String]
   )
+  /// The user unfolded every row (`true`) or went back to the first few.
+  ShowAll(Bool)
   /// GitHub answered the lookup of the pull request at `url`, asked in
   /// generation `generation`. `Ok(None)` means the address is not a pull
   /// request GitHub knows how to describe.
@@ -84,6 +86,9 @@ pub struct State {
   /// Counts the overview's arrivals and the list's changes, the moments every
   /// attached pull request is looked up again.
   generation : Int32
+  /// Whether the conversation's card shows every row rather than the first
+  /// few; another conversation starts folded back.
+  expanded : Bool
 } derive(Eq)
 
 ///|
@@ -120,6 +125,7 @@ pub fn State::initial() -> State {
     remove_error: None,
     lookups: {},
     generation: 0,
+    expanded: false,
   }
 }
 
@@ -235,6 +241,7 @@ pub fn update(
           (@cmd.none, { ..state, removing, remove_error: Some(message), })
       }
     }
+    ShowAll(expanded) => (@cmd.none, { ..state, expanded, })
     // An answer a later lookup of the same address superseded is dropped. A
     // failed lookup keeps what an earlier one found.
     Summarized(url~, generation~, result) => {
@@ -336,7 +343,7 @@ fn ask(
   let state = if state.conversation == Some(conversation) {
     state
   } else {
-    { ..state, removing: [], remove_error: None, }
+    { ..state, removing: [], remove_error: None, expanded: false, }
   }
   (cmd, { ..state, conversation: Some(conversation), phase: waiting, serial, })
 }
@@ -353,5 +360,27 @@ fn PullRequest::from_reply(reply : @protocol.GitPullRequest) -> PullRequest? {
     "closed" => Closed
     _ => return None
   }
-  Some({ number: reply.number, title: reply.title, state, url: reply.url, })
+  Some({
+    number: reply.number,
+    title: reply.title,
+    state,
+    url: reply.url,
+    additions: reply.additions,
+    deletions: reply.deletions,
+    checks: reply.checks.map(checks => {
+      passed: checks.passed,
+      failed: checks.failed,
+      pending: checks.pending,
+    }),
+  })
+}
+
+///|
+/// What GitHub last said about `artifact`, when it is a pull request.
+fn State::summary_of(
+  self : State,
+  artifact : @protocol.SessionArtifact,
+) -> PullRequest? {
+  guard artifact.type_ is PullRequest else { return None }
+  self.summary(artifact.url)
 }
