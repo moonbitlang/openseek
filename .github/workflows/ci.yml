@@ -143,13 +143,16 @@ jobs:
       - name: Test native target
         # The Proton window host builds in its own desktop/app/moon.work, so
         # nothing in this workspace links libproton or needs the CEF runtime.
+        # Most test executables wait on child processes, timers, and I/O
+        # rather than the CPU, so run more of them than the runner's four
+        # cores; the default of one per core leaves the CPU mostly idle.
         if: matrix.target == 'native'
-        run: moon test --target native
+        run: moon test --target native -j 16
 
       - name: Test JS target
         # Run JS-only package tests from the same root workspace.
         if: matrix.target == 'js'
-        run: moon test --target js
+        run: moon test --target js -j 16
 
       - name: Test wasm target
         # The portability gate for every package carrying `+wasm` in its
@@ -157,7 +160,7 @@ jobs:
         # this row proves is that the workspace's own portable logic behaves
         # under moonrun exactly as it does natively.
         if: matrix.target == 'wasm'
-        run: moon test --target wasm
+        run: moon test --target wasm -j 16
 
       - name: Build and launch the wasm TUI
         if: matrix.target == 'wasm'
