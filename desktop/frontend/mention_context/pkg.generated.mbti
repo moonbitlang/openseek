@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub fn artifact_snapshot(String, String) -> ArtifactSnapshot?
+
 pub fn encode(Array[MentionRef], String) -> String
 
 pub fn glyph(MentionRef) -> String
@@ -38,6 +40,15 @@ pub(all) enum AnnotationSide {
 pub fn AnnotationSide::equal(Self, Self) -> Bool
 pub fn AnnotationSide::not_equal(Self, Self) -> Bool
 pub fn AnnotationSide::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ArtifactSnapshot {
+  reference : String
+  title : String
+  state : Json
+} derive(Eq, @debug.Debug)
+pub fn ArtifactSnapshot::equal(Self, Self) -> Bool
+pub fn ArtifactSnapshot::not_equal(Self, Self) -> Bool
+pub fn ArtifactSnapshot::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ChangeExcerpt {
   original : Array[ChangeLine]
@@ -81,6 +92,7 @@ pub(all) enum MentionRef {
   SemanticSearch(SemanticSearchReference)
   SemanticSearchArtifact(SemanticSearchArtifact)
   OfficeSelection(materialized~ : String)
+  InteractiveAnswer(ArtifactSnapshot)
   Annotation(file~ : String, start_line~ : Int32, end_line~ : Int32, quote~ : String, comment~ : String, side~ : AnnotationSide)
 } derive(Eq, @debug.Debug)
 pub fn MentionRef::comment(Self) -> String?

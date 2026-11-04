@@ -762,7 +762,7 @@ fn MinimalContent::render(
   self : MinimalContent,
   actions : Actions,
   active~ : Bool = false,
-  artifact_view? : (String, String) -> @html.Html,
+  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
 ) -> @html.Html {
   match self {
     Messages(parts, active_group~) => {

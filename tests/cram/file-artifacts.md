@@ -335,3 +335,68 @@ $ grep -q 'unused_value' warning.err
 ```mooncram
 $ test ! -e "$OUTPUT/warning.html" && test ! -e "$OUTPUT/warning.html.source"
 ```
+
+
+The authoring helpers prepare a clean working project and apply a batch of
+source files by location. Pass the scratch path explicitly, and write generated
+text to staging files first.
+
+```mooncram
+$ SCRATCH="$PWD/session/scratch"
+```
+
+```mooncram
+$ INIT="$TESTDIR/../../share/artifact/init.mbtx"
+```
+
+```mooncram
+$ AUTHOR="$TESTDIR/../../share/artifact/write.mbtx"
+```
+
+```mooncram
+$ moon run --target-dir "$PWD/init-build" "$INIT" "$SCRATCH" "$TESTDIR/../../share/artifact/rabbita" authored > init.out
+```
+
+```mooncram
+$ WORK="$SCRATCH/component-work/authored"
+```
+
+```mooncram
+$ test -f "$WORK/bridge.mbt" && test ! -e "$WORK/.mooncakes" && test ! -e "$WORK/_build"
+```
+
+```mooncram
+$ mkdir -p "$SCRATCH/staged-sources" && printf '{"value": 2}' > "$SCRATCH/staged-sources/data.json"
+```
+
+```mooncram
+$ moon run --target-dir "$PWD/author-build" "$AUTHOR" "$SCRATCH" "$WORK" data/input.json "$SCRATCH/staged-sources/data.json" > author.out
+```
+
+```mooncram
+$ grep -Fq '"value": 2' "$WORK/data/input.json"
+```
+
+Existing working projects are protected from reinitialization.
+
+```mooncram
+$ moon run --target-dir "$PWD/init-build" "$INIT" "$SCRATCH" "$TESTDIR/../../share/artifact/rabbita" authored > duplicate-init.out 2> duplicate-init.err
+[1]
+```
+
+```mooncram
+$ grep -Fq '"value": 2' "$WORK/data/input.json"
+```
+
+The write helper accepts source file paths, and refuses to apply them to a
+workspace project or a retained published revision.
+
+```mooncram
+$ moon run --target-dir "$PWD/author-build" "$AUTHOR" "$SCRATCH" "$PROJECT" main.mbt "$SCRATCH/staged-sources/data.json" 2> author-scope.err
+[1]
+```
+
+```mooncram
+$ grep -Fo 'project must be a working directory inside session scratch' author-scope.err
+project must be a working directory inside session scratch
+```

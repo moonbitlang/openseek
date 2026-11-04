@@ -14,7 +14,7 @@ pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, title~ : Str
 
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
 
-pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd, artifact_view? : (String, String) -> @html.Html, defer_artifacts? : Bool) -> Array[@html.Html]
+pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd, artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html, defer_artifacts? : Bool) -> Array[@html.Html]
 
 pub fn workspace_file_card(@i18n.Locale, @workspace_file_ref.WorkspaceFileRef, ((String) -> @cmd.Cmd)?) -> @html.Html
 

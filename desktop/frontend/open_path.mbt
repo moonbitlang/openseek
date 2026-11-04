@@ -67,7 +67,6 @@ fn Model::session_file_target(
   path : String,
 ) -> (@common.Uri, String)? {
   guard !self.cloud_selected() &&
-    @workspace_file_ref.artifact_path(path) is Some(_) &&
     self.active_conversation() is Some(conversation) else {
     return None
   }
@@ -89,9 +88,8 @@ fn request_open_path(
   annotation? : String,
   return_to? : @interop.ConversationKey,
 ) -> (@cmd.Cmd, Model) {
-  if @workspace_file_ref.artifact_path(path) is Some(_) {
-    guard model.active_checkout() is Some(active) &&
-      model.session_file_target(path) is Some((root, relative)) else {
+  if model.session_file_target(path) is Some((root, relative)) {
+    guard model.active_checkout() is Some(active) else {
       return (@cmd.none, model)
     }
     let model = model.begin_editor_navigation()
