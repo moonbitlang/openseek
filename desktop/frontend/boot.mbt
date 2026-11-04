@@ -530,6 +530,7 @@ fn main {
             emit.map(message => CloudAction(message)),
           ),
         ]
+        subs.append(back_layers(model, emit))
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
         subs.push(

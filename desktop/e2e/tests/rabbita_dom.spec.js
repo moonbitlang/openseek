@@ -1823,6 +1823,35 @@ test('desktop shell and modal stay inside a narrow browser viewport', async ({ p
   expect(app.pageErrors).toEqual([]);
 });
 
+test('a browser close request closes a workspace settings menu before its dialog', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'CloseWatcher is Chromium-only');
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  // Escape is Chromium's desktop close request. Hiding it from the page's
+  // listeners leaves only the close request, which is what Android's Back
+  // sends an installed web app.
+  await page.evaluate(() => addEventListener('keydown', event => {
+    if (event.key === 'Escape') event.stopImmediatePropagation();
+  }, true));
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByTitle('More actions').click();
+  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Workspace settings' });
+  await expect(dialog).toBeVisible();
+  const launchMode = page.getByRole('button', { name: 'New chats' });
+  await expect(launchMode).toBeEnabled();
+  await launchMode.click();
+  const option = page.getByRole('option', { name: 'Worktree' });
+  await expect(option).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(option).toBeHidden();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('workspace settings dialog opens and persists per-workspace choices', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

@@ -296,3 +296,19 @@ for (const failure of ['rpc', 'store']) {
     expect(app.requests.some(r => r.method === 'session.load_archived')).toBe(true); expect(app.pageErrors).toEqual([]);
   });
 }
+
+test("Back closes the management dialog before it reaches the page", async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install(); await app.goto(); await app.openSession();
+  // The host's Back event, as the Android shell dispatches it: true exactly
+  // when a layer took it.
+  const hostBack = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
+  expect(await hostBack()).toBe(false);
+  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await expect(dialog(page)).toHaveAccessibleName('Skills');
+  expect(await hostBack()).toBe(true);
+  await expect(dialog(page)).not.toBeVisible();
+  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  expect(await hostBack()).toBe(false);
+  expect(app.pageErrors).toEqual([]);
+});

@@ -4549,6 +4549,7 @@ fn update_msg(
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
+    CloseSidebar => (@cmd.none, { ..model, sidebar_open: false, })
     SidebarModeSelected(sidebar_mode) => (@cmd.none, { ..model, sidebar_mode, })
     DeviceChosen(id) => (@nav.load(@routes.device_entry_path(id)), model)
     // A conversation already on screen has claimed the list, and a Cloud
@@ -5995,6 +5996,12 @@ fn update_msg(
       let overview_open = !model.overview_open
       (save_overview_open(overview_open), { ..model, overview_open, })
     }
+    CloseOverview =>
+      if model.overview_open {
+        update_msg(dispatch, ToggleOverview, model)
+      } else {
+        (@cmd.none, model)
+      }
     OverviewLoaded(overview_open) => (@cmd.none, { ..model, overview_open, })
     Overview(msg) =>
       (
@@ -6034,6 +6041,12 @@ fn update_msg(
       }
       (@cmd.none, model)
     }
+    CloseRightPanel =>
+      if model.right_panel_open {
+        update_msg(dispatch, ToggleRightPanel, model)
+      } else {
+        (@cmd.none, model)
+      }
     ToggleRightPanelMenu =>
       (
         @cmd.none,

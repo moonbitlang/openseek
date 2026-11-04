@@ -523,6 +523,8 @@ pub fn body_view(
             .map(key => key.key() == "Escape")
             .unwrap_or(false) &&
             state.pending_excel_selection(ctx) is Some(preview) {
+            // Clearing the selection spends this Escape; it closes no layer.
+            event.prevent_default()
             dispatch(ExcelSelectionCleared(preview))
           } else {
             @cmd.none
