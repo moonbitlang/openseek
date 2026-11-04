@@ -45,6 +45,41 @@ permission question. The child's `allow` deletes the file and its `deny`
 keeps it; either way it saw the user's message and its transcript records the
 verdict.
 
+# File artifact scripts
+
+The bundled artifact scripts and example projects run through the real mbtx tool
+in an isolated scratch directory:
+
+```sh
+moon test tests/integration/artifact_generation/scripts --target native
+moon test tests/integration/artifact_generation/scripts --target wasm
+```
+
+Native and Wasm CI include this suite.
+
+# Interactive answers
+
+The offline test
+`moon test tests/integration/artifact_generation/offline --target native` drives a
+scripted model through the actual mbtx tool, script and component compilation,
+repair, packaging and a selected-state follow-up. It runs with the standard native
+MoonBit test suite.
+
+Live acceptance is explicit and separate from offline CI:
+
+```sh
+moon run tests/integration/artifact_generation --target native -- ENGINE_SETTINGS_FILE
+```
+
+The client reads the configured DeepSeek key and creates an isolated temporary
+workspace and scratch. The model authors, checks, tests and packages a small
+Rabbita explanation.
+It saves the generated page, source revision, answer and session trace in the
+printed acceptance directory.
+An unfinished acceptance can continue by passing that directory as a second
+argument. This command is not part of `just test` and needs explicit live
+service configuration.
+
 # Bundled workflows
 
 `just test-workflows` runs the native MoonBit fixture package at

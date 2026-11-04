@@ -81,11 +81,27 @@ fn dismiss_loader(
 }
 
 ///|
-pub fn dismiss_subscription(id : String, emit : @cmd.Emit[Bool]) -> @sub.Sub {
-  @sub.custom_sub(
-    "changes-dismiss-" + id,
-    @sub.Local,
-    DismissSubscription(id, emit),
-    dismiss_loader,
-  )
+/// Close the open popup on a click or focus outside it, on Escape, and on
+/// Back. `emit` receives whether focus should return to the chip: only after
+/// a key, since a host's Back button leaves no keyboard focus to restore.
+/// `level` is where the popup sits for Back: `TopLayer` when it is shown as a
+/// popover.
+pub fn dismiss_subscription(
+  id : String,
+  level~ : @dismiss.Level = Popup,
+  emit : @cmd.Emit[Bool],
+) -> @sub.Sub {
+  @sub.batch([
+    @sub.custom_sub(
+      "changes-dismiss-" + id,
+      @sub.Local,
+      DismissSubscription(id, emit),
+      dismiss_loader,
+    ),
+    @dismiss.on_back(
+      "changes-back-" + id,
+      level~,
+      emit.map((_ : Unit) => false),
+    ),
+  ])
 }

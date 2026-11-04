@@ -49,11 +49,22 @@ fn open_new_tab(
     workspace_label: workspace_label(ctx),
     session: ctx.session,
     workspace_path: ctx.placement.bind(placement => placement.project_root()),
-    status: TabOpening,
+    status: TabOpening(requested=false),
     command,
     input: InputQueue::empty(),
   }
-  let state = { ..state, tabs: state.tabs + [tab], }
+  let state = {
+    ..state,
+    tabs: state.tabs + [tab],
+    cloud_failures: state.cloud_failures.filter(failed => {
+      failed.0 != ctx.channel
+    }),
+    interrupted_channels: if ctx.channel is Cloud(..) {
+      state.interrupted_channels.filter(connection => connection != ctx.channel)
+    } else {
+      state.interrupted_channels
+    },
+  }
   let mount = @cmd.batch([
     terminal_resizer.mount(),
     mount_tab(dispatch, key, focus=command is None, show=on_screen),
@@ -102,6 +113,27 @@ pub fn State::run_command(
 }
 
 ///|
+/// Show a requested terminal after deferred workspace creation. A background
+/// completion may allocate its tab without changing the foreground panel.
+pub fn State::open_terminal(
+  self : State,
+  dispatch : @cmd.Emit[Msg],
+  input : Input,
+  on_screen~ : Bool,
+) -> (@cmd.Cmd, State) {
+  let ctx = input.ctx
+  guard ctx.connected && workspace_key(ctx) is Some(_) else {
+    return (@cmd.none, self)
+  }
+  let (command, state) = if self.active_tab(ctx) is Some(_) {
+    (@cmd.none, self)
+  } else {
+    open_new_tab(dispatch, self, ctx, on_screen~)
+  }
+  (command, { ..state, open: state.open || on_screen, })
+}
+
+///|
 /// Whether a mounted tab should spawn its session now. `checkout_ready` is the
 /// conversation on screen, which a shell tab was opened from; a command tab
 /// was bound to a ready checkout when it was created, for a conversation that
@@ -109,7 +141,7 @@ pub fn State::run_command(
 /// about it.
 fn Tab::awaits_session(self : Tab, checkout_ready : Bool) -> Bool {
   (checkout_ready || self.command is Some(_)) &&
-  self.status is TabOpening &&
+  self.status is TabOpening(requested=false) &&
   self.id is None
 }
 
@@ -120,7 +152,7 @@ fn Tab::awaits_session(self : Tab, checkout_ready : Bool) -> Bool {
 /// and for a command tab that already reported.
 fn Tab::abandoned(self : Tab, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd? {
   guard self.command is Some(command) &&
-    self.status is (TabOpening | TabRunning) else {
+    self.status is (TabOpening(..) | TabRunning) else {
     return None
   }
   Some(report_command(dispatch, self.key, command.shell, None))
@@ -225,6 +257,14 @@ fn update(
 ) -> (@cmd.Cmd, State) {
   let checkout_ready = ctx.placement is Some(placement) && placement.is_ready()
   match msg {
+    CloudDisconnected(connection~, authenticated~, reason~) =>
+      disconnect(
+        dispatch,
+        state,
+        connection,
+        never_started=!authenticated,
+        reason~,
+      )
     ToggleMaximized =>
       if state.open {
         (@cmd.none, { ..state, maximized: !state.maximized, })
@@ -245,13 +285,16 @@ fn update(
           // tab once `open` flips.
           Some(_) => (@cmd.none, { ..state, open: true, })
           // First open in this workspace: start its first shell.
-          None if ctx.connected => {
+          None if ctx.connected &&
+            !(ctx.channel is Cloud(..) &&
+            state.interrupted_channels.contains(ctx.channel)) => {
             let (cmd, state) = open_new_tab(dispatch, state, ctx)
             (cmd, { ..state, open: true, })
           }
           // A remote socket can be between attempts. Keep the panel visible
           // with its disconnected status; `sync` starts a fresh PTY only
-          // after this channel reports ready again.
+          // after this channel reports ready again. A disconnected Cloud
+          // terminal stays ended until the user requests a new terminal.
           None => (@cmd.none, { ..state, open: true, })
         }
       }
@@ -309,7 +352,7 @@ fn update(
             rows,
             command?=tab.command.map(command => command.text),
           ),
-          state,
+          state.replace_tab({ ..tab, status: TabOpening(requested=true), }),
         )
       } else {
         (@cmd.none, state)
@@ -331,8 +374,8 @@ fn update(
         }
         guard state.tab_by_key(key) is Some(tab) &&
           tab.workspace.channel() == channel &&
-          tab.status is TabOpening else {
-          return (drop_pending(id), state)
+          tab.status is TabOpening(..) else {
+          return (drop_pending(channel, id), state)
         }
         match tab.command {
           // A quick command (`true`, `ls`) is exactly this race. Its output
@@ -341,31 +384,37 @@ fn update(
           Some(command) =>
             (
               @cmd.batch([
-                flush_pending(key, id),
+                flush_pending(channel, key, id),
                 report_command(dispatch, key, command.shell, exit_code_of(code)),
               ]),
               state.replace_tab({ ..tab, status: TabExited(code~), }),
             )
           None => {
             let (cmds, state) = drop_tab(state, ctx, key)
-            cmds.push(drop_pending(id))
+            cmds.push(drop_pending(channel, id))
             (@cmd.batch(cmds), state)
           }
         }
       } else if state.tab_by_key(key) is Some(tab) &&
         tab.workspace.channel() == channel &&
-        tab.status is TabOpening {
+        tab.status is TabOpening(..) {
         let (send, tab) = start_input(dispatch, {
           ..tab,
           id: Some(id),
           status: TabRunning,
         })
-        (@cmd.batch([flush_pending(key, id), send]), state.replace_tab(tab))
+        (
+          @cmd.batch([flush_pending(channel, key, id), send]),
+          state.replace_tab(tab),
+        )
       } else {
         // The tab was closed while the open was in flight; the session
         // belongs to nobody, so retire it on the host connection that opened
         // it, even if another device is focused now.
-        (@cmd.batch([send_close(channel, id), drop_pending(id)]), state)
+        (
+          @cmd.batch([send_close(channel, id), drop_pending(channel, id)]),
+          state,
+        )
       }
     }
     OpenFailed(key~, message~) =>
@@ -387,7 +436,7 @@ fn update(
     UserInput(key~, data~) | BinaryInput(key~, data~) => {
       guard checkout_ready &&
         state.tab_by_key(key) is Some(tab) &&
-        tab.status is (TabOpening | TabRunning) else {
+        tab.status is (TabOpening(..) | TabRunning) else {
         return (@cmd.none, state)
       }
       let (cmd, tab) = queue_input(dispatch, tab, data, msg is BinaryInput(..))
@@ -448,7 +497,7 @@ fn update(
       (@cmd.none, { ..state, open: true, })
     }
     SessionExited(channel~, id~, code~) =>
-      match state.tab_by_id(id) {
+      match state.tab_by_id(channel, id) {
         // The command ended, on its own or interrupted. The tab stays, with
         // its session id spent, until the report has read its screen.
         Some({ command: Some(command), .. } as tab) =>
@@ -464,20 +513,20 @@ fn update(
         }
         None =>
           if state.tabs.any(tab => {
-              tab.workspace.channel() == channel && tab.status is TabOpening
+              tab.workspace.channel() == channel && tab.status is TabOpening(..)
             }) {
             // A command tab may be the one opening: keep the output buffered
             // for it until the reply says whose session this was.
             let commands_opening = state.tabs.any(tab => {
               tab.workspace.channel() == channel &&
-              tab.status is TabOpening &&
+              tab.status is TabOpening(..) &&
               tab.command is Some(_)
             })
             (
               if commands_opening {
                 @cmd.none
               } else {
-                drop_pending(id)
+                drop_pending(channel, id)
               },
               if state.exited_before_open.any(exited => {
                   exited.0 == channel && exited.1 == id
@@ -492,7 +541,7 @@ fn update(
               },
             )
           } else {
-            (drop_pending(id), state)
+            (drop_pending(channel, id), state)
           }
       }
   }
@@ -505,14 +554,25 @@ fn update(
 fn disconnect(
   dispatch : @cmd.Emit[Msg],
   state : State,
-  channel : @interop.ChannelId,
+  channel : Connection,
+  never_started~ : Bool = false,
+  reason~ : String? = None,
 ) -> (@cmd.Cmd, State) {
   let commands : Array[@cmd.Cmd] = [term_host.clear_pending(channel)]
   let retired_keys : Array[String] = []
   for tab in state.tabs {
     if tab.workspace.channel() == channel {
       retired_keys.push(tab.key)
-      if tab.abandoned(dispatch) is Some(report) {
+      if never_started && tab.command is Some(command) {
+        commands.push(
+          dispatch(
+            CommandNotStarted(
+              shell=command.shell,
+              message=reason.unwrap_or(ui(English, ConnectionFailed(None))),
+            ),
+          ),
+        )
+      } else if tab.abandoned(dispatch) is Some(report) {
         commands.push(report)
       }
       commands.push(dispose_tab(tab.key))
@@ -526,6 +586,14 @@ fn disconnect(
     @cmd.batch(commands),
     {
       ..state,
+      cloud_failures: if never_started && !retired_keys.is_empty() {
+        [
+          ..state.cloud_failures.filter(failed => failed.0 != channel),
+          (channel, reason),
+        ]
+      } else {
+        state.cloud_failures
+      },
       interrupted_channels: if !retired_keys.is_empty() &&
         !state.interrupted_channels.contains(channel) {
         state.interrupted_channels + [channel]
@@ -600,7 +668,11 @@ fn sync(
       @cmd.batch(commands),
     )
   }
-  if state.open && ctx.connected && state.visible_tabs(ctx).is_empty() {
+  if state.open &&
+    ctx.connected &&
+    state.visible_tabs(ctx).is_empty() &&
+    !(ctx.channel is Cloud(..) &&
+    state.interrupted_channels.contains(ctx.channel)) {
     let (cmd, state) = open_new_tab(dispatch, state, ctx)
     let theme_changed = state.synced_dark_mode != Some(ctx.dark_mode)
     let state = { ..state, synced_dark_mode: Some(ctx.dark_mode), }

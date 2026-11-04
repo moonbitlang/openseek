@@ -111,6 +111,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
         },
       ]),
       etag: None,
+      offset: None,
       messages: [
         {
           task_id: "task",

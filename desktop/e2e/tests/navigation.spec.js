@@ -241,6 +241,21 @@ test('session deep links wait for catalogs and distinguish missing from failed l
   expect(app.pageErrors).toEqual([]);
 });
 
+test("a management page answers the host's Back only with a level to return to", async ({ page }) => {
+  const app = new DesktopBrowserHarness(page); skills(app);
+  await app.install(); await page.goto(path('skills'));
+  await expect(page.locator('.skill-summary', { hasText: 'route-skill' })).toBeVisible();
+  // The Android shell's Back: true exactly when something closed. Opened
+  // directly, the page has no level to return to, so Back is the host's.
+  const hostBack = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
+  expect(await hostBack()).toBe(false);
+  await page.locator('.skill-summary', { hasText: 'route-skill' }).click();
+  await expect(page.locator('.skill-preview-markdown')).toContainText('Detail reached.');
+  expect(await hostBack()).toBe(true);
+  await expect(page).toHaveURL(new RegExp(path('skills') + '$'));
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('Skills detail is addressable, refreshable and participates in history', async ({ page }) => {
   const app = new DesktopBrowserHarness(page); skills(app);
   await app.install(); await page.goto(path('skills'));

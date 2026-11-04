@@ -91,7 +91,7 @@ test('history 404 retires an externally removed conversation without creating a 
   const cloud = new CloudHarness(page);
   await cloud.install();
   await cloud.goto();
-  await page.route(`${cloudOrigin}/v1/sessions/${sessionB}/messages`, route => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': authOrigin } }));
+  await page.route(url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionB}/messages`, route => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': authOrigin } }));
   await cloud.row(sessionB).click();
   await expect(cloud.row(sessionB)).toHaveCount(0);
   await expect(cloud.row(sessionC)).toHaveCount(0);

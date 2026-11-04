@@ -827,10 +827,7 @@ priv struct Conversation {
 ///|
 /// One `!` command in flight. `id` names its terminal tab, so the tab's
 /// report retires exactly this command even when the same text runs twice.
-priv struct ShellCommand {
-  id : String
-  command : String
-} derive(Eq)
+using @composer {type ShellCommand}
 
 ///|
 /// One follow-up submitted into an open run. A queued follow-up waits for its
@@ -1660,6 +1657,11 @@ priv enum Msg {
   OpenCloudConversation(account~ : String, session~ : String)
   ComposerAction(@composer.Action)
   ComposerReply(@composer.QuoteReply)
+  ComposerCommandResult(@composer.CommandResult)
+  TranscriptArtifactContextRequested(
+    slot~ : String,
+    @mention_context.ArtifactSnapshot
+  )
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
   // be mistaken for an OpenSeek conversation owned by the root store.
@@ -1995,12 +1997,17 @@ priv enum Msg {
   ToggleOverview
   OverviewLoaded(Bool)
   Overview(@conversation_overview.Msg)
-  // Clicks away from a transient menu, one per menu. Each is separate from
-  // its toggle on purpose: a dismissal must never reopen what it closed.
+  // Clicks away from a transient menu, one per menu, and Back on a narrow
+  // layout's overlays. Each is separate from its toggle on purpose: a
+  // dismissal must never reopen what it closed.
   CloseGitDetails
+  CloseSidebar
+  CloseOverview
+  CloseRightPanel
   // The transcript component reports where its reader was as it leaves the
   // screen; the root remembers it for the conversation's next visit.
   TranscriptLeft(slot~ : String, scroll~ : @transcript_component.ScrollPosition)
+  TranscriptLoadOlder(String)
   TranscriptReviewChangesOpened(
     slot~ : String,
     selection~ : @mention_context.ReviewChanges
@@ -2693,7 +2700,11 @@ fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
     minimal_transcript: true,
     narrow,
     sidebar_open: !narrow,
-    sidebar_mode: WorkMode,
+    sidebar_mode: if !desktop && page_device is None {
+      ChatMode
+    } else {
+      WorkMode
+    },
     sidebar_revealed: None,
     right_panel_open: false,
     right_panel_menu_open: false,
@@ -2788,6 +2799,13 @@ fn Model::device_state(
   channel : @interop.ChannelId,
 ) -> DeviceState? {
   self.devices.iter().find_first(dev => dev.channel == channel)
+}
+
+///|
+/// Whether this page owns host features, including while its selected device
+/// is offline. A browser Cloud page has no device; Desktop always owns its host.
+fn Model::has_host(self : Model) -> Bool {
+  self.is_desktop || self.console.page_device is Some(_)
 }
 
 ///|

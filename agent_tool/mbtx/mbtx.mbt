@@ -157,7 +157,7 @@ pub fn definition(
         build_timeout_ms~,
       ) +
       (if scratch_dir is Some(_) {
-        "\nFile artifacts: write completed files under the artifact/ subdirectory of the session scratch path shown in Environment. Use that actual path as an explicit script argument and new filenames for revisions, then reference scratch/artifact/FILENAME in an openseek-file fence in the final answer. Add the artifact marker to display completed HTML/SVG interactively. Read <bundled-resources>/artifact/README.md for normal MoonBit/Rabbita interactive HTML generation."
+        "\nFile artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
       } else {
         ""
       }),
@@ -1708,7 +1708,7 @@ fn description(
     #|Omit unused fields entirely; do not send null.
     #|
     #|For example, create and run a reusable script with
-    #|`{"description":"Save and run a greeting","source":"fn main { println(42) }","filename":"scripts/greet.mbtx"}`.
+    #|`{"description":"Save and run a greeting","source":"---\nimport {\n  \"moonbitlang/core/env\",\n}\n---\n\nfn main {\n  println(@env.args()[1:])\n}\n","filename":"scripts/greet.mbtx"}`.
     #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
     #|A filename-only call cannot create a script. Missing parent directories are
     #|created. Identical existing content is reused; different content is never

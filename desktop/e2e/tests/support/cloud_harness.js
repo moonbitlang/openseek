@@ -63,6 +63,7 @@ export class CloudHarness {
     this.generating = new Set();
     this.archived = new Set();
     this.histories = new Map();
+    this.historyTurns = new Map();
     this.nativeNotices = new Map();
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
@@ -390,7 +391,22 @@ export class CloudHarness {
     if (!match) throw new Error(`Unexpected Cloud request: ${path}`);
     const session = match[1];
     if (request.method() === 'GET') {
-      const history = this.histories.get(session) || { messages: [], generating: false, outcome: null };
+      const query = new URL(request.url()).searchParams;
+      const turns = this.historyTurns.get(session);
+      const limit = Number(query.get('limit'));
+      let history = this.histories.get(session) || { messages: [], generating: false, outcome: null };
+      if (turns && limit > 0) {
+        const offset = query.has('offset')
+          ? Math.min(Number(query.get('offset')), turns.length)
+          : Math.max(0, turns.length - limit);
+        const page = turns.slice(offset, offset + limit);
+        history = {
+          ...history,
+          messages: page.flatMap(turn => turn.messages),
+          session: { events: page.flatMap(turn => turn.events) },
+          page: { offset },
+        };
+      }
       const body = JSON.stringify(history.session ? history : { ...history, ...this.nativeHistory(session, history) });
       const etag = '"' + createHash('sha256').update(body).digest('hex') + '"';
       const status = this.historyStatus;

@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/openseek/agent",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/json",
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
+} for "test"
+
+supported_targets = "+native"

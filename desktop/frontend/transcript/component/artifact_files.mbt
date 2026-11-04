@@ -46,20 +46,11 @@ fn ArtifactFileCache::empty() -> ArtifactFileCache {
 
 ///|
 fn artifact_file_view(
-  reference : String,
-  _title : String,
+  file : @workspace_file_ref.WorkspaceFileRef,
   locale : @i18n.Locale,
   open : @cmd.Emit[String],
   owner : ArtifactOwner,
 ) -> @html.Html {
-  guard @workspace_file_ref.parse(
-      @workspace_file_ref.ArtifactFenceLanguage,
-      reference,
-      closed=true,
-    )
-    is Some(file) else {
-    return @html.nothing
-  }
   let card = @markdown.workspace_file_card(
     locale,
     file,
@@ -71,7 +62,7 @@ fn artifact_file_view(
   @html.div(
     class="chat-artifact-file",
     attrs=@html.Attrs::build()
-      .data_set("transcript-artifact", reference)
+      .data_set("transcript-artifact", file.path)
       .data_set("artifact-owner", owner.key()),
     [
       @html.div(
@@ -84,6 +75,19 @@ fn artifact_file_view(
         sandbox="allow-scripts",
         style=["display:none", "width:100%", "height:420px", "border:0"],
         attrs=@html.Attrs::build().referrerpolicy("no-referrer"),
+      ),
+      @html.button(
+        type_="button",
+        class="chat-artifact-context",
+        style=["display:none"],
+        disabled=owner.archived,
+        match locale {
+          SimplifiedChinese => "携带当前状态提问"
+          TraditionalChinese => "帶著目前設定提問"
+          Japanese => "現在の設定で質問する"
+          Spanish => "Preguntar con estos ajustes"
+          _ => "Ask with current settings"
+        },
       ),
     ],
   )
@@ -113,13 +117,7 @@ fn ArtifactFileCache::begin_read(
   reference : String,
   emit : @cmd.Emit[Msg],
 ) -> (ArtifactFileCache, @cmd.Cmd) {
-  guard !self.0.contains(reference) &&
-    @workspace_file_ref.parse(
-      @workspace_file_ref.ArtifactFenceLanguage,
-      reference,
-      closed=true,
-    )
-    is Some(_) else {
+  if self.0.contains(reference) {
     return (self, @cmd.none)
   }
   let files = self.0.copy()
@@ -207,33 +205,71 @@ extern "js" fn settle_artifact_frame(
   #|  for (const node of document.querySelectorAll('[data-transcript-artifact]')) {
   #|    if (node.dataset.transcriptArtifact !== reference || node.dataset.artifactOwner !== owner) continue;
   #|    const frame = node.querySelector('iframe');
-  #|    if (!frame || frame.dataset.artifactLoaded === owner) continue;
-  #|    if (frame.dataset.artifactLoaded) { frame.removeAttribute('srcdoc'); delete frame.dataset.artifactLoaded; frame.style.display = 'none'; }
+  #|    if (!frame || (frame.dataset.artifactLoaded === owner && frame.dataset.artifactReference === reference)) continue;
+  #|    const button = node.querySelector('.chat-artifact-context');
+  #|    if (frame.dataset.artifactLoaded) { frame.removeAttribute('srcdoc'); delete frame.dataset.artifactLoaded; delete frame.dataset.artifactReference; delete frame.dataset.artifactToken; delete frame.__artifactSnapshot; frame.style.display = 'none'; if (button) button.style.display = 'none'; }
   #|    const fallback = node.querySelector('[data-artifact-fallback]');
   #|    if (error && node.title !== error) node.title = error;
   #|    if (!ready) { if (fallback && fallback.style.display === 'none') fallback.style.display = ''; continue; }
   #|    const policy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
+  #|    const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+  #|    frame.dataset.artifactToken = token;
+  #|    delete frame.__artifactSnapshot;
+  #|    if (button) button.style.display = 'none';
+  #|    const bridge = '<script>(()=>{const token=' + JSON.stringify(token) + ';window.openseekArtifact={setState:(title,state)=>{const packet={type:"openseek-artifact-state",version:1,token,title,state};try{parent.postMessage(packet,"*")}catch{parent.postMessage({...packet,title:"",state:null},"*")}}};})();<\/script>';
   #|    const resize = '<script>(()=>{const send=()=>parent.postMessage({type:"openseek-artifact-height",height:Math.ceil(document.body?.scrollHeight||420)},"*");addEventListener("load",()=>{new ResizeObserver(send).observe(document.body);send()})})();<\/script>';
-  #|    frame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="' + policy + '"><meta name="referrer" content="no-referrer">' + content + resize;
+  #|    frame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="' + policy + '"><meta name="referrer" content="no-referrer">' + bridge + content + resize;
   #|    frame.dataset.artifactLoaded = owner;
+  #|    frame.dataset.artifactReference = reference;
   #|    frame.style.display = 'block';
   #|    if (fallback) fallback.style.display = 'none';
   #|  }
   #|}
 
 ///|
-extern "js" fn artifact_frame_listener(changed : () -> Unit) -> () -> Unit =
-  #|(changed) => {
+extern "js" fn artifact_frame_listener(
+  changed : () -> Unit,
+  selected : (String, String, String) -> Unit,
+) -> () -> Unit =
+  #|(changed, selected) => {
+  #|  const jsonValue = (_key, value) => {
+  #|    const type = typeof value;
+  #|    if (value === null || type === 'object' || type === 'string' || type === 'boolean' || (type === 'number' && Number.isFinite(value))) return value;
+  #|    throw new TypeError('Component state must be JSON data');
+  #|  };
   #|  const listener = event => {
   #|    const data = event.data;
-  #|    if (!data || data.type !== 'openseek-artifact-height' || !Number.isFinite(data.height)) return;
+  #|    if (!data) return;
   #|    for (const frame of document.querySelectorAll('#transcript .chat-artifact-frame')) {
   #|      if (frame.contentWindow !== event.source) continue;
-  #|      const height = Math.max(64, Math.min(2000, Math.ceil(data.height)));
-  #|      if (frame.style.height !== height + 'px') { frame.style.height = height + 'px'; changed(); }
+  #|      if (data.type === 'openseek-artifact-height' && Number.isFinite(data.height)) {
+  #|        const height = Math.max(64, Math.min(2000, Math.ceil(data.height)));
+  #|        if (frame.style.height !== height + 'px') { frame.style.height = height + 'px'; changed(); }
+  #|      } else if (data.type === 'openseek-artifact-state' && data.version === 1 && typeof data.token === 'string' && data.token === frame.dataset.artifactToken) {
+  #|        const node = frame.closest('[data-transcript-artifact]');
+  #|        if (!node || frame.dataset.artifactLoaded !== node.dataset.artifactOwner || frame.dataset.artifactReference !== node.dataset.transcriptArtifact) return;
+  #|        const button = frame.closest('[data-transcript-artifact]')?.querySelector('.chat-artifact-context');
+  #|        const clear = () => { delete frame.__artifactSnapshot; if (button && button.style.display !== 'none') button.style.display = 'none'; };
+  #|        if (typeof data.title !== 'string' || !data.title.trim() || data.title.length > 160) { clear(); return; }
+  #|        let payload;
+  #|        try { payload = JSON.stringify({title:data.title,state:data.state}, jsonValue); } catch { clear(); return; }
+  #|        if (new TextEncoder().encode(payload).length > 12288) { clear(); return; }
+  #|        frame.__artifactSnapshot = payload;
+  #|        if (button && !button.disabled && button.style.display === 'none') button.style.display = '';
+  #|      }
   #|      break;
   #|    }
   #|  };
+  #|  const click = event => {
+  #|    if (!event.isTrusted || !(event.target instanceof Element)) return;
+  #|    const button = event.target.closest('#transcript .chat-artifact-context');
+  #|    if (!button || button.disabled) return;
+  #|    const node = button.closest('[data-transcript-artifact]');
+  #|    const frame = node?.querySelector('iframe');
+  #|    if (!frame?.__artifactSnapshot || frame.dataset.artifactLoaded !== node.dataset.artifactOwner || frame.dataset.artifactReference !== node.dataset.transcriptArtifact) return;
+  #|    selected(node.dataset.artifactOwner, node.dataset.transcriptArtifact, frame.__artifactSnapshot);
+  #|  };
   #|  addEventListener('message', listener);
-  #|  return () => removeEventListener('message', listener);
+  #|  document.addEventListener('click', click);
+  #|  return () => { removeEventListener('message', listener); document.removeEventListener('click', click); };
   #|}

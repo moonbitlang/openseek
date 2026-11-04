@@ -105,6 +105,7 @@ test "Busy cannot allow another send before authoritative history recovers" {
       prediction: None,
       session: native_document([]),
       etag: None,
+      offset: None,
       messages: [],
       generating: false,
     }),
@@ -155,6 +156,7 @@ test "Busy cannot allow another send before authoritative history recovers" {
       prediction: None,
       session: native_document([]),
       etag: None,
+      offset: None,
       messages: [],
       generating: false,
     }),
@@ -215,6 +217,7 @@ test "history recovery clears a send error only when the pending submission was 
         prediction: None,
         session: native_document([]),
         etag: None,
+        offset: None,
         messages: if admitted {
           [
             {
@@ -321,6 +324,7 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
         { "kind": "assistant", "payload": { "content": "你好 🌙" } },
       ]),
       etag: None,
+      offset: None,
       messages: [
         {
           task_id: "task",

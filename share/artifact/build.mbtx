@@ -26,8 +26,7 @@ async fn executable_scripts(
 }
 
 ///|
-// Retain editable source inputs, skipping dependency/build caches and rejecting
-// links as the session fork's artifact copier does.
+// Retain regular source files and directories, excluding dependency/build caches.
 async fn copy_sources(source : String, destination : String) -> Unit {
   @fs.mkdir(destination)
   copy_source_files(source, destination)
@@ -147,7 +146,7 @@ async fn main {
   }
   let artifacts : Array[String] = []
   executable_scripts(build_directory + "/js/release/build", artifacts)
-  guard artifacts is [script] && script.has_suffix(".js") else {
+  guard artifacts is [script] else {
     fail("build must select exactly one JavaScript executable")
   }
   let code = inline_script(@fs.read_text(script))

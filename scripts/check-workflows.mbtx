@@ -40,5 +40,24 @@ async fn main {
       checked += 1
     }
   }
+  let component = temporary + "/rabbita"
+  @fs.mkdir(component)
+  for
+    name in [
+      "moon.mod", "moon.pkg", "main.mbt", "model.mbt", "model_wbtest.mbt", "bridge.mbt",
+      "index.html",
+    ] {
+    @fs.write_binary(
+      component + "/" + name,
+      @fs.read_binary("share/artifact/rabbita/" + name),
+    )
+  }
+  println("Checking share/artifact/rabbita")
+  let code = @shell.Cmd("moon", [
+    "-C", component, "check", "--target", "js", "--deny-warn",
+  ]).status()
+  if code != 0 {
+    @sys.exit(code)
+  }
   println("Checked \{checked} bundled scripts")
 }

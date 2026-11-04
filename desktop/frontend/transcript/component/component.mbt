@@ -84,6 +84,7 @@ struct Input {
   identity : String
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
+  older_history : Bool
   // The registered project that owns this conversation, kept separate from
   // `root`: a managed worktree resolves files from its checkout while the
   // empty-state question should still name the project the user selected.
@@ -129,6 +130,7 @@ pub fn Input::Input(
   forking? : Int32,
   editable_users~ : Array[Int32] = [],
   scroll~ : ScrollPosition = Pinned,
+  older_history~ : Bool = false,
   project_label? : String,
   current_project~ : @common.Uri?,
   projects~ : Array[ProjectChoice],
@@ -157,6 +159,7 @@ pub fn Input::Input(
     editable_users,
     identity: identity.unwrap_or(active_session),
     scroll,
+    older_history,
     project_label,
     current_project,
     projects,
@@ -179,6 +182,7 @@ pub(all) struct Actions {
   open : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
   open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
+  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot]
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
@@ -194,6 +198,7 @@ pub(all) struct Actions {
   /// Where the reader was when this conversation left the screen. The root
   /// keeps it per conversation and hands it back through `Input::scroll`.
   departed : @cmd.Emit[ScrollPosition]
+  load_older : @cmd.Cmd
 }
 
 ///|
@@ -365,8 +370,18 @@ pub fn component(
       )
     },
     update=(state, input, msg, emit) => state.update(input, msg, emit),
-    subscriptions=(model, _, emit) => {
-      transcript_subscription(model, emit, actions.departed)
+    subscriptions=(model, input, emit) => {
+      transcript_subscription(
+        model,
+        emit,
+        actions.departed,
+        actions.artifact_context,
+        if input.older_history {
+          Some(actions.load_older)
+        } else {
+          None
+        },
+      )
     },
   )
   // Every stream child renders in its own branch, keyed by the block within
@@ -411,14 +426,8 @@ pub fn component(
             block.render(
               locale~,
               actions,
-              artifact_view=(reference, title) => {
-                artifact_file_view(
-                  reference,
-                  title,
-                  locale,
-                  actions.open,
-                  owner,
-                )
+              artifact_view=reference => {
+                artifact_file_view(reference, locale, actions.open, owner)
               },
               changes?=changes.control(block, changes_emit),
               editor?=editor.view(block, locale~, editor_emit),
@@ -515,19 +524,51 @@ fn scroll_after_render() -> @cmd.Cmd {
 /// offsets saved earlier map to the same content, and scrolling through
 /// history never shifts as rows first render.
 fn render_rows_once_after_mount() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => render_rows_once(), kind=@cmd.after_render)
+}
+
+///|
+fn render_rows_once() -> Unit {
+  guard @dom.document().get_element_by_id("stream").to_option() is Some(stream) &&
+    stream.to_html_element() is Some(stream) else {
+    return
+  }
+  let style = stream.get_style()
+  style.set(STREAM_ROWS_VISIBILITY, "visible")
+  @dom.window().request_animation_frame(_ => {
+    style.remove_property(STREAM_ROWS_VISIBILITY) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Capture the current reading position before committing an older page.
+pub fn preserve_prepend_scroll() -> @cmd.Cmd {
+  guard @dom.document().get_element_by_id("transcript").to_option()
+    is Some(transcript) else {
+    return @cmd.none
+  }
+  let top = transcript.get_scroll_top()
+  let height = transcript.get_scroll_height()
+  let anchor = transcript
+    .query_selector(".msg.user[id^='turn-s']")
+    .bind(node => {
+      node
+      .get_attribute("id")
+      .map(id => (id, node.get_bounding_client_rect().get_top()))
+    })
   @cmd.custom_cmd(
     _ => {
-      guard @dom.document().get_element_by_id("stream").to_option()
-        is Some(stream) &&
-        stream.to_html_element() is Some(stream) else {
-        return
+      render_rows_once()
+      let next = if anchor is Some((id, before)) &&
+        @dom.document().get_element_by_id(id).to_option() is Some(node) {
+        transcript.get_scroll_top() +
+        node.get_bounding_client_rect().get_top() -
+        before
+      } else {
+        top + transcript.get_scroll_height() - height
       }
-      let style = stream.get_style()
-      style.set(STREAM_ROWS_VISIBILITY, "visible")
-      @dom.window().request_animation_frame(_ => {
-        style.remove_property(STREAM_ROWS_VISIBILITY) |> ignore
-      })
-      |> ignore
+      transcript.set_scroll_top(next)
     },
     kind=@cmd.after_render,
   )
@@ -702,6 +743,9 @@ priv suberror TranscriptSubscription {
   TranscriptSubscription(
     emit~ : @cmd.Emit[Msg],
     departed~ : @cmd.Emit[ScrollPosition],
+    artifact_owner~ : String,
+    artifact_context~ : @cmd.Emit[@mention_context.ArtifactSnapshot],
+    load_older~ : @cmd.Cmd?,
     // The Model's current reading, refreshed after every message. The scroll
     // listener reports only readings that differ from it, so the Model is the
     // single source of truth and no cache can drift from it.
@@ -718,6 +762,8 @@ fn transcript_subscription(
   model : Model,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
+  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot],
+  load_older : @cmd.Cmd?,
 ) -> @sub.Sub {
   @sub.custom_sub(
     "transcript-dom",
@@ -725,6 +771,9 @@ fn transcript_subscription(
     TranscriptSubscription(
       emit~,
       departed~,
+      artifact_owner=model.artifact_owner.key(),
+      artifact_context~,
+      load_older~,
       pinned=model.pinned,
       active=model.overview.active,
     ),
@@ -738,9 +787,20 @@ fn transcript_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    TranscriptSubscription(emit~, departed~, pinned~, active~) => {
+    TranscriptSubscription(
+      emit~,
+      departed~,
+      artifact_owner~,
+      artifact_context~,
+      load_older~,
+      pinned~,
+      active~
+    ) => {
       let mut emit = emit
       let mut departed = departed
+      let mut artifact_owner = artifact_owner
+      let mut artifact_context = artifact_context
+      let mut load_older = load_older
       let mut pinned = pinned
       let mut active = active
       // The last scroller offset this listener saw. Growth inside an animated
@@ -759,6 +819,9 @@ fn transcript_sub_loader(
         let top = element.get_scroll_top()
         let moved_up = top < last_top
         last_top = top
+        if moved_up && top <= 4.0 && load_older is Some(command) {
+          scheduler.add(command)
+        }
         // Report only what differs from the Model. Its next message brings
         // the same value back through `update_tagger`; assigning here just
         // keeps a burst of scroll events from repeating the report meanwhile.
@@ -774,6 +837,47 @@ fn transcript_sub_loader(
         }
       }
       target.add_event_listener_with_options("scroll", listener, capture=true)
+      let at_top = (event : @dom.Event) => {
+        event.target().to_element() is Some(element) &&
+        element.closest("#transcript") is Some(transcript) &&
+        transcript.get_scroll_top() <= 4.0
+      }
+      // When a single turn fits the viewport, an upward gesture produces
+      // no scroll event. The same boundary must still be reachable.
+      let wheel : @dom.Listener = event => {
+        if load_older is Some(command) && upward_wheel(event) && at_top(event) {
+          scheduler.add(command)
+        }
+      }
+      let mut touch_y = 0.0
+      let touch_start : @dom.Listener = event => {
+        touch_y = transcript_touch_y(event)
+      }
+      let touch_move : @dom.Listener = event => {
+        let y = transcript_touch_y(event)
+        if load_older is Some(command) && y - touch_y >= 8.0 && at_top(event) {
+          scheduler.add(command)
+          touch_y = y
+        }
+      }
+      target.add_event_listener_with_options(
+        "wheel",
+        wheel,
+        capture=true,
+        passive=true,
+      )
+      target.add_event_listener_with_options(
+        "touchstart",
+        touch_start,
+        capture=true,
+        passive=true,
+      )
+      target.add_event_listener_with_options(
+        "touchmove",
+        touch_move,
+        capture=true,
+        passive=true,
+      )
       let observers = TranscriptObservers::install(
         () => scheduler.add(emit(ContentRendered)),
         path => scheduler.add(emit(ImageRequested(path))),
@@ -781,15 +885,38 @@ fn transcript_sub_loader(
         // including when a conversation restores a nonzero reading position.
         element => last_top = element.get_scroll_top(),
       )
-      let remove_artifact_listener = artifact_frame_listener(() => {
-        scheduler.add(emit(ContentRendered))
-      })
+      let remove_artifact_listener = artifact_frame_listener(
+        () => scheduler.add(emit(ContentRendered)),
+        (owner, reference, payload) => {
+          guard owner == artifact_owner &&
+            @mention_context.artifact_snapshot(reference, payload)
+            is Some(snapshot) else {
+            return
+          }
+          scheduler.add(artifact_context(snapshot))
+        },
+      )
       Some({
         unload: scheduler => {
           remove_artifact_listener()
           target.remove_event_listener_with_options(
             "scroll",
             listener,
+            capture=true,
+          )
+          target.remove_event_listener_with_options(
+            "wheel",
+            wheel,
+            capture=true,
+          )
+          target.remove_event_listener_with_options(
+            "touchstart",
+            touch_start,
+            capture=true,
+          )
+          target.remove_event_listener_with_options(
+            "touchmove",
+            touch_move,
             capture=true,
           )
           observers.disconnect()
@@ -807,6 +934,9 @@ fn transcript_sub_loader(
             is TranscriptSubscription(
               emit=next,
               departed=left,
+              artifact_owner=next_artifact_owner,
+              artifact_context=next_artifact_context,
+              load_older=next_load_older,
               pinned=next_pinned,
               active=next_active
             ) else {
@@ -814,6 +944,9 @@ fn transcript_sub_loader(
           }
           emit = next
           departed = left
+          artifact_owner = next_artifact_owner
+          artifact_context = next_artifact_context
+          load_older = next_load_older
           pinned = next_pinned
           active = next_active
         },
@@ -1035,3 +1168,11 @@ pub extend Source with Eq::{equal, not_equal}
 
 ///|
 pub extend VisibleRow with Eq::{equal, not_equal}
+
+///|
+extern "js" fn upward_wheel(event : @dom.Event) -> Bool =
+  #| (event) => event.deltaY < 0
+
+///|
+extern "js" fn transcript_touch_y(event : @dom.Event) -> Double =
+  #| (event) => event.touches[0]?.clientY ?? 0

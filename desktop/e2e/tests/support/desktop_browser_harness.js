@@ -532,9 +532,8 @@ export class DesktopBrowserHarness {
     };
   }
 
-  async install() {
+  async install({ offlineAssets = process.env.OPENSEEK_DESKTOP_OFFLINE_ASSETS } = {}) {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
-    const offlineAssets = process.env.OPENSEEK_DESKTOP_OFFLINE_ASSETS;
     if (offlineAssets) {
       const root = resolve(offlineAssets);
       const types = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.wasm': 'application/wasm' };

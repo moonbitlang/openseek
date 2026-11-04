@@ -18,8 +18,11 @@ export default defineConfig({
   timeout: 30_000,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
-  // Run independent test files in parallel while preserving in-file ordering.
-  workers: 4,
+  // Every test opens its own page and fixture, so schedule tests rather than
+  // files: the largest spec files would otherwise each pin one worker.
+  fullyParallel: true,
+  // CI runners have four cores. Local machines usually have more.
+  workers: isCI ? 4 : '50%',
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
     { name: 'webkit-mobile', testMatch: '**/mobile_browser.spec.js', use: { browserName: 'webkit' } },
