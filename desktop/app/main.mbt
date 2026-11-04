@@ -25,7 +25,12 @@ async fn main {
     [command, ..] => command
     [] => abort("current executable command is unavailable")
   }
-  launch_logger(executable)
+  with_launch_log(executable, () => run_host(executable, matches))
+}
+
+///|
+/// Everything the host does once its launch log is open.
+async fn run_host(executable : String, matches : @argparse.Matches) -> Unit {
   @logging.info() <?
     {
       "event": "desktop_main_start",

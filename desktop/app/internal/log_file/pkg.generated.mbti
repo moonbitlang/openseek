@@ -6,20 +6,13 @@ import {
 }
 
 // Values
+pub async fn with_log_file(String, async (LogFile) -> Unit) -> Unit
 
 // Errors
-pub suberror LogFileError {
-  OpenFailed(String)
-  WriteFailed(String)
-}
-pub fn LogFileError::output(Self, &Logger) -> Unit
-pub fn LogFileError::to_string(Self) -> String
-pub impl Show for LogFileError
 
 // Types and methods
 type LogFile
-pub fn LogFile::append(Self, @json.Json) -> Unit raise LogFileError
-pub fn LogFile::open(String) -> Self raise LogFileError
+pub fn LogFile::append(Self, @json.Json) -> Unit raise
 
 // Type aliases
 

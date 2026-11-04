@@ -1,44 +1,69 @@
 ///|
-async test "append writes one JSON line per record" {
+async test "lines are appended after existing content, in order" {
   let dir = @fs.tmpdir(prefix="openseek-log-file-")
   defer @fs.rmdir(dir, recursive=true)
   let path = "\{dir}/desktop.log"
-  let file = @log_file.LogFile::open(path)
-  file.append({ "level": "INFO", "message": "start" })
-  file.append({ "level": "WARN", "message": "line\nbreak" })
+  @fs.write_file(path, "{\"earlier\":true}\n", create_mode=CreateNew)
+  @log_file.with_log_file(path, log => {
+    log.append({ "level": "INFO", "message": "start" })
+    log.append({ "level": "WARN", "message": "line\nbreak" })
+  })
   assert_eq(
     @fs.read_file(path).text(),
-    "{\"level\":\"INFO\",\"message\":\"start\"}\n{\"level\":\"WARN\",\"message\":\"line\\nbreak\"}\n",
+    "{\"earlier\":true}\n{\"level\":\"INFO\",\"message\":\"start\"}\n{\"level\":\"WARN\",\"message\":\"line\\nbreak\"}\n",
   )
 }
 
 ///|
-async test "a second handle appends after the first instead of truncating" {
+async test "lines queued before the body fails are still written" {
   let dir = @fs.tmpdir(prefix="openseek-log-file-")
   defer @fs.rmdir(dir, recursive=true)
   let path = "\{dir}/desktop.log"
-  let host = @log_file.LogFile::open(path)
-  host.append({ "who": "host" })
-  let child = @log_file.LogFile::open(path)
-  child.append({ "who": "child" })
-  host.append({ "who": "host again" })
-  assert_eq(
-    @fs.read_file(path).text(),
-    "{\"who\":\"host\"}\n{\"who\":\"child\"}\n{\"who\":\"host again\"}\n",
-  )
-}
-
-///|
-async test "opening inside a missing directory fails" {
-  let dir = @fs.tmpdir(prefix="openseek-log-file-")
-  defer @fs.rmdir(dir, recursive=true)
-  let path = "\{dir}/missing/desktop.log"
-  let failed = try {
-    ignore(@log_file.LogFile::open(path))
-    None
+  let raised = try {
+    @log_file.with_log_file(path, log => {
+      log.append({ "message": "before failure" })
+      fail("startup failed")
+    })
+    false
   } catch {
-    OpenFailed(failed) => Some(failed)
+    Failure(_) => true
     error => raise error
   }
-  assert_eq(failed, Some(path))
+  assert_true(raised)
+  assert_eq(@fs.read_file(path).text(), "{\"message\":\"before failure\"}\n")
+}
+
+///|
+async test "two writers share the file without losing lines" {
+  let dir = @fs.tmpdir(prefix="openseek-log-file-")
+  defer @fs.rmdir(dir, recursive=true)
+  let path = "\{dir}/desktop.log"
+  @log_file.with_log_file(path, host => {
+    @log_file.with_log_file(path, child => {
+      for i in 0..<50 {
+        host.append({ "who": "host", "i": i })
+        child.append({ "who": "child", "i": i })
+      }
+    })
+  })
+  let lines = @fs.read_file(path).text().split("\n").to_array()
+  assert_eq(lines.length(), 101)
+  assert_eq(lines.filter(line => line.contains("\"host\"")).length(), 50)
+  assert_eq(lines.filter(line => line.contains("\"child\"")).length(), 50)
+}
+
+///|
+async test "appending after the file is closed raises" {
+  let dir = @fs.tmpdir(prefix="openseek-log-file-")
+  defer @fs.rmdir(dir, recursive=true)
+  let mut kept = None
+  @log_file.with_log_file("\{dir}/desktop.log", log => kept = Some(log))
+  guard kept is Some(log) else { fail("body did not run") }
+  let raised = try {
+    log.append({ "message": "late" })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(raised)
 }

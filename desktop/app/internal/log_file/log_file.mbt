@@ -1,66 +1,60 @@
 ///|
-/// Native handle owned by a `LogFile`; closed when the file is collected.
-priv type Handle
-
-///|
-#borrow(path)
-extern "C" fn open_handle(path : Bytes) -> Handle = "openseek_log_file_open"
-
-///|
-#borrow(handle)
-extern "C" fn is_open(handle : Handle) -> Bool = "openseek_log_file_is_open"
-
-///|
-#borrow(handle, data)
-extern "C" fn append_bytes(handle : Handle, data : Bytes) -> Int32 = "openseek_log_file_append"
-
-///|
-/// A log file that `LogFile::append` extends one JSON line at a time.
+/// A JSONL log file that `LogFile::append` extends one record at a time.
 ///
-/// The file is opened in append mode and each record is written with one
-/// append write, so several processes can share it without interleaving
-/// lines. The handle stays open until the `LogFile` is collected.
+/// `append` only queues the line; the task `with_log_file` runs writes the
+/// queue out in order. The file is open in append mode and every line goes
+/// out in one write, so several processes can share it without overwriting
+/// or interleaving each other's lines.
 struct LogFile {
-  handle : Handle
-  path : String
+  lines : @aqueue.Queue[String]
 }
 
 ///|
-/// Errors raised while opening or appending to a `LogFile`.
-pub suberror LogFileError {
-  /// The file at this path could not be opened for appending.
-  OpenFailed(String)
-  /// A record could not be written to the file at this path.
-  WriteFailed(String)
+/// Queue `record` as one JSONL line. Raises once `with_log_file` has
+/// returned and the file is closed.
+pub fn LogFile::append(self : LogFile, record : Json) -> Unit raise {
+  ignore(self.lines.try_put("\{record.stringify()}\n"))
 }
 
 ///|
-pub impl Show for LogFileError with fn output(self, logger) -> Unit {
-  match self {
-    OpenFailed(path) => logger.write_string("cannot open \{path} for append")
-    WriteFailed(path) => logger.write_string("cannot append to \{path}")
-  }
-}
-
-///|
-pub extend LogFileError with Show::{to_string, output}
-
-///|
-/// Open `path` for appending, creating it when it does not exist.
-pub fn LogFile::open(path : String) -> LogFile raise LogFileError {
-  let handle = open_handle(@utf8.encode(path))
-  guard is_open(handle) else { raise OpenFailed(path) }
-  { handle, path, }
-}
-
-///|
-/// Append `record` as one JSONL line.
-pub fn LogFile::append(
-  self : LogFile,
-  record : Json,
-) -> Unit raise LogFileError {
-  let line = @utf8.encode("\{record.stringify()}\n")
-  guard append_bytes(self.handle, line) == 0 else {
-    raise WriteFailed(self.path)
+/// Open `path` for appending, creating it when missing, and run `body` with
+/// it. Lines appended while `body` runs are written by a background task, and
+/// all of them are on disk when this returns — also when `body` raises, which
+/// is when a launch log matters most. Write failures drop the line.
+pub async fn with_log_file(
+  path : String,
+  body : async (LogFile) -> Unit,
+) -> Unit {
+  let file = @fs.open(
+    path,
+    mode=WriteOnly,
+    append=true,
+    create_mode=OpenOrCreate,
+  )
+  defer file.close()
+  let log = { lines: Queue(kind=Unbounded), }
+  // A task group cancels its tasks when its body raises, so the body's error
+  // is held until the writer has drained the queue.
+  let failure = @async.with_task_group(group => {
+    group.spawn_bg(() => {
+      for ;; {
+        let line = log.lines.get() catch {
+          @aqueue.QueueAlreadyClosed => break
+          error => raise error
+        }
+        file.write(line) catch {
+          _ => ()
+        }
+      }
+    })
+    defer log.lines.close()
+    try body(log) catch {
+      error => Some(error)
+    } noraise {
+      _ => None
+    }
+  })
+  if failure is Some(error) {
+    raise error
   }
 }
