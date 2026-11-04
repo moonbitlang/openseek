@@ -10,6 +10,25 @@ export const sessionB = '22222222-2222-4222-8222-222222222222';
 export const sessionC = '33333333-3333-4333-8333-333333333333';
 const bundle = new URL('../../../dist/browser/', import.meta.url);
 
+// Resolves with the first matching response once its request has ended, so the
+// page has read the whole body. Use it instead of `response.finished()`, which
+// never settles when the request ends as failed: the async HTTP client cancels
+// the body stream after reading it, and Chromium can report that cancellation
+// (net::ERR_ABORTED) before it reports the load as finished.
+export function settledResponse(page, predicate) {
+  return new Promise(resolve => {
+    const settle = async request => {
+      const response = await request.response();
+      if (!response || !predicate(response)) return;
+      page.off('requestfinished', settle);
+      page.off('requestfailed', settle);
+      resolve(response);
+    };
+    page.on('requestfinished', settle);
+    page.on('requestfailed', settle);
+  });
+}
+
 export class CloudHarness {
   constructor(page, { desktop = false, cached = true } = {}) {
     this.page = page;

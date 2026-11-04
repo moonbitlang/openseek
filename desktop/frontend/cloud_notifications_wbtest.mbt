@@ -267,6 +267,9 @@ test "Cloud notification targets are isolated by account and retired conversatio
   assert_true(ignored.cloud_identity() == signed_out.cloud_identity())
   assert_true(ignored.screen == signed_out.screen)
   assert_eq(ignored.notification_badge_count(), 0)
+  // A retired target is not a navigation: the open dialog stays.
+  assert_true(signed_out.management_dialog is Some(Settings))
+  assert_true(ignored.management_dialog is Some(Settings))
   let account = finished.account.unwrap()
   let (_, switched) = update(
     test_dispatch(),
@@ -372,6 +375,7 @@ test "Local and Cloud unread completions share one badge without reading each ot
     both,
   )
   assert_eq(cloud_read.notification_badge_count(), 1)
+  assert_true(cloud_read.management_dialog is None)
   let (_, local_read) = update(
     test_dispatch(),
     NotificationClicked(run_id="r7"),
