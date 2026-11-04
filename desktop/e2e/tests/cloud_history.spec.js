@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { CloudHarness, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 const png = readFileSync(new URL('../../../deepseek/client/testdata/two-colors.png', import.meta.url)).toString('base64');
 const image = { type: 'image', media_type: 'image/png', data: png };
@@ -189,7 +189,7 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
   expect(queries).toEqual(['?limit=1']);
   let release;
   cloud.pauseHistory = new Promise(resolve => { release = resolve; });
-  const oldResponse = page.waitForResponse(response => new URL(response.url()).searchParams.get('offset') === '0');
+  const oldResponse = settledResponse(page, response => new URL(response.url()).searchParams.get('offset') === '0');
   try {
     await transcript.hover();
     await page.mouse.wheel(0, -200);
@@ -200,7 +200,7 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
     cloud.pauseHistory = null;
     release();
   }
-  await (await oldResponse).finished();
+  await oldResponse;
   await cloud.open(sessionA);
   await expect(bubbles).toHaveText(['Latest question']);
   await transcript.hover();

@@ -490,7 +490,7 @@ test('minimal diff pins line numbers and markers while source scrolls', async ({
   ];
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+  await app.showSidebar();
   await app.openSession();
   await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
   const block = page.locator('.minimal-edit-block');

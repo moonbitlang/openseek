@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, settledResponse, sessionA, sessionB } from './support/cloud_harness.js';
 
 function deferred() {
   let resolve;
@@ -76,9 +76,9 @@ for (const receiptFirst of [true, false]) {
     const app = await running(page);
     const held = deferred();
     app.pauseControl = receiptFirst ? held.promise : null;
-    const accepted = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/commands') && response.request().postDataJSON()?.command.command === 'steer');
+    const accepted = settledResponse(page, response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/commands') && response.request().postDataJSON()?.command.command === 'steer');
     await followup(page, 'Inspect the login first', 'steer');
-    if (!receiptFirst) await (await accepted).finished();
+    if (!receiptFirst) await accepted;
     await expect.poll(() => controls(app, 'steer').length).toBe(1);
     const request = controls(app, 'steer')[0];
     expect(request.task_id).toBe(app.controlState(sessionA).task_id);
@@ -87,7 +87,7 @@ for (const receiptFirst of [true, false]) {
     await app.emitSessionEvent(sessionA, 'user', { submission_id: request.submission_id, content: request.content });
     await app.emitSessionEvent(sessionA, 'steer_applied', { submission_id: request.submission_id, kind: 'prompt', content: request.content });
     held.resolve();
-    await (await accepted).finished();
+    await accepted;
     await expect(page.locator('.pending-steer-row')).toHaveCount(0);
     await expect(page.locator('#task')).toHaveValue('A later independent draft');
     await expect(page.locator('#stop')).toBeEnabled();
@@ -127,9 +127,9 @@ test('Cloud Steer network failure stays unknown until a server receipt resolves 
   // result. A missing receipt is not an explicit rejection.
   await app.publishControl(sessionA, { steers: [{ submission_id: request.submission_id, status: 'unknown' }] });
   app.controlOffline = true;
-  const reconciled = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith('/control'));
+  const reconciled = settledResponse(page, response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith('/control'));
   held.resolve();
-  await (await reconciled).finished();
+  await reconciled;
   await expect(page.locator('.pending-steer-row')).toContainText('An uncertain submission');
   await expect(page.locator('#task')).toHaveValue('Draft after submission');
   app.controlOffline = false;

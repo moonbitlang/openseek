@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
+import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 for (const desktop of [false, true]) {
   test(`${desktop ? 'desktop' : 'browser'} restores Cloud in the ordinary chat UI without an online device`, async ({ page }) => {
@@ -317,8 +317,8 @@ test('Cloud disconnect replaces provisional text with authoritative history and 
   await page.locator('#task').fill('Question'); await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toBeVisible();
   await page.locator('#task').fill('Draft after admission');
-  const recovered = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
-  disconnect(); await (await recovered).finished();
+  const recovered = settledResponse(page, response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
+  disconnect(); await recovered;
   await expect(page.locator('#transcript').getByText('Authoritative answer', { exact: true })).toHaveCount(1);
   await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Draft after admission');

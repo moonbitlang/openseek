@@ -1809,7 +1809,7 @@ test('desktop shell and modal stay inside a narrow browser viewport', async ({ p
   await app.install();
   await app.goto();
 
-  await page.getByRole('button', { name: 'Show sidebar' }).click();
+  await app.showSidebar();
   await (await sidebarAddProject(page)).click();
   const bounds = await page.locator('.picker-modal').boundingBox();
   expect(bounds).not.toBeNull();
