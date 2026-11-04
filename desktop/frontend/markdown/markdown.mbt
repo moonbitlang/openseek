@@ -1092,6 +1092,7 @@ fn is_known_extension(ext : String) -> Bool {
     | "json"
     | "md"
     | "markdown"
+    | "typ"
     | "toml"
     | "yaml"
     | "yml"
