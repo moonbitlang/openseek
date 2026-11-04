@@ -53,7 +53,7 @@ fn Ui::Ui(tty : @tty.Tty, config : Config) -> Ui {
 /// and leave run on the command queue so they serialize with redraws.
 async fn[T] Ui::with_entered(self : Self, body : async () -> T) -> T {
   self.commands.wait(() => self.enter())
-  defer self.commands.wait(() => self.leave())
+  defer @async.protect_from_cancel(() => self.commands.wait(() => self.leave()))
   body()
 }
 
@@ -119,7 +119,7 @@ pub async fn[T] with_ui(
   body : async (Ui) -> T,
 ) -> T {
   let tty = @tty.Tty::open()
-  defer tty.close()
+  defer @async.protect_from_cancel(() => tty.close())
   let ui = Ui::Ui(tty, config)
   // Request the kitty keyboard protocol's "disambiguate" level so modified keys
   // the legacy encoding cannot represent — Shift+Enter, Alt+F/Alt+B — are

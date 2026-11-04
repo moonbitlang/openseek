@@ -213,7 +213,9 @@ pub fn definition(
             on_trace?=on_program_trace,
             on_image_output?=on_program_output,
           )
-          errdefer program.close(discard_images=!program.is_in_background())
+          errdefer @async.protect_from_cancel(() => {
+            program.close(discard_images=!program.is_in_background())
+          })
           let action = run(Some(program)) catch {
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
@@ -567,7 +569,7 @@ async fn execute(
     })
   }
 
-  defer cleanup()
+  defer @async.protect_from_cancel(() => cleanup())
   // Keep disposable compiler inputs and artifacts apart from `tmp`, whose
   // result files may need to remain readable after a background job exits.
   // `dir` is one uniquely named call directory under `job_dir` or `scratch_dir`,

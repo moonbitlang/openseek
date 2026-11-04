@@ -74,7 +74,11 @@ pub async fn AuthStore::set_remote(self : AuthStore, enabled : Bool) -> Unit {
       return
     }
     if self.runtime_dir is Some(dir) {
-      errdefer (revoke_device(session.server_url, device) catch { _ => () })
+      errdefer @async.protect_from_cancel(() => {
+        revoke_device(session.server_url, device) catch {
+          _ => ()
+        }
+      })
       save_session_file(dir, next)
     }
     self.session = Some(next)

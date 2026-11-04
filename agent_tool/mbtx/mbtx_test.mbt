@@ -125,7 +125,7 @@ async test "script arguments reach inline and reused scripts verbatim" {
       #|---
       #|import { "moonbitlang/core/env" }
       #|---
-      #|fn main { println(@env.args()[1:].to_array().to_json().stringify()) }
+      #|fn main { println(ToJson::to_json(@env.args()[1:].to_array()).stringify()) }
     let filename = "args.mbtx"
     let inline = run_in(ws, { "source": source })
     assert_false(inline.is_error, msg=inline.content)

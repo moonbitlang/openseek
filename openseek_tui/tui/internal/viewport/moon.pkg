@@ -4,6 +4,7 @@ import {
   "moonbitlang/openseek_tui/tui/internal/surface",
   "moonbitlang/openseek_tui/tui/style",
   "moonbit-community/tty",
+  "moonbitlang/async",
 }
 
 supported_targets = "+native+wasm"
