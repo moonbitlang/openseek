@@ -97,8 +97,7 @@ test "restore canonicalizes non-canonical encoded paths while retaining browser 
     .written()
     .select("/device/%641/codex/thread/t1", { "group": "g", "key": "c" })
     is Some(forward) &&
-    forward.visit(encoded, replace=false, key="d")
-    is Some(visited) else {
+    forward.visit(encoded, replace=false, key="d") is Some(visited) else {
     fail("encoded entry cannot be traversed or followed by navigation")
   }
   assert_eq(forward.path(), "/device/d1/codex/thread/t1")
