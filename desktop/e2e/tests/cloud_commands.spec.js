@@ -146,7 +146,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
   await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Retain this goal');
   await page.locator('#goal-set').click();
-  await expect(page.getByRole('main')).toContainText('Error');
+  await expect(page.locator('#transcript')).toContainText('Cloud answered HTTP 503.');
   await expect(task).toHaveValue('Retain this goal');
   await expect(page.locator('#goal-set')).toBeEnabled();
   expect(commands(app)).toEqual([]);
@@ -156,7 +156,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
   app.controlRejected = 'Model is unavailable';
   await page.locator('#goal-set').click();
   await expect(page.getByRole('main')).toContainText('Model is unavailable');
-  const history = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/${sessionC}/messages`));
+  const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionC}/messages`));
   releaseHistory();
   await (await history).finished();
   await expect(page.getByRole('main')).toContainText('Model is unavailable');
@@ -332,7 +332,7 @@ test('Cloud keeps failed and successful identical prompts in task order live and
   let successfulTask = null;
   let nativeUserSaved = false;
   await app.install();
-  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/messages`, async route => {
+  await page.route(url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionA}/messages`, async route => {
     if (route.request().method() !== 'GET') return route.fallback();
     const history = app.histories.get(sessionA) || { messages: [], generating: false };
     const current = history.messages.filter(record => record.task_id === successfulTask);

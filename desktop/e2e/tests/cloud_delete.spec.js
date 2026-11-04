@@ -91,7 +91,7 @@ test('history 404 retires an externally removed conversation without creating a 
   const cloud = new CloudHarness(page);
   await cloud.install();
   await cloud.goto();
-  await page.route(`${cloudOrigin}/v1/sessions/${sessionB}/messages`, route => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': authOrigin } }));
+  await page.route(url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionB}/messages`, route => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': authOrigin } }));
   await cloud.row(sessionB).click();
   await expect(cloud.row(sessionB)).toHaveCount(0);
   await expect(cloud.row(sessionC)).toHaveCount(0);
@@ -184,7 +184,6 @@ test('busy Cloud menus retain rename while deletion stays disabled with normal d
 test('device browser traversal reports deleted Cloud destinations as missing', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install(); await cloud.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const heading = page.locator('main > .topbar h1');
   const notice = page.locator('.navigation-notice');
   await cloud.open(sessionA); await cloud.open(sessionB);
@@ -193,10 +192,6 @@ test('device browser traversal reports deleted Cloud destinations as missing', a
   await expect(cloud.row(sessionA)).toHaveCount(0);
   await page.goBack();
   await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionA}`);
-  await expect(notice).toContainText('no longer exists');
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await expect(heading).toHaveText('Settings');
-  await page.getByRole('button', { name: 'Forward', exact: true }).click();
   await expect(notice).toContainText('no longer exists');
   await page.goForward();
   await expect(notice).toHaveCount(0);

@@ -120,7 +120,6 @@ fn update_editor_feedback(
             model,
           )
         }
-        Skills | Schedules | Settings => (@cmd.none, model)
       }
     _ => (@cmd.none, model)
   }

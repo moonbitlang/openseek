@@ -93,7 +93,7 @@ test('a delayed fork cannot replace a newer missing destination', async ({ page 
   app.liveSessions = app.liveSessions.filter(row => row.id !== 'session-other');
   app.notify('session.changed', { change: 'deleted', session: 'session-other', workspace: '/workspace' });
   await expect(page.locator('.conversation-row[title="session-other"]')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.goBack();
   await expect(page).toHaveURL(/\/chat\/session\/session-other$/);
   const unavailable = page.getByText('This destination no longer exists or is no longer attached.');
   await expect(unavailable).toBeVisible();

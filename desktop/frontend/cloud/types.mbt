@@ -20,11 +20,15 @@ pub(all) struct Record {
 ///|
 pub(all) struct History {
   etag : String?
+  offset : Int32?
   prediction : @wire.PredictionRecord?
   session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
-}
+} derive(Eq)
+
+///|
+pub extend History with Eq::{equal, not_equal}
 
 ///|
 pub(all) struct Event {
@@ -41,6 +45,7 @@ pub(all) struct Event {
 pub struct Submission {
   content : @wire.Content
   known_tasks : Array[String]
+  result_id : String?
 } derive(Eq)
 
 ///|
@@ -61,6 +66,9 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
+  history_pages : Map[Int32, History]
+  // Request, requested offset, and the navigation that owns the prepend.
+  history_older_request : (Int32, Int32, Int32)?
   // Compare the first snapshot after a revisit that shares an earlier read.
   history_resume_baseline : (String?, Int32?)?
   history_refresh_after_read : Bool
@@ -88,6 +96,7 @@ pub(all) struct Conversation {
   initial_submission : @composer.Draft?
   initial_attachments : Array[@protocol.AttachmentSource]
   uploads : Array[UploadedAttachment]
+  shell_commands : Array[@composer.ShellCommand]
   pending : Submission?
   // One command waiting for session creation or the first SSE snapshot.
   outgoing : PendingCommand?
@@ -114,6 +123,8 @@ fn Conversation::empty() -> Conversation {
     history_cached: false,
     history_etag: None,
     history_reading: false,
+    history_pages: Map([]),
+    history_older_request: None,
     history_resume_baseline: None,
     history_refresh_after_read: false,
     events: [],
@@ -138,6 +149,7 @@ fn Conversation::empty() -> Conversation {
     initial_submission: None,
     initial_attachments: [],
     uploads: [],
+    shell_commands: [],
     pending: None,
     outgoing: None,
     stream: None,
@@ -174,6 +186,7 @@ pub struct PendingCommand {
 ///|
 pub enum CommandInput {
   Native(@wire.Command)
+  Terminal(@composer.ShellCommand?)
   Prompt(
     content~ : @wire.Content,
     draft~ : @composer.Draft,
@@ -270,6 +283,8 @@ pub(all) enum Msg {
   Edited(Int32, String, Int32)
   EditFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
+  TerminalRequested(@interop.ConversationIdentity, @composer.ShellCommand?)
+  TerminalReady(Int32, String, @composer.ShellCommand?)
   SubmitAttachments(
     @interop.ConversationIdentity,
     @composer.Draft,
@@ -280,6 +295,9 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, Failure)
   Loaded(Int32, String, Int32, History)
+  LoadOlder(String)
+  OlderLoaded(Int32, String, Int32, History)
+  OlderFailed(Int32, String, Int32, Failure)
   HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, Failure)
   WatchOpened(Int32, String, StreamLease)
@@ -407,6 +425,12 @@ fn decode_history(json : Json) -> History raise RequestError {
   }
   {
     etag: None,
+    offset: match json {
+      { "page": { "offset": Number(offset, ..), .. }, .. } if offset >= 0 &&
+        offset == offset.to_int().to_double() => Some(offset.to_int())
+      Object(fields) if !fields.contains("page") => None
+      _ => raise @cloud_client.RequestError(Malformed)
+    },
     session,
     messages,
     prediction,

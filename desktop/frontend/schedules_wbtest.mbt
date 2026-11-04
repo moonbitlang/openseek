@@ -55,7 +55,7 @@ test "scheduled status refresh cannot remain busy on a previous host" {
   let base = test_model()
   let model = {
     ..base,
-    screen: Schedules,
+    management_dialog: Some(Schedules),
     schedules: {
       ..SchedulePage::empty(),
       owner: Some(@interop.ChannelId::Remote("other")),

@@ -209,7 +209,7 @@ test('returning to the same blank Codex entry retains its pending project add', 
   await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
   await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(page).toHaveURL(/\/codex\/new$/);
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
@@ -248,7 +248,7 @@ for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings'
     await expect(page.locator('#task')).toHaveValue('Send in the added project');
     if (managementPage) {
       await page.getByRole('button', { name: managementPage, exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
+      await expect(page.getByRole('dialog')).toBeVisible();
       if (managementPage === 'Settings') {
         await expect(page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) }).getByRole('button', { name: 'Sign out', exact: true })).toBeDisabled();
       }
@@ -260,7 +260,7 @@ for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings'
     app.notify('workspace.changed', { workspaces: app.workspaces });
     await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/Users/test');
     if (managementPage) {
-      const back = page.getByRole('button', { name: 'Back', exact: true });
+      const back = page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true });
       await expect(back).toBeVisible();
       if (managementPage === 'Settings') {
         await expect(page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) }).getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
@@ -283,19 +283,19 @@ for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings'
   const managementPage = 'Settings';
 
   for (const broadcastFirst of [false, true]) {
-    test(`adding a project from ${managementPage} preserves its hidden draft (broadcast first: ${broadcastFirst})`, async ({ page }) => {
+    test(`adding a project behind ${managementPage} preserves its draft (broadcast first: ${broadcastFirst})`, async ({ page }) => {
       const app = await open(page, ['/workspace', '/other']);
       await choose(page, 'Codex test');
       await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
       await page.locator('#task').fill('Keep the hidden draft');
       const session = await page.locator('#transcript').getAttribute('data-transcript-session');
-      await page.getByRole('button', { name: managementPage, exact: true }).click();
       const pending = Promise.withResolvers();
       const reply = app.replyFor.bind(app);
       app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
       await page.getByRole('button', { name: 'Add a project', exact: true }).click();
       await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
       await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
+      await page.getByRole('button', { name: managementPage, exact: true }).click();
       const result = reply(app.requests.find(r => r.method === 'workspace.add'));
       if (broadcastFirst) {
         app.notify('workspace.changed', { workspaces: app.workspaces });
@@ -308,7 +308,7 @@ for (const [detachPrevious, managementPage] of [[false, null], [true, 'Settings'
         app.notify('workspace.changed', { workspaces: app.workspaces });
       }
       await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/Users/test');
-      const back = page.getByRole('button', { name: 'Back', exact: true });
+      const back = page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true });
       await expect(back).toBeVisible();
       await back.click();
       await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);

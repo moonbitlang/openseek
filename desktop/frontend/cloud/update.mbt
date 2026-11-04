@@ -370,6 +370,26 @@ pub fn update(
       })
       (next, @cmd.none, None)
     }
+    TerminalRequested(owner, shell) => {
+      guard owner is @interop.Cloud(account~, session=id) &&
+        state.user_id == Some(account) &&
+        token is Some(token) &&
+        state.can_compose(id) &&
+        !state.retired.contains(id) &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.outgoing is None else {
+        return (state, @cmd.none, None)
+      }
+      let (next, command) = state.submit_command(
+        id,
+        { request: state.sequence + 1, input: Terminal(shell), },
+        emit,
+        token,
+        navigation,
+      )
+      (next, command, None)
+    }
+    TerminalReady(_, _, _) => (state, @cmd.none, None)
     Created(epoch, request, id) => {
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
@@ -398,9 +418,15 @@ pub fn update(
         conversations,
         creation: None,
       }.list(token, emit)
+      let (next, terminal) = if conversation.outgoing
+        is Some({ input: Terminal(_), .. }) {
+        next.send_pending(id, token, emit)
+      } else {
+        (next, @cmd.none)
+      }
       (
         next,
-        command,
+        @cmd.batch([command, terminal]),
         if creation.navigation == navigation {
           Some(id)
         } else {
@@ -423,12 +449,21 @@ pub fn update(
             submission.request.to_string(),
             @engine_session.Rejected,
           )
-        Prompt(..) => conversation.controls
+        Prompt(..) | Terminal(_) => conversation.controls
       }
-      let (next, command) = state
-        .replace(creation.id, { ..conversation, outgoing: None, controls, })
-        .failed(error)
-      (next, command, None)
+      let next = { ..state, needs_sign_in: error is Unauthorized, }.replace(
+        creation.id,
+        {
+          ..conversation,
+          outgoing: None,
+          controls,
+          notice: match submission.input {
+            Prompt(..) | Native(_) => Some(error.label())
+            Terminal(_) => None
+          },
+        },
+      )
+      (next, @cmd.none, None)
     }
     Edit(account~, session=id, edit~) => {
       let edit = match edit {
@@ -641,13 +676,20 @@ pub fn update(
               conversation.pending
             },
             submission_sequence: conversation.submission_sequence +
-            (if admitted { 1 } else { 0 }),
-            initial_submission: if admitted {
+            (if admitted &&
+              conversation.pending.map_or(false, p => p.result_id is None) {
+              1
+            } else {
+              0
+            }),
+            initial_submission: if admitted &&
+              conversation.pending.map_or(false, p => p.result_id is None) {
               None
             } else {
               conversation.initial_submission
             },
-            initial_attachments: if admitted {
+            initial_attachments: if admitted &&
+              conversation.pending.map_or(false, p => p.result_id is None) {
               []
             } else {
               conversation.initial_attachments
@@ -794,8 +836,72 @@ pub fn update(
       let (next, command) = next.load(id, token, emit, reuse=true)
       (next, command, None)
     }
+    LoadOlder(id) => {
+      guard token is Some(token) &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.older_history_start() is Some(start) else {
+        return (state, @cmd.none, None)
+      }
+      let limit = start.min(HistoryPageSize)
+      let offset = start - limit
+      let request = state.sequence + 1
+      let next = state.replace(id, {
+        ..conversation,
+        history_older_request: Some((request, offset, navigation)),
+      })
+      (
+        { ..next, sequence: request, },
+        run(emit, () => {
+          load_history(token, id, None, state.epoch, request, offset~, limit~) catch {
+            @cloud_client.RequestError(error) =>
+              OlderFailed(state.epoch, id, request, error)
+            _ => OlderFailed(state.epoch, id, request, Unreachable)
+          }
+        }),
+        None,
+      )
+    }
+    OlderLoaded(epoch, id, request, history) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_older_request is Some((pending, offset, owner)) &&
+        request == pending else {
+        return (state, @cmd.none, None)
+      }
+      let conversation = { ..conversation, history_older_request: None, }
+      let next = if owner == navigation && history.offset == Some(offset) {
+        conversation.with_history_page(
+          { ..history, generating: false, },
+          latest=false,
+        )
+      } else {
+        conversation
+      }
+      (state.replace(id, next), @cmd.none, None)
+    }
+    OlderFailed(epoch, id, request, error) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_older_request is Some((pending, _, _)) &&
+        request == pending else {
+        return (state, @cmd.none, None)
+      }
+      let next = state.replace(id, {
+        ..conversation,
+        history_older_request: None,
+      })
+      let (next, command) = if error is Unauthorized {
+        next.failed(error)
+      } else {
+        (next, @cmd.none)
+      }
+      (next, command, None)
+    }
     Loaded(epoch, id, request, history) => {
-      let conversation = state.conversations[id]
+      let conversation = state.conversations[id].with_history_page(
+        history,
+        latest=true,
+      )
       let accepted = conversation.pending is Some(submission) &&
         history.messages.any(record => {
           record.kind == "user" &&
@@ -817,19 +923,17 @@ pub fn update(
         conversation
       }
       let restored = {
-        ..settled.restore_goal(history.session),
+        ..settled.restore_goal(conversation.document),
         control,
-        records: history.messages,
         history_cached: true,
         history_etag: history.etag,
         history_reading: false,
         events: conversation.events.filter(event => {
-          !history.messages.any(record => {
+          !conversation.records.any(record => {
             record.task_id == event.task_id &&
             (record.kind == event.kind || record.kind == "task_finished")
           })
         }),
-        document: history.session,
         loading: false,
         watch_status: if observed && conversation.last_seq is Some(_) {
           Watching
@@ -852,7 +956,11 @@ pub fn update(
           })
         }),
         sending: conversation.sending && !accepted,
-        pending: if accepted || !conversation.sending {
+        pending: if accepted ||
+          (
+            !conversation.sending &&
+            conversation.pending.map_or(true, p => p.result_id is None)
+          ) {
           None
         } else {
           conversation.pending
@@ -870,13 +978,20 @@ pub fn update(
           None
         },
         submission_sequence: conversation.submission_sequence +
-        (if accepted { 1 } else { 0 }),
-        initial_submission: if accepted {
+        (if accepted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
+          1
+        } else {
+          0
+        }),
+        initial_submission: if accepted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
           None
         } else {
           conversation.initial_submission
         },
-        initial_attachments: if accepted {
+        initial_attachments: if accepted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
           []
         } else {
           conversation.initial_attachments
@@ -954,22 +1069,14 @@ pub fn update(
           Some(error.label())
         },
       })
-      let (next, command) = if recovering && retry {
-        (next, @cmd.none)
-      } else {
-        next.failed(error)
-      }
       (
-        next,
-        @cmd.batch([
-          command,
-          if (recovering && retry) ||
-            (!recovering && conversation.generating && !(error is Unauthorized)) {
-            poll(epoch, id, request, emit)
-          } else {
-            @cmd.none
-          },
-        ]),
+        { ..next, needs_sign_in: error is Unauthorized, },
+        if (recovering && retry) ||
+          (!recovering && conversation.generating && !(error is Unauthorized)) {
+          poll(epoch, id, request, emit)
+        } else {
+          @cmd.none
+        },
         None,
       )
     }
@@ -1094,13 +1201,20 @@ pub fn update(
           conversation.uploads
         },
         submission_sequence: conversation.submission_sequence +
-        (if admitted { 1 } else { 0 }),
-        initial_submission: if admitted {
+        (if admitted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
+          1
+        } else {
+          0
+        }),
+        initial_submission: if admitted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
           None
         } else {
           conversation.initial_submission
         },
-        initial_attachments: if admitted {
+        initial_attachments: if admitted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
           []
         } else {
           conversation.initial_attachments
@@ -1157,14 +1271,10 @@ pub fn update(
         },
       })
       if configuration {
-        return (
-          { ..next, sequence: state.sequence + 1, notice: Some(error.label()), },
-          @cmd.none,
-          None,
-        )
+        return ({ ..next, sequence: state.sequence + 1, }, @cmd.none, None)
       }
       let (next, command) = if error is Unauthorized {
-        next.failed(error)
+        ({ ..next, needs_sign_in: true, }, @cmd.none)
       } else {
         next.load(id, token, emit)
       }
@@ -1198,8 +1308,16 @@ pub fn update(
         state.replace(id, {
           ..conversation,
           pending: Some({ ..pending, content, }),
-          initial_submission: conversation.initial_submission.map(_ => draft),
-          initial_attachments: [],
+          initial_submission: if pending.result_id is None {
+            conversation.initial_submission.map(_ => draft)
+          } else {
+            conversation.initial_submission
+          },
+          initial_attachments: if pending.result_id is None {
+            []
+          } else {
+            conversation.initial_attachments
+          },
         }),
         @cmd.none,
         None,
@@ -1238,14 +1356,10 @@ fn State::submit(
   let content = prompt_content(draft) catch {
     @cloud_client.RequestError(failure) =>
       return (
-        if state.draft_identity() == Some(owner) {
-          { ..state, notice: Some(failure.label()), }
-        } else {
-          state.replace(id, {
-            ..state.conversations[id],
-            notice: Some(failure.label()),
-          })
-        },
+        state.replace(id, {
+          ..state.conversations[id],
+          notice: Some(failure.label()),
+        }),
         @cmd.none,
         None,
       )

@@ -105,13 +105,6 @@ fn activate_navigation(
       },
     )
   }
-  if location.target is Settings {
-    let (command, next) = update_msg(dispatch, OpenSetup, model)
-    return (
-      command,
-      { ..next, navigation: { ..next.navigation, phase: Active, }, },
-    )
-  }
   // Browser authentication and device gates own connectivity UI. Do not turn
   // an unconnected or not-yet-listed target into a missing target.
   guard location.device is Some(_) &&
@@ -136,16 +129,7 @@ fn activate_navigation(
     }
   }
   let (command, next, phase) = match location.target {
-    Cloud | CloudSession(..) | CloudDraft(..) | Settings =>
-      (@cmd.none, model, Active)
-    Schedules => {
-      let (cmd, next) = open_schedules(dispatch, model)
-      (cmd, next, Active)
-    }
-    Skills => {
-      let (cmd, next) = update_msg(dispatch, OpenSkills, model)
-      (cmd, next, Active)
-    }
+    Cloud | CloudSession(..) | CloudDraft(..) => (@cmd.none, model, Active)
     Chat | Codex => {
       let target : @routes.Target = if location.target is Chat {
         ChatNew
@@ -287,41 +271,7 @@ fn activate_navigation(
       } else {
         return replace_with_new_navigation(dispatch, model, CodexNew)
       }
-    InstalledSkill(id) | MarketSkill(id) as target => {
-      let detail : @skills.Detail = if target is InstalledSkill(_) {
-        InstalledRef(id)
-      } else {
-        MarketRef(id)
-      }
-      if target is InstalledSkill(_) && model.navigation.skills is None {
-        return (@cmd.none, model)
-      }
-      if target is InstalledSkill(_) &&
-        model.navigation.skills is Some(Err(message)) {
-        return (
-          @cmd.none,
-          {
-            ..model,
-            navigation: { ..model.navigation, phase: Failed(message), },
-          },
-        )
-      }
-      let (cmd, skills, resolution) = model.skills.open_detail(
-        dispatch.map(msg => Skills(msg)),
-        model.skills_input(),
-        detail,
-      )
-      (
-        cmd,
-        { ..model, skills, },
-        match resolution {
-          Waiting => Waiting
-          Opened => Active
-          Missing => Missing
-          Failed(message) => Failed(message)
-        },
-      )
-    }
   }
-  (command, { ..next, navigation: { ..next.navigation, phase, }, })
+  let next = { ..next, navigation: { ..next.navigation, phase, }, }
+  (command, next)
 }

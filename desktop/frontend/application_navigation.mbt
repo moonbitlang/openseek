@@ -109,7 +109,6 @@ fn reconcile_navigation(
       next.codex
       .active_placement(next.focused)
       .bind(placement => placement.project_root())
-    _ => None
   }
   let next = if host_project is Some(project) &&
     next.focused_device().map_or(false, dev => dev.is_chat_workspace(project)) {

@@ -1708,7 +1708,7 @@ fn description(
     #|Omit unused fields entirely; do not send null.
     #|
     #|For example, create and run a reusable script with
-    #|`{"description":"Save and run a greeting","source":"fn main { println(42) }","filename":"scripts/greet.mbtx"}`.
+    #|`{"description":"Save and run a greeting","source":"---\nimport {\n  \"moonbitlang/core/env\",\n}\n---\n\nfn main {\n  println(@env.args()[1:])\n}\n","filename":"scripts/greet.mbtx"}`.
     #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
     #|A filename-only call cannot create a script. Missing parent directories are
     #|created. Identical existing content is reused; different content is never

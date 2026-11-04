@@ -105,9 +105,9 @@ test "the sidebar mode follows the conversation on screen and keeps a manual pic
   assert_eq(browsing.active_session, model.active_session)
   let (_, settled) = update(dispatch, ToggleSidebar, browsing)
   assert_true(settled.sidebar_mode is ChatMode)
-  // A page without a conversation claims no list.
+  // A dialog preserves the conversation's list and the manual pick.
   let (_, settings) = update(dispatch, OpenSetup, settled)
-  assert_true(settings.sidebar_activation() is None)
+  assert_true(settings.sidebar_activation() == settled.sidebar_activation())
   assert_true(settings.sidebar_mode is ChatMode)
   // Retired standalone chats no longer claim a sidebar list.
   let in_work = { ..model, sidebar_mode: WorkMode, }

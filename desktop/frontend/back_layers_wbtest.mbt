@@ -22,12 +22,21 @@ test "Back's overlay dismissals close and never reopen" {
     })
     assert_false(panel.right_panel_open)
     assert_false(panel.right_panel_menu_open)
+    let (_, dialog) = update(dispatch, CloseManagementDialog, {
+      ..model,
+      management_dialog: if open {
+        Some(Settings)
+      } else {
+        None
+      },
+    })
+    assert_true(dialog.management_dialog is None)
   }
 }
 
 ///|
 test "the overview is a layer only where a conversation page shows it" {
   let model = { ..test_model(), overview_open: true, }
-  assert_false({ ..model, screen: Settings, }.overview_shown())
+  assert_false({ ..model, screen: Codex, }.overview_shown())
   assert_false({ ..model, overview_open: false, }.overview_shown())
 }

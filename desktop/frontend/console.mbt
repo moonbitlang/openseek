@@ -151,15 +151,6 @@ test "a Cloud route keeps the Chat list over the stored sidebar pick" {
   }
   let (_, next) = update(test_dispatch(), SidebarModeLoaded(WorkMode), model)
   assert_true(next.sidebar_mode is ChatMode)
-  let settings = {
-    ..model,
-    navigation: {
-      ..model.navigation,
-      location: Some({ device: None, target: Settings, }),
-    },
-  }
-  let (_, next) = update(test_dispatch(), SidebarModeLoaded(WorkMode), settings)
-  assert_true(next.sidebar_mode is WorkMode)
 }
 
 ///|
