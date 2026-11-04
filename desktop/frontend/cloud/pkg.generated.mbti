@@ -128,6 +128,8 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
+  history_pages : Map[Int32, History]
+  history_older_request : (Int32, Int32, Int32)?
   history_resume_baseline : (String?, Int32?)?
   history_refresh_after_read : Bool
   events : Array[Event]
@@ -159,12 +161,13 @@ pub(all) struct Conversation {
   task : String?
   last_seq : Int32?
   live : @engine_session.Stream
-  pending_assistants : Array[@transcript.TranscriptItem]
+  pending_assistants : Array[PendingAssistant]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
   notice : String?
 } derive(Eq)
+pub fn Conversation::can_load_older_history(Self) -> Bool
 pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
 pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @composer.PrimaryAction
 pub fn Conversation::equal(Self, Self) -> Bool
@@ -203,11 +206,14 @@ pub fn Event::not_equal(Self, Self) -> Bool
 
 pub(all) struct History {
   etag : String?
+  offset : Int32?
   prediction : @openseek_protocol.PredictionRecord?
   session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
-}
+} derive(Eq)
+pub fn History::equal(Self, Self) -> Bool
+pub fn History::not_equal(Self, Self) -> Bool
 
 pub struct MetadataSave {
   request : Int32
@@ -237,6 +243,9 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
+  LoadOlder(String)
+  OlderLoaded(Int32, String, Int32, History)
+  OlderFailed(Int32, String, Int32, @cloud_client.Failure)
   HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, @cloud_client.Failure)
   WatchOpened(Int32, String, StreamLease)
@@ -258,6 +267,14 @@ pub(all) enum Msg {
   MessagePrepared(Int32, String, Int32, @composer.Draft, @openseek_protocol.Content)
   Poll(Int32, String, Int32)
 }
+
+pub struct PendingAssistant {
+  task : String
+  history_request : Int32
+  item : @transcript.TranscriptItem
+} derive(Eq)
+pub fn PendingAssistant::equal(Self, Self) -> Bool
+pub fn PendingAssistant::not_equal(Self, Self) -> Bool
 
 pub struct PendingCommand {
   request : Int32

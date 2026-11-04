@@ -32,6 +32,7 @@ pub fn Conversation::run_heartbeat(
 fn Conversation::live_progress(
   self : Conversation,
   wire : @wire.Event,
+  history_request : Int32,
 ) -> Conversation {
   let progress = @transcript.decode_engine_event(wire)
   let self = if progress.map_or(false, event => event.ends_retry()) ||
@@ -43,20 +44,25 @@ fn Conversation::live_progress(
   if wire is @wire.AssistantMessage(content~) {
     let prose = if content.is_blank() { None } else { Some(content) }
     let reasoning = self.live.reasoning.map(reasoning => reasoning.content)
-    let pending_assistants = if prose is Some(_) || reasoning is Some(_) {
+    let pending_assistants = if self.task is Some(task) &&
+      (prose is Some(_) || reasoning is Some(_)) {
       [
         ..self.pending_assistants,
         {
-          kind: @transcript.Assistant(
-            prose~,
-            reasoning~,
-            calls=[],
-            replay=false,
-            finished=false,
-            end_sequence=None,
-          ),
-          ts: None,
-          sequence: None,
+          task,
+          history_request,
+          item: {
+            kind: @transcript.Assistant(
+              prose~,
+              reasoning~,
+              calls=[],
+              replay=false,
+              finished=false,
+              end_sequence=None,
+            ),
+            ts: None,
+            sequence: None,
+          },
         },
       ]
     } else {

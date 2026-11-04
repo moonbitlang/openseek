@@ -6060,6 +6060,14 @@ fn update_msg(
           overview: @conversation_overview.update(msg, model.overview),
         },
       )
+    TranscriptLoadOlder(slot) => {
+      guard model.transcript_slot()
+        is Some(CloudTranscriptSlot(owner) as active) &&
+        active.key() == slot else {
+        return (@cmd.none, model)
+      }
+      update_cloud(dispatch, @cloud.LoadOlder(owner.session()), model)
+    }
     TranscriptLeft(slot~, scroll~) =>
       (
         @cmd.none,
