@@ -19,7 +19,7 @@ with inline HTML.
 From the generated project directory:
 
 1. Run `moon update` to resolve dependencies.
-2. Run `proton_cli cef setup` to prepare CEF, the embedded browser runtime.
+2. Run `proton_cli setup` to prepare CEF, the embedded browser runtime.
 3. Run `proton_cli dev` to launch the application during development.
 
 Let the CLI manage the runtime and helper; do not assemble them by hand.

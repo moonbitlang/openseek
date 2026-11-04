@@ -11,7 +11,7 @@ target/
 node_modules/
 .DS_Store
 
-# Proton native runtime assembled by `proton_cli cef setup` (CEF framework +
+# Proton native runtime assembled by `proton_cli setup` (CEF framework +
 # helpers + libproton); hundreds of MB, downloaded/generated, never committed.
 .proton/
 .cef-cache/
