@@ -8,7 +8,6 @@ priv enum NavigationMsg {
 }
 
 ///|
-#derive(Eq)
 priv enum NavigationPhase {
   Waiting
   Active
@@ -16,10 +15,9 @@ priv enum NavigationPhase {
   PreparingNew
   Invalid
   Failed(String)
-}
+} derive(Eq)
 
 ///|
-#derive(Eq)
 priv struct AppNavigation {
   location : @routes.Location?
   phase : NavigationPhase
@@ -29,7 +27,7 @@ priv struct AppNavigation {
   skills : Result[Unit, String]?
   new_chat_requested : Bool
   revision : Int32
-}
+} derive(Eq)
 
 ///|
 fn AppNavigation::empty() -> AppNavigation {

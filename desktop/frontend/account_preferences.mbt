@@ -1,11 +1,10 @@
 ///|
-#derive(Eq)
 priv struct AccountPreferences {
   request : Int32
   value : Bool?
   pending : Bool
   error : String?
-}
+} derive(Eq)
 
 ///|
 fn AccountPreferences::empty(request~ : Int32 = 0) -> AccountPreferences {

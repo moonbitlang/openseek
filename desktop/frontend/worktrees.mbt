@@ -11,7 +11,6 @@
 /// what the sidebar and file root projection read: the name (the glyph's
 /// tooltip), the OpenSeek conversations bound to it or its Codex owner, its
 /// concrete checkout path, and whether that checkout still exists on disk.
-#derive(Eq)
 priv struct WorktreeRow {
   name : String
   sessions : Array[String]
@@ -19,7 +18,7 @@ priv struct WorktreeRow {
   // The host's concrete checkout root, already bound to its device channel.
   path : @common.Uri?
   present : Bool
-}
+} derive(Eq)
 
 ///|
 /// One project's worktree rows, keyed by the registry path the host also
@@ -27,24 +26,22 @@ priv struct WorktreeRow {
 /// were applied under — the staleness fence is per project, so a
 /// broadcast for one project can never discard another's still-current
 /// list reply.
-#derive(Eq)
 priv struct ProjectWorktrees {
   project : @common.Uri
   rows : Array[WorktreeRow]
   generation : Int32
-}
+} derive(Eq)
 
 ///|
 /// The archive-discard confirmation: the host refused to archive because
 /// the conversation's worktree holds uncommitted changes; confirming
 /// retries the archive with force. The structured refusal names the worktree
 /// and carries a bounded path preview without exposing arbitrary host errors.
-#derive(Eq)
 priv struct ArchiveConfirm {
   channel : @interop.ChannelId
   session : String
   refusal : @protocol.ArchiveNeedsForceReply
-}
+} derive(Eq)
 
 ///|
 fn fetch_worktrees(
