@@ -29,7 +29,16 @@ fn management_dialog_view(
     id="management-dialog",
     class="modal management-dialog",
     on_cancel=dispatch(CloseManagementDialog),
-    attrs=@html.Attrs::build().aria_label(title),
+    attrs=@html.Attrs::build()
+      .aria_label(title)
+      .on_click(event => {
+        if event.target().to_element() is Some(element) &&
+          element.get_property("id").to_option() is Some("management-dialog") {
+          dispatch(CloseManagementDialog)
+        } else {
+          @cmd.none
+        }
+      }),
     [
       @html.div(class="management-dialog-header", [
         if model.management_dialog is Some(Skills) &&
