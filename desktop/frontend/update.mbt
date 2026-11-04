@@ -1716,7 +1716,6 @@ fn update(
     | CloudAction(@cloud.Create)
     | CodexOpenThread(_)
     | OpenCodex
-    | NotificationClicked(..)
     | NewChatRequested
     | ExplorerRequested(_)
     | SidebarModeSelected(_) => true
@@ -5819,6 +5818,7 @@ fn update_msg(
               OpenCloudConversation(account~, session=session.id),
               {
                 ..model,
+                management_dialog: None,
                 chat_navigation_generation: model.chat_navigation_generation + 1,
               },
             )
@@ -5836,6 +5836,7 @@ fn update_msg(
       if conv is Some(conv) {
         update_msg(dispatch, OpenSession(conv.device, conv.session_id), {
           ..model,
+          management_dialog: None,
           chat_navigation_generation: model.chat_navigation_generation + 1,
         })
       } else {
