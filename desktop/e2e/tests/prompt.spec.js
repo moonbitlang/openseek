@@ -95,6 +95,7 @@ test('changing the default preserves an existing unsent draft', async ({ page })
   const builtin = (await send(page, app, 'Remember the builtin text')).system_prompt;
   await newChat(page, false);
   await page.locator('#task').fill('Keep this draft');
+  await expect(page).toHaveURL(/\/chat\/draft\/[^/?#]+$/);
   const draft = new URL(page.url()).pathname;
   await choose(page, 'Custom prompt');
   await saveCustom(page, app, 'New default');

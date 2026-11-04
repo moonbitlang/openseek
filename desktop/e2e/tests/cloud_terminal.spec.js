@@ -127,6 +127,10 @@ test('account replacement closes this client sockets and cannot display the old 
   cloud.userId = '456';
   await account.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(account.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await settings.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect(settings).not.toBeVisible();
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await cloud.open();
   if (await show(page).isVisible()) await show(page).click();
   await expect.poll(() => terminal.connections.length).toBe(2);
