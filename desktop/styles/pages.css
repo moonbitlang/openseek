@@ -121,69 +121,48 @@ dialog.management-dialog {
   padding: 0;
   color: var(--color-text-primary);
   overflow: hidden;
-  /* `display`/`overlay` are discrete; transitioning them keeps the panel on
-     screen while it leaves. The closed state owns the exit timing and the
-     open state the entrance: a short quick fade out, a slightly longer
-     ease-out entrance that arrives without any settle wobble. */
-  opacity: 0;
-  scale: 0.97;
-  transition:
-    opacity 80ms cubic-bezier(0.4, 0, 1, 1),
-    scale 80ms cubic-bezier(0.4, 0, 1, 1),
-    display 80ms allow-discrete,
-    overlay 80ms allow-discrete;
 }
 .management-dialog[open] {
   display: flex;
   flex-direction: column;
-  opacity: 1;
-  scale: 1;
-  transition:
-    opacity 130ms cubic-bezier(0.16, 1, 0.3, 1),
-    scale 130ms cubic-bezier(0.16, 1, 0.3, 1),
-    display 130ms allow-discrete,
-    overlay 130ms allow-discrete;
-}
-@starting-style {
-  .management-dialog[open] {
-    opacity: 0;
-    scale: 0.97;
-  }
-}
-.management-dialog::backdrop {
-  background: transparent;
-  transition:
-    background-color 80ms cubic-bezier(0.4, 0, 1, 1),
-    display 80ms allow-discrete,
-    overlay 80ms allow-discrete;
 }
 .management-dialog[open]::backdrop {
   background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
-  transition:
-    background-color 130ms cubic-bezier(0.16, 1, 0.3, 1),
-    display 130ms allow-discrete,
-    overlay 130ms allow-discrete;
 }
-@starting-style {
-  .management-dialog[open]::backdrop {
-    background: transparent;
+/* A plain pop: the panel fades and lifts a hair, the backdrop fades with it.
+   `display`/`overlay` are discrete, so transitioning them keeps the panel on
+   screen while it leaves. Motion is opt-in, per the reduced-motion default. */
+@media (prefers-reduced-motion: no-preference) {
+  dialog.management-dialog {
+    opacity: 0;
+    scale: 0.98;
+    transition:
+      opacity 120ms ease,
+      scale 120ms ease,
+      display 120ms allow-discrete,
+      overlay 120ms allow-discrete;
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  dialog.management-dialog,
-  dialog.management-dialog[open] {
+  .management-dialog[open] {
+    opacity: 1;
     scale: 1;
-    transition:
-      opacity 1ms linear,
-      display 1ms allow-discrete,
-      overlay 1ms allow-discrete;
   }
-  .management-dialog::backdrop,
-  .management-dialog[open]::backdrop {
+  @starting-style {
+    .management-dialog[open] {
+      opacity: 0;
+      scale: 0.98;
+    }
+  }
+  .management-dialog::backdrop {
+    background: transparent;
     transition:
-      background-color 1ms linear,
-      display 1ms allow-discrete,
-      overlay 1ms allow-discrete;
+      background-color 120ms ease,
+      display 120ms allow-discrete,
+      overlay 120ms allow-discrete;
+  }
+  @starting-style {
+    .management-dialog[open]::backdrop {
+      background: transparent;
+    }
   }
 }
 .management-dialog-header {
