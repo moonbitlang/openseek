@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 async function diagramViewportFillsHost(host) {
@@ -1497,7 +1497,7 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sidebar menu dismissal and pending selection follow the clicked row', async ({ page }) => {
+test('sidebar menu dismissal and pending selection follow the clicked row', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions.push({
     id: 'session-2',

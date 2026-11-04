@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { LocalConsoleHarness, browserAccount } from './support/local_console_harness.js';
 import { sessionA } from './support/cloud_harness.js';
 

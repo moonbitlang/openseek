@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 for (const desktop of [false, true]) {

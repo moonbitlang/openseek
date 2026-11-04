@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { pinchZoom } from './support/office_zoom.js';
 import { annotationPdf, formPdf, markupPdf } from './support/pdf_annotation_fixture.js';

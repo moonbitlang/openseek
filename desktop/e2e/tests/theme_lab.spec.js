@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { openThemeLab } from '../../dev/theme-lab.mjs';
 
 test('Theme Lab applies palettes to the real app without remounting its draft or editor', async ({ page }, testInfo) => {
