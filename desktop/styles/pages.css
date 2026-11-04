@@ -135,9 +135,9 @@ dialog.management-dialog::backdrop {
   dialog.management-dialog {
     scale: 0.99;
     transition:
-      scale 90ms linear,
-      display 90ms allow-discrete,
-      overlay 90ms allow-discrete;
+      scale 45ms linear,
+      display 45ms allow-discrete,
+      overlay 45ms allow-discrete;
   }
   dialog.management-dialog[open] {
     scale: 1;
