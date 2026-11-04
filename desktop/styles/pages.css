@@ -121,6 +121,10 @@ dialog.management-dialog {
   max-height: 84dvh;
   padding: 0;
   border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px -4px light-dark(
+    rgba(20, 23, 26, 0.12),
+    rgba(0, 0, 0, 0.3)
+  );
   color: var(--color-text-primary);
   overflow: hidden;
   flex-direction: column;
@@ -133,18 +137,18 @@ dialog.management-dialog::backdrop {
 }
 @media (prefers-reduced-motion: no-preference) {
   dialog.management-dialog {
-    scale: 0.99;
+    scale: 0.995;
     transition:
-      scale 30ms linear,
-      display 30ms allow-discrete,
-      overlay 30ms allow-discrete;
+      scale 20ms linear,
+      display 20ms allow-discrete,
+      overlay 20ms allow-discrete;
   }
   dialog.management-dialog[open] {
     scale: 1;
   }
   @starting-style {
     dialog.management-dialog[open] {
-      scale: 0.99;
+      scale: 0.995;
     }
   }
 }
