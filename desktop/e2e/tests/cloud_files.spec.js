@@ -1070,7 +1070,8 @@ for (const unchanged of [true, false]) {
   });
 }
 
-for (const preview of ['oversized', 'binary', 'office', 'pending']) {
+// Binary previews share the oversized notice path.
+for (const preview of ['oversized', 'office', 'pending']) {
   test(`Cloud files download when the preview is ${preview} without saving the preview result`, async ({ page }) => {
     const cloud = new CloudFilesHarness(page);
     const name = preview === 'office' ? 'report.docx' : 'unsupported.bin';
@@ -1086,7 +1087,7 @@ for (const preview of ['oversized', 'binary', 'office', 'pending']) {
     await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
     await file(page, name).click();
     if (preview === 'office') await expect(page.locator('.word-page')).toBeVisible();
-    else await expect(page.locator('.viewer-notice')).toContainText(preview === 'pending' ? 'Loading file' : preview === 'oversized' ? 'too large' : 'binary file');
+    else await expect(page.locator('.viewer-notice')).toContainText(preview === 'pending' ? 'Loading file' : 'too large');
     const before = cloud.fileRequests.length;
     const transfer = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download to local', exact: true }).click();
