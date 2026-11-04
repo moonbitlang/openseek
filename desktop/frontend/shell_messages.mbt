@@ -77,6 +77,7 @@ priv enum ShellMessage {
   SetupEndpoint
   NotNow
   DismissLabel
+  BackToSkills
   CancelLabel
   DeleteChatQuestion
   DeletePermanently
@@ -568,6 +569,11 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, DismissLabel) => "关闭"
     (TraditionalChinese, DismissLabel) => "關閉"
     (Japanese, DismissLabel) => "閉じる"
+    (English, BackToSkills) => "Back to skills"
+    (Spanish, BackToSkills) => "Volver a las habilidades"
+    (SimplifiedChinese, BackToSkills) => "返回技能列表"
+    (TraditionalChinese, BackToSkills) => "返回技能列表"
+    (Japanese, BackToSkills) => "スキル一覧に戻る"
     (English, CancelLabel) => "Cancel"
     (Spanish, CancelLabel) => "Cancelar"
     (SimplifiedChinese, CancelLabel) => "取消"

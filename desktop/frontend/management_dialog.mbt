@@ -41,16 +41,22 @@ fn management_dialog_view(
       }),
     [
       @html.div(class="management-dialog-header", [
-        if model.management_dialog is Some(Skills) &&
-          model.skills.detail() is Some(_) {
-          @html.button(
-            class="button",
-            on_click=dispatch(Skills(@skills.BackToList)),
-            [@icons.icon(@icons.icon_arrow_left), @html.text(title)],
-          )
-        } else {
-          @html.h2(title)
-        },
+        @html.div(class="management-dialog-heading", [
+          if model.management_dialog is Some(Skills) &&
+            model.skills.detail() is Some(_) {
+            @html.button(
+              class="icon-button",
+              attrs=@html.Attrs::build().aria_label(
+                shell_text(model.locale, BackToSkills),
+              ),
+              on_click=dispatch(Skills(@skills.BackToList)),
+              @icons.icon(@icons.icon_arrow_left),
+            )
+          } else {
+            @html.nothing
+          },
+          @html.h1(class="topbar-title", title),
+        ]),
         @html.button(
           class="icon-button",
           attrs=@html.Attrs::build().aria_label(
