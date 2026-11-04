@@ -395,8 +395,6 @@ html.is-resizing .sidebar-resize-handle {
   visibility: visible;
 }
 
-/* Section disclosure and creation are sibling buttons so adding a project
-   never toggles the list. Keep the compact action available when folded. */
 .sidebar-group,
 .sidebar-branch {
   display: grid;
@@ -405,7 +403,6 @@ html.is-resizing .sidebar-resize-handle {
   transition: row-gap var(--disclosure-duration) ease,
     margin-block-start var(--disclosure-duration) ease;
 }
-.sidebar-group.collapsed,
 .sidebar-branch.collapsed {
   row-gap: 0;
 }
@@ -419,7 +416,6 @@ html.is-resizing .sidebar-resize-handle {
   overflow: clip;
   transition: block-size var(--disclosure-duration) ease;
 }
-.sidebar-group.collapsed > .sidebar-group-content,
 .sidebar-branch.collapsed > .sidebar-branch-content {
   block-size: 0;
 }
@@ -438,30 +434,9 @@ html.is-resizing .sidebar-resize-handle {
 .sidebar-group:not(:first-child) > .section-heading {
   margin-top: var(--space-5);
 }
-.section-disclosure {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
+.section-label {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 2em;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.section-chevron {
-  --icon-size: var(--icon-sm);
-  display: grid;
-  place-items: center;
-  flex: none;
-  transition: transform var(--disclosure-duration) ease;
-}
-.section-heading.collapsed .section-chevron {
-  transform: rotate(-90deg);
 }
 .section-primary-action {
   --icon-size: var(--icon-md);
@@ -481,10 +456,6 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-.section-disclosure:hover {
-  color: var(--color-text-primary);
-}
-.section-disclosure:focus-visible,
 .section-primary-action:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
@@ -497,8 +468,7 @@ html.is-resizing .sidebar-resize-handle {
   .sidebar-group,
   .sidebar-group-content,
   .sidebar-branch,
-  .sidebar-branch-content,
-  .section-chevron {
+  .sidebar-branch-content {
     transition: none;
   }
 }

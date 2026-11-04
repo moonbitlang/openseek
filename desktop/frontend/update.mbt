@@ -16287,7 +16287,6 @@ test "Codex threads share the Projects section's project rows" {
   // live on Settings' archived page.
   assert_eq(sections.length(), 1)
   inspect(sections[0].label, content="Projects")
-  assert_true(!sections[0].initially_collapsed)
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")
   }

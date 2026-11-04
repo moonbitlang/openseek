@@ -71,7 +71,6 @@ pub(all) struct Action {
 pub(all) struct Input {
   id : Id
   label : String
-  initially_collapsed : Bool
   // The active conversation's session id while this section holds the
   // focused chat; `None` otherwise. Same contract as
   // `@project.Input.activation`.
@@ -91,35 +90,6 @@ pub(all) struct Actions {
   placeholder : (String) -> @cmd.Cmd
   project : @project.Actions
   conversation : @conversation.Actions
-}
-
-///|
-priv enum Msg {
-  Toggle
-}
-
-///|
-/// A fold is stamped with the activation it was made under, so revealing is
-/// edge-triggered without watching input transitions: only an activation
-/// different from the stamped one forces the section open.
-priv enum Fold {
-  Open
-  Folded(during~ : String?)
-} derive(Eq)
-
-///|
-priv struct State {
-  fold : Fold
-} derive(Eq)
-
-///|
-/// Whether the section renders folded. A stored fold holds — including while
-/// its own activation stays current, so the heading's toggle works inside
-/// the selected section — and only a new activation reveals it: jumping into
-/// a folded section opens it to show where you are.
-fn State::folded(self : State, input : Input) -> Bool {
-  guard self.fold is Folded(during~) else { return false }
-  input.activation is None || input.activation == during
 }
 
 ///|
@@ -226,50 +196,13 @@ fn Actions::entry_component(
 }
 
 ///|
-/// A Section is a keyed Rabbita component, not an array fragment rebuilt by
-/// the root view. Its disclosure state survives entry insertion and reorder.
-/// Its keyed content stays mounted while the section animates closed.
+/// Keyed entries retain their component state across insertion and reorder.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
   locale : @rabbita.Val[@i18n.Locale],
   search : @rabbita.Val[@conversation.Search],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
-  let (state, emit) = @rabbita.create_state_with_input(
-    input~,
-    // A section born collapsed is stamped with the activation current at
-    // birth, so the initial fold is not instantly revealed by it.
-    init=(_, input) => {
-      (
-        {
-          fold: if input.initially_collapsed {
-            Folded(during=input.activation)
-          } else {
-            Open
-          },
-        },
-        @cmd.none,
-      )
-    },
-    update=(state, input, msg, _) => {
-      match msg {
-        // Toggle the fold the user sees: a stored fold currently overridden
-        // by an activation reveal must fold on click, not silently flip to
-        // open.
-        Toggle =>
-          (
-            {
-              fold: if state.folded(input) {
-                Open
-              } else {
-                Folded(during=input.activation)
-              },
-            },
-            @cmd.none,
-          )
-      }
-    },
-  )
   let entry_inputs = input.map3(locale, search, (input, locale, search) => {
     @vector.from_array(input.entries.map(entry => (locale, entry, search)))
   })
@@ -284,32 +217,13 @@ pub fn component(
     },
     by=entry => entry.1.key(),
   )
-  state.map4(input, entry_rows, search, (state, input, entry_rows, search) => {
-    let collapsed = search.query.is_blank() && state.folded(input)
-    let mut class = if collapsed {
-      "sidebar-heading section-heading collapsible collapsed"
-    } else {
-      "sidebar-heading section-heading collapsible"
-    }
+  input.map2(entry_rows, (input, entry_rows) => {
+    let mut class = "sidebar-heading section-heading"
     if input.activation is Some(_) {
       class += " active"
     }
     let heading : Array[@html.Html] = [
-      @html.button(
-        class="section-disclosure",
-        type_="button",
-        on_click=emit(Toggle),
-        attrs=@html.Attrs::build()
-          .aria_expanded((!collapsed).to_string())
-          .aria_controls(input.id.key() + ":content"),
-        [
-          @html.span(class="sidebar-label", input.label),
-          @html.span(
-            class="section-chevron",
-            @icons.icon(@icons.icon_chevron_down),
-          ),
-        ],
-      ),
+      @html.span(class="sidebar-label section-label", input.label),
     ]
     if input.action is Some(action) {
       heading.push(
@@ -334,19 +248,12 @@ pub fn component(
       (
         input.id.key(),
         @html.div(
-          class=if collapsed {
-            "sidebar-group collapsed"
-          } else {
-            "sidebar-group"
-          },
+          class="sidebar-group",
           [
             @html.div(class~, heading),
             @html.div(
               id=input.id.key() + ":content",
               class="sidebar-group-content",
-              attrs=@html.Attrs::build()
-                .aria_hidden(collapsed.to_string())
-                .inert(collapsed),
               rows,
             ),
           ],

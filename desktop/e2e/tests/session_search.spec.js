@@ -26,7 +26,7 @@ function fixture(page) {
 // Folded sections, projects and sub-runs keep their rows mounted. Count only
 // titles exposed to the reader, including while the content box animates.
 const rows = page => page.locator(
-  'aside .sidebar-group-content[aria-hidden="false"] .conversation-open',
+  'aside .sidebar-group-content .conversation-open',
 ).and(page.getByRole('button'));
 
 test('inline title search reuses project rows and keeps results when opening unloaded history', async ({ page }) => {

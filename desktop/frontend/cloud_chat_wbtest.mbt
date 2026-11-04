@@ -297,7 +297,6 @@ test "Chats use the shared section with existing ordering and create action" {
   assert_eq(sections.map(section => section.label), ["Chats"])
   assert_eq(ids(sections[0]), ["cloud-b", "cloud-a"])
   assert_true(sections[0].action is Some(_))
-  assert_true(!sections[0].initially_collapsed)
 }
 
 ///|
