@@ -182,12 +182,13 @@ pub fn view_event_payload(
 }
 
 ///|
+#derive(Debug)
 priv suberror BrowserViewError {
   WindowNotReady
   PageNotConnected
   UnknownView(Int32)
   BlockedURL(String)
-} derive(Debug)
+}
 
 ///|
 impl Show for BrowserViewError with fn output(self, logger) {

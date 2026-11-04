@@ -297,10 +297,10 @@ async test "mbtx reads a workspace file" {
       content=(
         #|Respond(
         #|  {
-        #|    content: "lines=2\n",
+        #|    content: "[mbtx: run failed (exit 1) at RUNTIME — the build succeeded; this failure is from the run, not the build]\nSandbox policy blocked file read: \"<untracked resource>\"\ninitialize `stdout`: Permission denied\n\n\nmbtx sandbox: that failure is this tool's policy refusing something, not a\nfilesystem problem to debug — either the program is not on the spawn allowlist, or\nthe snippet tried to write outside its own `@fs.tmpdir()`. Reach for the\nMoonBit replacement of the utility you wanted rather than another program, and\nfor the file tools to change a file.",
         #|    images: [],
-        #|    is_error: false,
-        #|    brief: None,
+        #|    is_error: true,
+        #|    brief: Some("mbtx run"),
         #|    data: None,
         #|  },
         #|)

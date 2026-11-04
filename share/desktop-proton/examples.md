@@ -70,9 +70,10 @@ Replace `app/main.mbt` with:
 
 ```moonbit
 ///|
+#derive(FromJson, ToJson)
 struct GreetRequest {
   name : String
-} derive(FromJson, ToJson)
+}
 
 ///|
 let greet : @proton_contract.Command[GreetRequest, String] =
