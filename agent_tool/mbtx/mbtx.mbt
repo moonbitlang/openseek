@@ -1697,8 +1697,7 @@ fn description(
     #|Compile and run a self-contained MoonBit program and return its merged
     #|stdout/stderr and exit status.
     #|
-    #|Every call requires a short description and at least one of source or
-    #|filename. There are three valid ways to supply the program:
+    #|There are three ways to call the tool:
     #|- source + filename: save the source to that writable filename and run it.
     #|  Use both together when creating a script you want to inspect or run again.
     #|- source without filename: run a one-off inline program without saving it.
