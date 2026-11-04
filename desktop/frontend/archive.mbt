@@ -13,24 +13,21 @@
 /// The exact live or archived row awaiting permanent-deletion confirmation.
 /// The visible title is captured with the identity so another render cannot
 /// make the dialog appear to authorize a different conversation.
-#derive(Eq)
 priv struct DeleteConfirm {
   channel : @interop.ChannelId
   key : ArchiveRecordKey
   title : String
   target : DeleteTarget
-}
+} derive(Eq)
 
 ///|
-#derive(Eq)
 priv enum DeletePrompt {
   HostDelete(DeleteConfirm)
   CloudDelete(account~ : String, session~ : String, title~ : String)
-}
+} derive(Eq)
 
 ///|
 /// Which record a confirmation is about, with what only that kind carries.
-#derive(Eq)
 priv enum DeleteTarget {
   // The parent plus every descendant visible in the same archived snapshot.
   // Host notifications still cover a child created after that snapshot.
@@ -38,12 +35,11 @@ priv enum DeleteTarget {
   // The worktree checkout the host reported goes with the chat, if any. An
   // archived chat has none: its checkout went when it was archived.
   LiveChat(checkout~ : @protocol.CheckoutRemoval?)
-}
+} derive(Eq)
 
 ///|
 /// One confirmed delete still out with the host: the conversation the user
 /// chose and the family it removes, captured when the user confirmed.
-#derive(Eq)
 priv struct ConfirmedDelete {
   channel : @interop.ChannelId
   key : ArchiveRecordKey
@@ -52,7 +48,7 @@ priv struct ConfirmedDelete {
   // one by one; a catalog refresh between the removal and its announcement
   // must not make a member look foreign.
   family : Array[String]
-}
+} derive(Eq)
 
 ///|
 /// The conversation a sub-run or side chat was made from.

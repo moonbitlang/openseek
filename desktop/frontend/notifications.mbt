@@ -10,23 +10,21 @@ const NotificationLifetimeMs : Int32 = 6000
 /// One transient toast. `id` pairs the auto-dismiss timer with its toast, so
 /// a timer whose toast was already clicked away expires harmlessly instead
 /// of touching a newer one.
-#derive(Eq)
 priv struct Notification {
   id : Int32
   message : String
-}
+} derive(Eq)
 
 ///|
 /// The window corner where toasts stack — a Settings choice, persisted under
 /// its wire name. An unknown stored value falls back to the default
 /// bottom-right, so a missing key and a stale value read the same.
-#derive(Eq)
 priv enum NotificationCorner {
   TopLeft
   TopRight
   BottomLeft
   BottomRight
-}
+} derive(Eq)
 
 ///|
 fn NotificationCorner::parse(value : String) -> NotificationCorner {

@@ -15,24 +15,21 @@ pub fn parse(String) -> Result[Location, RouteError]
 // Errors
 
 // Types and methods
-#derive(Eq)
 pub(all) struct Location {
   device : String?
   target : Target
-}
+} derive(Eq)
 pub fn Location::equal(Self, Self) -> Bool
 pub fn Location::not_equal(Self, Self) -> Bool
 pub fn Location::path(Self) -> String?
 
-#derive(Eq)
 pub(all) enum RouteError {
   OutsideApplication
   InvalidRoute
-}
+} derive(Eq)
 pub fn RouteError::equal(Self, Self) -> Bool
 pub fn RouteError::not_equal(Self, Self) -> Bool
 
-#derive(Eq)
 pub(all) enum Target {
   Chat
   ChatNew
@@ -45,7 +42,7 @@ pub(all) enum Target {
   CodexNew
   Thread(String)
   CodexDraft(String)
-}
+} derive(Eq)
 pub fn Target::equal(Self, Self) -> Bool
 pub fn Target::is_cloud(Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool
