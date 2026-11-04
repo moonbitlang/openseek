@@ -271,6 +271,10 @@ const GlmReasoningStorageKey : String = "openseek.glm_reasoning_effort"
 const SidebarModeStorageKey : String = "openseek.sidebar_mode"
 
 ///|
+/// Browser Cloud preferences must not replace any connected host's settings.
+const CloudFollowupBehaviorStorageKey : String = "openseek.cloud_followup_behavior"
+
+///|
 /// Every conversation whose tier the user has chosen, so reopening one
 /// recovers its own tier instead of inheriting whatever was picked last in
 /// some unrelated chat. Page-local like the rest of this file: the desktop
@@ -1710,6 +1714,7 @@ priv enum Msg {
     openseek_effort~ : String?,
     glm_effort~ : String?
   )
+  CloudFollowupLoaded(String?)
   // Deliberate actions emitted by the component-local input composer. Raw
   // keystrokes never enter this root message loop.
   CloudAction(@cloud.Msg)
