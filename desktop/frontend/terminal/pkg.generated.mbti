@@ -16,7 +16,7 @@ pub fn apply_font_size(Double) -> @cmd.Cmd
 
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @rabbita.Val[State], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
 
-pub fn output(@interop.ChannelId, String, Int32, String) -> @cmd.Cmd
+pub fn output(Connection, String, Int32, String) -> @cmd.Cmd
 
 // Errors
 
@@ -27,21 +27,31 @@ pub(all) enum CommandStart {
   CommandUnavailable
 }
 
+pub(all) enum Connection {
+  Host(@interop.ChannelId)
+  Cloud(account~ : String, session~ : String, epoch~ : Int32)
+} derive(Eq, Hash)
+pub fn Connection::equal(Self, Self) -> Bool
+pub fn Connection::hash(Self) -> Int32
+pub fn Connection::hash_combine(Self, Hasher) -> Unit
+pub fn Connection::not_equal(Self, Self) -> Bool
+
 pub struct Ctx {
   host_name : String?
   connection_notice : String?
-  channel : @interop.ChannelId
+  channel : Connection
   session : String
   placement : @interop.CheckoutPlacement?
   dark_mode : Bool
   connected : Bool
 } derive(Eq)
 pub fn Ctx::Ctx(host_name? : String, connection_notice? : String, channel~ : @interop.ChannelId, session~ : String, placement~ : @interop.CheckoutPlacement?, dark_mode~ : Bool, connected~ : Bool) -> Self
+pub fn Ctx::cloud(account~ : String, session~ : String, ready~ : Bool, epoch~ : Int32, dark_mode~ : Bool) -> Self
 pub fn Ctx::equal(Self, Self) -> Bool
 pub fn Ctx::not_equal(Self, Self) -> Bool
 
 type Input derive(Eq)
-pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], has_devices~ : Bool) -> Self
+pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], has_devices~ : Bool, cloud_access? : (String, String, Int32)) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
@@ -53,15 +63,16 @@ pub fn InputWriteFailure::equal(Self, Self) -> Bool
 pub fn InputWriteFailure::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
+  CloudDisconnected(connection~ : Connection, authenticated~ : Bool, reason~ : String?)
   ToggleTerminal
   ToggleMaximized
-  SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int32)
+  SessionExited(channel~ : Connection, id~ : String, code~ : Int32)
   NewTerminal
   CloseActiveTerminal
   TabSelected(key~ : String)
   TabClosed(key~ : String)
   EmulatorReady(key~ : String, cols~ : Int32, rows~ : Int32)
-  Opened(channel~ : @interop.ChannelId, key~ : String, id~ : String)
+  Opened(channel~ : Connection, key~ : String, id~ : String)
   OpenFailed(key~ : String, message~ : String)
   UserInput(key~ : String, data~ : String)
   LinkActivated(url~ : String)
@@ -81,6 +92,7 @@ pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self)
 pub fn State::is_maximized(Self) -> Bool
 pub fn State::is_open(Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::open_terminal(Self, @cmd.Emit[Msg], Input, on_screen~ : Bool) -> (@cmd.Cmd, Self)
 pub fn State::reconcile(Self, @cmd.Emit[Msg], Input) -> (Self, @cmd.Cmd)
 pub fn State::run_command(Self, @cmd.Emit[Msg], Input, shell~ : String, command~ : String, on_screen~ : Bool) -> CommandStart
 

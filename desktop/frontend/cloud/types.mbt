@@ -41,6 +41,7 @@ pub(all) struct Event {
 pub struct Submission {
   content : @wire.Content
   known_tasks : Array[String]
+  result_id : String?
 } derive(Eq)
 
 ///|
@@ -88,6 +89,7 @@ pub(all) struct Conversation {
   initial_submission : @composer.Draft?
   initial_attachments : Array[@protocol.AttachmentSource]
   uploads : Array[UploadedAttachment]
+  shell_commands : Array[@composer.ShellCommand]
   pending : Submission?
   // One command waiting for session creation or the first SSE snapshot.
   outgoing : PendingCommand?
@@ -138,6 +140,7 @@ fn Conversation::empty() -> Conversation {
     initial_submission: None,
     initial_attachments: [],
     uploads: [],
+    shell_commands: [],
     pending: None,
     outgoing: None,
     stream: None,
@@ -174,6 +177,7 @@ pub struct PendingCommand {
 ///|
 pub enum CommandInput {
   Native(@wire.Command)
+  Terminal(@composer.ShellCommand?)
   Prompt(
     content~ : @wire.Content,
     draft~ : @composer.Draft,
@@ -270,6 +274,8 @@ pub(all) enum Msg {
   Edited(Int32, String, Int32)
   EditFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
+  TerminalRequested(@interop.ConversationIdentity, @composer.ShellCommand?)
+  TerminalReady(Int32, String, @composer.ShellCommand?)
   SubmitAttachments(
     @interop.ConversationIdentity,
     @composer.Draft,

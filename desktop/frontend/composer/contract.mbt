@@ -344,6 +344,13 @@ pub(all) enum Action {
   // A `!` draft was submitted: run `command` (the text after `!`, trimmed and
   // non-empty) and hand its output to the conversation.
   ShellCommandSubmitted(identity~ : Identity, command~ : String)
+  CommandResultRecovered(identity~ : Identity)
+  CommandResultSubmitted(
+    identity~ : Identity,
+    id~ : String,
+    text~ : String,
+    choice~ : FollowupChoice?
+  )
   // Show the terminal tab of the running `!` command at `index` in
   // `ShellCommandsRunning`.
   ShellTerminalRequested(identity~ : Identity, index~ : Int32)
@@ -410,6 +417,8 @@ pub fn Action::identity(self : Action) -> Identity {
     | RootMentionRemoved(identity~, ..)
     | SlashCommand(identity~, ..)
     | ShellCommandSubmitted(identity~, ..)
+    | CommandResultRecovered(identity~)
+    | CommandResultSubmitted(identity~, ..)
     | ShellTerminalRequested(identity~, ..)
     | MentionOpened(identity~, ..)
     | GoalEditStarted(identity~)

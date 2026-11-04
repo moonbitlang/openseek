@@ -370,6 +370,26 @@ pub fn update(
       })
       (next, @cmd.none, None)
     }
+    TerminalRequested(owner, shell) => {
+      guard owner is @interop.Cloud(account~, session=id) &&
+        state.user_id == Some(account) &&
+        token is Some(token) &&
+        state.can_compose(id) &&
+        !state.retired.contains(id) &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.outgoing is None else {
+        return (state, @cmd.none, None)
+      }
+      let (next, command) = state.submit_command(
+        id,
+        { request: state.sequence + 1, input: Terminal(shell), },
+        emit,
+        token,
+        navigation,
+      )
+      (next, command, None)
+    }
+    TerminalReady(_, _, _) => (state, @cmd.none, None)
     Created(epoch, request, id) => {
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
@@ -398,9 +418,15 @@ pub fn update(
         conversations,
         creation: None,
       }.list(token, emit)
+      let (next, terminal) = if conversation.outgoing
+        is Some({ input: Terminal(_), .. }) {
+        next.send_pending(id, token, emit)
+      } else {
+        (next, @cmd.none)
+      }
       (
         next,
-        command,
+        @cmd.batch([command, terminal]),
         if creation.navigation == navigation {
           Some(id)
         } else {
@@ -423,7 +449,7 @@ pub fn update(
             submission.request.to_string(),
             @engine_session.Rejected,
           )
-        Prompt(..) => conversation.controls
+        Prompt(..) | Terminal(_) => conversation.controls
       }
       let (next, command) = state
         .replace(creation.id, { ..conversation, outgoing: None, controls, })
@@ -641,13 +667,20 @@ pub fn update(
               conversation.pending
             },
             submission_sequence: conversation.submission_sequence +
-            (if admitted { 1 } else { 0 }),
-            initial_submission: if admitted {
+            (if admitted &&
+              conversation.pending.map_or(false, p => p.result_id is None) {
+              1
+            } else {
+              0
+            }),
+            initial_submission: if admitted &&
+              conversation.pending.map_or(false, p => p.result_id is None) {
               None
             } else {
               conversation.initial_submission
             },
-            initial_attachments: if admitted {
+            initial_attachments: if admitted &&
+              conversation.pending.map_or(false, p => p.result_id is None) {
               []
             } else {
               conversation.initial_attachments
@@ -852,7 +885,11 @@ pub fn update(
           })
         }),
         sending: conversation.sending && !accepted,
-        pending: if accepted || !conversation.sending {
+        pending: if accepted ||
+          (
+            !conversation.sending &&
+            conversation.pending.map_or(true, p => p.result_id is None)
+          ) {
           None
         } else {
           conversation.pending
@@ -870,13 +907,20 @@ pub fn update(
           None
         },
         submission_sequence: conversation.submission_sequence +
-        (if accepted { 1 } else { 0 }),
-        initial_submission: if accepted {
+        (if accepted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
+          1
+        } else {
+          0
+        }),
+        initial_submission: if accepted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
           None
         } else {
           conversation.initial_submission
         },
-        initial_attachments: if accepted {
+        initial_attachments: if accepted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
           []
         } else {
           conversation.initial_attachments
@@ -1094,13 +1138,20 @@ pub fn update(
           conversation.uploads
         },
         submission_sequence: conversation.submission_sequence +
-        (if admitted { 1 } else { 0 }),
-        initial_submission: if admitted {
+        (if admitted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
+          1
+        } else {
+          0
+        }),
+        initial_submission: if admitted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
           None
         } else {
           conversation.initial_submission
         },
-        initial_attachments: if admitted {
+        initial_attachments: if admitted &&
+          conversation.pending.map_or(false, p => p.result_id is None) {
           []
         } else {
           conversation.initial_attachments
@@ -1198,8 +1249,16 @@ pub fn update(
         state.replace(id, {
           ..conversation,
           pending: Some({ ..pending, content, }),
-          initial_submission: conversation.initial_submission.map(_ => draft),
-          initial_attachments: [],
+          initial_submission: if pending.result_id is None {
+            conversation.initial_submission.map(_ => draft)
+          } else {
+            conversation.initial_submission
+          },
+          initial_attachments: if pending.result_id is None {
+            []
+          } else {
+            conversation.initial_attachments
+          },
         }),
         @cmd.none,
         None,

@@ -43,6 +43,8 @@ pub fn js_prop(@js.Value, String) -> @js.Value?
 
 pub fn moonbit_bridge_root() -> @js.Value?
 
+pub fn new_deferred() -> @js.Value
+
 pub fn now_ms() -> Double
 
 pub fn openseek_api() -> @js.Value?
@@ -125,6 +127,18 @@ pub fn ConversationKey::hash(Self) -> Int32
 pub fn ConversationKey::hash_combine(Self, Hasher) -> Unit
 pub fn ConversationKey::not_equal(Self, Self) -> Bool
 pub fn ConversationKey::to_repr(Self) -> @debug.Repr
+
+pub struct RpcSession {
+  socket : @js.Value
+  pending : Map[Int32, @js.Value]
+  mut next_id : Int32
+  mut open_ : Bool
+}
+pub fn RpcSession::RpcSession(@js.Value) -> Self
+pub fn RpcSession::authenticated(Self) -> Unit
+pub fn RpcSession::close(Self) -> Unit
+pub fn RpcSession::receive(Self, @js.Value, (@protocol.Notification) -> Unit) -> Unit
+pub async fn[Payload : ToJson, Reply : @json.FromJson] RpcSession::request(Self, @commands.Command[Payload, Reply], Payload) -> Reply
 
 // Type aliases
 
