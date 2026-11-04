@@ -27,6 +27,7 @@ pub(all) struct Actions {
   open : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
   open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
+  artifact_context : @cmd.Emit[@mention_context.ArtifactSnapshot]
   open_session : @cmd.Emit[String]
   fork : @cmd.Emit[Int32]
   edit_user : @cmd.Emit[(Int32, @composer.Draft)]

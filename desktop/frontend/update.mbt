@@ -3220,7 +3220,9 @@ fn update_msg(
       | ApplyEditorFeedback(_) as feedback
     ) => update_editor_feedback(dispatch, feedback, model)
     // Delivered to the component by boot, alongside the other component inputs.
-    ComposerReply(_) | ComposerCommandResult(_) => (@cmd.none, model)
+    ComposerReply(_)
+    | ComposerCommandResult(_)
+    | TranscriptArtifactContextRequested(_, ..) => (@cmd.none, model)
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a

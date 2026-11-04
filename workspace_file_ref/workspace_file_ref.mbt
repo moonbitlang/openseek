@@ -126,11 +126,8 @@ pub fn parse(
 ///|
 /// Decode the path inside the session's scratch/artifact directory.
 /// The presentation flag is independent of this storage location.
-pub fn artifact_path(reference : String) -> String? {
-  guard parse(FenceLanguage, reference, closed=true) is Some(file) else {
-    return None
-  }
-  let path = file.path.replace_all(old="\\", new="/")
+pub fn WorkspaceFileRef::artifact_path(self : WorkspaceFileRef) -> String? {
+  let path = self.path.replace_all(old="\\", new="/")
   guard path.has_prefix("scratch/artifact/") else { return None }
   Some(path.exact_view(start=17).to_owned())
 }
@@ -304,7 +301,7 @@ test "file presentation is explicit and independent of its path" {
   assert_false(card.artifact)
   assert_true(inline.artifact)
   assert_eq(card.path, inline.path)
-  assert_eq(artifact_path(path), Some("charts/revenue.html"))
+  assert_eq(inline.artifact_path(), Some("charts/revenue.html"))
   assert_true(
     parse(ArtifactFenceLanguage, "reports/page.html", closed=true).unwrap().artifact,
   )

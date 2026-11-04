@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/mbtx",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
+} for "test"
+
+supported_targets = "+wasm+native"
+
+max_concurrent_tests = 2

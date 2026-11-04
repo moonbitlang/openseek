@@ -544,7 +544,7 @@ fn Block::render(
   changes? : @review_changes.Control,
   editor? : @html.Html,
   begin_edit~ : @cmd.Cmd,
-  artifact_view? : (String, String) -> @html.Html,
+  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
 ) -> @html.Html {
   let on_open = path => (actions.open)(path)
   match self.content {

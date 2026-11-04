@@ -1657,6 +1657,10 @@ priv enum Msg {
   ComposerAction(@composer.Action)
   ComposerReply(@composer.QuoteReply)
   ComposerCommandResult(@composer.CommandResult)
+  TranscriptArtifactContextRequested(
+    slot~ : String,
+    @mention_context.ArtifactSnapshot
+  )
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
   // be mistaken for an OpenSeek conversation owned by the root store.
