@@ -863,6 +863,10 @@ pub fn update(
           })
         }),
         document: history.session,
+        // The service commits each assistant before publishing its SSE.
+        // Only the current read can land here, so replace the pending rows
+        // atomically with the document that includes those commits.
+        pending_assistants: [],
         loading: false,
         watch_status: if observed && conversation.last_seq is Some(_) {
           Watching
@@ -955,6 +959,8 @@ pub fn update(
         ..conversation,
         history_etag: Some(etag),
         history_reading: false,
+        // A read after the SSE returned 304, so the cache already has it.
+        pending_assistants: [],
         loading: false,
         history_required: false,
         watch_status: if observing && conversation.last_seq is Some(_) {

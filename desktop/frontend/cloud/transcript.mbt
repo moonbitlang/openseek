@@ -122,6 +122,7 @@ pub fn Conversation::items(
     ignore(@transcript.apply_session_item(items, item, ts?))
   }
   ignore(append_native(items, native, cursor, native.length()))
+  items.append(self.pending_assistants)
   if !self.history_required && self.notice is Some(message) {
     items.push({ kind: Failure(message), ts: None, sequence: None, })
   }

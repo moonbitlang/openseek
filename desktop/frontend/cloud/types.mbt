@@ -103,6 +103,8 @@ pub(all) struct Conversation {
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
   live : @engine_session.Stream
+  // Committed replies waiting for the history read triggered by their SSE.
+  pending_assistants : Array[@transcript.TranscriptItem]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
@@ -152,6 +154,7 @@ fn Conversation::empty() -> Conversation {
     task: None,
     last_seq: None,
     live: @engine_session.Stream::empty(),
+    pending_assistants: [],
     heartbeat: None,
     retrying: None,
     controls: @engine_session.State::empty(),

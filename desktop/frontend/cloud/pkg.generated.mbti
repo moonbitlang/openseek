@@ -159,6 +159,7 @@ pub(all) struct Conversation {
   task : String?
   last_seq : Int32?
   live : @engine_session.Stream
+  pending_assistants : Array[@transcript.TranscriptItem]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State

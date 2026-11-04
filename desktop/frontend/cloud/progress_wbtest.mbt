@@ -90,14 +90,27 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
       r.complete
     }),
   )
-  let canonical = settled.progress_test_event(6, "assistant_message", {
+  let pending = settled.progress_test_event(6, "assistant_message", {
     "content": "Answer",
     "reasoning_content": "Complete reasoning",
   })
-  assert_true(canonical.conversations["session"].items().is_empty())
+  assert_true(
+    pending.conversations["session"].items()
+    is [
+      {
+        kind: Assistant(
+          reasoning=Some("Complete reasoning"),
+          prose=Some("Answer"),
+          ..
+        ),
+        sequence: None,
+        ..
+      },
+    ],
+  )
   let canonical = metadata_update(
-    canonical,
-    Loaded(1, "session", canonical.conversations["session"].request, {
+    pending,
+    Loaded(1, "session", pending.conversations["session"].request, {
       prediction: None,
       generating: true,
       session: native_document([
