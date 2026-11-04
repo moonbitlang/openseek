@@ -19,7 +19,7 @@ import {
   "openseek_desktop/backend/internal/worktree",
   "moonbitlang/async",
   "moonbitlang/core/json",
-  "tonyfettes/xlog",
+  "openseek_desktop/backend/logging",
 }
 
 import {

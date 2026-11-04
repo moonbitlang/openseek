@@ -136,12 +136,12 @@ async fn external_toolchain(
       // working directory; children spawn elsewhere, so it must not be
       // selected or re-exported.
       guard bin_dir.to_absolute() is Some(bin_dir) else {
-        @xlog.debug() <?
+        @logging.debug() <?
           { "event": "desktop_moonbit_path_entry_relative", "entry": entry }
         continue
       }
       if toolchain_at(bin_dir) is Some(toolchain) {
-        @xlog.debug() <?
+        @logging.debug() <?
           {
             "event": "desktop_moonbit_external_toolchain",
             "source": "path",
@@ -155,7 +155,7 @@ async fn external_toolchain(
     let bin_dir = home.join(".moon").join("bin")
     if bin_dir.to_absolute() is Some(bin_dir) &&
       toolchain_at(bin_dir) is Some(toolchain) {
-      @xlog.debug() <?
+      @logging.debug() <?
         {
           "event": "desktop_moonbit_external_toolchain",
           "source": "home_default",

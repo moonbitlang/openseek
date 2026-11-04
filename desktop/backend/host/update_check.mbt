@@ -85,12 +85,12 @@ async fn SelfUpdate::check(self : SelfUpdate) -> CheckUpdateReply {
   let info = @update.check_for_update(current=self.app_version) catch {
     @update.Unreachable(reason~) => return Unreachable(reason~)
     @update.MalformedManifest(reason~) => {
-      @xlog.warn(category="update") <?
+      @logging.warn(category="update") <?
         { "event": "manifest_malformed", "error": reason }
       return Malformed(reason~)
     }
     @update.MalformedArtifact(version~, reason~) => {
-      @xlog.warn(category="update") <?
+      @logging.warn(category="update") <?
         {
           "event": "manifest_artifact_malformed",
           "version": version,
@@ -167,7 +167,7 @@ async fn SelfUpdate::download_package(
     total_bytes,
   ) => emit(UpdateDownloadProgress({ downloaded_bytes, total_bytes, }))) catch {
     error => {
-      @xlog.warn(category="update") <?
+      @logging.warn(category="update") <?
         {
           "event": "stage_failed",
           "version": info.version,
@@ -196,7 +196,7 @@ async fn SelfUpdate::run(
   defer self.downloads.close()
   self.cleanup() catch {
     error =>
-      @xlog.warn(category="update") <?
+      @logging.warn(category="update") <?
         { "event": "cleanup_failed", "error": "\{error}" }
   }
   for ;; {

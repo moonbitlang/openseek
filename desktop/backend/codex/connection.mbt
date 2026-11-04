@@ -159,7 +159,7 @@ async fn[X] connect(
         for ;; {
           let line = stderr_reader.read_until("\n") catch {
             error => {
-              @xlog.warn(category="codex") <?
+              @logging.warn(category="codex") <?
                 {
                   "event": "codex_app_server_stderr_read_failed",
                   "error": "\{error}",
@@ -168,7 +168,7 @@ async fn[X] connect(
             }
           }
           guard line is Some(line) else { break }
-          @xlog.debug(category="codex") <?
+          @logging.debug(category="codex") <?
             { "event": "codex_app_server_stderr", "line": line }
         }
       },

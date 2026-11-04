@@ -234,7 +234,7 @@ async fn FsWatchRequest::activate(
       let active = target.activate(emit) catch {
         error => {
           target.alive.val = false
-          @xlog.warn(category="filesystem") <?
+          @logging.warn(category="filesystem") <?
             {
               "event": "watch_activation_failed",
               "root": target.root.to_string(),
@@ -328,7 +328,7 @@ async fn FsWatchActor::run(
           error => {
             target.alive.val = false
             let message = "File watching stopped: \{error}"
-            @xlog.warn(category="filesystem") <?
+            @logging.warn(category="filesystem") <?
               {
                 "event": "watch_failed",
                 "root": target.root.to_string(),

@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/app/internal/log_file"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+
+// Errors
+pub suberror LogFileError {
+  OpenFailed(String)
+  WriteFailed(String)
+}
+pub fn LogFileError::output(Self, &Logger) -> Unit
+pub fn LogFileError::to_string(Self) -> String
+pub impl Show for LogFileError
+
+// Types and methods
+type LogFile
+pub fn LogFile::append(Self, @json.Json) -> Unit raise LogFileError
+pub fn LogFile::open(String) -> Self raise LogFileError
+
+// Type aliases
+
+// Traits

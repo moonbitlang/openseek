@@ -37,7 +37,7 @@ async fn Schedules::execute(
     if self.manager.followers.get(run.session) is Some(follower) {
       stop_follower_instance(self.manager, follower, writer_exited=true) catch {
         error =>
-          @xlog.warn() <?
+          @logging.warn() <?
             { "event": "schedule_final_scan_failed", "message": "\{error}" }
       }
     }
@@ -61,7 +61,7 @@ async fn Schedules::execute(
       permission=0o600,
     ) catch {
       error =>
-        @xlog.warn() <?
+        @logging.warn() <?
           { "event": "schedule_log_write_failed", "message": "\{error}" }
     }
   }
@@ -84,7 +84,7 @@ async fn Schedules::execute(
       }
     }) catch {
       error => {
-        @xlog.warn() <?
+        @logging.warn() <?
           { "event": "schedule_result_save_failed", "message": "\{error}" }
         @async.sleep(5000)
         continue

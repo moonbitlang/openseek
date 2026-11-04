@@ -202,7 +202,7 @@ async fn SessionFollower::run(
           follower.kick_pending = false
           follower.scan(sink) catch {
             error =>
-              @xlog.debug() <?
+              @logging.debug() <?
                 {
                   "event": "desktop_follower_scan_failed",
                   "session": follower.session,

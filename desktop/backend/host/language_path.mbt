@@ -32,7 +32,7 @@ async fn LanguagePath::authorized_root(
     None => @work_dir.resolve_in_workspace(session, "")
   }
   guard authorized is Some(authorized) else {
-    @xlog.warn(category="language") <?
+    @logging.warn(category="language") <?
       {
         "event": "language_root_ownership_missing",
         "session": session,
@@ -51,7 +51,7 @@ async fn LanguagePath::authorized_root(
     @pathx.Path(authorized_physical).to_absolute() is Some(authorized_physical) &&
     requested_physical.relative_to(root=authorized_physical) is Some(relative) &&
     relative.is_root() else {
-    @xlog.warn(category="language") <?
+    @logging.warn(category="language") <?
       {
         "event": "language_root_ownership_mismatch",
         "session": session,

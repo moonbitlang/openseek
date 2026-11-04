@@ -143,7 +143,7 @@ async fn EngineManager::reap_idle_engines(
       engine.last_activity_ms == seen else {
       continue
     }
-    @xlog.info() <?
+    @logging.info() <?
       {
         "event": "desktop_engine_idle_stop",
         "session": engine.session_key,
@@ -152,7 +152,7 @@ async fn EngineManager::reap_idle_engines(
       }
     engine.close_and_wait() catch {
       error => {
-        @xlog.warn() <?
+        @logging.warn() <?
           {
             "event": "desktop_engine_idle_stop_failed",
             "session": engine.session_key,
@@ -168,7 +168,7 @@ async fn EngineManager::reap_idle_engines(
     if engine.follower is Some(follower) {
       stop_follower_instance(self, follower, writer_exited=true) catch {
         error =>
-          @xlog.debug() <?
+          @logging.debug() <?
             {
               "event": "desktop_follower_final_scan_failed",
               "session": engine.session_key,

@@ -130,7 +130,7 @@ async fn fork_session_in(
   async fn announce() -> Unit {
     store.set_title(id, title) catch {
       error =>
-        @xlog.warn() <?
+        @logging.warn() <?
           {
             "event": "desktop_fork_title_save_failed",
             "session": session,
@@ -198,7 +198,7 @@ async fn fork_session_in(
         raise EngineError("engine reported a fork it did not write")
       }
       if failure is Some(error) {
-        @xlog.warn() <?
+        @logging.warn() <?
           {
             "event": "desktop_fork_engine_failed_after_commit",
             "session": session,

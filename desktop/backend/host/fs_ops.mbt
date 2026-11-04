@@ -516,7 +516,7 @@ async fn file_signature(absolute : String) -> FileSignature {
     @os_error.OSError(_) as error if error.is_ENOENT() || error.is_ENOTDIR() =>
       return Missing
     error => {
-      @xlog.warn(category="filesystem") <?
+      @logging.warn(category="filesystem") <?
         { "event": "stat_failed", "path": absolute, "error": "\{error}" }
       return Failed("\{error}")
     }

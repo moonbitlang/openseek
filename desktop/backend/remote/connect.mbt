@@ -41,7 +41,7 @@ async fn RelayActor::run_connector(
         return message
       }
       error =>
-        @xlog.warn(category="remote") <?
+        @logging.warn(category="remote") <?
           { "message": "relay connection lost", "error": "\{error}" }
     }
     self.dropped()

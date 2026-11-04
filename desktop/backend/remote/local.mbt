@@ -258,7 +258,7 @@ async fn serve_static(
       return
     }
     error => {
-      @xlog.error(category="transport") <?
+      @logging.error(category="transport") <?
         {
           "event": "console_asset_unreadable",
           "path": relative,

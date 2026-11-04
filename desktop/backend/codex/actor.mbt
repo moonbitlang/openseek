@@ -74,7 +74,7 @@ pub fn CodexError::is_unmaterialized_thread_turns(self : CodexError) -> Bool {
 fn CodexError::log(self : CodexError) -> Unit {
   match self {
     JsonRpc(method_~, code~, message~, data~) =>
-      @xlog.error(category="codex") <?
+      @logging.error(category="codex") <?
         {
           "event": "codex_app_server_jsonrpc_error",
           "method": method_,
@@ -83,17 +83,17 @@ fn CodexError::log(self : CodexError) -> Unit {
           "data": data.unwrap_or(null),
         }
     TransportClosed(method_~) =>
-      @xlog.error(category="codex") <?
+      @logging.error(category="codex") <?
         { "event": "codex_app_server_transport_closed", "method": method_ }
     RequestFailed(method_~, detail~) =>
-      @xlog.error(category="codex") <?
+      @logging.error(category="codex") <?
         {
           "event": "codex_app_server_request_failed",
           "method": method_,
           "error": detail,
         }
     Unavailable(message) =>
-      @xlog.warn(category="codex") <?
+      @logging.warn(category="codex") <?
         { "event": "codex_app_server_unavailable", "error": message }
   }
 }

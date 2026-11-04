@@ -26,7 +26,7 @@ async fn main {
     [] => abort("current executable command is unavailable")
   }
   launch_logger(executable)
-  @xlog.info() <?
+  @logging.info() <?
     {
       "event": "desktop_main_start",
       "message": "start",
@@ -64,11 +64,11 @@ async fn main {
     ),
   )..config(@proton.load_config())
   let app_version = app.version() catch { _ => "development" }
-  @xlog.info() <? { "message": "host process start" }
-  @xlog.info() <? { "message": "frontend entry", "path": frontend_entry }
-  @xlog.info() <? { "message": "engine", "path": engine }
-  @xlog.info() <? { "message": "codex", "path": @codex.command() }
-  @xlog.info() <? { "message": "app version", "version": app_version }
+  @logging.info() <? { "message": "host process start" }
+  @logging.info() <? { "message": "frontend entry", "path": frontend_entry }
+  @logging.info() <? { "message": "engine", "path": engine }
+  @logging.info() <? { "message": "codex", "path": @codex.command() }
+  @logging.info() <? { "message": "app version", "version": app_version }
   // The identity this process answers to. A development build never answers
   // to the shipped one: `package/build.mjs` generates a project config
   // carrying its own, and `proton dev` hands that config on to the host
@@ -85,7 +85,7 @@ async fn main {
     home=codex_home,
     require_home=true,
   )
-  @xlog.info() <?
+  @logging.info() <?
     {
       "message": "codex home",
       "path": codex_home
@@ -136,7 +136,7 @@ async fn main {
   let bridge = @extension.DesktopBridgeActor(state, askpass=Some(executable))
   views.page_attached(payload => bridge.notify_browser_event(payload))
   let relay = @remote.RelayActor(state, announce=device => {
-    @xlog.info() <? { "message": "relay registered", "device": device }
+    @logging.info() <? { "message": "relay registered", "device": device }
   })
   // Proton exposes the `__MoonBit__` bridge — both the ops and the event
   // channel the frontend listens on — only to the local origin its asset
@@ -264,7 +264,7 @@ async fn main {
     if console is Some(console) {
       // The same directory and document the window loads.
       let entry = @pathx.Path(frontend_entry)
-      @xlog.info() <?
+      @logging.info() <?
         {
           "event": "desktop_console_serving",
           "origin": console.origin(),
@@ -279,7 +279,7 @@ async fn main {
       })
     }
   })
-  @xlog.info() <?
+  @logging.info() <?
     { "event": "desktop_app_run_start", "single_instance": single_instance }
   try {
     app.run()
@@ -291,7 +291,7 @@ async fn main {
         "SeekMoon is already running; its window was brought to the front. Quit it first, or start this one with --no-single-instance to use a temporary browser profile.",
       )
     }
-    @xlog.info() <?
+    @logging.info() <?
       {
         "event": "desktop_app_run_return",
         "result": "ok",
@@ -300,7 +300,7 @@ async fn main {
       }
   } catch {
     error =>
-      @xlog.error() <?
+      @logging.error() <?
         {
           "event": "desktop_app_run_return",
           "result": "error",
@@ -332,21 +332,22 @@ async fn main {
           work_dir=dir.to_string(),
           bundle_path=bundle,
         ) {
-        @xlog.info() <? { "message": "relaunch after update", "path": bundle }
+        @logging.info() <?
+          { "message": "relaunch after update", "path": bundle }
         let code = @process.run("open", ["-n", bundle]) catch {
           error => {
-            @xlog.error() <?
+            @logging.error() <?
               { "message": "relaunch failed", "error": "\{error}" }
             return
           }
         }
         if code != 0 {
-          @xlog.error() <? { "message": "relaunch failed", "code": code }
+          @logging.error() <? { "message": "relaunch failed", "code": code }
         }
       }
     }
   }
-  @xlog.info() <? { "event": "desktop_main_return", "primary": is_primary }
+  @logging.info() <? { "event": "desktop_main_return", "primary": is_primary }
 }
 
 ///|

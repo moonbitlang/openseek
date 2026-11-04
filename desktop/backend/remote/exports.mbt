@@ -21,7 +21,7 @@ pub async fn LocalConsole::bind(
     reuse_addr=true,
   ) catch {
     error => {
-      @xlog.warn(category="transport") <?
+      @logging.warn(category="transport") <?
         {
           "event": "console_port_unavailable",
           "port": port,
@@ -120,14 +120,14 @@ pub async fn RelayActor::run(self : RelayActor) -> Unit {
           // (tearing its control socket down); re-read and start over.
           Poked => ()
           Refused(message) => {
-            @xlog.warn(category="remote") <?
+            @logging.warn(category="remote") <?
               { "message": "relay refused registration", "error": message }
             store.handle_refusal(expected=config) catch {
               error =>
                 // The relay already rejected this token. Keep the actor
                 // alive and parked on the cleared in-memory state even if
                 // persisting its signed-out marker failed.
-                @xlog.warn(category="remote") <?
+                @logging.warn(category="remote") <?
                   {
                     "message": "could not persist refused sign-out",
                     "error": "\{error}",

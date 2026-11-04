@@ -149,7 +149,7 @@ async fn ServeEngine::close_and_wait(self : ServeEngine) -> Unit {
     self.wait_retired()
     return
   }
-  @xlog.warn() <?
+  @logging.warn() <?
     {
       "event": "desktop_engine_cancel",
       "reason": "graceful close timeout",
@@ -377,7 +377,7 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
     }
     if @async.with_timeout_opt(ServeCloseGraceMs, () => self.wait_process())
       is None {
-      @xlog.warn() <?
+      @logging.warn() <?
         {
           "event": "desktop_engine_cancel",
           "reason": "failed command close timeout",
@@ -1430,7 +1430,7 @@ async fn add_moonbit_path_for_native_engine(
     source~,
   )
   toolchain.apply_to_env(env)
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_engine_moonbit_path",
       "bin_dir": toolchain.bin_dir.to_string(),
@@ -1549,7 +1549,7 @@ async fn[G] start_serve_engine(
     if startup_engine is Some(engine) {
       // Nothing was admitted yet; the writer task closes stdin on its way out.
       engine.discard_commands("the engine failed to start")
-      @xlog.debug() <?
+      @logging.debug() <?
         {
           "event": "desktop_engine_cancel",
           "reason": "startup rollback",
@@ -1588,7 +1588,7 @@ async fn[G] start_serve_engine(
     host_mcp=manager.mcp.server is Some(_),
   )
   let graceful_cancel = @process.graceful_cancel(timeout=1000)
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_engine_spawn",
       "program": program,
@@ -1615,7 +1615,7 @@ async fn[G] start_serve_engine(
     // would otherwise open its own visible conhost window on Windows.
     no_console_window=true,
     cancel_handler=CancellationHandler(pid => {
-      @xlog.warn() <?
+      @logging.warn() <?
         {
           "event": "desktop_engine_process_task_cancelled",
           "session_key": config.session,
@@ -1625,7 +1625,7 @@ async fn[G] start_serve_engine(
     }),
     no_wait=true,
   )
-  @xlog.info() <?
+  @logging.info() <?
     {
       "event": "desktop_engine_spawned",
       "program": program,
@@ -1713,7 +1713,7 @@ async fn ServeEngine::run(
   defer self.message_receipts.close(Closed)
   let code = self.consume(manager, reader) catch {
     error => {
-      @xlog.error() <?
+      @logging.error() <?
         {
           "event": "desktop_engine_consumer_failed",
           "session": self.session_key,
@@ -1726,7 +1726,7 @@ async fn ServeEngine::run(
       // mid-turn on a blocked write, so waiting for it to exit on its own
       // would wait forever. Kill it instead, so the retirement below reaps a
       // real exit and settles the open run.
-      @xlog.warn() <?
+      @logging.warn() <?
         {
           "event": "desktop_engine_cancel",
           "reason": "event consumer failed",
@@ -2200,7 +2200,7 @@ async fn ServeEngine::retire(
 ) -> Unit {
   let engine = self
   let sink = self.sink
-  @xlog.info() <?
+  @logging.info() <?
     {
       "event": "desktop_engine_exited",
       "session": engine.session_key,
@@ -2236,7 +2236,7 @@ async fn ServeEngine::retire(
       // retry. Nothing else is owed: what this conversation committed is a
       // question the transcript read answers.
       error =>
-        @xlog.debug() <?
+        @logging.debug() <?
           {
             "event": "desktop_follower_final_scan_failed",
             "session": engine.session_key,

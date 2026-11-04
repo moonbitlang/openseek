@@ -574,7 +574,7 @@ pub fn external_link_policy() -> @proton.WebContentsPolicy {
     if request.user_gesture {
       ignore(open_external({ url: request.url, })) catch {
         error =>
-          @xlog.error() <?
+          @logging.error() <?
             {
               "event": "external_link_open_failed",
               "url": request.url,

@@ -326,7 +326,7 @@ pub async fn Schedules::run(
     for ;; {
       let launches = self.take_due() catch {
         error => {
-          @xlog.warn() <?
+          @logging.warn() <?
             { "event": "schedules_unavailable", "message": "\{error}" }
           @async.sleep(5000)
           continue

@@ -18,7 +18,7 @@ build-scripts-check:
 # The window host's package directories. Moon path arguments select single
 # packages, not subtrees, and the workspace's other members are covered by the
 # root gates, so list the host's own packages here.
-app_packages := ". internal/cdp internal/extension"
+app_packages := ". internal/cdp internal/extension internal/log_file"
 
 # Check the Proton window host in its own workspace (app/moon.work). The root
 # workspace leaves it out, so this is the only Moon gate that needs Proton.
