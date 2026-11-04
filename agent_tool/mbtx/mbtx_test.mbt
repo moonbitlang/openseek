@@ -587,8 +587,8 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
 
 ///|
 /// The main agent's snippet writes the workspace EXCEPT its MoonBit sources,
-/// manifests and git metadata, plus its own temp directory, and nothing
-/// outside those. Source changes go through the file tools or a child
+/// manifests, `.mbtx` scripts and git metadata — whatever the case of the
+/// name — plus its own temp directory, and nothing outside those. Source changes go through the file tools or a child
 /// process, which no `fs` rule of this policy reaches.
 ///
 /// Source is refused at any depth and for every write-class call: creating,
@@ -604,6 +604,7 @@ async test "a snippet writes the workspace except its sources" {
     @vfs.with_tmpdir(outside => {
       @fs.mkdir("\{ws}/pkg")
       @fs.mkdir("\{ws}/.git")
+      @fs.mkdir("\{ws}/data")
       for
         file in [
           "keep.mbt", "pkg/lib.mbt", "pkg/moon.pkg", "pkg/pkg.generated.mbti", "notes.txt",
@@ -639,6 +640,8 @@ async test "a snippet writes the workspace except its sources" {
         #|  attempt("manifest", () => write("pkg/moon.pkg"))
         #|  attempt("interface", () => write("pkg/pkg.generated.mbti"))
         #|  attempt("git", () => write(".git/HEAD"))
+        #|  attempt("manifest_case", () => write("data/MOON.PKG"))
+        #|  attempt("script", () => write("tool.mbtx"))
         #|  attempt("remove_source", () => @fs.remove("pkg/lib.mbt"))
         #|  attempt("rmdir_source", () => @fs.rmdir("pkg", recursive=true))
         #|  attempt("data", () => write("pkg/data.json"))
@@ -650,8 +653,8 @@ async test "a snippet writes the workspace except its sources" {
       let out = run_in(ws, { "source": source })
       for
         denied in [
-          "source", "nested", "new_source", "manifest", "interface", "git", "remove_source",
-          "rmdir_source", "outside",
+          "source", "nested", "new_source", "manifest", "interface", "git", "manifest_case",
+          "script", "remove_source", "rmdir_source", "outside",
         ] {
         assert_true(out.content.contains("\{denied}=false"), msg=out.content)
       }
@@ -662,7 +665,11 @@ async test "a snippet writes the workspace except its sources" {
       for file in ["keep.mbt", "pkg/lib.mbt", "pkg/moon.pkg", ".git/HEAD"] {
         assert_eq(@fs.read_file("\{ws}/\{file}").text(), "keep me\n")
       }
-      assert_false(@fs.exists("\{ws}/pkg/new.mbt.md"))
+      // On a case-insensitive file system moon would read `data/MOON.PKG` as
+      // `data/moon.pkg` and make `data` a package.
+      for created in ["pkg/new.mbt.md", "data/MOON.PKG", "tool.mbtx"] {
+        assert_false(@fs.exists("\{ws}/\{created}"), msg=created)
+      }
       assert_false(@fs.exists("\{outside}/escape.txt"))
       assert_true(@fs.exists("\{ws}/pkg/data.json"))
       assert_false(@fs.exists("\{ws}/notes.txt"))

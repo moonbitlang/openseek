@@ -150,9 +150,11 @@ The wasm run carries a moonrun policy on every platform. Unsupported FFI is
 reported by the wasm compiler through normal build diagnostics. The snippet
 may read anywhere. It may write inside its own `@fs.tmpdir()` and any
 caller-provided scratch lab, and — for the main agent only — anywhere in the
-workspace except MoonBit sources, manifests and `.git`, which moonrun refuses
-through `!`-glob exclusions (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`,
-`moon.pkg`, `moon.work` and the JSON manifests, at any depth). Read-only and
+workspace except MoonBit sources, manifests, `.mbtx` scripts and `.git`, which
+moonrun refuses through `!`-glob exclusions (`*.mbt`, `*.mbti`, `*.mbt.md`,
+`*.mbtx`, `moon.mod`, `moon.pkg`, `moon.work` and the JSON manifests, at any
+depth and in any letter case, since macOS and Windows file systems ignore case
+and moon finds `MOON.PKG` as a manifest there). Read-only and
 worker roles get no workspace grant. Changing source belongs to the file tools.
 That grant is not a deletion gate: a snippet can remove or overwrite a plain
 workspace file without `remove`'s approval, and renaming a directory carries

@@ -405,7 +405,19 @@ fn wrap_bullet(bullet : String) -> String {
 /// Inside the workspace that legibility matters most for source, so source is
 /// what the `workspace` grant keeps out: `!`-globs from
 /// `protected_source_globs` refuse every `.mbt`/`.mbti`/`.mbt.md` file and
-/// every `moon.*` manifest at any depth, and `.git` is refused alongside them.
+/// every `moon.*` manifest at any depth, and `.mbtx` scripts and `.git` are
+/// refused alongside them. A saved script is source too — the bundled
+/// workflows are `.mbtx` files, and `mbtx` runs a workspace script by name —
+/// and is saved through `mbtx`'s own `filename`, which goes through the file
+/// tools' checks rather than the snippet's `fs` rights.
+///
+/// Every pattern is matched CASE-INSENSITIVELY (see
+/// `case_insensitive_glob`). moonrun compares case-sensitively, but macOS and
+/// Windows file systems do not: moon finds a manifest by asking whether
+/// `moon.pkg` exists, so a new `MOON.PKG` makes its directory a package there.
+/// An existing file reached under another case needs no help — moonrun
+/// resolves the target to its stored name before matching — so this is about
+/// names a snippet creates.
 /// moonrun lets an exclusion override every grant in its list, whatever the
 /// order, so these patterns also bind the other write roots when one of them
 /// lies inside the workspace — a session scratch under `.openseek` cannot
@@ -470,10 +482,11 @@ fn wasm_policy_document(
     for
       pattern in [
         ..@source_write_policy.protected_source_globs(),
+        "**/*.mbtx",
         "**/.git",
         "**/.git/**",
       ] {
-      write_rules.push({ "glob": "!\{root}/\{pattern}" })
+      write_rules.push({ "glob": "!\{root}/\{case_insensitive_glob(pattern)}" })
     }
   }
   let allow : Array[Json] = []
@@ -570,6 +583,26 @@ fn json_strings(values : Array[String]) -> Json {
 }
 
 ///|
+/// `pattern` with every ASCII letter widened to a two-case class (`mbt` →
+/// `[mM][bB][tT]`), so it matches a name whatever its case. Everything else —
+/// `*`, `**`, separators, `{a,b}` alternatives — passes through, so it is
+/// meant for the fixed pattern tails here, never for an escaped literal path,
+/// whose letters may already sit inside a class.
+fn case_insensitive_glob(pattern : String) -> String {
+  let widened = StringBuilder()
+  for ch in pattern {
+    if ch is ('a'..<='z') {
+      widened <+ "[\{ch}\{ch.to_ascii_uppercase()}]"
+    } else if ch is ('A'..<='Z') {
+      widened <+ "[\{ch.to_ascii_lowercase()}\{ch}]"
+    } else {
+      widened <+ "\{ch}"
+    }
+  }
+  widened.to_string()
+}
+
+///|
 /// `path` as a glob that matches only itself: each glob metacharacter becomes
 /// a one-character class (`*` → `[*]`), which `globset` reads literally.
 /// Separators pass through, so the result stays a path moonrun can anchor.
@@ -627,7 +660,7 @@ test "a policy clears any inherited handoff and admits no engine" {
 /// The workspace grant is the root plus one exclusion per protected pattern,
 /// each anchored at the root spelled as a literal glob. Without the grant the
 /// write list is the plain roots alone and no exclusion narrows them.
-test "a workspace grant writes the root minus sources and git" {
+test "a workspace grant writes the root minus sources, scripts and git" {
   guard wasm_policy_document(
       tmp_dir="/run/tmp",
       extra_roots=["/lab"],
@@ -637,20 +670,34 @@ test "a workspace grant writes the root minus sources and git" {
     is { "fs": { "write": write, .. }, .. } else {
     fail("policy lost its fs section")
   }
-  assert_eq(write, [
-    "/run/tmp",
-    "/lab",
-    "/w[1]*{a,b}?/",
-    { "glob": "!/w[[]1[]][*][{]a,b[}][?]/**/*{.mbt.md,.mbt,.mbti}" },
-    {
-      "glob": "!/w[[]1[]][*][{]a,b[}][?]/**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
-    },
-    { "glob": "!/w[[]1[]][*][{]a,b[}][?]/**/.git" },
-    { "glob": "!/w[[]1[]][*][{]a,b[}][?]/**/.git/**" },
-  ])
+  let root = "/w[[]1[]][*][{]a,b[}][?]"
+  assert_eq(
+    write,
+    [
+      "/run/tmp",
+      "/lab",
+      "/w[1]*{a,b}?/",
+      ..[
+        "**/*{.mbt.md,.mbt,.mbti}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+        "**/*.mbtx", "**/.git", "**/.git/**",
+      ].map(pattern => {
+        Json::object({
+          "glob": Json::string("!\{root}/\{case_insensitive_glob(pattern)}"),
+        })
+      }),
+    ],
+  )
   guard wasm_policy_document(tmp_dir="/run/tmp", extra_roots=[], inject=Map([]))
     is { "fs": { "write": write, .. }, .. } else {
     fail("policy lost its fs section")
   }
   assert_eq(write, ["/run/tmp"])
+}
+
+///|
+test "case widening covers letters and leaves glob syntax alone" {
+  assert_eq(
+    case_insensitive_glob("**/*{.Mbt,moon.pkg}"),
+    "**/*{.[mM][bB][tT],[mM][oO][oO][nN].[pP][kK][gG]}",
+  )
 }

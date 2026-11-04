@@ -1807,7 +1807,8 @@ fn description(
       #|  configured session scratch directory shown in Environment, and workspace
       #|  files — data, fixtures, logs, generated output — EXCEPT MoonBit sources and
       #|  manifests (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`
-      #|  and their `.json` forms) and `.git`. Use the actual scratch path for
+      #|  and their `.json` forms, in any letter case), `*.mbtx` scripts (save one
+      #|  with `filename`) and `.git`. Use the actual scratch path for
       #|  cross-call files, binary data, and command output. Temporary files must be
       #|  consumed before the execution ends. Changing source is the file tools' job,
       #|  or a command's — `moon fmt`, `git checkout` and friends are child processes
