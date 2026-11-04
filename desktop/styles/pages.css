@@ -115,50 +115,75 @@ a:where(.setting-link) {
 
 /* ---------- management dialogs ---------- */
 dialog.management-dialog {
-  width: min(960px, calc(100vw - 32px));
-  height: min(800px, calc(100dvh - 48px));
-  max-height: calc(100dvh - 48px);
+  box-sizing: border-box;
+  width: min(1180px, 86vw);
+  height: min(900px, 84dvh);
+  max-height: 84dvh;
   padding: 0;
+  border-radius: var(--radius-md);
   color: var(--color-text-primary);
   overflow: hidden;
-}
-.management-dialog[open] {
-  display: flex;
   flex-direction: column;
 }
-.management-dialog[open]::backdrop {
+dialog.management-dialog[open] {
+  display: flex;
+}
+dialog.management-dialog::backdrop {
   background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .management-dialog[open] {
-    animation: management-dialog-pop 90ms cubic-bezier(0.22, 1, 0.36, 1);
+  dialog.management-dialog {
+    scale: 0.99;
+    transition:
+      scale 90ms linear,
+      display 90ms allow-discrete,
+      overlay 90ms allow-discrete;
+  }
+  dialog.management-dialog[open] {
+    scale: 1;
+  }
+  @starting-style {
+    dialog.management-dialog[open] {
+      scale: 0.99;
+    }
   }
 }
-@keyframes management-dialog-pop {
-  from {
-    opacity: 0.4;
-    scale: 0.96;
-  }
-}
+/* The header is the main topbar: same height, padding, divider and title
+   size, so a dialog does not read as a differently scaled surface. */
 .management-dialog-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-5) var(--space-7);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--titlebar-control-gap);
+  height: var(--topbar-height);
+  padding-inline: var(--topbar-inline-padding);
+  border-bottom: 1px solid var(--color-separator);
   flex-shrink: 0;
+}
+.management-dialog-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.management-dialog-heading .topbar-title {
+  max-width: none;
+  margin-inline-end: 0;
 }
 .management-dialog > .management-page {
   flex: 1;
   width: 100%;
   box-sizing: border-box;
+  padding: var(--space-7) var(--topbar-inline-padding) var(--space-7);
 }
-
-@media (max-width: 600px) {
-  .management-dialog > .management-page { padding: var(--space-5); }
+.management-dialog .management-page-content {
+  max-width: 100%;
 }
-
+@media (max-width: 720px) {
+  .management-dialog > .management-page {
+    padding: var(--space-5) var(--space-5) var(--space-6);
+  }
+}
 /* ---------- shared management content ---------- */
 .management-page {
   grid-row: 2 / -1;
