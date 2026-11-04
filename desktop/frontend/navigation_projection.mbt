@@ -2,14 +2,6 @@
 fn Model::navigation_location(self : Model) -> @routes.Location? {
   let device = self.console.page_device
   let target : @routes.Target = match self.screen {
-    Settings => Settings
-    Schedules => Schedules
-    Skills =>
-      match self.skills.detail() {
-        Some(InstalledRef(id)) => InstalledSkill(id)
-        Some(MarketRef(source)) => MarketSkill(source)
-        None => Skills
-      }
     Codex => self.codex.navigation_target()
     Chat =>
       if self.cloud_draft_identity()
@@ -48,7 +40,6 @@ fn Model::navigation_location(self : Model) -> @routes.Location? {
   }
   match target {
     Cloud | CloudSession(..) | CloudDraft(..) => Some({ device: None, target, })
-    Settings => Some({ device, target, })
     _ => if device is Some(_) { Some({ device, target, }) } else { None }
   }
 }
@@ -64,15 +55,11 @@ fn navigation_screen(target : @routes.Target) -> Screen {
     | CloudSession(..)
     | CloudDraft(..) => Chat
     Codex | CodexNew | Thread(_) | CodexDraft(_) => Codex
-    Settings => Settings
-    Skills | InstalledSkill(_) | MarketSkill(_) => Skills
-    Schedules => Schedules
   }
 }
 
 ///|
-/// A management page can cover the draft whose project add is still pending.
-/// Leaving that owner for a different work destination cancels its adoption.
+/// A different work destination cancels the pending draft's project adoption.
 fn Model::project_adoption_at(
   self : Model,
   location : @routes.Location,
@@ -85,8 +72,6 @@ fn Model::project_adoption_at(
     return None
   }
   match location.target {
-    Settings | Skills | InstalledSkill(_) | MarketSkill(_) | Schedules =>
-      self.pending_project_adoption
     CodexDraft(target) if target == id => self.pending_project_adoption
     CodexNew if self.codex.active_id() == Some(id) &&
       self.codex.navigation_target() is CodexNew =>

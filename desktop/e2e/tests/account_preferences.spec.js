@@ -63,7 +63,7 @@ test('read failures and malformed responses never imply consent', async ({ page 
     await openSettings(page);
     await expect(accountPanel(page).getByRole('alert')).toContainText('Could not load account preferences');
     await expect(toggle(page)).toHaveCount(0);
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   }
   result = { json: { allow_content_improvement: false } };
   await openSettings(page);

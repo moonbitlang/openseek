@@ -35,19 +35,10 @@ fn apply_browser_navigation(
   snapshot : @navigation_browser.Snapshot,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
-  let parsed : Result[@routes.Location, @routes.RouteError] = if snapshot.settings {
-    Ok({ device: None, target: Settings, })
-  } else {
-    @routes.parse(
-      snapshot.path.split("?").next().unwrap_or(snapshot.path[:]).to_owned(),
-    )
-  }
-  let navigation = {
-    ..model.navigation,
-    browser_ready: true,
-    can_back: snapshot.can_back,
-    can_forward: snapshot.can_forward,
-  }
+  let parsed = @routes.parse(
+    snapshot.path.split("?").next().unwrap_or(snapshot.path[:]).to_owned(),
+  )
+  let navigation = { ..model.navigation, browser_ready: true, }
   match parsed {
     Ok(location) if location.target.is_cloud() ||
       location.device == model.console.page_device => {

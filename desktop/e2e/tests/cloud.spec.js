@@ -55,8 +55,10 @@ test('browser login and session recovery use only v2 account endpoints', async (
   await expect(login).toHaveAttribute('href', /^\/v2\/auth\/login\?/);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const recovered = page.waitForResponse(response => new URL(response.url()).pathname === '/v2/auth/session');
-  await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await settings.getByRole('button', { name: 'Sign in', exact: true }).click();
   await recovered;
+  await expect(settings).not.toBeVisible();
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await expect(cloud.row(sessionA)).toBeVisible();
   expect(cloud.requests.filter(request => request.side === 'api' && request.path === '/v2/auth/login')).toHaveLength(1);
@@ -362,36 +364,10 @@ test('browser returns from Cloud to Work project new chat', async ({ page }) => 
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('device browser history retains Cloud visits across refresh', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install(); await cloud.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page).toHaveURL(/\/device\/device-a\/settings$/);
-  await cloud.open(sessionA);
-  await page.locator('#task').fill('Cloud draft A');
-  await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionA}`);
-  await cloud.open(sessionB);
-  await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionB}`);
-  await page.goBack();
-  await expect(page.locator('main > .topbar h1')).toHaveText('Cloud fixture A');
-  await expect(page.locator('#task')).toHaveValue('Cloud draft A');
-  await page.goBack();
-  await expect(page.locator('main > .topbar h1')).toHaveText('Settings');
-  await page.goForward();
-  await expect(page.locator('main > .topbar h1')).toHaveText('Cloud fixture A');
-  await page.reload();
-  await expect(page.locator('main > .topbar h1')).toHaveText('Cloud fixture A');
-  await expect(page.locator('#task')).toHaveValue('');
-  await page.goBack();
-  await expect(page.locator('main > .topbar h1')).toHaveText('Settings');
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
 for (const destination of ['settings', 'not-a-page']) {
-  test(`late Cloud creation cannot steal browser navigation to ${destination}`, async ({ page }) => {
+  test(`late Cloud creation preserves ${destination === 'settings' ? 'the Settings dialog' : 'an invalid browser destination'}`, async ({ page }) => {
     const cloud = new CloudHarness(page);
     await cloud.install(); await cloud.goto();
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await cloud.open();
     let complete;
     cloud.pauseCreate = new Promise(resolve => { complete = resolve; });
@@ -402,7 +378,7 @@ for (const destination of ['settings', 'not-a-page']) {
       await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);
       if (destination !== 'not-a-page') {
         await page.getByRole('button', { name: 'Settings', exact: true }).click();
-        await expect(page.locator('main > .topbar h1')).toHaveText('Settings');
+        await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
       } else {
         await page.evaluate(() => {
           history.pushState(null, '', '/device/device-a/not-a-page');
@@ -412,11 +388,17 @@ for (const destination of ['settings', 'not-a-page']) {
       }
       complete();
       await expect.poll(() => cloud.requests.some(request => request.path === `/v1/sessions/${sessionC}/messages`)).toBe(true);
-      // An invalid URL covers the promoted draft; only Settings leaves Chat.
-      if (destination !== 'not-a-page') await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'false');
-      await expect(page).toHaveURL(new RegExp(`/device/device-a/${destination}$`));
-      if (destination !== 'not-a-page') await expect(page.locator('main > .topbar h1')).toHaveText('Settings');
-      else await expect(page.locator('.navigation-notice')).toBeVisible();
+      if (destination === 'settings') {
+        const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+        await expect(settings).toBeVisible();
+        await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+        await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionC}`);
+        await settings.getByRole('button', { name: 'Dismiss', exact: true }).click();
+        await expect(page.locator('main > .topbar h1')).toHaveText('First Cloud message');
+      } else {
+        await expect(page).toHaveURL(`${authOrigin}/device/device-a/not-a-page`);
+        await expect(page.locator('.navigation-notice')).toBeVisible();
+      }
       expect(cloud.device.pageErrors).toEqual([]);
     } finally { complete(); }
   });

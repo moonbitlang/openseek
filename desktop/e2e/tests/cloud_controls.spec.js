@@ -285,6 +285,7 @@ for (const stopped of [false, true]) {
     const rows = page.locator('.queued-input-row');
     await expect(rows.getByTitle('Steer', { exact: true }).first()).toBeDisabled();
     await rows.filter({ hasText: 'Keep this queued input' }).getByTitle('Edit', { exact: true }).click();
+    await expect(page.locator('#task')).toHaveValue('Keep this queued input');
     await page.locator('#task').fill('Edited while paused');
     await expect(page.getByTitle('Save queued message', { exact: true })).toBeEnabled();
     await expect(page.locator('#stop')).toHaveCount(0);
@@ -304,6 +305,7 @@ for (const stopped of [false, true]) {
     let current = app.controlState(sessionA).task_id;
     expect(current).not.toBe(previous);
     await rows.getByTitle('Edit', { exact: true }).click();
+    await expect(page.locator('#task')).toHaveValue('Edited while paused');
     await page.locator('#task').fill('Edit bound to the new task');
     await page.getByTitle('Save queued message', { exact: true }).click();
     await expect(rows).toContainText('Edit bound to the new task');

@@ -85,7 +85,7 @@ test('failed save retains the draft and editing preserves its fields', async ({ 
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Daily work');
   await expect(page.getByLabel('Minutes', { exact: true })).toHaveValue('30');
   await page.setViewportSize({ width: 420, height: 900 });
-  await expect(page.getByRole('button', { name: 'Show sidebar', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Scheduled tasks', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeVisible();
   await page.screenshot({ animations: 'disabled', path: test.info().outputPath('schedule-form-mobile.png') });
   expect(app.pageErrors).toEqual([]);
@@ -152,6 +152,7 @@ for (const broadcastDirectory of [true, false]) {
     await expect(page.getByText('Scheduled task · Read only while running', { exact: true })).toBeVisible();
     await expect(page.locator('textarea#task')).toHaveCount(0);
     const submissionsBefore = app.requests.filter(r => ['agent.start', 'agent.command'].includes(r.method)).length;
+    await page.locator('#transcript').click();
     await page.keyboard.press('Enter');
     await page.keyboard.press('Control+Enter');
     expect(app.requests.filter(r => ['agent.start', 'agent.command'].includes(r.method)).length).toBe(submissionsBefore);
@@ -192,6 +193,7 @@ test('reopening Scheduled while save is pending preserves its acknowledgement', 
   await page.getByLabel('Task', { exact: true }).fill('Summarize updates');
   await page.getByRole('button', { name: 'Save schedule', exact: true }).click();
   await expect.poll(() => app.requests.filter(r => r.method === 'schedules.save').length).toBe(1);
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeDisabled();
   await expect(page.locator('.schedule-form')).toHaveCount(0);

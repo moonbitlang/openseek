@@ -75,6 +75,8 @@ test('a project draft survives Chat navigation and account sign-out', async ({ p
   await cloud.open();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Settings', exact: true })
+    .getByRole('button', { name: 'Dismiss', exact: true }).click();
   await sidebarMode(page, 'Work').click();
   await cloud.device.openSession();
   await expect(page.locator('#task')).toHaveValue('Keep this project draft');
