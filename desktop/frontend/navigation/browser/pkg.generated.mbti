@@ -16,9 +16,10 @@ pub fn visit(String, replace~ : Bool) -> @cmd.Cmd
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) struct Snapshot {
   path : String
-} derive(Eq)
+}
 pub fn Snapshot::equal(Self, Self) -> Bool
 pub fn Snapshot::not_equal(Self, Self) -> Bool
 

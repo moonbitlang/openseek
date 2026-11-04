@@ -142,7 +142,7 @@ pub fn RpcSession::RpcSession(@js.Value) -> Self
 pub fn RpcSession::authenticated(Self) -> Unit
 pub fn RpcSession::close(Self) -> Unit
 pub fn RpcSession::receive(Self, @js.Value, (@protocol.Notification) -> Unit) -> Unit
-pub async fn[Payload : ToJson, Reply : @json.FromJson] RpcSession::request(Self, @commands.Command[Payload, Reply], Payload) -> Reply
+pub async fn[Payload : @json.ToJson, Reply : @json.FromJson] RpcSession::request(Self, @commands.Command[Payload, Reply], Payload) -> Reply
 
 // Type aliases
 

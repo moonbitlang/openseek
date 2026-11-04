@@ -1,6 +1,7 @@
 ///|
 /// Application-owned values read by the terminal component. Tabs and emulator
 /// lifecycle remain exclusively in the terminal Model.
+#derive(Eq)
 struct Input {
   ctx : Ctx
   live_channels : Array[@interop.ChannelId]
@@ -9,7 +10,7 @@ struct Input {
   // generation.
   has_devices : Bool
   cloud_access : (String, String, Int32)?
-} derive(Eq)
+}
 
 ///|
 pub fn Input::Input(
