@@ -1702,47 +1702,35 @@ fn description(
     #|  Use both together when creating a script you want to inspect or run again.
     #|- source without filename: run a one-off inline program without saving it.
     #|- filename without source: run a script that already exists.
-    #|Omit unused fields entirely; do not send null.
     #|
     #|For example, create and run a reusable script with
     #|`{"description":"Save and run a greeting","source":"---\nimport {\n  \"moonbitlang/core/env\",\n}\n---\n\nfn main {\n  println(@env.args()[1:])\n}\n","filename":"scripts/greet.mbtx"}`.
     #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
-    #|A filename-only call cannot create a script. Missing parent directories are
-    #|created. Identical existing content is reused; different content is never
-    #|overwritten. Use the edit tool to change a saved script. Saving is limited
-    #|to the writable workspace or configured scratch directory and is unavailable in read-only mode.
-    #|Pass `args` (an array of strings, default `[]`) to parameterize any script:
-    #|`{"description":"Run saved checks","filename":"scripts/check.mbtx","args":["--deny-warn"]}`.
-    #|The script runs on wasm. Import "moonbitlang/core/env" and read
-    #|`@env.args()[1:]` to skip the executable name.
-    #|Arguments are passed verbatim, without shell expansion or splitting.
-    #|Relative filenames resolve from the workspace root, whatever `cwd` is. Each
-    #|run executes a snapshot of the script with the same sandbox and isolated
-    #|imports as inline source. The tool compiles to wasm and runs it with
-    #|moonrun; diagnostics cite `source:LINE:COL` or the filename and line/column.
+    #|Missing parent directories are created. A saved script is never overwritten
+    #|with different content; change it with the edit tool. Scripts compile to
+    #|wasm and run under moonrun.
     #|
     #|## Bundled scripts
     #|
     #|Filenames under `@builtin/` run read-only scripts built into OpenSeek: pass
     #|`filename` and `args`, never `source`. Every other filename is a workspace
-    #|path, so `./@builtin/check.mbtx` is a workspace file. `args=["--help"]`
-    #|prints a script's usage.
+    #|path, so `./@builtin/check.mbtx` is a workspace file. Args `["--help"]`
+    #|print a script's usage.
     #|
-    #|- `@builtin/read.mbtx` reads text files with numbered lines, e.g.
-    #|  `{"description":"Read the entry point","filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}`.
-    #|  Selectors are `path`, `path:start` or `path:start:end` (inclusive,
-    #|  1-based). Output is bounded: follow truncated or skipped files with
-    #|  narrower reads. A failing file fails the call; the others still return.
+    #|- `@builtin/read.mbtx` reads text files with numbered lines, e.g. args
+    #|  `["src/main.mbt:120:200", "moon.mod"]`. Selectors are `path`,
+    #|  `path:start` or `path:start:end` (inclusive, 1-based). Output is bounded:
+    #|  follow truncated or skipped files with narrower reads. A failing file fails the call; the others still return.
     #|- `@builtin/rg.mbtx` searches text. `args` go to ripgrep unchanged, so they
     #|  are rg flags and regex, not POSIX grep (`-E` is `--encoding`; alternation
-    #|  is `a|b`), e.g. `"args":["fn parse","-g","*.mbt"]`. Output is
+    #|  is `a|b`), e.g. args `["fn parse", "-g", "*.mbt"]`. Output is
     #|  `path:line:text`; no match exits 0 with a note.
     #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
     #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
     #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and
     #|  `@builtin/check-json.mbtx` (moon check --output-json).
     #|- `@builtin/ci-watch.mbtx` monitors a GitHub PR's checks with gh;
-    #|  `"args":["PR","--repo","OWNER/REPO","--once"]` takes one snapshot.
+    #|  args `["PR", "--repo", "OWNER/REPO", "--once"]` take one snapshot.
     #|- `@builtin/fix-deprecations.mbtx`, run with `cwd` at the module, fixes each
     #|  deprecation warning whose message names a bare replacement, one guarded
     #|  edit per site, and lists the rest; `--dry-run` only plans.
@@ -1858,8 +1846,8 @@ fn description(
       #|safe simplifications and opens one pull request per package; `--no-pr`
       #|keeps them on local branches).
       #|
-      #|For an independent worktree review, run the bundled script:
-      #|`{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"]}`.
+      #|For an independent worktree review, run `@builtin/review.mbtx`, e.g. with args
+      #|`["Check the CSV parser's CRLF and escaped-quote handling"]`.
       #|With empty args it audits the standing goal and its recorded baseline, which
       #|the engine supplies; args narrow that goal as an audit focus, or are the whole
       #|criteria when no goal stands. It prints the reviewer's full report (`findings`,
