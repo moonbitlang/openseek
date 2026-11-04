@@ -25,17 +25,23 @@ test('management dialogs preserve the work surface, draft and browser entry', as
   const url = page.url();
   const entries = await page.evaluate(() => history.length);
   const originalComposer = await composer.elementHandle();
-  for (const [entry, title] of [['Settings', 'Settings'], ['Skills', 'Skills'], ['Scheduled', 'Scheduled tasks']]) {
+  for (const [entry, title, dismiss] of [
+    ['Settings', 'Settings', 'close'],
+    ['Skills', 'Skills', 'escape'],
+    ['Scheduled', 'Scheduled tasks', 'backdrop'],
+  ]) {
     await page.getByRole('button', { name: entry, exact: true }).click();
     await expect(dialog(page)).toHaveAccessibleName(title);
     await expect(dialog(page)).toBeVisible();
     await expect(page).toHaveURL(url);
     expect(await page.evaluate(() => history.length)).toBe(entries);
     expect(await originalComposer.evaluate(node => node.isConnected)).toBe(true);
-    await page.screenshot({ path: test.info().outputPath(`${entry.toLowerCase()}-dialog.png`) });
-    if (entry === 'Settings') await dialog(page).getByRole('button', { name: 'Dismiss', exact: true }).click();
-    else await page.keyboard.press('Escape');
-    await expect(dialog(page)).not.toBeVisible();
+    await page.screenshot({ animations: 'disabled', path: test.info().outputPath(`${entry.toLowerCase()}-dialog.png`) });
+    // Every dismissal animates out and leaves nothing interactive behind.
+    if (dismiss === 'close') await dialog(page).getByRole('button', { name: 'Dismiss', exact: true }).click();
+    else if (dismiss === 'escape') await page.keyboard.press('Escape');
+    else await page.mouse.click(8, 8);
+    await expect(page.locator('#management-dialog')).not.toBeVisible();
     await expect(composer).toHaveValue('Unsent input survives dialogs');
     await expect(page.getByRole('button', { name: entry, exact: true })).toBeFocused();
   }
