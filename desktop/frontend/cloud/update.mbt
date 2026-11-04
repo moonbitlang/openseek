@@ -840,6 +840,15 @@ pub fn update(
       let conversation = state.conversations
         .get(id)
         .unwrap_or(Conversation::empty())
+      // The route switches from a local draft to the newly created empty
+      // session before its first prompt. Observation can start from that
+      // empty baseline without asking the server to read it back.
+      if conversation.request == 0 &&
+        !conversation.loading &&
+        conversation.watch_status == Watching &&
+        conversation.outgoing is Some({ input: Prompt(..), .. }) {
+        return (state, @cmd.none, None)
+      }
       let next = if (
           conversation.outgoing is Some(_) &&
           conversation.watch_status != Disconnected
