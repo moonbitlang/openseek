@@ -1634,7 +1634,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             selected=model.followup_behavior.wire(),
             aria_label=@settings.text(locale, Followup),
             change=dispatch.map(value => FollowupBehaviorChanged(value)),
-            disabled=!settings_loaded,
+            disabled=has_host && !settings_loaded,
           ),
         ],
         desc=@settings.text(locale, FollowupDescription),
