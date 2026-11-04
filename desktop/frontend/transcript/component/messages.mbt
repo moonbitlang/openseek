@@ -11,6 +11,7 @@ priv enum UiMessage {
   BuildInPrefix
   BuildInSuffix
   JumpLatest
+  LoadingOlderHistory
   RecordedSnapshot
   ToolInProgress
   ToolFailed
@@ -79,6 +80,13 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, LoadingOlderHistory) => "Loading more…"
+    (Spanish, LoadingOlderHistory) => "Cargando más mensajes…"
+    (SimplifiedChinese, LoadingOlderHistory) => "正在加载更早的消息…"
+    (TraditionalChinese, LoadingOlderHistory) =>
+      "正在載入較早的訊息…"
+    (Japanese, LoadingOlderHistory) =>
+      "以前のメッセージを読み込み中…"
     (English, CopyDiff) => "Copy diff"
     (Spanish, CopyDiff) => "Copiar diferencias"
     (SimplifiedChinese, CopyDiff) => "复制差异"

@@ -644,6 +644,16 @@ fn section_children(
       clock=ms => clock_label(locale~, ms),
     ),
   )
+  if input.loading_older_history {
+    children.set(
+      "older-history",
+      @html.div(
+        class="transcript-loading-older",
+        attrs=@html.Attrs::build().role("status"),
+        ui(locale, LoadingOlderHistory),
+      ),
+    )
+  }
   children.set(
     TranscriptSectionKey::stream(input).wire(),
     @html.div(id="stream", class="stream", stream),

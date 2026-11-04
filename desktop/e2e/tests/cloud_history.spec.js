@@ -104,7 +104,11 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   const firstTag = (await first).headers().etag;
   const transcript = page.locator('#transcript');
   const bubbles = transcript.locator('.msg.user .msg-content');
+  const loadingOlder = transcript.getByRole('status').filter({ hasText: 'Loading more…' });
+  const rowSpinner = cloud.row(sessionA).locator('..').locator('.conversation-load-spinner');
   await expect(bubbles).toHaveText(['Third question']);
+  await expect(loadingOlder).toHaveCount(0);
+  await expect(rowSpinner).toHaveCount(0);
   expect(requests.map(request => new URL(request.url()).search)).toEqual(['?limit=1']);
 
   // Pause the page after the viewport has moved to the boundary so we can
@@ -118,6 +122,8 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
     await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeGreaterThan(4);
     await transcript.evaluate(element => { element.scrollTop = 0; });
     await expect.poll(() => requests.length).toBe(2);
+    await expect(loadingOlder).toBeInViewport();
+    await expect(rowSpinner).toBeVisible();
     before = (await third.boundingBox()).y;
     await transcript.hover();
     await page.mouse.wheel(0, -400);
@@ -128,6 +134,8 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   }
   expect((await response).status()).toBe(200);
   await expect(bubbles).toHaveText(['Second question', 'Third question']);
+  await expect(loadingOlder).toHaveCount(0);
+  await expect(rowSpinner).toHaveCount(0);
   await expect.poll(async () => Math.abs((await third.boundingBox()).y - before)).toBeLessThan(2);
 
   await transcript.evaluate(element => { element.scrollTop = 0; });
@@ -168,6 +176,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
 });
 
 test('Cloud can page upward when the latest turn fits without a scrollbar', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openseek.language', 'zh-Hans'));
   const cloud = new CloudHarness(page);
   cloud.historyTurns.set(sessionA, ['Earlier question', 'Latest question'].map((text, index) => ({
     messages: [user(`task-${index}`, text, index + 1)],
@@ -194,6 +203,7 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
     await transcript.hover();
     await page.mouse.wheel(0, -200);
     await expect.poll(() => queries.length).toBe(2);
+    await expect(transcript.getByRole('status').filter({ hasText: '正在加载更早的消息…' })).toBeInViewport();
     await cloud.row(sessionB).click();
     await expect(cloud.row(sessionB)).toHaveAttribute('aria-current', 'true');
   } finally {
