@@ -99,8 +99,6 @@ html.is-resizing .sidebar-resize-handle {
 
 .sidebar-main {
   display: grid;
-  /* One scroll lane holds every peer section. Independent folds keep a long
-     source manageable without turning Codex and OpenSeek into nested panes. */
   align-content: start;
   min-width: 0;
   min-height: 0;
@@ -113,6 +111,7 @@ html.is-resizing .sidebar-resize-handle {
      and reserves nothing, so there the whole inset has to be real padding.
      `--scrollbar-lane` is the measured width of the gutter the bar claims. */
   padding-top: 0;
+  padding-bottom: 0.8em;
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
