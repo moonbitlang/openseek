@@ -41,6 +41,7 @@ fn cloud_notification_model() -> Model {
     session: document,
     generating: true,
     etag: None,
+    offset: None,
     messages: [
       {
         task_id: "cloud-run",
@@ -156,6 +157,7 @@ test "Cloud completion notifications ignore duplicate terminals and history repl
       generating: false,
       session: model.cloud.conversations["cloud-a"].document,
       etag: None,
+      offset: None,
       messages: [
         {
           task_id: "cloud-run",
@@ -196,6 +198,7 @@ test "Cloud live completion is notified when its history reply arrives first" {
           generating: false,
           session: model.cloud.conversations["cloud-a"].document,
           etag: None,
+          offset: None,
           messages: [
             {
               task_id: "cloud-run",

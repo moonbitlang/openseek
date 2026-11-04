@@ -2004,6 +2004,7 @@ priv enum Msg {
   // The transcript component reports where its reader was as it leaves the
   // screen; the root remembers it for the conversation's next visit.
   TranscriptLeft(slot~ : String, scroll~ : @transcript_component.ScrollPosition)
+  TranscriptLoadOlder(String)
   TranscriptReviewChangesOpened(
     slot~ : String,
     selection~ : @mention_context.ReviewChanges

@@ -197,7 +197,7 @@ test('Cloud reconnect fences an old history reply and retains newer live message
   const oldTask = app.controlState(sessionA).task_id;
   const oldRead = deferred();
   app.pauseHistory = oldRead.promise;
-  const oldResponse = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/${sessionA}/messages`));
+  const oldResponse = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
   const reads = () => app.requests.filter(request => request.method === 'GET' && request.path.endsWith(`/${sessionA}/messages`)).length;
   const before = reads();
   await app.finishTask();
@@ -260,7 +260,7 @@ test('Cloud recovery retries a failed history synchronization without another st
   await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Completed during the outage' });
   await app.finishTask();
   app.historyStatus = 503;
-  const failed = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/${sessionA}/messages`) && response.status() === 503);
+  const failed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`) && response.status() === 503);
   app.pauseSessionEvents = null;
   connection.resolve();
   await (await failed).finished();

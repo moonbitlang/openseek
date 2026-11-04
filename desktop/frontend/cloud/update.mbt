@@ -827,8 +827,72 @@ pub fn update(
       let (next, command) = next.load(id, token, emit, reuse=true)
       (next, command, None)
     }
+    LoadOlder(id) => {
+      guard token is Some(token) &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.older_history_start() is Some(start) else {
+        return (state, @cmd.none, None)
+      }
+      let limit = start.min(HistoryPageSize)
+      let offset = start - limit
+      let request = state.sequence + 1
+      let next = state.replace(id, {
+        ..conversation,
+        history_older_request: Some((request, offset, navigation)),
+      })
+      (
+        { ..next, sequence: request, },
+        run(emit, () => {
+          load_history(token, id, None, state.epoch, request, offset~, limit~) catch {
+            @cloud_client.RequestError(error) =>
+              OlderFailed(state.epoch, id, request, error)
+            _ => OlderFailed(state.epoch, id, request, Unreachable)
+          }
+        }),
+        None,
+      )
+    }
+    OlderLoaded(epoch, id, request, history) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_older_request is Some((pending, offset, owner)) &&
+        request == pending else {
+        return (state, @cmd.none, None)
+      }
+      let conversation = { ..conversation, history_older_request: None, }
+      let next = if owner == navigation && history.offset == Some(offset) {
+        conversation.with_history_page(
+          { ..history, generating: false, },
+          latest=false,
+        )
+      } else {
+        conversation
+      }
+      (state.replace(id, next), @cmd.none, None)
+    }
+    OlderFailed(epoch, id, request, error) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_older_request is Some((pending, _, _)) &&
+        request == pending else {
+        return (state, @cmd.none, None)
+      }
+      let next = state.replace(id, {
+        ..conversation,
+        history_older_request: None,
+      })
+      let (next, command) = if error is Unauthorized {
+        next.failed(error)
+      } else {
+        (next, @cmd.none)
+      }
+      (next, command, None)
+    }
     Loaded(epoch, id, request, history) => {
-      let conversation = state.conversations[id]
+      let conversation = state.conversations[id].with_history_page(
+        history,
+        latest=true,
+      )
       let accepted = conversation.pending is Some(submission) &&
         history.messages.any(record => {
           record.kind == "user" &&
@@ -850,19 +914,17 @@ pub fn update(
         conversation
       }
       let restored = {
-        ..settled.restore_goal(history.session),
+        ..settled.restore_goal(conversation.document),
         control,
-        records: history.messages,
         history_cached: true,
         history_etag: history.etag,
         history_reading: false,
         events: conversation.events.filter(event => {
-          !history.messages.any(record => {
+          !conversation.records.any(record => {
             record.task_id == event.task_id &&
             (record.kind == event.kind || record.kind == "task_finished")
           })
         }),
-        document: history.session,
         loading: false,
         watch_status: if observed && conversation.last_seq is Some(_) {
           Watching

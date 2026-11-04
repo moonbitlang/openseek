@@ -263,6 +263,7 @@ test "a first command waits for a new observer after a definitive observation fa
       prediction: None,
       session: native_document([]),
       etag: None,
+      offset: None,
       messages: [],
       generating: false,
     }),

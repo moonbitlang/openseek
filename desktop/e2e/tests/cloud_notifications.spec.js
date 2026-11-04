@@ -54,7 +54,7 @@ for (const focused of [true, false]) {
       await page.evaluate(() => window.dispatchEvent(new Event('focus')));
       await expect.poll(() => badge(app)).toBe(0);
     }
-    const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/${sessionA}/messages`));
+    const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
     await app.emitSessionEvent(sessionA, 'task_finished', { status: 'completed', result: { status: 'completed' } });
     await (await refreshed).finished();
     expect(shown(app)).toHaveLength(1);

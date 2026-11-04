@@ -789,6 +789,7 @@ fn main {
           // Bound to the slot at construction: by the time the report
           // arrives the model already shows the next conversation.
           departed: emit.map(scroll => TranscriptLeft(slot~, scroll~)),
+          load_older: emit(TranscriptLoadOlder(slot)),
         } : @transcript_component.Actions)
     }
     // One transcript component per conversation on screen. Switching

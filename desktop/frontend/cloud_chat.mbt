@@ -355,9 +355,24 @@ fn update_cloud(
     let (report, next) = next.notify_error(dispatch, failure.label())
     return (@cmd.batch([command, ..file_commands, report]), next)
   }
+  let preserve_scroll = if message
+    is @cloud.OlderLoaded(epoch, id, request, page) &&
+    epoch == before.epoch &&
+    model.transcript_slot() is Some(CloudTranscriptSlot(owner)) &&
+    owner.session() == id &&
+    before.conversations.get(id)
+    is Some({ history_older_request: Some((pending, offset, generation)), .. }) &&
+    generation == model.chat_navigation_generation &&
+    request == pending &&
+    page.offset == Some(offset) {
+    @transcript_component.preserve_prepend_scroll()
+  } else {
+    @cmd.none
+  }
   let command = @cmd.batch(
     [
       command,
+      preserve_scroll,
       ..file_commands,
       cloud_command_results(dispatch, before, next.cloud, message),
       completion.map_or(@cmd.none, value => value.1.command(locale=next.locale)),

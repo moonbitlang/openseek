@@ -126,7 +126,7 @@ test('Cloud revisits show cached history during conditional reads and pick up an
   await cloud.goto();
   const historyPath = `/v1/sessions/${sessionA}/messages`;
   const reads = () => cloud.requests.filter(r => r.method === 'GET' && r.path === historyPath);
-  const historyResponse = () => page.waitForResponse(r => r.request().method() === 'GET' && r.url().endsWith(historyPath));
+  const historyResponse = () => page.waitForResponse(r => r.request().method() === 'GET' && new URL(r.url()).pathname.endsWith(historyPath));
   const transcript = page.locator('#transcript');
   const composer = page.locator('#task');
   const first = historyResponse();
@@ -236,7 +236,7 @@ test('Cloud catches up after an old conditional response spans an observation ga
 
   let release;
   cloud.pauseHistory = new Promise(resolve => { release = resolve; });
-  const unchanged = page.waitForResponse(r => r.url().endsWith(path) && r.status() === 304);
+  const unchanged = page.waitForResponse(r => new URL(r.url()).pathname === path && r.status() === 304);
   try {
     await cloud.open(sessionA);
     await expect(page.locator('#send')).toBeEnabled();
