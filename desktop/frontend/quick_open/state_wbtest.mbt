@@ -29,7 +29,13 @@ fn test_input(
   open_files~ : Array[@pathx.Relative] = [],
   active_file? : @pathx.Relative,
 ) -> Input {
-  { owner: owner.unwrap_or(test_owner()), root, open_files, active_file, }
+  {
+    owner: Host(owner.unwrap_or(test_owner())),
+    cloud_access: None,
+    root,
+    open_files,
+    active_file,
+  }
 }
 
 ///|
@@ -354,12 +360,9 @@ test "leading hash switches providers and fences stale symbol replies" {
   guard changed.open is Some(pending) else { fail("palette expected") }
   let item = test_symbol("parse_hover", "src/main.mbt")
   let stale = changed.step(
-    SymbolsLoaded(
-      owner=initial.owner,
-      query="",
-      generation=initial.generation,
-      items=[item],
-    ),
+    SymbolsLoaded(owner=test_owner(), query="", generation=initial.generation, items=[
+      item,
+    ]),
     input,
   )
   guard stale.open is Some(still_pending) else {
@@ -372,7 +375,7 @@ test "leading hash switches providers and fences stale symbol replies" {
   assert_true(files_open.provider() is Files)
   let still_files = files.step(
     SymbolsLoaded(
-      owner=pending.owner,
+      owner=test_owner(),
       query=pending.query(),
       generation=pending.generation,
       items=[item],
@@ -392,7 +395,7 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   guard changed.open is Some(pending) else { fail("palette expected") }
   let loading = changed.step(
     SymbolsDue(
-      owner=pending.owner,
+      owner=test_owner(),
       query=pending.query(),
       generation=pending.generation,
     ),
@@ -402,7 +405,7 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   assert_true(in_flight.phase is Loading)
   let failed = loading.step(
     SymbolsRequestFailed(
-      owner=pending.owner,
+      owner=test_owner(),
       query=pending.query(),
       generation=pending.generation,
     ),
@@ -413,7 +416,7 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   assert_eq(failure.items.length(), 0)
   let loaded = loading.step(
     SymbolsLoaded(
-      owner=pending.owner,
+      owner=test_owner(),
       query=pending.query(),
       generation=pending.generation,
       items=[],
@@ -432,7 +435,7 @@ test "symbols without a source path are dropped from the rows" {
   guard opened.open is Some(search) else { fail("palette expected") }
   let ready = opened.step(
     SymbolsLoaded(
-      owner=search.owner,
+      owner=test_owner(),
       query=search.query(),
       generation=search.generation,
       items=[test_symbol("placed", "src/main.mbt"), test_symbol("unplaced", "")],

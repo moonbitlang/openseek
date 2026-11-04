@@ -1893,12 +1893,9 @@ fn update(
   // many messages — device/session switches, background pushes, connection
   // metadata, restored session data, a worktree registry broadcast — so the
   // package fences the palette once here rather than in every branch.
-  let (quick_open_cmd, quick_open) = match model.active_checkout() {
-    Some(active) =>
-      model.quick_open.reconcile(
-        dispatch.map(msg => QuickOpen(msg)),
-        model.quick_open_input(active),
-      )
+  let (quick_open_cmd, quick_open) = match model.quick_open_input() {
+    Some(input) =>
+      model.quick_open.reconcile(dispatch.map(msg => QuickOpen(msg)), input)
     // No checkout on screen is no owner to fence against — the palette has
     // nothing left to search, so it closes here for the same reason it does
     // when its conversation is replaced.
