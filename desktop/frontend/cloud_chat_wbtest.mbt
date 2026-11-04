@@ -808,3 +808,15 @@ test "new-chat shortcuts create conversations in the selected Codex project" {
   }
   assert_eq(actual, [project, project, project, project])
 }
+
+///|
+test "a Cloud Quick Open pick opens its file before panel reconciliation" {
+  let cloud = integrated_cloud_model()
+  assert_true(cloud.cloud_selected())
+  assert_true(
+    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(cloud),
+  )
+  assert_false(
+    QuickOpen(@quick_open.Move(1)).opens_file_before_panel_reconciliation(cloud),
+  )
+}

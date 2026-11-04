@@ -1314,6 +1314,8 @@ test('Cloud Quick Open finds files without a host and keeps unsupported Symbols 
   await query.press('Enter');
   await expect(palette).toHaveCount(0);
   await expect(source(page)).toContainText('// literal hash file');
+  // The pick opened the panel; reconciling it must not read the file again.
+  expect(cloud.fileRequests.filter(request => request.content && request.path === 'src/#literal.mbt')).toHaveLength(1);
   expect(cloud.fileRequests.some(request => request.index && request.session === sessionA)).toBe(true);
   expect(fileHostRequests(cloud)).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);
