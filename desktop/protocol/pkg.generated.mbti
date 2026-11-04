@@ -591,6 +591,52 @@ pub fn CloudFileDownloadReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CloudFileDownloadReply
 pub impl @json.FromJson for CloudFileDownloadReply
 
+pub(all) enum CloudHistoryCacheAction {
+  List
+  Read(session~ : String)
+  Write(session~ : String, page~ : CloudHistoryCachePage)
+  Remove(session~ : String)
+}
+
+pub(all) struct CloudHistoryCacheEntry {
+  session : String
+  label : String
+}
+pub fn CloudHistoryCacheEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudHistoryCacheEntry::to_json(Self) -> Json
+pub impl ToJson for CloudHistoryCacheEntry
+pub impl @json.FromJson for CloudHistoryCacheEntry
+
+pub(all) struct CloudHistoryCachePage {
+  session : SessionDocument
+  messages : Array[Json]
+  offset : Int32?
+  etag : String?
+}
+pub fn CloudHistoryCachePage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudHistoryCachePage::to_json(Self) -> Json
+pub impl ToJson for CloudHistoryCachePage
+pub impl @json.FromJson for CloudHistoryCachePage
+
+pub(all) enum CloudHistoryCacheReply {
+  Done
+  Page(CloudHistoryCachePage?)
+  Entries(Array[CloudHistoryCacheEntry])
+}
+pub fn CloudHistoryCacheReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudHistoryCacheReply::to_json(Self) -> Json
+pub impl ToJson for CloudHistoryCacheReply
+pub impl @json.FromJson for CloudHistoryCacheReply
+
+pub(all) struct CloudHistoryCacheRequest {
+  token : String
+  action : CloudHistoryCacheAction
+}
+pub fn CloudHistoryCacheRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CloudHistoryCacheRequest::to_json(Self) -> Json
+pub impl ToJson for CloudHistoryCacheRequest
+pub impl @json.FromJson for CloudHistoryCacheRequest
+
 pub(all) struct CodexAccountLoginCancelPayload {
   login_id : String
 } derive(Eq, @debug.Debug)

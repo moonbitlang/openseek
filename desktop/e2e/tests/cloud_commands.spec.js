@@ -158,7 +158,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
   await expect(page.getByRole('main')).toContainText('Model is unavailable');
   const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionC}/messages`));
   releaseHistory();
-  await (await history).finished();
+  expect((await history).status()).toBe(200);
   await expect(page.getByRole('main')).toContainText('Model is unavailable');
   await expect(task).toHaveValue('Retain this goal');
   await expect(page.locator('.composer-goal.pending')).toHaveCount(0);

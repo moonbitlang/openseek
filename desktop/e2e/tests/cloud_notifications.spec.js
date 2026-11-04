@@ -56,7 +56,7 @@ for (const focused of [true, false]) {
     }
     const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
     await app.emitSessionEvent(sessionA, 'task_finished', { status: 'completed', result: { status: 'completed' } });
-    await (await refreshed).finished();
+    expect([200, 304]).toContain((await refreshed).status());
     expect(shown(app)).toHaveLength(1);
     await app.open(sessionB);
     await app.open(sessionA);

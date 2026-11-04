@@ -240,6 +240,7 @@ export class CloudHarness {
       }
       if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false, server_url: authOrigin }; }
       if (request.method === 'remote.access_set') return { connected: false, server_url: authOrigin };
+      if (request.method === 'cloud.history_cache') return this.historyCache?.(request.params) ?? { kind: 'done' };
       if (request.method === 'cloud.key') throw new Error('Cloud must not read local credentials');
       return this.device.replyFor(request);
     });

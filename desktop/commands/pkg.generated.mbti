@@ -79,6 +79,8 @@ pub let browser_set_visible : Command[@protocol.BrowserVisiblePayload, @protocol
 
 pub let cloud_file_download : Command[@protocol.CloudFileDownloadPayload, @protocol.CloudFileDownloadReply]
 
+pub let cloud_history_cache : Command[@protocol.CloudHistoryCacheRequest, @protocol.CloudHistoryCacheReply]
+
 pub let codex_account_login_cancel : Command[@protocol.CodexAccountLoginCancelPayload, @protocol.CodexCommandReply[@protocol.EmptyReply]]
 
 pub let codex_account_login_start : Command[@protocol.CodexAccountLoginStartPayload, @protocol.CodexCommandReply[@protocol.CodexLoginStartReply]]

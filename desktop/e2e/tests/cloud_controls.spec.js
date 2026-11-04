@@ -260,7 +260,7 @@ for (const status of ['completed', 'failed']) {
     const before = reads();
     const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
     await app.finishTask(sessionA, status);
-    await (await refreshed).finished();
+    expect((await refreshed).ok()).toBe(true);
     await expect.poll(reads).toBeGreaterThan(before);
     await expect(page.locator('#stop')).toHaveCount(0);
     if (status === 'failed') await expect(page.locator('#transcript')).toContainText('interrupted');

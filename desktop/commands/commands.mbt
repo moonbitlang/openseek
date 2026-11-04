@@ -1032,6 +1032,13 @@ pub let cloud_file_download : Command[
 ] = Command("cloud.file_download")
 
 ///|
+/// Window-only access to the current account's saved Cloud history pages.
+pub let cloud_history_cache : Command[
+  @protocol.CloudHistoryCacheRequest,
+  @protocol.CloudHistoryCacheReply,
+] = Command("cloud.history_cache")
+
+///|
 pub let fs_share_file : Command[
   @protocol.FileSharePayload,
   @protocol.SessionShareReply,
