@@ -176,6 +176,7 @@ async test "a device refusal preserves the account and parks its connector" {
   assert_false(store.connected)
   assert_true(store.desired_connector() is None)
   let override_store : AuthStore = {
+    ..AuthStore::empty(),
     runtime_dir: None,
     env_override: Some({
       relay_url: "ws://127.0.0.1:8080/v1/tunnel",

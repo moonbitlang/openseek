@@ -12,7 +12,7 @@ fn State::submit_command(
   guard conversation.outgoing is None else { return (self, @cmd.none) }
   let next = { ..self, sequence: submission.request, notice: None, }.replace(
     session,
-    { ..conversation, outgoing: Some(submission), },
+    { ..conversation, outgoing: Some(submission), notice: None, },
   )
   if self.creation is Some(creation) && creation.id == session {
     return (

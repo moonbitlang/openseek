@@ -25,6 +25,7 @@ pub(all) struct ConnectorConfig {
 /// runtime dir (`session_share_wbtest.mbt`, `file_share_wbtest.mbt`).
 pub async fn AuthStore::load(
   runtime_dir? : @pathx.Path,
+  cloud_history_runtime? : @pathx.Path,
   env_override? : ConnectorConfig,
 ) -> AuthStore {
   let session = match runtime_dir {
@@ -33,6 +34,11 @@ pub async fn AuthStore::load(
   }
   {
     runtime_dir,
+    cloud_history_runtime: match cloud_history_runtime {
+      Some(dir) => Some(dir)
+      None => runtime_dir
+    },
+    cloud_history_deleted: Set([]),
     env_override,
     wakeups: Queue(kind=DiscardOldest(1)),
     session,

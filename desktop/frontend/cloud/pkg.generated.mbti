@@ -34,7 +34,7 @@ pub async fn share(String, String, String, path? : String) -> String
 
 pub fn subscriptions(State, String?, String?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) -> (State, @cmd.Cmd, String?)
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32, desktop_history? : Bool) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
@@ -128,6 +128,7 @@ pub(all) struct Conversation {
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
+  history_disk_request : Int32?
   history_pages : Map[Int32, History]
   history_older_request : (Int32, Int32, Int32)?
   history_resume_baseline : (String?, Int32?)?
@@ -239,10 +240,12 @@ pub(all) enum Msg {
   TerminalReady(Int32, String, @composer.ShellCommand?)
   SubmitAttachments(@interop.ConversationIdentity, @composer.Draft, Array[@protocol.AttachmentSource])
   Listed(Int32, Int32, Array[Session])
+  CachedCatalog(Int32, Array[@protocol.CloudHistoryCacheEntry])
   ListFailed(Int32, Int32, @cloud_client.Failure)
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
+  DiskHistoryLoaded(Int32, String, Int32, History?)
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, @cloud_client.Failure)
@@ -332,6 +335,8 @@ pub(all) struct State {
   epoch : Int32
   needs_sign_in : Bool
   sessions : Array[Session]
+  cached_sessions : Array[Session]
+  cached_catalog_pending : Bool
   conversations : Map[String, Conversation]
   sequence : Int32
   list_request : Int32
@@ -353,6 +358,7 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::is_archived(Self, String) -> Bool
 pub fn State::mark_read(Self, String) -> Self
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::sidebar_sessions(Self) -> Array[Session]
 
 pub struct SteerReceipt {
   submission_id : String

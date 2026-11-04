@@ -29,13 +29,16 @@ pub fn Conversation::can_load_older_history(self : Conversation) -> Bool {
 fn Conversation::with_history_page(
   self : Conversation,
   history : History,
-  request : Int32,
+  request? : Int32,
   latest~ : Bool,
 ) -> Conversation {
-  let pending_assistants = self.uncovered_assistants(
-    request,
-    history.offset.map(_ => history.messages),
-  )
+  // Disk hydration supplies no request because its snapshot can predate SSE.
+  let pending_assistants = request.map_or(self.pending_assistants, request => {
+    self.uncovered_assistants(
+      request,
+      history.offset.map(_ => history.messages),
+    )
+  })
   guard history.offset is Some(offset) else {
     return {
       ..self,

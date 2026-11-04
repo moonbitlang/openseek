@@ -8,8 +8,6 @@ import {
 // Values
 pub fn body(Array[@html.Html], class~ : String, attrs? : @html.Attrs) -> @html.Html
 
-pub fn header(String) -> Array[@html.Html]
-
 // Errors
 
 // Types and methods

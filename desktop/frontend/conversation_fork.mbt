@@ -281,7 +281,7 @@ test "fork and message editing are pure and preserve navigation" {
   let (_, repeat) = requested.request_fork(emit, slot.key(), 4)
   assert_true(repeat.conversation_fork == requested.conversation_fork)
   // E2E covers chat-to-chat navigation. Also preserve a non-chat page.
-  let away = { ..requested, screen: Settings, }
+  let away = { ..requested, screen: Codex, }
   let result : Result[@protocol.SessionForkReply, String] = Ok({
     session: "desktop-fork",
     title: pending.source_title,
@@ -300,7 +300,7 @@ test "fork and message editing are pure and preserve navigation" {
   )
   assert_true(done.dev().sessions == done_again.dev().sessions)
   assert_true(away.dev().sessions == model.dev().sessions)
-  assert_true(done.screen is Settings)
+  assert_true(done.screen is Codex)
   assert_eq(done.active_session, model.active_session)
   assert_true(done.conversation_fork is None)
   assert_true(done.dev().sessions.any(item => item.id == "desktop-fork"))
@@ -362,7 +362,7 @@ test "fork and message editing are pure and preserve navigation" {
       { session: source.session_id, workspace: source.project(), },
       ArchiveDeleted,
     )
-    for screen in [Chat, Settings] {
+    for screen in [Chat, Codex] {
       let (_, retired) = { ..deleted, screen, }.finish_fork(
         emit,
         pending,

@@ -16,13 +16,6 @@ fn back_layers(model : Model, emit : @cmd.Emit[Msg]) -> Array[@sub.Sub] {
     layer_at(Popup, key, msg)
   }
 
-  // A management page returns one page level, as its topbar does. With no
-  // level to return to, Back is the host's: on Android it leaves the app.
-  if model.screen.work_screen() is None &&
-    !model.is_console_gated() &&
-    model.navigation.can_back {
-    layer_at(Page, "back-management-page", Navigation(Back))
-  }
   // On the narrow layout the sidebar is a drawer, and the overview and the
   // files panel cover the conversation. Their places follow the stylesheet:
   // the drawer over the files panel over the overview.
@@ -60,6 +53,9 @@ fn back_layers(model : Model, emit : @cmd.Emit[Msg]) -> Array[@sub.Sub] {
   }
   if model.screen is Codex && model.codex.confirmation_dismissal() is Some(msg) {
     layer("back-codex-confirmation", Codex(channel=model.focused, msg))
+  }
+  if model.management_dialog is Some(_) {
+    layer_at(TopLayer, "back-management-dialog", CloseManagementDialog)
   }
   if model.workspace_settings_dialog is Some(_) {
     layer_at(TopLayer, "back-workspace-settings", CloseWorkspaceSettings)

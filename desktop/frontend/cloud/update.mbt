@@ -113,7 +113,8 @@ fn State::fence_archived_history(
 ) -> (State, @cmd.Cmd) {
   // A prompt being prepared or submitted still owns its admission request.
   guard self.conversations.get(id) is Some(conversation) &&
-    !conversation.sending else {
+    !conversation.sending &&
+    conversation.history_disk_request != Some(conversation.request) else {
     return (self, @cmd.none)
   }
   // Fence pre-archive reads even after a later restore. Replace an unfinished
@@ -246,6 +247,7 @@ fn State::forget(self : State, id : String) -> State {
   {
     ..self,
     sessions: self.sessions.filter(session => session.id != id),
+    cached_sessions: self.cached_sessions.filter(session => session.id != id),
     conversations,
     deletions,
     metadata_saves,
@@ -266,6 +268,7 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   token? : String,
   navigation~ : Int32,
+  desktop_history~ : Bool = false,
 ) -> (State, @cmd.Cmd, String?) {
   match msg {
     Loaded(epoch, id, request, _)
@@ -293,14 +296,29 @@ pub fn update(
   }
   let (next, command, select) = match msg {
     AccountChanged(user_id) => {
+      let cache_catalog = desktop_history &&
+        user_id is Some(_) &&
+        token is Some(_)
       let next = {
         ..State::empty(),
         user_id,
         epoch: state.epoch + 1,
         sequence: state.sequence,
+        cached_catalog_pending: cache_catalog,
       }
       let (next, command) = next.list(token, emit)
-      (next, command, None)
+      let catalog = if cache_catalog && token is Some(token) {
+        run(emit, () => {
+          let entries = match history_cache(token, List) {
+            Entries(entries) => entries
+            _ => []
+          }
+          CachedCatalog(next.epoch, entries)
+        })
+      } else {
+        @cmd.none
+      }
+      (next, @cmd.batch([command, catalog]), None)
     }
     Refresh => {
       guard !(state.list_status is Retrying) else {
@@ -335,7 +353,17 @@ pub fn update(
           history.push(command)
         }
       }
-      ({ ..next, sessions, list_status: Idle, }, @cmd.batch(history), None)
+      (
+        {
+          ..next,
+          sessions,
+          cached_sessions: [],
+          cached_catalog_pending: false,
+          list_status: Idle,
+        },
+        @cmd.batch(history),
+        None,
+      )
     }
     ListFailed(epoch, request, error) => {
       guard epoch == state.epoch && request == state.list_request else {
@@ -347,6 +375,29 @@ pub fn update(
       } else {
         ({ ..state, list_status: Failed, }, @cmd.none, None)
       }
+    }
+    CachedCatalog(epoch, entries) => {
+      guard epoch == state.epoch && state.cached_catalog_pending else {
+        return (state, @cmd.none, None)
+      }
+      let cached_sessions = entries.filter_map(entry => {
+        if state.retired.contains(entry.session) {
+          None
+        } else {
+          Some({
+            id: entry.session,
+            title: Some(entry.label),
+            updated_at: None,
+            generating: false,
+            archived: false,
+          })
+        }
+      })
+      (
+        { ..state, cached_sessions, cached_catalog_pending: false, },
+        @cmd.none,
+        None,
+      )
     }
     Create => {
       if state.creation is Some(creation) {
@@ -451,10 +502,19 @@ pub fn update(
           )
         Prompt(..) | Terminal(_) => conversation.controls
       }
-      let (next, command) = state
-        .replace(creation.id, { ..conversation, outgoing: None, controls, })
-        .failed(error)
-      (next, command, None)
+      let next = { ..state, needs_sign_in: error is Unauthorized, }.replace(
+        creation.id,
+        {
+          ..conversation,
+          outgoing: None,
+          controls,
+          notice: match submission.input {
+            Prompt(..) | Native(_) => Some(error.label())
+            Terminal(_) => None
+          },
+        },
+      )
+      (next, @cmd.none, None)
     }
     Edit(account~, session=id, edit~) => {
       let edit = match edit {
@@ -559,14 +619,22 @@ pub fn update(
       guard epoch == state.epoch && state.deletions.get(id) == Some(request) else {
         return (state, @cmd.none, None)
       }
-      (state.forget(id), @cmd.none, None)
+      (
+        state.forget(id),
+        cache_mutation(desktop_history, token, Remove(session=id)),
+        None,
+      )
     }
     DeleteFailed(epoch, id, request, error) => {
       guard epoch == state.epoch && state.deletions.get(id) == Some(request) else {
         return (state, @cmd.none, None)
       }
       if error is Http(404) {
-        return (state.forget(id), @cmd.none, None)
+        return (
+          state.forget(id),
+          cache_mutation(desktop_history, token, Remove(session=id)),
+          None,
+        )
       }
       let deletions = state.deletions.copy()
       deletions.remove(id)
@@ -824,7 +892,45 @@ pub fn update(
           notice: None,
         })
       }
-      let (next, command) = next.load(id, token, emit, reuse=true)
+      let (next, command) = if desktop_history &&
+        token is Some(token) &&
+        !conversation.history_cached &&
+        !conversation.history_reading &&
+        conversation.history_disk_request is None {
+        next.read_disk_history(id, token, emit)
+      } else {
+        next.load(id, token, emit, reuse=true)
+      }
+      (next, command, None)
+    }
+    DiskHistoryLoaded(epoch, id, request, history) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_disk_request == Some(request) else {
+        return (state, @cmd.none, None)
+      }
+      let awaiting_disk = conversation.request == request &&
+        conversation.history_reading
+      let conversation = { ..conversation, history_disk_request: None, }
+      let next = state.replace(
+        id,
+        if history is Some(history) && !conversation.history_cached {
+          let cached = conversation.with_history_page(history, latest=true)
+          {
+            ..cached.restore_goal(cached.document),
+            history_cached: true,
+            history_etag: history.etag,
+            history_required: false,
+            loading: false,
+          }
+        } else {
+          conversation
+        },
+      )
+      if !awaiting_disk {
+        return (next, @cmd.none, None)
+      }
+      let (next, command) = next.load(id, token, emit)
       (next, command, None)
     }
     LoadOlder(id) => {
@@ -863,7 +969,7 @@ pub fn update(
       let next = if owner == navigation && history.offset == Some(offset) {
         conversation.with_history_page(
           { ..history, generating: false, },
-          request,
+          request~,
           latest=false,
         )
       } else {
@@ -892,7 +998,7 @@ pub fn update(
     Loaded(epoch, id, request, history) => {
       let conversation = state.conversations[id].with_history_page(
         history,
-        request,
+        request~,
         latest=true,
       )
       let accepted = conversation.pending is Some(submission) &&
@@ -921,6 +1027,7 @@ pub fn update(
         history_cached: true,
         history_etag: history.etag,
         history_reading: false,
+        history_disk_request: None,
         events: conversation.events.filter(event => {
           !conversation.records.any(record => {
             record.task_id == event.task_id &&
@@ -1001,14 +1108,26 @@ pub fn update(
           }
         }),
       }
+      let refresh = if history.generating &&
+        !conversation.stream.map_or(false, stream => stream.active) {
+        poll(epoch, id, request, emit)
+      } else {
+        @cmd.none
+      }
       (
         next,
-        if history.generating &&
-          !conversation.stream.map_or(false, stream => stream.active) {
-          poll(epoch, id, request, emit)
-        } else {
-          @cmd.none
-        },
+        @cmd.batch([
+          refresh,
+          if desktop_history {
+            cache_mutation(
+              true,
+              token,
+              Write(session=id, page=history.cache_page()),
+            )
+          } else {
+            @cmd.none
+          },
+        ]),
         None,
       )
     }
@@ -1025,6 +1144,7 @@ pub fn update(
         ..conversation,
         history_etag: Some(etag),
         history_reading: false,
+        history_disk_request: None,
         pending_assistants: conversation.uncovered_assistants(
           request, page_records,
         ),
@@ -1071,22 +1191,14 @@ pub fn update(
           Some(error.label())
         },
       })
-      let (next, command) = if recovering && retry {
-        (next, @cmd.none)
-      } else {
-        next.failed(error)
-      }
       (
-        next,
-        @cmd.batch([
-          command,
-          if (recovering && retry) ||
-            (!recovering && conversation.generating && !(error is Unauthorized)) {
-            poll(epoch, id, request, emit)
-          } else {
-            @cmd.none
-          },
-        ]),
+        { ..next, needs_sign_in: error is Unauthorized, },
+        if (recovering && retry) ||
+          (!recovering && conversation.generating && !(error is Unauthorized)) {
+          poll(epoch, id, request, emit)
+        } else {
+          @cmd.none
+        },
         None,
       )
     }
@@ -1281,14 +1393,10 @@ pub fn update(
         },
       })
       if configuration {
-        return (
-          { ..next, sequence: state.sequence + 1, notice: Some(error.label()), },
-          @cmd.none,
-          None,
-        )
+        return ({ ..next, sequence: state.sequence + 1, }, @cmd.none, None)
       }
       let (next, command) = if error is Unauthorized {
-        next.failed(error)
+        ({ ..next, needs_sign_in: true, }, @cmd.none)
       } else {
         next.load(id, token, emit)
       }
@@ -1370,14 +1478,10 @@ fn State::submit(
   let content = prompt_content(draft) catch {
     @cloud_client.RequestError(failure) =>
       return (
-        if state.draft_identity() == Some(owner) {
-          { ..state, notice: Some(failure.label()), }
-        } else {
-          state.replace(id, {
-            ..state.conversations[id],
-            notice: Some(failure.label()),
-          })
-        },
+        state.replace(id, {
+          ..state.conversations[id],
+          notice: Some(failure.label()),
+        }),
         @cmd.none,
         None,
       )

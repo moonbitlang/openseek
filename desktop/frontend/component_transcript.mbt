@@ -126,7 +126,6 @@ fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
         Transcript(slot~, ..) | CloudTranscript(slot~) => Some(slot)
         LoadFailed(..) | Loading | Onboarding | CloudHome => None
       }
-    Skills | Schedules | Settings => None
   }
 }
 
@@ -228,6 +227,9 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
 ///|
 fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   if self.cloud_draft_identity() is Some(owner) {
+    let items = self.cloud.conversations
+      .get(owner.session())
+      .map_or([], conversation => conversation.items())
     return @transcript_component.Input(
       locale=self.locale,
       dark_mode=self.theme.is_dark(self.system_dark),
@@ -242,7 +244,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       project_menu_open=false,
       project_query="",
       root=None,
-      items=[],
+      items=@transcript_component.VisibleRow::history(items),
       streaming_response=None,
       streaming_identity="idle",
     )

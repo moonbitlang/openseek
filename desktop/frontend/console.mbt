@@ -138,7 +138,7 @@ fn ConsoleState::login_url(self : ConsoleState) -> String {
 }
 
 ///|
-test "device-less Cloud and Settings keep the Chat list over the stored sidebar pick" {
+test "a Cloud route keeps the Chat list over the stored sidebar pick" {
   let model = {
     ..console_test_model(),
     console: empty_console_state(None, None, login_return_to="/cloud"),
@@ -150,15 +150,6 @@ test "device-less Cloud and Settings keep the Chat list over the stored sidebar 
     sidebar_revealed: None,
   }
   let (_, next) = update(test_dispatch(), SidebarModeLoaded(WorkMode), model)
-  assert_true(next.sidebar_mode is ChatMode)
-  let settings = {
-    ..model,
-    navigation: {
-      ..model.navigation,
-      location: Some({ device: None, target: Settings, }),
-    },
-  }
-  let (_, next) = update(test_dispatch(), SidebarModeLoaded(WorkMode), settings)
   assert_true(next.sidebar_mode is ChatMode)
 }
 

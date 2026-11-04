@@ -402,16 +402,9 @@ html {
     calc(var(--topbar-inline-padding) - var(--titlebar-control-gap)),
     var(--native-titlebar-left, 0px)
   );
-  --navigation-inline-inset: calc(
-    var(--sidebar-toggle-inline-inset) + var(--titlebar-control-size) +
-      var(--titlebar-control-gap)
-  );
-  --navigation-width: calc(
-    2 * var(--titlebar-control-size) + var(--titlebar-control-gap)
-  );
   --sidebar-toggle-trailing-gap: calc(var(--titlebar-control-gap) * 3);
   --sidebar-toggle-reserved-width: calc(
-    var(--navigation-inline-inset) + var(--navigation-width) +
+    var(--sidebar-toggle-inline-inset) + var(--titlebar-control-size) +
       var(--sidebar-toggle-trailing-gap)
   );
   --main-titlebar-leading-inset: max(

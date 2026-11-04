@@ -476,10 +476,6 @@ test "stable application paths serve the application document" {
     is ApplicationPage,
   )
   assert_true(
-    route(Get, "/device/host/skills/market/a%2Fb%401", entry="index.html")
-    is ApplicationPage,
-  )
-  assert_true(
     route(Get, "/frontend.js", entry="index.html") is Static("frontend.js"),
   )
 }

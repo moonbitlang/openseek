@@ -127,11 +127,12 @@ test "the overview stays shown across conversations and asks about each" {
     Some({ channel: Local, session: "second-session", }),
   )
   assert_true(switched.mcp.phase is Checking)
-  // Settings has no conversation to describe: nothing is asked, and the
-  // overview is still on when the conversation comes back.
+  // The dialog preserves the underlying overview and its conversation.
   let (_, settings) = update(dispatch, OpenSetup, switched)
   assert_true(settings.overview_open)
-  assert_true(settings.overview_conversation() is None)
+  assert_true(
+    settings.overview_conversation() == switched.overview_conversation(),
+  )
   assert_true(settings.mcp == switched.mcp)
 }
 

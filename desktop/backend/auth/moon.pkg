@@ -8,6 +8,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/http",
+  "moonbitlang/async/os_error",
   "moonbitlang/async/socket",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/encoding/utf8",

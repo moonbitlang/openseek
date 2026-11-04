@@ -168,7 +168,6 @@ fn Model::quote_screen(self : Model) -> QuoteScreen? {
           !self.scheduled_session_read_only(conv) => Some(ChatQuote)
         _ => None
       }
-    Skills | Schedules | Settings => None
   }
 }
 

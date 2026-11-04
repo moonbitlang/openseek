@@ -5,7 +5,10 @@ test "Cloud blank, expired and changed-account file contexts have no Host placem
   assert_true(ctx.owner is @interop.Cloud(..))
   assert_true(ctx.placement is None)
   assert_true(ctx.cloud_files is Some(_))
-  assert_true(file_ctx({ ..model, screen: Settings, }).cloud_files is None)
+  assert_true(
+    file_ctx({ ..model, management_dialog: Some(Settings), }).cloud_files ==
+    file_ctx(model).cloud_files,
+  )
   let unavailable = file_ctx({ ..model, account: None, })
   assert_true(unavailable.placement is None)
   assert_true(unavailable.root() is None)
@@ -20,12 +23,7 @@ test "Cloud blank, expired and changed-account file contexts have no Host placem
   let (_, draft) = update(test_dispatch(), CloudAction(@cloud.Create), model)
   assert_true(file_ctx(draft).root() is None)
   assert_false(draft.file_panel_visible())
-  let location : @navigation_browser.Snapshot = {
-    path: "/cloud",
-    settings: false,
-    can_back: false,
-    can_forward: false,
-  }
+  let location : @navigation_browser.Snapshot = { path: "/cloud", }
   let (_, home) = update(test_dispatch(), Navigation(Browser(location)), model)
   assert_true(home.cloud_selected())
   assert_true(file_ctx(home).placement is None)
@@ -57,8 +55,8 @@ test "Explorer from Settings preserves Cloud files and the covered Host dock" {
     model = opened
   }
   let (_, settings) = update(dispatch, OpenSetup, model)
-  assert_true(settings.screen is Settings)
-  assert_true(settings.dock_owner() == host_owner)
+  assert_true(settings.management_dialog is Some(Settings))
+  assert_true(settings.dock_owner() == cloud_owner)
   let input_ctx = file_ctx(settings)
   for _ in 0..<2 {
     let (_, searched) = update(

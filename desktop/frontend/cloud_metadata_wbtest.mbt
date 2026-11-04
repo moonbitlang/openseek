@@ -151,7 +151,7 @@ test "archiving the selected Cloud creates a new Cloud without retiring its arch
   assert_true(archived.cloud.conversations.contains("cloud-a"))
   assert_true(archived.navigation.location == archived.navigation_location())
   let (_, settings) = update(test_dispatch(), OpenSetup, archived)
-  let (_, back) = update(test_dispatch(), Navigation(Back), settings)
+  let (_, back) = update(test_dispatch(), CloseManagementDialog, settings)
   assert_true(back.cloud_draft_identity() == archived.cloud_draft_identity())
 }
 
@@ -159,10 +159,7 @@ test "archiving the selected Cloud creates a new Cloud without retiring its arch
 test "late background archives preserve navigation and archived Cloud has no send or quote entry" {
   let initial = integrated_cloud_model()
   for
-    leave in [
-      OpenSetup,
-      OpenCloudConversation(account="fixture-user", session="cloud-b"),
-    ] {
+    leave in [OpenCloudConversation(account="fixture-user", session="cloud-b")] {
     let pending = pending_cloud_archive(initial)
     let save = pending.cloud.metadata_saves["cloud-a"]
     let (_, elsewhere) = update(test_dispatch(), leave, pending)
