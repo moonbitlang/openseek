@@ -49,8 +49,6 @@ async test "explicit artifact paths use existing scratch permissions without gra
         "args": [
           second + "/chart.html",
           workspace + "/main.mbt",
-          // Outside every root: the workspace grant itself admits a plain
-          // `output.html`, but not a sibling of the workspace.
           root + "/output.html",
         ],
         "ptc": false,

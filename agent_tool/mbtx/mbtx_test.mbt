@@ -586,35 +586,14 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
 }
 
 ///|
-/// The main agent's snippet writes the workspace EXCEPT its MoonBit sources,
-/// manifests, `.mbtx` scripts and git metadata — whatever the case of the
-/// name — plus its own temp directory, and nothing outside those. Source changes go through the file tools or a child
-/// process, which no `fs` rule of this policy reaches.
-///
-/// Source is refused at any depth and for every write-class call: creating,
-/// truncating, removing, and a recursive `rmdir` of a tree that holds any.
-/// A plain workspace file is writable AND removable — the accepted cost of the
-/// grant, since moonrun gates removal on `fs.write` (see
-/// `wasm_policy_document`).
-///
-/// Ungated: this is the policy's own `fs.write` rule, which moonrun applies on
-/// every platform, so there is no host where it may be skipped.
+/// moonrun enforces the main agent's grant: a source (in any case) and paths
+/// outside the roots are refused; data files are writable and removable. The
+/// exact exclusion list is pinned in `wasm_policy.mbt`.
 async test "a snippet writes the workspace except its sources" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
-      @fs.mkdir("\{ws}/pkg")
-      @fs.mkdir("\{ws}/.git")
-      @fs.mkdir("\{ws}/data")
-      for
-        file in [
-          "keep.mbt", "pkg/lib.mbt", "pkg/moon.pkg", "pkg/pkg.generated.mbti", "notes.txt",
-          ".git/HEAD",
-        ] {
-        @fs.write_file(
-          "\{ws}/\{file}",
-          "keep me\n",
-          create_mode=CreateOrTruncate,
-        )
+      for file in ["keep.mbt", "notes.txt"] {
+        @fs.write_file("\{ws}/\{file}", "keep me\n", create_mode=CreateNew)
       }
       let source = (
         #|---
@@ -622,57 +601,32 @@ async test "a snippet writes the workspace except its sources" {
         #|---
         #|
         #|async fn attempt(label : String, f : async () -> Unit) -> Unit {
-        #|  let ok = try {
-        #|    f()
-        #|    true
-        #|  } catch { _ => false }
+        #|  let ok = try { f(); true } catch { _ => false }
         #|  println("\{label}=\{ok}")
         #|}
         #|
         #|async fn write(path : String) -> Unit {
-        #|  @fs.write_text(path, "// REWRITTEN\n", create_mode=CreateOrTruncate)
+        #|  @fs.write_text(path, "x", create_mode=CreateOrTruncate)
         #|}
         #|
         #|async fn main {
         #|  attempt("source", () => write("keep.mbt"))
-        #|  attempt("nested", () => write("pkg/lib.mbt"))
-        #|  attempt("new_source", () => write("pkg/new.mbt.md"))
-        #|  attempt("manifest", () => write("pkg/moon.pkg"))
-        #|  attempt("interface", () => write("pkg/pkg.generated.mbti"))
-        #|  attempt("git", () => write(".git/HEAD"))
-        #|  attempt("manifest_case", () => write("data/MOON.PKG"))
-        #|  attempt("script", () => write("tool.mbtx"))
-        #|  attempt("remove_source", () => @fs.remove("pkg/lib.mbt"))
-        #|  attempt("rmdir_source", () => @fs.rmdir("pkg", recursive=true))
-        #|  attempt("data", () => write("pkg/data.json"))
-        #|  attempt("remove_data", () => @fs.remove("notes.txt"))
+        #|  attempt("manifest_case", () => write("MOON.PKG"))
         #|  attempt("outside", () => write("OUTSIDE/escape.txt"))
-        #|  attempt("scratch", () => write("\{@fs.tmpdir(prefix="probe-")}/ok.txt"))
+        #|  attempt("data", () => write("data.json"))
+        #|  attempt("remove_data", () => @fs.remove("notes.txt"))
         #|}
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
       for
-        denied in [
-          "source", "nested", "new_source", "manifest", "interface", "git", "manifest_case",
-          "script", "remove_source", "rmdir_source", "outside",
+        line in [
+          "source=false", "manifest_case=false", "outside=false", "data=true", "remove_data=true",
         ] {
-        assert_true(out.content.contains("\{denied}=false"), msg=out.content)
+        assert_true(out.content.contains(line), msg=out.content)
       }
-      for allowed in ["data", "remove_data", "scratch"] {
-        assert_true(out.content.contains("\{allowed}=true"), msg=out.content)
-      }
-      // Reported as denied AND untouched on disk.
-      for file in ["keep.mbt", "pkg/lib.mbt", "pkg/moon.pkg", ".git/HEAD"] {
-        assert_eq(@fs.read_file("\{ws}/\{file}").text(), "keep me\n")
-      }
-      // On a case-insensitive file system moon would read `data/MOON.PKG` as
-      // `data/moon.pkg` and make `data` a package.
-      for created in ["pkg/new.mbt.md", "data/MOON.PKG", "tool.mbtx"] {
-        assert_false(@fs.exists("\{ws}/\{created}"), msg=created)
-      }
+      assert_eq(@fs.read_file("\{ws}/keep.mbt").text(), "keep me\n")
+      assert_false(@fs.exists("\{ws}/MOON.PKG"))
       assert_false(@fs.exists("\{outside}/escape.txt"))
-      assert_true(@fs.exists("\{ws}/pkg/data.json"))
-      assert_false(@fs.exists("\{ws}/notes.txt"))
     })
   })
 }
@@ -1025,10 +979,7 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
 }
 
 ///|
-/// The workspace grant is the main agent's alone. A read-only role is defined
-/// by writing nothing in the tree, and a worker's writes are bounded by its
-/// write scope, so neither snippet may write even a plain data file there.
-/// Pinned with a NON-source file, which only the role decides.
+/// Only the main agent gets the workspace grant, so even a data file is refused.
 async test "read-only and worker snippets write no workspace file at all" {
   @vfs.with_tmpdir(prefix="mbtx-roles-", repo => {
     let ws = "\{repo}/wt-1"

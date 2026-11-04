@@ -29,8 +29,6 @@ async test "session scratch permits raw file IO and script saving outside the wo
     let saved = dispatch(tool, {
       "source": source,
       "filename": "\{scratch}/helper.mbtx",
-      // A workspace SOURCE file: the main agent's grant admits plain workspace
-      // files, never sources.
       "args": [scratch, "\{workspace}/project.mbt"],
       "ptc": false,
     })

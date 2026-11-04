@@ -556,11 +556,8 @@ fn json_strings(values : Array[String]) -> Json {
 }
 
 ///|
-/// `pattern` with every ASCII letter widened to a two-case class (`mbt` →
-/// `[mM][bB][tT]`), so it matches a name whatever its case. Everything else —
-/// `*`, `**`, separators, `{a,b}` alternatives — passes through, so it is
-/// meant for the fixed pattern tails here, never for an escaped literal path,
-/// whose letters may already sit inside a class.
+/// `pattern` with each ASCII letter widened to a two-case class (`mbt` →
+/// `[mM][bB][tT]`). Only for the fixed pattern tails, not an escaped path.
 fn case_insensitive_glob(pattern : String) -> String {
   let widened = StringBuilder()
   for ch in pattern {
@@ -576,9 +573,7 @@ fn case_insensitive_glob(pattern : String) -> String {
 }
 
 ///|
-/// `path` as a glob that matches only itself: each glob metacharacter becomes
-/// a one-character class (`*` → `[*]`), which `globset` reads literally.
-/// Separators pass through, so the result stays a path moonrun can anchor.
+/// `path` as a glob matching only itself (`*` → `[*]`).
 fn glob_literal(path : String) -> String {
   let escaped = StringBuilder()
   for ch in path {
@@ -630,9 +625,6 @@ test "a policy clears any inherited handoff and admits no engine" {
 }
 
 ///|
-/// The workspace grant is the root plus one exclusion per protected pattern,
-/// each anchored at the root spelled as a literal glob. Without the grant the
-/// write list is the plain roots alone and no exclusion narrows them.
 test "a workspace grant writes the root minus sources, scripts and git" {
   guard wasm_policy_document(
       tmp_dir="/run/tmp",

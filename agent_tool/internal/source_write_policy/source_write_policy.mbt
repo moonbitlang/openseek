@@ -65,8 +65,6 @@ pub fn is_protected_source_path(path : String) -> Bool {
 }
 
 ///|
-/// The filename suffixes `is_protected_source_path` guards: sources, literate
-/// sources, generated interfaces, and `.mbtx` scripts.
 let protected_source_suffixes : Array[String] = [
   ".mbt.md", ".mbt", ".mbti", ".mbtx",
 ]
@@ -79,16 +77,9 @@ let protected_manifest_names : Array[String] = [
 ]
 
 ///|
-/// Glob patterns, relative to a workspace root, matching every path
-/// `is_protected_source_path` names below that root at any depth.
-///
-/// They are built from the same suffix and manifest lists as the predicate,
-/// so a policy written with them protects exactly the names this package
-/// does. They use `globset` syntax (`**` crosses directories, `{a,b}` lists
-/// alternatives), the syntax of moonrun's `fs` globs. Unlike
-/// `is_protected_workspace_source_path` they carry no `_build` or
-/// `.mooncakes` carve-out: a glob cannot exempt a subtree from another
-/// pattern, so a caller using them protects generated sources as well.
+/// `globset` patterns, relative to a workspace root, for the names
+/// `is_protected_source_path` protects at any depth. No `_build`/`.mooncakes`
+/// carve-out.
 pub fn protected_source_globs() -> Array[String] {
   [
     "**/*{\{protected_source_suffixes.join(",")}}",

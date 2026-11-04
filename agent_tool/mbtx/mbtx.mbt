@@ -656,11 +656,8 @@ async fn execute(
   }
   // `cwd` is deliberately NOT a write root: naming where a program runs should
   // not also grant writing there, and reads are open, so a snippet can still
-  // work in a directory it may not modify. What a snippet may write in the
-  // tree comes from `workspace_writes`, whatever its `cwd`.
-  //
-  // The root is canonicalized here because moonrun matches the source
-  // exclusions against resolved paths and does not canonicalize a glob (see
+  // work in a directory it may not modify. The workspace root is
+  // canonicalized because the policy's globs must be (see
   // `wasm_policy_document`).
   let workspace_grant = match workspace_writes {
     Denied => None
@@ -1077,17 +1074,12 @@ async fn execute(
 }
 
 ///|
-/// What a snippet's wasm policy lets it write in the workspace, on top of its
-/// own temp directory and the session lab. It follows from the role, so
-/// `definition` decides it once and both the description and every run's
-/// policy read the same answer.
+/// What a snippet may write in the workspace, decided once per role.
 priv enum WorkspaceWrites {
-  /// Nothing in the workspace. A read-only role is defined by writing nothing
-  /// there, and a worker's writes are bounded by its write scope, whose allowed
-  /// prefixes a whole-tree grant would ignore.
+  /// Read-only roles, and workers (a whole-tree grant would ignore their write
+  /// scope's allowed paths).
   Denied
-  /// The workspace minus MoonBit sources, manifests, `.mbtx` scripts and
-  /// `.git` (see `wasm_policy_document`): the main agent.
+  /// The main agent: everything but sources, manifests, `.mbtx` and `.git`.
   ExceptSource
 }
 
