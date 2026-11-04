@@ -168,7 +168,7 @@ test('Cloud restore keeps its read-only view after failure and disables its arch
   await restore.click();
   try {
     await expect(restore).toBeDisabled();
-    await page.goBack();
+    await cloud.openArchivedChats();
     const row = cloud.archivedRow(sessionA);
     await expect(row.getByRole('button', { name: 'Restore', exact: true })).toBeDisabled();
     await expect(row.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
@@ -179,6 +179,7 @@ test('Cloud restore keeps its read-only view after failure and disables its arch
   }
   await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.live:/);
   await expect(cloud.archivedRow(sessionA)).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await cloud.open();
   expect(creations(cloud)).toHaveLength(0);
 });

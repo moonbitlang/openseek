@@ -575,7 +575,6 @@ fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
       Some((WorkMode, self.active_session))
     }
     Codex => self.codex.active_id().map(id => (WorkMode, id))
-    Skills | Schedules | Settings | ArchivedChats => None
   }
 }
 
@@ -691,9 +690,9 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
-    schedules_active: self.screen is Schedules,
-    skills_active: self.screen is Skills,
-    settings_active: self.screen is (Settings | ArchivedChats),
+    schedules_active: self.management_dialog is Some(Schedules),
+    skills_active: self.management_dialog is Some(Skills),
+    settings_active: self.management_dialog is Some(Settings | ArchivedChats),
     account,
   }.filtered()
 }
@@ -1370,8 +1369,7 @@ fn api_settings_rows(
 }
 
 ///|
-/// The Settings page, shown in the main area in place of the conversation
-/// inside the shared management shell with explicit return navigation.
+/// Settings content for the shared management dialog.
 /// While the configured endpoint is unusable the BYOK guide leads the API
 /// group, and the composer keeps Send disabled until a usable endpoint is
 /// saved.
@@ -2299,18 +2297,8 @@ fn view(
         narrow=model.narrow,
         codex_actions,
       )
-    Settings => @page_shell.header(@settings.text(model.locale, Settings))
-    ArchivedChats =>
-      @page_shell.header(@archived_chats.text(model.locale, Title))
-    Skills =>
-      model.skills.header(
-        locale=model.locale,
-        @sidebar_messages.text(model.locale, Skills),
-      )
-    Schedules => @page_shell.header(ui(model.locale, ScheduledTasks))
   }
-  if @interop.is_native_ssh(model.focused) &&
-    model.screen.work_screen() is Some(_) {
+  if @interop.is_native_ssh(model.focused) {
     header.insert(0, ssh_context(dispatch, model))
   }
   let content = match model.screen {
@@ -2421,10 +2409,6 @@ fn view(
       }
       page
     }
-    Schedules => [schedules_page(dispatch, model)]
-    Skills => [skills_html]
-    Settings => [settings_page(dispatch, model)]
-    ArchivedChats => [archived_chats_html]
   }
   // An incompatible host can drive no page. Show why wherever the page is,
   // not only in a conversation header; Cloud pages do not need the host.
@@ -2517,7 +2501,6 @@ fn view(
       attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
       icon(icon_layout_sidebar_left),
     ),
-    navigation_controls(dispatch, model),
     sidebar_html,
     @html.div(class=content_class, [
       // One fixed control owns both states, outside the animated pane tracks.
@@ -2539,6 +2522,7 @@ fn view(
       right_panel_html,
       terminal_html,
     ]),
+    management_dialog_view(dispatch, model, skills_html, archived_chats_html),
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,
@@ -2623,7 +2607,8 @@ fn view(
       }.render(locale=model.locale),
     )
   }
-  if model.delete_confirm is Some(confirm) {
+  if !(model.management_dialog is Some(ArchivedChats)) &&
+    model.delete_confirm is Some(confirm) {
     children.push(
       delete_modal(locale=model.locale, dispatch, confirm, model.cloud),
     )

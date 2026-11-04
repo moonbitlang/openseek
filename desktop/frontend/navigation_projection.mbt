@@ -2,15 +2,6 @@
 fn Model::navigation_location(self : Model) -> @routes.Location? {
   let device = self.console.page_device
   let target : @routes.Target = match self.screen {
-    Settings => Settings
-    ArchivedChats => ArchivedChats
-    Schedules => Schedules
-    Skills =>
-      match self.skills.detail() {
-        Some(InstalledRef(id)) => InstalledSkill(id)
-        Some(MarketRef(source)) => MarketSkill(source)
-        None => Skills
-      }
     Codex => self.codex.navigation_target()
     Chat =>
       if self.cloud_draft_identity()
@@ -49,10 +40,6 @@ fn Model::navigation_location(self : Model) -> @routes.Location? {
   }
   match target {
     Cloud | CloudSession(..) | CloudDraft(..) => Some({ device: None, target, })
-    Settings => Some({ device, target, })
-    // Device-less Settings covers the current URL instead of owning one, and
-    // its archived page (Cloud chats only) shares that entry.
-    ArchivedChats if device is None => Some({ device, target: Settings, })
     _ => if device is Some(_) { Some({ device, target, }) } else { None }
   }
 }
@@ -68,16 +55,11 @@ fn navigation_screen(target : @routes.Target) -> Screen {
     | CloudSession(..)
     | CloudDraft(..) => Chat
     Codex | CodexNew | Thread(_) | CodexDraft(_) => Codex
-    Settings => Settings
-    ArchivedChats => ArchivedChats
-    Skills | InstalledSkill(_) | MarketSkill(_) => Skills
-    Schedules => Schedules
   }
 }
 
 ///|
-/// A management page can cover the draft whose project add is still pending.
-/// Leaving that owner for a different work destination cancels its adoption.
+/// A different work destination cancels the pending draft's project adoption.
 fn Model::project_adoption_at(
   self : Model,
   location : @routes.Location,
@@ -90,12 +72,6 @@ fn Model::project_adoption_at(
     return None
   }
   match location.target {
-    Settings
-    | ArchivedChats
-    | Skills
-    | InstalledSkill(_)
-    | MarketSkill(_)
-    | Schedules => self.pending_project_adoption
     CodexDraft(target) if target == id => self.pending_project_adoption
     CodexNew if self.codex.active_id() == Some(id) &&
       self.codex.navigation_target() is CodexNew =>

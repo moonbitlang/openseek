@@ -8,10 +8,11 @@
 ///|
 /// Which agent runs a conversation. Persisted as the default for the next
 /// "New chat"; a conversation that has begun never changes agents.
+#derive(Eq)
 priv enum AgentChoice {
   OpenSeekAgent
   CodexAgent
-} derive(Eq)
+}
 
 ///|
 fn AgentChoice::wire(self : AgentChoice) -> String {

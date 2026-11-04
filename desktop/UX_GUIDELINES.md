@@ -148,72 +148,15 @@ controls. It must not conceal what will change, what did change, whether the
 result is trustworthy, what failed, or how the user can recover. Simplicity is
 the removal of unnecessary decisions, not the removal of necessary truth.
 
-## Navigation and independent management pages
+## Archived chats
 
-Place the sidebar toggle, then global **Back** and **Forward** buttons after
-macOS window controls. Center them on the shared header row, with compact,
-unboxed outline arrows and a subdued disabled state. Keep the three controls visible in narrow layouts and
-reserve their space in the shared header. Disable arrows at the ends of the
-application's history; a direct link has no invented predecessor.
-
-History records destination identities: OpenSeek conversations, Codex threads,
-new-chat entry pages, local drafts, Settings and its archived chats page, Skills
-lists and details, and Scheduled tasks. An explicit destination change adds an
-entry and discards the forward branch;
-selecting the same destination does not add a duplicate. Back and Forward
-restore the exact target while current application state continues to own
-content, unfinished input, running work and errors. Sending a draft for the
-first time replaces its identity in history with the durable conversation.
-
-Browser URLs use `/device/:device/...` for host pages, `/cloud` for the Cloud
-landing page, `/cloud/draft/:id` for a blank Cloud chat and
-`/cloud/session/:id` for a durable Cloud conversation. Browser controls and
-application arrows share one history. Cloud URLs do not require a connected
-device; session access is checked using the signed-in account. Opening or
-refreshing `/cloud` never creates a session. The first send creates the session
-and replaces the draft URL with its session URL, without pushing. Login
-preserves the requested destination.
-Missing sessions show an unavailable state; authorization and operational errors
-remain distinct and never create a replacement session. Direct links can display
-history before the session catalog arrives, but editing waits until the catalog
-confirms the session is live; archived sessions remain read only. Unsent drafts
-remain in memory. Device-less Settings covers the current URL in window history; refreshing
-restores that URL. Its archived chats page, which then lists only Cloud chats, shares that
-entry; a device's archived chats page is `/device/:device/settings/archived`. Cross-device links open separately; traversing back from a
-refreshed Cloud document to a device page reloads its device binding.
-
-Refresh restores the current target and known browser history segment. Desktop
-history lasts for the window and retains each Cloud conversation's account
-identity. Draft URLs identify in-memory drafts and do not promise recovery of
-unsaved content after refresh. An expired draft replaces its current history
-entry with the corresponding new-chat page and clears the old conversation
-selection. Deleting the shown conversation from this window, whether on a
-device or in Cloud, replaces its entry with a fresh draft; a conversation
-deleted elsewhere, and older history entries for a deleted one, show the
-unavailable state. Confirmed missing stored targets and load failures retain
-their distinct unavailable states. Offline and connecting devices keep their
-connection UI.
-
-`/device/:device/chat/new` and `/device/:device/codex/new` are stable blank
-entry pages. Clicking New chat uses the same flow as opening these URLs.
-Creating a blank page from another destination pushes an entry; clicking New
-chat again while already blank is a no-op. The first input, attachment or
-other draft content replaces that entry with `/draft/:id`, without pushing.
-Clearing the content afterwards retains the draft identity. The implementation
-may allocate an internal ID before content exists; that alone does not expose
-it in the URL. First send then replaces the draft with its stored identity.
-
-Settings, Skills, and Scheduled tasks share the `page_shell` header with a
-single `h1` and one scrolling content column. Page actions live with their
-content. Archived conversations leave the sidebar and its search; Settings
-links to their own page, which groups them like the sidebar (Cloud chats, then
-each project), filters by title, and offers Restore and Delete per row.
-**Back to settings** is an explicit Settings destination. Skills sidebar navigation always opens its list; **Back to skills**
-is an explicit list destination, while global Back restores the previous
-history entry, including a detail page. **Close log** and **Cancel editing**
-affect only Scheduled tasks. Editor and embedded-browser navigation remain
-local to their own surfaces. Small contextual operations such as Workspace
-settings use a dismissible dialog.
+Archived conversations leave the sidebar and its search. Settings' **Manage**
+button opens archived chats within the management dialog, without changing the
+underlying work surface or browser URL. The list groups Cloud chats first, then
+projects, and offers a title/group filter, Restore, and Delete where supported.
+Opening a conversation closes the dialog and shows its read-only transcript.
+**Back to settings** returns within the dialog; dismissing it reveals the work
+surface. Each visit starts with an empty filter.
 
 ## Operational companion
 

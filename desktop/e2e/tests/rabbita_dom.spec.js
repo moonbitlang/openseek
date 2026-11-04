@@ -1163,7 +1163,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await page.keyboard.press('Escape');
   await expect(reply).toHaveCount(0);
   await openReply(first);
-  await page.locator('.topbar-title').click();
+  await page.locator('main .topbar-title').click();
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
 
@@ -1183,7 +1183,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   const settled = () => page.evaluate(() => new Promise(resolve => {
     setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 0);
   }));
-  const title = page.locator('.topbar-title');
+  const title = page.locator('main .topbar-title');
   await press(title);
   await settled();
   await expect(bar).toHaveCount(0);

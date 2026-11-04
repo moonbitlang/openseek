@@ -1,4 +1,5 @@
 ///|
+#derive(Eq)
 priv struct ScheduleForm {
   id : String?
   name : String
@@ -9,7 +10,7 @@ priv struct ScheduleForm {
   once_at : Int64?
   minutes : String
   timeout : String
-} derive(Eq)
+}
 
 ///|
 fn ScheduleForm::empty() -> ScheduleForm {
@@ -27,6 +28,7 @@ fn ScheduleForm::empty() -> ScheduleForm {
 }
 
 ///|
+#derive(Eq)
 priv struct SchedulePage {
   owner : @interop.ChannelId?
   snapshot : @protocol.SchedulesReply
@@ -35,7 +37,7 @@ priv struct SchedulePage {
   sequence : Int32
   error : String?
   log : (String, String)?
-} derive(Eq)
+}
 
 ///|
 fn SchedulePage::empty() -> SchedulePage {
@@ -151,7 +153,7 @@ fn open_schedules(
     dispatch,
     {
       ..model,
-      screen: Schedules,
+      management_dialog: Some(Schedules),
       schedules: page,
       sidebar_open: model.sidebar_open && !model.narrow,
     },
@@ -241,7 +243,8 @@ fn update_schedules(
       (@cmd.none, { ..model, schedules: page, })
     }
     Opened(channel, session, result) => {
-      guard model.screen is Schedules && model.focused == channel else {
+      guard model.management_dialog is Some(Schedules) &&
+        model.focused == channel else {
         return (@cmd.none, model)
       }
       let items = match result {
@@ -285,7 +288,10 @@ fn update_schedules(
         OpenSession(channel, session),
         placed,
       )
-      (@cmd.batch([placement_cmd, open_cmd]), opened)
+      (
+        @cmd.batch([placement_cmd, open_cmd]),
+        { ..opened, management_dialog: None, },
+      )
     }
     Poll => {
       guard model.wants_schedule_updates() else { return (@cmd.none, model) }
@@ -406,7 +412,8 @@ fn update_schedules(
       )
     }
     LogLoaded(channel, path, result) => {
-      guard model.screen is Schedules && model.focused == channel else {
+      guard model.management_dialog is Some(Schedules) &&
+        model.focused == channel else {
         return (@cmd.none, model)
       }
       match result {
@@ -505,7 +512,7 @@ fn Model::scheduled_session_read_only(
 
 ///|
 fn Model::wants_schedule_updates(self : Model) -> Bool {
-  self.screen is Schedules ||
+  self.management_dialog is Some(Schedules) ||
   (
     self.screen is Chat &&
     self.active_conversation() is Some(conv) &&

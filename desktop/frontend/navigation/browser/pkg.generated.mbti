@@ -13,16 +13,11 @@ pub fn promote(String, String) -> @cmd.Cmd
 
 pub fn visit(String, replace~ : Bool) -> @cmd.Cmd
 
-pub fn visit_settings(replace~ : Bool) -> @cmd.Cmd
-
 // Errors
 
 // Types and methods
 pub(all) struct Snapshot {
   path : String
-  settings : Bool
-  can_back : Bool
-  can_forward : Bool
 } derive(Eq)
 pub fn Snapshot::equal(Self, Self) -> Bool
 pub fn Snapshot::not_equal(Self, Self) -> Bool

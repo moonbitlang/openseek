@@ -55,8 +55,6 @@ pub fn host_back() -> @sub.Sub {
 ///|
 /// Where a layer sits, bottom to top.
 pub(all) enum Level {
-  /// A page shown in place of the work surface.
-  Page
   /// A panel that covers the page on the narrow layout. Panels keep a fixed
   /// stacking among themselves, so each carries its place in it: a higher
   /// one is drawn above a lower one, whichever opened first.
@@ -73,9 +71,7 @@ pub(all) enum Level {
 fn Level::below(self : Level, other : Level) -> Bool {
   match (self, other) {
     (Panel(lower), Panel(upper)) => lower < upper
-    (Page, Panel(_) | Popup | TopLayer)
-    | (Panel(_), Popup | TopLayer)
-    | (Popup, TopLayer) => true
+    (Panel(_), Popup | TopLayer) | (Popup, TopLayer) => true
     _ => false
   }
 }

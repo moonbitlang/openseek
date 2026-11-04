@@ -1,6 +1,7 @@
 ///|
 /// Addressable surfaces. Draft identities belong to this running client;
 /// durable identities can be resolved after refresh. No content lives here.
+#derive(Eq)
 pub(all) enum Target {
   Chat
   ChatNew
@@ -15,14 +16,7 @@ pub(all) enum Target {
   CodexNew
   Thread(String)
   CodexDraft(String)
-  Settings
-  // Settings' archived-conversations page; it belongs to a device.
-  ArchivedChats
-  Skills
-  InstalledSkill(String)
-  MarketSkill(String)
-  Schedules
-} derive(Eq)
+}
 
 ///|
 /// Cloud destinations belong to the signed-in account, not to a device.
@@ -31,10 +25,11 @@ pub fn Target::is_cloud(self : Target) -> Bool {
 }
 
 ///|
+#derive(Eq)
 pub(all) struct Location {
   device : String?
   target : Target
-} derive(Eq)
+}
 
 ///|
 pub extend Target with Eq::{equal, not_equal}

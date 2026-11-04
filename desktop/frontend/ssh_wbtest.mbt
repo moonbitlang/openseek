@@ -857,8 +857,8 @@ test "opening an offline SSH conversation defers its read and never steals later
     assert_true(ready.ssh_online(id))
     assert_true(ready.ssh_ui.pending_open is None)
     if leave {
-      assert_true(ready.screen is Settings)
-      assert_true(ready.loading_conversation is None)
+      assert_true(ready.management_dialog is Some(Settings))
+      assert_true(ready.loading_conversation is Some({ session: "saved", .. }))
     } else {
       assert_eq(ready.active_session, "saved")
       assert_true(

@@ -142,17 +142,19 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
 
 ///|
 /// The composer sitting under the transcript on screen.
+#derive(Eq)
 priv enum QuoteScreen {
   ChatQuote
   CodexQuote
-} derive(Eq)
+}
 
 ///|
 /// The composer a reply quoting the transcript on screen is addressed to.
+#derive(Eq)
 priv enum QuoteTarget {
   ChatComposer(@composer.Identity)
   CodexComposer(@composer.Identity)
-} derive(Eq)
+}
 
 ///|
 /// Which composer, if any, is shown with a transcript right now. A read-only
@@ -168,7 +170,6 @@ fn Model::quote_screen(self : Model) -> QuoteScreen? {
           !self.scheduled_session_read_only(conv) => Some(ChatQuote)
         _ => None
       }
-    Skills | Schedules | Settings | ArchivedChats => None
   }
 }
 
@@ -1072,7 +1073,7 @@ fn main {
     // One archived page per visit: leaving it disposes the component with
     // its filter, so every visit starts unfiltered.
     let archived_chats_html = state
-      .map(model => model.screen is ArchivedChats)
+      .map(model => model.management_dialog is Some(ArchivedChats))
       .switch_by(
         open => {
           if open {

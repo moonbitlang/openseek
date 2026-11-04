@@ -193,8 +193,12 @@ enum PreviewTarget {
 } derive(Eq)
 
 ///|
-/// A page that has never been opened: no catalog, no filter, nothing in
-/// flight.
+pub fn State::detail_open(self : State) -> Bool {
+  !(self.preview is Closed)
+}
+
+///|
+/// Initial state: no catalog, no filter, nothing in flight.
 pub fn State::empty() -> State {
   {
     catalog: Idle,

@@ -18,18 +18,19 @@ function fixture(page) {
   return app;
 }
 
-const archivedRow = (page, title) => page.getByRole('main').locator('.archived-chat-row').filter({ hasText: title });
+const archivedRow = (page, title) => page.getByRole('dialog', { name: 'Archived chats', exact: true }).locator('.archived-chat-row').filter({ hasText: title });
 
-test('archived chats live on a Settings page with filter, read-only open, restore and delete', async ({ page }) => {
+test('archived chats live in Settings with filter, read-only open, restore and delete', async ({ page }) => {
   const app = fixture(page);
   await app.install();
   await app.goto();
   await expect(page.getByRole('complementary')).not.toContainText('Archived');
+  const workUrl = page.url();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByText('2 archived conversations', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Manage', exact: true }).click();
-  await expect(page).toHaveURL(/\/device\/device-a\/settings\/archived$/);
-  const main = page.getByRole('main');
+  await expect(page).toHaveURL(workUrl);
+  const main = page.locator('#management-dialog');
   await expect(main.locator('.topbar-title')).toHaveText('Archived chats');
   await expect(main.getByRole('heading', { level: 2 })).toHaveText(['workspace', 'notes']);
 
@@ -45,7 +46,9 @@ test('archived chats live on a Settings page with filter, read-only open, restor
   await expect(page.getByText('Archived conversation · Read only', { exact: true })).toBeVisible();
   await expect(page.locator('#task')).toHaveCount(0);
   await expect.poll(() => app.requests.some(r => r.method === 'session.load_archived' && r.params.session === 'work-archive')).toBe(true);
-  await page.goBack();
+  await expect(main).not.toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Manage', exact: true }).click();
   await expect(main.locator('.topbar-title')).toHaveText('Archived chats');
   // Each visit starts unfiltered.
   await expect(filter).toHaveValue('');
@@ -54,8 +57,6 @@ test('archived chats live on a Settings page with filter, read-only open, restor
   await archivedRow(page, 'Parser notes').getByRole('button', { name: 'Restore', exact: true }).click();
   await expect(archivedRow(page, 'Parser notes')).toHaveCount(0);
   await expect.poll(() => app.requests.filter(r => r.method === 'session.unarchive').map(r => r.params.session)).toEqual(['work-archive']);
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
-  await expect(page.getByRole('complementary').getByRole('button', { name: 'Parser notes', exact: true })).toBeVisible();
 
   await archivedRow(page, 'Trip plan').getByRole('button', { name: 'Delete', exact: true }).click();
   await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
@@ -78,7 +79,7 @@ test('a long archived title truncates and keeps its actions in view', async ({ p
   await app.goto();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Manage', exact: true }).click();
-  const main = page.getByRole('main');
+  const main = page.getByRole('dialog', { name: 'Archived chats', exact: true });
   const scroller = main.locator('.archived-chats-page');
   await expect(scroller.locator('.archived-chat-row')).toHaveCount(1);
   expect(await scroller.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);

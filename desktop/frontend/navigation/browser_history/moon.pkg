@@ -1,4 +1,0 @@
-// Pure history transitions; no browser or effect dependencies.
-import {
-  "openseek_desktop/routes",
-}
