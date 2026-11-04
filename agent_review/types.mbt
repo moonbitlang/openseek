@@ -6,6 +6,7 @@
 
 ///|
 /// A single review finding at an optional source location.
+#derive(Debug, Eq, ToJson, FromJson)
 struct Finding {
   file : String
   line : Int32?
@@ -14,36 +15,39 @@ struct Finding {
   title : String
   detail : String
   suggestion : String?
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// The change set the review covered.
+#derive(Debug, Eq, ToJson, FromJson)
 struct ReviewScope {
   base : String
   head : String
   files : Array[String]
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// Deterministic preflight signals that ground the review in the compiler/tests
 /// rather than model opinion.
+#derive(Debug, Eq, ToJson, FromJson)
 struct ReviewStats {
   files_reviewed : Int32
   findings : Int32
   build : String
   tests : String
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// The full review report. Abstract: the representation stays inside this
 /// package; callers reach it through the accessors and JSON contract below.
+#derive(Debug, Eq, ToJson, FromJson)
 struct ReviewReport {
   schema_version : Int32
   scope : ReviewScope
   findings : Array[Finding]
   summary : String
   stats : ReviewStats
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// Encode the report as a single-line JSON string (the CLI stdout contract).

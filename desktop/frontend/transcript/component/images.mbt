@@ -33,23 +33,26 @@ fn observe_transcript_images(
 }
 
 ///|
+#derive(Eq)
 priv enum LocalImageState {
   ImageLoading
   ImageReady(String)
   ImageUnavailable
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct ImageOwner {
   channel : @interop.ChannelId?
   // Session remains frontend identity only: it fences late replies after a
   // conversation switch and is never sent to the filesystem operation.
   session : String
   root : @common.Uri?
-} derive(Eq)
+}
 
 ///|
-priv struct ImageCache(Map[String, LocalImageState]) derive(Eq)
+#derive(Eq)
+priv struct ImageCache(Map[String, LocalImageState])
 
 ///|
 priv enum ImageReadResult {

@@ -13,13 +13,14 @@
 /// repository offered none — then the count is uncommitted work alone.
 /// `partial` marks a count that stopped short of every untracked file, which
 /// the chip says out loud rather than under-reporting quietly.
+#derive(Eq, Debug)
 priv struct DiffStat {
   added : Int32
   removed : Int32
   files : Int32
   base : String?
   partial : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where a conversation's pull-request lookup stands. `branch` is what the
@@ -37,19 +38,21 @@ priv struct DiffStat {
 /// here, the counter would restart from zero every time the display state is
 /// cleared (a checkout that stops being a repository, a worktree removed) and
 /// hand a number to a new lookup that an in-flight one still holds.
+#derive(Eq, Debug)
 priv struct PullRequestProbe {
   branch : String
   probing : Bool
   stale : Bool
   pull_request : PullRequest?
   compare_url : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// One pull request as GitHub reports it. `additions`/`deletions` are
 /// GitHub's own totals against the pull request's base, which is a different
 /// question from the locally measured `DiffStat` — and the reason only one of
 /// the two is ever on screen at a time.
+#derive(Eq, Debug)
 priv struct PullRequest {
   number : Int32
   title : String
@@ -65,24 +68,26 @@ priv struct PullRequest {
   deletions : Int32
   changed_files : Int32
   checks : Checks?
-} derive(Eq, Debug)
+}
 
 ///|
 /// A draft is not a fourth state: it is an open pull request that refuses to
 /// merge, and the chip says so separately.
+#derive(Eq, Debug)
 priv enum PullRequestState {
   PullRequestOpen
   PullRequestMerged
   PullRequestClosed
-} derive(Eq, Debug)
+}
 
 ///|
 /// The head commit's checks, bucketed into what a chip can show at a glance.
+#derive(Eq, Debug)
 priv struct Checks {
   passed : Int32
   failed : Int32
   pending : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 fn DiffStat::from_reply(reply : @protocol.GitDiffStat) -> DiffStat {

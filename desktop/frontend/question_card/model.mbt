@@ -1,21 +1,24 @@
 ///|
+#derive(Debug, Eq)
 pub(all) struct Choice {
   label : String
   description : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Question {
   id : String
   title : String
   options : Array[Choice]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 priv enum DraftAnswer {
   Chosen(String)
   Written(String)
-} derive(Debug, Eq)
+}
 
 ///|
 fn DraftAnswer::text(self : DraftAnswer) -> String {
@@ -25,17 +28,19 @@ fn DraftAnswer::text(self : DraftAnswer) -> String {
 }
 
 ///|
+#derive(Debug, Eq)
 priv enum Submission {
   Editing(String?)
   Sending
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 struct Model {
   answers : @sorted_map.SortedMap[String, DraftAnswer]
   current : Int32
   submission : Submission
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn Model::Model() -> Model {
@@ -43,12 +48,13 @@ pub fn Model::Model() -> Model {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Action {
   Edit(question~ : String, text~ : String)
   Select(question~ : String, option~ : String)
   Navigate(index~ : Int32)
   Submit(skip~ : Bool)
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn Model::answers(self : Model) -> Map[String, String] {

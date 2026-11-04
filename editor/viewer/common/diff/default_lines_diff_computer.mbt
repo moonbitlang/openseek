@@ -6,9 +6,10 @@
 
 ///|
 /// Stateless built-in document diff provider.
+#derive(Eq, Debug)
 pub struct LineDocumentDiffProvider {
   _unit : Unit
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn LineDocumentDiffProvider::LineDocumentDiffProvider() -> LineDocumentDiffProvider {

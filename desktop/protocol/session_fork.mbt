@@ -1,4 +1,5 @@
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionForkPayload {
   session : String
   workspace : String
@@ -8,13 +9,14 @@ pub(all) struct SessionForkPayload {
   // Fork as a side chat of `session` (see `side_chat_id`) rather than as a
   // conversation of its own. Absent on the wire means an ordinary fork.
   side_chat : Bool?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionForkReply {
   session : String
   title : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SessionForkPayload with fn from_json(json, path) {

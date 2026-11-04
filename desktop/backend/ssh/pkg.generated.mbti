@@ -2,6 +2,7 @@
 package "openseek_desktop/backend/ssh"
 
 import {
+  "moonbitlang/core/json",
   "moonbitlang/openseek/jsonrpc",
   "openseek_desktop/protocol",
 }
@@ -34,12 +35,12 @@ pub fn Connection::active(Self) -> Bool
 pub fn Connection::close(Self) -> Unit
 pub async fn Connection::request(Self, @protocol.SshRequest) -> @protocol.SshReply
 pub fn Connection::respond(Self, @protocol.SshAuthResponse) -> @protocol.SshReply
-pub async fn Connection::run(Self, (Json) -> Unit, model_environment? : async () -> Map[String, String]) -> Unit
+pub async fn Connection::run(Self, (@json.Json) -> Unit, model_environment? : async () -> Map[String, String]) -> Unit
 
 type TcpTransport
 pub fn TcpTransport::close(Self) -> Unit
-pub async fn TcpTransport::recv(Self) -> Json?
-pub async fn TcpTransport::send(Self, Json) -> Unit
+pub async fn TcpTransport::recv(Self) -> @json.Json?
+pub async fn TcpTransport::send(Self, @json.Json) -> Unit
 pub impl @jsonrpc.Transport for TcpTransport
 
 // Type aliases

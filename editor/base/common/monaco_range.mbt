@@ -11,12 +11,13 @@
 ///|
 /// A range in the editor. `(start_line_number, start_column)` is <=
 /// `(end_line_number, end_column)`.
+#derive(Eq, Debug)
 pub(all) struct Range {
   start_line_number : Int32
   start_column : Int32
   end_line_number : Int32
   end_column : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Range::Range(

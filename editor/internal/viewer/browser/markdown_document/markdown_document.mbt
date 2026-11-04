@@ -662,11 +662,12 @@ let markdown_hidden_element_attribute : String = "data-markdown-section-hidden"
 ///|
 /// One heading's fold affordance: which article root element carries the
 /// control, which section it toggles, and the state the control displays.
+#derive(Eq, Debug)
 pub(all) struct MarkdownSectionFoldControl {
   heading_source_range : @base_common.OffsetRange
   section_index : Int32
   collapsed : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Installs the reader-facing fold toggle on each listed heading and removes
@@ -1041,11 +1042,12 @@ pub fn MarkdownDocumentView::dispose(self : MarkdownDocumentView) -> Unit {
 
 ///|
 /// One row of the pinned table-of-contents bar.
+#derive(Eq, Debug)
 pub(all) struct MarkdownTocBarEntry {
   depth : Int32
   text : String
   source_offset : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Replaces the TOC bar's rows and the navigation handler.

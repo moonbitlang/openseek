@@ -17,10 +17,11 @@
 ///|
 /// Monaco's `wordBreak` editor option (`'normal' | 'keepAll'`): `KeepAll`
 /// disables the ideographic (CJK) break points.
+#derive(Eq, Debug)
 pub(all) enum WordBreak {
   Normal
   KeepAll
-} derive(Eq, Debug)
+}
 
 ///|
 /// Monaco `CharacterClass` (`monospaceLineBreaksComputer.ts`), as the small

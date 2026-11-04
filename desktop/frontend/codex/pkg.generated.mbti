@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/codex"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/i18n",
@@ -55,13 +56,13 @@ pub fn Msg::is_account_action(Self) -> Bool
 pub fn Msg::login() -> Self
 pub fn Msg::logout() -> Self
 pub fn Msg::model_changed(String) -> Self
-pub fn Msg::notification(String, Json, Int32) -> Self
+pub fn Msg::notification(String, @json.Json, Int32) -> Self
 pub fn Msg::open_thread(String) -> Self
 pub fn Msg::refresh() -> Self
 pub fn Msg::restore_failure(Self, locale? : @i18n.Locale) -> String?
-pub fn Msg::server_request(String, Json, String, Json, Int32) -> Self
+pub fn Msg::server_request(String, @json.Json, String, @json.Json, Int32) -> Self
 pub fn Msg::start_draft(String, String, draft? : @composer.Draft, worktree? : Bool) -> Self
-pub fn Msg::status_changed(Json) -> Self
+pub fn Msg::status_changed(@json.Json) -> Self
 pub fn Msg::unarchive_thread(String) -> Self
 pub fn Msg::worktree_changed(String, String, String, String, Bool) -> Self
 
@@ -79,7 +80,8 @@ pub(all) struct SidebarContext {
   registered_projects : Array[String]
 }
 
-type State derive(Eq)
+#derive(Eq)
+type State
 pub fn State::State(loading? : Bool) -> Self
 pub fn State::accepts_composer_identity(Self, @composer.Identity, @interop.ChannelId) -> Bool
 pub fn State::account_label(Self, locale? : @i18n.Locale) -> String
@@ -99,7 +101,7 @@ pub fn State::draft_text(Self) -> String
 pub fn State::draft_worktree_mode(Self) -> Bool
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::files_toggle_label(Self, @interop.ChannelId, locale? : @i18n.Locale) -> String
-pub fn State::from_thread_snapshot(Json) -> Self
+pub fn State::from_thread_snapshot(@json.Json) -> Self
 pub fn State::git_details_open(Self) -> Bool
 pub fn State::has_active(Self) -> Bool
 pub fn State::header(locale? : @i18n.Locale, Self, @interop.ChannelId, terminal_open~ : Bool, narrow~ : Bool, PageActions) -> Array[@html.Html]

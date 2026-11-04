@@ -19,16 +19,18 @@ pub fn resolve_remote_document_uri(@common.Uri, request_id? : String) -> RemoteP
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) enum RemoteDirectoryResult {
   ParsedRemoteDirectory(String, String)
   RemoteDirectoryError(@remote_protocol.ProtocolError)
-} derive(@debug.Debug)
+}
 pub fn RemoteDirectoryResult::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum RemotePathResult {
   ParsedRemotePath(@workspace.SourcePath)
   RemotePathError(@remote_protocol.ProtocolError)
-} derive(@debug.Debug)
+}
 pub fn RemotePathResult::to_repr(Self) -> @debug.Repr
 
 type RemoteServer
@@ -47,16 +49,18 @@ pub fn RemoteServer::set_workspace_root(Self, String) -> Unit
 pub async fn RemoteServer::watch_document(Self, @remote_protocol.DocumentRequest, async (@remote_protocol.ServerPacket) -> Unit, (async () -> Unit) -> Unit) -> @remote_protocol.ServerPacket
 pub fn RemoteServer::with_language_providers(String, &ServerHost, &@language.HoverProvider, &@language.DefinitionProvider, &@language.ReferencesProvider, &@language.DocumentSymbolProvider) -> Self
 
+#derive(@debug.Debug)
 pub(all) enum ServerHostReadResult {
   ServerHostReadOk(@workspace.DocumentContent)
   ServerHostReadError(@workspace.FileSystemProviderErrorCode, String)
-} derive(@debug.Debug)
+}
 pub fn ServerHostReadResult::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum ServerHostResolveResult {
   ServerHostResolveOk(Array[@workspace.WorkspaceStat])
   ServerHostResolveError(@workspace.FileSystemProviderErrorCode, String)
-} derive(@debug.Debug)
+}
 pub fn ServerHostResolveResult::to_repr(Self) -> @debug.Repr
 
 type ServerWatch

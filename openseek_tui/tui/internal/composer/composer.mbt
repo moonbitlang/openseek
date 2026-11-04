@@ -38,10 +38,11 @@ fn compute_visible_count(total~ : Int32, max_text_rows~ : Int32) -> Int32 {
 ///
 /// `Input` is normal agent-steering text. `Shell` changes the first prompt to
 /// `! ` and makes the submitted text become a shell command.
+#derive(Eq)
 enum Mode {
   Input
   Shell
-} derive(Eq)
+}
 
 ///|
 let exclaimation_prefix : @displaytext.DisplayText = DisplayText("! ")

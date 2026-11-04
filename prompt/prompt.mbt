@@ -1,9 +1,10 @@
 ///|
 /// The source of the optional instructions added to the working prompt.
+#derive(Eq)
 pub(all) enum Prompt {
   BuiltinMoonBitGuide
   Custom(String)
-} derive(Eq)
+}
 
 ///|
 #doc(hidden)

@@ -1,15 +1,17 @@
 ///|
+#derive(Eq)
 priv enum Contents {
   Missing
   File(String)
   Directory(Array[String])
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct Snapshot {
   destination : String
   contents : Contents
-} derive(Eq)
+}
 
 ///|
 async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {

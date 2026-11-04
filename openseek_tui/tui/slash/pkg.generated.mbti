@@ -12,7 +12,8 @@ pub fn has_arguments(String) -> Bool
 // Errors
 
 // Types and methods
-type SlashCommandInvocation derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type SlashCommandInvocation
 pub fn SlashCommandInvocation::arguments(Self) -> String
 pub fn SlashCommandInvocation::equal(Self, Self) -> Bool
 pub fn SlashCommandInvocation::name(Self) -> String
@@ -20,7 +21,8 @@ pub fn SlashCommandInvocation::not_equal(Self, Self) -> Bool
 pub fn SlashCommandInvocation::parse(String) -> Self?
 pub fn SlashCommandInvocation::to_repr(Self) -> @debug.Repr
 
-type SlashCommandSpec derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type SlashCommandSpec
 pub fn SlashCommandSpec::SlashCommandSpec(name~ : String, description~ : String) -> Self
 pub fn SlashCommandSpec::description(Self) -> String
 pub fn SlashCommandSpec::equal(Self, Self) -> Bool

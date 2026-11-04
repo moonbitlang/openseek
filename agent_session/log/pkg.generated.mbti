@@ -3,11 +3,12 @@ package "moonbitlang/openseek/agent_session/log"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/openseek/agent_session",
 }
 
 // Values
-pub fn classify_header(Json) -> HeaderParse
+pub fn classify_header(@json.Json) -> HeaderParse
 
 pub fn parse_events(String) -> ParsedLog
 
@@ -16,30 +17,34 @@ pub fn session_from_parse(ParsedLog, id~ : String, system_prompt~ : String) -> @
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub enum HeaderParse {
   Header(SessionFileHeader)
   UnsupportedVersion(Int32)
   NotHeader
-} derive(@debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub struct LineError {
   line_number : Int32
   content : String
   message : String
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ParsedLog {
   header : SessionFileHeader?
   events : Array[@agent_session.SessionEvent]
   errors : Array[LineError]
   partial_tail : Bool
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SessionFileHeader {
   id : String
   system_prompt : String
-} derive(Eq, @debug.Debug)
-pub impl ToJson for SessionFileHeader
+}
+pub impl @json.ToJson for SessionFileHeader
 
 // Type aliases
 

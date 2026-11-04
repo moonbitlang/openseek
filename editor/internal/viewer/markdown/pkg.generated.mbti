@@ -42,16 +42,18 @@ pub fn render_uml_diagram_svg(String) -> String?
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct MarkdownBlockAnchor {
   index : Int32
   source_range : @common.OffsetRange
   is_root_element : Bool
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownBlockAnchor::equal(Self, Self) -> Bool
 pub fn MarkdownBlockAnchor::not_equal(Self, Self) -> Bool
 pub fn MarkdownBlockAnchor::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct MarkdownCodeBlock {
   block_index : Int32
   node_id : Int32?
@@ -59,7 +61,7 @@ pub struct MarkdownCodeBlock {
   block_source_range : @common.OffsetRange
   code_lines : Array[MarkdownCodeLine]
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownCodeBlock::MarkdownCodeBlock(Int32, String, String?, String?, String?, @common.OffsetRange, Array[MarkdownCodeLine], node_id? : Int32) -> Self
 pub fn MarkdownCodeBlock::equal(Self, Self) -> Bool
 pub fn MarkdownCodeBlock::is_moonbit_check_fence(Self, MarkdownResourceKind) -> Bool
@@ -67,68 +69,75 @@ pub fn MarkdownCodeBlock::not_equal(Self, Self) -> Bool
 pub fn MarkdownCodeBlock::project_source_range(Self, @common.OffsetRange) -> Array[MarkdownProjectedCodeRange]
 pub fn MarkdownCodeBlock::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct MarkdownCodeLine {
   displayed_text : String
   source_line_number : Int32
   source_range : @common.OffsetRange
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownCodeLine::equal(Self, Self) -> Bool
 pub fn MarkdownCodeLine::not_equal(Self, Self) -> Bool
 pub fn MarkdownCodeLine::source_offset_at_displayed_boundary(Self, Int32) -> Int32?
 pub fn MarkdownCodeLine::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct MarkdownDocumentProjection {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownDocumentProjection::equal(Self, Self) -> Bool
 pub fn MarkdownDocumentProjection::not_equal(Self, Self) -> Bool
 pub fn MarkdownDocumentProjection::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct MarkdownProjectedCodeRange {
   line_index : Int32
   displayed_range : @common.OffsetRange
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownProjectedCodeRange::equal(Self, Self) -> Bool
 pub fn MarkdownProjectedCodeRange::not_equal(Self, Self) -> Bool
 pub fn MarkdownProjectedCodeRange::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct MarkdownRenderFact {
   html : String
   has_code_block : Bool
   projection : MarkdownDocumentProjection
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownRenderFact::equal(Self, Self) -> Bool
 pub fn MarkdownRenderFact::not_equal(Self, Self) -> Bool
 pub fn MarkdownRenderFact::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum MarkdownResourceKind {
   OrdinaryMarkdown
   MoonBitMarkdown
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownResourceKind::equal(Self, Self) -> Bool
 pub fn MarkdownResourceKind::not_equal(Self, Self) -> Bool
 pub fn MarkdownResourceKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct MarkdownSection {
   heading_anchor_index : Int32
   source_range : @common.OffsetRange
   body_source_range : @common.OffsetRange?
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownSection::body_source_ranges(Self, MarkdownDocumentProjection) -> Array[@common.OffsetRange]
 pub fn MarkdownSection::equal(Self, Self) -> Bool
 pub fn MarkdownSection::is_foldable(Self, MarkdownDocumentProjection) -> Bool
 pub fn MarkdownSection::not_equal(Self, Self) -> Bool
 pub fn MarkdownSection::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct MarkdownTocEntry {
   depth : Int32
   text : String
   source_offset : Int32
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownTocEntry::equal(Self, Self) -> Bool
 pub fn MarkdownTocEntry::not_equal(Self, Self) -> Bool
 pub fn MarkdownTocEntry::to_repr(Self) -> @debug.Repr

@@ -5,10 +5,11 @@
 // ViewModel, browser View, or configuration object crosses the boundary.
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct CodeEditorRenderLinesDecoration {
   range : @base_common.Range
   class_name : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub struct CodeEditorRenderedLines {

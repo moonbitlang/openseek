@@ -3,14 +3,16 @@
 /// protocol client, composes the viewer library with the explorer widget,
 /// and renders the chrome around them (topbar, sidebar, diagnostics
 /// panel, status messages, theme).
+#derive(Eq)
 priv struct WorkbenchDocumentView {
   uri : String
   display_name : String
   language_id : String
   revision : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct WorkbenchModel {
   ui_language : @localization.Language
   status : String
@@ -30,7 +32,7 @@ priv struct WorkbenchModel {
   /// the first connection announce. A differing announce (reconnect across a
   /// switch, another session switching) triggers the full switch cleanup.
   workspace_root : String
-} derive(Eq)
+}
 
 ///|
 /// The shell's scroll policy for an incoming document read: a reload of the

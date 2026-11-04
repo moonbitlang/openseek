@@ -17,10 +17,11 @@ pub fn record_path(@pathx.Absolute, String) -> @pathx.Path
 pub async fn[T] with_document(@pathx.Absolute, String, async (@protocol.SessionDocument) -> T) -> T
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror RecordError {
   Absent(String)
   Unreadable(String)
-} derive(@debug.Debug)
+}
 pub fn RecordError::to_repr(Self) -> @debug.Repr
 
 // Types and methods

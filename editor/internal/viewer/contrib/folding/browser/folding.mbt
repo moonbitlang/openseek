@@ -21,10 +21,11 @@
 /// (`folding.ts:54-59`). Provider identity and folded-import state are absent
 /// with those unported features; `line_count` remains part of the persisted
 /// shape for source fidelity.
+#derive(Debug)
 struct FoldingStateMemento {
   collapsed_regions : Array[FoldingLineMemento]?
   line_count : Int32?
-} derive(Debug)
+}
 
 ///|
 /// Receives how many ranges a provider computed and whether the limit

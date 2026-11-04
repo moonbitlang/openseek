@@ -1,8 +1,9 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum MarkdownResourceKind {
   OrdinaryMarkdown
   MoonBitMarkdown
-} derive(Eq, Debug)
+}
 
 ///|
 pub(all) struct MarkdownViewerModel {
@@ -19,11 +20,12 @@ pub fn MarkdownViewerModel::MarkdownViewerModel(
 }
 
 ///|
+#derive(Eq, Debug)
 struct MarkdownViewerOptions {
   theme : String
   placeholder : String
   show_unused : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn MarkdownViewerOptions::MarkdownViewerOptions(
@@ -64,9 +66,10 @@ pub fn MarkdownViewerOptions::with_show_unused(
 }
 
 ///|
+#derive(Debug)
 struct MarkdownViewerViewState {
   inner : @markdown_viewer.MarkdownViewerWidgetViewState
-} derive(Debug)
+}
 
 ///|
 struct MarkdownViewer {

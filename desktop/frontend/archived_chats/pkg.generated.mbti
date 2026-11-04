@@ -29,19 +29,21 @@ pub(all) struct Actions {
   delete : (@conversation.Id) -> @cmd.Cmd
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Group {
   kind : GroupKind
   rows : Array[@conversation.Input]
-} derive(Eq, @debug.Debug)
+}
 pub fn Group::equal(Self, Self) -> Bool
 pub fn Group::not_equal(Self, Self) -> Bool
 pub fn Group::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum GroupKind {
   Chats
   Project(String)
   Other
-} derive(Eq, @debug.Debug)
+}
 pub fn GroupKind::equal(Self, Self) -> Bool
 pub fn GroupKind::not_equal(Self, Self) -> Bool
 pub fn GroupKind::to_repr(Self) -> @debug.Repr
@@ -67,9 +69,10 @@ pub(all) enum Msg {
   QueryChanged(String)
 }
 
+#derive(Eq, @debug.Debug)
 pub struct State {
   query : String
-} derive(Eq, @debug.Debug)
+}
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool

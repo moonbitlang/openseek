@@ -15,7 +15,8 @@ pub fn clear_input(focus~ : Bool) -> @cmd.Cmd
 // Errors
 
 // Types and methods
-type Model derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Model
 pub fn Model::Model() -> Self
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool

@@ -1,9 +1,10 @@
 ///|
 /// Mermaid's supported color modes for browser Markdown rendering.
+#derive(Eq, Debug)
 pub(all) enum MermaidTheme {
   Light
   Dark
-} derive(Eq, Debug)
+}
 
 ///|
 /// Browser policy and callbacks for one synchronous Markdown render.

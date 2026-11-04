@@ -2,13 +2,14 @@
 /// Metadata returned after a successful Files API image upload. The opaque
 /// `id` can be passed to `ContentPart::File(file_id=...)`. Timestamps are Unix
 /// seconds; `expires_at=None` means no expiry was returned by the server.
+#derive(Debug)
 pub struct UploadedFile {
   id : String
   bytes : Int64
   created_at : Int64
   filename : String
   expires_at : Int64?
-} derive(Debug)
+}
 
 ///|
 pub extend UploadedFile with Debug::{to_repr}
@@ -18,6 +19,7 @@ pub extend UploadedFile with Debug::{to_repr}
 /// Match variants to handle failures; display messages are not an API contract.
 /// Payloads retain offending values or typed decoding errors. `HttpStatus`
 /// carries the unmodified response body, which need not be JSON.
+#derive(Debug, Eq)
 pub(all) suberror FileUploadError {
   UnsupportedImageFormat
   ImageTooLarge(bytes~ : Int32, limit~ : Int32)
@@ -36,7 +38,7 @@ pub(all) suberror FileUploadError {
   InvalidCreatedAt(Double)
   InvalidExpiresAt(Double)
   MissingExpiresAt
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend FileUploadError with Debug::{to_repr}
@@ -103,6 +105,7 @@ impl Show for FileUploadError with fn output(self, logger) {
 }
 
 ///|
+#derive(FromJson)
 priv struct FileResponse {
   id : String
   object : String
@@ -111,7 +114,7 @@ priv struct FileResponse {
   filename : String
   purpose : String
   expires_at : Double?
-} derive(FromJson)
+}
 
 ///|
 priv struct ImageUpload {

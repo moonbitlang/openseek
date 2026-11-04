@@ -39,19 +39,21 @@ let _test_only_content_emitter_anchor : Unit = ignore(
 /// `RawContentChangedType` (`textModelEvents.ts:221-227`). The source's
 /// numeric const-enum values (1-5) are not observable through this port;
 /// identity is by constructor.
+#derive(Eq, Debug)
 pub(all) enum RawContentChangedType {
   Flush
   LineChanged
   LinesDeleted
   LinesInserted
   EOLChanged
-} derive(Eq, Debug)
+}
 
 ///|
 /// The `ModelRawChange` union (`textModelEvents.ts:451`): `ModelRawFlush`
 /// (`:233`), `ModelRawLineChanged` (`:308`), `ModelRawLinesDeleted` (`:380`),
 /// `ModelRawLinesInserted` (`:406`), `ModelRawEOLChanged` (`:444`), with each
 /// class's fields as labeled payloads.
+#derive(Debug)
 #warnings("-unused_constructor")
 pub enum ModelRawChange {
   ModelRawFlush
@@ -67,7 +69,7 @@ pub enum ModelRawChange {
     count~ : Int32
   )
   ModelRawEOLChanged
-} derive(Debug)
+}
 
 ///|
 /// Each class's `changeType` member (`textModelEvents.ts:234,309,381,407,445`).
@@ -84,13 +86,14 @@ fn ModelRawChange::change_type(self : ModelRawChange) -> RawContentChangedType {
 ///|
 /// `ModelRawContentChangedEvent` (`textModelEvents.ts:457-500`) minus
 /// `resultingSelection` (file-header deviation).
+#derive(Debug)
 pub struct ModelRawContentChangedEvent {
   changes : Array[ModelRawChange]
   /// The new version id the model has transitioned to.
   version_id : Int32
   is_undoing : Bool
   is_redoing : Bool
-} derive(Debug)
+}
 
 ///|
 /// `containsEvent` (`textModelEvents.ts:483-491`).
@@ -119,6 +122,7 @@ fn ModelRawContentChangedEvent::merge(
 /// The public `IModelContentChangedEvent` (`textModelEvents.ts:42-85`) minus
 /// `detailedReasons`/`detailedReasonsChangeLengths` (file-header deviation).
 /// The I-prefix drops per the repo naming policy.
+#derive(Debug)
 pub struct ModelContentChangedEvent {
   /// Ordered from the end of the document to the beginning.
   changes : Array[ModelContentChange]
@@ -131,14 +135,15 @@ pub struct ModelContentChangedEvent {
   /// All decorations were lost with this edit; the model was reset.
   is_flush : Bool
   is_eol_change : Bool
-} derive(Debug)
+}
 
 ///|
 /// `InternalModelContentChangeEvent` (`textModelEvents.ts:562-594`).
+#derive(Debug)
 pub struct InternalModelContentChangeEvent {
   raw_content_changed_event : ModelRawContentChangedEvent
   content_changed_event : ModelContentChangedEvent
-} derive(Debug)
+}
 
 ///|
 /// `InternalModelContentChangeEvent.merge` (`textModelEvents.ts:568-572`).

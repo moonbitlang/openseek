@@ -3,6 +3,7 @@
 // responses escape their nested text as well as attributes (see question_response).
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Context {
   Message(source_session~ : String, message_id~ : String, text~ : String)
   DeliveryResult(
@@ -17,7 +18,7 @@ pub(all) enum Context {
     questions~ : Array[@protocol.UserQuestion],
     answers~ : Map[String, String]?
   )
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Context with Eq::{equal, not_equal}

@@ -16,12 +16,13 @@ import {
 ---
 
 ///|
+#derive(Eq)
 enum Scenario {
   Run
   Serve
   Controls
   Read
-} derive(Eq)
+}
 
 ///|
 fn field(value : Json, name : String) -> Json raise {

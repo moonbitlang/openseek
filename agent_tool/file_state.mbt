@@ -10,6 +10,7 @@
 /// so `Created` alone proves only that the agent once created *a* file at this
 /// path. Use `created_and_unchanged`, which pairs the provenance with a content
 /// check, rather than `get(...) is Some(Created)`.
+#derive(Eq, Debug)
 pub enum FileState {
   /// The agent created this file this session — a `write` to a path that did
   /// not exist. Editing it afterward keeps this state; it is still the agent's
@@ -19,7 +20,7 @@ pub enum FileState {
   /// this session — an `edit`/`multi_edit`, or a `write` overwriting a
   /// pre-existing non-source file.
   Modified
-} derive(Eq, Debug)
+}
 
 ///|
 /// The internal per-path record: provenance plus the file's identity — a

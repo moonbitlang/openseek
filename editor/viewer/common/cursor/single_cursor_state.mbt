@@ -2,11 +2,12 @@
 /// How a selection was anchored, mirroring Monaco's `SelectionStartKind`. A
 /// plain click anchors `Simple`; double/triple-click anchors `Word`/`Line`, and
 /// continuation gestures preserve and extend the corresponding anchor range.
+#derive(Eq, Debug)
 pub(all) enum SelectionStartKind {
   Simple
   Word
   Line
-} derive(Eq, Debug)
+}
 
 ///|
 /// The cursor state on either the model or the view model, a faithful port of
@@ -20,6 +21,7 @@ pub(all) enum SelectionStartKind {
 /// while vertical movement crosses lines of different widths. The anchor-side
 /// value is preserved while extending a selection; collapsing a selection
 /// replaces both values with the active movement residue.
+#derive(Eq, Debug)
 pub struct SingleCursorState {
   selection_start_start : @base_common.Position
   selection_start_end : @base_common.Position
@@ -27,7 +29,7 @@ pub struct SingleCursorState {
   selection_start_leftover_visible_columns : Int32
   position : @base_common.Position
   leftover_visible_columns : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds a cursor state from an explicit anchor range and active position.

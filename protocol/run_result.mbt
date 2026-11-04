@@ -9,6 +9,7 @@ pub const RunResultVersion : Int32 = 1
 /// The statuses mirror how a turn can end in the session log, plus runs that
 /// failed before their turn started (a missing API key, an unreachable
 /// workspace), which are `Failed` too.
+#derive(Eq, Debug)
 pub(all) enum RunStatus {
   /// The run finished. `output` is what it produced: `{"answer": String}`,
   /// the model's final message, for a general run; the preset's typed report
@@ -28,12 +29,13 @@ pub(all) enum RunStatus {
   Interrupted(reason~ : String)
   /// An error ended the run.
   Failed(reason~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// What `openseek run --result-file PATH` writes to `PATH`: the one
 /// authoritative account of how the run ended. See `docs/run-result.md` for
 /// the file's lifecycle and the exact JSON.
+#derive(Eq, Debug)
 pub(all) struct RunResult {
   /// The request's `request_id`, echoed; `None` when it carried none.
   request_id : String?
@@ -48,16 +50,17 @@ pub(all) struct RunResult {
   /// How many model responses this run's turn recorded; `None` when the run
   /// never reached its turn.
   steps : Int32?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Why a JSON value is not a result this module can read.
+#derive(Eq, Debug)
 pub(all) suberror RunResultError {
   /// A result from a newer (or unknown) format version.
   UnsupportedVersion(Int32)
   /// A required field is missing or mistyped; names the field.
   Malformed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl ToJson for RunResult with fn to_json(self) {

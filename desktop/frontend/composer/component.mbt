@@ -3,16 +3,18 @@
 // canonical external facts through `Input` and receives deliberate `Action`s.
 
 ///|
+#derive(Eq)
 priv enum PendingSubmission {
   PromptSubmission(sequence_before~ : Int32, Draft, attachments~ : Array[Int32])
   GoalSubmission(sequence_before~ : Int32, String)
-} derive(Eq)
+}
 
 ///|
 /// File completion follows the component-local draft. A settled Host result
 /// stays valid only while owner, root, query, and index epoch all still
 /// match. There is no pending variant: while a remote lookup is wanted, the
 /// declared `Request::searching` subscription IS the in-flight state.
+#derive(Eq)
 priv enum FileCompletion {
   Local(files~ : Array[@files.Match], loading~ : Bool, epoch~ : Int32)
   RemoteSettled(
@@ -22,7 +24,7 @@ priv enum FileCompletion {
     files~ : Array[@files.Match],
     epoch~ : Int32
   )
-} derive(Eq)
+}
 
 ///|
 fn FileCompletion::files(self : FileCompletion) -> Array[@files.Match] {
@@ -68,6 +70,7 @@ fn FileCompletion::matches(
 ///|
 /// One conversation's local editor state. Entries remain cached for the page
 /// lifetime, so navigation never mirrors keystrokes into the root Model.
+#derive(Eq)
 priv struct Entry {
   owner : @interop.ConversationIdentity
   action_generation : Int32
@@ -99,7 +102,7 @@ priv struct Entry {
   // How far back in `Input::history` the draft was recalled from (1 is the
   // latest prompt), or `None` while the draft is the user's own.
   history_back : Int32?
-} derive(Eq)
+}
 
 ///|
 fn Entry::Entry(input : Input) -> Entry {
@@ -384,6 +387,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
 }
 
 ///|
+#derive(Eq)
 priv struct Model {
   entries : Array[Entry]
   applied_changes : Int32
@@ -393,7 +397,7 @@ priv struct Model {
   // subtree that displays it, or every other component's input is reprojected
   // once a second to redraw a single line.
   clock_ms : Double
-} derive(Eq)
+}
 
 ///|
 fn Model::Model(input : Input) -> Model {

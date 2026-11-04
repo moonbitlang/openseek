@@ -4,6 +4,7 @@
 /// has not been resolved yet; a resolve result is cached on the node and
 /// survives collapse/expand cycles. Nodes and their child vectors are immutable:
 /// every change rebuilds the path from the root, preserving prior snapshots.
+#derive(Eq)
 priv struct TreeNode {
   uri : @base_common.Uri
   name : String
@@ -11,14 +12,15 @@ priv struct TreeNode {
   children : @vec.Vector[TreeNode]?
   expanded : Bool
   resolve_failed : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct FileTreeModel {
   root : TreeNode?
   selected : @base_common.Uri?
   pending_reveal : @base_common.Uri?
-} derive(Eq)
+}
 
 ///|
 priv struct TreeRow {

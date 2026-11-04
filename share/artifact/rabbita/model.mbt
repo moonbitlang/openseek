@@ -1,8 +1,9 @@
 ///|
+#derive(Eq)
 priv struct Model {
   serial_percent : Int32
   workers : Int32
-} derive(Eq)
+}
 
 ///|
 priv enum Msg {

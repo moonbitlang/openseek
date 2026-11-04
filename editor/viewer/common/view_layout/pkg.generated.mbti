@@ -25,10 +25,11 @@ pub fn view_line_span_of_model_line(Int32, Int32, (Int32) -> Int32) -> (Int32, I
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct CharacterMapping {
   length : Int32
   entries : Array[CharacterMappingEntry]
-} derive(Eq, @debug.Debug)
+}
 pub fn CharacterMapping::CharacterMapping(Int32) -> Self
 pub fn CharacterMapping::column_horizontal_offset(Self, Int32, space_width~ : Double) -> Double
 pub fn CharacterMapping::equal(Self, Self) -> Bool
@@ -40,11 +41,12 @@ pub fn CharacterMapping::not_equal(Self, Self) -> Bool
 pub fn CharacterMapping::set_column_info(Self, Int32, Int32, Int32, Int32) -> Unit
 pub fn CharacterMapping::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct CharacterMappingEntry {
   part_index : Int32
   char_index : Int32
   visible_column : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn CharacterMappingEntry::equal(Self, Self) -> Bool
 pub fn CharacterMappingEntry::not_equal(Self, Self) -> Bool
 pub fn CharacterMappingEntry::to_repr(Self) -> @debug.Repr
@@ -64,34 +66,38 @@ pub fn ConstantTimePrefixSumComputer::insert_values(Self, Int32, Array[Int32]) -
 pub fn ConstantTimePrefixSumComputer::remove_values(Self, Int32, Int32) -> Unit
 pub fn ConstantTimePrefixSumComputer::set_value(Self, Int32, Int32) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ContentSizeChange {
   old_content_width : Double
   old_content_height : Double
   content_width : Double
   content_height : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn ContentSizeChange::equal(Self, Self) -> Bool
 pub fn ContentSizeChange::not_equal(Self, Self) -> Bool
 pub fn ContentSizeChange::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DecorationSegment {
   start_offset : Int32
   end_offset : Int32
   class_name : String
   metadata : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn DecorationSegment::equal(Self, Self) -> Bool
 pub fn DecorationSegment::not_equal(Self, Self) -> Bool
 pub fn DecorationSegment::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DomPosition {
   part_index : Int32
   char_index : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn DomPosition::equal(Self, Self) -> Bool
 pub fn DomPosition::not_equal(Self, Self) -> Bool
 pub fn DomPosition::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct EditorScrollDimensions {
   width : Double
   content_width : Double
@@ -99,7 +105,7 @@ pub struct EditorScrollDimensions {
   height : Double
   content_height : Double
   scroll_height : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn EditorScrollDimensions::EditorScrollDimensions(Double, Double, Double, Double) -> Self
 pub fn EditorScrollDimensions::equal(Self, Self) -> Bool
 pub fn EditorScrollDimensions::not_equal(Self, Self) -> Bool
@@ -123,6 +129,7 @@ pub fn EditorScrollable::set_position_smooth(Self, ScrollPositionUpdate) -> Unit
 pub fn EditorScrollable::set_smooth_scroll_duration(Self, Double) -> Unit
 pub fn EditorScrollable::validate_scroll_position(Self, ScrollPositionUpdate) -> ScrollPosition
 
+#derive(Eq, @debug.Debug)
 pub struct EditorWhitespace {
   id : String
   mut after_line_number : Int32
@@ -130,48 +137,52 @@ pub struct EditorWhitespace {
   mut height : Int32
   mut min_width : Int32
   mut prefix_sum : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn EditorWhitespace::EditorWhitespace(String, Int32, Int32, Int32, Int32) -> Self
 pub fn EditorWhitespace::equal(Self, Self) -> Bool
 pub fn EditorWhitespace::not_equal(Self, Self) -> Bool
 pub fn EditorWhitespace::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ForeignElementType {
   None
   Before
   After
   BeforeAndAfter
-} derive(Eq, @debug.Debug)
+}
 pub fn ForeignElementType::equal(Self, Self) -> Bool
 pub fn ForeignElementType::not_equal(Self, Self) -> Bool
 pub fn ForeignElementType::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct InlineDecoration {
   range : @common.OffsetRange
   class_name : String
   decoration_type : InlineDecorationType
-} derive(Eq, @debug.Debug)
+}
 pub fn InlineDecoration::InlineDecoration(@common.OffsetRange, String, decoration_type? : InlineDecorationType) -> Self
 pub fn InlineDecoration::equal(Self, Self) -> Bool
 pub fn InlineDecoration::not_equal(Self, Self) -> Bool
 pub fn InlineDecoration::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum InlineDecorationType {
   Regular
   Before
   After
   RegularAffectingLetterSpacing
-} derive(Eq, @debug.Debug)
+}
 pub fn InlineDecorationType::equal(Self, Self) -> Bool
 pub fn InlineDecorationType::not_equal(Self, Self) -> Bool
 pub fn InlineDecorationType::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct LineDecoration {
   start_column : Int32
   end_column : Int32
   class_name : String
   decoration_type : InlineDecorationType
-} derive(Eq, @debug.Debug)
+}
 pub fn LineDecoration::LineDecoration(Int32, Int32, String, decoration_type? : InlineDecorationType) -> Self
 pub fn LineDecoration::compare(Self, Self) -> Int32
 pub fn LineDecoration::equal(Self, Self) -> Bool
@@ -182,12 +193,13 @@ pub struct LineDecorationsNormalizer {
 }
 pub fn LineDecorationsNormalizer::normalize(String, Array[LineDecoration]) -> Array[DecorationSegment]
 
+#derive(Eq, @debug.Debug)
 pub struct LinePart {
   end_index : Int32
   class_name : String
   metadata : Int32
   contains_rtl : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn LinePart::LinePart(Int32, String, metadata? : Int32, contains_rtl? : Bool) -> Self
 pub fn LinePart::equal(Self, Self) -> Bool
 pub fn LinePart::is_pseudo_after(Self) -> Bool
@@ -196,10 +208,11 @@ pub fn LinePart::is_whitespace(Self) -> Bool
 pub fn LinePart::not_equal(Self, Self) -> Bool
 pub fn LinePart::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct LineWindow {
   start : Int32
   end : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn LineWindow::equal(Self, Self) -> Bool
 pub fn LineWindow::not_equal(Self, Self) -> Bool
 pub fn LineWindow::to_repr(Self) -> @debug.Repr
@@ -238,6 +251,7 @@ pub fn LinesLayout::on_lines_inserted(Self, Int32, Int32) -> Unit
 pub fn LinesLayout::set_default_line_height(Self, Int32) -> Unit
 pub fn LinesLayout::set_padding(Self, Int32, Int32) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub struct PartialViewLinesViewportData {
   big_numbers_delta : Int32
   start_line_number : Int32
@@ -247,7 +261,7 @@ pub struct PartialViewLinesViewportData {
   completely_visible_start_line_number : Int32
   completely_visible_end_line_number : Int32
   line_height : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn PartialViewLinesViewportData::equal(Self, Self) -> Bool
 pub fn PartialViewLinesViewportData::not_equal(Self, Self) -> Bool
 pub fn PartialViewLinesViewportData::to_repr(Self) -> @debug.Repr
@@ -266,14 +280,16 @@ pub fn PrefixSumComputer::insert_values(Self, Int32, Array[Int32]) -> Bool
 pub fn PrefixSumComputer::remove_values(Self, Int32, Int32) -> Bool
 pub fn PrefixSumComputer::set_value(Self, Int32, Int32) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct PrefixSumIndexOfResult {
   index : Int32
   remainder : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn PrefixSumIndexOfResult::equal(Self, Self) -> Bool
 pub fn PrefixSumIndexOfResult::not_equal(Self, Self) -> Bool
 pub fn PrefixSumIndexOfResult::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct RenderLineInput {
   use_monospace_optimizations : Bool
   can_use_halfwidth_rightwards_arrow : Bool
@@ -297,38 +313,42 @@ pub struct RenderLineInput {
   text_direction : TextDirection
   vertical_scrollbar_size : Double
   render_new_line_when_empty : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn RenderLineInput::equal(Self, Self) -> Bool
 pub fn RenderLineInput::from_view_line(ViewLineRenderingData, line_decorations? : Array[LineDecoration], use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, faux_indent_length? : Int32, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, stop_rendering_line_after? : Int32, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, selections_on_line? : Array[@common.OffsetRange], vertical_scrollbar_size? : Double, render_new_line_when_empty? : Bool) -> Self
 pub fn RenderLineInput::not_equal(Self, Self) -> Bool
 pub fn RenderLineInput::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct RenderLineOutput {
   character_mapping : CharacterMapping
   contains_foreign_elements : ForeignElementType
-} derive(Eq, @debug.Debug)
+}
 pub fn RenderLineOutput::equal(Self, Self) -> Bool
 pub fn RenderLineOutput::not_equal(Self, Self) -> Bool
 pub fn RenderLineOutput::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct RenderLineOutput2 {
   html : String
   character_mapping : CharacterMapping
   contains_foreign_elements : ForeignElementType
-} derive(Eq, @debug.Debug)
+}
 pub fn RenderLineOutput2::equal(Self, Self) -> Bool
 pub fn RenderLineOutput2::not_equal(Self, Self) -> Bool
 pub fn RenderLineOutput2::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct SavedScrollState {
   scroll_top : Double
   scroll_top_without_view_zones : Double
   scroll_left : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn SavedScrollState::equal(Self, Self) -> Bool
 pub fn SavedScrollState::not_equal(Self, Self) -> Bool
 pub fn SavedScrollState::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScrollChange {
   position : ScrollPosition
   delta_left : Double
@@ -355,47 +375,52 @@ pub(all) struct ScrollChange {
   height_changed : Bool
   scroll_height_changed : Bool
   scroll_top_changed : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn ScrollChange::equal(Self, Self) -> Bool
 pub fn ScrollChange::not_equal(Self, Self) -> Bool
 pub fn ScrollChange::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScrollDimensions {
   width : Double
   scroll_width : Double
   height : Double
   scroll_height : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn ScrollDimensions::equal(Self, Self) -> Bool
 pub fn ScrollDimensions::not_equal(Self, Self) -> Bool
 pub fn ScrollDimensions::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScrollDimensionsUpdate {
   width : Double?
   scroll_width : Double?
   height : Double?
   scroll_height : Double?
-} derive(Eq, @debug.Debug)
+}
 pub fn ScrollDimensionsUpdate::equal(Self, Self) -> Bool
 pub fn ScrollDimensionsUpdate::not_equal(Self, Self) -> Bool
 pub fn ScrollDimensionsUpdate::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScrollPosition {
   scroll_left : Double
   scroll_top : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn ScrollPosition::equal(Self, Self) -> Bool
 pub fn ScrollPosition::not_equal(Self, Self) -> Bool
 pub fn ScrollPosition::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScrollPositionUpdate {
   scroll_left : Double?
   scroll_top : Double?
-} derive(Eq, @debug.Debug)
+}
 pub fn ScrollPositionUpdate::equal(Self, Self) -> Bool
 pub fn ScrollPositionUpdate::not_equal(Self, Self) -> Bool
 pub fn ScrollPositionUpdate::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ScrollState {
   force_integer_values : Bool
   raw_scroll_left : Double
@@ -406,7 +431,7 @@ pub struct ScrollState {
   height : Double
   scroll_height : Double
   scroll_top : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn ScrollState::ScrollState(force_integer_values~ : Bool, Double, Double, Double, Double, Double, Double) -> Self
 pub fn ScrollState::create_scroll_event(Self, Self, Bool) -> ScrollChange
 pub fn ScrollState::equal(Self, Self) -> Bool
@@ -450,12 +475,13 @@ pub fn ScrollbarState::set_visible_size(Self, Double) -> Bool
 pub fn ScrollbarState::slider_position(Self) -> Double
 pub fn ScrollbarState::slider_size(Self) -> Double
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SmoothScrollPosition {
   scroll_left : Double
   scroll_top : Double
   width : Double
   height : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn SmoothScrollPosition::equal(Self, Self) -> Bool
 pub fn SmoothScrollPosition::not_equal(Self, Self) -> Bool
 pub fn SmoothScrollPosition::to_repr(Self) -> @debug.Repr
@@ -476,24 +502,27 @@ pub fn SmoothScrollingOperation::dispose(Self) -> Unit
 pub fn SmoothScrollingOperation::start(SmoothScrollPosition, SmoothScrollPosition, Double, Double) -> Self
 pub fn SmoothScrollingOperation::tick_at(Self, Double) -> SmoothScrollingUpdate
 
+#derive(Eq, @debug.Debug)
 pub struct SmoothScrollingUpdate {
   scroll_left : Double
   scroll_top : Double
   is_done : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn SmoothScrollingUpdate::SmoothScrollingUpdate(Double, Double, Bool) -> Self
 pub fn SmoothScrollingUpdate::equal(Self, Self) -> Bool
 pub fn SmoothScrollingUpdate::not_equal(Self, Self) -> Bool
 pub fn SmoothScrollingUpdate::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum TextDirection {
   LTR
   RTL
-} derive(Eq, @debug.Debug)
+}
 pub fn TextDirection::equal(Self, Self) -> Bool
 pub fn TextDirection::not_equal(Self, Self) -> Bool
 pub fn TextDirection::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum VerticalRevealType {
   Simple
   Center
@@ -502,7 +531,7 @@ pub(all) enum VerticalRevealType {
   NearTopIfOutsideViewport
   Top
   Bottom
-} derive(Eq, @debug.Debug)
+}
 pub fn VerticalRevealType::equal(Self, Self) -> Bool
 pub fn VerticalRevealType::not_equal(Self, Self) -> Bool
 pub fn VerticalRevealType::to_repr(Self) -> @debug.Repr
@@ -567,6 +596,7 @@ pub fn ViewLayout::vertical_offset_for_line(Self, Int32) -> Double
 pub fn ViewLayout::visible_window(Self) -> LineWindow
 pub fn ViewLayout::window_origin(Self, LineWindow) -> Double
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ViewLineRenderingData {
   min_column : Int32
   max_column : Int32
@@ -580,31 +610,34 @@ pub(all) struct ViewLineRenderingData {
   start_visible_column : Int32
   text_direction : TextDirection
   has_variable_fonts : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn ViewLineRenderingData::equal(Self, Self) -> Bool
 pub fn ViewLineRenderingData::not_equal(Self, Self) -> Bool
 pub fn ViewLineRenderingData::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ViewWhitespaceViewportData {
   id : String
   after_line_number : Int32
   vertical_offset : Double
   height : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ViewWhitespaceViewportData::equal(Self, Self) -> Bool
 pub fn ViewWhitespaceViewportData::not_equal(Self, Self) -> Bool
 pub fn ViewWhitespaceViewportData::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct Viewport {
   top : Double
   left : Double
   width : Double
   height : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn Viewport::equal(Self, Self) -> Bool
 pub fn Viewport::not_equal(Self, Self) -> Bool
 pub fn Viewport::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ViewportData {
   start_line_number : Int32
   end_line_number : Int32
@@ -615,7 +648,7 @@ pub(all) struct ViewportData {
   lines : Array[ViewLineRenderingData]
   line_decorations : Array[Array[LineDecoration]]
   view_zones : Array[ViewWhitespaceViewportData]
-} derive(Eq, @debug.Debug)
+}
 pub fn ViewportData::decorations_for_line(Self, Int32) -> Array[LineDecoration]
 pub fn ViewportData::decorations_in_viewport(Self) -> Array[LineDecoration]
 pub fn ViewportData::equal(Self, Self) -> Bool

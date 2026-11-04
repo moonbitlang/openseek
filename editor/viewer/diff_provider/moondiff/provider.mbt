@@ -2,19 +2,21 @@
 /// MoonDiff mode selected by the desktop review host. Line is intentionally
 /// absent from the fragment provider below: Line continues to use the normal
 /// full-file DiffEditor provider.
+#derive(Eq, Debug)
 pub(all) enum MoonDiffMode {
   Line
   Token
   Tree
-} derive(Eq, Debug)
+}
 
 ///|
 /// Immutable provider for one already-aligned MoonDiff fragment. A fragment
 /// is linear by construction; top-level ordering stays outside this provider
 /// and is represented by separate DiffEditor instances in the desktop host.
+#derive(Eq, Debug)
 pub struct MoonFragmentDiffProvider {
   document : @diff.DocumentDiff
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn MoonFragmentDiffProvider::MoonFragmentDiffProvider(

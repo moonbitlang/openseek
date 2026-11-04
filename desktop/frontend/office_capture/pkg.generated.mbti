@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/office_capture"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -14,30 +15,33 @@ pub fn start(String, Format, label~ : String, hint~ : String, failure~ : String,
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) struct Capture {
   format : Format
   url : String
-  source : Json
+  source : @json.Json
   regions : Array[Region]
   rotation : Int32?
   text : String?
   sheet : String?
   range : String?
-} derive(Eq)
+}
 pub fn Capture::equal(Self, Self) -> Bool
 pub fn Capture::not_equal(Self, Self) -> Bool
 pub fn Capture::selection_rects(Self, @dom.Element) -> Array[@dom.DOMRect]
 
+#derive(Eq)
 pub(all) enum Format {
   Word
   PowerPoint
   Excel
   Pdf
-} derive(Eq)
+}
 pub fn Format::equal(Self, Self) -> Bool
 pub fn Format::name(Self) -> String
 pub fn Format::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct Region {
   index : Int32
   page : Int32?
@@ -45,7 +49,7 @@ pub(all) struct Region {
   y : Double
   width : Double
   height : Double
-} derive(Eq)
+}
 pub fn Region::equal(Self, Self) -> Bool
 pub fn Region::not_equal(Self, Self) -> Bool
 

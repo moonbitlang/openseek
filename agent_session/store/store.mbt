@@ -30,6 +30,7 @@ let title_file_name : String = "session-title"
 /// lines) and `session.lock`. The store is not a handle to one current
 /// session; APIs that operate on a session either take a `SessionId` or a
 /// `Session` carrying its id.
+#derive(Debug)
 struct SessionStore {
   root : String
   // The last session value this store instance loaded from or persisted to
@@ -38,13 +39,14 @@ struct SessionStore {
   // file on the common append path. Never required for correctness — a
   // missing or mismatching mark falls back to the full comparison.
   marks : Map[String, DurableMark]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 priv struct DurableMark {
   session : @agent_session.Session
   fingerprint : FileFingerprint
-} derive(Debug)
+}
 
 ///|
 /// Metadata that changes whenever the session file is visibly touched. Size
@@ -53,13 +55,14 @@ priv struct DurableMark {
 /// data write and is freshly stamped by the kernel on the inode a rename
 /// installs, so even a rewrite forged to preserve size and mtime does not
 /// reproduce it.
+#derive(Debug, Eq)
 priv struct FileFingerprint {
   size : Int64
   mtime_seconds : Int64
   mtime_nanoseconds : Int32
   ctime_seconds : Int64
   ctime_nanoseconds : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Construct a store rooted at `root`.
@@ -599,12 +602,13 @@ pub async fn SessionStore::fork(
 /// built without replaying the full event log, so it is suitable for pickers
 /// and `--session-list`. A row can also represent a damaged directory: in that
 /// case timestamp may be `None` and first prompt may be empty.
+#derive(Debug)
 struct SessionListing {
   id : @agent_session.SessionId
   last_active_unix_seconds : Int64?
   first_prompt : String
   title : String?
-} derive(Debug)
+}
 
 ///|
 /// Return the listed session id.

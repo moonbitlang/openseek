@@ -21,10 +21,11 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum MarkdownResourceKind {
   OrdinaryMarkdown
   MoonBitMarkdown
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownResourceKind::equal(Self, Self) -> Bool
 pub fn MarkdownResourceKind::not_equal(Self, Self) -> Bool
 pub fn MarkdownResourceKind::to_repr(Self) -> @debug.Repr
@@ -66,14 +67,16 @@ pub fn MarkdownViewerWidget::set_model(Self, MarkdownViewerWidgetModel?) -> Mark
 pub fn MarkdownViewerWidget::toggle_section_at(Self, Int32) -> Bool
 pub fn MarkdownViewerWidget::update_options(Self, MarkdownViewerWidgetOptions) -> Unit
 
+#derive(@debug.Debug)
 pub(all) struct MarkdownViewerWidgetModel {
   model : @model.TextModel
   resource_kind : MarkdownResourceKind
-} derive(@debug.Debug)
+}
 pub fn MarkdownViewerWidgetModel::MarkdownViewerWidgetModel(@model.TextModel, MarkdownResourceKind) -> Self
 pub fn MarkdownViewerWidgetModel::to_repr(Self) -> @debug.Repr
 
-type MarkdownViewerWidgetOptions derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type MarkdownViewerWidgetOptions
 pub fn MarkdownViewerWidgetOptions::MarkdownViewerWidgetOptions(theme? : String, placeholder? : String, show_unused? : Bool) -> Self
 pub fn MarkdownViewerWidgetOptions::default() -> Self
 pub fn MarkdownViewerWidgetOptions::equal(Self, Self) -> Bool
@@ -86,7 +89,8 @@ pub fn MarkdownViewerWidgetOptions::with_placeholder(Self, String) -> Self
 pub fn MarkdownViewerWidgetOptions::with_show_unused(Self, Bool) -> Self
 pub fn MarkdownViewerWidgetOptions::with_theme(Self, String) -> Self
 
-type MarkdownViewerWidgetViewState derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type MarkdownViewerWidgetViewState
 pub fn MarkdownViewerWidgetViewState::equal(Self, Self) -> Bool
 pub fn MarkdownViewerWidgetViewState::not_equal(Self, Self) -> Bool
 pub fn MarkdownViewerWidgetViewState::to_repr(Self) -> @debug.Repr

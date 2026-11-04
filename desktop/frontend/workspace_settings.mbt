@@ -15,13 +15,14 @@ const DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds : Int32 = 30
 /// One project's settings mirror, keyed like `ProjectWorktrees` and fenced
 /// by the same per-project generation rule: a reply carrying an older token
 /// is stale for that project alone.
+#derive(Eq)
 priv struct ProjectSettings {
   project : @common.Uri
   worktree_mode : Bool
   checkout_submodules : Bool
   submodule_checkout_timeout_seconds : Int32
   generation : Int32
-} derive(Eq)
+}
 
 ///|
 fn fetch_workspace_settings(
@@ -228,11 +229,12 @@ fn Model::default_worktree_mode(
 }
 
 ///|
+#derive(Eq)
 priv struct WorkspaceSettingsDialog {
   target : @workspace_settings.Target
   pending_save : Int32?
   error : String?
-} derive(Eq)
+}
 
 ///|
 fn Model::begin_workspace_settings_save(

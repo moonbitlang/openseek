@@ -12,10 +12,11 @@
 
 ///|
 /// A range of lines (1-based), `[start_line_number, end_line_number_exclusive)`.
+#derive(Eq, Debug)
 pub(all) struct LineRange {
   start_line_number : Int32
   end_line_number_exclusive : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn LineRange::LineRange(

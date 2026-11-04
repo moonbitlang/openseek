@@ -6,6 +6,7 @@ let manifest_file_name : String = "run_manifest.json"
 /// executes from the trial workspace. Optional `stdin` is supplied through a
 /// temporary file, optional `write_file`/`write_content` creates an input file
 /// before the command runs, and expectations are checked after process exit.
+#derive(ToJson)
 struct ValidationProbeSpec {
   name : String
   command : Array[String]
@@ -17,7 +18,7 @@ struct ValidationProbeSpec {
   stdout_contains : String
   stderr_contains : String
   stdout_json : Bool
-} derive(ToJson)
+}
 
 ///|
 pub extend ValidationProbeSpec with ToJson::{to_json}
@@ -54,6 +55,7 @@ fn ValidationProbeSpec::ValidationProbeSpec(
 /// Durable artifact record for one prompt-task trial. The runner writes these
 /// fields once; analyzers can replay report generation from them without
 /// rerunning the agent.
+#derive(ToJson)
 priv struct TrialArtifact {
   index : Int32
   workspace : String
@@ -61,7 +63,7 @@ priv struct TrialArtifact {
   session_id : String
   events_path : String
   exit_code : Int32
-} derive(ToJson)
+}
 
 ///|
 /// Build a trial artifact entry for a completed prompt-task experiment trial.
@@ -78,6 +80,7 @@ fn TrialArtifact::TrialArtifact(
 
 ///|
 /// Manifest for one prompt-task experiment run.
+#derive(ToJson)
 pub struct RunManifest {
   priv model : String
   priv problem_id : String
@@ -90,7 +93,7 @@ pub struct RunManifest {
   out_dir : String
   priv validation_probes : Array[ValidationProbeSpec]
   priv trials : Array[TrialArtifact]
-} derive(ToJson)
+}
 
 ///|
 pub extend RunManifest with ToJson::{to_json}

@@ -3,6 +3,7 @@ package "openseek_desktop/frontend/cloud_client"
 
 import {
   "moonbitlang/async/http",
+  "moonbitlang/core/json",
   "openseek_desktop/protocol",
 }
 
@@ -27,7 +28,7 @@ pub async fn read_file(String, String, String, allow_large? : Bool) -> @protocol
 
 pub async fn read_file_index(String, String) -> Array[String]
 
-pub async fn request(String, String, @http.RequestMethod, token? : String, body? : Json) -> Json
+pub async fn request(String, String, @http.RequestMethod, token? : String, body? : @json.Json) -> @json.Json
 
 pub async fn watch_files(String, String, (@http.Client) -> Unit, () -> Bool, () -> Unit) -> Unit
 
@@ -37,10 +38,11 @@ pub(all) suberror RequestError {
 }
 
 // Types and methods
+#derive(Eq)
 pub(all) struct Access {
   token : String
   epoch : Int32
-} derive(Eq)
+}
 pub fn Access::equal(Self, Self) -> Bool
 pub fn Access::not_equal(Self, Self) -> Bool
 

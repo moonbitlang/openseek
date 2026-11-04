@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/backend/mcp"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
 pub const TokenEnv : String = "OPENSEEK_DESKTOP_TOOLS_TOKEN"
 
@@ -37,13 +41,13 @@ pub fn Server::url(Self) -> String
 pub(all) struct Tool {
   name : String
   description : String
-  input_schema : Json
+  input_schema : @json.Json
   call : async (ToolCall) -> Array[Content]
 }
 
 pub(all) struct ToolCall {
   session : String
-  arguments : Json
+  arguments : @json.Json
 }
 
 // Type aliases

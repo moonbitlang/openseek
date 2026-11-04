@@ -65,7 +65,7 @@ async test "pending covers terminal cleanup and notice publication" {
         release.get()
       })
       entered.get()
-      defer release.put(())
+      defer @async.protect_from_cancel(() => release.put(()))
       assert_true(jobs.snapshot(id) is Some(job) && job.status is Running)
       assert_true(jobs.records() is [record] && record.state is Stopping)
       assert_eq(jobs.pending().length(), 1)

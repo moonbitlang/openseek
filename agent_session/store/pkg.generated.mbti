@@ -3,6 +3,7 @@ package "moonbitlang/openseek/agent_session/store"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek_protocol",
 }
@@ -17,13 +18,15 @@ pub(all) enum SessionClaim {
   Taken
 }
 
-type SessionListing derive(@debug.Debug)
+#derive(@debug.Debug)
+type SessionListing
 pub fn SessionListing::first_prompt(Self) -> String
 pub fn SessionListing::id(Self) -> @agent_session.SessionId
 pub fn SessionListing::last_active_unix_seconds(Self) -> Int64?
 pub fn SessionListing::title(Self) -> String?
 
-type SessionStore derive(@debug.Debug)
+#derive(@debug.Debug)
+type SessionStore
 pub fn SessionStore::SessionStore(String) -> Self
 pub async fn SessionStore::accept_claim(Self, @agent_session.SessionId, String) -> Unit
 pub async fn SessionStore::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
@@ -43,7 +46,7 @@ pub async fn SessionStore::prediction(Self, @agent_session.SessionId) -> @opense
 pub fn SessionStore::report_file(Self, @agent_session.SessionId) -> String raise
 pub fn SessionStore::root(Self) -> String
 pub async fn SessionStore::save_prediction(Self, @agent_session.Session, @openseek_protocol.PredictionRecord) -> Unit
-pub async fn SessionStore::save_report(Self, @agent_session.SessionId, Json) -> Unit
+pub async fn SessionStore::save_report(Self, @agent_session.SessionId, @json.Json) -> Unit
 pub async fn SessionStore::scratch_dir(Self, @agent_session.SessionId) -> String
 pub fn SessionStore::session_file(Self, @agent_session.SessionId) -> String raise
 pub async fn SessionStore::set_title(Self, @agent_session.SessionId, String) -> Unit

@@ -20,9 +20,10 @@ pub const MaxStepsExhaustedMessage : String = "max steps exhausted"
 /// This type deliberately stores the raw string without normalizing or
 /// validating it; store APIs validate filesystem safety before constructing
 /// paths. Use `generated` for ids created by OpenSeek itself.
+#derive(Eq, Debug)
 struct SessionId {
   value : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Wrap a raw id string exactly as supplied.
@@ -102,17 +103,19 @@ pub fn SessionId::generated(
 /// and one-shot prompts, and older records without a tag. Encoding
 /// omits it when absent. Single text content is written as a string; mixed
 /// content is written as an ordered array. Both forms are accepted on read.
+#derive(Eq, Debug, ToJson, FromJson)
 struct UserMessage {
   content : Content
   submission_id : String?
-} derive(Eq, Debug, ToJson, FromJson)
+}
 
 ///|
+#derive(Eq, Debug, ToJson, FromJson)
 priv struct SessionToolCall {
   id : String
   name : String
   arguments : String
-} derive(Eq, Debug, ToJson, FromJson)
+}
 
 ///|
 fn SessionToolCall::from_deepseek(call : @deepseek.ToolCall) -> SessionToolCall {
@@ -148,6 +151,7 @@ pub fn UserMessage::content(self : UserMessage) -> Content {
 /// This stores visible assistant text, requested tool calls, and optional
 /// reasoning content. Tool calls are durable because later `ToolResult` events
 /// must match their call ids during `Session::chat_messages` projection.
+#derive(Eq, Debug, ToJson, FromJson)
 struct AssistantMessage {
   content : String
   tool_calls : Array[SessionToolCall]
@@ -158,20 +162,21 @@ struct AssistantMessage {
   // The provider response's token usage, on the first durable record of that
   // response only. Absent on replays and on logs written before it existed.
   usage : TokenUsage?
-} derive(Eq, Debug, ToJson, FromJson)
+}
 
 ///|
 /// Token counts for one provider response, as its durable `AssistantMessage`
 /// records them. The fields and JSON match the `usage` event, so a reader of
 /// the session log can account for a run without its event stream: summed
 /// over a turn's messages, they equal the turn's `usage` events.
+#derive(Eq, Debug, ToJson, FromJson)
 pub(all) struct TokenUsage {
   prompt_tokens : Int32
   completion_tokens : Int32
   total_tokens : Int32
   prompt_cache_hit_tokens : Int32
   prompt_cache_miss_tokens : Int32
-} derive(Eq, Debug, ToJson, FromJson)
+}
 
 ///|
 fn TokenUsage::from_deepseek(usage : @deepseek.Usage) -> TokenUsage {
@@ -276,6 +281,7 @@ pub fn AssistantMessage::is_replay(self : AssistantMessage) -> Bool {
 /// During model projection, a `ToolResult` is emitted only when its
 /// `tool_call_id` matches a pending assistant tool call. Unmatched results are
 /// ignored to keep replay protocol-valid.
+#derive(Eq, Debug, ToJson, FromJson)
 struct ToolResult {
   tool_call_id : String
   tool_name : String
@@ -284,7 +290,7 @@ struct ToolResult {
   brief : String?
   /// Machine-readable output and nested PTC trace, excluded from model projection.
   data : Json?
-} derive(Eq, Debug, ToJson, FromJson)
+}
 
 ///|
 /// Record the outcome of one tool execution.
@@ -340,9 +346,10 @@ pub fn ToolResult::is_error(self : ToolResult) -> Bool {
 /// Runtime notices are projected as user-role messages. They are intended for
 /// loop-injected context such as plan reminders or other text that did not
 /// originate from the user's prompt.
+#derive(Eq, Debug, ToJson, FromJson)
 struct RuntimeNotice {
   content : String
-} derive(Eq, Debug, ToJson, FromJson)
+}
 
 ///|
 /// First line of the runtime notices the agent loop injects as plan-cadence
@@ -369,11 +376,12 @@ pub fn RuntimeNotice::content(self : RuntimeNotice) -> String {
 /// A summary does not delete the covered raw events. It records that
 /// `from_sequence..to_sequence` can be replaced by `content` when projecting
 /// model context. The durable event log remains append-only.
+#derive(Eq, Debug, ToJson, FromJson)
 struct SessionSummary {
   content : String
   from_sequence : Int32
   to_sequence : Int32
-} derive(Eq, Debug, ToJson, FromJson)
+}
 
 ///|
 /// Return the summary text used in model-facing projection.
@@ -399,6 +407,7 @@ pub fn SessionSummary::to_sequence(self : SessionSummary) -> Int32 {
 /// Only `Finished` means the task ran to completion. In a complete turn, the
 /// last event is exactly one `Terminal`; if a session ends without one,
 /// replay is seeing a turn that was cut off mid-flight.
+#derive(Eq, Debug)
 pub(all) enum TurnTerminal {
   /// The agent completed normally and produced a final assistant answer.
   /// Non-blank text projects as an assistant message for later turns.
@@ -420,7 +429,7 @@ pub(all) enum TurnTerminal {
   /// The turn ended because an unexpected error escaped the agent loop. The
   /// failure message projects as an assistant status message.
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Payload vocabulary for one `SessionEvent`.
@@ -431,6 +440,7 @@ pub(all) enum TurnTerminal {
 /// metadata that can replace older events during projection. `Terminal`
 /// records turn completion status and may project as a final assistant/status
 /// message.
+#derive(Eq, Debug)
 pub(all) enum SessionItem {
   /// User-authored model input, including the initial task and any steering
   /// text. JSON tag: `user`. Projection replays it as a user-role message.
@@ -455,7 +465,7 @@ pub(all) enum SessionItem {
   /// `Finished(text)` can project as a final assistant message; aborted,
   /// interrupted, and failed terminals project assistant status messages.
   Terminal(TurnTerminal)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One append-only event in a session log.
@@ -465,6 +475,7 @@ pub(all) enum SessionItem {
 /// when loading from disk. The timestamp is unix milliseconds; in-memory
 /// appends default to `0`, while `SessionStore::append` stamps with the current
 /// wall clock.
+#derive(Eq, Debug, ToJson, FromJson)
 struct SessionEvent {
   sequence : Int32
   // Wall-clock stamp (unix milliseconds) of when the event was appended; 0
@@ -474,7 +485,7 @@ struct SessionEvent {
   // string); milliseconds are exactly representable until year ~2255.
   ts : Double
   item : SessionItem
-} derive(Eq, Debug, ToJson, FromJson)
+}
 
 ///|
 fn SessionEvent::SessionEvent(
@@ -522,12 +533,13 @@ pub fn SessionEvent::is_agent_step(self : SessionEvent) -> Bool {
 /// `append`/`append_event` preserve it by construction; the `Session::Session`
 /// constructor trusts callers to supply a log that already satisfies it — see
 /// that constructor for the full contract.
+#derive(Eq, Debug)
 struct Session {
   id : SessionId
   system_prompt : String
   events : @vector.Vector[SessionEvent]
   last_sequence : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Build a session from identity, system prompt, and an optional event log.

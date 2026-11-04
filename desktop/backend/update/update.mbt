@@ -18,10 +18,11 @@ const ManifestUrl : String = "https://openseek-api.moonbitlang.cn/desktop/releas
 /// A newer hosted release: the version to announce, and — when the manifest
 /// carries one for this platform — the package the app can install by
 /// itself. Without a package the announcement is informational only.
+#derive(Eq, Debug)
 pub struct UpdateInfo {
   version : String
   artifact : PackageInfo?
-} derive(Eq, Debug)
+}
 
 ///|
 /// A manifest the server actually served (HTTP 200) but that cannot be
@@ -50,10 +51,11 @@ pub suberror Unreachable {
 ///|
 /// A downloadable update package: where to fetch it and the hex sha256 the
 /// download must match.
+#derive(Eq, Debug)
 pub struct PackageInfo {
   url : String
   sha256 : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// The manifest `platforms` key this build installs from. Only the macOS

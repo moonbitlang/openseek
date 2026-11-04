@@ -11,6 +11,7 @@
 /// rows. Each kind carries only the text it can have, so a part that may be
 /// absent (a response's prose, a notice's body) is an option, never an empty
 /// string.
+#derive(Eq)
 pub(all) enum ItemKind {
   // Preserve the ordered text and image parts through to rendering.
   User(content~ : @deepseek.Content)
@@ -53,12 +54,13 @@ pub(all) enum ItemKind {
   // text and dropped from the context. Its own kind so the view renders it
   // as a standalone card between turns.
   Summary(String)
-} derive(Eq)
+}
 
 ///|
 /// One tool call of a provider response, in its original order. `call_id`
 /// pairs the later durable result into this same call; `arguments` is what
 /// the model sent (a Codex file change can carry none).
+#derive(Eq)
 pub(all) struct ToolCall {
   call_id : String
   name : String
@@ -66,7 +68,7 @@ pub(all) struct ToolCall {
   outcome : ToolOutcome
   /// Programmatic calls recorded beneath this model-issued call.
   children : Array[ToolCall]
-} derive(Eq)
+}
 
 ///|
 /// Where a tool call stands. A call is `Pending` until its durable result
@@ -74,14 +76,16 @@ pub(all) struct ToolCall {
 /// while still pending. `Done` carries the recorded result (possibly empty),
 /// or the terminal failure when no result arrived, with an error flag and
 /// optional display brief.
+#derive(Eq)
 pub(all) enum ToolOutcome {
   // Historical observation of a background call, with no terminal outcome yet.
   Snapshot(content~ : String)
   Pending(output~ : String?)
   Done(content~ : @deepseek.Content, is_error~ : Bool, brief~ : String?)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct TranscriptItem {
   kind : ItemKind
   // When the durable event that produced this item was committed (unix
@@ -93,7 +97,7 @@ pub(all) struct TranscriptItem {
   // item. One event projects to at most one item, so the sequence is the
   // item's stable identity.
   sequence : Int32?
-} derive(Eq)
+}
 
 ///|
 /// The item's own text, when it has one: a user prompt, a response's prose,
@@ -117,6 +121,7 @@ pub fn TranscriptItem::text(self : TranscriptItem) -> String? {
 /// its display label, both from the host's grouping. Every durable record
 /// lives in a workspace store, so the resource is not optional; its
 /// authority retains the device that owns the path.
+#derive(Eq)
 pub(all) struct SessionListItem {
   id : String
   title : String?
@@ -126,7 +131,7 @@ pub(all) struct SessionListItem {
   // for a damaged directory the engine could not stat; such rows keep their
   // listing but sort after stamped ones, same as the engine's own ordering.
   updated_at_ms : Double?
-} derive(Eq)
+}
 
 ///|
 pub extend ItemKind with Eq::{equal, not_equal}

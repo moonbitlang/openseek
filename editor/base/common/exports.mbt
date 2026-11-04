@@ -1,8 +1,9 @@
 ///|
 /// Validation failure raised by the documented URI constructors.
+#derive(Debug)
 pub suberror UriError {
   UriError(String)
-} derive(Debug)
+}
 
 ///|
 /// A new position derived from this one. Retained as part of the documented

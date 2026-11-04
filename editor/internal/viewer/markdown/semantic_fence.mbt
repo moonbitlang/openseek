@@ -1,10 +1,11 @@
 ///|
 /// The outer resource kind is deliberately explicit: a matching fence in an
 /// ordinary Markdown resource is static code, not a MoonBit provider surface.
+#derive(Eq, Debug)
 pub(all) enum MarkdownResourceKind {
   OrdinaryMarkdown
   MoonBitMarkdown
-} derive(Eq, Debug)
+}
 
 ///|
 /// Whether this block uses the MoonBit compiler's Markdown-test prefix grammar:

@@ -6,16 +6,18 @@
 ///|
 /// Monaco `ContentWidgetPositionPreference` (`editorBrowser.ts`). `Exact` is
 /// retained for the staged exact-coordinate widget contract.
+#derive(Eq)
 pub(all) enum ContentWidgetPositionPreference {
   Above
   Below
   Exact
-} derive(Eq)
+}
 
 ///|
 /// `PartFingerprint` (`vscode/src/vs/editor/browser/view/viewPart.ts:34-46`).
 /// Numeric order is load-bearing; reserved source slots remain present even
 /// when the readonly viewer does not currently create those parts.
+#derive(Eq, Debug)
 pub(all) enum PartFingerprint {
   None
   ContentWidgets
@@ -28,12 +30,13 @@ pub(all) enum PartFingerprint {
   ViewLines
   Minimap
   ViewLinesGpu
-} derive(Eq, Debug)
+}
 
 ///|
 /// Monaco-shaped option identifiers queried by browser view parts. The root
 /// Viewer currently emits a subset; the remaining identifiers preserve the
 /// staged configuration-change contract.
+#derive(Eq, Debug)
 pub(all) enum ViewConfigurationOption {
   LayoutInfo
   FontInfo
@@ -54,7 +57,7 @@ pub(all) enum ViewConfigurationOption {
   EffectiveCursorStyle
   CursorSmoothCaretAnimation
   EffectiveEditContext
-} derive(Eq, Debug)
+}
 
 ///|
 /// Closed readonly-view event union. `ViewZonesChanged` remains part of the

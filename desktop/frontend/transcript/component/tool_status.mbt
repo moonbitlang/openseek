@@ -1,12 +1,13 @@
 ///|
 /// A call's recorded outcome, rendered independently of its disclosure body.
 /// Partial output still means pending; only a completed result earns a check.
+#derive(Eq)
 priv enum ToolStatus {
   Snapshot
   Pending
   Succeeded
   Failed
-} derive(Eq)
+}
 
 ///|
 /// Share presentation state without retaining tool arguments or result output.

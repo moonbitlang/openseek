@@ -2,6 +2,7 @@
 package "moonbitlang/openseek/agent_tool/subagent"
 
 import {
+  "moonbitlang/core/json",
   "moonbitlang/openseek/agent_subagent",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/bgjobs",
@@ -11,7 +12,7 @@ import {
 // Values
 pub fn definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
 
-pub fn program_binding(@agent_subagent.Launcher, @bgjobs.BgJobRuntime, Array[Kind], () -> Json) -> (String) -> @ptc.ProgramBinding
+pub fn program_binding(@agent_subagent.Launcher, @bgjobs.BgJobRuntime, Array[Kind], () -> @json.Json) -> (String) -> @ptc.ProgramBinding
 
 pub fn send_definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
 
@@ -21,7 +22,7 @@ pub fn send_definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.Age
 pub(all) struct Kind {
   name : String
   ceiling : Int32
-  validate : (Json) -> Result[Json, String]
+  validate : (@json.Json) -> Result[@json.Json, String]
   takes_instructions : Bool
   changes_code : Bool
 }
@@ -29,7 +30,7 @@ pub(all) struct Kind {
 pub(all) struct Subagents {
   launcher : (@bgjobs.BgJobRuntime) -> @agent_subagent.Launcher
   kinds : Array[Kind]
-  audit_context : () -> Json
+  audit_context : () -> @json.Json
   notified : (String) -> Bool
 }
 

@@ -2,13 +2,14 @@
 /// One exact replacement requested by `multi_edit`. Each edit names its own
 /// `file`, so a single call can span several files. All edits for a given file
 /// must be listed contiguously (enforced by the tool, not the decoder).
+#derive(Debug)
 pub struct MultiEditItem {
   file : String
   old_string : String
   new_string : String
   start_line : Int32
   end_line : Int32?
-} derive(Debug)
+}
 
 ///|
 /// Decoded `multi_edit` arguments: edits provided inline, plus an optional path
@@ -16,6 +17,7 @@ pub struct MultiEditItem {
 /// fields (no `oneOf`); the tool concatenates them — inline first, then the
 /// file's contents — so a call may set either, both, or (rejected later as a
 /// combined-empty batch) neither.
+#derive(Debug)
 pub struct MultiEditArgs {
   inline : Array[MultiEditItem]
   edits_file : String?
@@ -27,7 +29,7 @@ pub struct MultiEditArgs {
   // Post-write warning guard (absent = off): roll the batch back when it
   // its reported warning-count change is >= this threshold.
   revert_if_warning_delta_greater_or_equal : Int32?
-} derive(Debug)
+}
 
 ///|
 /// Decode `multi_edit` tool-call arguments.

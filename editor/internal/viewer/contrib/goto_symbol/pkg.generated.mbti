@@ -68,12 +68,13 @@ pub fn SymbolNavigationAnchor::range(Self) -> @common.Range
 pub fn SymbolNavigationAnchor::same_snapshot(Self, Self) -> Bool
 pub fn SymbolNavigationAnchor::surface_generation(Self) -> Int32
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SymbolNavigationCommand {
   RevealDefinition
   PeekDefinition
   GoToReferences
   PeekReferences
-} derive(Eq, @debug.Debug)
+}
 pub fn SymbolNavigationCommand::equal(Self, Self) -> Bool
 pub fn SymbolNavigationCommand::from_id(String) -> Self?
 pub fn SymbolNavigationCommand::id(Self) -> String

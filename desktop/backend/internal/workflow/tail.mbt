@@ -121,13 +121,14 @@ async fn FileTail::poll(self : FileTail) -> Array[String] {
 
 ///|
 /// A child the sidecar reported launched.
+#derive(Eq, Debug)
 pub(all) struct ChildStarted {
   /// The child's session id, `<parent>-sr-N` — the same string its own record
   /// is named by and the journal's `attempt_id` will carry.
   child : String
   kind : String
   label : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ChildStarted with Eq::{equal, not_equal}
@@ -137,6 +138,7 @@ pub extend ChildStarted with Debug::{to_repr}
 
 ///|
 /// A child the sidecar reported ended.
+#derive(Eq, Debug)
 pub(all) struct ChildFinished {
   child : String
   /// The contract's own vocabulary: `captured`, `no_report`, `max_steps`,
@@ -148,7 +150,7 @@ pub(all) struct ChildFinished {
   /// Why `steps` and `tokens` may fall short of the child's spend (it left no
   /// result, or its launch was cancelled); `None` when they are its account.
   unaccounted : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ChildFinished with Eq::{equal, not_equal}

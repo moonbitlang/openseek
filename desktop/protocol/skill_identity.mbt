@@ -1,9 +1,10 @@
 ///|
 /// A registry skill's module and package, independent of name and version.
+#derive(Debug, Eq)
 pub(all) struct RegistrySkillIdentity {
   module_name : String
   package_path : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for RegistrySkillIdentity with fn from_json(json, path) {

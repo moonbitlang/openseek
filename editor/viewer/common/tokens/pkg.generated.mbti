@@ -59,7 +59,8 @@ pub struct ContiguousTokensStoreUpdate {
 type InsertedToken
 pub fn InsertedToken::InsertedToken(Int32, String, TokenMetadata) -> Self
 
-type LineTokens derive(@debug.Debug)
+#derive(@debug.Debug)
+type LineTokens
 pub fn LineTokens::LineTokens(Array[UInt32], String, @services.LanguageIdCodec) -> Self
 pub fn LineTokens::convert_to_end_offset(Array[UInt32], Int32) -> Unit
 pub fn LineTokens::default_token_metadata() -> TokenMetadata
@@ -71,7 +72,8 @@ pub fn LineTokens::inflate(Self) -> ViewLineTokens
 pub fn LineTokens::slice_and_inflate(Self, Int32, Int32, Int32) -> ViewLineTokens
 pub fn LineTokens::with_inserted(Self, Array[InsertedToken]) -> Self
 
-pub(all) struct TokenMetadata(UInt32) derive(Eq)
+#derive(Eq)
+pub(all) struct TokenMetadata(UInt32)
 pub fn TokenMetadata::equal(Self, Self) -> Bool
 pub fn TokenMetadata::get_class_name(Self) -> String
 pub fn TokenMetadata::not_equal(Self, Self) -> Bool

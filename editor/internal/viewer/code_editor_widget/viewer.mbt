@@ -119,10 +119,11 @@ priv struct PendingRendered {
 /// the 1-based view line/columns to measure once rendered, plus the scroll-top
 /// band (`[start_scroll_top, stop_scroll_top]`) outside which an intervening
 /// vertical scroll cancels the request.
+#derive(Eq)
 priv enum CursorRevealScrollType {
   Smooth
   Immediate
-} derive(Eq)
+}
 
 ///|
 priv struct HorizontalRevealRangeRequest {
@@ -136,11 +137,12 @@ priv struct HorizontalRevealRangeRequest {
 }
 
 ///|
+#derive(Debug)
 struct CodeEditorViewState {
   scroll_top : Double
   scroll_left : Double
   folding_state : @folding_browser.FoldingStateMemento?
-} derive(Debug)
+}
 
 ///|
 /// Creates a viewer instance. An omitted service bundle is created and owned

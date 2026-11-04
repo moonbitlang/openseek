@@ -17,20 +17,22 @@ pub fn wait_for_layout(String, Target, () -> Unit) -> Bool
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Reference {
   path : String
   target : Target
-} derive(Eq, @debug.Debug)
+}
 pub fn Reference::equal(Self, Self) -> Bool
 pub fn Reference::not_equal(Self, Self) -> Bool
 pub fn Reference::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Target {
   PdfPage(Int32)
   WordHeading(String)
   WordParagraph(String)
   ExcelRange(sheet~ : String, range~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn Target::equal(Self, Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool
 pub fn Target::to_repr(Self) -> @debug.Repr

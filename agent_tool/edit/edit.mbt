@@ -899,7 +899,7 @@ async fn commit_edit(
     }
   }
 
-  errdefer restore_on_unwind()
+  errdefer @async.protect_from_cancel(() => restore_on_unwind())
   // A guarded write runs to completion for the same reason: a truncated,
   // half-written file is neither the edit nor the original, and the rollback
   // restores only what it recognizes.

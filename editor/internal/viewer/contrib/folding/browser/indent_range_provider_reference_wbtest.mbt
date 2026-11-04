@@ -88,11 +88,12 @@ fn word_markers() -> @languages.FoldingMarkers {
 }
 
 ///|
+#derive(Eq, Debug)
 priv struct ExpectedIndentRange {
   start_line_number : Int32
   end_line_number : Int32
   parent_index : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// The suite's `r(start, end, parentIndex)` literal.

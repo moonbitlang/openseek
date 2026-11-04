@@ -23,20 +23,22 @@
 ///|
 /// Placement of an inline decoration relative to the source text (Monaco's
 /// InlineDecorationType, declared in inlineDecorations.ts).
+#derive(Eq)
 priv enum InlineDecorationType {
   Regular
   Before
   After
   RegularAffectingLetterSpacing
-} derive(Eq)
+}
 
 ///|
 /// An inline decoration over a line/column Range.
+#derive(Eq)
 priv struct InlineDecoration {
   range : @base_common.Range
   inline_class_name : String
   type_ : InlineDecorationType
-} derive(Eq)
+}
 
 ///|
 /// Builds an inline decoration (Monaco new InlineDecoration).

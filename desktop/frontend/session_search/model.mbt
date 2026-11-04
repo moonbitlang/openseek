@@ -7,10 +7,11 @@ pub(all) enum Msg {
 }
 
 ///|
+#derive(Eq, Debug)
 struct Model {
   query : String
   selected : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Model::Model() -> Model {

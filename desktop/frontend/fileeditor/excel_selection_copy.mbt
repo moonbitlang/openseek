@@ -1,8 +1,9 @@
 ///|
+#derive(Eq)
 pub enum ExcelCopyFormat {
   Tsv
   Markdown
-} derive(Eq)
+}
 
 ///|
 pub extend ExcelCopyFormat with Eq::{equal, not_equal}
@@ -10,34 +11,37 @@ pub extend ExcelCopyFormat with Eq::{equal, not_equal}
 ///|
 /// Keep the complete cell contents separately from the bounded Agent preview.
 /// Coordinates retain empty rows/columns and the covered area of merged cells.
+#derive(Eq)
 pub struct ExcelSelectionTable {
   first_row : Int32
   last_row : Int32
   first_column : Int32
   last_column : Int32
   cells : Map[(Int32, Int32), String]
-} derive(Eq)
+}
 
 ///|
 pub extend ExcelSelectionTable with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub enum ExcelCopyStatus {
   Copying
   Copied
   Failed
-} derive(Eq)
+}
 
 ///|
 pub extend ExcelCopyStatus with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub struct ExcelCopyFeedback {
   preview : OfficeSelectionPreview
   generation : Int32
   format : ExcelCopyFormat
   status : ExcelCopyStatus
-} derive(Eq)
+}
 
 ///|
 pub extend ExcelCopyFeedback with Eq::{equal, not_equal}

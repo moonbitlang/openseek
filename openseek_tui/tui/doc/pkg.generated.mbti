@@ -18,12 +18,14 @@ type Doc
 pub fn Doc::Doc(Array[Text]) -> Self
 pub fn Doc::layout(Self, width~ : Int32) -> Array[@surface.Line]
 
-type Span derive(@debug.Debug)
+#derive(@debug.Debug)
+type Span
 pub fn Span::Span(@displaytext.DisplayText, style? : @style.Style) -> Self
 pub fn Span::plain(String) -> Self
 pub fn Span::to_repr(Self) -> @debug.Repr
 
-type Text derive(@debug.Debug)
+#derive(@debug.Debug)
+type Text
 pub fn Text::Text(Array[Span]) -> Self
 pub fn Text::first_line(Self, width~ : Int32) -> @surface.Line
 pub fn Text::plain(String) -> Self

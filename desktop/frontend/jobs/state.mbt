@@ -1,12 +1,14 @@
 ///|
+#derive(Eq)
 pub(all) struct Owner {
   channel : @interop.ChannelId
   scope : @protocol.JobsScope
-} derive(Eq)
+}
 
 ///|
 /// Who on screen reads the listing. The listing serves both readers; the
 /// selected job's output is the panel's alone.
+#derive(Eq)
 pub(all) enum Watch {
   /// Nobody: no requests and no timer.
   Unwatched
@@ -15,12 +17,13 @@ pub(all) enum Watch {
   Summary
   /// The Jobs panel: the listing every second and the selected job's output.
   Panel
-} derive(Eq)
+}
 
 ///|
 pub extend Watch with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) struct State {
   owner : Owner?
   watch : Watch
@@ -47,7 +50,7 @@ pub(all) struct State {
   clipped : Bool
   control_error : String?
   stopping : Bool
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {

@@ -12,6 +12,7 @@
 /// `ISessionEditorComment` trimmed to the single agent-feedback source.
 /// `id` is the prefixed navigation/anchor id (`to_session_editor_comment_id`);
 /// `source_id` is the raw `AgentFeedback.id` the service mutations take.
+#derive(Debug)
 pub struct SessionEditorComment {
   id : String
   source_id : String
@@ -21,7 +22,7 @@ pub struct SessionEditorComment {
   text : String
   replies : Array[String]
   state : @agent_feedback_api.AgentFeedbackState
-} derive(Debug)
+}
 
 ///|
 /// `toSessionEditorCommentId(source, sourceId)` with the source fixed to

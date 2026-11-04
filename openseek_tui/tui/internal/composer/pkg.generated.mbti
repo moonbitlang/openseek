@@ -11,7 +11,8 @@ pub const DefaultMaxTextRows : Int32 = 4
 // Errors
 
 // Types and methods
-type Mode derive(Eq)
+#derive(Eq)
+type Mode
 pub fn Mode::equal(Self, Self) -> Bool
 pub fn Mode::is_input(Self) -> Bool
 pub fn Mode::is_shell(Self) -> Bool

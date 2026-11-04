@@ -1,5 +1,6 @@
 ///|
 /// Provider-owned immutable document content for one URI/revision.
+#derive(Debug)
 pub struct DocumentSnapshot {
   uri : @base_common.Uri
   display_name : String
@@ -7,24 +8,26 @@ pub struct DocumentSnapshot {
   revision : String
   text : String
   priv line_starts : Array[Int32]
-} derive(Debug)
+}
 
 ///|
 /// Provider read result without exceptions.
+#derive(Debug)
 pub(all) enum DocumentReadResult {
   DocumentLoaded(DocumentSnapshot)
   DocumentNotFound(@base_common.Uri)
   DocumentReadFailed(DocumentError)
-} derive(Debug)
+}
 
 ///|
 /// Push notification from a provider watch or host-owned watcher.
+#derive(Debug)
 pub(all) enum DocumentChange {
   DocumentInvalidated(uri~ : @base_common.Uri, known_revision~ : String?)
   DocumentUpdated(DocumentSnapshot)
   DocumentDeleted(@base_common.Uri)
   DocumentChangeFailed(uri~ : @base_common.Uri, error~ : DocumentError)
-} derive(Debug)
+}
 
 ///|
 /// Document source contract for the readonly viewer. Providers may coalesce

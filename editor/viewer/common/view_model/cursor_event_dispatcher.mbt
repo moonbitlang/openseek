@@ -2,16 +2,18 @@
 /// Semantic kind of the scoped outgoing events. Monaco's const-enum values are
 /// `4` for ViewZones and `7` for cursor state; MoonBit deliberately exposes no
 /// numeric ABI for these variants.
+#derive(Eq, Debug)
 pub(all) enum OutgoingViewModelEventKind {
   ViewZonesChanged
   HiddenAreasChanged
   CursorStateChanged
   ModelTokensChanged
-} derive(Eq, Debug)
+}
 
 ///|
 /// Complete outgoing cursor payload owned by the ViewModel. It retains the
 /// earliest old state when merged and the latest new state/source/reason.
+#derive(Debug)
 pub(all) struct CursorStateChangedEvent {
   kind : OutgoingViewModelEventKind
   old_selections : Array[@core.Selection]?
@@ -21,7 +23,7 @@ pub(all) struct CursorStateChangedEvent {
   source : String
   reason : @editor_api.CursorChangeReason
   reached_max_cursor_count : Bool
-} derive(Debug)
+}
 
 ///|
 /// Builds the outgoing event from one controller transition fact.
@@ -63,9 +65,10 @@ pub fn CursorStateChangedEvent::is_no_op(
 ///|
 /// Payload-free outgoing ViewZones change event. Its kind is semantic rather
 /// than Monaco's numeric const-enum ordinal `4`.
+#derive(Debug)
 pub struct ViewZonesChangedEvent {
   kind : OutgoingViewModelEventKind
-} derive(Debug)
+}
 
 ///|
 /// Creates one source-shaped ViewZones change event.
@@ -83,9 +86,10 @@ pub fn ViewZonesChangedEvent::is_no_op(_self : ViewZonesChangedEvent) -> Bool {
 /// Payload-free outgoing hidden-area change event. It is published only after
 /// the line mapping, cursor/decorations, layout, and stable viewport have been
 /// updated by `ViewModel::set_hidden_areas`.
+#derive(Debug)
 pub struct HiddenAreasChangedOutgoingEvent {
   kind : OutgoingViewModelEventKind
-} derive(Debug)
+}
 
 ///|
 /// Creates one source-shaped hidden-area change event.

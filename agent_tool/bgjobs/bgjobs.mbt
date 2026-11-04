@@ -1,9 +1,10 @@
 ///|
 /// Image attachments and their descriptive text, retained by a PTC program or job.
+#derive(Debug, Eq)
 pub(all) struct ImageOutput {
   content : String
   images : Array[@protocol.Image]
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend ImageOutput with Debug::{to_repr}
@@ -24,11 +25,12 @@ let default_max_output_chars : Int32 = 12000
 ///   `Running` — a poller has no separate "detached" state).
 /// - `Exited(code)`: exited on its own with `code`.
 /// - `Stopped`: cancelled (`stop`, a reader error, or teardown) before exit.
+#derive(Eq)
 pub enum BgJobStatus {
   Running
   Exited(Int32)
   Stopped
-} derive(Eq)
+}
 
 ///|
 /// How a job's process ended, as its launcher's `on_end` hook is told before
@@ -133,12 +135,13 @@ struct BgJobRuntime {
 /// already be terminal while the job is still `Live`: launcher cleanup, the
 /// frozen final data, and the completion notice each mark a later milestone,
 /// and readers report a job as running/stopping until `CleanedUp`.
+#derive(Eq)
 priv enum JobPhase {
   Live
   Finishing
   CleanedUp
   Published
-} derive(Eq)
+}
 
 ///|
 /// One background job: session-visible metadata plus the shared execution that

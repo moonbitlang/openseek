@@ -5,9 +5,10 @@
 ///|
 /// A host-side failure with a user-facing message. Ops raise it; the
 /// transport boundary stringifies it into the error the client displays.
+#derive(Debug)
 pub(all) suberror HostError {
   HostError(String)
-} derive(Debug)
+}
 
 ///|
 impl Show for HostError with fn output(self, logger) {
@@ -21,9 +22,10 @@ impl Show for HostError with fn output(self, logger) {
 /// method does not accept. Kept apart from `HostError` so transports can
 /// report it as a malformed request (JSON-RPC -32602) rather than a failed
 /// operation.
+#derive(Debug)
 pub(all) suberror PayloadError {
   PayloadError(String)
-} derive(Debug)
+}
 
 ///|
 impl Show for PayloadError with fn output(self, logger) {

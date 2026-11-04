@@ -1006,6 +1006,7 @@ fn remove_very_short_matching_lines_between_diffs(
 }
 
 ///|
+#derive(Eq)
 priv enum ScalarBoundaryCategory {
   WordLower
   WordUpper
@@ -1015,7 +1016,7 @@ priv enum ScalarBoundaryCategory {
   Separator
   Space
   LineBreak
-} derive(Eq)
+}
 
 ///|
 fn scalar_boundary_category(value : Int32) -> ScalarBoundaryCategory {

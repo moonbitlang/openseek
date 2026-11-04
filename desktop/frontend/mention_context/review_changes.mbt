@@ -1,39 +1,44 @@
 ///|
 /// Immutable comparison identity. The digest covers both complete source
 /// texts; only explicitly selected lines are carried to the agent.
+#derive(Eq, Debug)
 pub(all) struct ReviewSource {
   workspace : String
   file : String
   original_file : String?
   base : String?
   version : String
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ChangeLine {
   number : Int32
   text : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// A selection made by the user, independent of subsequent display grouping.
+#derive(Eq, Debug)
 pub(all) struct ChangeExcerpt {
   original : Array[ChangeLine]
   modified : Array[ChangeLine]
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ReviewChanges {
   source : ReviewSource
   excerpts : Array[ChangeExcerpt]
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ContextCoverage {
   NotIncluded
   PartlyIncluded
   Included
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ChangeExcerpt::is_empty(self : ChangeExcerpt) -> Bool {

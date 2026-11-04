@@ -56,10 +56,11 @@ const RecordAnchorBytes = 48
 /// Debug is what the host boundary logs: proton renders a failed handler's
 /// error through `Repr`, which prints only an opaque `<...: ...>` placeholder
 /// for types without it — swallowing the one string that says what failed.
+#derive(Debug)
 pub(all) suberror RecordError {
   Absent(String)
   Unreadable(String)
-} derive(Debug)
+}
 
 ///|
 impl Show for RecordError with fn output(self, logger) {

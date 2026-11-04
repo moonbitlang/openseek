@@ -6,6 +6,7 @@
 /// The job's own `state` stays the fact about the PROCESS; `outcome` is what
 /// the child achieved. `outcome`, `usage` and `report` are absent while the
 /// child is live and settled once it has ended.
+#derive(Eq, Debug)
 pub(all) struct SubagentInfo {
   /// The preset the child runs: `explore`, `review`, ...
   kind : String
@@ -23,20 +24,22 @@ pub(all) struct SubagentInfo {
   report : SubagentReport?
   /// The checkout the child works in.
   workspace : SubagentWorkspace
-} derive(Eq, Debug)
+}
 
 ///|
 /// Who started a subagent. The starter is its owner.
+#derive(Eq, Debug)
 pub(all) enum SubagentLaunch {
   /// The model's own tool call. The child belongs to the session.
   Direct
   /// A script's host-tool call: the host's id for that script's program,
   /// and which of that program's subagent starts this is (from 0).
   Script(program~ : String, call~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// How a subagent ended.
+#derive(Eq, Debug)
 pub(all) enum SubagentOutcome {
   /// It submitted a report that passed its kind's validation.
   Captured
@@ -52,10 +55,11 @@ pub(all) enum SubagentOutcome {
   Stopped
   /// Anything else, with the reason.
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a subagent spent, once it has ended.
+#derive(Eq, Debug)
 pub(all) enum SubagentUsage {
   /// The counts, from the child's own account or reconstructed. `steps`
   /// is `None` when the account did not say.
@@ -69,30 +73,33 @@ pub(all) enum SubagentUsage {
   )
   /// Nothing could be read; why.
   Unavailable(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where a subagent's usage counts came from.
+#derive(Eq, Debug)
 pub(all) enum SubagentUsageSource {
   /// The child's own result file: exact for the requests it made.
   Result
   /// Summed from the child's transcript because it left no result: a lower
   /// bound when `unaccounted` says so.
   Transcript
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where a captured report is.
+#derive(Eq, Debug)
 pub(all) enum SubagentReport {
   /// In `report.json` in the child's session directory.
   Stored
   /// Storing it failed, with the reason. The engine that captured it still
   /// holds it in memory.
   StoreFailed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The checkout a subagent works in.
+#derive(Eq, Debug)
 pub(all) enum SubagentWorkspace {
   /// The session's own checkout, the one its launcher works in.
   InPlace
@@ -102,7 +109,7 @@ pub(all) enum SubagentWorkspace {
   /// worker had to itself while it ran: it changed files there in place, and
   /// what it changed is left there, uncommitted, for the launching session.
   Directory(path~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A worker's git worktree: a branch forked from the launching checkout's
@@ -110,6 +117,7 @@ pub(all) enum SubagentWorkspace {
 /// validation. When the worker ends, the engine hands it over: what is left
 /// (the branch, or a worktree kept for inspection) is the launching
 /// session's to merge or remove, and the engine tracks it no further.
+#derive(Eq, Debug)
 pub(all) struct Worktree {
   /// The slice's name, unique among the repository's active worktrees.
   name : String
@@ -122,10 +130,11 @@ pub(all) struct Worktree {
   /// The repository-relative path prefixes the worker may change.
   allowed_paths : Array[String]
   state : WorktreeState
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a worker's worktree holds when it is handed over.
+#derive(Eq, Debug)
 pub(all) enum WorktreeState {
   /// The worker is running in it.
   Working
@@ -140,7 +149,7 @@ pub(all) enum WorktreeState {
   /// Its changes failed validation, for these reasons; its files are kept at
   /// the worktree's path for inspection.
   Unmergeable(defects~ : Array[String])
-} derive(Eq, Debug)
+}
 
 ///|
 fn subagent_count(

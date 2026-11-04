@@ -3,17 +3,19 @@
 // connected device rather than the local desktop host.
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionRenamePayload {
   session : String
   workspace : String
   title : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CodexThreadRenamePayload {
   thread_id : String
   name : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SessionRenamePayload with fn from_json(json, path) {

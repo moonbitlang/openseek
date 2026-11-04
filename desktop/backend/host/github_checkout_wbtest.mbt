@@ -2,7 +2,7 @@
 async test "current PR status skips GitHub for a local checkout without remotes" {
   let dir = @fs.tmpdir(prefix="openseek-local-pr-status-")
   let _ = {
-    defer git_test_cleanup(dir)
+    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
     git_test_run(dir, ["init", "--quiet"])
     let root = @pathx.Absolute::from_uri_path(dir).unwrap()
     let branch = github_checkout_branch(dir).unwrap()
@@ -20,7 +20,7 @@ async test "current PR status skips GitHub for a local checkout without remotes"
 async test "current PR status verifies remote lifecycle even for saved branch associations" {
   let dir = @fs.tmpdir(prefix="openseek-pr-status-")
   let _ = {
-    defer git_test_cleanup(dir)
+    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file("\{dir}/file.txt", "content", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "."])
@@ -130,7 +130,7 @@ async test "checkout failures travel as data instead of redacted Proton errors" 
 async test "checkout choices preserve edits until chosen and stash retains index and untracked files" {
   let dir = @fs.tmpdir(prefix="openseek-checkout-choices-")
   let _ = {
-    defer git_test_cleanup(dir)
+    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file(
       "\{dir}/tracked.txt",
@@ -221,7 +221,7 @@ test "checkout errors explain recovery and retain Git diagnostics" {
 async test "PR review uses its merge base and association follows the checked out branch" {
   let dir = @fs.tmpdir(prefix="openseek-checkout-review-")
   let _ = {
-    defer git_test_cleanup(dir)
+    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file(
       "\{dir}/upstream.txt",
@@ -299,7 +299,7 @@ async fn git_test_run(dir : String, args : Array[String]) -> Unit {
 async test "Git history pages stay pinned and commit changes use first parent" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-")
   let _ = {
-    defer git_test_cleanup(dir)
+    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file("\{dir}/old.mbt", "first\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "old.mbt"])
@@ -455,7 +455,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
 async test "Git history paginates fifty commits and describes detached HEAD" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-page-")
   let _ = {
-    defer git_test_cleanup(dir)
+    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
     git_test_run(dir, ["init", "--quiet"])
     let unborn = capture_git_history_snapshot(dir, None)
     assert_eq(unborn.head, None)
@@ -487,7 +487,7 @@ async test "Git history paginates fifty commits and describes detached HEAD" {
 ///|
 async test "Git recognizes only origin HEAD's branch as the default" {
   let dir = @fs.tmpdir(prefix="openseek-git-default-branch-")
-  defer git_test_cleanup(dir)
+  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
   git_test_run(dir, ["init", "--quiet"])
   @fs.write_file("\{dir}/tracked.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "tracked.txt"])
@@ -510,7 +510,7 @@ async test "Git recognizes only origin HEAD's branch as the default" {
 #skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "Git snapshots pair status with HEAD and supplied revisions stay pinned" {
   let dir = @fs.tmpdir(prefix="openseek-git-review-")
-  defer git_test_cleanup(dir)
+  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
   git_test_run(dir, ["init", "--quiet"])
   assert_eq(git_revision_commit(dir, "HEAD"), None)
   @fs.mkdir("\{dir}/desktop", recursive=true)
@@ -660,7 +660,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
 #skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "checkout reviews retain committed changes and follow rebases" {
   let dir = @fs.tmpdir(prefix="openseek-git-root-review-")
-  defer git_test_cleanup(dir)
+  defer @async.protect_from_cancel(() => git_test_cleanup(dir))
   git_test_run(dir, ["init", "--quiet"])
   @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "review.txt"])

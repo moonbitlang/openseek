@@ -12,9 +12,10 @@
 /// Debug is what the host boundary logs: proton renders a failed handler's
 /// error through `Repr`, which prints only an opaque `<...: ...>` placeholder
 /// for types without it — swallowing the one string that says what failed.
+#derive(Debug)
 pub suberror StoreError {
   StoreError(String)
-} derive(Debug)
+}
 
 ///|
 impl Show for StoreError with fn output(self, logger) {

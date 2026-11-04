@@ -77,12 +77,13 @@ fn dotdotdot_svg_data_uri(color : String) -> String {
 ///|
 /// One optional foreground color per severity, mirroring `theme.getColor(...)`
 /// returning `undefined` when a theme leaves a token unset.
+#derive(Eq, Debug)
 pub(all) struct SquigglyThemeColors {
   error : String?
   warning : String?
   info : String?
   hint : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// The `registerThemingParticipant` callback body (`codeEditorWidget.ts:2532-

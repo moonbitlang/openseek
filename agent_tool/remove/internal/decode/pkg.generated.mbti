@@ -3,18 +3,20 @@ package "moonbitlang/openseek/agent_tool/remove/internal/decode"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn decode(Json) -> RemoveInput raise
+pub fn decode(@json.Json) -> RemoveInput raise
 
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct RemoveInput {
   path : String
   reason : String
-} derive(@debug.Debug)
+}
 
 // Type aliases
 

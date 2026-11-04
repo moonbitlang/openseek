@@ -25,6 +25,7 @@ pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) struct Checkout {
   repository_url : String
   number : Int32
@@ -32,43 +33,47 @@ pub(all) struct Checkout {
   updating : Bool
   phase : CheckoutPhase
   show_details : Bool
-} derive(Eq)
+}
 pub fn Checkout::equal(Self, Self) -> Bool
 pub fn Checkout::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum CheckoutPhase {
   Running
   Confirming
   Failed(String, String?)
-} derive(Eq)
+}
 pub fn CheckoutPhase::equal(Self, Self) -> Bool
 pub fn CheckoutPhase::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct CheckoutScope {
   channel : @interop.ChannelId
   cwd : String
   branch : String?
   head : String?
-} derive(Eq)
+}
 pub fn CheckoutScope::equal(Self, Self) -> Bool
 pub fn CheckoutScope::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct Detail {
   repository_url : String
   item : @protocol.GithubItem
   reply : @protocol.GithubPullRequestDetail?
   loading : Bool
   error : String?
-} derive(Eq)
+}
 pub fn Detail::equal(Self, Self) -> Bool
 pub fn Detail::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct Group {
   expanded : Bool
   reply : @protocol.GithubListReply?
   loading : Bool
   error : String?
-} derive(Eq)
+}
 pub fn Group::equal(Self, Self) -> Bool
 pub fn Group::not_equal(Self, Self) -> Bool
 
@@ -93,6 +98,7 @@ pub(all) enum Msg {
   Listed(Int32, @protocol.GithubListKind, Result[@protocol.GithubListReply, String])
 }
 
+#derive(Eq)
 pub(all) struct State {
   scope : CheckoutScope?
   active : Bool
@@ -110,7 +116,7 @@ pub(all) struct State {
   current_loading : Bool
   current_active : Bool
   review_pending : Bool
-} derive(Eq)
+}
 pub fn State::checking_out(Self) -> Bool
 pub fn State::checkout_busy(Self) -> Bool
 pub fn State::current_url(Self) -> String?

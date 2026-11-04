@@ -9,6 +9,7 @@
 /// Writes go through temp-file + rename: atomic against torn reads, NOT a
 /// cross-process lock — two engines driving one repository can still race
 /// silently (documented residual; the single-engine-per-repo assumption).
+#derive(Debug, Eq, ToJson, FromJson)
 pub enum SubtaskState {
   Provisioning
   Running
@@ -18,7 +19,7 @@ pub enum SubtaskState {
   Integrated
   Discarded
   NoChanges
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// The unique part of the entry's branch, worktree registry file and
@@ -55,6 +56,7 @@ pub fn SubtaskState::is_terminal(self : SubtaskState) -> Bool {
 
 ///|
 /// One subtask's durable lifecycle record; see the file comment.
+#derive(Debug, Eq, ToJson, FromJson)
 pub struct SubtaskEntry {
   priv schema_version : Int32
   name : String
@@ -74,7 +76,7 @@ pub struct SubtaskEntry {
   // The engine let go of it after its capture: what is left (a branch, or a
   // worktree kept for inspection) is its launcher's, and it reserves nothing.
   priv handed_off : Bool
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 let registry_schema_version : Int32 = 1

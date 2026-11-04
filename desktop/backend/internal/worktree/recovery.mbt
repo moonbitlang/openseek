@@ -7,10 +7,11 @@
 const WorktreeRecoveryPrefix = "refs/openseek/worktrees/"
 
 ///|
+#derive(Debug, Eq)
 priv enum WorktreeCheckout {
   Branch(String)
   Detached(String)
-} derive(Debug, Eq)
+}
 
 ///|
 fn WorktreeCheckout::branch(self : WorktreeCheckout) -> String? {
