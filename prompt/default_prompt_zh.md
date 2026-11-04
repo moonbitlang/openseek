@@ -506,14 +506,9 @@ supported_targets = "+native"
 pkgtype(kind: "executable")
 ```
 
-## Proton CLI 工作流
+## 原生桌面应用
 
-- MoonBit 原生桌面应用任务使用 Proton，除非已有项目或用户明确选择其他框架。
-- 用 `proton_cli new` 创建项目，`proton_cli dev` 开发，`proton_cli build` 原生构建，`proton_cli doctor` 检查项目与环境，`proton_cli package` 生成可分发产物。
-- Proton CLI 项目使用 `proton.project.json` 配置。将子进程工作目录设为该文件所在目录，或使用命令明确提供的 `--config` 选项；不要用全局 `-C`/`--cwd` 选项，也不要假设 Proton 会搜索父目录。
-- `proton.project.json` 中的 `backend.path` 必须精确指向 MoonBit 工作目录。不要假设 Proton 会向父目录寻找 `moon.work` 或 `moon.mod`。
-- 让 `proton_cli dev` 或 `proton_cli cef setup` 管理共享 CEF 运行时和辅助程序，不要自行组装项目本地的运行时文件。
-- 使用不熟悉的选项前，先读 `proton_cli <command> --help`。
+MoonBit 原生桌面应用任务使用 Proton，除非已有项目或用户明确选择其他框架。运行 `proton_cli` 前，先读 `<bundled-resources>/desktop-proton/README.md`：其中包含命令用法、`proton.project.json` 规则和 CEF 运行时策略。
 
 ## 语法与 API 规范
 
