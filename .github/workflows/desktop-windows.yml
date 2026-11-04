@@ -1,11 +1,12 @@
 name: Desktop Windows
 
 # Windows minutes cost twice Linux minutes, and this package build is the
-# slowest Desktop job. Its Windows-specific risk is the native window host,
-# backend, and packager; the browser frontend compiles to JS identically on
-# every OS and is covered by the Linux desktop e2e job in desktop.yml. Pull
-# requests that change only frontend files therefore skip it. Pushes to main use
-# desktop.yml's full path list so every relevant merged commit is packaged.
+# slowest Desktop job. Pull requests run it only when they change the
+# packaging path itself: the window host, the packager and release scripts,
+# the Proton manifest, or the toolchain and dependency pins. Backend and
+# frontend changes are covered on Linux by desktop.yml and reach Windows on
+# the push to main, which uses desktop.yml's full path list so every relevant
+# merged commit is still packaged.
 on:
   push:
     branches: [main]
@@ -24,27 +25,14 @@ on:
       - ".github/workflows/desktop-release.yml"
   pull_request:
     paths:
-      - "desktop/**"
-      - "editor/**"
-      - "protocol/**"
-      - "share/artifact/**"
-      - "agent_tool/edit_diff/**"
-      - "agent_tool/mbtx/html/**"
-      - "jsonrpc/**"
-      - "viz_export/**"
-      - "moon.mod"
-      - "moon.work"
+      - "desktop/app/**"
+      - "desktop/package/**"
+      - "desktop/scripts/**"
+      - "desktop/proton.project.json"
+      - "desktop/moon.mod"
+      - "desktop/.moonbit-version"
       - ".github/workflows/desktop-windows.yml"
       - ".github/workflows/desktop-release.yml"
-      # Browser-only sources and documentation. Negations must follow the
-      # patterns they narrow.
-      - "!desktop/frontend/**"
-      - "!desktop/e2e/**"
-      - "!desktop/styles/**"
-      - "!desktop/pwa/**"
-      - "!desktop/*.css"
-      - "!desktop/*.md"
-      - "!desktop/index.html"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

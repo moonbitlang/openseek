@@ -42,8 +42,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # The Windows package job lives in desktop-windows.yml, which skips pull
-  # requests that only change the browser frontend.
+  # The Windows package job lives in desktop-windows.yml, which runs on pull
+  # requests only when they change packaging paths.
 
   # The window host is the only module that depends on Proton, so it builds in
   # its own desktop/app/moon.work and is checked here rather than by the root
