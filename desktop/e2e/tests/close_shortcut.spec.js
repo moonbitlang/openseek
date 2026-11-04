@@ -182,6 +182,8 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
     });
     return box.y + box.height / 2 - headerHeight / 2;
   }).toBe(0);
+  await page.getByRole('dialog', { name: 'Settings', exact: true })
+    .getByRole('button', { name: 'Dismiss', exact: true }).click();
   // A real click must reach the fixed control above the narrow drawer.
   await toggle.click();
   await expect(toggle).toHaveAccessibleName('Hide sidebar');

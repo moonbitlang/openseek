@@ -195,7 +195,7 @@ test('Skills detail returns to its list within the dialog', async ({ page }) => 
   await page.locator('.skill-summary', { hasText: 'route-skill' }).click();
   await expect(page.locator('.skill-preview-markdown')).toContainText('Detail reached.');
   await expect(page).toHaveURL(url);
-  await dialog(page).getByRole('button', { name: 'Skills', exact: true }).click();
+  await dialog(page).getByRole('button', { name: 'Back to skills', exact: true }).click();
   await expect(page.locator('.skill-summary', { hasText: 'route-skill' })).toBeVisible();
   await page.keyboard.press('Escape'); await expect(dialog(page)).not.toBeVisible();
   expect(app.pageErrors).toEqual([]);

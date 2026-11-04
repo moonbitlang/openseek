@@ -28,6 +28,10 @@ for (const entry of ['deep link', 'host base']) {
     });
     await page.goto(entry === 'deep link' ? '/device/device-a/settings' : '/index.html?device=device-a');
     await expect(page.locator('base')).toHaveCount(entry === 'deep link' ? 0 : 1);
+    if (entry === 'deep link') {
+      await page.getByRole('dialog', { name: 'Settings', exact: true })
+        .getByRole('button', { name: 'Dismiss', exact: true }).click();
+    }
     await app.openSession();
     await expect(page.locator('.chat-mermaid svg')).toContainText('Loaded');
     await page.reload();

@@ -67,6 +67,15 @@ fn management_dialog_view(
         ),
       ]),
       ..match model.management_dialog {
+        Some(_) if model.host_incompatible() =>
+          [
+            console_gate_view(
+              locale=model.locale,
+              dispatch,
+              model.console,
+              host_incompatible=true,
+            ),
+          ]
         Some(Settings) => [settings_page(dispatch, model)]
         Some(Skills) =>
           if model.navigation.location.map_or(false, location => {
