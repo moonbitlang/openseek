@@ -129,9 +129,6 @@ dialog.management-dialog {
 .management-dialog[open]::backdrop {
   background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
 }
-/* A plain pop: the panel fades and lifts a hair, the backdrop fades with it.
-   `display`/`overlay` are discrete, so transitioning them keeps the panel on
-   screen while it leaves. Motion is opt-in, per the reduced-motion default. */
 @media (prefers-reduced-motion: no-preference) {
   dialog.management-dialog {
     opacity: 0;
