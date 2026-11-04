@@ -425,6 +425,8 @@ fn SidebarDispatcher::placeholder_open(
 ) -> @cmd.Cmd {
   if id == "cloud-sign-in" {
     self.emit(RemoteConnectClicked)
+  } else if id == "cloud-list-status" {
+    self.emit(CloudAction(@cloud.Refresh))
   } else {
     self.unroutable("placeholder action", id)
   }

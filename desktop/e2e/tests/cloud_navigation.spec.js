@@ -348,6 +348,6 @@ test('Cloud direct link keeps history readable but editing disabled after catalo
   await page.goto(sessionURL(sessionA));
   await expect(page.locator('#transcript')).toContainText('Readable despite metadata failure');
   await expect(page.locator('#task')).toBeDisabled();
-  await expect(page.getByText('Cloud answered HTTP 503. Try again.', { exact: true })).toBeVisible();
+  await expect(page.locator('aside').getByText('Couldn’t load chats', { exact: true })).toBeVisible();
   expect(creations(cloud)).toEqual([]);
 });

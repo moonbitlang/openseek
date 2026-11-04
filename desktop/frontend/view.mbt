@@ -3013,6 +3013,29 @@ fn Model::chat_sidebar_sections(
         }),
       }),
     )
+  } else if self.cloud.list_status is (@cloud.Retrying | @cloud.Failed) {
+    let loading = self.cloud.list_status is @cloud.Retrying
+    let label = shell_text(
+      self.locale,
+      if loading {
+        LoadingConversations
+      } else {
+        CannotLoadConversations
+      },
+    )
+    entries.push(
+      @section.Placeholder({
+        id: "cloud-list-status",
+        label,
+        class_name: "",
+        nested: false,
+        openable: false,
+        action: Some({
+          title: shell_text(self.locale, RetryLabel),
+          disabled: loading,
+        }),
+      }),
+    )
   }
   for row in ordered_by_recency(self.cloud_chat_rows()) {
     entries.push(@section.Conversation(row))

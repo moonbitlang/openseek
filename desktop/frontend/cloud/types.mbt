@@ -209,6 +209,16 @@ pub extend SessionEdit with Eq::{equal, not_equal}
 pub extend MetadataSave with Eq::{equal, not_equal}
 
 ///|
+pub(all) enum SessionListStatus {
+  Idle
+  Retrying
+  Failed
+} derive(Eq)
+
+///|
+pub extend SessionListStatus with Eq::{equal, not_equal}
+
+///|
 pub(all) struct State {
   user_id : String?
   epoch : Int32
@@ -217,6 +227,7 @@ pub(all) struct State {
   conversations : Map[String, Conversation]
   sequence : Int32
   list_request : Int32
+  list_status : SessionListStatus
   deletions : Map[String, Int32]
   metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
@@ -234,6 +245,7 @@ pub fn State::empty() -> State {
     conversations: Map([]),
     sequence: 0,
     list_request: 0,
+    list_status: Idle,
     deletions: {},
     metadata_saves: {},
     retired: [],
