@@ -49,24 +49,20 @@ fn Ui::Ui(tty : @tty.Tty, config : Config) -> Ui {
 
 ///|
 /// Run `body` with the live UI entered: draw the first frame up front and always
-/// restore the terminal afterwards, on both the success and error paths. Enter
-/// and leave run on the command queue so they serialize with redraws.
-async fn[T] Ui::with_entered(self : Self, body : async () -> T) -> T {
-  self.commands.wait(() => self.enter())
-  defer @async.protect_from_cancel(() => self.commands.wait(() => self.leave()))
-  body()
-}
-
-///|
+/// restore the terminal afterwards, on the success, error, and cancellation
+/// paths. `enter` runs on the command queue so it serializes with redraws.
+/// `leave` runs once the task group has joined: the command worker and the tty
+/// reader have stopped by then, so no redraw can follow it, and it needs no
+/// worker that a cancellation may already have stopped.
 async fn[T] run_ui_session(ui : Ui, body : async (Ui) -> T) -> T {
+  defer @async.protect_from_cancel(() => ui.leave())
   @async.with_task_group() <| g => {
     g.spawn_bg(no_wait=true) <| () => { ui.commands.run() }
-    ui.with_entered(() => {
-      // `enter` drew the first frame, querying cursor position through tty input.
-      // Start the reader only now, so it cannot consume that response as a key.
-      g.spawn_bg(no_wait=true) <| () => { ui.read_tty_events() }
-      body(ui)
-    })
+    ui.commands.wait(() => ui.enter())
+    // `enter` drew the first frame, querying cursor position through tty input.
+    // Start the reader only now, so it cannot consume that response as a key.
+    g.spawn_bg(no_wait=true) <| () => { ui.read_tty_events() }
+    body(ui)
   }
 }
 
