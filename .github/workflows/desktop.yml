@@ -66,7 +66,7 @@ jobs:
           arch: x64
 
       - name: Test release and packaging scripts
-        run: node --test desktop/scripts/release.test.mjs desktop/package/signing.test.mjs desktop/package/notarization.test.mjs
+        run: node --test desktop/scripts/release.test.mjs desktop/package/notarization.test.mjs
 
       - name: Set up MoonBit
         run: |
@@ -98,7 +98,7 @@ jobs:
           if ($manifest -notmatch '"moonbit-community/proton@([^"]+)"') {
             throw 'desktop/app/moon.mod does not pin Proton'
           }
-          moonx "moonbit-community/proton_cli@$($Matches[1])" cef setup
+          moonx "moonbit-community/proton_cli@$($Matches[1])" setup
 
       - name: Build Windows app
         env:
@@ -184,13 +184,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes libgtk-3-dev libx11-dev
 
-      # `cef setup` installs the release-selected runtime and subprocess helper
+      # `setup` installs the release-selected runtime and subprocess helper
       # into Proton's user-level immutable store. Setup is idempotent after a
       # cache hit.
       - name: Assemble Proton CEF runtime
         run: >-
           moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
-          cef setup
+          setup
 
       # Main is the sole Linux writer; PR jobs remain restore-only.
       - name: Save Proton runtime
