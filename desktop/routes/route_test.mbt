@@ -36,10 +36,7 @@ test "Cloud routes resolve accounts at activation" {
 
 ///|
 test "device identity is independent of target validity" {
-  for
-    path in [
-      "/device/%68ost/unknown", "/device/host/chat/session/%GG",
-    ] {
+  for path in ["/device/%68ost/unknown", "/device/host/chat/session/%GG"] {
     assert_eq(@routes.device(path), Some("host"))
   }
   assert_eq(@routes.device("/console/"), None)
