@@ -1,8 +1,0 @@
-import {
-  "moonbitlang/openseek/internal/workspace_path",
-  "moonbitlang/x/path",
-}
-
-warnings = "+unnecessary_annotation"
-
-supported_targets = "+wasm+native"

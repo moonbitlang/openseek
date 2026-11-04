@@ -2,7 +2,7 @@
 
 Lexical path helpers shared by every agent tool that has to interpret a path
 the model wrote. `write`, `edit`, `multi_edit`, `remove`, `mbtx`,
-`write_scope`, `auto_check`, `moon_check`, `source_write_policy`, `sandbox`,
+`write_scope`, `auto_check`, `moon_check`, `sandbox`,
 `agent_subtask`, and the root CLI entry point all resolve and compare
 paths through this package,
 so they agree on what "inside the workspace" means.
@@ -117,10 +117,10 @@ test "parent_dir drives a terminating upward walk" {
 
 ## Containment
 
-`is_under_workspace_root` answers "is this path the root or below it". It is
-the predicate behind the source-write protection in
-`agent_tool/internal/source_write_policy`, so its prefix handling matters: a
-sibling directory whose name merely starts with the root must not count.
+`is_under_workspace_root` answers "is this path the root or below it". Write
+scopes, `remove` and the sandbox profiles gate on it, so its prefix handling
+matters: a sibling directory whose name merely starts with the root must not
+count.
 
 ```mbt check
 ///|

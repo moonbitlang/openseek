@@ -9,11 +9,9 @@ that same value to judge the output. Everything SBPL-specific — profile text,
 denial subjects, escaping, the `sandbox-exec` path, and the availability probe
 — stays behind the API.
 
-This package does not own workspace path manipulation or protection-policy
-predicates. Generic lexical operations live in `internal/workspace_path`,
-MoonBit source classification lives in
-`agent_tool/internal/source_write_policy`, and the platform shell pair lives
-in `agent_tool/internal/platform_shell`.
+This package does not own workspace path manipulation. Generic lexical
+operations live in `internal/workspace_path`, and the platform shell pair
+lives in `agent_tool/internal/platform_shell`.
 
 ## The contract
 
@@ -120,8 +118,8 @@ The profile depends only on the root and the optional `writable_subtree`, so
 nothing is scanned or cached. `sandbox_wbtest.mbt` pins the emitted SBPL byte
 for byte.
 
-The profile builder classifies names through `@source_write_policy`, so what
-the kernel profile protects is exactly what that policy calls source.
+The protected source and manifest names are spelled once, in the profile's
+own regex (`source_write_regex`).
 
 ## Availability and limitations
 

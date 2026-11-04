@@ -131,6 +131,4 @@ test "`..` is not interpreted, because these are name tests" {
 ```
 
 For "is this path inside the workspace?" — the question these predicates
-deliberately do not answer — see `internal/workspace_path`, and
-`agent_tool/internal/source_write_policy` for the combined protected-source
-decision.
+deliberately do not answer — see `internal/workspace_path`.
