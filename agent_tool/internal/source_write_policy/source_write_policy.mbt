@@ -49,12 +49,14 @@ fn workspace_compare_path(path : String) -> String {
 ///|
 /// Return whether `path` has a protected MoonBit source or manifest name.
 ///
-/// Protected names are `*.mbt`, `*.mbti`, `*.mbt.md`, `*.mbtx`, `moon.mod`,
-/// `moon.pkg`, `moon.work`, and the legacy JSON manifests. Matching is case-sensitive,
+/// Protected names are `*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`, `moon.pkg`,
+/// `moon.work`, and the legacy JSON manifests. Matching is case-sensitive,
 /// purely lexical, and accepts either a basename or a full path.
 pub fn is_protected_source_path(path : String) -> Bool {
   let path = path.replace_all(old="\\", new="/")
-  protected_source_suffixes.any(suffix => path.has_suffix(suffix)) ||
+  path.has_suffix(".mbt.md") ||
+  path.has_suffix(".mbt") ||
+  path.has_suffix(".mbti") ||
   // A bare basename and a full path are both accepted, so each manifest name
   // is matched either whole or as the last component. Deliberately NOT via
   // `path_basename`: that strips a trailing slash, and callers hand this raw
@@ -65,24 +67,8 @@ pub fn is_protected_source_path(path : String) -> Bool {
 }
 
 ///|
-let protected_source_suffixes : Array[String] = [
-  ".mbt.md", ".mbt", ".mbti", ".mbtx",
-]
-
-///|
 /// The manifest filenames `is_protected_source_path` guards, current and
 /// legacy-JSON spellings alike.
 let protected_manifest_names : Array[String] = [
   "moon.mod", "moon.pkg", "moon.work", "moon.mod.json", "moon.pkg.json",
 ]
-
-///|
-/// `globset` patterns, relative to a workspace root, for the names
-/// `is_protected_source_path` protects at any depth. No `_build`/`.mooncakes`
-/// carve-out.
-pub fn protected_source_globs() -> Array[String] {
-  [
-    "**/*{\{protected_source_suffixes.join(",")}}",
-    "**/{\{protected_manifest_names.join(",")}}",
-  ]
-}

@@ -455,9 +455,8 @@ fn wasm_policy_document(
     let root = glob_literal(@workspace_path.strip_trailing_slash(root))
     for
       pattern in [
-        ..@source_write_policy.protected_source_globs(),
-        "**/.git",
-        "**/.git/**",
+        "**/*{.mbt.md,.mbt,.mbti,.mbtx}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+        "**/.git", "**/.git/**",
       ] {
       write_rules.push({ "glob": "!\{root}/\{case_insensitive_glob(pattern)}" })
     }

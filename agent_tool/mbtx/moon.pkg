@@ -9,7 +9,6 @@ import {
   "moonbitlang/openseek/agent_tool/mbtx/internal/decode",
   "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
   "moonbitlang/openseek/agent_tool/internal/sandbox",
-  "moonbitlang/openseek/agent_tool/internal/source_write_policy",
   "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/async",
   "moonbitlang/async/fs",

@@ -8,8 +8,6 @@ pub fn is_protected_source_path(String) -> Bool
 
 pub fn is_protected_workspace_source_path(String, String) -> Bool
 
-pub fn protected_source_globs() -> Array[String]
-
 // Errors
 
 // Types and methods
