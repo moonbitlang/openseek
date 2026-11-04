@@ -3,14 +3,16 @@ package "moonbitlang/openseek/agent_tool/mbtx/internal/decode"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn decode(Json) -> MbtxInput raise
+pub fn decode(@json.Json) -> MbtxInput raise
 
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct MbtxInput {
   program : Program
   args : Array[String]
@@ -19,13 +21,14 @@ pub struct MbtxInput {
   warning : Bool
   escalated : Bool
   ptc : Bool?
-} derive(@debug.Debug)
+}
 
+#derive(@debug.Debug)
 pub enum Program {
   Source(String)
   File(String)
   Save(String, String)
-} derive(@debug.Debug)
+}
 
 // Type aliases
 

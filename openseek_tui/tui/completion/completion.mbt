@@ -1,10 +1,11 @@
 ///|
 /// One item the UI can offer in the input-completion menu.
+#derive(Eq, Debug)
 struct CompletionItem {
   label : String
   insert_text : String
   description : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Build a completion item. `label` is shown in the menu, `insert_text` is the
@@ -66,11 +67,12 @@ pub fn completion_item_matches(
 
 ///|
 /// Open or closed state for the input-completion menu.
+#derive(Eq, Debug)
 struct Model {
   open : Bool
   items : Array[CompletionItem]
   selected : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// A closed completion menu.

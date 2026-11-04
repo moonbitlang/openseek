@@ -34,10 +34,11 @@ pub fn CodeEditorContributionDescriptors::diff_pane() -> Self
 pub fn CodeEditorContributionDescriptors::peek_preview() -> Self
 pub fn CodeEditorContributionDescriptors::standalone() -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) struct CodeEditorForeignZoneHeight {
   after_line_number : Int32
   height_in_px : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn CodeEditorForeignZoneHeight::equal(Self, Self) -> Bool
 pub fn CodeEditorForeignZoneHeight::not_equal(Self, Self) -> Bool
 pub fn CodeEditorForeignZoneHeight::to_repr(Self) -> @debug.Repr
@@ -57,15 +58,17 @@ pub fn CodeEditorGeometrySnapshot::model_line_heights(Self) -> Array[CodeEditorM
 pub fn CodeEditorGeometrySnapshot::model_version(Self) -> Int32
 pub fn CodeEditorGeometrySnapshot::scroll_content(Self) -> CodeEditorScrollContentFacts
 
+#derive(Eq, @debug.Debug)
 pub(all) struct CodeEditorModelLineHeight {
   line_number : Int32
   height_in_px : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn CodeEditorModelLineHeight::equal(Self, Self) -> Bool
 pub fn CodeEditorModelLineHeight::not_equal(Self, Self) -> Bool
 pub fn CodeEditorModelLineHeight::to_repr(Self) -> @debug.Repr
 
-type CodeEditorOptions derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type CodeEditorOptions
 pub fn CodeEditorOptions::CodeEditorOptions(soft_wrap? : Bool, tab_size? : Int32, wrapping_indent? : @editor_api.WrappingIndent, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, render_line_highlight? : @editor_api.RenderLineHighlight, render_line_highlight_only_when_focus? : Bool, render_validation_decorations? : @editor_api.RenderValidationDecorations, theme? : String, placeholder? : String, line_decorations_width? : Int32, line_numbers_min_chars? : Int32, folding? : Bool, show_folding_controls? : @editor_api.ShowFoldingControls, folding_highlight? : Bool, folding_maximum_regions? : Int32, unfold_on_click_after_end_of_line? : Bool, smooth_scrolling? : Bool, handle_mouse_wheel? : Bool, show_unused? : Bool, show_deprecated? : Bool, code_lens? : Bool, code_lens_font_family? : String, code_lens_font_size? : Double, font_family? : String, font_weight? : String, font_size? : Double, line_height? : Double, letter_spacing? : Double) -> Self
 pub fn CodeEditorOptions::default() -> Self
 pub fn CodeEditorOptions::equal(Self, Self) -> Bool
@@ -114,35 +117,39 @@ pub fn CodeEditorOverviewRuler::get_dom_node(Self) -> @dom.Element
 pub fn CodeEditorOverviewRuler::is_disposed(Self) -> Bool
 pub fn CodeEditorOverviewRuler::set_entries(Self, Int32, Array[CodeEditorOverviewRulerEntry]) -> Unit
 
-type CodeEditorOverviewRulerBand derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type CodeEditorOverviewRulerBand
 pub fn CodeEditorOverviewRulerBand::equal(Self, Self) -> Bool
 pub fn CodeEditorOverviewRulerBand::not_equal(Self, Self) -> Bool
 pub fn CodeEditorOverviewRulerBand::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct CodeEditorOverviewRulerEntry {
   id : Int32
   range : @common.LineRange
   color : String
   lane : CodeEditorOverviewRulerLane
-} derive(Eq, @debug.Debug)
+}
 pub fn CodeEditorOverviewRulerEntry::equal(Self, Self) -> Bool
 pub fn CodeEditorOverviewRulerEntry::not_equal(Self, Self) -> Bool
 pub fn CodeEditorOverviewRulerEntry::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CodeEditorOverviewRulerLane {
   Left
   Center
   Right
   Full
-} derive(Eq, @debug.Debug)
+}
 pub fn CodeEditorOverviewRulerLane::equal(Self, Self) -> Bool
 pub fn CodeEditorOverviewRulerLane::not_equal(Self, Self) -> Bool
 pub fn CodeEditorOverviewRulerLane::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct CodeEditorRenderLinesDecoration {
   range : @common.Range
   class_name : String
-} derive(Eq, @debug.Debug)
+}
 pub fn CodeEditorRenderLinesDecoration::equal(Self, Self) -> Bool
 pub fn CodeEditorRenderLinesDecoration::not_equal(Self, Self) -> Bool
 pub fn CodeEditorRenderLinesDecoration::to_repr(Self) -> @debug.Repr
@@ -162,6 +169,7 @@ pub fn CodeEditorRenderedLines::min_width_in_px(Self) -> Double
 pub fn CodeEditorRenderedLines::model_line_view_counts(Self) -> Array[Int32]
 pub fn CodeEditorRenderedLines::view_line_count(Self) -> Int32
 
+#derive(Eq, @debug.Debug)
 pub(all) struct CodeEditorScrollContentFacts {
   scroll_top : Double
   scroll_left : Double
@@ -171,7 +179,7 @@ pub(all) struct CodeEditorScrollContentFacts {
   content_height : Double
   scroll_width : Double
   scroll_height : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn CodeEditorScrollContentFacts::equal(Self, Self) -> Bool
 pub fn CodeEditorScrollContentFacts::not_equal(Self, Self) -> Bool
 pub fn CodeEditorScrollContentFacts::to_repr(Self) -> @debug.Repr
@@ -189,7 +197,8 @@ pub fn CodeEditorServices::quick_diff(Self) -> @quick_diff_api.QuickDiffHandle
 pub fn CodeEditorServices::resource_path_label(Self) -> (@common.Uri) -> String?
 pub fn CodeEditorServices::text_model_resolver(Self) -> @navigation_api.TextModelResolverHandle?
 
-type CodeEditorViewState derive(@debug.Debug)
+#derive(@debug.Debug)
+type CodeEditorViewState
 
 type CodeEditorWidget
 pub fn CodeEditorWidget::add_overlay_widget(Self, @moonbitlang/editor/viewer/browser.OverlayWidget) -> Unit

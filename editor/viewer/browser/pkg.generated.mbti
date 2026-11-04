@@ -17,19 +17,21 @@ pub fn create_editor_page_position(@dom.Element) -> EditorPagePosition
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ClientCoordinates {
   client_x : Double
   client_y : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn ClientCoordinates::equal(Self, Self) -> Bool
 pub fn ClientCoordinates::not_equal(Self, Self) -> Bool
 pub fn ClientCoordinates::to_page_coordinates(Self) -> PageCoordinates
 pub fn ClientCoordinates::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct CoordinatesRelativeToEditor {
   x : Double
   y : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn CoordinatesRelativeToEditor::equal(Self, Self) -> Bool
 pub fn CoordinatesRelativeToEditor::not_equal(Self, Self) -> Bool
 pub fn CoordinatesRelativeToEditor::to_repr(Self) -> @debug.Repr
@@ -75,12 +77,13 @@ pub fn EditorMouseEventFactory::on_mouse_move(Self, @dom.Element, (EditorDomMous
 pub fn EditorMouseEventFactory::on_mouse_up(Self, @dom.Element, (EditorDomMouseEvent) -> Unit) -> @common.Disposable
 pub fn EditorMouseEventFactory::on_pointer_down(Self, @dom.Element, (EditorDomMouseEvent, Int32) -> Unit) -> @common.Disposable
 
+#derive(Eq, @debug.Debug)
 pub struct EditorPagePosition {
   x : Double
   y : Double
   width : Double
   height : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn EditorPagePosition::equal(Self, Self) -> Bool
 pub fn EditorPagePosition::not_equal(Self, Self) -> Bool
 pub fn EditorPagePosition::to_repr(Self) -> @debug.Repr
@@ -108,10 +111,11 @@ pub fn MouseTarget::position(Self) -> @common.Position?
 pub fn MouseTarget::range(Self) -> @common.Range?
 pub fn MouseTarget::type_(Self) -> MouseTargetType
 
+#derive(Eq, @debug.Debug)
 pub(all) struct MouseTargetContentEmptyData {
   is_after_lines : Bool
   horizontal_distance_to_text : Double?
-} derive(Eq, @debug.Debug)
+}
 pub fn MouseTargetContentEmptyData::equal(Self, Self) -> Bool
 pub fn MouseTargetContentEmptyData::not_equal(Self, Self) -> Bool
 pub fn MouseTargetContentEmptyData::to_repr(Self) -> @debug.Repr
@@ -121,17 +125,19 @@ pub(all) struct MouseTargetContentTextData {
   injected_text : @view_model.InjectedText?
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct MouseTargetMarginData {
   is_after_lines : Bool
   glyph_margin_left : Double
   glyph_margin_width : Double
   line_numbers_width : Double
   offset_x : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn MouseTargetMarginData::equal(Self, Self) -> Bool
 pub fn MouseTargetMarginData::not_equal(Self, Self) -> Bool
 pub fn MouseTargetMarginData::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum MouseTargetType {
   Unknown
   Textarea
@@ -147,28 +153,30 @@ pub(all) enum MouseTargetType {
   Scrollbar
   OverlayWidget
   OutsideEditor
-} derive(Eq, @debug.Debug)
+}
 pub fn MouseTargetType::equal(Self, Self) -> Bool
 pub fn MouseTargetType::not_equal(Self, Self) -> Bool
 pub fn MouseTargetType::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct MouseTargetViewZoneData {
   view_zone_id : String
   position_before : @common.Position?
   position_after : @common.Position?
   position : @common.Position
   after_line_number : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn MouseTargetViewZoneData::equal(Self, Self) -> Bool
 pub fn MouseTargetViewZoneData::not_equal(Self, Self) -> Bool
 pub fn MouseTargetViewZoneData::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum OutsidePosition {
   Above
   Below
   Left
   Right
-} derive(Eq, @debug.Debug)
+}
 pub fn OutsidePosition::equal(Self, Self) -> Bool
 pub fn OutsidePosition::not_equal(Self, Self) -> Bool
 pub fn OutsidePosition::to_repr(Self) -> @debug.Repr
@@ -178,10 +186,11 @@ pub fn OverlayWidget::get_dom_node(Self) -> @dom.Element
 pub fn OverlayWidget::get_id(Self) -> String
 pub fn OverlayWidget::unmanaged(String, @dom.Element) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) struct PageCoordinates {
   x : Double
   y : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn PageCoordinates::equal(Self, Self) -> Bool
 pub fn PageCoordinates::not_equal(Self, Self) -> Bool
 pub fn PageCoordinates::to_client_coordinates(Self) -> ClientCoordinates

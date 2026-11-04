@@ -1,5 +1,6 @@
 ///|
 /// Log threshold and entry severity. `Off` disables emission.
+#derive(Eq, Debug)
 pub(all) enum LogLevel {
   Off
   Trace
@@ -7,16 +8,17 @@ pub(all) enum LogLevel {
   Info
   Warning
   Error
-} derive(Eq, Debug)
+}
 
 ///|
 /// Structured log event emitted by app and viewer services.
+#derive(Eq, Debug)
 pub(all) struct LogEntry {
   level : LogLevel
   category : String
   message : String
   details : Array[(String, String)]
-} derive(Eq, Debug)
+}
 
 ///|
 /// In-memory logger used by tests and harness-facing diagnostics.

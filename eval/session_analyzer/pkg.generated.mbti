@@ -2,6 +2,7 @@
 package "moonbitlang/openseek/eval/session_analyzer"
 
 import {
+  "moonbitlang/core/json",
   "moonbitlang/openseek/agent_session",
 }
 
@@ -28,7 +29,7 @@ pub struct EvalResult {
 }
 pub fn EvalResult::html(Self) -> String
 pub fn EvalResult::markdown(Self) -> String
-pub fn EvalResult::to_json(Self) -> Json
+pub fn EvalResult::to_json(Self) -> @json.Json
 pub async fn EvalResult::write_files(Self, String) -> Unit
 
 // Type aliases

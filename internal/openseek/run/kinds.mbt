@@ -177,7 +177,9 @@ async fn Kind::run(
     Explore => {
       let api_key = api_key()
       let scratch_dir = @setup.new_scratch_lab("openseek-explore-lab-")
-      defer @setup.remove_scratch_lab(scratch_dir)
+      defer @async.protect_from_cancel(() => {
+        @setup.remove_scratch_lab(scratch_dir)
+      })
       let report = @agent_explore.run_child(
         input,
         api_key~,
@@ -206,7 +208,9 @@ async fn Kind::run(
       }
       let api_key = api_key()
       let scratch_dir = @setup.new_scratch_lab("openseek-review-lab-")
-      defer @setup.remove_scratch_lab(scratch_dir)
+      defer @async.protect_from_cancel(() => {
+        @setup.remove_scratch_lab(scratch_dir)
+      })
       let report = match target {
         Goal(goal~, baseline~) =>
           @agent_review.run_goal_audit(

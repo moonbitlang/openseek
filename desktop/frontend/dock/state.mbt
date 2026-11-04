@@ -11,6 +11,7 @@
 /// The surrounding strip is already scoped to a conversation owner, so the
 /// commit/path pair distinguishes tabs without leaking filesystem paths into
 /// the ordinary open-file projection.
+#derive(Eq, Debug)
 pub(all) struct GitHistoryDiff {
   commit : String
   parent : String?
@@ -18,12 +19,13 @@ pub(all) struct GitHistoryDiff {
   original_path : @pathx.Relative?
   status : String
   kind : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// One strip entry. Adding a tab kind later (subagent viewer, review pane)
 /// is a new variant plus its body view — the strip machine itself does not
 /// change.
+#derive(Eq)
 pub(all) enum DockTab {
   // Device-bound absolute identity; changing checkout never retargets a tab.
   File(path~ : @common.Uri)
@@ -41,18 +43,19 @@ pub(all) enum DockTab {
   Workflows
   Github
   Jobs
-} derive(Eq)
+}
 
 ///|
 /// One conversation's dock. The root stores it under that conversation's key;
 /// selecting another conversation does not move or copy either dock's tabs.
 /// `active` is `None` exactly when `tabs` is empty, and a present active tab
 /// belongs to `tabs`. An empty dock shows the launcher menu.
+#derive(Eq)
 pub(all) struct DockState {
   // The strip, in opening order, and the tab whose body is on screen.
   tabs : Array[DockTab]
   active : DockTab?
-} derive(Eq)
+}
 
 ///|
 pub fn DockState::empty() -> DockState {

@@ -1,10 +1,11 @@
 ///|
 /// Browser-neutral inclusive view-line range produced by the common ViewModel
 /// before the browser tier constructs its frozen `ViewTokensChangedEvent`.
+#derive(Eq, Debug)
 pub struct ViewTokensChangedRange {
   from_line_number : Int32
   to_line_number : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Keeps existing headless `ViewModel` callers source-compatible. The browser

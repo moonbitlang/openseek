@@ -1,10 +1,11 @@
 // Title search across the host’s registered session stores.
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionSearchPayload {
   query : String
   include_archived : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SessionSearchPayload with fn from_json(json, path) {
@@ -37,13 +38,14 @@ pub extend SessionSearchPayload with FromJson::{from_json}
 pub extend SessionSearchPayload with ToJson::{to_json}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionSearchHit {
   session : String
   workspace : String
   title : String
   archived : Bool
   updated_at_ms : Double?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SessionSearchHit with fn from_json(json, path) {
@@ -86,11 +88,12 @@ pub extend SessionSearchHit with FromJson::{from_json}
 pub extend SessionSearchHit with ToJson::{to_json}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionSearchReply {
   hits : Array[SessionSearchHit]
   errors : Array[String]
   has_more : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SessionSearchReply with fn from_json(json, path) {

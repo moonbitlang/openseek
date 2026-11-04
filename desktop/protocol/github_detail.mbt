@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubPullRequestPayload {
   cwd : String
   repository_url : String
   number : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubPullRequestPayload with fn from_json(json, path) {
@@ -25,12 +26,13 @@ pub impl ToJson for GithubPullRequestPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubComment {
   author : String?
   body_html : String
   url : String
   created_at : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubComment with fn from_json(json, path) {
@@ -57,12 +59,13 @@ pub impl ToJson for GithubComment with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubCheck {
   name : String
   state : String
   url : String?
   workflow : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubCheck with fn from_json(json, path) {
@@ -91,10 +94,11 @@ pub impl ToJson for GithubCheck with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubReviewer {
   name : String
   state : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubReviewer with fn from_json(json, path) {
@@ -111,6 +115,7 @@ pub impl ToJson for GithubReviewer with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubPullRequestDetail {
   item : GithubItem
   state : String
@@ -128,7 +133,7 @@ pub(all) struct GithubPullRequestDetail {
   assignees : Array[String]
   labels : Array[String]
   milestone : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubPullRequestDetail with fn from_json(json, path) {

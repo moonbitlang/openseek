@@ -1,9 +1,10 @@
 ///|
+#derive(Eq)
 priv enum PreviewResourceLifecycle {
   PreviewResourceOpen
   PreviewResourceClosing
   PreviewResourceDisposed
-} derive(Eq)
+}
 
 ///|
 /// Host-owned state for one cross-resource Peek preview. The remote document

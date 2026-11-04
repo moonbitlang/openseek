@@ -26,18 +26,20 @@ pub fn tokenize_to_string(String, @services.LanguageIdCodec, (String) -> Array[U
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct CharacterPair {
   open : String
   close : String
-} derive(Eq, @debug.Debug)
+}
 pub fn CharacterPair::equal(Self, Self) -> Bool
 pub fn CharacterPair::not_equal(Self, Self) -> Bool
 pub fn CharacterPair::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct CommentRule {
   line_comment : LineCommentRule?
   block_comment : CharacterPair?
-} derive(Eq, @debug.Debug)
+}
 pub fn CommentRule::equal(Self, Self) -> Bool
 pub fn CommentRule::not_equal(Self, Self) -> Bool
 pub fn CommentRule::to_repr(Self) -> @debug.Repr
@@ -81,10 +83,11 @@ pub fn Languages::register_references_provider(Self, @language.LanguageSelector,
 pub fn Languages::set_language_configuration(Self, String, LanguageConfiguration) -> Unit
 pub fn Languages::set_tokens_provider(Self, String, &@syntax.LineTokenizer) -> @common.Disposable
 
+#derive(Eq, @debug.Debug)
 pub struct LineCommentRule {
   comment : String
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn LineCommentRule::LineCommentRule(String, no_indent? : Bool) -> Self
 pub fn LineCommentRule::equal(Self, Self) -> Bool
 pub fn LineCommentRule::not_equal(Self, Self) -> Bool

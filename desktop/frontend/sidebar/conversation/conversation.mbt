@@ -1,5 +1,6 @@
 ///|
 /// The durable/UI origin of one sidebar conversation row.
+#derive(Debug, Eq, Hash)
 pub(all) enum ConversationSource {
   OpenSeekLive
   CloudLive
@@ -8,7 +9,7 @@ pub(all) enum ConversationSource {
   CodexLive
   CodexArchived
   CodexDraft
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 fn ConversationSource::key(self : ConversationSource) -> String {
@@ -28,12 +29,13 @@ fn ConversationSource::key(self : ConversationSource) -> String {
 /// sidebar sections that list the same channel-local id — a live chat and an
 /// archived record, or another conversation source entirely — from sharing
 /// Rabbita state.
+#derive(Debug, Eq, Hash)
 pub(all) struct Id {
   source : ConversationSource
   channel : String
   conversation : String
   root : String?
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn Id::Id(
@@ -74,6 +76,7 @@ pub fn Id::key(self : Id) -> String {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum RunMark {
   NoRunMark
   RunningMark
@@ -82,16 +85,17 @@ pub(all) enum RunMark {
   FailedMark
   StoppedMark
   EndedMark
-} derive(Debug, Eq)
+}
 
 ///|
 /// Backend adapters supply facts; priority and visual meaning belong here.
+#derive(Eq)
 pub(all) enum RunOutcome {
   Completed
   Failed
   Stopped
   Ended
-} derive(Eq)
+}
 
 ///|
 pub fn RunMark::for_task(
@@ -118,19 +122,21 @@ pub fn RunMark::for_task(
 /// One action a row offers. A live durable conversation offers Archive, and
 /// the permanent Delete where its source supports one; an archived record
 /// offers Restore and Delete.
+#derive(Debug, Eq)
 pub(all) enum TrailingAction {
   Archive(title~ : String)
   Restore(title~ : String)
   Delete(title~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// A row's title while it is edited in place. The root owns the draft and
 /// the save; the row only renders the field, locked while a save is pending.
+#derive(Debug, Eq)
 pub(all) struct Rename {
   draft : String
   saving : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// What the user did in the in-place title field. `Left` is focus moving
@@ -146,6 +152,7 @@ pub(all) enum RenameEdit {
 /// Plain, comparable input to one conversation component. Child runs are
 /// nested data so their lifetime follows the parent branch rather than array
 /// position in the global sidebar.
+#derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
   title : String
@@ -161,7 +168,7 @@ pub(all) struct Input {
   run_mark : RunMark
   trailing : Array[TrailingAction]
   children : Array[Input]
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn Input::id(self : Input) -> Id {
@@ -183,10 +190,11 @@ pub(all) struct Actions {
 
 ///|
 /// Search presentation is separate from the row's domain identity and state.
+#derive(Eq)
 pub(all) struct Search {
   query : String
   selected : Id?
-} derive(Eq)
+}
 
 ///|
 fn highlighted(value : String, query : String) -> @html.Html {
@@ -213,9 +221,10 @@ priv enum Msg {
 }
 
 ///|
+#derive(Eq)
 priv struct State {
   children_open : Bool
-} derive(Eq)
+}
 
 ///|
 fn Actions::command(

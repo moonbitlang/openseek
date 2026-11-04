@@ -25,20 +25,22 @@ pub(all) struct Actions {
   conversation : @conversation.Actions
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Host {
   name : String
   online : Bool
   details : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn Host::equal(Self, Self) -> Bool
 pub fn Host::not_equal(Self, Self) -> Bool
 pub fn Host::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, Hash, @debug.Debug)
 pub(all) struct Id {
   source : String
   channel : String
   root : String
-} derive(Eq, Hash, @debug.Debug)
+}
 pub fn Id::Id(source~ : String, channel~ : String, root~ : String) -> Self
 pub fn Id::channel(Self) -> String
 pub fn Id::equal(Self, Self) -> Bool
@@ -50,6 +52,7 @@ pub fn Id::root(Self) -> String
 pub fn Id::source(Self) -> String
 pub fn Id::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Input {
   id : Id
   title : String
@@ -59,7 +62,7 @@ pub(all) struct Input {
   can_start : Bool
   managed : Bool
   conversations : Array[@conversation.Input]
-} derive(Eq, @debug.Debug)
+}
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id
 pub fn Input::menu_entries(Self, Actions, locale? : @i18n.Locale) -> Array[@action_menu.Entry]

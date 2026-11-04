@@ -6,10 +6,11 @@
 ///|
 /// Maps a half-open line range in the original document to one in the
 /// modified document.
+#derive(Eq, Debug)
 pub(all) struct LineRangeMapping {
   original : @base_common.LineRange
   modified : @base_common.LineRange
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn LineRangeMapping::LineRangeMapping(
@@ -22,10 +23,11 @@ pub fn LineRangeMapping::LineRangeMapping(
 ///|
 /// Maps a one-based UTF-16 range in the original document to one in the
 /// modified document.
+#derive(Eq, Debug)
 pub(all) struct RangeMapping {
   original : @base_common.Range
   modified : @base_common.Range
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn RangeMapping::RangeMapping(
@@ -41,13 +43,14 @@ pub fn RangeMapping::RangeMapping(
 /// mappings — `DetailedLineRangeMapping` (`rangeMapping.ts:196`). The source
 /// class extends `LineRangeMapping`; MoonBit has no inheritance, so the
 /// struct is flat and repeats the two line ranges.
+#derive(Eq, Debug)
 pub(all) struct DetailedLineRangeMapping {
   original : @base_common.LineRange
   modified : @base_common.LineRange
   /// If inner changes have not been computed, this is `None`. Otherwise it
   /// represents the character-level diff in this line range.
   inner_changes : Array[RangeMapping]?
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn DetailedLineRangeMapping::DetailedLineRangeMapping(

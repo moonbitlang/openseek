@@ -1,11 +1,12 @@
 ///|
 /// Positions present in GitHub's own PR patch, rather than the displayed file.
 /// LEFT contains deletions; RIGHT contains additions and context lines.
+#derive(Eq, Debug)
 pub(all) struct GithubCommentableFile {
   path : String
   left_lines : Array[Int32]
   right_lines : Array[Int32]
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubCommentableFile with fn from_json(json, path) {

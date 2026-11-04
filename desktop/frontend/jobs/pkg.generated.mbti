@@ -38,13 +38,15 @@ pub(all) enum Msg {
   OpenSession(String)
 }
 
+#derive(Eq)
 pub(all) struct Owner {
   channel : @interop.ChannelId
   scope : @protocol.JobsScope
-} derive(Eq)
+}
 pub fn Owner::equal(Self, Self) -> Bool
 pub fn Owner::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct State {
   owner : Owner?
   watch : Watch
@@ -71,16 +73,17 @@ pub(all) struct State {
   clipped : Bool
   control_error : String?
   stopping : Bool
-} derive(Eq)
+}
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum Watch {
   Unwatched
   Summary
   Panel
-} derive(Eq)
+}
 pub fn Watch::equal(Self, Self) -> Bool
 pub fn Watch::not_equal(Self, Self) -> Bool
 

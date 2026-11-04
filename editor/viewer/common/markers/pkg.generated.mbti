@@ -14,6 +14,7 @@ pub fn squiggly_theme_css(SquigglyThemeColors) -> String
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct Marker {
   owner : String
   resource : @common.Uri
@@ -29,12 +30,13 @@ pub struct Marker {
   related_information : Array[RelatedInformation]?
   tags : Array[MarkerTag]?
   origin : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn Marker::equal(Self, Self) -> Bool
 pub fn Marker::not_equal(Self, Self) -> Bool
 pub fn Marker::to_repr(Self) -> @debug.Repr
 
-type MarkerData derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type MarkerData
 pub fn MarkerData::MarkerData(severity~ : MarkerSeverity, message~ : String, start_line_number~ : Int32, start_column~ : Int32, end_line_number~ : Int32, end_column~ : Int32, code? : String, source? : String, model_version_id? : Int32, related_information? : Array[RelatedInformation], tags? : Array[MarkerTag], origin? : String) -> Self
 pub fn MarkerData::equal(Self, Self) -> Bool
 pub fn MarkerData::not_equal(Self, Self) -> Bool
@@ -73,24 +75,27 @@ pub fn MarkerService::set_diagnostics(Self, String, @common.Uri, Array[@language
 
 type MarkerServiceHandle
 
+#derive(Eq, @debug.Debug)
 pub(all) enum MarkerSeverity {
   Hint
   Info
   Warning
   Error
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkerSeverity::equal(Self, Self) -> Bool
 pub fn MarkerSeverity::not_equal(Self, Self) -> Bool
 pub fn MarkerSeverity::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum MarkerTag {
   Unnecessary
   Deprecated
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkerTag::equal(Self, Self) -> Bool
 pub fn MarkerTag::not_equal(Self, Self) -> Bool
 pub fn MarkerTag::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RelatedInformation {
   resource : @common.Uri
   message : String
@@ -98,7 +103,7 @@ pub(all) struct RelatedInformation {
   start_column : Int32
   end_line_number : Int32
   end_column : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn RelatedInformation::equal(Self, Self) -> Bool
 pub fn RelatedInformation::not_equal(Self, Self) -> Bool
 pub fn RelatedInformation::to_repr(Self) -> @debug.Repr
@@ -109,20 +114,22 @@ pub struct ResolvedMarkerDecoration {
   options : @model.ModelDecorationOptions
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ResourceMarker {
   resource : @common.Uri
   marker : MarkerData
-} derive(Eq, @debug.Debug)
+}
 pub fn ResourceMarker::equal(Self, Self) -> Bool
 pub fn ResourceMarker::not_equal(Self, Self) -> Bool
 pub fn ResourceMarker::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SquigglyThemeColors {
   error : String?
   warning : String?
   info : String?
   hint : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn SquigglyThemeColors::equal(Self, Self) -> Bool
 pub fn SquigglyThemeColors::not_equal(Self, Self) -> Bool
 pub fn SquigglyThemeColors::to_repr(Self) -> @debug.Repr

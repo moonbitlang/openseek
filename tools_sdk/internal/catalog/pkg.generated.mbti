@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek_tools/internal/catalog"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
 
 // Errors
@@ -34,10 +38,10 @@ pub fn Source::unavailable(name~ : String, error~ : String) -> Self
 pub struct Tool {
   name : String
   description : String
-  input_schema : Json
-  output_schema : Json?
+  input_schema : @json.Json
+  output_schema : @json.Json?
 }
-pub fn Tool::Tool(name~ : String, description~ : String, input_schema~ : Json, output_schema? : Json) -> Self
+pub fn Tool::Tool(name~ : String, description~ : String, input_schema~ : @json.Json, output_schema? : @json.Json) -> Self
 
 // Type aliases
 

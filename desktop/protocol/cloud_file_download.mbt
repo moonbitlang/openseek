@@ -4,25 +4,28 @@ pub const CloudOrigin = "https://cloud.moonbitlang.cn"
 
 ///|
 /// Only complete original bytes belong here, never a rendered preview.
+#derive(Eq, Debug)
 pub(all) struct CloudFileCache {
   etag : String
   data_base64 : String
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct CloudFileDownloadPayload {
   account : String
   session : String
   path : String
   cached : CloudFileCache?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Saved bytes and revealing them are separate outcomes.
+#derive(Eq, Debug)
 pub(all) enum CloudFileDownloadReply {
   Saved(path~ : String, revealed~ : Bool)
   Failed(message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for CloudFileCache with fn from_json(json, path) {

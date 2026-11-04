@@ -6,18 +6,20 @@
 ///|
 /// A rectangle in CSS pixels — the browser pane's placement, which at 100%
 /// zoom equals the window-logical bounds a native view takes.
+#derive(Eq)
 pub(all) struct Rect {
   x : Int32
   y : Int32
   width : Int32
   height : Int32
-} derive(Eq)
+}
 
 ///|
 /// One browser page's state. `url` is `None` until the first navigation —
 /// a blank tab has no native view yet (the host creates it on the first
 /// `browser.open`), so nothing covers the pane while the address bar waits
 /// for input.
+#derive(Eq)
 pub(all) struct PageState {
   // The last URL this page was sent to (optimistic) or reported at (from a
   // `Navigated` event). `None` = blank tab, no native view exists.
@@ -31,17 +33,18 @@ pub(all) struct PageState {
   loading : Bool
   // The last load failure's description, cleared by the next navigation.
   failure : String?
-} derive(Eq)
+}
 
 ///|
 /// The browser subsystem's state: every live page keyed by its dock tab id.
 /// Ids are page-global (never per conversation) so parked strips can keep
 /// referring to their pages, and only ever grow.
+#derive(Eq)
 pub(all) struct State {
   pages : Map[Int32, PageState]
   next_id : Int32
   files : Map[Int32, FileObservation]
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {

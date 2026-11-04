@@ -12,12 +12,13 @@
 /// individual lines that failed to decode; `partial_tail` is true when the
 /// final line looked like a half-written record from a process that exited
 /// mid-append.
+#derive(Eq, Debug)
 pub(all) struct ParsedLog {
   header : SessionFileHeader?
   events : Array[@agent_session.SessionEvent]
   errors : Array[LineError]
   partial_tail : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Parse a session file into a header record and typed `SessionEvent`s,

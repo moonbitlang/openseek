@@ -4,10 +4,11 @@
 /// `line_number` starts at 1 and `column` starts at 1 (the first character on a
 /// line sits between column 1 and column 2). Field names use the repo's
 /// snake_case convention (`line_number`), matching `Range::start_line_number`.
+#derive(Eq, Debug)
 pub(all) struct Position {
   line_number : Int32
   column : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// A range of offsets (0-based), half-open `[start, end_exclusive)`. A subset
@@ -15,10 +16,11 @@ pub(all) struct Position {
 /// operations used by the viewer; field names use the repo's snake_case
 /// (`end_exclusive`). The name `Range` is reserved for
 /// Monaco's line/column range (see `monaco_range.mbt`).
+#derive(Eq, Debug)
 pub struct OffsetRange {
   start : Int32
   end_exclusive : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds a position without normalization; callers decide the coordinate

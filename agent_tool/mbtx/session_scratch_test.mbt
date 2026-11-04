@@ -29,7 +29,7 @@ async test "session scratch permits raw file IO and script saving outside the wo
     let saved = dispatch(tool, {
       "source": source,
       "filename": "\{scratch}/helper.mbtx",
-      "args": [scratch, "\{workspace}/project.txt"],
+      "args": [scratch, "\{workspace}/project.mbt"],
       "ptc": false,
     })
     assert_false(saved.is_error, msg=saved.content)

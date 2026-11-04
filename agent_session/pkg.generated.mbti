@@ -41,7 +41,8 @@ pub fn to_deepseek_parts(@openseek_protocol.Content) -> Array[@deepseek.ContentP
 // Errors
 
 // Types and methods
-type AssistantMessage derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type AssistantMessage
 pub fn AssistantMessage::AssistantMessage(String, tool_calls? : Array[@deepseek.ToolCall], reasoning_content? : String, is_replay? : Bool) -> Self
 pub fn AssistantMessage::content(Self) -> String
 pub fn AssistantMessage::is_replay(Self) -> Bool
@@ -50,23 +51,27 @@ pub fn AssistantMessage::tool_calls(Self) -> Array[@deepseek.ToolCall]
 pub fn AssistantMessage::usage(Self) -> TokenUsage?
 pub fn AssistantMessage::with_usage(Self, @deepseek.Usage) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GoalBaseline {
   sha : String
   dirty : Bool
-} derive(Eq, @debug.Debug)
+}
 
+#derive(@debug.Debug)
 pub enum GoalMarker {
   GoalSet(String)
   GoalCleared
   GoalBlocked(String)
   GoalUnblocked
-} derive(@debug.Debug)
+}
 
-type RuntimeNotice derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type RuntimeNotice
 pub fn RuntimeNotice::RuntimeNotice(String) -> Self
 pub fn RuntimeNotice::content(Self) -> String
 
-type Session derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Session
 pub fn Session::Session(SessionId, system_prompt~ : String, events? : @vector.Vector[SessionEvent]) -> Self
 pub fn Session::append(Self, SessionItem, unix_ms? : Int64) -> Self
 pub fn Session::append_event(Self, SessionItem, unix_ms? : Int64) -> (Self, SessionEvent)
@@ -81,21 +86,24 @@ pub fn Session::last_sequence(Self) -> Int32
 pub fn Session::last_terminal(Self) -> TurnTerminal?
 pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32) -> SessionItem raise
 pub fn Session::system_prompt(Self) -> String
-pub impl ToJson for Session
 pub impl @json.FromJson for Session
+pub impl @json.ToJson for Session
 
-type SessionEvent derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type SessionEvent
 pub fn SessionEvent::is_agent_step(Self) -> Bool
 pub fn SessionEvent::item(Self) -> SessionItem
 pub fn SessionEvent::sequence(Self) -> Int32
 pub fn SessionEvent::unix_ms(Self) -> Int64
 
-type SessionId derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type SessionId
 pub fn SessionId::SessionId(String) -> Self
 pub fn SessionId::generated(prefix~ : String, now_ms~ : Int64, salt? : String) -> Self
 pub fn SessionId::value(Self) -> String
 pub impl @json.FromJson for SessionId
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SessionItem {
   User(UserMessage)
   Assistant(AssistantMessage)
@@ -103,38 +111,43 @@ pub(all) enum SessionItem {
   Runtime(RuntimeNotice)
   Summary(SessionSummary)
   Terminal(TurnTerminal)
-} derive(Eq, @debug.Debug)
+}
 pub impl @json.FromJson for SessionItem
 
-type SessionSummary derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type SessionSummary
 pub fn SessionSummary::SessionSummary(content~ : String, from_sequence~ : Int32, to_sequence~ : Int32) -> Self
 pub fn SessionSummary::content(Self) -> String
 pub fn SessionSummary::from_sequence(Self) -> Int32
 pub fn SessionSummary::to_sequence(Self) -> Int32
 
-type StandingGoal derive(@debug.Debug)
+#derive(@debug.Debug)
+type StandingGoal
 pub fn StandingGoal::answered_since_set(Self) -> Bool
 pub fn StandingGoal::blocked(Self) -> Bool
 pub fn StandingGoal::set_sequence(Self) -> Int32
 pub fn StandingGoal::text(Self) -> String
 
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct TokenUsage {
   prompt_tokens : Int32
   completion_tokens : Int32
   total_tokens : Int32
   prompt_cache_hit_tokens : Int32
   prompt_cache_miss_tokens : Int32
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+}
 
-type ToolResult derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn ToolResult::ToolResult(tool_call_id~ : String, tool_name~ : String, content~ : Array[@openseek_protocol.ContentPart], is_error? : Bool, brief? : String, data? : Json) -> Self
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type ToolResult
+pub fn ToolResult::ToolResult(tool_call_id~ : String, tool_name~ : String, content~ : Array[@openseek_protocol.ContentPart], is_error? : Bool, brief? : String, data? : @json.Json) -> Self
 pub fn ToolResult::brief(Self) -> String?
 pub fn ToolResult::content(Self) -> @openseek_protocol.Content
-pub fn ToolResult::data(Self) -> Json?
+pub fn ToolResult::data(Self) -> @json.Json?
 pub fn ToolResult::is_error(Self) -> Bool
 pub fn ToolResult::tool_call_id(Self) -> String
 pub fn ToolResult::tool_name(Self) -> String
 
+#derive(Eq, @debug.Debug)
 pub(all) enum TurnTerminal {
   Finished(String)
   ContextYield(String)
@@ -142,10 +155,11 @@ pub(all) enum TurnTerminal {
   Interrupted(String)
   MaxStepsExhausted
   Failed(String)
-} derive(Eq, @debug.Debug)
+}
 pub impl @json.FromJson for TurnTerminal
 
-type UserMessage derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type UserMessage
 pub fn UserMessage::UserMessage(@openseek_protocol.Content, submission_id? : String) -> Self
 pub fn UserMessage::content(Self) -> @openseek_protocol.Content
 pub fn UserMessage::submission_id(Self) -> String?

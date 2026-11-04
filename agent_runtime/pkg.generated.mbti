@@ -32,21 +32,23 @@ type AgentTaskScope[X]
 pub fn[X] AgentTaskScope::AgentTaskScope(@async.TaskGroup[X]) -> Self[X]
 pub fn[X] AgentTaskScope::group(Self[X]) -> @async.TaskGroup[X]
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ApprovalAsk {
   tool_name : String
   detail : String
   body : String?
-} derive(Eq, @debug.Debug)
+}
 
 pub(all) struct ApprovalChannel(async (ApprovalAsk) -> ApprovalOutcome)
 pub async fn ApprovalChannel::ask(Self, ApprovalAsk) -> ApprovalOutcome
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ApprovalOutcome {
   AllowedOnce
   Rejected
   Cancelled
   Unavailable
-} derive(Eq, @debug.Debug)
+}
 
 pub(all) enum SteerInput {
   Prompt(@openseek_protocol.Content, submission_id~ : String?)

@@ -27,9 +27,10 @@ pub fn Doc::Doc(texts : Array[Text]) -> Doc {
 ///
 /// Text wraps by terminal display width and treats newline characters as forced
 /// row breaks.
+#derive(Debug)
 struct Text {
   spans : Array[Span]
-} derive(Debug)
+}
 
 ///|
 /// Build a text block from a sequence of styled spans.
@@ -87,10 +88,11 @@ pub fn Text::split_lines(self : Text) -> Array[Text] {
 /// newline is still handled: `Text::wrap` iterates the span's `DisplayText`
 /// directly and forces a row break on CR/LF/CRLF inline, without re-segmenting
 /// the string.
+#derive(Debug)
 struct Span {
   display : @displaytext.DisplayText
   style : @style.Style
-} derive(Debug)
+}
 
 ///|
 /// Build a styled span.

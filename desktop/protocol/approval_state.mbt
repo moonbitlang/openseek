@@ -1,10 +1,11 @@
 ///|
 /// Atomic process-lifetime view of every unresolved OpenSeek permission request.
 /// A claimed request stays visible as answered until the engine resolves it.
+#derive(Debug, Eq)
 pub(all) struct ApprovalSnapshot {
   generation : Int32
   approvals : Array[PendingApprovalPayload]
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for ApprovalSnapshot with fn to_json(self) {

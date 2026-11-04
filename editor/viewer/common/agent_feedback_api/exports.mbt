@@ -10,21 +10,23 @@
 /// needs the payload without consuming the viewer's service — which is why
 /// this is a shared contract while the reply notification stays private to
 /// the concrete service. `moonbitlang/openseek` consumes it.
+#derive(Debug)
 pub(all) struct AgentFeedbackAddedEvent {
   feedback : AgentFeedback
   has_existing_feedback_for_file : Bool
-} derive(Debug)
+}
 
 ///|
 /// Accepted feedback submitted for one resource, including host-forwardable
 /// items and the per-kind/reply counts.
+#derive(Debug)
 pub(all) struct AgentFeedbackSubmittedEvent {
   resource : @base_common.Uri
   items : Array[AgentFeedback]
   user_count : Int32
   agent_review_count : Int32
   reply_count : Int32
-} derive(Debug)
+}
 
 ///|
 pub extend AgentFeedbackAddedEvent with Debug::{to_repr}

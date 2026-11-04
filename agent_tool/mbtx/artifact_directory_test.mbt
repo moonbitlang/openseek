@@ -1,5 +1,5 @@
 ///|
-async test "explicit artifact paths use existing scratch permissions without granting workspace or other session writes" {
+async test "explicit artifact paths use existing scratch permissions without granting workspace source or other session writes" {
   @vfs.with_tmpdir(root => {
     let workspace = root + "/project"
     let first_scratch = root + "/sessions/first/scratch"
@@ -49,14 +49,14 @@ async test "explicit artifact paths use existing scratch permissions without gra
         "args": [
           second + "/chart.html",
           workspace + "/main.mbt",
-          workspace + "/output.html",
+          root + "/output.html",
         ],
         "ptc": false,
       },
     )
     assert_false(escaped.is_error, msg=escaped.content)
     assert_false(@fs.exists(workspace + "/main.mbt"))
-    assert_false(@fs.exists(workspace + "/output.html"))
+    assert_false(@fs.exists(root + "/output.html"))
     assert_eq(@fs.read_file(second + "/chart.html").text(), "second")
     let resumed = dispatch(
       @mbtx.definition(workspace_root=workspace, scratch_dir=first_scratch),

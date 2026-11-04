@@ -7,6 +7,7 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
@@ -65,7 +66,7 @@ pub(all) enum Action {
   CodexRequestToggled(identity~ : Identity, request_key~ : String)
   CodexRequestAnswerChanged(identity~ : Identity, request_key~ : String, question_id~ : String, answer~ : String)
   CodexQuestionChanged(identity~ : Identity, request_key~ : String, action~ : @question_card.Action)
-  CodexRequestResponded(identity~ : Identity, request_key~ : String, decision~ : Json)
+  CodexRequestResponded(identity~ : Identity, request_key~ : String, decision~ : @json.Json)
   PermissionMenuToggled(identity~ : Identity)
   PermissionMenuDismissed(identity~ : Identity)
   PermissionSelected(identity~ : Identity, mode~ : @protocol.CodexPermissionMode)
@@ -83,20 +84,23 @@ pub(all) enum Action {
 }
 pub fn Action::identity(Self) -> Identity
 
+#derive(Eq)
 pub(all) struct ApprovalNotice {
   tool_name : String
   detail : String
   target_label : String?
   body : String?
   answered : Bool
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct ApprovalSelect {
   mode : @protocol.OpenSeekApproval
   open : Bool
   enabled : Bool
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct CodexRequestInput {
   questions : Array[@question_card.Question]
   question_draft : @question_card.Model
@@ -104,9 +108,9 @@ pub(all) struct CodexRequestInput {
   request_key : String
   expanded : Bool
   method_ : String
-  params : Json
+  params : @json.Json
   answers : Map[String, String]
-} derive(Eq)
+}
 
 pub(all) enum CommandResult {
   Ready(Input, String, String)
@@ -114,6 +118,7 @@ pub(all) enum CommandResult {
   Settled(@interop.ConversationIdentity, String, Bool)
 }
 
+#derive(Eq)
 pub(all) enum ContextComponent {
   ConnectionBanner(device_name~ : String?)
   SubrunDock(lanes~ : Array[@subrun.Lane])
@@ -126,13 +131,14 @@ pub(all) enum ContextComponent {
   CompactionNotice(queued~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
-} derive(Eq)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Draft {
   task : String
   mentions : Array[Mention]
   images : Array[Image]
-} derive(Eq, @debug.Debug)
+}
 pub fn Draft::equal(Self, Self) -> Bool
 pub fn Draft::from_content(@deepseek.Content) -> Self?
 pub fn Draft::is_blank(Self) -> Bool
@@ -147,93 +153,106 @@ pub fn Draft::with_office_selection(Self, String?) -> Self
 pub fn Draft::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
 pub fn Draft::with_semantic_selection(Self, @mention_context.SemanticSearchReference?) -> Self
 
+#derive(Eq)
 pub(all) enum EntryChange {
   Retire(@interop.ConversationIdentity)
   Move(from~ : @interop.ConversationIdentity, to~ : @interop.ConversationIdentity)
-} derive(Eq)
+}
 pub fn EntryChange::equal(Self, Self) -> Bool
 pub fn EntryChange::not_equal(Self, Self) -> Bool
 pub fn EntryChange::retires(Self, @interop.ConversationIdentity) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) enum FileIndex {
   FileIndexEmpty(epoch~ : Int32)
   FileIndexLoading(epoch~ : Int32)
   FileIndexReady(epoch~ : Int32, truncated~ : Bool)
   FileIndexFailed(epoch~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn FileIndex::equal(Self, Self) -> Bool
 pub fn FileIndex::not_equal(Self, Self) -> Bool
 pub fn FileIndex::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum FollowupChoice {
   SteerNow
   QueueNext
-} derive(Eq, @debug.Debug)
+}
 pub fn FollowupChoice::equal(Self, Self) -> Bool
 pub fn FollowupChoice::not_equal(Self, Self) -> Bool
 pub fn FollowupChoice::to_repr(Self) -> @debug.Repr
 
-type GitChanges derive(Eq)
+#derive(Eq)
+type GitChanges
 pub fn GitChanges::GitChanges(added~ : Int32, removed~ : Int32, files~ : Int32, partial~ : Bool, base? : String) -> Self
 pub fn GitChanges::equal(Self, Self) -> Bool
 pub fn GitChanges::not_equal(Self, Self) -> Bool
 
-type GitChecks derive(Eq)
+#derive(Eq)
+type GitChecks
 pub fn GitChecks::GitChecks(passed~ : Int32, failed~ : Int32, pending~ : Int32) -> Self
 pub fn GitChecks::equal(Self, Self) -> Bool
 pub fn GitChecks::not_equal(Self, Self) -> Bool
 pub fn GitChecks::summary(locale? : @i18n.Locale, Self) -> String
 pub fn GitChecks::tone(Self) -> String
 
+#derive(Eq)
 pub(all) struct GitControl {
   presentation : GitPresentation
   open : Bool
-} derive(Eq)
+}
 
-type GitPresentation derive(Eq)
+#derive(Eq)
+type GitPresentation
 pub fn GitPresentation::GitPresentation(branch~ : String, changes? : GitChanges, pull_request? : GitPullRequest, compare_url? : String, missing_pull_request? : String) -> Self
 pub fn GitPresentation::equal(Self, Self) -> Bool
 pub fn GitPresentation::not_equal(Self, Self) -> Bool
 pub fn GitPresentation::tone(Self) -> String
 
-type GitPullRequest derive(Eq)
+#derive(Eq)
+type GitPullRequest
 pub fn GitPullRequest::GitPullRequest(number~ : Int32, title~ : String, state~ : String, draft~ : Bool, url~ : String, checks? : GitChecks) -> Self
 pub fn GitPullRequest::equal(Self, Self) -> Bool
 pub fn GitPullRequest::label(Self) -> String
 pub fn GitPullRequest::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct GoalInput {
   draft : String?
   standing : @transcript.GoalStanding?
   pending : GoalPending?
-} derive(Eq)
+}
 pub fn GoalInput::equal(Self, Self) -> Bool
 pub fn GoalInput::not_equal(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) enum GoalPending {
   GoalSetting(String)
   GoalClearing
-} derive(Eq, @debug.Debug)
+}
 pub fn GoalPending::equal(Self, Self) -> Bool
 pub fn GoalPending::not_equal(Self, Self) -> Bool
 pub fn GoalPending::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Identity {
   owner : @interop.ConversationIdentity
   archive_generation : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn Identity::equal(Self, Self) -> Bool
 pub fn Identity::not_equal(Self, Self) -> Bool
 pub fn Identity::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Image {
   name : String
   url : String
-} derive(Eq, @debug.Debug)
+}
 pub fn Image::equal(Self, Self) -> Bool
 pub fn Image::not_equal(Self, Self) -> Bool
 pub fn Image::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct Input {
   identity : Identity
   draft : Draft
@@ -257,35 +276,40 @@ pub(all) struct Input {
   active_file : @pathx.Relative?
   file_index : FileIndex
   presentation : Presentation
-} derive(Eq)
+}
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::quote_target(Self) -> Identity?
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Mention {
   ref_ : @mention_context.MentionRef
   range : @common.Range?
-} derive(Eq, @debug.Debug)
+}
 pub fn Mention::editor_annotation(String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn Mention::equal(Self, Self) -> Bool
 pub fn Mention::not_equal(Self, Self) -> Bool
 pub fn Mention::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct MissingWorktreeNotice {
   name : String
   conversation_noun : String
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct ModelGroup {
   label : String
   options : Array[ModelOption]
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct ModelOption {
   value : String
   label : String
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct ModelSelect {
   id : String
   groups : Array[ModelGroup]
@@ -293,21 +317,24 @@ pub(all) struct ModelSelect {
   disabled : Bool
   open : Bool
   title : String
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct PendingSteerInput {
   id : String
   content : String
-} derive(Eq)
+}
 pub fn PendingSteerInput::equal(Self, Self) -> Bool
 pub fn PendingSteerInput::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct PermissionControl {
   mode : @protocol.CodexPermissionMode
   open : Bool
   enabled : Bool
-} derive(Eq)
+}
 
+#derive(Eq)
 pub(all) struct Presentation {
   context : Array[ContextComponent]
   status : Array[StatusComponent]
@@ -315,31 +342,34 @@ pub(all) struct Presentation {
   disabled : Bool
   primary_action : PrimaryAction
   images_enabled : Bool
-} derive(Eq)
+}
 pub fn Presentation::equal(Self, Self) -> Bool
 pub fn Presentation::not_equal(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) enum PrimaryAction {
   Send(available~ : Bool)
   SaveQueuedInput(available~ : Bool)
   Running(steer_available~ : Bool, can_stop~ : Bool, submit~ : RunningSubmit, queue_available~ : Bool)
-} derive(Eq, @debug.Debug)
+}
 pub fn PrimaryAction::equal(Self, Self) -> Bool
 pub fn PrimaryAction::not_equal(Self, Self) -> Bool
 pub fn PrimaryAction::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct QueuedInput {
   id : String
   content : String
   state : QueuedInputState
-} derive(Eq)
+}
 pub fn QueuedInput::equal(Self, Self) -> Bool
 pub fn QueuedInput::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum QueuedInputState {
   Queueing
   Queued(editing~ : Bool, interactive~ : Bool, steer_available~ : Bool)
-} derive(Eq)
+}
 pub fn QueuedInputState::equal(Self, Self) -> Bool
 pub fn QueuedInputState::not_equal(Self, Self) -> Bool
 
@@ -352,6 +382,7 @@ pub(all) struct QuoteReply {
   declined : @cmd.Cmd
 }
 
+#derive(Eq)
 pub(all) struct ReasoningSelect {
   id : String
   options : Array[ModelOption]
@@ -359,7 +390,7 @@ pub(all) struct ReasoningSelect {
   disabled : Bool
   open : Bool
   title : String
-} derive(Eq)
+}
 
 pub(all) enum ReplyContent {
   Text(quote~ : String?, comment~ : String)
@@ -367,15 +398,17 @@ pub(all) enum ReplyContent {
   Annotation(Mention)
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RunHeartbeat {
   stage : RunStage
   started_ms : Double?
   tokens : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn RunHeartbeat::equal(Self, Self) -> Bool
 pub fn RunHeartbeat::not_equal(Self, Self) -> Bool
 pub fn RunHeartbeat::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RunStage {
   Starting
   Thinking
@@ -383,37 +416,41 @@ pub(all) enum RunStage {
   Retrying(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
   Working
   Stopping
-} derive(Eq, @debug.Debug)
+}
 pub fn RunStage::equal(Self, Self) -> Bool
 pub fn RunStage::not_equal(Self, Self) -> Bool
 pub fn RunStage::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RunningSubmit {
   Steer
   Queue
   SaveQueue
-} derive(Eq, @debug.Debug)
+}
 pub fn RunningSubmit::equal(Self, Self) -> Bool
 pub fn RunningSubmit::not_equal(Self, Self) -> Bool
 pub fn RunningSubmit::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct ShellCommand {
   id : String
   command : String
-} derive(Eq)
+}
 pub fn ShellCommand::equal(Self, Self) -> Bool
 pub fn ShellCommand::not_equal(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SlashCommand {
   label : String
   detail : String
   command : String
   prompt : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn SlashCommand::equal(Self, Self) -> Bool
 pub fn SlashCommand::not_equal(Self, Self) -> Bool
 pub fn SlashCommand::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) enum StatusComponent {
   ModelStatus(ModelSelect)
   ReasoningStatus(ReasoningSelect)
@@ -421,7 +458,7 @@ pub(all) enum StatusComponent {
   GitStatus(GitControl)
   WorktreeStatus(WorktreeControl)
   ApprovalStatus(ApprovalSelect)
-} derive(Eq)
+}
 
 pub(all) struct WorktreeArchiveDialog {
   refusal : @protocol.ArchiveNeedsForceReply
@@ -432,21 +469,23 @@ pub(all) struct WorktreeArchiveDialog {
 pub fn WorktreeArchiveDialog::message(locale? : @i18n.Locale, Self) -> String
 pub fn WorktreeArchiveDialog::render(locale? : @i18n.Locale, Self) -> @html.Html
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WorktreeChoice {
   LocalCheckout
   FreshWorktree
   BoundWorktree(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn WorktreeChoice::equal(Self, Self) -> Bool
 pub fn WorktreeChoice::not_equal(Self, Self) -> Bool
 pub fn WorktreeChoice::to_repr(Self) -> @debug.Repr
 pub fn WorktreeChoice::toggled(Self) -> Self
 pub fn WorktreeChoice::wants_fresh(Self) -> Bool
 
+#derive(Eq)
 pub(all) struct WorktreeControl {
   choice : WorktreeChoice
   enabled : Bool
-} derive(Eq)
+}
 
 // Type aliases
 

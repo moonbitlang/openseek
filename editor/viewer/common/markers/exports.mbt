@@ -48,6 +48,7 @@ pub fn MarkerService::change_one(
 
 ///|
 /// Related-information location, `IRelatedInformation` (`markers.ts:42`).
+#derive(Eq, Debug)
 pub(all) struct RelatedInformation {
   resource : @base_common.Uri
   message : String
@@ -55,15 +56,16 @@ pub(all) struct RelatedInformation {
   start_column : Int32
   end_line_number : Int32
   end_column : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// A `{resource, marker}` pair for `change_all`, `IResourceMarker`
 /// (`markers.ts:124`).
+#derive(Eq, Debug)
 pub(all) struct ResourceMarker {
   resource : @base_common.Uri
   marker : MarkerData
-} derive(Eq, Debug)
+}
 
 ///|
 /// Compatibility entry point for callers that still use the historical

@@ -1,10 +1,11 @@
 ///|
 /// A half-open range of 1-based view-line numbers the view should render:
 /// covers lines `start ..< end` in Monaco's view coordinate space.
+#derive(Eq, Debug)
 pub(all) struct LineWindow {
   start : Int32
   end : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend LineWindow with Debug::{to_repr}

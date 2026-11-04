@@ -15,7 +15,8 @@ import {
 // Errors
 
 // Types and methods
-type Model derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Model
 pub fn Model::Model() -> Self
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::is_open(Self) -> Bool
@@ -34,12 +35,13 @@ pub(all) enum Msg {
   Imported(Int32, @protocol.SessionImportReply)
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Target {
   channel : @interop.ChannelId
   connection_generation : Int32
   workspace : String
   worktree_of : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn Target::equal(Self, Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool
 pub fn Target::to_repr(Self) -> @debug.Repr

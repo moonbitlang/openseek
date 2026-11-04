@@ -6,7 +6,7 @@ fn test_scan_entry(name : String, is_dir : Bool) -> FileScanEntry {
 ///|
 async test "file scan respects Git ignores and keeps tracked files" {
   let root = @fs.tmpdir(prefix="openseek-search-ignore-")
-  defer git_test_cleanup(root)
+  defer @async.protect_from_cancel(() => git_test_cleanup(root))
   git_test_run(root, ["init", "--quiet"])
   @fs.mkdir("\{root}/toolchains")
   @fs.mkdir("\{root}/src")
@@ -59,7 +59,7 @@ async test "file scan prunes ignored trees before reading them" {
 ///|
 async test "file scan supports ordinary folders without Git" {
   let root = @fs.tmpdir(prefix="openseek-search-no-git-")
-  defer git_test_cleanup(root)
+  defer @async.protect_from_cancel(() => git_test_cleanup(root))
   @fs.write_file("\{root}/main.mbt", "", create_mode=CreateOrTruncate)
   let snapshot = scan_workspace_files(@pathx.Path(root).resolve())
   assert_eq(snapshot.files, ["main.mbt"])

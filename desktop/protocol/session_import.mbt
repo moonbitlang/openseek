@@ -1,15 +1,17 @@
 ///|
+#derive(Debug, Eq)
 pub(all) enum SessionImportSource {
   JsonFile(text~ : String)
   ShareLink(url~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionImportPayload {
   source : SessionImportSource
   workspace : String
   worktree_of : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Carry diagnostics through native and remote transports without redaction.

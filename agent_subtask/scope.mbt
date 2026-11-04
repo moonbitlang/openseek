@@ -8,10 +8,11 @@
 ///|
 /// One changed path with how it changed. Renames yield TWO records (source
 /// and target) — both sides must be in scope for the change to merge.
+#derive(Debug, Eq)
 struct Change {
   path : String
   kind : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// Parse `git status --porcelain=v1 -z --untracked-files=all` output.

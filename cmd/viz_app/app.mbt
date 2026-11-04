@@ -2,6 +2,7 @@
 /// One row of the `/api/sessions` listing shown in the sidebar. The server
 /// already returns rows most-recently-active first; the row keeps `last_active`
 /// so the sidebar can show when an experiment last wrote to disk.
+#derive(Eq)
 struct SessionRow {
   key : String
   id : String
@@ -12,13 +13,14 @@ struct SessionRow {
   // sidebar strips the last path segment when grouping. Absent → `false`.
   is_marker : Bool
   first_prompt : String
-} derive(Eq)
+}
 
 ///|
 /// The whole viewer state. The current session is kept as the parsed log plus a
 /// system prompt lifted from the session file's header line; the typed
 /// `Session` and its model projection are rebuilt in `view` so the two view
 /// modes always agree with the bytes on disk.
+#derive(Eq)
 struct Model {
   sessions : Array[SessionRow]
   selected : String?
@@ -66,17 +68,18 @@ struct Model {
   // Ticks since startup, to refresh the session list less often than the
   // open session.
   watch_ticks : Int32
-} derive(Eq)
+}
 
 ///|
 /// Colour theme. `System` is the default and follows the OS via a CSS
 /// `prefers-color-scheme` media query (so it tracks live OS changes without any
 /// listener). The choice is applied by setting `data-theme` on `<html>`.
+#derive(Eq)
 enum Theme {
   Light
   Dark
   System
-} derive(Eq)
+}
 
 ///|
 fn Theme::value(self : Theme) -> String {

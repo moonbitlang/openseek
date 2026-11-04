@@ -7,37 +7,41 @@ import {
 }
 
 // Values
-pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : ThinkingMode, stream? : Bool, response_format? : ResponseFormat, model? : Model, Array[ChatMessage]) -> Json raise ChatMessageError
+pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : ThinkingMode, stream? : Bool, response_format? : ResponseFormat, model? : Model, Array[ChatMessage]) -> @json.Json raise ChatMessageError
 
-pub fn openrouter_encode_chat_request(model~ : DsVariant, thinking~ : ThinkingMode, tools? : Array[ToolDefinition], stream? : Bool, response_format? : ResponseFormat, Array[ChatMessage]) -> Json raise ChatMessageError
+pub fn openrouter_encode_chat_request(model~ : DsVariant, thinking~ : ThinkingMode, tools? : Array[ToolDefinition], stream? : Bool, response_format? : ResponseFormat, Array[ChatMessage]) -> @json.Json raise ChatMessageError
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror ChatMessageError {
   FileContentNotAllowed(Role)
   EmptyFileId
   ImageContentNotAllowed(Role)
   EmptyImageUrl
-} derive(@debug.Debug)
+}
 pub fn ChatMessageError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct ChatMessage {
   role : Role
   content : Content
   tool_calls : Array[ToolCall]
   reasoning_content : String?
-} derive(@debug.Debug)
+}
 pub fn ChatMessage::ChatMessage(Role, content~ : Array[ContentPart], tool_calls? : Array[ToolCall], reasoning_content? : String) -> Self
 
+#derive(@debug.Debug)
 pub struct ChatResponse {
   content : String
   reasoning_content : String
   tool_calls : Array[ToolCall]
   usage : Usage
-} derive(@debug.Debug)
+}
 pub impl @json.FromJson for ChatResponse
 
-pub(all) struct Content(Array[ContentPart]) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct Content(Array[ContentPart])
 pub fn Content::contains(Self, StringView) -> Bool
 pub fn Content::equal(Self, Self) -> Bool
 pub fn Content::is_text_only(Self) -> Bool
@@ -46,35 +50,40 @@ pub fn Content::not_equal(Self, Self) -> Bool
 pub fn Content::text(Self) -> String
 pub fn Content::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ContentPart {
   Text(String)
   File(file_id~ : String)
   ImageUrl(url~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn ContentPart::equal(Self, Self) -> Bool
 pub fn ContentPart::not_equal(Self, Self) -> Bool
 pub fn ContentPart::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DsVariant {
   V4Flash
   V4Pro
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum GlmVariant {
   G53
   G53Flash
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum KimiVariant {
   K27Code
   K27CodeHighSpeed
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
   Glm(GlmVariant)
-} derive(Eq, @debug.Debug)
+}
 pub fn Model::api_key(Self, Map[String, Array[String]]) -> String?
 pub fn Model::context_window(Self) -> Int32
 pub fn Model::output(Self, &Logger) -> Unit
@@ -82,49 +91,55 @@ pub fn Model::parse(String) -> Self raise
 pub fn Model::to_string(Self) -> String
 pub impl Show for Model
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ResponseFormat {
   JsonObject
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Role {
   System
   User
   Assistant
   Tool(String)
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ThinkingMode {
   No
   High
   Max
-} derive(Eq, @debug.Debug)
+}
 pub fn ThinkingMode::output(Self, &Logger) -> Unit
 pub fn ThinkingMode::parse(String) -> Self raise
 pub fn ThinkingMode::to_string(Self) -> String
 pub impl Show for ThinkingMode
 
+#derive(@debug.Debug)
 pub struct ToolCall {
   id : String
   name : String
   arguments : String
-} derive(@debug.Debug)
+}
 pub fn ToolCall::ToolCall(id~ : String, name~ : String, arguments~ : String) -> Self
 
+#derive(@debug.Debug)
 pub struct ToolDefinition {
   name : String
   description : String
-  parameters : Json
+  parameters : @json.Json
   strict : Bool
-} derive(@debug.Debug)
-pub fn ToolDefinition::ToolDefinition(String, String, Json, strict? : Bool) -> Self
+}
+pub fn ToolDefinition::ToolDefinition(String, String, @json.Json, strict? : Bool) -> Self
 
+#derive(@debug.Debug, @json.ToJson)
 pub struct Usage {
   prompt_tokens : Int32
   completion_tokens : Int32
   total_tokens : Int32
   prompt_cache_hit_tokens : Int32
   prompt_cache_miss_tokens : Int32
-} derive(ToJson, @debug.Debug)
+}
 pub impl @json.FromJson for Usage
 
 // Type aliases

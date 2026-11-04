@@ -44,10 +44,11 @@ pub fn should_show_hover(HoverEnabled, MultiCursorModifier, EventModifiers) -> B
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct ComputedHover {
   parts : Array[HoverPart]
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn ComputedHover::equal(Self, Self) -> Bool
 pub fn ComputedHover::not_equal(Self, Self) -> Bool
 pub fn ComputedHover::to_repr(Self) -> @debug.Repr
@@ -60,26 +61,29 @@ pub fn ContentHoverComputer::compute_sync(Self, @model.TextModel, HoverAnchor) -
 pub fn ContentHoverComputer::create_loading_message(Self, HoverAnchor) -> HoverPart?
 pub fn ContentHoverComputer::participants(Self) -> Array[HoverParticipantHandle]
 
-type EventModifiers derive(@debug.Debug)
+#derive(@debug.Debug)
+type EventModifiers
 pub fn EventModifiers::EventModifiers(Bool, Bool, Bool) -> Self
 pub fn EventModifiers::none() -> Self
 pub fn EventModifiers::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum HoverAnchor {
   HoverRangeAnchor(priority~ : Int32, range~ : @common.Range, initial_mouse_pos_x~ : Double?, initial_mouse_pos_y~ : Double?)
   HoverForeignElementAnchor(priority~ : Int32, owner~ : HoverParticipantOwner, injected_text_index~ : Int32, range~ : @common.Range, initial_mouse_pos_x~ : Double?, initial_mouse_pos_y~ : Double?, supports_marker_hover~ : Bool)
-} derive(Eq, @debug.Debug)
+}
 pub fn HoverAnchor::equal(Self, Self) -> Bool
 pub fn HoverAnchor::not_equal(Self, Self) -> Bool
 pub fn HoverAnchor::priority(Self) -> Int32
 pub fn HoverAnchor::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub struct HoverController {
   anchor : HoverAnchor?
   operation : HoverOperation
   view : HoverView?
   // private fields
-} derive(Eq)
+}
 pub fn HoverController::cancel_operation_preserving_view(Self) -> Self
 pub fn HoverController::cleared(Self) -> Self
 pub fn HoverController::empty() -> Self
@@ -96,7 +100,8 @@ pub fn HoverController::request_stamp(Self, @model.TextModel, @language.Cancella
 pub fn HoverController::start_showing_or_update_hover(Self, HoverAnchor, Bool, show_at_position? : @common.Position, mode? : HoverStartMode, source? : HoverStartSource, should_focus? : Bool, live_widget_visible? : Bool) -> (HoverEffect, Self)
 pub fn HoverController::widget_view_with_loading(Self, HoverPart?) -> HoverWidgetView?
 
-type HoverDebouncer derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type HoverDebouncer
 pub fn HoverDebouncer::HoverDebouncer(default_delay_ms? : Int32) -> Self
 pub fn HoverDebouncer::cancel(Self) -> Self
 pub fn HoverDebouncer::equal(Self, Self) -> Bool
@@ -112,29 +117,32 @@ pub(all) enum HoverEffect {
 
 type HoverEnabled
 
+#derive(Eq, @debug.Debug)
 pub struct HoverOperation {
   token : Int32
   options : HoverOperationOptions?
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn HoverOperation::equal(Self, Self) -> Bool
 pub fn HoverOperation::not_equal(Self, Self) -> Bool
 pub fn HoverOperation::shows_loading_message(Self) -> Bool
 pub fn HoverOperation::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct HoverOperationOptions {
   source : HoverStartSource
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn HoverOperationOptions::equal(Self, Self) -> Bool
 pub fn HoverOperationOptions::not_equal(Self, Self) -> Bool
 pub fn HoverOperationOptions::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum HoverPart {
   MarkdownHover(range~ : @common.Range, contents~ : Array[@language.HoverContent], ordinal~ : Int32)
   MarkerHover(range~ : @common.Range, marker~ : @markers.Marker)
   LoadingHover(range~ : @common.Range, message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn HoverPart::equal(Self, Self) -> Bool
 pub fn HoverPart::not_equal(Self, Self) -> Bool
 pub fn HoverPart::to_repr(Self) -> @debug.Repr
@@ -144,7 +152,8 @@ pub struct HoverParticipantHandle {
   // private fields
 }
 
-type HoverParticipantOwner derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type HoverParticipantOwner
 pub fn HoverParticipantOwner::HoverParticipantOwner() -> Self
 pub fn HoverParticipantOwner::equal(Self, Self) -> Bool
 pub fn HoverParticipantOwner::not_equal(Self, Self) -> Bool
@@ -172,31 +181,35 @@ pub struct HoverSettings {
 }
 pub fn HoverSettings::defaults() -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum HoverStartMode {
   HoverStartDelayed
   HoverStartImmediate
-} derive(Eq, @debug.Debug)
+}
 pub fn HoverStartMode::equal(Self, Self) -> Bool
 pub fn HoverStartMode::not_equal(Self, Self) -> Bool
 pub fn HoverStartMode::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum HoverStartSource {
   HoverStartMouse
   HoverStartClick
   HoverStartKeyboard
-} derive(Eq, @debug.Debug)
+}
 pub fn HoverStartSource::equal(Self, Self) -> Bool
 pub fn HoverStartSource::not_equal(Self, Self) -> Bool
 pub fn HoverStartSource::to_repr(Self) -> @debug.Repr
 
-type HoverView derive(Eq)
+#derive(Eq)
+type HoverView
 pub fn HoverView::equal(Self, Self) -> Bool
 pub fn HoverView::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub struct HoverWidgetView {
   anchor_range : @common.Range
   parts : Array[HoverPart]
-} derive(Eq)
+}
 pub fn HoverWidgetView::equal(Self, Self) -> Bool
 pub fn HoverWidgetView::not_equal(Self, Self) -> Bool
 

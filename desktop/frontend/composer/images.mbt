@@ -1,10 +1,11 @@
 ///|
 /// Browser-owned image bytes encoded as a data URL. This value travels with
 /// the draft; a file path on the browser device is never sent to another device.
+#derive(Eq, @debug.Debug)
 pub(all) struct Image {
   name : String
   url : String
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// No text (including whitespace), mentions, or images.

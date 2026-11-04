@@ -11,19 +11,21 @@
 /// the rail's sticky container. The popover renders outside the scrollable
 /// rail (a scroll container would clip it), so it cannot inherit the
 /// tick's position and carries this measurement instead.
+#derive(Eq, Debug)
 pub(all) struct Hover {
   key : TurnKey
   flip : Bool
   anchor : Double
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct State {
   hover : Hover?
   // The turn the transcript viewport currently reads, highlighted on the
   // rail. Reported by the root's scroll watcher.
   active : TurnKey?
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn State::empty() -> State {

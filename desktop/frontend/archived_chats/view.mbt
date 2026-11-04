@@ -5,6 +5,7 @@
 
 ///|
 /// Which list a group of archived rows belongs to.
+#derive(Eq, Debug)
 pub(all) enum GroupKind {
   Chats
   // The project's name, prefixed with its host's when the desktop window
@@ -13,13 +14,14 @@ pub(all) enum GroupKind {
   // Rows whose project could not be resolved, such as a Codex task whose
   // worktree is gone.
   Other
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Group {
   kind : GroupKind
   rows : Array[@conversation.Input]
-} derive(Eq, Debug)
+}
 
 ///|
 pub(all) struct Actions {

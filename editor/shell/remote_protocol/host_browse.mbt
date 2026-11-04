@@ -6,45 +6,50 @@
 ///|
 /// Request addressed by an absolute host filesystem path. An empty path asks
 /// the server to start from the current workspace root.
+#derive(Debug)
 pub(all) struct HostPathRequest {
   id : String
   path : String
-} derive(Debug)
+}
 
 ///|
 /// One child directory in a host filesystem listing. `is_workspace` marks
 /// directories that look like a repository root (a `moon.mod`,
 /// `moon.mod.json`, or `.git` entry).
+#derive(Debug, Eq)
 pub(all) struct HostDirectoryEntry {
   name : String
   path : String
   is_workspace : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// One resolved host directory level: the absolute listed path, its parent
 /// (`None` at the filesystem root), and its child directories.
+#derive(Debug, Eq)
 pub(all) struct HostDirectoryListing {
   path : String
   parent : String?
   entries : Array[HostDirectoryEntry]
-} derive(Debug, Eq)
+}
 
 ///|
 /// Response payload for `ListHostDirectory`.
+#derive(Debug)
 pub(all) struct HostDirectoryListedPayload {
   id : String
   listing : HostDirectoryListing
-} derive(Debug)
+}
 
 ///|
 /// The served workspace root changed. Carries the requester's id on the
 /// direct response and an empty id on the broadcast to every other session.
+#derive(Debug)
 pub(all) struct WorkspaceSwitchedPayload {
   id : String
   root : String
   name : String
-} derive(Debug)
+}
 
 ///|
 fn host_path_request_json(kind : String, request : HostPathRequest) -> Json {

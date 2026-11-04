@@ -7,16 +7,18 @@
 
 ///|
 /// A string fragment with an associated style.
+#derive(Eq)
 struct Span {
   text : @displaytext.DisplayText
   style : @style.Style
-} derive(Eq)
+}
 
 ///|
 /// One rendered row: a sequence of styled spans.
+#derive(Eq)
 struct Line {
   spans : Array[Span]
-} derive(Eq)
+}
 
 ///|
 /// A cursor position within a surface, as a 0-based (row, col) cell offset.

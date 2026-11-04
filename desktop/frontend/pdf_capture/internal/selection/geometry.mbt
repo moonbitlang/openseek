@@ -1,17 +1,19 @@
 ///|
 /// Geometry snapshots, independent of DOM, PDF.js and device pixel density.
+#derive(Eq, Debug)
 pub(all) struct Rect {
   x : Double
   y : Double
   width : Double
   height : Double
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Point {
   x : Double
   y : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Rect::intersection(self : Rect, other : Rect) -> Rect? {
@@ -82,11 +84,12 @@ pub fn Rect::mapped(self : Rect, from~ : Rect, to~ : Rect) -> Rect {
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct Output {
   scale : Double
   width : Double
   height : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Each density is the backing canvas's pixel/CSS ratio on one axis.
@@ -113,12 +116,13 @@ pub fn png_within_limit(url : String) -> Bool {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct LinearTransform {
   a : Double
   b : Double
   c : Double
   d : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub(all) struct LayerTransform {
@@ -127,11 +131,12 @@ pub(all) struct LayerTransform {
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct BitmapPlacement {
   opacity : Double
   linear : LinearTransform
   origin : Point
-} derive(Eq, Debug)
+}
 
 ///|
 /// The browser supplies the cumulative CSS linear transform and measured bounds.

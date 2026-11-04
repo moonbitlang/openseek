@@ -23969,11 +23969,12 @@ test "file context inherits the conversation model and its reasoning family" {
 }
 
 ///|
+#derive(Eq)
 priv struct PendingReviewContext {
   owner : @interop.ConversationKey
   navigation : Int32
   selection : @mention_context.ReviewChanges
-} derive(Eq)
+}
 
 ///|
 fn PendingReviewContext::is_current(

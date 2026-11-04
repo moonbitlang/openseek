@@ -253,7 +253,7 @@ async fn probe_terminal_protocol_size(
   timeout_ms~ : Int32,
 ) -> @terminal_size.TerminalSize? {
   tty.write(SaveCursor)
-  defer tty.write(RestoreCursor)
+  defer @async.protect_from_cancel(() => tty.write(RestoreCursor))
   tty.set_cursor_position(ProtocolProbeRow, ProtocolProbeCol)
   let position = tty.query_cursor_position(timeout_ms~)
   if position is Some(position) && position.row >= 1 && position.col >= 1 {
@@ -376,7 +376,7 @@ async fn write_span(tty : @tty.Tty, span : @surface.Span) -> Unit {
 /// raises.
 async fn without_auto_wrap(tty : @tty.Tty, body : async () -> Unit) -> Unit {
   tty.disable_auto_wrap()
-  defer tty.enable_auto_wrap()
+  defer @async.protect_from_cancel(() => tty.enable_auto_wrap())
   body()
 }
 
@@ -437,7 +437,7 @@ async fn with_scroll_region(
   body : async () -> Unit,
 ) -> Unit {
   tty.set_top_bottom_margins(top, bottom)
-  defer tty.reset_top_bottom_margins()
+  defer @async.protect_from_cancel(() => tty.reset_top_bottom_margins())
   body()
 }
 
@@ -511,7 +511,7 @@ async fn enter_placed_surface_rows(
   // Pair the hide with a guaranteed show. This is the first frame, so a draw
   // failure here unwinds before any viewport exists for `leave` to restore —
   // leaving the cursor hidden would break `with_ui`'s restore-on-error promise.
-  errdefer tty.show_cursor()
+  errdefer @async.protect_from_cancel(() => tty.show_cursor())
   without_auto_wrap(tty, () => {
     draw_frame_rows(tty, frame, top=frame.top, bottom=frame.top + height - 1)
   })

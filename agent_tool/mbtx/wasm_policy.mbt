@@ -383,8 +383,9 @@ fn wrap_bullet(bullet : String) -> String {
 /// Build the `moonrun --policy` document for one snippet run.
 ///
 /// Deny-by-default: moonrun denies every surface a policy does not name. Writes
-/// name only the two roots a snippet has business in — its own temp directory
-/// and a read-only role's lab — while reads are open.
+/// name the roots a snippet has business in — its own temp directory, the lab
+/// or session scratch, and, when `workspace` is given, that workspace minus its
+/// MoonBit sources, manifests and git metadata — while reads are open.
 ///
 /// Reads are open because bounding them stops nothing this agent cannot already
 /// do more easily, and costs steps to enforce. The read workflow accepts any
@@ -400,6 +401,14 @@ fn wrap_bullet(bullet : String) -> String {
 /// outside the tree is INVISIBLE in the transcript, where a `write` tool call
 /// naming the same path is right there to read. The asymmetry is legibility,
 /// not access.
+///
+/// The `workspace` grant keeps source out, since that is where legibility
+/// matters most: `!`-globs refuse MoonBit sources, manifests, `.mbtx` scripts
+/// and `.git` at any depth and in any letter case (macOS and Windows file
+/// systems ignore case; moonrun does not). An exclusion overrides every grant
+/// in the list, so it also binds a lab inside the workspace. Accepted costs: a
+/// snippet removes plain workspace files without `remove`'s approval, and a
+/// directory rename carries the sources inside it.
 ///
 /// What this binds is the SNIPPET, on every platform. It does not reach the
 /// child processes its `process` rules let the snippet start: those run with the
@@ -421,27 +430,37 @@ fn wrap_bullet(bullet : String) -> String {
 /// runtime plus the exact module path this host chose, with the prefix doing
 /// the pinning there. moonrun matches the entry exactly, so an absolute rule
 /// admits only that exact binary and no same-named one earlier in PATH.
+///
+/// `workspace` must be canonical: moonrun matches a glob against the resolved
+/// target without resolving the glob itself.
 fn wasm_policy_document(
   tmp_dir~ : String,
   extra_roots~ : Array[String],
+  workspace? : String,
   inject~ : Map[String, String],
 ) -> Json {
-  // A snippet cannot directly write ordinary project files. It does not need to: the file
+  // A snippet never writes source directly. It does not need to: the file
   // tools make the edits, and the commands whose job is to rewrite source
   // (`moon fmt`, `moon info`, `git checkout`) are child processes, which no `fs`
-  // rule here reaches. What granting the workspace did buy was a documented way
-  // around `remove`'s provenance and approval checks — `remove_path`, `rename_path` and
-  // `rmdir_path` are all gated on `fs.write`, so a snippet could delete a file
-  // the guarded tool exists to refuse.
+  // rule here reaches.
   //
-  // Writable roots include per-execution temp space, session-owned scratch,
-  // and a read-only role's experimental lab when supplied. Project write
-  // permissions remain the file tools' responsibility.
-  //
-  // Every entry must be an EXISTING path: moonrun canonicalizes each root when
-  // it loads the policy and fails the whole file otherwise. Both of these are
-  // created before this runs.
-  let write_roots = [tmp_dir, ..extra_roots]
+  // Every plain root must be an EXISTING path: moonrun canonicalizes each one
+  // when it loads the policy and fails the whole file otherwise. The temp
+  // directory and lab are created before this runs; the workspace exists.
+  let write_rules : Array[Json] = [
+    for root in [tmp_dir, ..extra_roots] => Json(root)
+  ]
+  if workspace is Some(root) {
+    write_rules.push(Json(root))
+    let root = glob_literal(@workspace_path.strip_trailing_slash(root))
+    for
+      pattern in [
+        "**/*{.mbt.md,.mbt,.mbti,.mbtx}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+        "**/.git", "**/.git/**",
+      ] {
+      write_rules.push({ "glob": "!\{root}/\{case_insensitive_glob(pattern)}" })
+    }
+  }
   let allow : Array[Json] = []
   for entry in spawnable_commands {
     let (program, args_prefix) = entry
@@ -474,7 +493,7 @@ fn wasm_policy_document(
     "env": { "from_host": ["*"], "set": Json(env_set(tmp_dir, inject)) },
     // `"*"` is moonrun's every-host-path wildcard — see the header for why
     // reads are open where writes are not.
-    "fs": { "read": ["*"], "write": json_strings(write_roots) },
+    "fs": { "read": ["*"], "write": Json(write_rules) },
     // Snippets may resolve names and connect out, but may listen only on the
     // exact IPv4 and IPv6 loopback addresses. moonrun requires IP literals in
     // bind rules, so `localhost` itself is not a valid spelling here.
@@ -536,6 +555,36 @@ fn json_strings(values : Array[String]) -> Json {
 }
 
 ///|
+/// `pattern` with each ASCII letter widened to a two-case class (`mbt` →
+/// `[mM][bB][tT]`). Only for the fixed pattern tails, not an escaped path.
+fn case_insensitive_glob(pattern : String) -> String {
+  let widened = StringBuilder()
+  for ch in pattern {
+    if ch is ('a'..<='z') {
+      widened <+ "[\{ch}\{ch.to_ascii_uppercase()}]"
+    } else if ch is ('A'..<='Z') {
+      widened <+ "[\{ch.to_ascii_lowercase()}\{ch}]"
+    } else {
+      widened <+ "\{ch}"
+    }
+  }
+  widened.to_string()
+}
+
+///|
+/// `path` as a glob matching only itself (`*` → `[*]`).
+fn glob_literal(path : String) -> String {
+  let escaped = StringBuilder()
+  for ch in path {
+    match ch {
+      '*' | '?' | '[' | ']' | '{' | '}' => escaped <+ "[\{ch}]"
+      _ => escaped <+ "\{ch}"
+    }
+  }
+  escaped.to_string()
+}
+
+///|
 test "a policy clears any inherited handoff and admits no engine" {
   let policy = wasm_policy_document(
     tmp_dir="/run/tmp",
@@ -572,4 +621,47 @@ test "a policy clears any inherited handoff and admits no engine" {
     guard rule is { "program": String(program), .. } else { continue }
     assert_false(program.contains("openseek"))
   }
+}
+
+///|
+test "a workspace grant writes the root minus sources, scripts and git" {
+  guard wasm_policy_document(
+      tmp_dir="/run/tmp",
+      extra_roots=["/lab"],
+      workspace="/w[1]*{a,b}?/",
+      inject=Map([]),
+    )
+    is { "fs": { "write": write, .. }, .. } else {
+    fail("policy lost its fs section")
+  }
+  let root = "/w[[]1[]][*][{]a,b[}][?]"
+  assert_eq(
+    write,
+    [
+      "/run/tmp",
+      "/lab",
+      "/w[1]*{a,b}?/",
+      ..[
+        "**/*{.mbt.md,.mbt,.mbti,.mbtx}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+        "**/.git", "**/.git/**",
+      ].map(pattern => {
+        Json::object({
+          "glob": Json::string("!\{root}/\{case_insensitive_glob(pattern)}"),
+        })
+      }),
+    ],
+  )
+  guard wasm_policy_document(tmp_dir="/run/tmp", extra_roots=[], inject=Map([]))
+    is { "fs": { "write": write, .. }, .. } else {
+    fail("policy lost its fs section")
+  }
+  assert_eq(write, ["/run/tmp"])
+}
+
+///|
+test "case widening covers letters and leaves glob syntax alone" {
+  assert_eq(
+    case_insensitive_glob("**/*{.Mbt,moon.pkg}"),
+    "**/*{.[mM][bB][tT],[mM][oO][oO][nN].[pP][kK][gG]}",
+  )
 }

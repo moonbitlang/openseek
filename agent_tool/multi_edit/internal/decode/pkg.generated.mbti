@@ -3,31 +3,34 @@ package "moonbitlang/openseek/agent_tool/multi_edit/internal/decode"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn decode_args(Json) -> MultiEditArgs raise
+pub fn decode_args(@json.Json) -> MultiEditArgs raise
 
-pub fn decode_edits_json(Json) -> Array[MultiEditItem] raise
+pub fn decode_edits_json(@json.Json) -> Array[MultiEditItem] raise
 
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct MultiEditArgs {
   inline : Array[MultiEditItem]
   edits_file : String?
   revert_if_error_delta_greater_or_equal : Int32?
   revert_on_parse_errors : Bool
   revert_if_warning_delta_greater_or_equal : Int32?
-} derive(@debug.Debug)
+}
 
+#derive(@debug.Debug)
 pub struct MultiEditItem {
   file : String
   old_string : String
   new_string : String
   start_line : Int32
   end_line : Int32?
-} derive(@debug.Debug)
+}
 
 // Type aliases
 

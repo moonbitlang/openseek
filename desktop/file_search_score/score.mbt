@@ -12,13 +12,14 @@ pub struct PathQuery {
 }
 
 ///|
+#derive(Eq)
 priv struct RankedPath {
   tier : Int32
   score : Int32
   label_length : Int32
   path_length : Int32
   path : String
-} derive(Eq)
+}
 
 ///|
 impl Compare for RankedPath with fn compare(self, other) {

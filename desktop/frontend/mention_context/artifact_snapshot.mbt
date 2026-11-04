@@ -1,11 +1,12 @@
 ///|
 /// A user-selected snapshot of one interactive answer. It is data carried by
 /// the ordinary prompt; the reference identifies the authored page revision.
+#derive(Eq, Debug)
 pub(all) struct ArtifactSnapshot {
   reference : String
   title : String
   state : Json
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn artifact_snapshot(

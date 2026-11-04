@@ -40,10 +40,11 @@ pub fn UpdateError::to_string(Self) -> String
 pub impl Show for UpdateError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct PackageInfo {
   url : String
   sha256 : String
-} derive(Eq, @debug.Debug)
+}
 pub fn PackageInfo::equal(Self, Self) -> Bool
 pub fn PackageInfo::not_equal(Self, Self) -> Bool
 pub fn PackageInfo::to_repr(Self) -> @debug.Repr
@@ -53,10 +54,11 @@ pub struct StagedUpdate {
   app_path : String
 }
 
+#derive(Eq, @debug.Debug)
 pub struct UpdateInfo {
   version : String
   artifact : PackageInfo?
-} derive(Eq, @debug.Debug)
+}
 pub fn UpdateInfo::equal(Self, Self) -> Bool
 pub fn UpdateInfo::not_equal(Self, Self) -> Bool
 pub fn UpdateInfo::to_repr(Self) -> @debug.Repr

@@ -34,8 +34,9 @@ async fn Ui::redraw_frame(self : Ui, viewport : @viewport.Viewport) -> Unit {
 
 ///|
 async fn Ui::redraw(self : Self) -> Unit {
-  // Redraws only run inside `with_entered`'s body, so a missing viewport is a
-  // lifecycle bug — surface it rather than silently skipping the draw.
+  // Redraws only run while `run_ui_session` has the UI entered, so a missing
+  // viewport is a lifecycle bug — surface it rather than silently skipping the
+  // draw.
   guard self.viewport is Some(viewport) else {
     abort("redraw without an entered UI")
   }
@@ -80,7 +81,7 @@ async fn Ui::redraw_after_resize(self : Self, size : @tty.WindowSize) -> Unit {
 
 ///|
 /// Anchor and draw the first frame. `enter` queries the terminal cursor, so this
-/// must run before the tty reader starts (see `with_entered`).
+/// must run before the tty reader starts (see `run_ui_session`).
 async fn Ui::enter(self : Self) -> Unit {
   let size = @viewport.read_terminal_size(self.tty)
   let viewport = @viewport.Viewport::enter(

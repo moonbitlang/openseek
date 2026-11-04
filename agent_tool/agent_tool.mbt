@@ -40,12 +40,14 @@ pub fn AgentToolCall::from_arguments(
 ///|
 /// A JSON Schema describing the arguments a tool accepts. Wraps a raw `Json`
 /// value so registry entries advertise schemas explicitly.
-pub(all) struct JsonSchema(Json) derive(Debug)
+#derive(Debug)
+pub(all) struct JsonSchema(Json)
 
 ///|
 /// A locally registered tool: the name and JSON Schema sent to DeepSeek, plus a
 /// callable executor that runs when DeepSeek requests this tool. Construct via
 /// `AgentToolDefinition(name~, description~, schema~, execute~)`.
+#derive(Debug(ignore=ToolExecutor))
 pub struct AgentToolDefinition {
   name : String
   description : String
@@ -87,7 +89,7 @@ pub struct AgentToolDefinition {
   priv can_request_approval : Bool
   /// Reject calls before execution when the current route cannot accept images.
   priv requires_image_input : Bool
-} derive(Debug(ignore=ToolExecutor))
+}
 
 ///|
 /// Builds a tool definition with a name, JSON Schema for the arguments, and
@@ -160,6 +162,7 @@ async fn ToolExecutor::run(self : ToolExecutor, arguments : Json) -> ToolAction 
 ///|
 /// Normal output produced by a tool and sent back to the model as a
 /// `Tool(id)` chat message.
+#derive(Debug)
 pub struct ToolOutput {
   /// Text and automatically attached images sent to the model.
   content : String
@@ -173,7 +176,7 @@ pub struct ToolOutput {
   brief : String?
   /// Optional machine-readable result; not appended to model messages.
   data : Json?
-} derive(Debug)
+}
 
 ///|
 /// Constructs typed tool output. `is_error` defaults to `false` for ordinary
@@ -191,6 +194,7 @@ fn ToolOutput::ToolOutput(
 
 ///|
 /// Agent-level control requested by a tool action.
+#derive(Debug)
 pub enum AgentControl {
   /// Stop the loop and surface the string as the final answer to the user.
   Finish(String)
@@ -198,17 +202,18 @@ pub enum AgentControl {
   Abort(String)
   /// Yield this turn until a selected background job ends or user input arrives.
   WaitJobs(Array[String])
-} derive(Debug)
+}
 
 ///|
 /// The action returned by a tool executor. Normal tools respond to the model;
 /// control tools request an agent-loop state transition.
+#derive(Debug)
 pub enum ToolAction {
   /// Append the output as a `Tool(id)` chat message and keep looping.
   Respond(ToolOutput)
   /// Request a loop-control action such as finishing the task.
   Control(AgentControl)
-} derive(Debug)
+}
 
 ///|
 /// Builds a normal tool response action. `brief` is an optional one-line summary

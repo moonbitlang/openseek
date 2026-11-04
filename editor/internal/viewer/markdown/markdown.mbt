@@ -2,6 +2,7 @@
 /// A cmark-independent fenced or indented code block passed to a synchronous
 /// renderer override. `language_id` is the first fenced-info token exactly as
 /// parsed by cmark; an unlabelled or indented block has no language id.
+#derive(Eq, Debug)
 pub struct MarkdownCodeBlock {
   block_index : Int32
   /// Present only for a parse rendered with source mapping enabled.
@@ -12,7 +13,7 @@ pub struct MarkdownCodeBlock {
   priv info_remainder : String?
   block_source_range : @common.OffsetRange
   code_lines : Array[MarkdownCodeLine]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds a code-block projection value without exposing mutable record fields
@@ -42,11 +43,12 @@ pub fn MarkdownCodeBlock::MarkdownCodeBlock(
 ///|
 /// Safe HTML and the render fact browser consumers need for layout/class
 /// decisions.
+#derive(Eq, Debug)
 pub struct MarkdownRenderFact {
   html : String
   has_code_block : Bool
   projection : MarkdownDocumentProjection
-} derive(Eq, Debug)
+}
 
 ///|
 /// Converts Markdown with cmark's safe HTML renderer. A code-block override is

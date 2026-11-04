@@ -1,10 +1,11 @@
 ///|
 /// One hunk's true changed lines in full-file coordinates. The same normalized
 /// value also stores accumulated Line/Token/Tree review coverage.
+#derive(Eq)
 pub struct ReviewHunk {
   priv old_ranges : Array[@common.LineRange]
   priv new_ranges : Array[@common.LineRange]
-} derive(Eq)
+}
 
 ///|
 fn ReviewHunk::ReviewHunk(
@@ -84,23 +85,26 @@ fn ReviewHunk::from_diff_hunk(
 }
 
 ///|
+#derive(Eq)
 priv enum ReviewHunkState {
   ReviewHunkUnviewed
   ReviewHunkPartial
   ReviewHunkViewed
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub enum ReviewFileProgress {
   ReviewFileInProgress(ReviewHunk)
   ReviewFileComplete
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub struct ChangedFileReview {
   priv change : ChangedFile
   priv progress : ReviewFileProgress
-} derive(Eq)
+}
 
 ///|
 priv enum ReviewCompletionState {
@@ -110,6 +114,7 @@ priv enum ReviewCompletionState {
 }
 
 ///|
+#derive(Eq)
 pub struct ReviewActiveHunk {
   priv change : ChangedFile
   priv review_generation : Int32
@@ -119,13 +124,14 @@ pub struct ReviewActiveHunk {
   // project into it, but never redefine it when filters or grouping change.
   priv file_changes : ReviewHunk?
   priv position : ReviewHunkPosition?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub struct ReviewHunkPosition {
   priv current : Int32
   priv total : Int32
-} derive(Eq)
+}
 
 ///|
 fn ReviewHunkPosition::from_zero_based(

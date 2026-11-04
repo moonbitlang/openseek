@@ -1,15 +1,17 @@
 ///|
 /// Both capture paths use the same anchored composer and delivery handshake.
+#derive(Eq)
 pub enum RegionFeedbackPreview {
   Pdf(PdfCapturePreview)
   Office(OfficeRegionPreview)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub struct RegionFeedbackDraft {
   preview : RegionFeedbackPreview
   comment : String
-} derive(Eq)
+}
 
 ///|
 pub fn State::pending_region_feedback(

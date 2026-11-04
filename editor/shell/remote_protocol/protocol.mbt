@@ -7,6 +7,7 @@ fn protocol_version_impl() -> Int32 {
 
 ///|
 /// Structured error categories used on the wire.
+#derive(Eq, Debug)
 pub(all) enum ProtocolErrorCode {
   ProtocolInvalidJson
   ProtocolUnsupportedVersion
@@ -14,7 +15,7 @@ pub(all) enum ProtocolErrorCode {
   ProtocolInvalidPacket
   ProtocolInvalidUri
   ProtocolProviderError
-} derive(Eq, Debug)
+}
 
 ///|
 /// Debug label that keeps the local enum prefix visible.
@@ -33,41 +34,46 @@ pub fn ProtocolErrorCode::label(self : ProtocolErrorCode) -> String {
 /// Remote protocol error packet payload. `request_id` correlates failures to a
 /// request; `provider_code` preserves lower-level filesystem/provider
 /// categories.
+#derive(Debug)
 pub struct ProtocolError {
   code : ProtocolErrorCode
   message : String
   request_id : String
   provider_code : String
-} derive(Debug)
+}
 
 ///|
 /// Request addressed only by document URI.
+#derive(Debug)
 pub(all) struct DocumentRequest {
   id : String
   uri : @base_common.Uri
-} derive(Debug)
+}
 
 ///|
 /// Request addressed by URI, expected document revision, and UTF-16 offset.
 /// Servers use the revision to drop stale feature requests.
+#derive(Debug)
 pub(all) struct DocumentPositionRequest {
   id : String
   uri : @base_common.Uri
   document_revision : String
   offset : Int32
-} derive(Debug)
+}
 
 ///|
 /// Request addressed by URI and expected document revision, for whole-document
 /// feature refreshes.
+#derive(Debug)
 pub(all) struct DocumentRevisionRequest {
   id : String
   uri : @base_common.Uri
   document_revision : String
-} derive(Debug)
+}
 
 ///|
 /// Browser-to-server request packet variants.
+#derive(Debug)
 pub(all) enum ClientPacket {
   ResolveDirectory(DocumentRequest)
   OpenDocument(DocumentRequest)
@@ -79,55 +85,61 @@ pub(all) enum ClientPacket {
   DocumentSymbols(DocumentRevisionRequest)
   ListHostDirectory(HostPathRequest)
   SwitchWorkspace(HostPathRequest)
-} derive(Debug)
+}
 
 ///|
 /// Loaded or changed document payload from the remote server.
+#derive(Debug)
 pub(all) struct DocumentPayload {
   id : String
   document : @workspace.DocumentSnapshot
-} derive(Debug)
+}
 
 ///|
 /// One stat for the requested directory URI with exactly one level of
 /// `children` resolved; nested directories arrive with `children: None`.
+#derive(Debug)
 pub(all) struct DirectoryResolvedPayload {
   id : String
   stat : @workspace.WorkspaceStat
-} derive(Debug)
+}
 
 ///|
 /// Server-initiated diagnostics push for a URI at a document revision. The
 /// backend publishes these from `moon check` runs, so the packet carries no
 /// request id.
+#derive(Debug)
 pub(all) struct DiagnosticsPayload {
   uri : @base_common.Uri
   revision : String
   diagnostics : Array[@language.Diagnostic]
-} derive(Debug)
+}
 
 ///|
 /// Hover response for a specific URI, document revision, and request id.
+#derive(Debug)
 pub(all) struct HoverResultPayload {
   id : String
   uri : @base_common.Uri
   revision : String
   hover : @language.Hover?
-} derive(Debug)
+}
 
 ///|
 /// Definition response for a specific URI, document revision, and request id.
+#derive(Debug)
 pub(all) struct DefinitionResultPayload {
   id : String
   uri : @base_common.Uri
   revision : String
   locations : Array[@language.Location]
-} derive(Debug)
+}
 
 ///|
 /// A reference location enriched by the server with one-based line/column
 /// and the text of the containing line, so clients can list cross-file
 /// references without fetching file contents.
+#derive(Debug)
 pub(all) struct ReferenceItem {
   uri : @base_common.Uri
   range : @base_common.Range
@@ -135,28 +147,31 @@ pub(all) struct ReferenceItem {
   column : Int32
   line_text : String
   is_test : Bool?
-} derive(Debug)
+}
 
 ///|
 /// References response for a specific URI and document revision.
+#derive(Debug)
 pub(all) struct ReferencesResultPayload {
   id : String
   uri : @base_common.Uri
   revision : String
   references : Array[ReferenceItem]
-} derive(Debug)
+}
 
 ///|
 /// Document symbols response for a specific URI and document revision.
+#derive(Debug)
 pub(all) struct DocumentSymbolsResultPayload {
   id : String
   uri : @base_common.Uri
   revision : String
   symbols : Array[@language.DocumentSymbol]
-} derive(Debug)
+}
 
 ///|
 /// Server-to-browser response, event, and error packet variants.
+#derive(Debug)
 pub(all) enum ServerPacket {
   DirectoryResolved(DirectoryResolvedPayload)
   DocumentLoaded(DocumentPayload)
@@ -169,28 +184,31 @@ pub(all) enum ServerPacket {
   HostDirectoryListed(HostDirectoryListedPayload)
   WorkspaceSwitched(WorkspaceSwitchedPayload)
   RemoteError(ProtocolError)
-} derive(Debug)
+}
 
 ///|
 /// Client-packet decode result that preserves structured protocol errors.
+#derive(Debug)
 pub enum ClientPacketDecodeResult {
   DecodedClientPacket(ClientPacket)
   ClientPacketDecodeError(ProtocolError)
-} derive(Debug)
+}
 
 ///|
 /// Server-packet decode result that preserves structured protocol errors.
+#derive(Debug)
 pub enum ServerPacketDecodeResult {
   DecodedServerPacket(ServerPacket)
   ServerPacketDecodeError(ProtocolError)
-} derive(Debug)
+}
 
 ///|
 /// Version-negotiation result used before opening a long-lived connection.
+#derive(Debug)
 pub enum ProtocolNegotiation {
   ProtocolAccepted(Int32)
   ProtocolRejected(ProtocolError)
-} derive(Debug)
+}
 
 ///|
 /// Builds a protocol error, defaulting an empty message to the wire code.

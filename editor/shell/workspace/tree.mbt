@@ -1,10 +1,11 @@
 ///|
 /// Kind of a workspace tree entry, in place of `IFileStat`'s
 /// `isFile`/`isDirectory` booleans.
+#derive(Eq, Debug)
 pub(all) enum WorkspaceEntryKind {
   File
   Directory
-} derive(Eq, Debug)
+}
 
 ///|
 /// One node of the workspace tree, mirroring VS Code's `IFileStat`: every
@@ -12,19 +13,21 @@ pub(all) enum WorkspaceEntryKind {
 /// until a provider resolves that directory level (the
 /// `IFileStat.children: undefined` convention). Depth is tree structure,
 /// not an annotation.
+#derive(Debug)
 pub(all) struct WorkspaceStat {
   uri : @base_common.Uri
   name : String
   kind : WorkspaceEntryKind
   children : Array[WorkspaceStat]?
-} derive(Debug)
+}
 
 ///|
 /// Result of resolving a workspace tree node through a tree provider.
+#derive(Debug)
 pub(all) enum WorkspaceResolveResult {
   WorkspaceResolved(WorkspaceStat)
   WorkspaceResolveError(FileSystemProviderError)
-} derive(Debug)
+}
 
 ///|
 /// The `IFileService.resolve` analog. `root` names the workspace root URI;

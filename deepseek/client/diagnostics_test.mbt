@@ -196,9 +196,10 @@ async test "idle flush preserves malformed response payload without retrying" {
 }
 
 ///|
+#derive(Debug)
 suberror StreamCallbackError {
   StreamCallbackError(String)
-} derive(Debug)
+}
 
 ///|
 async test "fallback diagnostics preserve the original error payload" {

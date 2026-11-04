@@ -2,10 +2,11 @@
 /// The orientation of a selection: whether the active `position` is at the
 /// end (`LTR`) or the start (`RTL`) of the selected range. Mirrors Monaco's
 /// `SelectionDirection`.
+#derive(Eq, Debug)
 pub(all) enum SelectionDirection {
   LTR
   RTL
-} derive(Eq, Debug)
+}
 
 ///|
 /// A selection in the editor: a range that carries an orientation. Mirrors
@@ -18,10 +19,11 @@ pub(all) enum SelectionDirection {
 /// in the controller layer (`viewer/selection.mbt`), not on this type, matching
 /// Monaco's split (clipboard belongs to the editor controller, not the value
 /// type).
+#derive(Eq, Debug)
 struct Selection {
   selection_start : @base_common.Position
   position : @base_common.Position
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds a selection from its anchor (`selection_start`) and active

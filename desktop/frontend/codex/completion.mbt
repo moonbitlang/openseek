@@ -3,19 +3,21 @@
 // symbol lookup, keyboard handling, and mention chips stay inside @composer.
 
 ///|
+#derive(Eq)
 priv struct CodexSkill {
   name : String
   description : String
   path : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum CodexSkillCatalog {
   CodexSkillsEmpty
   CodexSkillsLoading(String)
   CodexSkillsReady(String, Array[CodexSkill])
   CodexSkillsFailed(String)
-} derive(Eq)
+}
 
 ///|
 fn CodexSkill::decode_list(value : Json, cwd : String) -> Array[CodexSkill]? {

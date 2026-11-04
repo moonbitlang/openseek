@@ -1,7 +1,8 @@
 ///|
 /// Wraps an ordered array of message parts. Text extraction and structural
 /// inspection are separate: extracting text does not imply text-only content.
-pub(all) struct Content(Array[ContentPart]) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub(all) struct Content(Array[ContentPart])
 
 ///|
 pub extend Content with Debug::{to_repr}
@@ -67,10 +68,11 @@ pub fn Content::iter(self : Content) -> Iter[ContentPart] {
 
 ///|
 /// Durable content is independent of provider upload IDs.
+#derive(Debug, Eq)
 pub(all) enum ContentPart {
   Text(String)
   Image(Image)
-} derive(Debug, Eq)
+}
 
 ///|
 impl ToJson for ContentPart with fn to_json(self) {

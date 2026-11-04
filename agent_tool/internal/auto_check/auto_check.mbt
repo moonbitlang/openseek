@@ -67,12 +67,13 @@ const RevertErrorDisplayLimit : Int32 = 10
 /// no path at all, so a caller never mistakes "unknown file" for a known one;
 /// `loc` is the `line:col-line:col` span, or empty for a module-level error;
 /// `code` is moon's numeric `error_code` when the diagnostic carried one.
+#derive(Debug, Eq)
 pub(all) struct ErrorSite {
   path : String?
   loc : String
   code : Int32?
   message : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// The site's identity for comparing two check runs: `path:loc#code` when
@@ -136,13 +137,14 @@ pub fn ErrorSite::line(self : ErrorSite) -> String {
 /// packages moon compiled, and moon does not say which those were. A caller
 /// that compares two runs must reason about that from the package graph (see
 /// `package_graph`).
+#derive(Debug)
 pub(all) struct CheckErrors {
   error_count : Int32
   warning_count : Int32
   errors : Array[ErrorSite]
   warnings : Array[ErrorSite]
   truncated : Bool
-} derive(Debug)
+}
 
 ///|
 /// How many sites of each severity `to_json` carries. A tally keeps every

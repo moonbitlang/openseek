@@ -1,9 +1,10 @@
 ///|
 /// What the page itself holds: the filter box's text. The rows come from the
 /// stores the shell owns, so they are inputs, not page state.
+#derive(Eq, Debug)
 pub struct State {
   query : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// The page as it opens: an empty filter.

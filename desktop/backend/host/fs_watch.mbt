@@ -55,11 +55,12 @@ priv struct FsWatchActive {
 /// explicitly selected file/directory and its ancestors. `directories`
 /// additionally keeps each selected directory's immediate children so create,
 /// remove, and rename events can be discovered without descending further.
+#derive(Debug, Eq)
 priv struct WatchInterest {
   paths : Set[@pathx.Relative]
   directories : Set[@pathx.Relative]
   recursive : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 fn WatchInterest::WatchInterest(

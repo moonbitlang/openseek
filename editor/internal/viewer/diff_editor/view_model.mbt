@@ -7,12 +7,13 @@ pub(all) struct DiffEditorModelData {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum DiffEditorViewModelState {
   NoModel
   Pending
   Ready
   Failed
-} derive(Eq, Debug)
+}
 
 ///|
 /// Internal diagnostic for the otherwise intentionally coarse public

@@ -276,6 +276,7 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
 
 ///|
 /// Preserve frontend failures as data so existing notices follow live language changes.
+#derive(Eq, Debug)
 pub(all) enum Failure {
   Remote(String)
   EarlierRevision
@@ -284,7 +285,7 @@ pub(all) enum Failure {
   StorageUnavailable
   RestoreDraftsFailed(String)
   SaveDraftsFailed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Failure with Eq::{equal, not_equal}

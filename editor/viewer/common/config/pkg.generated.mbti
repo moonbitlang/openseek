@@ -21,6 +21,7 @@ pub let font_variation_off : String
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct BareFontInfo {
   pixel_ratio : Double
   font_family : String
@@ -30,7 +31,7 @@ pub struct BareFontInfo {
   font_variation_settings : String
   line_height : Int32
   letter_spacing : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn BareFontInfo::create(font_family~ : String, font_weight~ : String, font_size~ : Double, font_feature_settings~ : String, font_variation_settings~ : String, line_height~ : Double, letter_spacing~ : Double, pixel_ratio~ : Double) -> Self
 pub fn BareFontInfo::equal(Self, Self) -> Bool
 pub fn BareFontInfo::get_id(Self) -> String
@@ -38,17 +39,19 @@ pub fn BareFontInfo::get_massaged_font_family(Self) -> String
 pub fn BareFontInfo::not_equal(Self, Self) -> Bool
 pub fn BareFontInfo::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct EditorFontDefaults {
   font_family : String
   font_weight : String
   font_size : Double
   line_height : Double
   letter_spacing : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn EditorFontDefaults::equal(Self, Self) -> Bool
 pub fn EditorFontDefaults::not_equal(Self, Self) -> Bool
 pub fn EditorFontDefaults::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct EditorLayoutInfo {
   width : Double
   height : Double
@@ -62,11 +65,12 @@ pub(all) struct EditorLayoutInfo {
   content_width : Double
   horizontal_scrollbar_height : Double
   vertical_scrollbar_width : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn EditorLayoutInfo::equal(Self, Self) -> Bool
 pub fn EditorLayoutInfo::not_equal(Self, Self) -> Bool
 pub fn EditorLayoutInfo::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct FontInfo {
   pixel_ratio : Double
   font_family : String
@@ -85,7 +89,7 @@ pub(all) struct FontInfo {
   middot_width : Double
   wsmiddot_width : Double
   max_digit_width : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn FontInfo::bare(Self) -> BareFontInfo
 pub fn FontInfo::default() -> Self
 pub fn FontInfo::equal(Self, Self) -> Bool

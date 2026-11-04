@@ -9,6 +9,7 @@
 /// Exact 15-member `CursorMove.Direction` enum contract
 /// (`cursorMoveCommands.ts:929-948`). The viewport members remain behaviorally
 /// deferred, but retaining them here keeps the aggregate source type complete.
+#derive(Eq, Debug)
 pub(all) enum CursorMoveDirection {
   Left
   Right
@@ -25,11 +26,12 @@ pub(all) enum CursorMoveDirection {
   ViewPortCenter
   ViewPortBottom
   ViewPortIfOutside
-} derive(Eq, Debug)
+}
 
 ///|
 /// MoonBit representation of the source's exact 11-member
 /// `SimpleMoveDirection` union (`cursorMoveCommands.ts:950-962`).
+#derive(Eq, Debug)
 pub(all) enum SimpleMoveDirection {
   Left
   Right
@@ -42,12 +44,13 @@ pub(all) enum SimpleMoveDirection {
   WrappedLineColumnCenter
   WrappedLineEnd
   WrappedLineLastNonWhitespaceCharacter
-} derive(Eq, Debug)
+}
 
 ///|
 /// Exact `CursorMove.Unit` enum contract (`cursorMoveCommands.ts:971-978`).
 /// `None` and `WrappedLine` are behaviorally scoped; Line, Character,
 /// HalfLine, and FoldedLine remain explicit branch deferrals.
+#derive(Eq, Debug)
 pub(all) enum CursorMoveUnit {
   None
   Line
@@ -55,16 +58,17 @@ pub(all) enum CursorMoveUnit {
   Character
   HalfLine
   FoldedLine
-} derive(Eq, Debug)
+}
 
 ///|
 /// Exact typed argument contract consumed by the bound simple-move commands.
+#derive(Eq, Debug)
 pub struct SimpleMoveArguments {
   direction : SimpleMoveDirection
   unit : CursorMoveUnit
   select : Bool
   value : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn SimpleMoveArguments::SimpleMoveArguments(

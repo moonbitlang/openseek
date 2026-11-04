@@ -1,5 +1,6 @@
 ///|
 /// One edit request; the host owns fork/new, submission, and source deletion.
+#derive(Debug, Eq)
 pub(all) struct SessionEditPayload {
   session : String
   workspace : String
@@ -14,7 +15,7 @@ pub(all) struct SessionEditPayload {
   // Who answers the engine's permission questions; absent means ask.
   approval : OpenSeekApproval?
   max_steps : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SessionEditPayload with fn from_json(json, path) {

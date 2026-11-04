@@ -1,10 +1,11 @@
 ///|
 /// One task's ordered activity and unacknowledged terminal outcome.
+#derive(Eq)
 priv struct CodexActivityEntry {
   running : Bool
   unseen_outcome : (String, @conversation.RunOutcome)?
   revision : Int32
-} derive(Eq)
+}
 
 ///|
 /// The request-time cut carried by every app-server snapshot. Reserving a cut
@@ -19,11 +20,12 @@ priv struct CodexActivityFrontier {
 /// Ordered frontend-local activity for Codex tasks. Snapshots recover runtime
 /// but idle snapshots cannot manufacture or erase an unread terminal outcome. Revisions fence
 /// stale replies; backend-independent display priority lives in the shared row.
+#derive(Eq)
 priv struct CodexActivityLedger {
   entries : Map[String, CodexActivityEntry]
   revision : Int32
   connection_epoch : Int32
-} derive(Eq)
+}
 
 ///|
 fn CodexActivityLedger::empty() -> CodexActivityLedger {

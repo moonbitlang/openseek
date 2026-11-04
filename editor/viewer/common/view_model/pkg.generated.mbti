@@ -44,6 +44,7 @@ pub fn CoordinatesConverter::view_range_to_model_range(Self, @common.Range) -> @
 
 type CursorEventDispatcher
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CursorMoveDirection {
   Left
   Right
@@ -60,12 +61,13 @@ pub(all) enum CursorMoveDirection {
   ViewPortCenter
   ViewPortBottom
   ViewPortIfOutside
-} derive(Eq, @debug.Debug)
+}
 pub fn CursorMoveDirection::as_simple(Self) -> SimpleMoveDirection?
 pub fn CursorMoveDirection::equal(Self, Self) -> Bool
 pub fn CursorMoveDirection::not_equal(Self, Self) -> Bool
 pub fn CursorMoveDirection::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum CursorMoveUnit {
   None
   Line
@@ -73,11 +75,12 @@ pub(all) enum CursorMoveUnit {
   Character
   HalfLine
   FoldedLine
-} derive(Eq, @debug.Debug)
+}
 pub fn CursorMoveUnit::equal(Self, Self) -> Bool
 pub fn CursorMoveUnit::not_equal(Self, Self) -> Bool
 pub fn CursorMoveUnit::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct CursorStateChangedEvent {
   kind : OutgoingViewModelEventKind
   old_selections : Array[@core.Selection]?
@@ -87,33 +90,36 @@ pub(all) struct CursorStateChangedEvent {
   source : String
   reason : @editor_api.CursorChangeReason
   reached_max_cursor_count : Bool
-} derive(@debug.Debug)
+}
 pub fn CursorStateChangedEvent::is_no_op(Self) -> Bool
 pub fn CursorStateChangedEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct DecorationToRender {
   start_line_number : Int32
   end_line_number : Int32
   class_name : String
   z_index : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn DecorationToRender::equal(Self, Self) -> Bool
 pub fn DecorationToRender::not_equal(Self, Self) -> Bool
 pub fn DecorationToRender::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct HiddenAreasChangedOutgoingEvent {
   kind : OutgoingViewModelEventKind
-} derive(@debug.Debug)
+}
 pub fn HiddenAreasChangedOutgoingEvent::HiddenAreasChangedOutgoingEvent() -> Self
 pub fn HiddenAreasChangedOutgoingEvent::is_no_op(Self) -> Bool
 pub fn HiddenAreasChangedOutgoingEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct InjectedText {
   position : @common.Position
   text : String
   class_name : String
   source_index : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn InjectedText::InjectedText(@common.Position, String, String, source_index? : Int32) -> Self
 pub fn InjectedText::equal(Self, Self) -> Bool
 pub fn InjectedText::not_equal(Self, Self) -> Bool
@@ -140,12 +146,13 @@ pub fn ModelLineProjection::is_visible(Self) -> Bool
 pub fn ModelLineProjection::normalize_position(Self, Int32, @common.Position, @model.PositionAffinity) -> @common.Position
 pub fn ModelLineProjection::set_visible(Self, Bool) -> Self
 
+#derive(Eq, @debug.Debug)
 pub struct ModelLineProjectionData {
   model_line_number : Int32
   line_length : Int32
   projected_line : ProjectedTextLine
   segments : Array[ModelLineProjectionSegment]
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelLineProjectionData::ModelLineProjectionData(Int32, Int32, ProjectedTextLine, Array[ModelLineProjectionSegment]) -> Self
 pub fn ModelLineProjectionData::equal(Self, Self) -> Bool
 pub fn ModelLineProjectionData::not_equal(Self, Self) -> Bool
@@ -155,6 +162,7 @@ pub fn ModelLineProjectionData::view_line_count(Self) -> Int32
 pub fn ModelLineProjectionData::view_line_index_for_model_column(Self, Int32) -> Int32
 pub fn ModelLineProjectionData::view_line_index_for_projected_column(Self, Int32, affinity? : @model.PositionAffinity) -> Int32
 
+#derive(Eq, @debug.Debug)
 pub struct ModelLineProjectionSegment {
   model_line_number : Int32
   start_offset : Int32
@@ -164,7 +172,7 @@ pub struct ModelLineProjectionSegment {
   start_visible_column : Double
   continues_with_wrapped_line : Bool
   wrapped_text_indent_length : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ModelLineProjectionSegment::equal(Self, Self) -> Bool
 pub fn ModelLineProjectionSegment::not_equal(Self, Self) -> Bool
 pub fn ModelLineProjectionSegment::to_repr(Self) -> @debug.Repr
@@ -181,33 +189,37 @@ pub fn MonospaceLineBreaksComputerFactory::MonospaceLineBreaksComputerFactory(St
 pub fn MonospaceLineBreaksComputerFactory::create() -> Self
 pub fn MonospaceLineBreaksComputerFactory::create_line_breaks_computer(Self, font_info~ : @config.FontInfo, tab_size~ : Int32, wrapping_column~ : Int32, wrapping_indent~ : @editor_api.WrappingIndent, word_break? : WordBreak) -> LineBreaksComputer
 
+#derive(Eq, @debug.Debug)
 pub(all) enum OutgoingViewModelEventKind {
   ViewZonesChanged
   HiddenAreasChanged
   CursorStateChanged
   ModelTokensChanged
-} derive(Eq, @debug.Debug)
+}
 pub fn OutgoingViewModelEventKind::equal(Self, Self) -> Bool
 pub fn OutgoingViewModelEventKind::not_equal(Self, Self) -> Bool
 pub fn OutgoingViewModelEventKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ProjectedLinePart {
   start : Int32
   end : Int32
   kind : ProjectedLinePartKind
-} derive(Eq, @debug.Debug)
+}
 pub fn ProjectedLinePart::equal(Self, Self) -> Bool
 pub fn ProjectedLinePart::not_equal(Self, Self) -> Bool
 pub fn ProjectedLinePart::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub enum ProjectedLinePartKind {
   SourceSegment(model_start~ : Int32, model_end~ : Int32)
   InjectedSegment(model_column~ : Int32, injected_text_index~ : Int32, class_name~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn ProjectedLinePartKind::equal(Self, Self) -> Bool
 pub fn ProjectedLinePartKind::not_equal(Self, Self) -> Bool
 pub fn ProjectedLinePartKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ProjectedTextLine {
   text : String
   model_line_length : Int32
@@ -215,7 +227,7 @@ pub struct ProjectedTextLine {
   injected_text_indices : Array[Int32]
   model_to_projected_columns : Array[Int32]
   parts : Array[ProjectedLinePart]
-} derive(Eq, @debug.Debug)
+}
 pub fn ProjectedTextLine::equal(Self, Self) -> Bool
 pub fn ProjectedTextLine::from_injected_text(String, Array[InjectedText]) -> Self
 pub fn ProjectedTextLine::identity(String) -> Self
@@ -226,17 +238,19 @@ pub fn ProjectedTextLine::not_equal(Self, Self) -> Bool
 pub fn ProjectedTextLine::projected_column_to_model_column(Self, Int32) -> Int32
 pub fn ProjectedTextLine::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct SimpleMoveArguments {
   direction : SimpleMoveDirection
   unit : CursorMoveUnit
   select : Bool
   value : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn SimpleMoveArguments::SimpleMoveArguments(SimpleMoveDirection, CursorMoveUnit, Bool, Int32) -> Self
 pub fn SimpleMoveArguments::equal(Self, Self) -> Bool
 pub fn SimpleMoveArguments::not_equal(Self, Self) -> Bool
 pub fn SimpleMoveArguments::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SimpleMoveDirection {
   Left
   Right
@@ -249,7 +263,7 @@ pub(all) enum SimpleMoveDirection {
   WrappedLineColumnCenter
   WrappedLineEnd
   WrappedLineLastNonWhitespaceCharacter
-} derive(Eq, @debug.Debug)
+}
 pub fn SimpleMoveDirection::equal(Self, Self) -> Bool
 pub fn SimpleMoveDirection::not_equal(Self, Self) -> Bool
 pub fn SimpleMoveDirection::to_repr(Self) -> @debug.Repr
@@ -377,6 +391,7 @@ pub fn ViewModelLinesFromProjectedModel::set_tab_size(Self, Int32) -> Bool
 pub fn ViewModelLinesFromProjectedModel::set_wrapping_settings(Self, @config.FontInfo, Int32, @editor_api.WrappingIndent) -> Bool
 pub fn ViewModelLinesFromProjectedModel::view_line_rendering_data(Self, Int32, line_decorations? : Array[@view_layout.LineDecoration]) -> @view_layout.ViewLineRenderingData
 
+#derive(Eq, @debug.Debug)
 pub struct ViewModelOptions {
   font_info : @config.FontInfo
   soft_wrap_column : Int32
@@ -384,7 +399,7 @@ pub struct ViewModelOptions {
   wrapping_indent : @editor_api.WrappingIndent
   editor_id : Int32
   render_validation_decorations : @editor_api.RenderValidationDecorations
-} derive(Eq, @debug.Debug)
+}
 pub fn ViewModelOptions::ViewModelOptions(font_info? : @config.FontInfo, soft_wrap_column? : Int32, tab_size? : Int32, wrapping_indent? : @editor_api.WrappingIndent, editor_id? : Int32, render_validation_decorations? : @editor_api.RenderValidationDecorations) -> Self
 pub fn ViewModelOptions::equal(Self, Self) -> Bool
 pub fn ViewModelOptions::is_soft_wrap_enabled(Self) -> Bool
@@ -393,25 +408,28 @@ pub fn ViewModelOptions::not_equal(Self, Self) -> Bool
 pub fn ViewModelOptions::soft_wrap(Int32, tab_size? : Int32, wrapping_indent? : @editor_api.WrappingIndent) -> Self
 pub fn ViewModelOptions::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ViewTokensChangedRange {
   from_line_number : Int32
   to_line_number : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn ViewTokensChangedRange::equal(Self, Self) -> Bool
 pub fn ViewTokensChangedRange::not_equal(Self, Self) -> Bool
 pub fn ViewTokensChangedRange::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct ViewZonesChangedEvent {
   kind : OutgoingViewModelEventKind
-} derive(@debug.Debug)
+}
 pub fn ViewZonesChangedEvent::ViewZonesChangedEvent() -> Self
 pub fn ViewZonesChangedEvent::is_no_op(Self) -> Bool
 pub fn ViewZonesChangedEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WordBreak {
   Normal
   KeepAll
-} derive(Eq, @debug.Debug)
+}
 pub fn WordBreak::equal(Self, Self) -> Bool
 pub fn WordBreak::not_equal(Self, Self) -> Bool
 pub fn WordBreak::to_repr(Self) -> @debug.Repr

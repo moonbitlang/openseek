@@ -93,9 +93,10 @@ pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) 
 pub async fn update_settings(EngineManager, SettingsPatch, followup_behavior? : String, prompt_source? : String, custom_prompt? : String, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror EngineError {
   EngineError(String)
-} derive(@debug.Debug)
+}
 pub fn EngineError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
@@ -143,11 +144,12 @@ pub struct MessageSubmission {
 pub fn MessageSubmission::close(Self) -> Unit
 pub fn MessageSubmission::result(Self) -> MessageReceipt?
 
+#derive(@debug.Debug)
 pub enum PatternRepairEnvironment {
   Ready(Map[String, String])
   Configuration(String)
   Unavailable
-} derive(@debug.Debug)
+}
 pub fn PatternRepairEnvironment::to_repr(Self) -> @debug.Repr
 
 pub struct Schedules {

@@ -10,11 +10,12 @@ priv enum Feedback {
 }
 
 ///|
+#derive(Eq)
 priv enum Outcome {
   Pending
   Answered(Map[String, String])
   Skipped
-} derive(Eq)
+}
 
 ///|
 struct Request {

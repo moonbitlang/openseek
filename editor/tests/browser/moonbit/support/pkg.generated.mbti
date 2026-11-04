@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/editor/tests/browser/moonbit/support"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
 pub fn now_ms() -> Double
 
@@ -20,17 +24,17 @@ pub fn set_timeout(() -> Unit, Int32) -> Unit
 pub struct BrowserTestContext {
   suite : String
   failures : Array[String]
-  metrics : Map[String, Json]
+  metrics : Map[String, @json.Json]
 }
 pub fn BrowserTestContext::BrowserTestContext(String) -> Self
 pub fn BrowserTestContext::assert_true(Self, Bool, String) -> Unit
 pub fn BrowserTestContext::fail(Self, String) -> Unit
 pub fn BrowserTestContext::finish(Self) -> Unit
-pub fn BrowserTestContext::metric(Self, String, Json) -> Unit
+pub fn BrowserTestContext::metric(Self, String, @json.Json) -> Unit
 pub fn BrowserTestContext::metric_int(Self, String, Int32) -> Unit
 pub fn BrowserTestContext::metric_number(Self, String, Double) -> Unit
 pub fn BrowserTestContext::metric_string(Self, String, String) -> Unit
-pub fn BrowserTestContext::to_json(Self) -> Json
+pub fn BrowserTestContext::to_json(Self) -> @json.Json
 
 // Type aliases
 

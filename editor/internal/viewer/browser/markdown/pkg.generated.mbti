@@ -28,10 +28,11 @@ pub(all) struct MarkdownRenderOptions {
 }
 pub fn MarkdownRenderOptions::MarkdownRenderOptions(language_id? : String, base_uri? : @common.Uri, action_handler? : (String) -> Unit, code_block_renderer? : (@moonbitlang/editor/internal/viewer/markdown.MarkdownCodeBlock, String?) -> String, on_size_changed? : () -> Unit, code_block_renderer_owns_source_root? : Bool, source_mapping? : Bool, allow_remote_images? : Bool, mermaid_theme? : MermaidTheme) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum MermaidTheme {
   Light
   Dark
-} derive(Eq, @debug.Debug)
+}
 pub fn MermaidTheme::equal(Self, Self) -> Bool
 pub fn MermaidTheme::not_equal(Self, Self) -> Bool
 pub fn MermaidTheme::to_repr(Self) -> @debug.Repr

@@ -5,13 +5,14 @@
 ///|
 /// One usable workspace symbol in viewer coordinates. `path` stays in the
 /// host's workspace-relative form and `range` is one-based for editor reveal.
+#derive(Eq, Debug)
 pub(all) struct Symbol {
   name : String
   kind : Int32?
   container : String?
   path : String
   range : @common.Range
-} derive(Eq, Debug)
+}
 
 ///|
 /// Project a typed host reply into the shared UI form. Blank names are not

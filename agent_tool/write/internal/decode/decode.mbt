@@ -3,11 +3,12 @@
 /// `path` with exactly `content`. `revert_on_parse_errors` (default true)
 /// controls the pre-write syntax gate that rejects new `.mbt` content that
 /// fails to lex/parse.
+#derive(Debug)
 pub struct WriteInput {
   path : String
   content : String
   revert_on_parse_errors : Bool
-} derive(Debug)
+}
 
 ///|
 /// Decode `write` tool-call arguments.

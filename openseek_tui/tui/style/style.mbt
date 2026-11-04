@@ -3,11 +3,12 @@
 ///
 /// A style can set foreground color, background color, and underline. Terminal
 /// styling is reset after each span is emitted.
+#derive(Eq, Debug)
 pub struct Style {
   foreground : @tty/color.Color
   background : @tty/color.Color
   underline : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The terminal's own colors, no underline — text with no styling applied.

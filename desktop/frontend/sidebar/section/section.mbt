@@ -1,8 +1,9 @@
 ///|
+#derive(Debug, Eq, Hash)
 pub(all) struct Id {
   source : String
   channel : String
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn Id::Id(source~ : String, channel~ : String) -> Id {
@@ -27,6 +28,7 @@ pub fn Id::key(self : Id) -> String {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Placeholder {
   id : String
   label : String
@@ -34,14 +36,15 @@ pub(all) struct Placeholder {
   nested : Bool
   openable : Bool
   action : Action?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Entry {
   Project(@project.Input)
   Conversation(@conversation.Input)
   Placeholder(Placeholder)
-} derive(Debug, Eq)
+}
 
 ///|
 fn Entry::key(self : Entry) -> String {
@@ -62,12 +65,14 @@ fn Entry::kind(self : Entry) -> String {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Action {
   title : String
   disabled : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
   label : String
@@ -77,7 +82,7 @@ pub(all) struct Input {
   activation : String?
   action : Action?
   entries : Array[Entry]
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn Input::id(self : Input) -> Id {

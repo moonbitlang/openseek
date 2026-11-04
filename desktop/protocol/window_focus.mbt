@@ -1,9 +1,10 @@
 ///|
 /// Native Browser focus is window-local. An absent id means no Browser tab
 /// owns focus; query failures are reported separately as command failures.
+#derive(Debug, Eq)
 pub(all) struct AppFocusedBrowserReply {
   id : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for AppFocusedBrowserReply with fn from_json(json, path) {

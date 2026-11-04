@@ -20,10 +20,12 @@ pub const MaxOfficeFileBytes : Int32 = 20 * 1024 * 1024
 
 ///|
 /// One literal path surfaced by the agent and clicked by the user.
-pub(all) struct Reference(String) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub(all) struct Reference(String)
 
 ///|
 /// Where the host should send a transcript file reference.
+#derive(Debug, Eq)
 pub(all) enum Resolution {
   // UTF-8 text within the viewer's size limit.
   // Position is absent for an ordinary path and a real filename with a suffix.
@@ -35,7 +37,7 @@ pub(all) enum Resolution {
   SystemPath(String)
   // Neither the literal path nor a parsed suffix-free candidate exists.
   MissingPath(String)
-} derive(Debug, Eq)
+}
 
 ///|
 priv struct EditorCandidate {

@@ -1,4 +1,5 @@
 ///|
+#derive(Eq)
 pub(all) struct OfficeSelectionPreview {
   owner : @interop.ConversationIdentity
   epoch : Int32
@@ -8,7 +9,7 @@ pub(all) struct OfficeSelectionPreview {
   materialized : String
   summary : @mention_context.OfficeSelectionSummary
   excel_table : ExcelSelectionTable?
-} derive(Eq)
+}
 
 ///|
 pub extend OfficeSelectionPreview with Eq::{equal, not_equal}

@@ -1,10 +1,11 @@
 ///|
 /// The last shared stat result, either displayed or waiting for an in-flight
 /// navigation to finish. No filesystem work or timer belongs to this model.
+#derive(Eq)
 enum FileObservation {
   Current(@protocol.FileSignature)
   Pending(@protocol.FileSignature)
-} derive(Eq)
+}
 
 ///|
 pub extend FileObservation with Eq::{equal, not_equal}

@@ -1,8 +1,9 @@
 ///|
 /// One renderer-private key for a direct child of `#stream`.
+#derive(Eq)
 priv struct TranscriptRenderKey {
   value : String
-} derive(Eq)
+}
 
 ///|
 fn TranscriptRenderKey::wire(self : TranscriptRenderKey) -> String {
@@ -311,9 +312,10 @@ fn EmptyContent::render(
 
 ///|
 /// One renderer-private key for a direct child of `#transcript`.
+#derive(Eq)
 priv struct TranscriptSectionKey {
   value : String
-} derive(Eq)
+}
 
 ///|
 fn TranscriptSectionKey::wire(self : TranscriptSectionKey) -> String {
@@ -366,6 +368,7 @@ fn Input::subrun_parent(self : Input) -> String? {
 /// stored, so blocks compare by value: the component recomputes a block's
 /// Html only when the block itself changed, and a streaming delta leaves every
 /// settled row's Html untouched.
+#derive(Eq)
 priv struct Block {
   /// The stream the block belongs to. It is part of the block's branch
   /// identity so a conversation switch never continues another conversation's
@@ -373,12 +376,13 @@ priv struct Block {
   stream : TranscriptSectionKey
   key : TranscriptRenderKey
   content : BlockContent
-} derive(Eq)
+}
 
 ///|
 /// The empty block's pure rendering inputs. Keeping these values in the block
 /// lets `assoc_by` update only this branch when the menu opens or its query
 /// changes, while the stable branch key preserves its DOM and input focus.
+#derive(Eq)
 priv struct EmptyContent {
   project_label : String?
   current_project : @common.Uri?
@@ -386,7 +390,7 @@ priv struct EmptyContent {
   can_choose_project : Bool
   project_menu_open : Bool
   project_query : String
-} derive(Eq)
+}
 
 ///|
 fn Input::empty_content(self : Input) -> EmptyContent {
@@ -401,6 +405,7 @@ fn Input::empty_content(self : Input) -> EmptyContent {
 }
 
 ///|
+#derive(Eq)
 priv enum BlockContent {
   Minimal(MinimalContent)
   /// Nothing to show: no durable items and nothing streaming.
@@ -431,7 +436,7 @@ priv enum BlockContent {
     step_label~ : String?,
     assistant_name~ : String
   )
-} derive(Eq)
+}
 
 ///|
 /// Notices do not consume a new chat's project-selection surface.

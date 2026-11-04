@@ -2,11 +2,12 @@
 /// Lifecycle status of one plan step. Named after the update_plan vocabulary
 /// (`pending`/`in_progress`/`completed`) that coding models already know;
 /// deliberately distinct from any goal-level lifecycle status.
+#derive(Debug, Eq)
 pub enum PlanStatus {
   Pending
   InProgress
   Completed
-} derive(Debug, Eq)
+}
 
 ///|
 /// The wire spelling of a status — the exact strings `decode` accepts, so a
@@ -33,18 +34,20 @@ test "labels spell statuses exactly as the decoder accepts them" {
 
 ///|
 /// One step of the agent's plan: a short imperative title plus its status.
+#derive(Debug)
 pub struct PlanStep {
   title : String
   status : PlanStatus
-} derive(Debug)
+}
 
 ///|
 /// Decoded arguments of the `plan` tool: the complete, ordered list of steps.
 /// Every call replaces the previous plan, so the array is the whole plan; an
 /// empty array clears it.
+#derive(Debug)
 pub struct PlanInput {
   steps : Array[PlanStep]
-} derive(Debug)
+}
 
 ///|
 /// Upper bound on plan length. More steps than this is a sign the model is

@@ -2,9 +2,10 @@
 /// The native window's preference. Missing/null means no saved choice;
 /// Unknown fields are ignored; malformed values are rejected by this decoder.
 /// The native host validates supported language values before storing them.
+#derive(Eq, Debug)
 pub(all) struct UiLanguagePreference {
   language : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for UiLanguagePreference with fn from_json(json, path) {

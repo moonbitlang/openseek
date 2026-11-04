@@ -1,11 +1,12 @@
 ///|
+#derive(Eq)
 priv struct BrowserAnnotationSession {
   id : Int32
   request : String
   owner : @interop.ConversationKey
   codex : Bool
   state : @preview.Annotation
-} derive(Eq)
+}
 
 ///|
 fn capture_browser_element(

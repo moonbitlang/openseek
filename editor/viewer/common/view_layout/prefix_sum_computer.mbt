@@ -7,10 +7,11 @@
 ///|
 /// Result of `PrefixSumComputer::get_index_of`: the index whose range contains
 /// the queried sum, plus the remainder into that index.
+#derive(Eq, Debug)
 pub(all) struct PrefixSumIndexOfResult {
   index : Int32
   remainder : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Incrementally-cached prefix-sum computer over a mutable array of values.

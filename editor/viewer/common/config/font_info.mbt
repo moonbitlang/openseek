@@ -59,13 +59,14 @@ fn golden_line_height_ratio_for_platform(platform : FontPlatform) -> Double {
 ///|
 /// Monaco `EDITOR_FONT_DEFAULTS` (with `DEFAULT_MAC_FONT_FAMILY` /
 /// `DEFAULT_WINDOWS_FONT_FAMILY` / `DEFAULT_LINUX_FONT_FAMILY`).
+#derive(Eq, Debug)
 pub struct EditorFontDefaults {
   font_family : String
   font_weight : String
   font_size : Double
   line_height : Double
   letter_spacing : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub let editor_font_defaults : EditorFontDefaults = editor_font_defaults_for_platform(
@@ -95,6 +96,7 @@ fn editor_font_defaults_for_platform(
 ///|
 /// Monaco `BareFontInfo`: the requested font settings, with the line height
 /// already resolved through the golden-ratio/em/minimum rules.
+#derive(Eq, Debug)
 pub struct BareFontInfo {
   pixel_ratio : Double
   font_family : String
@@ -104,7 +106,7 @@ pub struct BareFontInfo {
   font_variation_settings : String
   line_height : Int32
   letter_spacing : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Monaco `BareFontInfo._create`: `lineHeight == 0` derives the golden-ratio
@@ -266,6 +268,7 @@ fn is_ecmascript_whitespace(code : Int32) -> Bool {
 /// Monaco `FontInfo`: the bare settings plus the widths measured from the
 /// DOM (`FontMeasurements`). `is_trusted` is `false` for estimated readings
 /// (never measured, or measured while the web font was still loading).
+#derive(Eq, Debug)
 pub(all) struct FontInfo {
   pixel_ratio : Double
   font_family : String
@@ -284,7 +287,7 @@ pub(all) struct FontInfo {
   middot_width : Double
   wsmiddot_width : Double
   max_digit_width : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// An estimated `FontInfo` for a `BareFontInfo` that has not been measured

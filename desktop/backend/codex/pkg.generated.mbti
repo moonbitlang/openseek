@@ -3,6 +3,7 @@ package "openseek_desktop/backend/codex"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/openseek/jsonrpc",
   "openseek_desktop/backend/pathx",
 }
@@ -13,12 +14,13 @@ pub fn command() -> String
 pub fn home_dir(@pathx.Path) -> @pathx.Path
 
 // Errors
+#derive(@debug.Debug)
 pub(all) suberror CodexError {
-  JsonRpc(method_~ : String, code~ : Int32, message~ : String, data~ : Json?)
+  JsonRpc(method_~ : String, code~ : Int32, message~ : String, data~ : @json.Json?)
   TransportClosed(method_~ : String)
   RequestFailed(method_~ : String, detail~ : String)
   Unavailable(String)
-} derive(@debug.Debug)
+}
 pub fn CodexError::is_unmaterialized_thread_history(Self) -> Bool
 pub fn CodexError::is_unmaterialized_thread_turns(Self) -> Bool
 pub fn CodexError::output(Self, &Logger) -> Unit
@@ -29,12 +31,12 @@ pub impl Show for CodexError
 // Types and methods
 type Actor
 pub fn Actor::Actor(CodexSettings) -> Self
-pub async fn Actor::call(Self, method_~ : String, params~ : Json) -> Json
+pub async fn Actor::call(Self, method_~ : String, params~ : @json.Json) -> @json.Json
 pub fn Actor::config_home(Self) -> @pathx.Path?
-pub async fn Actor::requests(Self) -> Json
-pub async fn Actor::respond(Self, request_id~ : Json, response_token~ : String, result~ : Json) -> Json
-pub async fn Actor::run(Self, (String, Json) -> Unit) -> Unit
-pub fn Actor::status(Self) -> Json
+pub async fn Actor::requests(Self) -> @json.Json
+pub async fn Actor::respond(Self, request_id~ : @json.Json, response_token~ : String, result~ : @json.Json) -> @json.Json
+pub async fn Actor::run(Self, (String, @json.Json) -> Unit) -> Unit
+pub fn Actor::status(Self) -> @json.Json
 
 pub struct CodexSettings {
   command : String
@@ -46,13 +48,13 @@ pub fn CodexSettings::default() -> Self
 
 type ProjectCatalog
 pub fn ProjectCatalog::ProjectCatalog() -> Self
-pub async fn ProjectCatalog::annotate(Self, Json) -> Json
+pub async fn ProjectCatalog::annotate(Self, @json.Json) -> @json.Json
 pub fn ProjectCatalog::main_project(Self, String) -> String?
 
 type StdioTransport
 pub fn StdioTransport::close(Self) -> Unit
-pub async fn StdioTransport::recv(Self) -> Json?
-pub async fn StdioTransport::send(Self, Json) -> Unit
+pub async fn StdioTransport::recv(Self) -> @json.Json?
+pub async fn StdioTransport::send(Self, @json.Json) -> Unit
 pub impl @jsonrpc.Transport for StdioTransport
 
 // Type aliases

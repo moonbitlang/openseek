@@ -12,6 +12,7 @@
 /// `initial_mouse_pos_*` are carried per the source shape; the
 /// mouse-getting-closer seam reads the live recorded pointer instead
 /// (`MouseCloserState`, Phase 4 increment 2).
+#derive(Eq, Debug)
 pub(all) enum HoverAnchor {
   HoverRangeAnchor(
     priority~ : Int32,
@@ -28,7 +29,7 @@ pub(all) enum HoverAnchor {
     initial_mouse_pos_y~ : Double?,
     supports_marker_hover~ : Bool
   )
-} derive(Eq, Debug)
+}
 
 ///|
 /// Mints the identity required by the staged foreign-element anchor contract.
@@ -42,18 +43,20 @@ pub fn HoverParticipantOwner::HoverParticipantOwner() -> HoverParticipantOwner {
 ///|
 /// Typed start mode from Monaco's `HoverStartMode`. Numeric enum encodings are
 /// intentionally not observable in the MoonBit API.
+#derive(Eq, Debug)
 pub(all) enum HoverStartMode {
   HoverStartDelayed
   HoverStartImmediate
-} derive(Eq, Debug)
+}
 
 ///|
 /// Typed origin of a hover start from Monaco's `HoverStartSource`.
+#derive(Eq, Debug)
 pub(all) enum HoverStartSource {
   HoverStartMouse
   HoverStartClick
   HoverStartKeyboard
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend HoverAnchor with Debug::{to_repr}

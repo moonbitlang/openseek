@@ -20,11 +20,12 @@ pub fn pick(locale? : @i18n.Locale, allow_images? : Bool, @cmd.Emit[Event]) -> @
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Document {
   name : String
   data_base64 : String
   native_path : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn Document::equal(Self, Self) -> Bool
 pub fn Document::not_equal(Self, Self) -> Bool
 pub fn Document::to_repr(Self) -> @debug.Repr

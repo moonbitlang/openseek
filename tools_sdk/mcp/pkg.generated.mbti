@@ -1,8 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek_tools/mcp"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
-pub async fn call(String, String, Json) -> CallResult
+pub async fn call(String, String, @json.Json) -> CallResult
 
 pub async fn search(query? : String, server? : String, limit? : Int32, offset? : Int32) -> SearchPage raise SearchError
 
@@ -25,7 +29,7 @@ pub impl Show for TransportError
 pub struct CallResult {
   content : String
   is_error : Bool
-  data : Json?
+  data : @json.Json?
   images : Array[String]
 }
 
@@ -42,8 +46,8 @@ pub struct Tool {
   server : String
   name : String
   description : String
-  input_schema : Json
-  output_schema : Json?
+  input_schema : @json.Json
+  output_schema : @json.Json?
 }
 
 // Type aliases

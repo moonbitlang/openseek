@@ -5,6 +5,7 @@
 // its correlated response, every other session reacts to the broadcast push.
 
 ///|
+#derive(Eq)
 priv struct RepoPickerModel {
   /// The request generation this picker is waiting on; results stamped with
   /// an older generation are superseded and dropped.
@@ -16,7 +17,7 @@ priv struct RepoPickerModel {
   entries : Array[@remote_protocol.HostDirectoryEntry]
   loading : Bool
   error : String
-} derive(Eq)
+}
 
 ///|
 /// Monotonic stamp for picker requests, module-level like the protocol

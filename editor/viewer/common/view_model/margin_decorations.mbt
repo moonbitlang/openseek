@@ -12,12 +12,13 @@
 /// `tooltip` (`linesDecorationsTooltip`) is not carried by the viewer's
 /// decoration options; `z_index` is kept for parity but — like Monaco's
 /// `LinesDecorationsOverlay` — does not affect the emitted order.
+#derive(Eq, Debug)
 pub struct DecorationToRender {
   start_line_number : Int32
   end_line_number : Int32
   class_name : String
   z_index : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// `LinesDecorationsOverlay._getDecorations`: the viewport decorations that

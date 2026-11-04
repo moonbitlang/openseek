@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum GithubListKind {
   CreatedByMe
   AllOpen
   Issues
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubListKind with fn from_json(json, path) {
@@ -25,11 +26,12 @@ pub impl ToJson for GithubListKind with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubListPayload {
   cwd : String
   kind : GithubListKind
   limit : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubListPayload with fn from_json(json, path) {
@@ -50,6 +52,7 @@ pub impl ToJson for GithubListPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubItem {
   number : Int32
   title : String
@@ -57,7 +60,7 @@ pub(all) struct GithubItem {
   author : String?
   avatar_url : String?
   draft : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubItem with fn from_json(json, path) {
@@ -90,13 +93,14 @@ pub impl ToJson for GithubItem with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubListReply {
   repository : String
   repository_url : String
   items : Array[GithubItem]
   has_more : Bool
   avatar_error : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubListReply with fn from_json(json, path) {

@@ -13,12 +13,13 @@ pub let default_hard_cap : Int32
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub enum ExecStatus {
   Running
   Backgrounded
   Exited(Int32)
   Killed
-} derive(Eq, @debug.Debug)
+}
 
 type ShellExecution
 pub fn ShellExecution::background(Self) -> Bool

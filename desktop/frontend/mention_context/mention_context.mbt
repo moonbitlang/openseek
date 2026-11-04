@@ -45,12 +45,14 @@
 /// One mention chip in envelope form. `Symbol`'s `file` is `""` (and `line`
 /// 0) when the language server could not place it; `Annotation` is an editor
 /// comment — selected text, source location, revision side, and user feedback.
+#derive(Eq, Debug)
 pub(all) enum AnnotationSide {
   WorkingRevision
   OriginalRevision
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum MentionRef {
   BrowserAnnotation(element~ : @protocol.BrowserElement)
   ReviewChanges(ReviewChanges)
@@ -71,12 +73,13 @@ pub(all) enum MentionRef {
     comment~ : String,
     side~ : AnnotationSide
   )
-} derive(Eq, Debug)
+}
 
 ///|
 /// A snapshot of selected semantic-search results. It is one Composer mention
 /// even when it contains many files and ranges; the snapshot stays independent
 /// from the live Search panel so later searches cannot silently change it.
+#derive(Eq, Debug)
 pub(all) struct SemanticSearchReference {
   id : String
   root : String
@@ -84,7 +87,7 @@ pub(all) struct SemanticSearchReference {
   include_glob : String
   exclude_glob : String
   matches : Array[@protocol.SemanticSelectionMatch]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Small selections stay in the prompt as structured XML. Larger selections
@@ -127,19 +130,21 @@ pub fn SemanticSearchReference::materialize_payload(
 ///|
 /// A generated JSONL snapshot used when a semantic selection is too large to
 /// put in the prompt itself.
+#derive(Eq, Debug)
 pub(all) struct SemanticSearchArtifact {
   path : String
   pattern_count : Int32
   match_count : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// A `<user_mentions>` envelope parsed back into its parts: the chips and the
 /// typed task text (possibly empty — a draft of chips alone still sends).
+#derive(Debug)
 pub struct MentionMessage {
   mentions : Array[MentionRef]
   task : String
-} derive(Debug)
+}
 
 ///|
 /// One mention-tag attribute in its wire representation. Keeping encoding and
@@ -205,11 +210,12 @@ pub fn MentionRef::comment(self : MentionRef) -> String? {
 /// The editor location represented by a mention chip. Skills and unresolved
 /// symbols have no target; comments on the original revision deliberately do
 /// not point into the working file.
+#derive(Eq, Debug)
 pub struct Target {
   file : String
   range : @common.Range?
   annotation : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// The short marker displayed before a mention's label.

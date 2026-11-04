@@ -1,11 +1,12 @@
 ///|
 /// Text inserted into a rendered line without existing in the source document.
+#derive(Eq, Debug)
 pub struct InjectedText {
   position : @base_common.Position
   text : String
   class_name : String
   source_index : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds injected text at a model position.
@@ -20,6 +21,7 @@ pub fn InjectedText::InjectedText(
 
 ///|
 /// Segment kind inside a projected line: source text or injected text.
+#derive(Eq, Debug)
 pub enum ProjectedLinePartKind {
   SourceSegment(model_start~ : Int32, model_end~ : Int32)
   InjectedSegment(
@@ -27,15 +29,16 @@ pub enum ProjectedLinePartKind {
     injected_text_index~ : Int32,
     class_name~ : String
   )
-} derive(Eq, Debug)
+}
 
 ///|
 /// Half-open projected text segment with its source/injected identity.
+#derive(Eq, Debug)
 pub struct ProjectedLinePart {
   start : Int32
   end : Int32
   kind : ProjectedLinePartKind
-} derive(Eq, Debug)
+}
 
 ///|
 /// One model line after injected text has been projected into display text,
@@ -50,6 +53,7 @@ pub struct ProjectedLinePart {
 /// behavior; `model_column_to_projected_column` surfaces the `Right` side and
 /// `normalize_projected_column_around_injections` ports the normalization
 /// branches.
+#derive(Eq, Debug)
 pub struct ProjectedTextLine {
   text : String
   model_line_length : Int32
@@ -57,7 +61,7 @@ pub struct ProjectedTextLine {
   injected_text_indices : Array[Int32]
   model_to_projected_columns : Array[Int32]
   parts : Array[ProjectedLinePart]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Projection for a line with no injected text.

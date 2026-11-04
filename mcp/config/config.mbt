@@ -8,6 +8,7 @@
 ///|
 /// A configured MCP server: launched as a subprocess (stdio) or reached at a
 /// Streamable HTTP endpoint.
+#derive(Eq, Debug)
 pub(all) enum McpServer {
   Stdio(
     name~ : String,
@@ -16,7 +17,7 @@ pub(all) enum McpServer {
     env~ : Map[String, String]
   )
   Http(name~ : String, url~ : String, headers~ : Map[String, String])
-} derive(Eq, Debug)
+}
 
 ///|
 /// The configured server's name (the key under `mcpServers`).
