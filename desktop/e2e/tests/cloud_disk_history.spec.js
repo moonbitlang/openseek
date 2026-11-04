@@ -55,7 +55,6 @@ test('desktop reopens cached Cloud turns offline and revalidates them after rest
   releaseList();
   const unchanged = await firstRead.response();
   expect(unchanged.status()).toBe(304);
-  await unchanged.finished();
   expect(files.get(sessionA).etag).toBe(etag);
 
   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
