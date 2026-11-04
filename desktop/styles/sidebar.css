@@ -1244,8 +1244,8 @@ button.row-twisty:hover {
   display: grid;
   gap: calc(1em / 14);
   min-width: 0;
-  margin-top: 1rem;
-  padding: 0 var(--sidebar-inset);
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) var(--sidebar-inset) 0;
 }
 
 .sidebar-button {
