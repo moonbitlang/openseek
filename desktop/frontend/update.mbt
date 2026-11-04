@@ -1927,7 +1927,7 @@ fn update(
   // still take the generic path so an older active document is restored.
   let file_opened_with_panel = !previous.right_panel_open &&
     model.right_panel_open &&
-    msg.opens_file_before_panel_reconciliation() &&
+    msg.opens_file_before_panel_reconciliation(model) &&
     model.file_panel.error is None &&
     @dock.active_file(model.dock_state()) is Some(_)
   let (panel_visibility_cmd, model) = if panel_visibility_changed &&
@@ -2117,7 +2117,7 @@ fn update(
         model.dock_state().tabs != previous.dock_state().tabs ||
         model.dock_owner() != previous.dock_owner() ||
         panel_visibility_changed ||
-        msg.opens_file_before_panel_reconciliation() ||
+        msg.opens_file_before_panel_reconciliation(model) ||
         msg is Dock(TabActivated(_)),
       ),
     ]),
@@ -2126,10 +2126,15 @@ fn update(
 }
 
 ///|
-/// Only the resolved editor reply opens a document during this transition.
-/// Every file selection first asks the host to classify the path.
-fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
-  self is OpenPathResolved(_, Editor(_))
+/// Host file selections first ask the host to classify the path, so only the
+/// resolved editor reply opens a document during this transition. A Cloud
+/// Quick Open pick names an indexed file and opens it synchronously.
+fn Msg::opens_file_before_panel_reconciliation(
+  self : Msg,
+  model : Model,
+) -> Bool {
+  self is OpenPathResolved(_, Editor(_)) ||
+  (model.cloud_selected() && self is QuickOpen(@quick_open.Pick(_)))
 }
 
 ///|
@@ -19783,6 +19788,7 @@ test "file editor context reports the file body actual visibility" {
 
 ///|
 test "only synchronous file-open messages suppress panel reactivation" {
+  let host = test_model()
   let owner : @interop.ConversationKey = {
     channel: Local,
     session: "desktop-test",
@@ -19791,14 +19797,14 @@ test "only synchronous file-open messages suppress panel reactivation" {
     owner: @interop.Host(owner),
     archive_generation: 0,
   }
-  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation())
+  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation(host))
   assert_false(
     ComposerAction(
       @composer.MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
         range: None,
       }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   assert_false(
     CodexComposerAction(
@@ -19806,24 +19812,26 @@ test "only synchronous file-open messages suppress panel reactivation" {
         ref_: File(path="a.mbt"),
         range: None,
       }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   assert_false(
-    JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(),
+    JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(
+      host,
+    ),
   )
   assert_false(
-    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(),
+    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(host),
   )
   assert_true(
     OpenPathResolved(
       FileOpenContext::new(owner, 1),
       Editor({ path: "a.mbt", line: Some(1), column: None, }),
-    ).opens_file_before_panel_reconciliation(),
+    ).opens_file_before_panel_reconciliation(host),
   )
   // This only starts the asynchronous host lookup. The later OpenPathResolved is
   // the message that actually opens the document.
-  assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation())
-  assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation())
+  assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation(host))
+  assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation(host))
 }
 
 ///|
