@@ -141,6 +141,11 @@ pub fn definition(
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
   let generations : Map[String, Int32] = Map([])
+  let workspace_writes = if read_only || worker_sandbox is Some(_) {
+    Denied
+  } else {
+    ExceptSource
+  }
   // Deliberately NOT `concurrent_safe`: wasm builds for one session share
   // build directories (see `build_cache_root`), and a call copies its program
   // out of the shared directory only after its own build returns. Two calls
@@ -155,7 +160,7 @@ pub fn definition(
         auto_background_after_ms~,
         foreground_timeout_ms~,
         build_timeout_ms~,
-        workspace_writes=!read_only && worker_sandbox is None,
+        workspace_writes~,
       ) +
       (if scratch_dir is Some(_) {
         "\nFile artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
@@ -193,6 +198,7 @@ pub fn definition(
           job_dir?,
           scratch_dir?,
           worker_sandbox?,
+          workspace_writes~,
           auto_background_after_ms~,
           foreground_timeout_ms~,
           build_timeout_ms~,
@@ -347,6 +353,7 @@ async fn execute(
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
+  workspace_writes~ : WorkspaceWrites,
   // Independent injectable bounds: a runtime-backed run hands off at the
   // first; a runtime-less run is cancelled at the second; the snippet's
   // synchronous build phase is cancelled at the third.
@@ -650,27 +657,24 @@ async fn execute(
   // `cwd` is deliberately NOT a write root: naming where a program runs should
   // not also grant writing there, and reads are open, so a snippet can still
   // work in a directory it may not modify. What a snippet may write in the
-  // tree comes from the workspace grant below, whatever its `cwd`.
+  // tree comes from `workspace_writes`, whatever its `cwd`.
   //
-  // Only the main agent holds that grant. A read-only role is defined by
-  // writing nothing in the workspace, and a worker's writes are bounded by its
-  // write scope, whose allowed prefixes a whole-tree grant would ignore; both
-  // keep writing only their temp directory and lab. The root is canonicalized
-  // here because moonrun matches the source exclusions against resolved paths
-  // and does not canonicalize a glob (see `wasm_policy_document`).
-  let workspace_grant = if read_only || worker_sandbox is Some(_) {
-    None
-  } else {
-    Some(
-      @fs.realpath(workspace_root) catch {
-        error =>
-          return @agent_tool.respond(
-            "mbtx: could not resolve the workspace root \{workspace_root} (\{error}).",
-            is_error=true,
-            brief="mbtx",
-          )
-      },
-    )
+  // The root is canonicalized here because moonrun matches the source
+  // exclusions against resolved paths and does not canonicalize a glob (see
+  // `wasm_policy_document`).
+  let workspace_grant = match workspace_writes {
+    Denied => None
+    ExceptSource =>
+      Some(
+        @fs.realpath(workspace_root) catch {
+          error =>
+            return @agent_tool.respond(
+              "mbtx: could not resolve the workspace root \{workspace_root} (\{error}).",
+              is_error=true,
+              brief="mbtx",
+            )
+        },
+      )
   }
   let injected : Map[String, String] = Map([])
   if mcp_service is Some(service) {
@@ -1070,6 +1074,21 @@ async fn execute(
       )
     }
   }
+}
+
+///|
+/// What a snippet's wasm policy lets it write in the workspace, on top of its
+/// own temp directory and the session lab. It follows from the role, so
+/// `definition` decides it once and both the description and every run's
+/// policy read the same answer.
+priv enum WorkspaceWrites {
+  /// Nothing in the workspace. A read-only role is defined by writing nothing
+  /// there, and a worker's writes are bounded by its write scope, whose allowed
+  /// prefixes a whole-tree grant would ignore.
+  Denied
+  /// The workspace minus MoonBit sources, manifests, `.mbtx` scripts and
+  /// `.git` (see `wasm_policy_document`): the main agent.
+  ExceptSource
 }
 
 ///|
@@ -1689,7 +1708,7 @@ fn description(
   auto_background_after_ms~ : Int32,
   foreground_timeout_ms~ : Int32,
   build_timeout_ms~ : Int32,
-  workspace_writes~ : Bool,
+  workspace_writes~ : WorkspaceWrites,
 ) -> String {
   // The one sentence here that depends on what this build can actually do.
   //
@@ -1799,33 +1818,32 @@ fn description(
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
-  // Which roots a snippet writes depends on the role: only the main agent's
-  // policy grants the workspace (see `execute`).
-  let write_rule = if workspace_writes {
-    (
-      #|- Direct filesystem IO READS anywhere. It WRITES its own `@fs.tmpdir()`, the
-      #|  configured session scratch directory shown in Environment, and workspace
-      #|  files — data, fixtures, logs, generated output — EXCEPT MoonBit sources and
-      #|  manifests (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`
-      #|  and their `.json` forms, in any letter case), `*.mbtx` scripts (save one
-      #|  with `filename`) and `.git`. Use the actual scratch path for
-      #|  cross-call files, binary data, and command output. Temporary files must be
-      #|  consumed before the execution ends. Changing source is the file tools' job,
-      #|  or a command's — `moon fmt`, `git checkout` and friends are child processes
-      #|  and run normally. Deleting a workspace file is `remove`'s job. A write
-      #|  refusal is that rule firing, not a filesystem fault to debug or route
-      #|  around.
-    )
-  } else {
-    (
-      #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`
-      #|  and the configured session scratch directory shown in Environment. Use the
-      #|  actual scratch path for cross-call files, binary data, and command output.
-      #|  Temporary files must be consumed before the execution ends. Changing a
-      #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
-      #|  checkout` and friends are child processes and run normally. A write refusal
-      #|  is that rule firing, not a filesystem fault to debug or route around.
-    )
+  let write_rule = match workspace_writes {
+    ExceptSource =>
+      (
+        #|- Direct filesystem IO READS anywhere. It WRITES its own `@fs.tmpdir()`, the
+        #|  configured session scratch directory shown in Environment, and workspace
+        #|  files — data, fixtures, logs, generated output — EXCEPT MoonBit sources and
+        #|  manifests (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`
+        #|  and their `.json` forms, in any letter case), `*.mbtx` scripts (save one
+        #|  with `filename`) and `.git`. Use the actual scratch path for
+        #|  cross-call files, binary data, and command output. Temporary files must be
+        #|  consumed before the execution ends. Changing source is the file tools' job,
+        #|  or a command's — `moon fmt`, `git checkout` and friends are child processes
+        #|  and run normally. Deleting a workspace file is `remove`'s job. A write
+        #|  refusal is that rule firing, not a filesystem fault to debug or route
+        #|  around.
+      )
+    Denied =>
+      (
+        #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`
+        #|  and the configured session scratch directory shown in Environment. Use the
+        #|  actual scratch path for cross-call files, binary data, and command output.
+        #|  Temporary files must be consumed before the execution ends. Changing a
+        #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
+        #|  checkout` and friends are child processes and run normally. A write refusal
+        #|  is that rule firing, not a filesystem fault to debug or route around.
+      )
   }
   let base_rest =
     #|- DNS and outbound connections are allowed. A snippet may bind/listen only on
