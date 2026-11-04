@@ -132,29 +132,25 @@ dialog.management-dialog {
 @media (prefers-reduced-motion: no-preference) {
   dialog.management-dialog {
     opacity: 0;
-    scale: 0.98;
     transition:
-      opacity 120ms ease,
-      scale 120ms ease,
-      display 120ms allow-discrete,
-      overlay 120ms allow-discrete;
+      opacity 70ms linear,
+      display 70ms allow-discrete,
+      overlay 70ms allow-discrete;
   }
   .management-dialog[open] {
     opacity: 1;
-    scale: 1;
   }
   @starting-style {
     .management-dialog[open] {
       opacity: 0;
-      scale: 0.98;
     }
   }
   .management-dialog::backdrop {
     background: transparent;
     transition:
-      background-color 120ms ease,
-      display 120ms allow-discrete,
-      overlay 120ms allow-discrete;
+      background-color 70ms linear,
+      display 70ms allow-discrete,
+      overlay 70ms allow-discrete;
   }
   @starting-style {
     .management-dialog[open]::backdrop {
