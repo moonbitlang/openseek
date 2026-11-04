@@ -105,7 +105,8 @@ pub fn device_entry_path(device : String) -> String {
 }
 
 ///|
-/// Encode an application target; account identity never enters the URL.
+/// Encode a work destination; legacy management links are accepted only on input.
+/// Account identity never enters the URL.
 pub fn Location::path(self : Location) -> String? {
   match self.target {
     Cloud => return Some("/cloud")
@@ -125,11 +126,8 @@ pub fn Location::path(self : Location) -> String? {
     CodexNew => "codex/new"
     Thread(id) => "codex/thread/" + @percent.encode(id)
     CodexDraft(id) => "codex/draft/" + @percent.encode(id)
-    Settings => "settings"
-    Skills => "skills"
-    InstalledSkill(id) => "skills/installed/" + @percent.encode(id)
-    MarketSkill(source) => "skills/market/" + @percent.encode(source)
-    Schedules => "schedules"
+    Settings | Skills | InstalledSkill(_) | MarketSkill(_) | Schedules =>
+      return None
   }
   Some("/device/" + @percent.encode(device) + "/" + suffix)
 }

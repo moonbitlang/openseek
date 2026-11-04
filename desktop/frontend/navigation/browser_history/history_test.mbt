@@ -14,9 +14,6 @@ test "Cloud URLs share browser history and restore across Cloud and device docum
     .visit("/cloud/session/session", replace=false, key="b")
     .unwrap()
   assert_eq(cloud.path(), "/cloud/session/session")
-  assert_true(cloud.can_back())
-  let back = cloud.select(Settings, initial.marker()).unwrap()
-  assert_true(back.can_forward())
   let restored = @browser_history.History::restore(
     cloud.path(),
     cloud.path(),
@@ -53,7 +50,6 @@ test "invalid targets retain their path but allow navigation within the decoded 
     fail("invalid target lost its device or browser entry")
   }
   assert_eq(back.path(), invalid)
-  assert_true(back.can_forward())
 }
 
 ///|
@@ -75,13 +71,11 @@ test "encoded device and target identities share canonical history" {
   }
   assert_eq(back.path(), "/device/d1/chat/session/s1")
   assert_true(promoted.select(draft, initial.marker()) == Some(back))
-  assert_true(back.can_forward())
-  assert_false(back.can_back())
 }
 
 ///|
 test "restore canonicalizes non-canonical encoded paths while retaining browser entry URLs" {
-  let encoded = "/device/%641/settings"
+  let encoded = "/device/%641/chat/session/s1"
   let marker : Json = { "group": "g", "key": "b" }
   let stored : Json = {
     "entries": [
@@ -89,8 +83,8 @@ test "restore canonicalizes non-canonical encoded paths while retaining browser 
       { "key": "b", "path": encoded, "original": encoded },
       {
         "key": "c",
-        "path": "/device/%641/skills",
-        "original": "/device/%641/skills",
+        "path": "/device/%641/codex/thread/t1",
+        "original": "/device/%641/codex/thread/t1",
       },
     ],
   }
@@ -98,23 +92,21 @@ test "restore canonicalizes non-canonical encoded paths while retaining browser 
     is Some(restored) else {
     fail("same-device encoded entries rejected")
   }
-  assert_eq(restored.path(), Settings)
-  assert_true(restored.can_back())
-  assert_true(restored.can_forward())
+  assert_eq(restored.path(), "/device/d1/chat/session/s1")
   guard restored
     .written()
-    .select("/device/%641/skills", { "group": "g", "key": "c" })
+    .select("/device/%641/codex/thread/t1", { "group": "g", "key": "c" })
     is Some(forward) &&
-    forward.visit("/device/%641/settings", replace=false, key="d")
+    forward.visit(encoded, replace=false, key="d")
     is Some(visited) else {
     fail("encoded entry cannot be traversed or followed by navigation")
   }
-  assert_eq(forward.path(), Skills)
-  assert_eq(visited.path(), Settings)
+  assert_eq(forward.path(), "/device/d1/codex/thread/t1")
+  assert_eq(visited.path(), "/device/d1/chat/session/s1")
   assert_true(
     @browser_history.History::restore(
-      Settings,
-      Settings,
+      visited.path(),
+      visited.path(),
       visited.marker(),
       visited.written().stored(),
     ) ==
@@ -125,8 +117,6 @@ test "restore canonicalizes non-canonical encoded paths while retaining browser 
 ///|
 test "visits deduplicate and branch without mutating previous states" {
   let initial = @browser_history.History(New, group="g", key="a")
-  assert_false(initial.can_back())
-  assert_false(initial.can_forward())
   assert_true(initial.visit(New, replace=false, key="unused") == Some(initial))
   guard initial.visit(Settings, replace=false, key="b") is Some(settings) else {
     fail("same-device visit rejected")
@@ -137,15 +127,11 @@ test "visits deduplicate and branch without mutating previous states" {
   guard skills.select(Settings, settings.marker()) is Some(back) else {
     fail("known browser entry rejected")
   }
-  assert_true(back.can_back())
-  assert_true(back.can_forward())
   guard back.visit(New, replace=false, key="d") is Some(branch) else {
     fail("branch rejected")
   }
-  assert_false(branch.can_forward())
   assert_true(branch.select(Skills, skills.marker()) == None)
   assert_eq(initial.path(), New)
-  assert_false(initial.can_back())
   assert_true(back.visit(New, replace=false, key="d") == Some(branch))
 }
 
@@ -165,8 +151,6 @@ test "stored history restores the cursor by entry key even for repeated paths" {
     fail("stored history was not restored")
   }
   assert_eq(history.marker(), marker)
-  assert_true(history.can_back())
-  assert_true(history.can_forward())
   assert_eq(@browser_history.storage_group(marker), Some("stored-group"))
   assert_true(
     @browser_history.History::restore(
@@ -254,8 +238,6 @@ test "covered draft promotion survives refresh and an old browser URL" {
     fail("old browser entry")
   }
   assert_eq(back.path(), session)
-  assert_false(back.can_back())
-  assert_true(back.can_forward())
   assert_true(
     @browser_history.History::restore(
       draft,
@@ -293,7 +275,6 @@ test "replacement keeps entry identity and forward history but retires the origi
     fail("replace")
   }
   assert_eq(replaced.marker(), initial.marker())
-  assert_true(replaced.can_forward())
   assert_true(replaced.select(draft, initial.marker()) == None)
   assert_eq(
     replaced.select(Settings, settings.marker()).map(h => h.path()),
@@ -364,8 +345,6 @@ test "successive promotions retain the URL actually written to each entry" {
       fail("intermediate browser URL lost")
     }
     assert_eq(back.path(), thread)
-    assert_false(back.can_back())
-    assert_true(back.can_forward())
     assert_eq(
       back.written().select(Settings, sent.marker()).map(h => h.path()),
       Some(Settings),

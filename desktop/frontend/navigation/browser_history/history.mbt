@@ -63,16 +63,6 @@ pub fn History::written(self : History) -> History {
 }
 
 ///|
-pub fn History::can_back(self : History) -> Bool {
-  !self.previous.is_empty()
-}
-
-///|
-pub fn History::can_forward(self : History) -> Bool {
-  !self.following.is_empty()
-}
-
-///|
 /// Missing/null/malformed fields cannot identify an entry; unknown fields are
 /// ignored.
 pub fn storage_group(marker : Json) -> String? {

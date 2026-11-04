@@ -9,8 +9,6 @@ pub fn storage_group(Json) -> String?
 // Types and methods
 type History derive(Eq)
 pub fn History::History(String, group~ : String, key~ : String) -> Self
-pub fn History::can_back(Self) -> Bool
-pub fn History::can_forward(Self) -> Bool
 pub fn History::equal(Self, Self) -> Bool
 pub fn History::marker(Self) -> Json
 pub fn History::not_equal(Self, Self) -> Bool

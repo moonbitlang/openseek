@@ -40,7 +40,6 @@ fn Model::navigation_location(self : Model) -> @routes.Location? {
   }
   match target {
     Cloud | CloudSession(..) | CloudDraft(..) => Some({ device: None, target, })
-    Settings => Some({ device, target, })
     _ => if device is Some(_) { Some({ device, target, }) } else { None }
   }
 }
@@ -61,8 +60,8 @@ fn navigation_screen(target : @routes.Target) -> Screen {
 }
 
 ///|
-/// A management page can cover the draft whose project add is still pending.
-/// Leaving that owner for a different work destination cancels its adoption.
+/// Legacy management links open a dialog without abandoning a pending draft.
+/// A different work destination cancels its project adoption.
 fn Model::project_adoption_at(
   self : Model,
   location : @routes.Location,

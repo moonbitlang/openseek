@@ -1,6 +1,5 @@
 ///|
-test "Cloud routes resolve accounts at activation while Settings can remain window-only" {
-  assert_eq(@routes.Location::{ device: None, target: Settings, }.path(), None)
+test "Cloud routes resolve accounts at activation" {
   assert_true(@routes.parse("/cloud") is Ok({ device: None, target: Cloud, }))
   for session in ["s", "a/b?中文#%"] {
     let location : @routes.Location = {
@@ -55,7 +54,7 @@ test "device identity is independent of target validity" {
 }
 
 ///|
-test "all targets roundtrip without interpreting encoded separators" {
+test "work targets roundtrip and legacy management targets are input-only" {
   let targets : Array[@routes.Target] = [
     Chat,
     ChatNew,
@@ -65,16 +64,23 @@ test "all targets roundtrip without interpreting encoded separators" {
     CodexNew,
     Thread("t-1"),
     CodexDraft("draft-2"),
-    Settings,
-    Skills,
-    InstalledSkill("local/技能"),
-    MarketSkill("moonbitlang/tool/path@1.0"),
-    Schedules,
   ]
   for target in targets {
     let location : @routes.Location = { device: Some("d_1"), target, }
     guard location.path() is Some(path) else { fail("device route missing") }
     assert_true(@routes.parse(path) is Ok(found) && found == location)
+  }
+  for
+    (suffix, target) in [
+      ("settings", @routes.Settings),
+      ("skills", @routes.Skills),
+      ("skills/installed/local%2Fskill", @routes.InstalledSkill("local/skill")),
+      ("skills/market/acme%2Ftool%401.0", @routes.MarketSkill("acme/tool@1.0")),
+      ("schedules", @routes.Schedules),
+    ] {
+    let location : @routes.Location = { device: Some("d_1"), target, }
+    assert_true(@routes.parse("/device/d_1/" + suffix) == Ok(location))
+    assert_eq(location.path(), None)
   }
 }
 
@@ -95,10 +101,8 @@ test "invalid routes remain distinct from unrelated links" {
 test "parsing then encoding normalizes route spelling without decoding identities twice" {
   for
     (input, expected) in [
-      ("/device/%68ost/%73kills", "/device/host/skills"),
-      (
-        "/device/host/skills/market/acme%2ftool%401.0", "/device/host/skills/market/acme%2Ftool%401.0",
-      ),
+      ("/device/%68ost/%63hat", "/device/host/chat"),
+      ("/device/host/chat/session/a%2fb", "/device/host/chat/session/a%2Fb"),
       ("/device/host/chat/session/a%252Fb", "/device/host/chat/session/a%252Fb"),
       ("/device/host/chat/session/a%5Cb", "/device/host/chat/session/a%5Cb"),
     ] {

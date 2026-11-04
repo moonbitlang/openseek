@@ -311,7 +311,10 @@ test "expired draft replaces its entry with a fresh new page" {
 
 ///|
 test "navigation write policy distinguishes foreground visits and background identity updates" {
-  let location : @routes.Location = { device: Some("local"), target: Settings, }
+  let location : @routes.Location = {
+    device: Some("local"),
+    target: Session("session-1"),
+  }
   let observed : NavigationObservation = {
     location: Some(location),
     user_visit: false,
