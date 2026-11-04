@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (ConsoleOrigin.contains(webView.url)) {
-                    webView.evaluateJavascript(CLOSE_OVERLAY) { handled ->
+                    webView.evaluateJavascript(BACK) { handled ->
                         if (handled != "true") navigateBack()
                     }
                 } else navigateBack()
@@ -204,43 +204,12 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private val CLOSE_OVERLAY = """
-            (() => {
-                const popover = [...document.querySelectorAll(':popover-open')].pop();
-                if (popover) {
-                    // A component that owns the popover's open state closes it
-                    // on Escape from its trigger or contents; hiding the element
-                    // alone would leave that state open.
-                    const focus = document.activeElement;
-                    const owned = focus && (popover.contains(focus) ||
-                        (popover.id && focus.getAttribute('aria-controls') === popover.id));
-                    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
-                    if (!owned || focus.dispatchEvent(escape)) popover.hidePopover();
-                    return true;
-                }
-                // Action menus and the composer's Git menu close on Escape from
-                // inside them, which restores focus, or on a click outside them.
-                const menu = [...document.querySelectorAll('[data-action-menu-surface], .composer-git-menu')].pop();
-                if (menu) {
-                    const focus = document.activeElement;
-                    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
-                    if (!(focus && menu.contains(focus)) || focus.dispatchEvent(escape)) document.body.click();
-                    return true;
-                }
-                // The topmost modal next, as Escape would: a native dialog's
-                // cancel handler or a confirmation's backdrop dismisses it.
-                const dialog = [...document.querySelectorAll('dialog[open]')].pop();
-                if (dialog) { dialog.dispatchEvent(new Event('cancel', { cancelable: true })); return true; }
-                const modal = [...document.querySelectorAll('.modal-backdrop')].pop();
-                if (modal) { modal.click(); return true; }
-                const drawer = document.querySelector('.sidebar-backdrop.open');
-                if (drawer) { drawer.click(); return true; }
-                const panel = document.querySelector('.content.panel-open .right-panel-toggle');
-                if (panel) { panel.click(); return true; }
-                const back = document.querySelector('.management-page-return');
-                if (back) { back.click(); return true; }
-                return false;
-            })()
-        """.trimIndent()
+        /**
+         * The frontend's Back: it closes its topmost open layer (a menu, dialog,
+         * drawer or management page) and cancels the event, so the result is
+         * true exactly when a layer closed. The frontend owns which layers exist.
+         */
+        private const val BACK =
+            "!document.dispatchEvent(new Event('openseek-back', { cancelable: true }))"
     }
 }

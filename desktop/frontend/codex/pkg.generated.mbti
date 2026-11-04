@@ -91,6 +91,7 @@ pub fn State::can_open_permission_menu(Self) -> Bool
 pub fn State::can_start_thread(Self) -> Bool
 pub fn State::composer_input(locale? : @i18n.Locale, Self, ComposerContext) -> @composer.Input
 pub fn State::composing_draft(Self) -> Bool
+pub fn State::confirmation_dismissal(Self) -> Msg?
 pub fn State::connection_label(Self, locale? : @i18n.Locale) -> String
 pub fn State::draft_project(Self, @interop.ChannelId) -> Result[@common.Uri?, String]
 pub fn State::draft_text(Self) -> String

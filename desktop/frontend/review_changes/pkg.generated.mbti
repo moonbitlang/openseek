@@ -5,12 +5,13 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/sub",
+  "openseek_desktop/frontend/dismiss",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/mention_context",
 }
 
 // Values
-pub fn dismiss_subscription(String, @cmd.Emit[Bool]) -> @sub.Sub
+pub fn dismiss_subscription(String, level? : @dismiss.Level, @cmd.Emit[Bool]) -> @sub.Sub
 
 pub fn focus_trigger(String) -> @cmd.Cmd
 
