@@ -4534,13 +4534,26 @@ fn update_msg(
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
     CloseSidebar => (@cmd.none, { ..model, sidebar_open: false, })
-    SidebarModeSelected(sidebar_mode) => (@cmd.none, { ..model, sidebar_mode, })
+    SidebarModeSelected(sidebar_mode) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          sidebar_mode: if model.has_host() {
+            sidebar_mode
+          } else {
+            ChatMode
+          },
+        },
+      )
     DeviceChosen(id) => (@nav.load(@routes.device_entry_path(id)), model)
     // A conversation already on screen has claimed the list, and a Cloud
     // destination shows the Chat list; the stored pick only decides what any
     // other empty page shows.
     SidebarModeLoaded(sidebar_mode) =>
-      if model.sidebar_revealed is None &&
+      if !model.has_host() {
+        (@cmd.none, { ..model, sidebar_mode: ChatMode, })
+      } else if model.sidebar_revealed is None &&
         !(model.navigation.location is Some(location) &&
         location.target.is_cloud()) {
         (@cmd.none, { ..model, sidebar_mode, })
@@ -10287,6 +10300,7 @@ fn test_model() -> Model {
     ],
     focused: @interop.ChannelId::Local,
     console: local_console_state(login_return_to="/console/"),
+    sidebar_mode: WorkMode,
     // The shared fixture represents a connected desktop after its initial
     // settings snapshot. Loading-state tests opt back into revision -1.
     host_settings_revision: 0,
@@ -10454,6 +10468,36 @@ test "viewport resize flips the narrow flag and resets the sidebar" {
   let (_, wide) = update(dispatch, ViewportResized(width=1280), same)
   assert_false(wide.narrow)
   assert_true(wide.sidebar_open)
+}
+
+///|
+test "device-less sidebar mode stays Chat for loaded and selected Work preferences" {
+  let dispatch = test_dispatch()
+  let base = test_model()
+  let cloud = {
+    ..base,
+    devices: [],
+    console: { ..base.console, page_device: None, },
+    sidebar_mode: WorkMode,
+  }
+  for message in [SidebarModeLoaded(WorkMode), SidebarModeSelected(WorkMode)] {
+    let (_, once) = update_msg(dispatch, message, cloud)
+    let (_, twice) = update_msg(dispatch, message, cloud)
+    assert_true(once.sidebar_mode is ChatMode)
+    assert_true(once.sidebar_mode == twice.sidebar_mode)
+    for host in [base, { ..base, devices: [], }] {
+      let (_, selected) = update_msg(dispatch, message, {
+        ..host,
+        sidebar_mode: ChatMode,
+      })
+      let (_, repeated) = update_msg(dispatch, message, {
+        ..host,
+        sidebar_mode: ChatMode,
+      })
+      assert_true(selected.sidebar_mode is WorkMode)
+      assert_true(selected.sidebar_mode == repeated.sidebar_mode)
+    }
+  }
 }
 
 ///|
