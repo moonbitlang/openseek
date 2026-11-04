@@ -1695,9 +1695,7 @@ fn description(
   }
   let base_head =
     #|Compile and run a self-contained MoonBit program and return its merged
-    #|stdout/stderr and exit status. This is BOTH your command runner and your
-    #|scripting surface: there is no shell tool, so commands, IO, and computation
-    #|happen inside the submitted MoonBit program.
+    #|stdout/stderr and exit status.
     #|
     #|Every call requires a short description and at least one of source or
     #|filename. There are three valid ways to supply the program:
