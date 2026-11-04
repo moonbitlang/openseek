@@ -1716,42 +1716,36 @@ fn description(
     #|The script runs on wasm. Import "moonbitlang/core/env" and read
     #|`@env.args()[1:]` to skip the executable name.
     #|Arguments are passed verbatim, without shell expansion or splitting.
-    #|When bundled resources are available, these scripts are already bundled:
-    #|Read text files with {"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}.
-    #|Selectors: path, path:start, path:start:end (inclusive, 1-based); batch in args.
-    #|Use ["--literal","name:123"] for numeric-colon filenames, and "--" before
-    #|option-like filenames. Headings, numbered lines and footers report each file,
-    #|including empty files; errors fail the call but remaining files still return.
-    #|Follow truncated/skipped_files with focused reads. args=["--help"] gives budgets.
-    #|@builtin/rg.mbtx searches text: args go to ripgrep unchanged (rg flags and
-    #|regex, not POSIX grep: -E is --encoding, alternation is a|b), e.g.
-    #|args=["fn parse", "-g", "*.mbt"]; output is path:line:text, bounded
-    #|like read, and no match exits 0 with a note.
-    #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
-    #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
-    #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
-    #|@builtin/ci-watch.mbtx monitors GitHub PR checks with gh;
-    #|@builtin/fix-deprecations.mbtx (with ptc=true, cwd at the module) fixes every
-    #|deprecation warning whose message names a bare replacement, one guarded edit
-    #|per site, and lists the rest for you; --dry-run plans only.
-    #|use args=["PR", "--repo", "OWNER/REPO", "--once"] for one snapshot.
-    #|Agent workflows (they start subagents): @builtin/review.mbtx (independent
-    #|worktree audit against the criteria in args), @builtin/change-review.mbtx
-    #|(working-tree review from three perspectives), @builtin/repo-map.mbtx
-    #|(architecture, validation, extension points) or @builtin/simplify.mbtx
-    #|(sweeps MoonBit packages for safe simplifications and opens one pull
-    #|request per package; --no-pr keeps them on local branches).
-    #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
-    #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
-    #|not implemented. Paths within the namespace cannot escape its root.
-    #|Ordinary names such as check.mbtx select workspace files. Use
-    #|./@builtin/check.mbtx for a literal workspace path. Relative paths resolve
-    #|from the workspace root; absolute paths stay absolute. No lookup fallback
-    #|occurs. `cwd` controls execution only, not filename resolution.
-    #|Existing scripts are read once; each run executes its selected snapshot
-    #|with the same sandbox and isolated imports as inline source.
-    #|Diagnostics cite `source:LINE:COL` or the supplied filename and line/column.
-    #|The tool always compiles to wasm and runs with moonrun.
+    #|Relative filenames resolve from the workspace root, whatever `cwd` is. Each
+    #|run executes a snapshot of the script with the same sandbox and isolated
+    #|imports as inline source. The tool compiles to wasm and runs it with
+    #|moonrun; diagnostics cite `source:LINE:COL` or the filename and line/column.
+    #|
+    #|## Bundled scripts
+    #|
+    #|Filenames under `@builtin/` run read-only scripts built into OpenSeek: pass
+    #|`filename` and `args`, never `source`. Every other filename is a workspace
+    #|path, so `./@builtin/check.mbtx` is a workspace file. `args=["--help"]`
+    #|prints a script's usage.
+    #|
+    #|- `@builtin/read.mbtx` reads text files with numbered lines, e.g.
+    #|  `{"description":"Read the entry point","filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}`.
+    #|  Selectors are `path`, `path:start` or `path:start:end` (inclusive,
+    #|  1-based). Output is bounded: follow truncated or skipped files with
+    #|  narrower reads. A failing file fails the call; the others still return.
+    #|- `@builtin/rg.mbtx` searches text. `args` go to ripgrep unchanged, so they
+    #|  are rg flags and regex, not POSIX grep (`-E` is `--encoding`; alternation
+    #|  is `a|b`), e.g. `"args":["fn parse","-g","*.mbt"]`. Output is
+    #|  `path:line:text`; no match exits 0 with a note.
+    #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
+    #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
+    #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and
+    #|  `@builtin/check-json.mbtx` (moon check --output-json).
+    #|- `@builtin/ci-watch.mbtx` monitors a GitHub PR's checks with gh;
+    #|  `"args":["PR","--repo","OWNER/REPO","--once"]` takes one snapshot.
+    #|- `@builtin/fix-deprecations.mbtx`, run with `cwd` at the module, fixes each
+    #|  deprecation warning whose message names a bare replacement, one guarded
+    #|  edit per site, and lists the rest; `--dry-run` only plans.
   // Rendered from `spawnable_commands`, the table that also builds the
   // moonrun policy: the list the model reads and the list moonrun enforces
   // cannot disagree, because there is only one.
@@ -1856,6 +1850,13 @@ fn description(
       #|stops one. A script reaches only the children it started, and stopping the
       #|script stops them. Each child gets its own transcript and appears in the
       #|desktop.
+      #|
+      #|Bundled workflows that start subagents: `@builtin/review.mbtx` (below),
+      #|`@builtin/change-review.mbtx` (reviews the working tree from three
+      #|perspectives), `@builtin/repo-map.mbtx` (maps architecture, validation and
+      #|extension points) and `@builtin/simplify.mbtx` (sweeps MoonBit packages for
+      #|safe simplifications and opens one pull request per package; `--no-pr`
+      #|keeps them on local branches).
       #|
       #|For an independent worktree review, run the bundled script:
       #|`{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"]}`.
