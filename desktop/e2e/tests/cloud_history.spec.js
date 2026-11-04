@@ -148,17 +148,26 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   await page.locator('#task').fill('Keep the local draft');
   await expect(page.locator('#send')).toBeEnabled();
 
-  // Keep the live answer visible until the terminal event makes the new
-  // turn durable. The latest page must retain earlier turns exactly once.
-  const started = historyResponse();
+  const fourth = makeTurn(3, 'Fourth question');
+  const publishRecord = record => cloud.emitSessionEvent(sessionA, 'session_record', { engine_session_id: sessionA, record }, { task: 'turn-3' });
+  const beforeTurn = requests.length;
   await cloud.emitSessionEvent(sessionA, 'task_started', {}, { task: 'turn-3' });
-  await started;
+  await publishRecord(fourth.events[0]);
   const answer = transcript.getByText('Fourth question detail 1', { exact: true });
   await cloud.emitSessionEvent(sessionA, 'assistant_delta', { content: 'Fourth question detail 1' }, { task: 'turn-3' });
   await expect(answer).toHaveCount(1);
-  turns.push(makeTurn(3, 'Fourth question'));
+  turns.push(fourth);
+  await publishRecord(fourth.events[1]);
+  await publishRecord(fourth.events[2]);
+  await cloud.emitSessionEvent(sessionA, 'task_finished', { status: 'completed' }, { task: 'turn-3', publishNative: false });
+  await expect(page.locator('#stop')).toHaveCount(0);
+  expect(requests).toHaveLength(beforeTurn);
+  await expect(bubbles).toHaveText(['First question', 'Second question', 'Third question', 'Fourth question']);
+  await expect(answer).toHaveCount(1);
+
+  await cloud.open(sessionB);
   const refreshed = historyResponse();
-  await cloud.emitSessionEvent(sessionA, 'task_finished', { status: 'completed' }, { task: 'turn-3' });
+  await cloud.open(sessionA);
   const updated = await refreshed;
   expect(updated.status()).toBe(200);
   expect(new URL(updated.url()).search).toBe('?limit=1');

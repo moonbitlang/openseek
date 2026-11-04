@@ -35,7 +35,8 @@ for (const desktop of [false, true]) {
     await expect(page.locator('#task')).toHaveValue('');
     expect(cloud.exchangeCount).toBe(0);
     const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
-    expect(JSON.parse(send.body)).toEqual({ command: { command: 'prompt', content: 'Calculate 1 + 1' } });
+    expect(JSON.parse(send.body)).toEqual({ command: { command: 'prompt', content: 'Calculate 1 + 1', submission_id: expect.any(String) } });
+    expect(cloud.historyReads.filter(read => read.session === sessionC)).toHaveLength(0);
     expect(cloud.hostRequests.filter(request => request.method === 'cloud.key')).toEqual([]);
     expect(send.headers.cookie).toBeUndefined();
     expect(send.headers.authorization).toMatch(/^Bearer ts_fixture-/);
@@ -261,50 +262,80 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
   });
 }
 
-test('Cloud renders each text fragment before completion and replaces the preview once', async ({ page }) => {
+test('Cloud commits each streamed reply in a tool loop without rereading history', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
+  const firstReply = '你好 🌙';
+  const finalReply = 'The result is 2.';
   cloud.streamEvents = [
     ['task_started', {}],
     ['assistant_delta', { content: '你' }],
     ['assistant_delta', { content: '好 🌙' }],
-    ['assistant_message', { content: '你好 🌙' }],
-    ['task_finished', { status: 'completed', result: { output: { answer: '你好 🌙' } } }],
+    ['assistant_message', { content: firstReply, tool_calls: [{ id: 'calc', name: 'mbtx', arguments: '{"source":"println(2)"}' }] }],
+    ['tool_result', { tool_call_id: 'calc', tool_name: 'mbtx', content: '2', is_error: false }],
+    ['assistant_delta', { content: finalReply }],
+    ['assistant_message', { content: finalReply }],
+    ['task_finished', { status: 'completed' }],
   ];
-  let first, second, final;
-  cloud.eventPauses = new Map([
-    [1, new Promise(resolve => first = resolve)],
-    [2, new Promise(resolve => second = resolve)],
-    [3, new Promise(resolve => final = resolve)],
-  ]);
+  const releases = new Map();
+  cloud.eventPauses = new Map([1, 2, 3, 5, 6].map(index => [index, new Promise(resolve => releases.set(index, resolve))]));
   await cloud.install();
   await cloud.goto();
   await cloud.open();
+  const send = page.getByRole('button', { name: 'Send', exact: true });
   await page.locator('#task').fill('Stream the reply');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('#transcript').getByText('你', { exact: true })).toBeVisible();
-  await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(0);
-  first();
-  await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(1);
-  let releaseHistory;
-  cloud.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
-  const path = `/v1/sessions/${sessionA}/messages`;
-  const handoff = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
-  second();
-  await handoff;
-  await expect(page.locator('#transcript .streaming')).toHaveCount(0);
-  const answer = page.locator('#transcript').getByText('你好 🌙', { exact: true });
-  await expect(answer).toBeVisible();
-  const finished = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
-  final();
-  const finalRead = await finished;
-  await expect(answer).toBeVisible();
-  releaseHistory();
-  const recovered = await finalRead.response();
-  expect(recovered.status()).toBe(200);
-  await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
-  await expect(page.locator('#task')).toHaveValue('');
-  await expect(answer).toHaveCount(1);
-  expect(cloud.device.pageErrors).toEqual([]);
+  await expect(send).toBeEnabled();
+  const before = cloud.historyReads.length;
+  const transcript = page.locator('#transcript');
+  const first = transcript.getByText(firstReply, { exact: true });
+  const final = transcript.getByText(finalReply, { exact: true });
+  const streaming = transcript.locator('.streaming');
+  const observeHandoff = async (answer, release) => {
+    await transcript.evaluate((element, text) => {
+      window.handoffCounts = [];
+      const observer = new MutationObserver(() => {
+        window.handoffCounts.push(element.textContent.split(text).length - 1);
+      });
+      observer.observe(element, { subtree: true, childList: true, characterData: true });
+      window.stopHandoff = () => observer.disconnect();
+    }, await answer.textContent());
+    release();
+    await expect(streaming).toHaveCount(0);
+    await expect(answer).toBeVisible();
+    const counts = await page.evaluate(() => {
+      window.stopHandoff();
+      return window.handoffCounts;
+    });
+    expect(counts.length).toBeGreaterThan(0);
+    expect(counts.every(count => count === 1)).toBe(true);
+  };
+
+  try {
+    await send.click();
+    await expect(transcript.getByText('Stream the reply', { exact: true })).toHaveCount(1);
+    await expect(page.locator('#task')).toHaveValue('');
+    await expect(transcript.getByText('你', { exact: true })).toBeVisible();
+    releases.get(1)();
+    await expect(first).toBeVisible();
+    await observeHandoff(first, releases.get(2));
+    await expect(first).toHaveCount(1);
+    await expect(first).toBeVisible();
+    releases.get(3)();
+    await expect(final).toBeVisible();
+    await expect(first).toHaveCount(1);
+    await observeHandoff(final, releases.get(5));
+    await expect(final).toHaveCount(1);
+    releases.get(6)();
+    await expect(page.locator('#stop')).toHaveCount(0);
+    await expect(first).toBeVisible();
+    await expect(final).toBeVisible();
+    expect(cloud.historyReads).toHaveLength(before);
+    const path = testInfo.outputPath('cloud-tool-loop.png');
+    await transcript.screenshot({ path });
+    await testInfo.attach('Committed tool-loop replies', { path, contentType: 'image/png' });
+    expect(cloud.device.pageErrors).toEqual([]);
+  } finally {
+    for (const release of releases.values()) release();
+  }
 });
 
 test('Cloud disconnect replaces provisional text with authoritative history and preserves the draft', async ({ page }) => {
@@ -399,7 +430,8 @@ for (const destination of ['settings', 'not-a-page']) {
         await expect(page.locator('.navigation-notice')).toBeVisible();
       }
       complete();
-      await expect.poll(() => cloud.requests.some(request => request.path === `/v1/sessions/${sessionC}/messages`)).toBe(true);
+      await expect.poll(() => cloud.controlState(sessionC).data.status).toBe('idle');
+      await expect.poll(() => cloud.titles.get(sessionC)).toBe('First Cloud message');
       if (destination === 'settings') {
         const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
         await expect(settings).toBeVisible();

@@ -684,9 +684,6 @@ pub fn update(
             conversation.last_seq.map_or(true, seq => snapshot.seq > seq) else {
             return (state, @cmd.none, None)
           }
-          let admitted = conversation.pending is Some(submitted) &&
-            snapshot.task_id is Some(task) &&
-            !submitted.known_tasks.contains(task)
           let refresh_history = baseline &&
             conversation.history_resume_baseline is Some((task, seq)) &&
             (snapshot.task_id != task || seq != Some(snapshot.seq))
@@ -728,43 +725,12 @@ pub fn update(
                 baseline~,
               )
             },
-            sending: conversation.sending && !admitted,
-            pending: if admitted {
-              None
-            } else {
-              conversation.pending
-            },
-            submission_sequence: conversation.submission_sequence +
-            (if admitted &&
-              conversation.pending.map_or(false, p => p.result_id is None) {
-              1
-            } else {
-              0
-            }),
-            initial_submission: if admitted &&
-              conversation.pending.map_or(false, p => p.result_id is None) {
-              None
-            } else {
-              conversation.initial_submission
-            },
-            initial_attachments: if admitted &&
-              conversation.pending.map_or(false, p => p.result_id is None) {
-              []
-            } else {
-              conversation.initial_attachments
-            },
-            uploads: if admitted {
-              []
-            } else {
-              conversation.uploads
-            },
           })
           if baseline && conversation.outgoing is Some(_) {
             let (next, command) = next.send_pending(id, token, emit)
             return (next, command, None)
           }
-          if admitted ||
-            (baseline && conversation.watch_status == Reconnecting) ||
+          if (baseline && conversation.watch_status == Reconnecting) ||
             (refresh_history && !conversation.history_reading) {
             let (next, command) = next.load(id, token, emit)
             (next, command, None)
@@ -802,6 +768,14 @@ pub fn update(
             @cmd.none,
             None,
           )
+        }
+        SessionRecord(session~, task~, seq~, record~) => {
+          guard session == id &&
+            conversation.last_seq is Some(last) &&
+            seq > last else {
+            return (state, @cmd.none, None)
+          }
+          state.session_record(id, task, seq, record, token, emit)
         }
         NativeEvent(frame) => {
           guard conversation.last_seq is Some(seq) && frame.seq > seq else {
@@ -969,7 +943,6 @@ pub fn update(
       let next = if owner == navigation && history.offset == Some(offset) {
         conversation.with_history_page(
           { ..history, generating: false, },
-          request~,
           latest=false,
         )
       } else {
@@ -998,14 +971,22 @@ pub fn update(
     Loaded(epoch, id, request, history) => {
       let conversation = state.conversations[id].with_history_page(
         history,
-        request~,
         latest=true,
       )
       let accepted = conversation.pending is Some(submission) &&
-        history.messages.any(record => {
-          record.kind == "user" &&
-          !submission.known_tasks.contains(record.task_id)
-        })
+        (
+          history.messages.any(record => {
+            record.kind == "user" &&
+            record.data is { "submission_id": String(id), .. } &&
+            id == submission.id
+          }) ||
+          history.session.events
+          .unwrap_or([])
+          .any(event => {
+            event.item is @protocol.User(user) &&
+            user.submission_id == Some(submission.id)
+          })
+        )
       let observed = conversation.stream.map_or(false, stream => stream.active)
       let control = if !observed && !history.generating {
         conversation.control.map(control => {
@@ -1134,20 +1115,11 @@ pub fn update(
     HistoryUnchanged(epoch, id, request, etag) => {
       let conversation = state.conversations[id]
       let observing = conversation.stream is Some({ active: true, .. })
-      let offset = conversation.history_pages
-        .keys()
-        .fold(init=0, (max, key) => max.max(key))
-      let page_records = conversation.history_pages
-        .get(offset)
-        .map(page => page.messages)
       let next = state.replace(id, {
         ..conversation,
         history_etag: Some(etag),
         history_reading: false,
         history_disk_request: None,
-        pending_assistants: conversation.uncovered_assistants(
-          request, page_records,
-        ),
         loading: false,
         history_required: false,
         watch_status: if observing && conversation.last_seq is Some(_) {
@@ -1261,8 +1233,6 @@ pub fn update(
           None,
         )
       }
-      let admitted = event.kind == "task_started" &&
-        conversation.pending is Some(_)
       let conversation = if event.kind == "task_started" {
         {
           ..conversation.clear_streams(),
@@ -1311,39 +1281,15 @@ pub fn update(
         } else {
           Some(event.task_id)
         },
-        sending: conversation.sending && !admitted,
-        pending: if admitted {
-          None
-        } else {
-          conversation.pending
-        },
-        uploads: if admitted {
-          []
-        } else {
-          conversation.uploads
-        },
-        submission_sequence: conversation.submission_sequence +
-        (if admitted &&
-          conversation.pending.map_or(false, p => p.result_id is None) {
-          1
-        } else {
-          0
-        }),
-        initial_submission: if admitted &&
-          conversation.pending.map_or(false, p => p.result_id is None) {
-          None
-        } else {
-          conversation.initial_submission
-        },
-        initial_attachments: if admitted &&
-          conversation.pending.map_or(false, p => p.result_id is None) {
-          []
-        } else {
-          conversation.initial_attachments
-        },
       })
       if event.kind is ("task_finished" | "task_started") {
-        let (next, history) = next.load(id, token, emit)
+        let (next, history) = if event.kind == "task_finished" &&
+          conversation.terminal_record_task != Some(event.task_id) {
+          // Startup failures and interrupted engines can lack a terminal record.
+          next.load(id, token, emit)
+        } else {
+          (next, @cmd.none)
+        }
         let (next, list) = next.list(token, emit)
         (next, @cmd.batch([history, list]), None)
       } else {

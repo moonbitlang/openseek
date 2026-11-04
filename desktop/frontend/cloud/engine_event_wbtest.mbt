@@ -280,12 +280,30 @@ test "Cloud retains native notification text until completion and fences it by t
     1,
     state.conversations["session"].control.unwrap(),
   )
-  let replied = native_event(
+  let reply : @protocol.SessionEvent = {
+    sequence: 1,
+    ts: None,
+    item: @protocol.Assistant({
+      content: "Native answer",
+      reasoning_content: None,
+      tool_calls: None,
+      is_replay: None,
+    }),
+  }
+  let replied = metadata_update(
     state,
-    stream,
-    Some("task"),
-    2,
-    @wire.AssistantMessage(content="Native answer"),
+    WatchEvent(
+      1,
+      "session",
+      stream,
+      decode_control_event("session_record", {
+        "kind": "session_record",
+        "session_id": "session",
+        "task_id": "task",
+        "seq": 2,
+        "data": { "engine_session_id": "session", "record": reply.to_json() },
+      }),
+    ),
   )
   assert_eq(
     replied.conversations["session"].notification_answer,
@@ -302,12 +320,14 @@ test "Cloud retains native notification text until completion and fences it by t
   let next = watch_event(finished, stream, "next", 4, "task_started", {
     "previous_task_id": "task",
   })
-  let late = native_event(
+  let late = metadata_update(
     next,
-    stream,
-    Some("task"),
-    5,
-    @wire.AssistantMessage(content="Late answer"),
+    WatchEvent(
+      1,
+      "session",
+      stream,
+      SessionRecord(session="session", task=Some("task"), seq=5, record=reply),
+    ),
   )
   assert_true(late.conversations["session"].notification_answer is None)
 }

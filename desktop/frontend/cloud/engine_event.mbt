@@ -57,14 +57,101 @@ fn State::engine_event(
     | @wire.CompactionFinished(..)
     | @wire.AutoCompactionFinished(..)
     | @wire.CompactionFailed(..)) {
-    conversation.live_progress(event, self.sequence + 1)
+    conversation.live_progress(event)
   } else {
     conversation
   }
   let next = next.replace(session, conversation)
-  if @engine_session.refreshes_history(event) {
-    // Live semantic events are not a second durable transcript. Refresh the
-    // unchanged history source, as Local renders canonical session records.
+  if frame.task_id is None && @engine_session.refreshes_history(event) {
+    // Idle commands can update the session outside a chat task.
+    let (next, command) = next.load(session, token, emit)
+    (next, command, None)
+  } else {
+    (next, @cmd.none, None)
+  }
+}
+
+///|
+fn State::session_record(
+  self : State,
+  session : String,
+  task : String?,
+  seq : Int32,
+  record : @protocol.SessionEvent,
+  token : String?,
+  emit : @cmd.Emit[Msg],
+) -> (State, @cmd.Cmd, String?) {
+  let conversation = self.conversations[session]
+  let conversation = { ..conversation, last_seq: Some(seq), }
+  guard (task is None || task == conversation.task) &&
+    record.sequence > conversation.last_record_sequence else {
+    return (self.replace(session, conversation), @cmd.none, None)
+  }
+  let events = conversation.document.events.unwrap_or([])
+  let frontier = events.last().map_or(0, event => event.sequence)
+  let missing = record.sequence > frontier + 1
+  let duplicate = events.any(event => event.sequence == record.sequence)
+  let conversation = { ..conversation, last_record_sequence: record.sequence, }
+  let conversation = if duplicate {
+    conversation
+  } else {
+    let events = [..events, record]
+    if record.sequence < frontier {
+      events.sort_by_key(event => event.sequence)
+    }
+    {
+      ..conversation,
+      document: { ..conversation.document, events: Some(events), },
+      pushed_records: [..conversation.pushed_records, record],
+    }
+  }
+  let conversation = match record.item {
+    @protocol.User(user) => {
+      let next = { ..conversation, history_required: false, }
+      if conversation.pending is Some(pending) &&
+        user.submission_id == Some(pending.id) {
+        let consume_draft = pending.result_id is None
+        {
+          ..next,
+          sending: false,
+          pending: None,
+          notice: None,
+          uploads: [],
+          submission_sequence: next.submission_sequence +
+          (if consume_draft { 1 } else { 0 }),
+          initial_submission: if consume_draft {
+            None
+          } else {
+            next.initial_submission
+          },
+          initial_attachments: if consume_draft {
+            []
+          } else {
+            next.initial_attachments
+          },
+        }
+      } else {
+        next
+      }
+    }
+    @protocol.Assistant(reply) if task == conversation.task &&
+      task is Some(_) &&
+      reply.is_replay != Some(true) =>
+      {
+        ..conversation.clear_streams(),
+        retrying: None,
+        notification_answer: if reply.content.is_blank() {
+          conversation.notification_answer
+        } else {
+          Some(reply.content)
+        },
+      }
+    @protocol.Terminal(_) | @protocol.UnknownTerminal(_) =>
+      { ..conversation, terminal_record_task: task, }
+    _ => conversation
+  }
+  let next = self.replace(session, conversation)
+  if missing {
     let (next, command) = next.load(session, token, emit)
     (next, command, None)
   } else {

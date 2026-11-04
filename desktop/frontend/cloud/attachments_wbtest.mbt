@@ -129,7 +129,7 @@ test "first Cloud file-only submission creates once and admits the prepared file
     ready.conversations["new-session"].pending.unwrap().content.text(),
     prepared.prompt(),
   )
-  let (admitted, _, _) = update(
+  let (started, _, _) = update(
     ready,
     StreamEvent(1, "new-session", conversation.request, {
       session_id: "new-session",
@@ -142,6 +142,22 @@ test "first Cloud file-only submission creates once and admits the prepared file
     token="fixture",
     navigation=0,
   )
+  let submitted = started.conversations["new-session"].pending.unwrap()
+  let admitted = started.session_record(
+      "new-session",
+      Some("task"),
+      2,
+      {
+        sequence: 1,
+        ts: None,
+        item: @protocol.User({
+          content: submitted.content,
+          submission_id: Some(submitted.id),
+        }),
+      },
+      Some("fixture"),
+      emit,
+    ).0
   assert_true(admitted.conversations["new-session"].pending is None)
   assert_true(admitted.conversations["new-session"].uploads.is_empty())
   assert_true(admitted.conversations["new-session"].initial_submission is None)

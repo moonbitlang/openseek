@@ -321,7 +321,7 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   expect(JSON.parse(request.body).command.content).toBe('Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>');
   await expect(page.locator('main .run-status')).toHaveText('Finished');
   await expect(input).toHaveValue('');
-  // Wait for the post-send history record before recalling its prompt.
+  // The committed SSE user record is available to prompt recall.
   await expect(page.locator('#transcript').getByText('Update the heading', { exact: true })).toBeVisible();
   await input.press('ArrowUp');
   await expect(input).toHaveValue('Update the heading');
@@ -706,8 +706,9 @@ test('a Cloud generation finishing off screen invalidates only its parked file c
   await cloud.open(sessionB);
   cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: '// Background generation finished', sig: 'finished', absolute: '/src/hello #.mbt' });
   const before = cloud.fileRequests.filter(request => request.content).length;
+  const refresh = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/sessions' && !cloud.generating.has(sessionA));
   finish();
-  await expect.poll(() => cloud.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`).length).toBeGreaterThan(1);
+  await refresh;
   expect(cloud.fileRequests.filter(request => request.content)).toHaveLength(before);
   await cloud.open(sessionA);
   await expect(source(page)).toContainText('Background generation finished');

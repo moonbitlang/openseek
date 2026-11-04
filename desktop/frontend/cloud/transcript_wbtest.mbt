@@ -567,3 +567,37 @@ test "Cloud engine sequence is optional and only identifies a native User" {
     }),
   )
 }
+
+///|
+test "Cloud keeps a recovered startup failure after the earlier pushed turn" {
+  let document = native_document([
+    { "kind": "user", "payload": { "content": "Earlier question" } },
+    { "kind": "assistant", "payload": { "content": "Earlier reply" } },
+  ])
+  let failed : Array[Record] = [
+    {
+      task_id: "failed",
+      kind: "user",
+      data: { "content": "Next question" },
+      engine_sequence: None,
+      created_at: 200,
+    },
+    {
+      task_id: "failed",
+      kind: "task_finished",
+      data: { "status": "failed", "reason": "Engine could not start" },
+      engine_sequence: None,
+      created_at: 201,
+    },
+  ]
+  let items = { ..Conversation::empty(), document, records: failed, }.items()
+  assert_true(
+    items
+    is [
+      { kind: User(content=Content([Text("Earlier question")])), .. },
+      { kind: Assistant(prose=Some("Earlier reply"), ..), .. },
+      { kind: User(content=Content([Text("Next question")])), .. },
+      { kind: Failure("Engine could not start"), .. },
+    ],
+  )
+}

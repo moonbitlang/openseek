@@ -253,6 +253,14 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   if self.screen is Chat &&
     self.cloud_identity() is Some(owner) &&
     self.cloud_conversation() is Some(conversation) {
+    let previous_reply = conversation.document.events
+      .unwrap_or([])
+      .rev_iter()
+      .find_first(event => {
+        event.item is @protocol.Assistant(reply) &&
+        reply.is_replay != Some(true)
+      })
+      .map_or(0, event => event.sequence)
     return @transcript_component.Input(
       locale=self.locale,
       dark_mode=self.theme.is_dark(self.system_dark),
@@ -274,9 +282,8 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       reasoning_complete=conversation.live.reasoning.map_or(false, r => {
         r.complete
       }),
-      // Deltas do not change the committed-event count, so the live bubble
-      // keeps one identity until a semantic response/step boundary.
-      streaming_identity="\{conversation.task.unwrap_or("idle")}:\{conversation.document.events.unwrap_or([]).last().map_or(0, event => event.sequence)}",
+      // Tool results and other records cannot remount a streaming reply.
+      streaming_identity="\{conversation.task.unwrap_or("idle")}:\{previous_reply}",
     )
   }
   let content = self.transcript_content()

@@ -74,7 +74,7 @@ test('first Cloud creation locks duplicate submissions and sends the captured me
   expect(cloud.postCount).toBe(1);
   const actions = cloud.requests.filter(request => request.method === 'POST');
   expect(actions.map(request => request.path)).toEqual(['/v1/sessions', `/v1/sessions/${sessionC}/commands`]);
-  expect(JSON.parse(actions[1].body)).toEqual({ command: { command: 'prompt', content: 'Create then send' } });
+  expect(JSON.parse(actions[1].body)).toEqual({ command: { command: 'prompt', content: 'Create then send', submission_id: expect.any(String) } });
 });
 
 test('a first-send rejection preserves the input and retries the existing Cloud session', async ({ page }) => {

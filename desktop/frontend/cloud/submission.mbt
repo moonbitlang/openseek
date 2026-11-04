@@ -67,12 +67,7 @@ fn State::send_pending(
   let conversation = match submission.input {
     Native(_) | Terminal(_) => conversation
     Prompt(content~, ..) => {
-      let tasks = conversation.records
-        .filter(record => record.kind == "user")
-        .map(record => record.task_id)
-      if conversation.task is Some(task) && !tasks.contains(task) {
-        tasks.push(task)
-      }
+      let id = @uuid.mint()
       {
         ..conversation.clear_progress(),
         send_request: request,
@@ -84,7 +79,7 @@ fn State::send_pending(
         }),
         history_required: true,
         notice: None,
-        pending: Some({ content, known_tasks: tasks, result_id: None, }),
+        pending: Some({ content, id, result_id: None, }),
       }
     }
   }
@@ -116,7 +111,13 @@ fn State::send_pending(
                 MessagePrepared(self.epoch, session, request, prepared, content),
               ),
             )
-            (@wire.Prompt(content~, submission_id=None), None)
+            (
+              @wire.Prompt(
+                content~,
+                submission_id=conversation.pending.map(p => p.id),
+              ),
+              None,
+            )
           }
         }
         Ok(send_command(token, session, command, task_id?))

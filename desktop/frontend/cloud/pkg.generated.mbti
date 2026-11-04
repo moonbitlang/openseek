@@ -126,6 +126,7 @@ pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
   NativeEvent(EngineFrame)
+  SessionRecord(session~ : String, task~ : String?, seq~ : Int32, record~ : @protocol.SessionEvent)
   EngineFailed(session~ : String, seq~ : Int32, error~ : String)
 }
 pub fn ControlStreamEvent::equal(Self, Self) -> Bool
@@ -171,7 +172,9 @@ pub(all) struct Conversation {
   task : String?
   last_seq : Int32?
   live : @engine_session.Stream
-  pending_assistants : Array[PendingAssistant]
+  pushed_records : Array[@protocol.SessionEvent]
+  terminal_record_task : String?
+  last_record_sequence : Int32
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
@@ -284,15 +287,6 @@ pub(all) enum Msg {
   MessagePrepared(Int32, String, Int32, @composer.Draft, @openseek_protocol.Content)
   Poll(Int32, String, Int32)
 }
-
-#derive(Eq)
-pub struct PendingAssistant {
-  task : String
-  history_request : Int32
-  item : @transcript.TranscriptItem
-}
-pub fn PendingAssistant::equal(Self, Self) -> Bool
-pub fn PendingAssistant::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub struct PendingCommand {
@@ -412,7 +406,7 @@ pub struct StreamLease {
 #derive(Eq)
 pub struct Submission {
   content : @openseek_protocol.Content
-  known_tasks : Array[String]
+  id : String
   result_id : String?
 }
 pub fn Submission::equal(Self, Self) -> Bool

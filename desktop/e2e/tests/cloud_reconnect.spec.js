@@ -195,17 +195,20 @@ for (const operation of ['Archive', 'Delete…']) {
 test('Cloud reconnect fences an old history reply and retains newer live messages during synchronization', async ({ page }) => {
   const app = await running(page);
   const oldTask = app.controlState(sessionA).task_id;
+  // Reconnect once to start a recovery read, then interrupt it before
+  // releasing the stale response.
+  await app.disconnectSession(sessionA);
+  await expect.poll(() => observations(app).length).toBe(2);
   const oldRead = deferred();
   app.pauseHistory = oldRead.promise;
   const oldResponse = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
   const reads = () => app.requests.filter(request => request.method === 'GET' && request.path.endsWith(`/${sessionA}/messages`)).length;
-  const before = reads();
+  await expect.poll(reads).toBe(2);
   await app.finishTask();
-  await expect.poll(reads).toBeGreaterThan(before);
   const connection = deferred();
   app.pauseSessionEvents = connection.promise;
   await app.disconnectSession(sessionA);
-  await expect.poll(() => observations(app).length).toBe(2);
+  await expect.poll(() => observations(app).length).toBe(3);
   await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: oldTask }, { task: 'next-task' });
   const freshRead = deferred();
   app.pauseHistory = freshRead.promise;

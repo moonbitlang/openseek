@@ -54,9 +54,7 @@ for (const focused of [true, false]) {
       await page.evaluate(() => window.dispatchEvent(new Event('focus')));
       await expect.poll(() => badge(app)).toBe(0);
     }
-    const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
-    await app.emitSessionEvent(sessionA, 'task_finished', { status: 'completed', result: { status: 'completed' } });
-    expect([200, 304]).toContain((await refreshed).status());
+    await app.emitSessionEvent(sessionA, 'task_finished', { status: 'completed', result: { status: 'completed' } }, { publishNative: false });
     expect(shown(app)).toHaveLength(1);
     await app.open(sessionB);
     await app.open(sessionA);
@@ -71,13 +69,18 @@ test('Cloud keeps observing a background queued turn and counts conversations ra
   await app.publishControl(sessionA, { queue: [{ id: 'next-input', content: 'Continue' }] });
   await app.open(sessionB);
   const previous = app.controlState(sessionA).task_id;
+  const before = app.historyReads.length;
+  await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'First task answer' });
   await app.finishTask();
   await expect.poll(() => shown(app).length).toBe(1);
   await app.emitSessionEvent(sessionA, 'task_started', { previous_task_id: previous, submission_id: 'next-input' }, { task: 'second-task' });
+  await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Second task answer' });
   await app.finishTask();
   await expect.poll(() => shown(app).length).toBe(2);
   await expect.poll(() => badge(app)).toBe(1);
   expect(shown(app)[0].params.payload).toBe(shown(app)[1].params.payload);
+  expect(shown(app).map(notification => notification.params.body)).toEqual(['First task answer', 'Second task answer']);
+  expect(app.historyReads).toHaveLength(before);
   expect(app.postCount).toBe(1);
   expect(app.device.pageErrors).toEqual([]);
 });

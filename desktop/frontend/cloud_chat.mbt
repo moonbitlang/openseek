@@ -467,6 +467,25 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       }
     }
   }
+  for event in conversation.pushed_records {
+    guard event.item is @protocol.User(user) &&
+      !conversation.records.any(record => {
+        record.kind == "user" &&
+        (
+          record.engine_sequence == Some(event.sequence) ||
+          (
+            record.data is { "submission_id": String(id), .. } &&
+            user.submission_id == Some(id)
+          )
+        )
+      }) else {
+      continue
+    }
+    let text = user.content.text()
+    if !text.is_blank() {
+      history.push(text)
+    }
+  }
   let input = self.dormant_composer_input()
   Some({
     ..input,

@@ -97,7 +97,7 @@ async fn watch_control(
         Snapshot(snapshot) => snapshot.session_id
         EngineEvent(event) => event.session_id
         NativeEvent(event) => event.session_id
-        EngineFailed(session~, ..) => session
+        EngineFailed(session~, ..) | SessionRecord(session~, ..) => session
       }
       guard owner == session else {
         raise @cloud_client.RequestError(Malformed)

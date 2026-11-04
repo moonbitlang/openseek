@@ -21,49 +21,12 @@ fn cloud_notification_event(
 fn cloud_notification_model() -> Model {
   let model = { ..integrated_cloud_model(), window_focused: true, }
   let (_, running) = cloud_notification_event(model, 1, "task_started", {})
-  let document = {
-    ..running.cloud.conversations["cloud-a"].document,
-    events: Some([
-      {
-        sequence: 1,
-        ts: Some(100),
-        item: @protocol.Assistant({
-          content: "Cloud final answer",
-          reasoning_content: None,
-          tool_calls: None,
-          is_replay: None,
-        }),
-      },
-    ]),
+  let conversations = running.cloud.conversations.copy()
+  conversations["cloud-a"] = {
+    ..conversations["cloud-a"],
+    notification_answer: Some("Cloud final answer"),
   }
-  let history : @cloud.History = {
-    prediction: None,
-    session: document,
-    generating: true,
-    etag: None,
-    offset: None,
-    messages: [
-      {
-        task_id: "cloud-run",
-        kind: "assistant_message",
-        data: { "content": "Cloud final answer" },
-        engine_sequence: None,
-        created_at: 100,
-      },
-    ],
-  }
-  update(
-    test_dispatch(),
-    CloudAction(
-      @cloud.Loaded(
-        running.cloud.epoch,
-        "cloud-a",
-        running.cloud.conversations["cloud-a"].request,
-        history,
-      ),
-    ),
-    running,
-  ).1
+  { ..running, cloud: { ..running.cloud, conversations, }, }
 }
 
 ///|

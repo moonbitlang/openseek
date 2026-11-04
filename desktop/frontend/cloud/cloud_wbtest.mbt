@@ -223,7 +223,12 @@ test "history recovery clears a send error only when the pending submission was 
             {
               task_id: "new-task",
               kind: "user",
-              data: { "content": "hello" },
+              data: {
+                "content": "hello",
+                "submission_id": Json(
+                  sending.conversations["session"].pending.unwrap().id,
+                ),
+              },
               engine_sequence: None,
               created_at: 100,
             },
@@ -310,88 +315,63 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     first.conversations["session"].document.events.unwrap_or([]).length(),
     second.conversations["session"].document.events.unwrap_or([]).length(),
   )
-  let full = advance(second, 4, "assistant_message", {
-    "content": "你好 🌙",
-  })
+  let full = second
+    .progress_user(4)
+    .progress_record(5, 2, {
+      "kind": "assistant",
+      "payload": { "content": "你好 🌙" },
+    })
   assert_true(full.conversations["session"].live.response is None)
-  let full = metadata_update(
-    full,
-    Loaded(1, "session", full.conversations["session"].request, {
-      prediction: None,
-      generating: true,
-      session: native_document([
-        { "kind": "user", "payload": { "content": "hello" } },
-        { "kind": "assistant", "payload": { "content": "你好 🌙" } },
-      ]),
-      etag: None,
-      offset: None,
-      messages: [
-        {
-          task_id: "task",
-          kind: "user",
-          data: { "content": "hello" },
-          engine_sequence: Some(1),
-          created_at: 1,
-        },
-        {
-          task_id: "task",
-          kind: "assistant_message",
-          data: { "content": "你好 🌙" },
-          engine_sequence: None,
-          created_at: 2,
-        },
-      ],
-    }),
-  )
   assert_true(
     full.conversations["session"].items()[1].kind
     is Assistant(prose=Some("你好 🌙"), ..),
   )
-  let tool = advance(full, 5, "tool_call", {
+  let tool = advance(full, 6, "tool_call", {
     "id": "call",
     "name": "read",
     "arguments": "{}",
   })
-  let result = advance(tool, 6, "tool_result", {
+  let result = advance(tool, 7, "tool_result", {
     "tool_call_id": "call",
     "tool_name": "read",
     "content": "ok",
     "is_error": false,
   })
-  let unfinished = advance(result, 7, "assistant_delta", {
+  let unfinished = advance(result, 8, "assistant_delta", {
     "content": "unfinished step",
   })
-  let step = advance(unfinished, 8, "step", { "step": 2 })
+  let step = advance(unfinished, 9, "step", { "step": 2 })
   assert_true(step.conversations["session"].live.response is None)
   assert_eq(
     step.conversations["session"].document.events.unwrap_or([]).length(),
     unfinished.conversations["session"].document.events.unwrap_or([]).length(),
   )
-  let failed_attempt = advance(step, 9, "assistant_delta", {
+  let failed_attempt = advance(step, 10, "assistant_delta", {
     "content": "discarded",
   })
-  let retry = advance(failed_attempt, 10, "stream_retry", {
+  let retry = advance(failed_attempt, 11, "stream_retry", {
     "attempt": 2,
     "max_attempts": 3,
     "reason": "fixture",
   })
   assert_true(retry.conversations["session"].live.response is None)
-  let replacement = advance(retry, 11, "assistant_delta", {
+  let replacement = advance(retry, 12, "assistant_delta", {
     "content": "replacement",
   })
   assert_eq(
     replacement.conversations["session"].live.response,
     Some("replacement"),
   )
-  let completed = advance(replacement, 12, "assistant_message", {
-    "content": "replacement",
+  let completed = replacement.progress_record(13, 3, {
+    "kind": "assistant",
+    "payload": { "content": "replacement" },
   })
-  let ended = advance(completed, 13, "task_finished", {
+  let ended = advance(completed, 14, "task_finished", {
     "status": "completed",
     "result": { "output": { "answer": "replacement" } },
   })
   assert_true(ended.conversations["session"].live.response is None)
-  let late = advance(ended, 14, "assistant_delta", { "content": "late" })
+  let late = advance(ended, 15, "assistant_delta", { "content": "late" })
   assert_false(late.conversations["session"].generating)
   assert_true(late.conversations["session"].live.response is None)
   let stream = StreamLease::new()

@@ -70,7 +70,7 @@ test('desktop reopens cached Cloud turns offline and revalidates them after rest
   await cloud.open(sessionA);
   await expect(transcript.getByText('Updated reply A')).toBeVisible();
   await expect.poll(() => files.get(sessionA).etag).not.toBe(etag);
-  expect(files.get(sessionA).messages.at(-1).data.content).toBe('Updated reply A');
+  expect(files.get(sessionA).session.events.at(-1).item.payload.content).toBe('Updated reply A');
 
   const row = cloud.row(sessionA).locator('..');
   await row.hover();

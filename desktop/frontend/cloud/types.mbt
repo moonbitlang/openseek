@@ -49,7 +49,7 @@ pub(all) struct Event {
 #derive(Eq)
 pub struct Submission {
   content : @wire.Content
-  known_tasks : Array[String]
+  id : String
   result_id : String?
 }
 
@@ -65,17 +65,6 @@ pub(all) enum WatchStatus {
 
 ///|
 pub extend WatchStatus with Eq::{equal, not_equal}
-
-///|
-#derive(Eq)
-pub struct PendingAssistant {
-  task : String
-  history_request : Int32
-  item : @transcript.TranscriptItem
-}
-
-///|
-pub extend PendingAssistant with Eq::{equal, not_equal}
 
 ///|
 #derive(Eq)
@@ -101,7 +90,7 @@ pub(all) struct Conversation {
   sending : Bool
   generating : Bool
   unseen_finish : Bool
-  // Retain the current native reply for completion notifications while history loads.
+  // Latest committed assistant text for this task’s completion notification.
   notification_answer : String?
   // Last live completion handled, independent of history replacement.
   last_finished_task : String?
@@ -129,8 +118,10 @@ pub(all) struct Conversation {
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
   live : @engine_session.Stream
-  // Committed replies waiting for the history read triggered by their SSE.
-  pending_assistants : Array[PendingAssistant]
+  // Committed records that the history pages do not contain yet.
+  pushed_records : Array[@protocol.SessionEvent]
+  terminal_record_task : String?
+  last_record_sequence : Int32
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
@@ -183,7 +174,9 @@ fn Conversation::empty() -> Conversation {
     task: None,
     last_seq: None,
     live: @engine_session.Stream::empty(),
-    pending_assistants: [],
+    pushed_records: [],
+    terminal_record_task: None,
+    last_record_sequence: 0,
     heartbeat: None,
     retrying: None,
     controls: @engine_session.State::empty(),

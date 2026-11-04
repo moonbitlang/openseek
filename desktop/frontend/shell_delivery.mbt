@@ -156,18 +156,12 @@ fn cloud_command_results(
       continue
     }
     let owner = @interop.Cloud(account~, session~)
-    if previous.pending is Some({ result_id: Some(id), known_tasks, .. }) {
+    if previous.pending is Some({ result_id: Some(id), .. }) {
       let failed = message is @cloud.SendFailed(epoch, target, request, _) &&
         epoch == before.epoch &&
         target == session &&
         request == previous.send_request
-      let admitted = current.pending is None &&
-        (
-          current.task.map_or(false, task => !known_tasks.contains(task)) ||
-          current.records.any(record => {
-            record.kind == "user" && !known_tasks.contains(record.task_id)
-          })
-        )
+      let admitted = !failed && current.pending is None
       if failed || admitted {
         commands.push(
           dispatch(

@@ -91,14 +91,19 @@ pub fn Conversation::items(
       native_failure = false
       task = Some(task_id)
     }
-    if item is @protocol.User(_) &&
-      engine_sequence is Some(sequence) &&
+    if item is @protocol.User(user) &&
       native.search_by(event => {
-        event.sequence == sequence && event.item is @protocol.User(_)
+        event.item is @protocol.User(native_user) &&
+        (
+          engine_sequence == Some(event.sequence) ||
+          (
+            user.submission_id is Some(_) &&
+            user.submission_id == native_user.submission_id
+          )
+        )
       })
       is Some(index) {
-      // Only the explicit native sequence establishes that this service
-      // submission is already represented. Equal text is not ownership.
+      // Use durable identity to reconcile the service and native copies.
       if index >= cursor {
         ignore(append_native(items, native, cursor, index + 1))
         cursor = index + 1
@@ -109,7 +114,19 @@ pub fn Conversation::items(
     // Keep the current native turn ahead of its service result, and place
     // missing service turns before the next native User anchor.
     let mut end = cursor
-    while end < native.length() && !(native[end].item is @protocol.User(_)) {
+    while end < native.length() {
+      let event = native[end]
+      if event.item is @protocol.User(_) {
+        // A service-only prompt may be recovered after a prior turn
+        // arrived through SSE without a service-side history anchor.
+        guard item is @protocol.User(_) &&
+          ts is Some(submitted) &&
+          event.ts is Some(saved) &&
+          saved > 0.0 &&
+          saved < submitted else {
+          break
+        }
+      }
       end += 1
     }
     native_failure = append_native(items, native, cursor, end) || native_failure
@@ -122,8 +139,16 @@ pub fn Conversation::items(
     ignore(@transcript.apply_session_item(items, item, ts?))
   }
   ignore(append_native(items, native, cursor, native.length()))
-  for pending in self.pending_assistants {
-    items.push(pending.item)
+  if self.sending && self.pending is Some(pending) {
+    ignore(
+      @transcript.apply_session_item(
+        items,
+        @protocol.User({
+          content: pending.content,
+          submission_id: Some(pending.id),
+        }),
+      ),
+    )
   }
   if !self.history_required && self.notice is Some(message) {
     items.push({ kind: Failure(message), ts: None, sequence: None, })

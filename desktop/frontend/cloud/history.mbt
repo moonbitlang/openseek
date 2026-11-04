@@ -29,25 +29,15 @@ pub fn Conversation::can_load_older_history(self : Conversation) -> Bool {
 fn Conversation::with_history_page(
   self : Conversation,
   history : History,
-  request? : Int32,
   latest~ : Bool,
 ) -> Conversation {
-  // Disk hydration supplies no request because its snapshot can predate SSE.
-  let pending_assistants = request.map_or(self.pending_assistants, request => {
-    self.uncovered_assistants(
-      request,
-      history.offset.map(_ => history.messages),
-    )
-  })
   guard history.offset is Some(offset) else {
-    return {
+    return self.with_history_document(history.session, {
       ..self,
       records: history.messages,
-      document: history.session,
-      pending_assistants,
       history_pages: Map([]),
       history_older_request: None,
-    }
+    })
   }
   let pages = self.history_pages.copy()
   if latest {
@@ -74,33 +64,33 @@ fn Conversation::with_history_page(
     }
   }
   let tail = pages[offsets[offsets.length() - 1]]
-  {
+  self.with_history_document({ ..tail.session, events: Some(events), }, {
     ..self,
     history_pages: pages,
     history_older_request: self.history_older_request.filter(request => {
       !latest || request.1 < offset
     }),
     records,
-    pending_assistants,
-    document: { ..tail.session, events: Some(events), },
-  }
+  })
 }
 
 ///|
-/// SSE publishes assistants after commit. A read started after the event
-/// includes that commit if it covers the task's turn. A read for a different
-/// turn or an older in-flight page cannot replace the temporary reply.
-fn Conversation::uncovered_assistants(
+/// History may have been read before a push. Keep pushed records until a
+/// history page contains the same native sequence.
+fn Conversation::with_history_document(
   self : Conversation,
-  request : Int32,
-  page_records : Array[Record]?,
-) -> Array[PendingAssistant] {
-  self.pending_assistants.filter(pending => {
-    request < pending.history_request ||
-    page_records.map_or(false, records => {
-      !records.any(record => {
-        record.task_id == pending.task && record.kind == "assistant_message"
-      })
-    })
+  history : @protocol.SessionDocument,
+  next : Conversation,
+) -> Conversation {
+  let events = history.events.unwrap_or([]).copy()
+  let sequences : Set[Int32] = Set([])
+  for event in events {
+    sequences.add(event.sequence)
+  }
+  let pushed_records = self.pushed_records.filter(event => {
+    !sequences.contains(event.sequence)
   })
+  events.append(pushed_records)
+  events.sort_by_key(event => event.sequence)
+  { ..next, pushed_records, document: { ..history, events: Some(events), }, }
 }

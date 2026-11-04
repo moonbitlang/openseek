@@ -64,79 +64,105 @@ fn State::progress_test_event(
 }
 
 ///|
-test "Cloud keeps an assistant preview when the latest page moves past its turn" {
-  let pending = progress_test_state()
+fn State::progress_record(
+  self : State,
+  seq : Int32,
+  sequence : Int32,
+  item : Json,
+) -> State raise {
+  self.session_record(
+    "session",
+    Some("task"),
+    seq,
+    { sequence, ts: None, item: @json.from_json(item), },
+    Some("ts_fixture"),
+    _ => @cmd.none,
+  ).0
+}
+
+///|
+fn State::progress_user(self : State, seq : Int32) -> State raise {
+  let id = self.conversations["session"].pending.unwrap().id
+  self.progress_record(seq, 1, {
+    "kind": "user",
+    "payload": { "content": "question", "submission_id": Json(id) },
+  })
+}
+
+///|
+test "Cloud only confirms the matching submission, even for identical prompts" {
+  let started = progress_test_state().progress_test_event(1, "task_started", {})
+  let other = started.progress_record(2, 1, {
+    "kind": "user",
+    "payload": { "content": "question", "submission_id": "other-device" },
+  })
+  let conversation = other.conversations["session"]
+  assert_true(conversation.sending && conversation.pending is Some(_))
+  assert_eq(conversation.submission_sequence, 0)
+  let confirmed = other.progress_record(3, 2, {
+      "kind": "user",
+      "payload": {
+        "content": "question",
+        "submission_id": Json(conversation.pending.unwrap().id),
+      },
+    }).conversations["session"]
+  assert_true(!confirmed.sending && confirmed.pending is None)
+  assert_eq(confirmed.submission_sequence, 1)
+  assert_eq(confirmed.items().map(item => item.sequence), [Some(1), Some(2)])
+}
+
+///|
+test "Cloud retains pushed records across stale and overlapping history reads" {
+  let live = progress_test_state()
     .progress_test_event(1, "task_started", {})
-    .progress_test_event(2, "assistant_message", { "content": "First answer" })
-    .progress_test_event(3, "task_finished", { "status": "completed" })
-  let request = pending.conversations["session"].request
-  let answer : Record = {
-    task_id: "task",
-    kind: "assistant_message",
-    data: { "content": "First answer" },
-    created_at: 1,
-    engine_sequence: None,
-  }
-  let first : History = {
+    .progress_user(2)
+    .progress_record(3, 2, {
+      "kind": "assistant",
+      "payload": { "content": "First answer" },
+    })
+  let conversation = live.conversations["session"]
+  let complete : History = {
     offset: Some(0),
     prediction: None,
     generating: false,
-    session: native_document([
-      { "kind": "assistant", "payload": { "content": "First answer" } },
-    ]),
+    session: conversation.document,
     etag: None,
-    messages: [answer],
+    messages: [],
   }
-  let next = metadata_update(
-    pending,
-    Loaded(1, "session", request, {
-      ..first,
-      offset: Some(1),
-      session: native_document([]),
-      etag: Some("latest"),
-      messages: [{ ..answer, task_id: "next", }],
-    }),
-  )
-  let rechecking = next.load("session", Some("fixture"), _ => @cmd.none).0
-  let validated = metadata_update(
-    rechecking,
-    HistoryUnchanged(1, "session", rechecking.sequence, "latest"),
-  )
-  assert_true(
-    validated.conversations["session"].items()
-    is [{ kind: Assistant(prose=Some("First answer"), ..), sequence: None, .. }],
-  )
-  let older = metadata_update(validated, LoadOlder("session"))
-  let settled = metadata_update(
-    older,
-    OlderLoaded(1, "session", older.sequence, first),
-  )
-  assert_true(
-    settled.conversations["session"].items()
-    is [
-      { kind: Assistant(prose=Some("First answer"), ..), sequence: Some(_), .. },
-    ],
-  )
+  let older_snapshot = {
+    ..complete,
+    session: {
+      ..complete.session,
+      events: Some([complete.session.events.unwrap()[0]]),
+    },
+  }
+  let stale = conversation.with_history_page(older_snapshot, latest=true)
+  assert_eq(stale.items().length(), 2)
+  assert_eq(stale.items()[1].sequence, Some(2))
+  let overlapping = stale.with_history_page(complete, latest=true)
+  assert_true(overlapping.items() == stale.items())
+  assert_true(overlapping.pushed_records.is_empty())
 }
 
 ///|
 test "Cloud reasoning settles into one canonical assistant and rejects late fragments" {
   let started = progress_test_state().progress_test_event(1, "task_started", {})
+  let started = started.progress_user(2)
   let partial = started
-    .progress_test_event(2, "reasoning_delta", { "content": "Consider " })
-    .progress_test_event(3, "reasoning_delta", { "content": "the input" })
+    .progress_test_event(3, "reasoning_delta", { "content": "Consider " })
+    .progress_test_event(4, "reasoning_delta", { "content": "the input" })
   let conversation = partial.conversations["session"]
   assert_eq(
     conversation.live.reasoning.map(r => r.content),
     Some("Consider the input"),
   )
   assert_false(conversation.live.reasoning.map_or(false, r => r.complete))
-  assert_true(conversation.items().is_empty())
+  assert_true(conversation.items().length() == 1)
   let settled = partial
-    .progress_test_event(4, "reasoning_message", {
+    .progress_test_event(5, "reasoning_message", {
       "content": "Complete reasoning",
     })
-    .progress_test_event(5, "reasoning_delta", { "content": "late" })
+    .progress_test_event(6, "reasoning_delta", { "content": "late" })
   assert_eq(
     settled.conversations["session"].live.reasoning.map(r => r.content),
     Some("Complete reasoning"),
@@ -146,74 +172,25 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
       r.complete
     }),
   )
-  let pending = settled.progress_test_event(6, "assistant_message", {
-    "content": "Answer",
-    "reasoning_content": "Complete reasoning",
+  let canonical = settled.progress_record(7, 2, {
+    "kind": "assistant",
+    "payload": {
+      "content": "Answer",
+      "reasoning_content": "Complete reasoning",
+    },
   })
-  assert_true(
-    pending.conversations["session"].items()
-    is [
-      {
-        kind: Assistant(
-          reasoning=Some("Complete reasoning"),
-          prose=Some("Answer"),
-          ..
-        ),
-        sequence: None,
-        ..
-      },
-    ],
-  )
-  let canonical = metadata_update(
-    pending,
-    Loaded(1, "session", pending.conversations["session"].request, {
-      prediction: None,
-      generating: true,
-      session: native_document([
-        { "kind": "user", "payload": { "content": "question" } },
-        {
-          "kind": "assistant",
-          "payload": {
-            "content": "Answer",
-            "reasoning_content": "Complete reasoning",
-          },
-        },
-      ]),
-      etag: None,
-      offset: None,
-      messages: [
-        {
-          task_id: "task",
-          kind: "user",
-          data: { "content": "question" },
-          engine_sequence: Some(1),
-          created_at: 1,
-        },
-        {
-          task_id: "task",
-          kind: "assistant_message",
-          data: {
-            "content": "Answer",
-            "reasoning_content": "Complete reasoning",
-          },
-          engine_sequence: None,
-          created_at: 2,
-        },
-      ],
-    }),
-  )
   let conversation = canonical.conversations["session"]
-  assert_true(conversation.live.reasoning.map(r => r.content) is None)
+  assert_true(conversation.live.reasoning is None)
   assert_eq(conversation.items().length(), 2)
   assert_true(
     conversation.items()[1].kind
     is Assistant(reasoning=Some("Complete reasoning"), prose=Some("Answer"), ..),
   )
   let next = canonical
-    .progress_test_event(7, "step", { "step": 2 })
-    .progress_test_event(8, "reasoning_delta", { "content": "Next step" })
-    .progress_test_event(9, "assistant_delta", { "content": "Next answer" })
-    .progress_test_event(10, "reasoning_delta", { "content": "late" })
+    .progress_test_event(8, "step", { "step": 2 })
+    .progress_test_event(9, "reasoning_delta", { "content": "Next step" })
+    .progress_test_event(10, "assistant_delta", { "content": "Next answer" })
+    .progress_test_event(11, "reasoning_delta", { "content": "late" })
   assert_eq(
     next.conversations["session"].live.reasoning.map(r => r.content),
     Some("Next step"),
@@ -221,7 +198,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
   assert_true(
     next.conversations["session"].live.reasoning.map_or(false, r => r.complete),
   )
-  let blank = next.progress_test_event(11, "reasoning_message", {
+  let blank = next.progress_test_event(12, "reasoning_message", {
     "content": "",
   })
   assert_true(
@@ -337,7 +314,6 @@ test "Cloud retry ends on same-step progress without waiting for another step" {
     ("reasoning_delta", { "content": "thinking" }),
     ("reasoning_message", { "content": "thought" }),
     ("assistant_delta", { "content": "answer" }),
-    ("assistant_message", { "content": "answer" }),
     (
       "tool_result",
       {
@@ -363,6 +339,8 @@ test "Cloud compaction follows native lifecycle without treating failure as a ta
   let started = started.replace("session", {
     ..started.conversations["session"],
     history_required: false,
+    sending: false,
+    pending: None,
   })
   assert_false(started.conversations["session"].controls.is_compacting())
   for prefix in ["compaction", "auto_compaction"] {
@@ -392,7 +370,8 @@ test "Cloud compaction follows native lifecycle without treating failure as a ta
 test "Cloud stream boundaries clear provisional reasoning and fence terminal callbacks" {
   let live = progress_test_state()
     .progress_test_event(1, "task_started", {})
-    .progress_test_event(2, "reasoning_delta", {
+    .progress_user(2)
+    .progress_test_event(3, "reasoning_delta", {
       "content": "Partial reasoning",
     })
   let request = live.conversations["session"].request
@@ -426,7 +405,7 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
       r.complete
     }),
   )
-  let retry = live.progress_test_event(3, "stream_retry", {
+  let retry = live.progress_test_event(4, "stream_retry", {
     "attempt": 1,
     "max_attempts": 3,
     "reason": "retry",
@@ -434,13 +413,13 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
   assert_true(
     retry.conversations["session"].live.reasoning.map(r => r.content) is None,
   )
-  let terminal = live.progress_test_event(3, "task_finished", {
+  let terminal = live.progress_test_event(4, "task_finished", {
     "status": "failed",
   })
   assert_true(
     terminal.conversations["session"].live.reasoning.map(r => r.content) is None,
   )
-  let late = terminal.progress_test_event(4, "reasoning_delta", {
+  let late = terminal.progress_test_event(5, "reasoning_delta", {
     "content": "late",
   })
   assert_true(
