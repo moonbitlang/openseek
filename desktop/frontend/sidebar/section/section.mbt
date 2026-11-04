@@ -252,17 +252,14 @@ pub fn component(
     [
       (
         input.id.key(),
-        @html.div(
-          class="sidebar-group",
-          [
-            @html.div(class~, heading),
-            @html.div(
-              id=input.id.key() + ":content",
-              class="sidebar-group-content",
-              rows,
-            ),
-          ],
-        ),
+        @html.div(class="sidebar-group", [
+          @html.div(class~, heading),
+          @html.div(
+            id=input.id.key() + ":content",
+            class="sidebar-group-content",
+            rows,
+          ),
+        ]),
       ),
     ]
   })
