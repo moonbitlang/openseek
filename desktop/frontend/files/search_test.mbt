@@ -37,3 +37,13 @@ test "search applies the caller's result cap" {
   assert_eq(search.rank("").length(), 200)
   assert_eq(search.rank("file", limit=512).length(), 512)
 }
+
+///|
+test "search keeps the first occurrence of a path repeated in the index" {
+  let search = @files.Search(
+    [Relative("b.mbt"), Relative("a.mbt"), Relative("b.mbt")],
+    [Relative("a.mbt")],
+    None,
+  )
+  @debug.assert_eq(search.rank("").map(item => item.path.0), ["a.mbt", "b.mbt"])
+}

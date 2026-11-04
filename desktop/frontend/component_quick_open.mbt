@@ -96,13 +96,17 @@ fn update_quick_open(
   )
   let model = { ..model, quick_open, }
   guard accepted is Some(target) else { return (cmd, model) }
-  if model.cloud_selected() && model.cloud_identity() is Some(owner) {
-    let (open, next) = open_cloud_file(
+  if model.cloud_selected() {
+    // An accepted row names an exact indexed path. Open it literally, as the
+    // Cloud file tree does, rather than parsing it as a Markdown file link.
+    guard file_ctx(model).root() is Some(root) else { return (cmd, model) }
+    let model = model.begin_editor_navigation()
+    let (open, next) = show_editor_resource(
       dispatch,
       model,
-      owner,
-      target.path,
+      @resource.join_relative(root, Relative(target.path)),
       target.range,
+      file_link_generation=model.file_panel.file_link_generation,
     )
     return (@cmd.batch([cmd, open]), next)
   }

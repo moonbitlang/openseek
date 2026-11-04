@@ -28,19 +28,20 @@ pub fn Search::Search(
   active : @pathx.Relative?,
 ) -> Search {
   let candidates : Array[@pathx.Relative] = []
+  // Cloud palettes rebuild this from a complete index on every keystroke, so
+  // deduplication must stay linear in the index size.
+  let seen : Set[@pathx.Relative] = Set([])
+  let add = path => {
+    if !seen.contains(path) {
+      seen.add(path)
+      candidates.push(path)
+    }
+  }
   if active is Some(path) && open_files.contains(path) {
-    candidates.push(path)
+    add(path)
   }
-  for path in open_files {
-    if !candidates.contains(path) {
-      candidates.push(path)
-    }
-  }
-  for path in indexed_files {
-    if !candidates.contains(path) {
-      candidates.push(path)
-    }
-  }
+  open_files.each(add)
+  indexed_files.each(add)
   { candidates, }
 }
 
