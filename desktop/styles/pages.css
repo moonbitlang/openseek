@@ -129,6 +129,17 @@ dialog.management-dialog {
 .management-dialog[open]::backdrop {
   background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .management-dialog[open] {
+    animation: management-dialog-pop 90ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+@keyframes management-dialog-pop {
+  from {
+    opacity: 0.4;
+    scale: 0.96;
+  }
+}
 .management-dialog-header {
   display: flex;
   align-items: center;
