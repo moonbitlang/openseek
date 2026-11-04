@@ -33,6 +33,11 @@ test "protected names: sources, interfaces, and every manifest" {
     @source_write_policy.is_protected_source_path("pkg.generated.mbti"),
     content="true",
   )
+  // A saved `.mbtx` script is source too: `mbtx` runs it by name.
+  inspect(
+    @source_write_policy.is_protected_source_path("scripts/check.mbtx"),
+    content="true",
+  )
   // All four manifests, current and legacy, as a bare name or a full path.
   inspect(
     @source_write_policy.is_protected_source_path("moon.mod"),

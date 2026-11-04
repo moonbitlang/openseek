@@ -49,8 +49,8 @@ fn workspace_compare_path(path : String) -> String {
 ///|
 /// Return whether `path` has a protected MoonBit source or manifest name.
 ///
-/// Protected names are `*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`, `moon.pkg`,
-/// `moon.work`, and the legacy JSON manifests. Matching is case-sensitive,
+/// Protected names are `*.mbt`, `*.mbti`, `*.mbt.md`, `*.mbtx`, `moon.mod`,
+/// `moon.pkg`, `moon.work`, and the legacy JSON manifests. Matching is case-sensitive,
 /// purely lexical, and accepts either a basename or a full path.
 pub fn is_protected_source_path(path : String) -> Bool {
   let path = path.replace_all(old="\\", new="/")
@@ -66,8 +66,10 @@ pub fn is_protected_source_path(path : String) -> Bool {
 
 ///|
 /// The filename suffixes `is_protected_source_path` guards: sources, literate
-/// sources, and generated interfaces.
-let protected_source_suffixes : Array[String] = [".mbt.md", ".mbt", ".mbti"]
+/// sources, generated interfaces, and `.mbtx` scripts.
+let protected_source_suffixes : Array[String] = [
+  ".mbt.md", ".mbt", ".mbti", ".mbtx",
+]
 
 ///|
 /// The manifest filenames `is_protected_source_path` guards, current and

@@ -456,7 +456,6 @@ fn wasm_policy_document(
     for
       pattern in [
         ..@source_write_policy.protected_source_globs(),
-        "**/*.mbtx",
         "**/.git",
         "**/.git/**",
       ] {
@@ -652,8 +651,8 @@ test "a workspace grant writes the root minus sources, scripts and git" {
       "/lab",
       "/w[1]*{a,b}?/",
       ..[
-        "**/*{.mbt.md,.mbt,.mbti}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
-        "**/*.mbtx", "**/.git", "**/.git/**",
+        "**/*{.mbt.md,.mbt,.mbti,.mbtx}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+        "**/.git", "**/.git/**",
       ].map(pattern => {
         Json::object({
           "glob": Json::string("!\{root}/\{case_insensitive_glob(pattern)}"),

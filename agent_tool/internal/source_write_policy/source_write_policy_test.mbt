@@ -45,6 +45,6 @@ test "protected workspace source policy" {
 ///|
 test "protected source globs name every guarded suffix and manifest" {
   assert_eq(@source_write_policy.protected_source_globs(), [
-    "**/*{.mbt.md,.mbt,.mbti}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
+    "**/*{.mbt.md,.mbt,.mbti,.mbtx}", "**/{moon.mod,moon.pkg,moon.work,moon.mod.json,moon.pkg.json}",
   ])
 }
