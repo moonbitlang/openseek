@@ -68,6 +68,17 @@ pub extend WatchStatus with Eq::{equal, not_equal}
 
 ///|
 #derive(Eq)
+pub struct PendingAssistant {
+  task : String
+  history_request : Int32
+  item : @transcript.TranscriptItem
+}
+
+///|
+pub extend PendingAssistant with Eq::{equal, not_equal}
+
+///|
+#derive(Eq)
 pub(all) struct Conversation {
   records : Array[Record]
   history_cached : Bool
@@ -118,6 +129,8 @@ pub(all) struct Conversation {
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
   live : @engine_session.Stream
+  // Committed replies waiting for the history read triggered by their SSE.
+  pending_assistants : Array[PendingAssistant]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
@@ -170,6 +183,7 @@ fn Conversation::empty() -> Conversation {
     task: None,
     last_seq: None,
     live: @engine_session.Stream::empty(),
+    pending_assistants: [],
     heartbeat: None,
     retrying: None,
     controls: @engine_session.State::empty(),

@@ -969,6 +969,7 @@ pub fn update(
       let next = if owner == navigation && history.offset == Some(offset) {
         conversation.with_history_page(
           { ..history, generating: false, },
+          request~,
           latest=false,
         )
       } else {
@@ -997,6 +998,7 @@ pub fn update(
     Loaded(epoch, id, request, history) => {
       let conversation = state.conversations[id].with_history_page(
         history,
+        request~,
         latest=true,
       )
       let accepted = conversation.pending is Some(submission) &&
@@ -1132,11 +1134,20 @@ pub fn update(
     HistoryUnchanged(epoch, id, request, etag) => {
       let conversation = state.conversations[id]
       let observing = conversation.stream is Some({ active: true, .. })
+      let offset = conversation.history_pages
+        .keys()
+        .fold(init=0, (max, key) => max.max(key))
+      let page_records = conversation.history_pages
+        .get(offset)
+        .map(page => page.messages)
       let next = state.replace(id, {
         ..conversation,
         history_etag: Some(etag),
         history_reading: false,
         history_disk_request: None,
+        pending_assistants: conversation.uncovered_assistants(
+          request, page_records,
+        ),
         loading: false,
         history_required: false,
         watch_status: if observing && conversation.last_seq is Some(_) {

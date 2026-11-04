@@ -64,6 +64,62 @@ fn State::progress_test_event(
 }
 
 ///|
+test "Cloud keeps an assistant preview when the latest page moves past its turn" {
+  let pending = progress_test_state()
+    .progress_test_event(1, "task_started", {})
+    .progress_test_event(2, "assistant_message", { "content": "First answer" })
+    .progress_test_event(3, "task_finished", { "status": "completed" })
+  let request = pending.conversations["session"].request
+  let answer : Record = {
+    task_id: "task",
+    kind: "assistant_message",
+    data: { "content": "First answer" },
+    created_at: 1,
+    engine_sequence: None,
+  }
+  let first : History = {
+    offset: Some(0),
+    prediction: None,
+    generating: false,
+    session: native_document([
+      { "kind": "assistant", "payload": { "content": "First answer" } },
+    ]),
+    etag: None,
+    messages: [answer],
+  }
+  let next = metadata_update(
+    pending,
+    Loaded(1, "session", request, {
+      ..first,
+      offset: Some(1),
+      session: native_document([]),
+      etag: Some("latest"),
+      messages: [{ ..answer, task_id: "next", }],
+    }),
+  )
+  let rechecking = next.load("session", Some("fixture"), _ => @cmd.none).0
+  let validated = metadata_update(
+    rechecking,
+    HistoryUnchanged(1, "session", rechecking.sequence, "latest"),
+  )
+  assert_true(
+    validated.conversations["session"].items()
+    is [{ kind: Assistant(prose=Some("First answer"), ..), sequence: None, .. }],
+  )
+  let older = metadata_update(validated, LoadOlder("session"))
+  let settled = metadata_update(
+    older,
+    OlderLoaded(1, "session", older.sequence, first),
+  )
+  assert_true(
+    settled.conversations["session"].items()
+    is [
+      { kind: Assistant(prose=Some("First answer"), ..), sequence: Some(_), .. },
+    ],
+  )
+}
+
+///|
 test "Cloud reasoning settles into one canonical assistant and rejects late fragments" {
   let started = progress_test_state().progress_test_event(1, "task_started", {})
   let partial = started
@@ -90,14 +146,27 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
       r.complete
     }),
   )
-  let canonical = settled.progress_test_event(6, "assistant_message", {
+  let pending = settled.progress_test_event(6, "assistant_message", {
     "content": "Answer",
     "reasoning_content": "Complete reasoning",
   })
-  assert_true(canonical.conversations["session"].items().is_empty())
+  assert_true(
+    pending.conversations["session"].items()
+    is [
+      {
+        kind: Assistant(
+          reasoning=Some("Complete reasoning"),
+          prose=Some("Answer"),
+          ..
+        ),
+        sequence: None,
+        ..
+      },
+    ],
+  )
   let canonical = metadata_update(
-    canonical,
-    Loaded(1, "session", canonical.conversations["session"].request, {
+    pending,
+    Loaded(1, "session", pending.conversations["session"].request, {
       prediction: None,
       generating: true,
       session: native_document([
