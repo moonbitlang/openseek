@@ -10,10 +10,11 @@
 ///|
 /// Byte progress for the package currently being downloaded. The total is
 /// optional because HTTP permits responses without Content-Length.
+#derive(Eq)
 priv struct UpdateDownloadProgress {
   downloaded_bytes : Int32
   total_bytes : Int32?
-} derive(Eq)
+}
 
 ///|
 fn UpdateDownloadProgress::percentage(self : UpdateDownloadProgress) -> Int32? {
@@ -104,6 +105,7 @@ test "update download progress labels known and unknown totals" {
 /// the app at startup) travels with the request instead — `explicit` on
 /// `UpdateCheckFinished` — since it is a property of the reply's routing,
 /// not of the state.
+#derive(Eq)
 priv enum UpdateUx {
   UpdateUnknown
   CheckingForUpdate
@@ -125,7 +127,7 @@ priv enum UpdateUx {
   RestartingForUpdate(version~ : String)
   // What the Settings row shows when a check could not answer.
   UpdateCheckFailed(message~ : String)
-} derive(Eq)
+}
 
 ///|
 /// A decoded `check_update` reply. Kinds mirror the wire contract; see the

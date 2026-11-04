@@ -1,25 +1,28 @@
 ///|
+#derive(Eq)
 priv enum SshIntent {
   AddProject
   DetailsConnect
   WorkspaceConnect
   Background
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum SshOpenTarget {
   Project(@common.Uri?)
   Session(String)
   Archived(String, @common.Uri)
   CodexThread(String)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct SshPendingOpen {
   host : String
   target : SshOpenTarget
   generation : Int32
-} derive(Eq)
+}
 
 ///|
 fn SshPendingOpen::message(self : SshPendingOpen) -> Msg {
@@ -55,13 +58,15 @@ fn ssh_open_target(msg : Msg, model : Model) -> SshPendingOpen? {
 }
 
 ///|
+#derive(Eq)
 priv struct SshAuthentication {
   request : @protocol.SshAuthRequest
   epoch : Int32
   submitting : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct SshUi {
   pending_open : SshPendingOpen?
   next_attempt : Int32
@@ -85,7 +90,7 @@ priv struct SshUi {
   error : String?
   connecting : Map[String, String]
   host_errors : Map[String, String]
-} derive(Eq)
+}
 
 ///|
 fn SshUi::empty() -> SshUi {

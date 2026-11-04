@@ -35,11 +35,12 @@ fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
 /// OpenSeek's reasoning choices. These stay distinct from Codex catalog
 /// values: the two agents share the control and request lifecycle, while
 /// each agent sends only values its own service defines.
+#derive(Eq)
 priv enum OpenSeekReasoning {
   ReasoningOff
   ReasoningHigh
   ReasoningMax
-} derive(Eq)
+}
 
 ///|
 fn OpenSeekReasoning::wire(self : OpenSeekReasoning) -> String {
@@ -138,10 +139,11 @@ fn @deepseek.Model::thinking(
 /// that deliberately never crosses a boundary, so persistence spells the same
 /// identity out itself: the channel's stable URI authority joined to the
 /// session id, which keeps two hosts' identical session ids apart.
+#derive(Eq, Debug)
 priv struct StoredConversationModel {
   key : String
   model : @deepseek.Model
-} derive(Eq, Debug)
+}
 
 ///|
 fn conversation_model_key(
@@ -297,11 +299,12 @@ const ConversationModelsLimit : Int32 = 200
 ///|
 /// The app's appearance choice. System preference is tracked separately on
 /// the model so this enum always describes exactly what Settings displays.
+#derive(Eq)
 priv enum Theme {
   System
   Light
   Dark
-} derive(Eq)
+}
 
 ///|
 fn Theme::is_dark(self : Theme, system_dark : Bool) -> Bool {
@@ -337,7 +340,8 @@ fn Theme::wire(self : Theme) -> String {
 /// The base text size selected in Settings. The CSS token scale derives the
 /// surrounding app sizes from this choice; the editor and terminal receive
 /// the adjacent smaller pixel value because their glyphs look larger.
-priv struct AppFontSize(Int32) derive(Eq, Debug)
+#derive(Eq, Debug)
+priv struct AppFontSize(Int32)
 
 ///|
 const AppFontSizeMinPixels : Int32 = 12
@@ -382,18 +386,20 @@ const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat
 /// The setting (and its credentials) live on the host; this mirror is what
 /// `settings.get`/`set` replies and the `settings.changed` broadcast last
 /// reported.
+#derive(Eq)
 priv enum ApiProvider {
   Deepseek
   Glm
   OpenRouter
   Custom
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum FollowupBehavior {
   FollowupSteer
   FollowupQueue
-} derive(Eq)
+}
 
 ///|
 fn FollowupBehavior::parse(value : String) -> FollowupBehavior {
@@ -467,6 +473,7 @@ fn @deepseek.Model::matches_provider(
 /// convention; a status of Running with the flag down was expressible).
 /// Every gate reads this one field, so a phase the model forgot to track
 /// cannot exist.
+#derive(Eq)
 priv enum RunPhase {
   // Between runs; `ended` remembers how the last one closed (`None` before
   // the first run of this app-lifetime).
@@ -478,13 +485,14 @@ priv enum RunPhase {
   Starting(submission_id~ : String)
   // The host's `started` event opened run `run_id`.
   Open(run_id~ : String, stage~ : TurnStage)
-} derive(Eq)
+}
 
 ///|
 /// How far an open turn has progressed — one axis, like the old status
 /// column: a Stop overwrites the step display with "Cancelling" and stays
 /// there (steering a dying turn is refused, so a later step must not flip
 /// the gate back open).
+#derive(Eq)
 priv enum TurnStage {
   // `started` arrived, no step event yet.
   Opened
@@ -493,16 +501,17 @@ priv enum TurnStage {
   AtStep(Int32?)
   // A Stop was sent and the engine has not yet honored it.
   Cancelling
-} derive(Eq)
+}
 
 ///|
 /// How a finished run closed, kept for the topbar/sidebar after the run
 /// phase returns to `NoRun`.
+#derive(Eq)
 priv enum RunEnd {
   RunFailed
   RunErrored
   RunFinished(RunOutcome)
-} derive(Eq)
+}
 
 ///|
 /// One run identity returned by an `agent.runs` snapshot. The whole snapshot
@@ -534,10 +543,11 @@ priv struct RecoveredSettlement {
 /// question itself is the same value the live event produces; only the session
 /// it belongs to has to travel beside it, since `PendingApproval` lives inside
 /// a conversation and does not name one.
+#derive(Eq)
 priv struct RecoveredApproval {
   session : String
   approval : PendingApproval
-} derive(Eq)
+}
 
 ///|
 /// The exact per-session lifecycle state at the instant an `agent.runs`
@@ -578,19 +588,21 @@ priv enum SettlementFrontierMatch {
 /// Every conversation has one. Which *directory* it resolves to can still be
 /// unknown while the worktree registry is in flight — that is
 /// `Model::conversation_placement`'s option, not this one.
+#derive(Eq, Debug)
 priv enum Workspace {
   Project(root~ : @common.Uri)
   Worktree(project~ : @common.Uri, name~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Which durable twin owns the transcript currently represented here.
 /// Archived records may be displayed, but actions that append to a record
 /// must reject `ArchivedRecord` in update even when no composer is rendered.
+#derive(Eq)
 priv enum ConversationRecord {
   LiveRecord
   ArchivedRecord
-} derive(Eq)
+}
 
 ///|
 /// The registered project that owns this workspace.
@@ -613,11 +625,12 @@ fn Workspace::worktree_name(self : Workspace) -> String? {
 ///|
 /// A provider retry the engine announced for the open step: the attempt about
 /// to be made, out of the client's budget, and why the last one failed.
+#derive(Eq)
 priv struct RetryNotice {
   attempt : Int32
   max_attempts : Int32
   reason : String
-} derive(Eq)
+}
 
 ///|
 /// Everything that belongs to one turn and to nothing outside it.
@@ -628,6 +641,7 @@ priv struct RetryNotice {
 /// and stream events write it. Durable commits are deliberately not allowed to
 /// mutate it: they carry no run or step identity, so a delayed older commit
 /// cannot safely settle a newer stream.
+#derive(Eq)
 priv struct RunState {
   // Provisional response and reasoning share one native stream reducer.
   // Durable commits never clear a potentially newer, run-scoped stream.
@@ -645,7 +659,7 @@ priv struct RunState {
   // tool call pending with no lane under it.
   subruns : Array[@subrun.Lane]
   usage_tokens : Int32
-} derive(Eq)
+}
 
 ///|
 /// The state a turn starts from. A conversation with no run open holds one
@@ -670,6 +684,7 @@ fn RunState::for_run(reasoning_frontier : Int32) -> RunState {
 /// durable engine session and, while running, to its own `--serve` engine
 /// process in the host — several conversations can run turns concurrently,
 /// so everything a run touches lives here rather than on the model.
+#derive(Eq)
 priv struct Conversation {
   // The device channel this conversation lives on. Its transcript, runs,
   // and every op it issues belong to that channel; two devices may hold
@@ -822,15 +837,16 @@ priv struct Conversation {
   // running in a terminal tab, oldest first. A command leaves the list when
   // its tab reports; its output is then sent as a message.
   shell_commands : Array[ShellCommand]
-} derive(Eq)
+}
 
 ///|
 /// One `!` command in flight. `id` names its terminal tab, so the tab's
 /// report retires exactly this command even when the same text runs twice.
+#derive(Eq)
 priv struct ShellCommand {
   id : String
   command : String
-} derive(Eq)
+}
 
 ///|
 /// One follow-up submitted into an open run. A queued follow-up waits for its
@@ -838,6 +854,7 @@ priv struct ShellCommand {
 /// `submission_id` is the only ownership proof. The original draft shape is
 /// retained so a definitive refusal can restore it to the composer without
 /// exposing the serialized mention envelope.
+#derive(Eq)
 priv struct PendingSteer {
   submission_id : String
   // The run this steer was sent into. A receipt names it too, which is what
@@ -851,15 +868,16 @@ priv struct PendingSteer {
   // it is in flight, so presentation cannot be derived from the current
   // global default.
   behavior : FollowupBehavior
-} derive(Eq)
+}
 
 ///|
 /// One prompt waiting in the Desktop engine's in-memory follow-up queue.
+#derive(Eq)
 priv struct QueuedInput {
   images : Array[@composer.Image]
   id : String
   content : String
-} derive(Eq)
+}
 
 ///|
 /// A permission question the engine announced and is blocked on. `detail` is
@@ -869,6 +887,7 @@ priv struct QueuedInput {
 /// `run_id` is the run this question belongs to. It rides the answer so a
 /// decision the user takes a while over cannot settle a question in a later
 /// run that happens to reuse the id sequence.
+#derive(Eq)
 priv struct PendingApproval {
   /// The id the decision carries back. Reused verbatim across a replay: a
   /// rejoining page answers the same question, not a new one.
@@ -885,17 +904,18 @@ priv struct PendingApproval {
   // until the engine's `approval_resolved` retires it, because until then the
   // answer has not demonstrably arrived.
   answered : Bool
-} derive(Eq)
+}
 
 ///|
 /// The prompt half of the same idea, minus the queue: see
 /// `Conversation::pending_prompt`.
+#derive(Eq)
 priv struct PendingPrompt {
   submission_id : String
   draft : String
   mentions : Array[Mention]
   images : Array[@composer.Image]
-} derive(Eq)
+}
 
 ///|
 /// The draft and action captured when a large semantic selection was
@@ -904,19 +924,21 @@ priv struct PendingPrompt {
 /// this snapshot and leaves whatever the user selected since as the next
 /// draft. Replies carry only the submission id and result; a retry gets a
 /// new id even for the same selection.
+#derive(Eq)
 priv struct PendingSemanticSubmission {
   submission_id : String
   reference : @mention_context.SemanticSearchReference
   task : String
   mentions : Array[Mention]
   followup : @composer.FollowupChoice?
-} derive(Eq)
+}
 
 ///|
 /// Whether the conversation's durable transcript is up to date with the
 /// store, a generation-tagged re-read is in flight, or a bounded retry round
 /// has stopped. Commits stay buffered across every failure. A later commit,
 /// reconnect, or explicit open starts a fresh generation from `ReloadFailed`.
+#derive(Eq)
 priv enum TranscriptSync {
   Synced
   Reloading(
@@ -929,28 +951,31 @@ priv enum TranscriptSync {
     reload_after_current~ : Bool
   )
   ReloadFailed(generation~ : Int32, buffered~ : Array[BufferedCommit])
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct BufferedCommit {
   sequence : Int32
   ts : Double?
   item : @protocol.SessionItem
-} derive(Eq)
+}
 
 ///|
 /// The work surface remains mounted beneath management dialogs.
+#derive(Eq)
 priv enum Screen {
   Chat
   Codex
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum ManagementDialog {
   Skills
   Schedules
   Settings
-} derive(Eq)
+}
 
 ///|
 /// One accepted mention, shown as a chip above the composer and folded into
@@ -966,6 +991,7 @@ type Mention = @composer.Mention
 /// Whether the host bridge is up — three states the old `bridge_ready` bool
 /// plus "why not" string encoded with an empty-string sentinel: still
 /// probing for the injected bridge, connected, or given up with a reason.
+#derive(Eq)
 priv enum BridgeState {
   Connecting
   Connected
@@ -973,7 +999,7 @@ priv enum BridgeState {
   // A browser reached a host built for another `HostProtocolRevision`. Its
   // socket is closed and not retried; reloading the page connects again.
   HostIncompatible
-} derive(Eq)
+}
 
 ///|
 /// The latest identity-bearing storage fact this connection observed for one
@@ -981,20 +1007,22 @@ priv enum BridgeState {
 /// states prevents a stale unversioned reply from resurrecting a deleted row.
 /// A later Started carrying the exact durable store is the creation fact that
 /// can supersede deletion without waiting for a reconnect.
+#derive(Eq)
 priv enum ArchiveDisposition {
   ArchiveLive
   ArchiveStored
   ArchiveDeleted
-} derive(Eq)
+}
 
 ///|
 /// One durable archive identity. Session ids may repeat across project
 /// stores, so archive actions, notifications, and tombstones always retain
 /// the host-listed workspace beside the id.
+#derive(Eq)
 priv struct ArchiveRecordKey {
   session : String
   workspace : @common.Uri
-} derive(Eq)
+}
 
 ///|
 fn ArchiveRecordKey::matches(
@@ -1037,23 +1065,26 @@ fn ArchiveRecordKey::workspace_payload(
 /// Whole-list replies do not carry a revision and can predate a notification,
 /// so they are reconciled through this override until the next connection
 /// boundary starts a fresh authoritative list round.
+#derive(Eq)
 priv struct ArchiveOverride {
   key : ArchiveRecordKey
   disposition : ArchiveDisposition
-} derive(Eq)
+}
 
 ///|
 
 ///|
+#derive(Eq)
 priv struct ApprovalMirror {
   generation : Int32
   approvals : Array[RecoveredApproval]
-} derive(Eq)
+}
 
 ///|
 /// Everything that exists once per connected device channel. The app holds
 /// one entry per channel in `Model::devices` — exactly one today (the page's
 /// own host); the multi-device console renders one sidebar group per entry.
+#derive(Eq)
 priv struct DeviceState {
   questions : @user_questions.Model
   approval_snapshot : ApprovalMirror?
@@ -1118,7 +1149,7 @@ priv struct DeviceState {
   // nowhere to go: see `target_project`. A placement always retains its
   // validated absolute-path provenance.
   active_project : @common.Uri?
-} derive(Eq)
+}
 
 ///|
 fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
@@ -1158,6 +1189,7 @@ type ComposerActionIdentity = @composer.Identity
 /// The one custom select menu currently open in the desktop. Explicit
 /// variants keep mutually exclusive menus deterministic across composer,
 /// app-settings, and workspace-settings views.
+#derive(Eq)
 priv enum SelectMenu {
   OpenSeekModelMenu
   OpenSeekReasoningMenu
@@ -1173,17 +1205,18 @@ priv enum SelectMenu {
   NotificationCornerMenu
   TreeLayoutMenu
   ProjectMenu
-} derive(Eq)
+}
 
 ///|
 /// The exact OpenSeek row the user selected. This is application navigation
 /// state, independent of the Sidebar's rendering identity.
+#derive(Eq)
 priv struct ConversationSelection {
   channel : @interop.ChannelId
   session : String
   workspace : @common.Uri
   record : ConversationRecord
-} derive(Eq)
+}
 
 ///|
 fn ConversationSelection::matches_id(
@@ -1219,19 +1252,22 @@ fn ConversationSelection::matches_record(
 ///|
 /// A blocking first-load failure belongs to the row the user selected, not
 /// to the last conversation whose transcript happened to load successfully.
+#derive(Eq)
 priv struct ConversationLoadFailure {
   target : ConversationSelection
   message : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum ChatSelection {
   HostSelection(ConversationSelection)
   CloudSelection(account~ : String, session~ : String)
   CloudDraftSelection(account~ : String, id~ : String)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct Model {
   cloud : @cloud.State
   chat_navigation_generation : Int32
@@ -1552,16 +1588,17 @@ priv struct Model {
   remote_connecting : Bool
   // The last connect/disconnect failure, shown inside the section.
   remote_error : String?
-} derive(Eq)
+}
 
 ///|
 /// Presentation of this host's independent remote registration.
 /// The current client account is held separately in `Model.account`.
+#derive(Eq)
 priv struct RemoteAccess {
   connected : Bool
   managed_by_env : Bool
   device_url : String?
-} derive(Eq)
+}
 
 ///|
 /// The host-side presentation of the active Browser tab's native view, as
@@ -1569,17 +1606,19 @@ priv struct RemoteAccess {
 /// `browser.set_bounds` already sent, and `geo` is the model-geometry
 /// signature the last pane measurement was requested under — the damping
 /// that keeps the per-dispatch sync pass from measuring forever.
+#derive(Eq)
 priv struct BrowserPane {
   shown : Int32?
   rect : @preview.Rect?
   geo : BrowserGeometry?
-} derive(Eq)
+}
 
 ///|
 /// Every model-driven input of the browser pane's placement. When any of
 /// these change while a view should be on screen, the pane is re-measured;
 /// sizes that change without the model (window resize, the width drag) are
 /// caught by the pane element's ResizeObserver instead.
+#derive(Eq)
 priv struct BrowserGeometry {
   // Which view should be visible (`desired_browser_view`), or none.
   desired : Int32?
@@ -1588,7 +1627,7 @@ priv struct BrowserGeometry {
   terminal_open : Bool
   right_panel_expanded : Bool
   tree_layout : @fileeditor.TreeLayout
-} derive(Eq)
+}
 
 ///|
 /// Set when the picker's confirm sends `workspace.add`, then settled in two
@@ -1598,6 +1637,7 @@ priv struct BrowserGeometry {
 /// fills `resolved`. The fenced registry snapshots own the sidebar list, so
 /// the focus itself — activate, fresh chat, scroll into view — waits until
 /// a snapshot actually contains the resolved row.
+#derive(Eq)
 priv struct ProjectAdoption {
   channel : @interop.ChannelId
   // The exact host path sent to `workspace.add`, used to pair its causal
@@ -1609,12 +1649,13 @@ priv struct ProjectAdoption {
   resolved : @common.Uri?
   // Retarget only the unsent Codex draft that initiated this add.
   codex_draft : String?
-} derive(Eq)
+}
 
 ///|
 /// One `settings.get`/`settings.set` reply (or `settings.changed`
 /// broadcast), decoded: the host's engine endpoint settings, with key
 /// material reduced to presence.
+#derive(Eq)
 priv struct HostSettings {
   revision : Int32
   provider : String
@@ -1625,7 +1666,7 @@ priv struct HostSettings {
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
-} derive(Eq)
+}
 
 ///|
 priv enum Msg {
@@ -4116,13 +4157,14 @@ fn Conversation::enqueue_steer(
 ///|
 /// A queued draft stays locked until its save RPC settles, even if the run
 /// consumes the queued item in the meantime.
+#derive(Eq)
 priv enum QueueEdit {
   Editing(id~ : String)
   Saving(id~ : String, run_id~ : String, mentions~ : Array[Mention])
   // Shell output replaced the editable draft, but the request still owns
   // the save lock until its response arrives.
   SavingDetached(id~ : String, run_id~ : String)
-} derive(Eq)
+}
 
 ///|
 fn QueueEdit::id(self : QueueEdit) -> String {
@@ -4557,6 +4599,7 @@ fn StatusKind::css(self : StatusKind) -> String {
 /// How a run ended, parsed from the engine's wire status. An unrecognized
 /// wire value survives as `Unknown` — a newer engine's statuses still get a
 /// label, they just fall on the cautious side of every typed split.
+#derive(Eq)
 priv enum RunOutcome {
   Completed
   ContextYield
@@ -4564,7 +4607,7 @@ priv enum RunOutcome {
   RunFailed
   MaxStepsExhausted
   Unknown(String)
-} derive(Eq)
+}
 
 ///|
 fn RunOutcome::parse(wire : String) -> RunOutcome {

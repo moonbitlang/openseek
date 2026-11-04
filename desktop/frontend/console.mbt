@@ -10,33 +10,36 @@
 
 ///|
 /// Who the relay says we are (`/v2/auth/me`), or the local Dev host.
+#derive(Eq)
 priv enum ConsoleAuth {
   // The check is in flight (or failed — `notice` carries the failure and
   // the gate card offers a retry).
   AuthChecking
   AuthSignedOut
   AuthSignedIn(login~ : String, avatar~ : String)
-} derive(Eq)
+}
 
 ///|
 /// The device roster's fetch lifecycle, separate from `auth` so a refresh
 /// can reload the list without leaving the signed-in frame.
+#derive(Eq)
 priv enum RosterSync {
   RosterLoading
   RosterReady
   RosterFailed(String)
-} derive(Eq)
+}
 
 ///|
 /// One device as `/v2/devices` (or the local Dev roster) reports it. Roster metadata stays separate
 /// from `DeviceState`: state exists only for channels this page connected,
 /// while the roster also names offline devices.
+#derive(Eq)
 priv struct DeviceMeta {
   id : String
   name : String
   hostname : String?
   online : Bool
-} derive(Eq)
+}
 
 ///|
 /// How the sidebar's device selector names a roster entry.
@@ -47,6 +50,7 @@ fn DeviceMeta::device_choice(self : DeviceMeta) -> @sidebar.DeviceChoice {
 ///|
 /// A page's account state: fetched and verified in a browser console, fixed
 /// from the start in the desktop window.
+#derive(Eq)
 priv struct ConsoleState {
   auth : ConsoleAuth
   // The account's devices in the relay's order. The page uses this metadata
@@ -76,7 +80,7 @@ priv struct ConsoleState {
   busy : Bool
   // The last account-level failure, shown until the next action clears it.
   notice : String?
-} derive(Eq)
+}
 
 ///|
 fn empty_console_state(

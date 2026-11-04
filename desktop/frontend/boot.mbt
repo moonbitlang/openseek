@@ -142,17 +142,19 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
 
 ///|
 /// The composer sitting under the transcript on screen.
+#derive(Eq)
 priv enum QuoteScreen {
   ChatQuote
   CodexQuote
-} derive(Eq)
+}
 
 ///|
 /// The composer a reply quoting the transcript on screen is addressed to.
+#derive(Eq)
 priv enum QuoteTarget {
   ChatComposer(@composer.Identity)
   CodexComposer(@composer.Identity)
-} derive(Eq)
+}
 
 ///|
 /// Which composer, if any, is shown with a transcript right now. A read-only
