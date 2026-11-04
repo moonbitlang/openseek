@@ -402,37 +402,13 @@ fn wrap_bullet(bullet : String) -> String {
 /// naming the same path is right there to read. The asymmetry is legibility,
 /// not access.
 ///
-/// Inside the workspace that legibility matters most for source, so source is
-/// what the `workspace` grant keeps out: `!`-globs from
-/// `protected_source_globs` refuse every `.mbt`/`.mbti`/`.mbt.md` file and
-/// every `moon.*` manifest at any depth, and `.mbtx` scripts and `.git` are
-/// refused alongside them. A saved script is source too — the bundled
-/// workflows are `.mbtx` files, and `mbtx` runs a workspace script by name —
-/// and is saved through `mbtx`'s own `filename`, which goes through the file
-/// tools' checks rather than the snippet's `fs` rights.
-///
-/// Every pattern is matched CASE-INSENSITIVELY (see
-/// `case_insensitive_glob`). moonrun compares case-sensitively, but macOS and
-/// Windows file systems do not: moon finds a manifest by asking whether
-/// `moon.pkg` exists, so a new `MOON.PKG` makes its directory a package there.
-/// An existing file reached under another case needs no help — moonrun
-/// resolves the target to its stored name before matching — so this is about
-/// names a snippet creates.
-/// moonrun lets an exclusion override every grant in its list, whatever the
-/// order, so these patterns also bind the other write roots when one of them
-/// lies inside the workspace — a session scratch under `.openseek` cannot
-/// receive a `.mbt` file either. Everything else in the tree is a plain
-/// generated file, data file or output, and is writable.
-///
-/// What that grant gives up, and was accepted to get it:
-/// - `remove`'s approval gate does not bind a snippet: `@fs.remove` on a
-///   non-source workspace file goes through with no question asked. Source is
-///   still refused, and so is a recursive `@fs.rmdir` of a tree that holds
-///   any, because the library walks it and each file is checked.
-/// - A glob cannot tell a directory from a file, so renaming a directory is
-///   checked at its two endpoints only. `@fs.rename("src", "moved")` carries
-///   the sources inside it along. The `sandbox-exec` profile closes that with
-///   a directory rule; nothing here can.
+/// The `workspace` grant keeps source out, since that is where legibility
+/// matters most: `!`-globs refuse MoonBit sources, manifests, `.mbtx` scripts
+/// and `.git` at any depth and in any letter case (macOS and Windows file
+/// systems ignore case; moonrun does not). An exclusion overrides every grant
+/// in the list, so it also binds a lab inside the workspace. Accepted costs: a
+/// snippet removes plain workspace files without `remove`'s approval, and a
+/// directory rename carries the sources inside it.
 ///
 /// What this binds is the SNIPPET, on every platform. It does not reach the
 /// child processes its `process` rules let the snippet start: those run with the
@@ -455,10 +431,8 @@ fn wrap_bullet(bullet : String) -> String {
 /// the pinning there. moonrun matches the entry exactly, so an absolute rule
 /// admits only that exact binary and no same-named one earlier in PATH.
 ///
-/// `workspace` must be CANONICAL. moonrun canonicalizes a plain root itself,
-/// but compiles a glob without touching the filesystem and matches it against
-/// the resolved target, so an exclusion spelled through a symlink (`/tmp` for
-/// `/private/tmp`) would match nothing and leave source writable.
+/// `workspace` must be canonical: moonrun matches a glob against the resolved
+/// target without resolving the glob itself.
 fn wasm_policy_document(
   tmp_dir~ : String,
   extra_roots~ : Array[String],
