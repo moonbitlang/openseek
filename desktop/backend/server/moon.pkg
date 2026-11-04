@@ -5,6 +5,7 @@ import {
   "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/remote",
   "openseek_desktop/backend/host",
+  "openseek_desktop/backend/terminal_pty",
   "moonbitlang/async",
   "moonbitlang/async/stdio",
   "moonbitlang/core/env",

@@ -1,0 +1,13 @@
+import {
+  "moonbit-community/pty",
+  "moonbitlang/async",
+  "openseek_desktop/backend/internal/terminal",
+}
+
+import {
+  "moonbitlang/core/encoding/utf8",
+} for "test"
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "native"

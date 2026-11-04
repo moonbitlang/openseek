@@ -1,5 +1,4 @@
 import {
-  "moonbit-community/pty",
   "moonbitlang/core/deque",
   "moonbitlang/async",
   "moonbitlang/async/cond_var",
@@ -11,7 +10,6 @@ import {
 
 import {
   "moonbitlang/async",
-  "moonbitlang/core/encoding/utf8",
 } for "test"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

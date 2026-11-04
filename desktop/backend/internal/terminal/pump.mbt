@@ -28,9 +28,10 @@ pub async fn run_terminal_pump(
 }
 
 ///|
-/// Stop a session through the task group that owns its PTY. PTY 0.4 closes the
-/// controlling handle when cancellation begins, gives the child five seconds
-/// to exit, and then kills the process tree if it is still running.
+/// Stop a session through the task group that owns its PTY. The native PTY
+/// (`moonbit-community/pty` 0.4) closes the controlling handle when
+/// cancellation begins, gives the child five seconds to exit, and then kills
+/// the process tree if it is still running.
 async fn TerminalSession::close_when_requested(
   self : TerminalSession,
   group : @async.TaskGroup[Unit],
@@ -48,7 +49,7 @@ async fn run_session(
   request : OpenRequest,
   emit : async (TerminalPush) -> Unit,
 ) -> Unit {
-  let mut opened_pty : @pty.Pty? = None
+  let mut opened_pty : &PtyProcess? = None
   @async.with_task_group(group => {
     if request.connection_generation != state.connection_generation {
       let message = if state.closed {
@@ -63,17 +64,23 @@ async fn run_session(
       request.reply.put(Err("terminal command must not be empty"))
       return
     }
-    let args = request.argv[1:].map(arg => arg.clamped_view())
-    let pty = @pty.spawn(
-      group,
-      file.clamped_view(),
-      args,
+    guard pty_spawner.val is Some(spawn) else {
+      request.reply.put(
+        Err(
+          "terminal is unavailable: this build has no pseudo-terminal support",
+        ),
+      )
+      return
+    }
+    let pty = spawn(group, {
+      file,
+      args: request.argv[1:].to_owned(),
       // The PTY applies the working directory in the platform spawn call,
       // so neither POSIX nor Windows needs a shell command that performs cd.
-      cwd=request.cwd,
-      cols=request.cols,
-      rows=request.rows,
-    ) catch {
+      cwd: request.cwd,
+      cols: request.cols,
+      rows: request.rows,
+    }) catch {
       error => {
         request.reply.put(Err(@debug.render(Repr(error))))
         return

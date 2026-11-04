@@ -1,5 +1,7 @@
 ///|
 async fn main {
+  // Terminals opened through this server run real pseudo-terminal children.
+  @terminal_pty.install()
   let executable = @executable.current_exe()
   let suffix = if executable.has_suffix(".exe") { ".exe" } else { "" }
   let engine = @env.get_env_var("OPENSEEK_ENGINE").unwrap_or(

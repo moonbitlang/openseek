@@ -1,12 +1,18 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/backend/internal/terminal"
 
+import {
+  "moonbitlang/async",
+}
+
 // Values
 pub fn ack_terminal(TerminalState, id~ : String, sequence~ : Int32) -> Unit
 
 pub fn close_all_terminals(TerminalState) -> Unit
 
 pub fn close_terminal(TerminalState, id~ : String) -> Unit
+
+pub fn install_pty_spawner(async (@async.TaskGroup[Unit], PtySpawn) -> &PtyProcess) -> Unit
 
 pub fn new_terminal_state() -> TerminalState
 
@@ -24,6 +30,14 @@ pub suberror TerminalError {
 }
 
 // Types and methods
+pub(all) struct PtySpawn {
+  file : String
+  args : Array[String]
+  cwd : String
+  cols : Int32
+  rows : Int32
+}
+
 pub(all) enum TerminalPush {
   Output(id~ : String, sequence~ : Int32, data~ : Bytes)
   Exited(id~ : String, code~ : Int32)
@@ -35,3 +49,10 @@ pub fn TerminalState::shutdown(Self) -> Unit
 // Type aliases
 
 // Traits
+pub(open) trait PtyProcess {
+  fn pid(Self) -> Int32
+  async fn read(Self, FixedArray[Byte]) -> Int32
+  async fn write(Self, Bytes) -> Unit
+  fn resize(Self, cols~ : Int32, rows~ : Int32) -> Unit raise
+  async fn wait(Self) -> Int32
+}

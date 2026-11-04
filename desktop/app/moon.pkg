@@ -15,6 +15,7 @@ import {
   "openseek_desktop/backend/remote",
   "openseek_desktop/backend/resources",
   "openseek_desktop/backend/shellenv",
+  "openseek_desktop/backend/terminal_pty",
   "openseek_desktop/backend/update",
   "moonbitlang/async/process",
   "moonbitlang/core/argparse",

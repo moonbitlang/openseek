@@ -111,7 +111,7 @@ test "a later terminal acknowledgement advances the output window" {
 
 ///|
 priv struct TerminalSession {
-  pty : @pty.Pty
+  pty : &PtyProcess
   output : TerminalOutputWindow
   /// Wakes the session's read loop when acknowledgements drain the debt or
   /// the session starts closing.

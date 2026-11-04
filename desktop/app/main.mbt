@@ -122,6 +122,9 @@ async fn main {
     @extension.browser_tools(views),
     version=app_version,
   )
+  // The integrated terminal runs real pseudo-terminal children; the backend
+  // only builds the sessions around them.
+  @terminal_pty.install()
   let state = @api.ApiState(
     engine~,
     codex~,
