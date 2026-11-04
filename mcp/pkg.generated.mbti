@@ -3,6 +3,7 @@ package "moonbitlang/openseek/mcp"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/openseek/jsonrpc",
   "moonbitlang/openseek_protocol",
 }
@@ -15,31 +16,34 @@ pub suberror McpError {
 }
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct CallToolResult {
   content : Array[ContentBlock]
-  structured_content : Json?
+  structured_content : @json.Json?
   is_error : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn CallToolResult::render(Self) -> RenderedResult
 pub fn CallToolResult::render_text(Self) -> String
 
+#derive(Eq, @debug.Debug)
 pub enum ContentBlock {
   Text(String)
   Image(mime_type~ : String, data~ : String)
   Resource(uri~ : String, text~ : String?)
   Other(kind~ : String)
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub struct InitializeResult {
   protocol_version : String
   server_name : String?
   server_version : String?
   instructions : String?
-} derive(Eq, @debug.Debug)
+}
 
 type McpClient
 pub fn McpClient::McpClient(@jsonrpc.Client, list_before_call? : Bool) -> Self
-pub async fn McpClient::call_tool(Self, name~ : String, arguments~ : Json) -> CallToolResult
+pub async fn McpClient::call_tool(Self, name~ : String, arguments~ : @json.Json) -> CallToolResult
 pub fn McpClient::close(Self) -> Unit
 pub async fn McpClient::discover(Self, client_name~ : String, client_version~ : String) -> InitializeResult
 pub async fn McpClient::initialize(Self, client_name~ : String, client_version~ : String) -> InitializeResult
@@ -47,12 +51,13 @@ pub fn McpClient::is_closed(Self) -> Bool
 pub async fn McpClient::list_tools(Self) -> Array[McpTool]
 pub fn McpClient::set_close_handler(Self, () -> Unit) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub struct McpTool {
   name : String
   description : String
-  input_schema : Json
-  output_schema : Json?
-} derive(Eq, @debug.Debug)
+  input_schema : @json.Json
+  output_schema : @json.Json?
+}
 
 pub struct RenderedResult {
   text : String

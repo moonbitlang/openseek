@@ -10,6 +10,7 @@
 ///
 /// There is no severity on the line: a client that wants one derives it from
 /// the variant it decoded. `emit` is the only writer; `parse` is its inverse.
+#derive(Eq, Debug)
 pub(all) enum Event {
   // ── agent loop ─────────────────────────────────────────────────────────
   AgentSetupFailed(error~ : String)
@@ -222,7 +223,7 @@ pub(all) enum Event {
   McpListToolsFailed(server~ : String, error~ : String)
   McpListToolsTimeout(server~ : String)
   McpNoTools(server~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Event with Debug::{to_repr}

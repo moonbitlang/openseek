@@ -1,27 +1,31 @@
 ///|
 /// Stable account identity; login and avatar are display metadata.
+#derive(Eq)
 pub(all) struct AccountUser {
   user_id : String
   login : String
   avatar_url : String
-} derive(Eq)
+}
 
 ///|
 /// The current client's account credential, never part of host broadcasts.
+#derive(Eq)
 pub(all) struct AccountSession {
   token : String
   user : AccountUser
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct AccountSessionReply {
   session : AccountSession?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct RemoteAccessPayload {
   enabled : Bool
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for AccountUser with fn from_json(json, path) {
@@ -139,10 +143,11 @@ pub extend RemoteAccessPayload with ToJson::{to_json}
 
 ///|
 /// Immutable standalone files captured together before sharing or downloading.
+#derive(Eq)
 pub(all) struct SessionSnapshot {
   html : String
   json : String
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for SessionSnapshot with fn from_json(json, path) {
@@ -169,10 +174,11 @@ pub extend SessionSnapshot with ToJson::{to_json}
 
 ///|
 /// Window-only save request. The destination is always selected by the user.
+#derive(Eq)
 pub(all) struct SnapshotSavePayload {
   session : String
   html : String
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for SnapshotSavePayload with fn from_json(json, path) {

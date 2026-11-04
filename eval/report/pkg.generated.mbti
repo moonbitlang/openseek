@@ -1,8 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek/eval/report"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
-pub async fn write_files(String, String, Json, html? : String) -> Unit
+pub async fn write_files(String, String, @json.Json, html? : String) -> Unit
 
 // Errors
 

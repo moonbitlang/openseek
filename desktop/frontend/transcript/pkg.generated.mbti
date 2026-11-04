@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend/transcript"
 
 import {
+  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
@@ -20,7 +21,7 @@ pub fn file_target(@common.Uri?, @common.Uri?, String, Bool, String) -> (@common
 
 pub fn goal_marker(String) -> GoalMarker?
 
-pub fn program_calls(Json?, String, origin? : TraceOrigin) -> Array[ToolCall]
+pub fn program_calls(@json.Json?, String, origin? : TraceOrigin) -> Array[ToolCall]
 
 pub fn session_from_reply(@protocol.LoadSessionReply) -> SessionLoadView
 
@@ -72,22 +73,25 @@ pub(all) enum EngineEvent {
 }
 pub fn EngineEvent::ends_retry(Self) -> Bool
 
+#derive(Eq)
 pub(all) enum GoalMarker {
   GoalSet(String)
   GoalCleared
   GoalBlocked(String)
   GoalUnblocked
-} derive(Eq)
+}
 pub fn GoalMarker::equal(Self, Self) -> Bool
 pub fn GoalMarker::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct GoalStanding {
   text : String
   blocked : String?
-} derive(Eq)
+}
 pub fn GoalStanding::equal(Self, Self) -> Bool
 pub fn GoalStanding::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ItemKind {
   User(content~ : @deepseek.Content)
   Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool, end_sequence~ : Int32?)
@@ -96,17 +100,18 @@ pub(all) enum ItemKind {
   Failure(String)
   Notice(label~ : String, brief~ : String?, is_error~ : Bool, body~ : String?)
   Summary(String)
-} derive(Eq)
+}
 pub fn ItemKind::equal(Self, Self) -> Bool
 pub fn ItemKind::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct SessionListItem {
   id : String
   title : String?
   workspace : @common.Uri
   workspace_name : String
   updated_at_ms : Double?
-} derive(Eq)
+}
 pub fn SessionListItem::equal(Self, Self) -> Bool
 pub fn SessionListItem::not_equal(Self, Self) -> Bool
 
@@ -118,28 +123,31 @@ pub struct SessionLoadView {
   goal_markers : Array[(Int32, GoalMarker)]
 }
 
+#derive(Eq)
 pub struct SessionTreeRow {
   item : SessionListItem
   children : Array[SessionListItem]
-} derive(Eq)
+}
 pub fn SessionTreeRow::equal(Self, Self) -> Bool
 pub fn SessionTreeRow::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct ToolCall {
   call_id : String
   name : String
   arguments : String?
   outcome : ToolOutcome
   children : Array[ToolCall]
-} derive(Eq)
+}
 pub fn ToolCall::equal(Self, Self) -> Bool
 pub fn ToolCall::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ToolOutcome {
   Snapshot(content~ : String)
   Pending(output~ : String?)
   Done(content~ : @deepseek.Content, is_error~ : Bool, brief~ : String?)
-} derive(Eq)
+}
 pub fn ToolOutcome::equal(Self, Self) -> Bool
 pub fn ToolOutcome::not_equal(Self, Self) -> Bool
 
@@ -149,11 +157,12 @@ pub(all) enum TraceOrigin {
   Recorded
 }
 
+#derive(Eq)
 pub(all) struct TranscriptItem {
   kind : ItemKind
   ts : Double?
   sequence : Int32?
-} derive(Eq)
+}
 pub fn TranscriptItem::equal(Self, Self) -> Bool
 pub fn TranscriptItem::fork_through(Self) -> Int32?
 pub fn TranscriptItem::not_equal(Self, Self) -> Bool

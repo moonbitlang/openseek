@@ -3,10 +3,11 @@ const MaxPatternChars : Int32 = 8000
 
 ///|
 /// A bounded candidate returned by the Pattern Repair Agent.
+#derive(Debug, Eq, ToJson, FromJson)
 struct PatternRepairReport {
   candidate_pattern : String
   message : String
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 #doc(hidden)

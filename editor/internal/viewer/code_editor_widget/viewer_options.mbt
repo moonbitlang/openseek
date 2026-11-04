@@ -1,5 +1,6 @@
 ///|
 /// Runtime viewer options that affect view-model construction and layout.
+#derive(Eq, Debug)
 struct CodeEditorOptions {
   soft_wrap : Bool
   tab_size : Int32
@@ -77,7 +78,7 @@ struct CodeEditorOptions {
   font_size : Double
   line_height : Double
   letter_spacing : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds viewer options, normalizing `tab_size` to at least one column.

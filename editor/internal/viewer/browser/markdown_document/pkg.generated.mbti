@@ -48,11 +48,12 @@ pub fn MarkdownDocumentView::source_selection(Self) -> MarkdownSourceSelection?
 pub fn MarkdownDocumentView::viewport(Self) -> @dom.Element
 pub fn MarkdownDocumentView::visible_source_ranges(Self) -> Array[@common.OffsetRange]
 
+#derive(Eq, @debug.Debug)
 pub(all) struct MarkdownSectionFoldControl {
   heading_source_range : @common.OffsetRange
   section_index : Int32
   collapsed : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownSectionFoldControl::equal(Self, Self) -> Bool
 pub fn MarkdownSectionFoldControl::not_equal(Self, Self) -> Bool
 pub fn MarkdownSectionFoldControl::to_repr(Self) -> @debug.Repr
@@ -82,11 +83,12 @@ pub struct MarkdownSourceSelection {
 pub fn MarkdownSourceSelection::anchor_client_rect(Self) -> @dom.DOMRect
 pub fn MarkdownSourceSelection::same_dom_range(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct MarkdownTocBarEntry {
   depth : Int32
   text : String
   source_offset : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownTocBarEntry::equal(Self, Self) -> Bool
 pub fn MarkdownTocBarEntry::not_equal(Self, Self) -> Bool
 pub fn MarkdownTocBarEntry::to_repr(Self) -> @debug.Repr

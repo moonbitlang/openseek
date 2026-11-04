@@ -1,10 +1,11 @@
 ///|
 /// Inline decoration over a line-local offset range.
+#derive(Eq, Debug)
 pub struct InlineDecoration {
   range : @base_common.OffsetRange
   class_name : String
   decoration_type : InlineDecorationType
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds an inline decoration.

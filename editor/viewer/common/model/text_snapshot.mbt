@@ -7,10 +7,11 @@
 /// Monaco, and LSP-facing code share one convention. Document identity
 /// (language id, version) lives on `TextModel`, not the buffer — same split as
 /// Monaco.
+#derive(Debug)
 struct TextSnapshot {
   text : String
   line_starts : Array[Int32]
-} derive(Debug)
+}
 
 ///|
 /// Builds a snapshot by replacing every CRLF pair, lone CR, or LF with one LF

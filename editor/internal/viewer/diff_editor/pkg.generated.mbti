@@ -24,10 +24,11 @@ pub struct DiffEditorEditors {
   mut disposed : Bool
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DiffEditorLayout {
   SideBySide
   Inline
-} derive(Eq, @debug.Debug)
+}
 pub fn DiffEditorLayout::equal(Self, Self) -> Bool
 pub fn DiffEditorLayout::not_equal(Self, Self) -> Bool
 pub fn DiffEditorLayout::to_repr(Self) -> @debug.Repr
@@ -63,9 +64,10 @@ pub(all) struct DiffEditorOptions {
 pub fn DiffEditorOptions::DiffEditorOptions(layout? : DiffEditorLayout, automatic_inline? : Bool, automatic_inline_width? : Double, sash_enabled? : Bool, split_ratio? : Double, diff_word_wrap? : DiffWordWrap, overview_ruler? : Bool, render_indicators? : Bool, render_markdown_comments? : Bool, handle_mouse_wheel? : Bool, ignore_trim_whitespace? : Bool) -> Self
 pub fn DiffEditorOptions::default() -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) struct DiffEditorRevealEvent {
   modified_range : @common.Range
-} derive(Eq, @debug.Debug)
+}
 pub fn DiffEditorRevealEvent::equal(Self, Self) -> Bool
 pub fn DiffEditorRevealEvent::not_equal(Self, Self) -> Bool
 pub fn DiffEditorRevealEvent::to_repr(Self) -> @debug.Repr
@@ -98,12 +100,13 @@ pub fn DiffEditorViewModel::set_model(Self, DiffEditorModelData?) -> DiffEditorM
 pub fn DiffEditorViewModel::set_provider(Self, &@diff.DocumentDiffProvider) -> Unit
 pub fn DiffEditorViewModel::update_options(Self, @diff.DocumentDiffOptions) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DiffEditorViewModelState {
   NoModel
   Pending
   Ready
   Failed
-} derive(Eq, @debug.Debug)
+}
 pub fn DiffEditorViewModelState::equal(Self, Self) -> Bool
 pub fn DiffEditorViewModelState::not_equal(Self, Self) -> Bool
 pub fn DiffEditorViewModelState::to_repr(Self) -> @debug.Repr
@@ -211,20 +214,22 @@ pub struct DiffState {
   mappings : Array[DiffMapping]
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) enum DiffWordWrap {
   Inherit
   Off
-} derive(Eq, @debug.Debug)
+}
 pub fn DiffWordWrap::equal(Self, Self) -> Bool
 pub fn DiffWordWrap::not_equal(Self, Self) -> Bool
 pub fn DiffWordWrap::to_repr(Self) -> @debug.Repr
 
 type InlineDeletedZone
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ManagedAlignmentSpacer {
   after_line_number : Int32
   height_in_px : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn ManagedAlignmentSpacer::equal(Self, Self) -> Bool
 pub fn ManagedAlignmentSpacer::not_equal(Self, Self) -> Bool
 pub fn ManagedAlignmentSpacer::to_repr(Self) -> @debug.Repr
@@ -236,10 +241,11 @@ pub struct ManagedAlignmentSpacers {
 pub fn ManagedAlignmentSpacers::modified(Self) -> Array[ManagedAlignmentSpacer]
 pub fn ManagedAlignmentSpacers::original(Self) -> Array[ManagedAlignmentSpacer]
 
+#derive(Eq, @debug.Debug)
 pub(all) struct PaneForeignZoneHeight {
   after_line_number : Int32
   height_in_px : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn PaneForeignZoneHeight::equal(Self, Self) -> Bool
 pub fn PaneForeignZoneHeight::not_equal(Self, Self) -> Bool
 pub fn PaneForeignZoneHeight::to_repr(Self) -> @debug.Repr
@@ -259,10 +265,11 @@ pub fn PaneGeometrySnapshot::line_count(Self) -> Int32
 pub fn PaneGeometrySnapshot::line_height(Self) -> Double
 pub fn PaneGeometrySnapshot::viewport_width(Self) -> Double
 
+#derive(Eq, @debug.Debug)
 pub(all) struct PaneModelLineHeight {
   line_number : Int32
   height_in_px : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn PaneModelLineHeight::equal(Self, Self) -> Bool
 pub fn PaneModelLineHeight::not_equal(Self, Self) -> Bool
 pub fn PaneModelLineHeight::to_repr(Self) -> @debug.Repr

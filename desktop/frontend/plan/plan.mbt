@@ -5,21 +5,23 @@
 
 ///|
 /// One step of a recorded plan. The title is already trimmed for display.
+#derive(Eq, @debug.Debug)
 pub struct Step {
   title : String
   status : Status
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// A step's status. `Other` keeps a status word this build does not know
 /// (a newer engine's, say) rather than folding it into `Pending`: showing a
 /// blocked step as an untouched circle would misreport it.
+#derive(Eq, @debug.Debug)
 pub enum Status {
   Pending
   InProgress
   Completed
   Other(String)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Ceilings on what is worth decoding, in UTF-16 code units and in steps.

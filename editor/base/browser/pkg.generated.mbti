@@ -112,10 +112,11 @@ pub struct StandardMouseEvent {
 }
 pub fn StandardMouseEvent::StandardMouseEvent(@dom.MouseEvent) -> Self
 
+#derive(@debug.Debug)
 pub(all) enum StorageFailure {
   Unavailable
   AccessFailed(String)
-} derive(@debug.Debug)
+}
 #deprecated
 pub fn StorageFailure::to_repr(Self) -> @debug.Repr
 

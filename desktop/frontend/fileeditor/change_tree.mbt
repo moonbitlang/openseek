@@ -1,10 +1,11 @@
 ///|
 /// Keep exact Git rows as identities: a deletion and a recreated untracked
 /// file may share a path without sharing review progress or selection.
+#derive(Eq)
 pub enum ChangeTreeItem {
   ChangeDirectory(@pathx.Relative)
   ChangeFile(ChangedFile)
-} derive(Eq)
+}
 
 ///|
 pub extend ChangeTreeItem with Eq::{equal, not_equal}

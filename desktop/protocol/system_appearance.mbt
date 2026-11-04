@@ -1,8 +1,9 @@
 ///|
 /// The local operating system preference, independent of the window theme.
+#derive(Debug, Eq)
 pub(all) struct AppSystemAppearanceReply {
   dark : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for AppSystemAppearanceReply with fn from_json(json, path) {

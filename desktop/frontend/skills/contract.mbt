@@ -9,10 +9,11 @@
 /// device: every request the page issues carries it, and every reply is
 /// fenced against it, so a result that outlived a focus switch is dropped
 /// instead of being applied to another host's library.
+#derive(Eq)
 pub(all) struct Input {
   channel : @interop.ChannelId
   installed : Array[InstalledItem]
-} derive(Eq)
+}
 
 ///|
 /// Index installed registry coordinates once for catalog filtering.
@@ -32,9 +33,10 @@ fn Input::installed_registry_skills(self : Input) -> Set[(String, String)] {
 /// not the page's to refresh: it belongs to the root's focused-host mirror,
 /// so a successful install, update, or uninstall reports the change and lets the root
 /// re-read it from disk.
+#derive(Eq)
 pub enum Outcome {
   LibraryChanged(channel~ : @interop.ChannelId)
-} derive(Eq)
+}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}

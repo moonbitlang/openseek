@@ -1,6 +1,7 @@
 ///|
 /// Durable dock, document, and browser data stays in its domain package. This
 /// value is the complete read-only input needed to render the right panel.
+#derive(Eq)
 struct Input {
   dock : @dock.DockState
   file_panel : @fileeditor.State
@@ -17,7 +18,7 @@ struct Input {
   // The workflows the active conversation's snippets announced, for the
   // Workflows tab. Live-only state projected from the root's conversation.
   workflows : Array[@workflow.Run]
-} derive(Eq)
+}
 
 ///|
 pub fn Input::Input(

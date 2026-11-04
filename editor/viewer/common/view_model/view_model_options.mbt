@@ -1,5 +1,6 @@
 ///|
 /// Backend-neutral view-model options derived from browser layout settings.
+#derive(Eq, Debug)
 pub struct ViewModelOptions {
   /// The measured font facts (Monaco threads `fontInfo` into the view model
   /// the same way): the line-breaks computer derives
@@ -16,7 +17,7 @@ pub struct ViewModelOptions {
   /// hides validation decorations in readonly editors); the `Viewer` passes
   /// `On` — see `filter_validation_decorations`.
   render_validation_decorations : @editor_api.RenderValidationDecorations
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds options while clamping wrapping column and tab size.

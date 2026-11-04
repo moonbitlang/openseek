@@ -16,14 +16,16 @@ pub fn Cursor::Cursor(row~ : Int32, col~ : Int32) -> Self
 pub fn Cursor::col(Self) -> Int32
 pub fn Cursor::row(Self) -> Int32
 
-type Line derive(Eq)
+#derive(Eq)
+type Line
 pub fn Line::Line(Array[Span]) -> Self
 pub fn Line::equal(Self, Self) -> Bool
 pub fn Line::not_equal(Self, Self) -> Bool
 pub fn Line::spans(Self) -> Array[Span]
 pub fn Line::text(Self) -> String
 
-type Span derive(Eq)
+#derive(Eq)
+type Span
 pub fn Span::Span(@displaytext.DisplayText, style? : @style.Style) -> Self
 pub fn Span::equal(Self, Self) -> Bool
 pub fn Span::not_equal(Self, Self) -> Bool

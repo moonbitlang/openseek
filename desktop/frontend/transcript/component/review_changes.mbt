@@ -1,10 +1,11 @@
 ///|
 /// Each keyed message owns its disclosure state. Streaming another row never
 /// resets it or applies its state to a different message's saved snapshot.
+#derive(Eq)
 priv struct MessageChanges {
   open : Bool
   collapsed : Array[String]
-} derive(Eq)
+}
 
 ///|
 priv enum MessageChangesMsg {

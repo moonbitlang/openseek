@@ -2,9 +2,10 @@
 /// Opaque public options for the standalone code surface. The canonical
 /// option state lives in the code kernel; this wrapper prevents the internal
 /// package type from leaking through the public package boundary.
+#derive(Eq, Debug)
 struct ViewerOptions {
   inner : @code_widget.CodeEditorOptions
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ViewerOptions::ViewerOptions(

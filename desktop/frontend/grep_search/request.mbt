@@ -21,11 +21,12 @@ priv enum SearchRequest {
 }
 
 ///|
+#derive(Eq)
 struct SearchRequestIdentity {
   root : String
   generation : Int32
   kind : String
-} derive(Eq)
+}
 
 ///|
 fn SearchRequest::identity(self : SearchRequest) -> SearchRequestIdentity {

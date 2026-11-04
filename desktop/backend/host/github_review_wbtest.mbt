@@ -114,7 +114,7 @@ test "review pagination cannot mistake a missing cursor for a complete discussio
 async test "review file snapshots use pinned local commits across renames additions and deletions" {
   let dir = @fs.tmpdir(prefix="openseek-review-files-")
   let _ = {
-    defer git_test_cleanup(dir)
+    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file(
       "\{dir}/old name.mbt",
@@ -186,7 +186,7 @@ async test "review snapshots distinguish an absent side from an empty blob" {
   for added in [true, false] {
     let dir = @fs.tmpdir(prefix="openseek-review-empty-")
     let _ = {
-      defer git_test_cleanup(dir)
+      defer @async.protect_from_cancel(() => git_test_cleanup(dir))
       git_test_run(dir, ["init", "--quiet"])
       @fs.write_file("\{dir}/seed.txt", "seed\n", create_mode=CreateOrTruncate)
       if !added {

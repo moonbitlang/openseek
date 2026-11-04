@@ -53,22 +53,25 @@ pub fn definition(
 }
 
 ///|
+#derive(Eq)
 priv struct FileVersion {
   canonical : String
   digest : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum NodeVersion {
   File(FileVersion)
   Directory(String)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct RemovalVersion {
   // Postorder: children precede their directory, and the target is last.
   entries : Array[(String, NodeVersion)]
-} derive(Eq)
+}
 
 ///|
 fn removal_error(path : String, message : String) -> @agent_tool.ToolAction {

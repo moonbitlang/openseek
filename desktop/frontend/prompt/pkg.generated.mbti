@@ -13,9 +13,10 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub struct Model {
   // private fields
-} derive(Eq)
+}
 pub fn Model::draft_text(Self) -> String?
 pub fn Model::new() -> Self
 pub fn Model::receive(Self, String, String) -> Self

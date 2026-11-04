@@ -2,6 +2,7 @@
 package "openseek_desktop/backend/internal/skillmarket"
 
 import {
+  "moonbitlang/core/json",
   "openseek_desktop/backend/pathx",
 }
 
@@ -59,12 +60,13 @@ pub struct MarketSkill {
   author : String
   repository : String
 }
-pub fn MarketSkill::to_json(Self) -> Json
+pub fn MarketSkill::to_json(Self) -> @json.Json
 
+#derive(Eq)
 pub(all) struct RegistrySkillIdentity {
   module_name : String
   package_path : String
-} derive(Eq)
+}
 pub fn RegistrySkillIdentity::equal(Self, Self) -> Bool
 pub fn RegistrySkillIdentity::not_equal(Self, Self) -> Bool
 

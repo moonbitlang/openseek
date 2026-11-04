@@ -11,7 +11,8 @@ pub fn completion_item_matches(Array[CompletionItem], String) -> Array[Completio
 // Errors
 
 // Types and methods
-type CompletionItem derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type CompletionItem
 pub fn CompletionItem::CompletionItem(label~ : String, insert_text? : String, description? : String) -> Self
 pub fn CompletionItem::description(Self) -> String
 pub fn CompletionItem::equal(Self, Self) -> Bool
@@ -20,7 +21,8 @@ pub fn CompletionItem::label(Self) -> String
 pub fn CompletionItem::not_equal(Self, Self) -> Bool
 pub fn CompletionItem::to_repr(Self) -> @debug.Repr
 
-type Model derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Model
 pub fn Model::closed() -> Self
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::is_open(Self) -> Bool

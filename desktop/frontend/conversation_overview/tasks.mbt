@@ -6,11 +6,12 @@
 
 ///|
 /// A running command.
+#derive(Eq, Debug)
 pub(all) struct RunningJob {
   command : String
   /// Milliseconds since the epoch.
   started_at_ms : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend RunningJob with Eq::{equal, not_equal}
@@ -20,6 +21,7 @@ pub extend RunningJob with @debug.Debug::{to_repr}
 
 ///|
 /// What the conversation runs in the background, while anything does.
+#derive(Eq, Debug)
 pub(all) struct BackgroundTasks {
   /// Running commands, in the listing's order: newest first.
   jobs : Array[RunningJob]
@@ -32,7 +34,7 @@ pub(all) struct BackgroundTasks {
   /// Whether a running task is a job, so the Jobs panel lists it; otherwise
   /// only the Workflows panel does.
   in_jobs : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BackgroundTasks with Eq::{equal, not_equal}

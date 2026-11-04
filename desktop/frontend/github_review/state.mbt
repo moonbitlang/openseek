@@ -2,6 +2,7 @@
 using @protocol {type GithubDraftTarget, type GithubDraft}
 
 ///|
+#derive(Eq)
 pub(all) struct State {
   checkout : @github.CheckoutScope?
   path : String?
@@ -23,7 +24,7 @@ pub(all) struct State {
   mutation_epoch : Int32
   mutation_error : Failure?
   storage_error : Failure?
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {

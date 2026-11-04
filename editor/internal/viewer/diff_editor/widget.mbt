@@ -9,9 +9,10 @@ priv enum DiffEditorScrollPane {
 /// Composite hosts retain the range, wait for their item layout to settle, and
 /// then measure its current pixel geometry before projecting the child scroll
 /// into their outer scroll plane.
+#derive(Eq, Debug)
 pub(all) struct DiffEditorRevealEvent {
   modified_range : @base_common.Range
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend DiffEditorRevealEvent with Eq::{equal, not_equal}

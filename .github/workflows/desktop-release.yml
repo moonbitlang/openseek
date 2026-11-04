@@ -462,7 +462,7 @@ jobs:
           if ($manifest -notmatch '"moonbit-community/proton@([^"]+)"') {
             throw 'desktop/app/moon.mod does not pin Proton'
           }
-          moonx "moonbit-community/proton_cli@$($Matches[1])" cef setup
+          moonx "moonbit-community/proton_cli@$($Matches[1])" setup
 
       # After the cache steps: stamping edits app/moon.mod, whose hash keys
       # the Proton runtime cache.

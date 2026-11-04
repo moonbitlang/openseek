@@ -9,10 +9,11 @@
 /// a fixture written without sequences). Sequences are per-session, so a key
 /// must never outlive a conversation switch — the root resets the overview
 /// state when the active conversation changes.
+#derive(Eq, Debug)
 pub(all) enum TurnKey {
   Durable(Int32)
   Local(Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn TurnKey::of(
@@ -58,6 +59,7 @@ fn ordinal_after(id : String, prefix : String) -> Int32? {
 ///|
 /// One user turn on the rail: its key, the display form of the prompt, when
 /// it was sent, and the answer it got.
+#derive(Eq, Debug)
 pub(all) struct Entry {
   key : TurnKey
   // Display form of the prompt. The caller supplies the projection — it owns
@@ -76,7 +78,7 @@ pub(all) struct Entry {
   // marks, because "the agent hit an error here and worked around it" is the
   // same place a reader wants to land.
   failed : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Project the visible transcript into rail entries, one per user turn.

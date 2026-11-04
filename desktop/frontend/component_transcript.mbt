@@ -5,6 +5,7 @@
 /// overview state, and `None` disposes the current one. It derives from the
 /// same `console_gate` and `chat_column` the view places the column from, so
 /// the component exists exactly while its DOM does.
+#derive(Eq)
 priv enum TranscriptSlot {
   HostTranscript(
     source~ : @transcript_component.Source,
@@ -12,7 +13,7 @@ priv enum TranscriptSlot {
     session~ : String?
   )
   CloudTranscriptSlot(@interop.ConversationIdentity)
-} derive(Eq)
+}
 
 ///|
 fn TranscriptSlot::key(self : TranscriptSlot) -> String {

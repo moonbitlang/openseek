@@ -1,10 +1,12 @@
 ///|
+#derive(Eq)
 priv enum ConversationForkKind {
   AfterAnswer(through~ : Int32)
   EditedMessage(@protocol.SessionEditPayload)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct ConversationFork {
   source : ConversationSelection
   source_title : String
@@ -14,7 +16,7 @@ priv struct ConversationFork {
   approval : @protocol.OpenSeekApproval
   connection_generation : Int32
   source_sequence : Int32
-} derive(Eq)
+}
 
 ///|
 /// Whether a conversation can be forked from its answers: a live record of

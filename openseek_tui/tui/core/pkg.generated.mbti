@@ -13,40 +13,45 @@ pub let prompt_prefix : @displaytext.DisplayText
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Event {
   Queue(Input)
   Steer(Input)
   SlashCommand(name~ : String, arguments~ : String)
   Interrupt
   Quit
-} derive(Eq, @debug.Debug)
+}
 pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 pub fn Event::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Input {
   Prompt(String)
   Command(String)
   Notice(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::prefix(Self) -> @displaytext.DisplayText
 pub fn Input::text(Self) -> String
 pub fn Input::to_repr(Self) -> @debug.Repr
 
-type ToolCall derive(@debug.Debug)
+#derive(@debug.Debug)
+type ToolCall
 pub fn ToolCall::ToolCall(@doc.Text, status? : ToolStatus, details? : Array[@doc.Text]) -> Self
 pub fn ToolCall::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ToolStatus {
   Completed
   Failed
-} derive(Eq, @debug.Debug)
+}
 pub fn ToolStatus::equal(Self, Self) -> Bool
 pub fn ToolStatus::not_equal(Self, Self) -> Bool
 pub fn ToolStatus::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum TranscriptItem {
   Input(Input)
   Response(String)
@@ -54,7 +59,7 @@ pub(all) enum TranscriptItem {
   Notice(ToolCall)
   Thought(ToolCall)
   Error(String)
-} derive(@debug.Debug)
+}
 pub fn TranscriptItem::to_doc(Self) -> @doc.Doc
 pub fn TranscriptItem::to_repr(Self) -> @debug.Repr
 pub impl @doc.ToDoc for TranscriptItem

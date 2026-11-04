@@ -1,5 +1,6 @@
 ///|
 /// One renderable contribution to the content hover widget.
+#derive(Eq, Debug)
 pub(all) enum HoverPart {
   MarkdownHover(
     range~ : @base_common.Range,
@@ -8,14 +9,15 @@ pub(all) enum HoverPart {
   )
   MarkerHover(range~ : @base_common.Range, marker~ : @markers.Marker)
   LoadingHover(range~ : @base_common.Range, message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Complete hover result after participant parts have been merged and sorted.
+#derive(Eq, Debug)
 pub struct ComputedHover {
   priv range : @base_common.Range
   parts : Array[HoverPart]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Inputs shared by synchronous and asynchronous hover participants. It carries

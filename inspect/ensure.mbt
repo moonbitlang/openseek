@@ -107,11 +107,12 @@ fn ensure_ports(identity : String) -> Array[Int32] {
 ///|
 /// What `--ensure` leaves in the session root for the next caller: where the
 /// server listens and the token its URLs need. Readable only by the user.
+#derive(ToJson, FromJson)
 priv struct ServerRecord {
   port : Int32
   token : String
   version : String
-} derive(ToJson, FromJson)
+}
 
 ///|
 fn record_path(session_root : String) -> String {

@@ -1,7 +1,8 @@
 ///|
+#derive(Debug)
 priv suberror BrowserCaptureError {
   BrowserCaptureError(String)
-} derive(Debug)
+}
 
 ///|
 /// Own the port configuration before CEF starts. The marker handshake below

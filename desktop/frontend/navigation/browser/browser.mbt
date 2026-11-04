@@ -1,7 +1,8 @@
 ///|
+#derive(Eq)
 pub(all) struct Snapshot {
   path : String
-} derive(Eq)
+}
 
 ///|
 priv suberror Subscription {

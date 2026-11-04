@@ -10,7 +10,6 @@ pub(all) enum Message {
   Projects
   NewChat
   AddProject
-  ArchivedChats(Int32)
   ShowMore
   ShowMoreChats
   MoreActions
@@ -76,36 +75,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, AddProject) => "添加项目"
     (TraditionalChinese, AddProject) => "新增專案"
     (Japanese, AddProject) => "プロジェクトを追加"
-    (English, ArchivedChats(count)) =>
-      if count == 0 {
-        "Archived chats"
-      } else {
-        "Archived chats (\{count})"
-      }
-    (Spanish, ArchivedChats(count)) =>
-      if count == 0 {
-        "Conversaciones archivadas"
-      } else {
-        "Conversaciones archivadas (\{count})"
-      }
-    (Japanese, ArchivedChats(count)) =>
-      if count == 0 {
-        "アーカイブ済みチャット"
-      } else {
-        "アーカイブ済みチャット（\{count}）"
-      }
-    (SimplifiedChinese, ArchivedChats(count)) =>
-      if count == 0 {
-        "已归档对话"
-      } else {
-        "已归档对话（\{count}）"
-      }
-    (TraditionalChinese, ArchivedChats(count)) =>
-      if count == 0 {
-        "已歸檔對話"
-      } else {
-        "已歸檔對話（\{count}）"
-      }
     (English, ShowMore) => "Show more"
     (Spanish, ShowMore) => "Mostrar más"
     (SimplifiedChinese, ShowMore) => "显示更多"

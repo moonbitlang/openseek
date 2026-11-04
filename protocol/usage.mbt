@@ -15,13 +15,14 @@
 /// failure this module exists to prevent, and a fabricated token count is worse
 /// than a dropped line — the counters feed the context-ceiling guard. `parse`
 /// decodes them field by field through `int`, which rejects a fractional value.
+#derive(Eq, Debug, ToJson)
 pub(all) struct Usage {
   prompt_tokens : Int32
   completion_tokens : Int32
   total_tokens : Int32
   prompt_cache_hit_tokens : Int32
   prompt_cache_miss_tokens : Int32
-} derive(Eq, Debug, ToJson)
+}
 
 ///|
 pub extend Usage with Debug::{to_repr}

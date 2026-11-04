@@ -1,14 +1,16 @@
 ///|
+#derive(Debug, Eq)
 priv struct Card {
   request : @protocol.PendingUserQuestion
   draft : @question_card.Model
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 struct Model {
   generation : Int32?
   cards : Array[Card]
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn Model::Model() -> Model {
@@ -16,11 +18,12 @@ pub fn Model::Model() -> Model {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Msg {
   Snapshot(@protocol.UserQuestionSnapshot)
   Interact(request~ : String, @question_card.Action)
   Failed(request~ : String, error~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// Retain draft text across reconnect, but let the new host reset its revision.

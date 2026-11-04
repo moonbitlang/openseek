@@ -10,6 +10,7 @@ pub const ArtifactFenceLanguage : String = "openseek-file artifact"
 /// A coarse presentation category derived from the referenced item's final
 /// extension. The category is a rendering hint; opening still goes through
 /// the host's ordinary path resolver.
+#derive(Eq, Debug)
 pub enum FileKind {
   Spreadsheet
   Document
@@ -20,7 +21,7 @@ pub enum FileKind {
   Code
   Text
   Generic
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend FileKind with Eq::{equal, not_equal}
@@ -31,13 +32,14 @@ pub extend FileKind with Debug::{to_repr}
 ///|
 /// A relative file path and its presentation hint extracted from a fenced
 /// block. Path resolution and file reads belong to the owning host.
+#derive(Eq, Debug)
 pub struct WorkspaceFileRef {
   path : String
   name : String
   extension : String?
   kind : FileKind
   artifact : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend WorkspaceFileRef with Eq::{equal, not_equal}
@@ -49,10 +51,11 @@ pub extend WorkspaceFileRef with Debug::{to_repr}
 /// A Markdown source split into ordinary text and recognized workspace-file
 /// fences. Invalid or unfinished fences remain ordinary text so a renderer
 /// never loses model output while it is streaming.
+#derive(Eq, Debug)
 pub enum MarkdownPart {
   Text(String)
   File(WorkspaceFileRef)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend MarkdownPart with Eq::{equal, not_equal}

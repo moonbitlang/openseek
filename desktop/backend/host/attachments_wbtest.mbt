@@ -12,7 +12,9 @@ async test "workspace documents become references without creating an upload" {
   let session = "attachment-inside"
   let root = attachment_test_workspace(session)
   defer @fs.rmdir(root.to_string(), recursive=true)
-  defer @work_dir.revoke_host_workspace(session)
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace(session)
+  })
   let bytes = b"%PDF-1.7\noriginal document"
   let source = root.join("report.pdf")
   @fs.write_file(source.to_string(), bytes)
@@ -37,7 +39,9 @@ async test "external imports require preparation and preserve original bytes and
   let outside = @fs.tmpdir(prefix="openseek-attachment-original-")
   defer @fs.rmdir(root.to_string(), recursive=true)
   defer @fs.rmdir(outside, recursive=true)
-  defer @work_dir.revoke_host_workspace(session)
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace(session)
+  })
   let original = "\{outside}/下载-5-1.pdf"
   let bytes = b"%PDF-1.7\noriginal bytes"
   @fs.write_file(original, bytes)
@@ -70,7 +74,9 @@ async test "browser document bytes import one original file and reject traversal
   let session = "attachment-browser"
   let root = attachment_test_workspace(session)
   defer @fs.rmdir(root.to_string(), recursive=true)
-  defer @work_dir.revoke_host_workspace(session)
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace(session)
+  })
   let bytes = b"PK office bytes"
   for name in ["Report.DOCX", "table.xlsx", "slides.PPTX"] {
     let payload : @protocol.PrepareAttachmentPayload = {
@@ -113,7 +119,9 @@ async test "attachment imports reject escaping directory links before writing" {
   let outside = @fs.tmpdir(prefix="openseek-attachment-link-")
   defer @fs.rmdir(root.to_string(), recursive=true)
   defer @fs.rmdir(outside, recursive=true)
-  defer @work_dir.revoke_host_workspace(session)
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace(session)
+  })
   @fs.symlink(target=outside, root.join(".openseek").to_string())
   let rejected = try {
     ignore(
@@ -139,7 +147,9 @@ async test "attachment preparation rejects unavailable workspace empty and overs
   let session = "attachment-limits"
   let root = attachment_test_workspace(session)
   defer @fs.rmdir(root.to_string(), recursive=true)
-  defer @work_dir.revoke_host_workspace(session)
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace(session)
+  })
   let unknown = try {
     ignore(
       prepare_attachment_op({
@@ -183,7 +193,9 @@ async test "imported originals reach a newly bound worktree and remain available
   ).resolve()
   defer @fs.rmdir(source.to_string(), recursive=true)
   defer @fs.rmdir(checkout.to_string(), recursive=true)
-  defer @work_dir.revoke_host_workspace(session)
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace(session)
+  })
   let bytes = b"%PDF-worktree original"
   let imported = import_attachment_op({
     session,
@@ -225,7 +237,9 @@ async test "attachment staging rejects non-imported paths and escaping source li
   defer @fs.rmdir(root.to_string(), recursive=true)
   defer @fs.rmdir(source.to_string(), recursive=true)
   defer @fs.rmdir(outside, recursive=true)
-  defer @work_dir.revoke_host_workspace(session)
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace(session)
+  })
   @fs.mkdir(source.join(".openseek/attachments/id").to_string(), recursive=true)
   @fs.write_file("\{outside}/report.pdf", b"%PDF-outside")
   @fs.symlink(

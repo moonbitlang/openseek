@@ -4,6 +4,7 @@
 /// This public type is owned by the `goal` package because the agent loop
 /// consumes it. Raw JSON decoding is delegated to `internal/decode` and mapped
 /// into this package-owned API.
+#derive(Debug)
 pub enum GoalStatus {
   /// The goal is fully achieved and verified.
   Met
@@ -11,7 +12,7 @@ pub enum GoalStatus {
   Continuing(String)
   /// Progress requires user action or an external-state change.
   Blocked(String)
-} derive(Debug)
+}
 
 ///|
 /// Decode and validate a `goal` verdict.

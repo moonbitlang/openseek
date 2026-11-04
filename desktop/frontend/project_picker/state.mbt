@@ -18,6 +18,7 @@
 /// Opaque outside this package: the shell holds the value but cannot read
 /// into it — every transition goes through `open`, `handle`, `view`, or
 /// `subscriptions`.
+#derive(Eq)
 struct State {
   channel : @interop.ChannelId
   // The last location the host successfully listed. `None` only while the
@@ -34,7 +35,7 @@ struct State {
   path_draft : String?
   path_selection : Int32
   generation : Int32
-} derive(Eq)
+}
 
 ///|
 pub extend State with Eq::{equal, not_equal}
@@ -56,15 +57,17 @@ pub fn State::channel(self : State) -> @interop.ChannelId {
 /// real host directory — the only thing Confirm can register — or the
 /// Windows-only virtual level above the drive roots. Keeping the host path
 /// here avoids conflating distinct POSIX paths through URI canonicalization.
+#derive(Eq)
 pub(all) enum Location {
   Directory(String)
   DriveList
-} derive(Eq)
+}
 
 ///|
 pub extend Location with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum Msg {
   // Browse into a directory: a subdirectory row, a breadcrumb ancestor, or
   // a path pasted while the picker is open.
@@ -101,7 +104,7 @@ pub(all) enum Msg {
   // Register the picker's current directory and close it.
   Confirm
   Close
-} derive(Eq)
+}
 
 ///|
 pub extend Msg with Eq::{equal, not_equal}

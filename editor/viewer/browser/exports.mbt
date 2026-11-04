@@ -2,6 +2,7 @@
 /// `MouseTargetType` (editorBrowser.ts:358-415). All 14 variants exist for
 /// contract parity; `Textarea`, `GutterGlyphMargin` (glyph margin width is 0)
 /// and `OverviewRuler` are never produced by this viewer.
+#derive(Eq, Debug)
 pub(all) enum MouseTargetType {
   Unknown
   Textarea
@@ -17,7 +18,7 @@ pub(all) enum MouseTargetType {
   Scrollbar
   OverlayWidget
   OutsideEditor
-} derive(Eq, Debug)
+}
 
 ///|
 /// `EditorMouseEvent` (editorDom.ts:105-147), named `EditorDomMouseEvent` here

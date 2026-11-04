@@ -1,6 +1,7 @@
 ///|
 /// Which side of an injected-text or soft-wrap boundary a position resolves
 /// to, `PositionAffinity` (`model.ts:1455-1480`).
+#derive(Eq, Debug)
 pub(all) enum PositionAffinity {
   /// Prefers the left most position.
   Left
@@ -14,7 +15,7 @@ pub(all) enum PositionAffinity {
   /// If the given position is on injected text, prefers the position right of
   /// it.
   RightOfInjectedText
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PositionAffinity with Debug::{to_repr}

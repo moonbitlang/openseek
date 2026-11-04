@@ -1,20 +1,22 @@
 ///|
 /// Host-neutral intent for opening a definition location. The mode deliberately
 /// carries no tab, editor-group, workspace, or history policy.
+#derive(Eq, Debug)
 pub(all) enum OpenLocationMode {
   Current
   Side
-} derive(Eq, Debug)
+}
 
 ///|
 /// One request for the host to open a location that the initiating Viewer
 /// cannot reveal locally. `source_viewer_id` is the stable public Viewer id;
 /// concrete Viewer and shell types do not cross this common-package boundary.
+#derive(Debug)
 pub(all) struct OpenLocationRequest {
   source_viewer_id : String
   location : @language.Location
   mode : OpenLocationMode
-} derive(Debug)
+}
 
 ///|
 /// Minimal host-owned capability for opening a location. `true` means the host

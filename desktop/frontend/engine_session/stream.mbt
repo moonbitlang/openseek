@@ -1,15 +1,17 @@
 ///|
+#derive(Eq, Debug)
 pub(all) struct Reasoning {
   content : String
   complete : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Provisional text belongs to an engine turn, never to durable history.
+#derive(Eq)
 pub(all) struct Stream {
   response : String?
   reasoning : Reasoning?
-} derive(Eq)
+}
 
 ///|
 pub fn Stream::event(self : Stream, event : @transcript.EngineEvent) -> Stream {

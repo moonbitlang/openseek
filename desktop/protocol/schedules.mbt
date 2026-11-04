@@ -3,10 +3,11 @@
 // Unknown object fields are ignored; unknown enum tags are rejected.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ScheduleTiming {
   Once(Int64)
   Every(Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl ToJson for ScheduleTiming with fn to_json(self) {
@@ -36,6 +37,7 @@ pub impl FromJson for ScheduleTiming with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ScheduleRunStatus {
   Running
   Succeeded
@@ -43,7 +45,7 @@ pub(all) enum ScheduleRunStatus {
   Stopped
   TimedOut
   Interrupted
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl ToJson for ScheduleRunStatus with fn to_json(self) {
@@ -72,6 +74,7 @@ pub impl FromJson for ScheduleRunStatus with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScheduleSpec {
   name : String
   workspace : String?
@@ -79,7 +82,7 @@ pub(all) struct ScheduleSpec {
   model : String?
   timing : ScheduleTiming
   timeout_minutes : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for ScheduleSpec with fn from_json(json, path) {
@@ -142,6 +145,7 @@ pub impl ToJson for ScheduleSpec with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScheduleEntry {
   id : String
   spec : ScheduleSpec
@@ -149,7 +153,7 @@ pub(all) struct ScheduleEntry {
   run_requested : Bool
   notice : String?
   next_at : Int64?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for ScheduleEntry with fn from_json(json, path) {
@@ -198,6 +202,7 @@ pub impl ToJson for ScheduleEntry with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScheduleRun {
   id : String
   schedule_id : String
@@ -208,7 +213,7 @@ pub(all) struct ScheduleRun {
   finished_at : Int64?
   status : ScheduleRunStatus
   log_path : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for ScheduleRun with fn from_json(json, path) {
@@ -280,10 +285,11 @@ pub impl ToJson for ScheduleRun with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct SchedulesReply {
   entries : Array[ScheduleEntry]
   runs : Array[ScheduleRun]
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for SchedulesReply with fn from_json(json, path) {
@@ -308,11 +314,12 @@ pub impl ToJson for SchedulesReply with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScheduleSavePayload {
   id : String?
   spec : ScheduleSpec
   run_now : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for ScheduleSavePayload with fn from_json(json, path) {
@@ -344,10 +351,11 @@ pub impl ToJson for ScheduleSavePayload with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScheduleActionPayload {
   id : String
   action : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for ScheduleActionPayload with fn from_json(json, path) {

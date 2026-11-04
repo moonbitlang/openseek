@@ -1,5 +1,6 @@
 ///|
 /// Fully normalized input for rendering one view line to HTML.
+#derive(Eq, Debug)
 pub struct RenderLineInput {
   use_monospace_optimizations : Bool
   can_use_halfwidth_rightwards_arrow : Bool
@@ -23,7 +24,7 @@ pub struct RenderLineInput {
   text_direction : TextDirection
   vertical_scrollbar_size : Double
   render_new_line_when_empty : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds line-renderer input from viewport line data plus runtime rendering

@@ -20,11 +20,12 @@
 
 ///|
 /// `ChangeType` (`quickDiff.ts:115`).
+#derive(Eq, Debug)
 pub(all) enum ChangeType {
   Modify
   Add
   Delete
-} derive(Eq, Debug)
+}
 
 ///|
 /// `getChangeType` (`quickDiff.ts:121`), expressed over the modern line-range

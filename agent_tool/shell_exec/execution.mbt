@@ -28,12 +28,13 @@ pub enum StopCause {
 /// - `Exited(code)`: the child exited on its own with `code`.
 /// - `Killed`: the child was cancelled (`stop`, a reader error, or session
 ///   teardown) before a natural exit — no exit code is available.
+#derive(Eq, Debug)
 pub enum ExecStatus {
   Running
   Backgrounded
   Exited(Int32)
   Killed
-} derive(Eq, Debug)
+}
 
 ///|
 /// Whether a status is terminal (the child is gone).

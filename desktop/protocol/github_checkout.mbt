@@ -1,9 +1,10 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum GithubCheckoutReply {
   CheckoutSuccess(String)
   CheckoutNeedsConfirmation
   CheckoutFailure(String, String?)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubCheckoutReply with fn from_json(json, path) {
@@ -54,21 +55,23 @@ pub extend GithubCheckoutReply with FromJson::{from_json}
 pub extend GithubCheckoutReply with ToJson::{to_json}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum GithubCheckoutChanges {
   Ask
   Stash
   Discard
   Carry
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubCheckoutPayload {
   cwd : String
   repository_url : String
   number : Int32
   changes : GithubCheckoutChanges
   update : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubCheckoutPayload with fn from_json(json, path) {
@@ -109,9 +112,10 @@ pub impl ToJson for GithubCheckoutPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubWorkspacePayload {
   cwd : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubWorkspacePayload with fn from_json(json, path) {
@@ -125,11 +129,12 @@ pub impl ToJson for GithubWorkspacePayload with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct GithubCheckoutStatus {
   branch : String?
   pull_request_url : String?
   has_open_pull_request : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubCheckoutStatus with fn from_json(json, path) {

@@ -14,12 +14,13 @@ let max_value_column : Int32 = 2147483647
 /// and `Hint` drives a distinct decoration-range branch, so the values matter;
 /// `value` exposes them. Kept local rather than reusing
 /// `@language.DiagnosticSeverity` (which has no `Hint` and no bit values).
+#derive(Eq, Debug)
 pub(all) enum MarkerSeverity {
   Hint
   Info
   Warning
   Error
-} derive(Eq, Debug)
+}
 
 ///|
 /// The marker severity's bit value (`Hint=1, Info=2, Warning=4, Error=8`),
@@ -64,10 +65,11 @@ fn MarkerSeverity::to_diagnostic_severity(
 ///|
 /// Marker tag, `MarkerTag` (`markers.ts:51`). Bit values drive nothing here but
 /// are kept faithful via `value`.
+#derive(Eq, Debug)
 pub(all) enum MarkerTag {
   Unnecessary
   Deprecated
-} derive(Eq, Debug)
+}
 
 ///|
 /// Inverse bridge for the `to_diagnostic` shim.
@@ -82,6 +84,7 @@ fn MarkerTag::to_diagnostic_tag(self : MarkerTag) -> @language.DiagnosticTag {
 /// Pre-sanitize marker input, `IMarkerData` (`markers.ts:109`). Monaco's
 /// `code?: string | { value; target }` object form (code links) is reduced to
 /// `String?` — the link target is out of scope (deviation).
+#derive(Eq, Debug)
 struct MarkerData {
   code : String?
   severity : MarkerSeverity
@@ -95,7 +98,7 @@ struct MarkerData {
   related_information : Array[RelatedInformation]?
   tags : Array[MarkerTag]?
   origin : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds marker input from the required fields, leaving the optional metadata
@@ -182,6 +185,7 @@ fn MarkerData::to_marker(
 /// separate line/column fields (Monaco stores them flat). `start_column` is
 /// mutable because `_createDecorationRange` snaps it for full-line markers
 /// (`markerDecorationsService.ts:220`).
+#derive(Eq, Debug)
 pub struct Marker {
   owner : String
   resource : @base_common.Uri
@@ -197,7 +201,7 @@ pub struct Marker {
   related_information : Array[RelatedInformation]?
   tags : Array[MarkerTag]?
   origin : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// The marker's line/column span as a `Range` (Monaco's `Range.lift(marker)`).

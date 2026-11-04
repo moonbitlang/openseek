@@ -15,15 +15,17 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum FileSource {
   HostFile(@interop.ChannelId, @protocol.ReadFilePayload)
   CloudFile(account~ : String, session~ : String, path~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn FileSource::equal(Self, Self) -> Bool
 pub fn FileSource::not_equal(Self, Self) -> Bool
 pub fn FileSource::to_repr(Self) -> @debug.Repr
 
-type Model derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Model
 pub fn Model::Model(id_prefix? : String) -> Self
 pub fn Model::account_changed(Self, Result[Unit, String]) -> (@cmd.Cmd, Self)
 pub fn Model::account_expired(Self, Msg) -> Bool

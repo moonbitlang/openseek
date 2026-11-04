@@ -1,9 +1,10 @@
 ///|
+#derive(Eq)
 pub(all) enum Annotation {
   Idle
   Selecting
   Failed(String)
-} derive(Eq)
+}
 
 ///|
 pub(all) enum AnnotationMsg {

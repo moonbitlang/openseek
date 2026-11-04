@@ -8,7 +8,6 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { stageResources } from "./resources.mjs";
 import { OfficeFontFiles, resolveOfficeFontSource } from "./office_fonts.mjs";
 import { OfficePdfArchive, stageOfficePdfAssets } from "./office_pdf.mjs";
-import { assertMacosSigningCoverage } from "./signing.mjs";
 import { reportNotarizationFailure } from "./notarization.mjs";
 
 const Hosts = {
@@ -348,7 +347,7 @@ class Build {
   async native(profile) {
     const release = profile === "release" ? ["--release"] : [];
     const env = this.command === "macos" ? { MACOSX_DEPLOYMENT_TARGET: "12.0" } : {};
-    await this.proton(["cef", "setup"], env);
+    await this.proton(["setup"], env);
     if (this.command === "macos") {
       // The window host has its own workspace (desktop/app/moon.work), so it
       // gets its own target directory rather than sharing the engine's.
@@ -440,8 +439,8 @@ class Build {
   }
 
   // Derive the project config a development build runs under: the checked-in
-  // one with its own identity and product name, and everything else — the
-  // signing list above all — carried over rather than duplicated.
+  // one with its own identity and product name, and everything else carried
+  // over rather than duplicated.
   //
   // The output directory is deliberately left alone. The product name already
   // keeps a development bundle from overwriting a release one, and moving the
@@ -483,10 +482,6 @@ class Build {
         ? options.targets.map(target => target === "installer" ? "nsis" : target)
         : ["appimage"];
     const config = options.release ? "proton.project.json" : await this.developmentConfig();
-    if (this.command === "macos" && options.sign) {
-      const project = JSON.parse(await readFile(join(this.desktop, config), "utf8"));
-      await assertMacosSigningCoverage(this.desktop, project.package.sign.binaries);
-    }
     const args = ["-C", ".", "package", "--config", config];
     for (const format of [...new Set(formats)]) args.push("--format", format);
     if (options.release) args.push("--release");

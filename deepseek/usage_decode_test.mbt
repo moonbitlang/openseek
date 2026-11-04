@@ -16,7 +16,12 @@ test "usage decode rejects malformed fields" {
       debug_inspect(
         e,
         content=(
-          #|JsonDecodeError((Root, "Usage::from_json: expected object with numeric fields"))
+          #|JsonDecodeError(
+          #|  (
+          #|    <JsonPath: "">,
+          #|    "Usage::from_json: expected object with numeric fields",
+          #|  ),
+          #|)
         ),
       )
   } noraise {
@@ -37,7 +42,12 @@ test "usage decode rejects non-object input" {
       debug_inspect(
         e,
         content=(
-          #|JsonDecodeError((Root, "Usage::from_json: expected object with numeric fields"))
+          #|JsonDecodeError(
+          #|  (
+          #|    <JsonPath: "">,
+          #|    "Usage::from_json: expected object with numeric fields",
+          #|  ),
+          #|)
         ),
       )
   } noraise {

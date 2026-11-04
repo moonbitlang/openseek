@@ -11,6 +11,7 @@
 /// it is doing right now. Progress is absent until the child has written a
 /// durable record; `run` prevents a lane stranded by a lost finish
 /// notification from leaking into a later turn.
+#derive(Eq, @debug.Debug)
 pub(all) struct Lane {
   id : String
   kind : String
@@ -18,7 +19,7 @@ pub(all) struct Lane {
   steps : Int32
   activity : String
   run : String?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The sub-run dock, above the composer: every child this turn is waiting on.

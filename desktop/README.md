@@ -673,7 +673,7 @@ moon run ./desktop/package/macos
 ```
 
 The app-only output is ad-hoc signed by Proton for local use. Codex is not part
-of the application bundle or its signing list.
+of the application bundle.
 
 To build a distribution artifact, select `dmg` or `zip`:
 

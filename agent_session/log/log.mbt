@@ -7,10 +7,11 @@ let session_file_version : Int32 = 1
 /// and system prompt for the event lines that follow. The system prompt lives
 /// only here — it is a `Session` field, not an event — so a session file is
 /// self-contained.
+#derive(Eq, Debug)
 pub(all) struct SessionFileHeader {
   id : String
   system_prompt : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Encode a header record as the JSON stored on a session file's first line.
@@ -31,11 +32,12 @@ pub impl ToJson for SessionFileHeader with fn to_json(
 /// distinct from `NotHeader` so a reader confronted with a file written by a
 /// newer format can say so, instead of misreporting it as a file that has no
 /// header at all.
+#derive(Debug)
 pub enum HeaderParse {
   Header(SessionFileHeader)
   UnsupportedVersion(Int32)
   NotHeader
-} derive(Debug)
+}
 
 ///|
 /// Classify `json` as a session-file header record.
@@ -63,11 +65,12 @@ pub fn classify_header(json : Json) -> HeaderParse {
 /// One JSONL line that could not be decoded into a `SessionEvent`. Kept so
 /// downstream tools can surface the offending line instead of silently
 /// dropping it or aborting the whole load.
+#derive(Eq, Debug)
 pub struct LineError {
   line_number : Int32
   content : String
   message : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Build an immutable `Session` from parsed events plus the header values the

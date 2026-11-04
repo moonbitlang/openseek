@@ -20,7 +20,8 @@ pub fn visible_column_from_column(String, Int32, Int32) -> Int32
 // Errors
 
 // Types and methods
-type Selection derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Selection
 pub fn Selection::Selection(@common.Position, @common.Position) -> Self
 pub fn Selection::direction(Self) -> SelectionDirection
 pub fn Selection::end(Self) -> @common.Position
@@ -35,10 +36,11 @@ pub fn Selection::set_start_position(Self, Int32, Int32) -> Self
 pub fn Selection::start(Self) -> @common.Position
 pub fn Selection::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SelectionDirection {
   LTR
   RTL
-} derive(Eq, @debug.Debug)
+}
 pub fn SelectionDirection::equal(Self, Self) -> Bool
 pub fn SelectionDirection::not_equal(Self, Self) -> Bool
 pub fn SelectionDirection::to_repr(Self) -> @debug.Repr

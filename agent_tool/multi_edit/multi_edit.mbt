@@ -429,7 +429,7 @@ async fn multi_edit_files(
     }
   }
 
-  errdefer restore_on_unwind()
+  errdefer @async.protect_from_cancel(() => restore_on_unwind())
   // A checked batch that fails mid-write restores the files touched so far.
   let written : Array[PreparedWrite] = []
   async fn write_failed(problem : String) -> @agent_tool.ToolAction {

@@ -51,12 +51,9 @@ directory; see `desktop/pwa/README.md`.
 
 Add the executable and its licenses in `Build.stage`. Preserve platform
 suffixes and executable permissions. If a macOS binary requires signing, also
-add its `seekmoon/...` path to `package.sign.binaries` in
-`proton.project.json`.
-
-Signed macOS builds check every staged Mach-O executable, library, and bundle
-against that signing list before packaging. Update the list when a toolchain
-upgrade adds a binary; relocatable object files do not require signing.
+it is covered by the `seekmoon/**` signing tree under
+`platforms.macos.package.sign.binaries` in `proton.project.json`; Proton signs
+every Mach-O in that tree, so a toolchain upgrade needs no list update.
 
 If notarized packaging fails after creating a DMG, the build retrieves Apple
 reports for this build's submissions and matches their SHA-256 to that DMG.

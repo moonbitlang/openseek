@@ -1,11 +1,12 @@
 ///|
 /// Geometry snapshots, independent of DOM, PDF.js and device pixel density.
+#derive(Eq)
 priv struct Rect {
   x : Double
   y : Double
   width : Double
   height : Double
-} derive(Eq)
+}
 
 ///|
 priv struct Point {

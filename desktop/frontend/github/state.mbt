@@ -1,10 +1,11 @@
 ///|
+#derive(Eq)
 pub(all) struct CheckoutScope {
   channel : @interop.ChannelId
   cwd : String
   branch : String?
   head : String?
-} derive(Eq)
+}
 
 ///|
 pub fn State::current_url(self : State) -> String? {
@@ -34,12 +35,13 @@ pub fn State::invalidate_current(self : State) -> State {
 pub extend CheckoutScope with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) struct Group {
   expanded : Bool
   reply : @protocol.GithubListReply?
   loading : Bool
   error : String?
-} derive(Eq)
+}
 
 ///|
 fn Group::empty(expanded : Bool) -> Group {
@@ -47,15 +49,17 @@ fn Group::empty(expanded : Bool) -> Group {
 }
 
 ///|
+#derive(Eq)
 pub(all) struct Detail {
   repository_url : String
   item : @protocol.GithubItem
   reply : @protocol.GithubPullRequestDetail?
   loading : Bool
   error : String?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct Checkout {
   repository_url : String
   number : Int32
@@ -63,16 +67,18 @@ pub(all) struct Checkout {
   updating : Bool
   phase : CheckoutPhase
   show_details : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum CheckoutPhase {
   Running
   Confirming
   Failed(String, String?)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct State {
   scope : CheckoutScope?
   active : Bool
@@ -90,7 +96,7 @@ pub(all) struct State {
   current_loading : Bool
   current_active : Bool
   review_pending : Bool
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {

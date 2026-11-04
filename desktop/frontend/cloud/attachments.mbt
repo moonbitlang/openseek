@@ -1,9 +1,10 @@
 ///|
 /// Keep completed imports only while an unacknowledged submission can retry.
+#derive(Eq)
 pub struct UploadedAttachment {
   source : @protocol.AttachmentSource
   path : String
-} derive(Eq)
+}
 
 ///|
 pub extend UploadedAttachment with Eq::{equal, not_equal}

@@ -23,12 +23,13 @@ let max_verification_chars : Int32 = 4_000
 /// remaining), or `failed` (nothing mergeable came of it). `verification`
 /// names the commands the worker ran and their outcomes — a claim without
 /// verification is a guess.
+#derive(Debug, Eq, ToJson, FromJson)
 pub struct WorkerReport {
   priv schema_version : Int32
   status : String
   summary : String
   verification : String
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// Validate a report against the contract. Returns the list of problems; an

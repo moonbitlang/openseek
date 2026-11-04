@@ -17,6 +17,7 @@ impl Show for SkillReplyError with fn output(self, logger) {
 
 ///|
 /// One installable entry of the registry catalog, as the host reports it.
+#derive(Eq)
 pub(all) struct MarketItem {
   // Skill display name, matching SKILL.md frontmatter when supplied.
   name : String
@@ -27,10 +28,11 @@ pub(all) struct MarketItem {
   description : String
   author : String
   repository : String
-} derive(Eq)
+}
 
 ///|
 /// One entry of the local skills library.
+#derive(Eq)
 pub(all) struct InstalledItem {
   // The library entry — the key `skill_uninstall` takes.
   id : String
@@ -45,7 +47,7 @@ pub(all) struct InstalledItem {
   // entries stay listed and previewable, and new installs default to enabled.
   enabled : Bool
   builtin : Bool
-} derive(Eq)
+}
 
 ///|
 /// The source label a catalog entry would carry once installed — the link

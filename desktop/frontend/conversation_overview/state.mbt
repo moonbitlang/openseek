@@ -10,12 +10,13 @@
 
 ///|
 /// One card of the overview.
+#derive(Eq, Debug)
 pub(all) enum Section {
   Environment
   Changes
   Connectors
   BackgroundTasks
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Section with Eq::{equal, not_equal}
@@ -31,12 +32,13 @@ pub(all) enum Msg {
 
 ///|
 /// Which cards show their rows. A folded card keeps its title and summary.
+#derive(Eq)
 pub struct State {
   environment_open : Bool
   changes_open : Bool
   connectors_open : Bool
   tasks_open : Bool
-} derive(Eq)
+}
 
 ///|
 pub extend State with Eq::{equal, not_equal}

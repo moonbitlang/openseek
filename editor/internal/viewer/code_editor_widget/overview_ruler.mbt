@@ -4,20 +4,22 @@
 // getOverviewRulerDecorations, so callers submit immutable entries explicitly.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum CodeEditorOverviewRulerLane {
   Left
   Center
   Right
   Full
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct CodeEditorOverviewRulerEntry {
   id : Int32
   range : @base_common.LineRange
   color : String
   lane : CodeEditorOverviewRulerLane
-} derive(Eq, Debug)
+}
 
 ///|
 priv struct CodeEditorOverviewRulerOffsetEntry {
@@ -29,13 +31,14 @@ priv struct CodeEditorOverviewRulerOffsetEntry {
 }
 
 ///|
+#derive(Eq, Debug)
 struct CodeEditorOverviewRulerBand {
   id : Int32
   from : Int32
   to : Int32
   color : String
   lane : CodeEditorOverviewRulerLane
-} derive(Eq, Debug)
+}
 
 ///|
 fn code_editor_overview_ruler_lane_value(

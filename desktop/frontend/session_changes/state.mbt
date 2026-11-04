@@ -45,6 +45,7 @@ pub(all) enum Msg {
 
 ///|
 /// What the overview has of its conversation's attached list.
+#derive(Eq)
 pub enum Phase {
   /// Nothing has been asked yet.
   Unchecked
@@ -59,12 +60,13 @@ pub enum Phase {
   /// The question itself failed: the host could not be reached or could not
   /// read the saved list.
   CheckFailed(String)
-} derive(Eq)
+}
 
 ///|
 pub extend Phase with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub struct State {
   /// The conversation the phase describes; `None` before the overview first
   /// shows.
@@ -84,7 +86,7 @@ pub struct State {
   /// Counts the overview's arrivals and the list's changes, the moments every
   /// attached pull request is looked up again.
   generation : Int32
-} derive(Eq)
+}
 
 ///|
 pub extend State with Eq::{equal, not_equal}
@@ -93,13 +95,14 @@ pub extend State with Eq::{equal, not_equal}
 /// One address's lookups. An address is looked up at most once per
 /// generation, and a lookup is answered only while it is still its address's
 /// latest.
+#derive(Eq)
 pub struct Lookup {
   /// The generation the address was last looked up in, answered or not.
   generation : Int32
   /// What GitHub last said about it: absent until a lookup finds a pull
   /// request, cleared when one finds none, and kept when one fails.
   summary : PullRequest?
-} derive(Eq)
+}
 
 ///|
 pub extend Lookup with Eq::{equal, not_equal}

@@ -13,25 +13,28 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Action {
   Edit(question~ : String, text~ : String)
   Select(question~ : String, option~ : String)
   Navigate(index~ : Int32)
   Submit(skip~ : Bool)
-} derive(Eq, @debug.Debug)
+}
 pub fn Action::equal(Self, Self) -> Bool
 pub fn Action::not_equal(Self, Self) -> Bool
 pub fn Action::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Choice {
   label : String
   description : String
-} derive(Eq, @debug.Debug)
+}
 pub fn Choice::equal(Self, Self) -> Bool
 pub fn Choice::not_equal(Self, Self) -> Bool
 pub fn Choice::to_repr(Self) -> @debug.Repr
 
-type Model derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Model
 pub fn Model::Model() -> Self
 pub fn Model::answers(Self) -> Map[String, String]
 pub fn Model::can_submit(Self, Array[Question], skip~ : Bool) -> Bool
@@ -45,11 +48,12 @@ pub fn Model::to_repr(Self) -> @debug.Repr
 pub fn Model::update(Self, Array[Question], Action) -> Self
 pub fn Model::view(Self, Array[Question], String, @i18n.Locale, disabled? : Bool, @cmd.Emit[Action]) -> @html.Html
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Question {
   id : String
   title : String
   options : Array[Choice]
-} derive(Eq, @debug.Debug)
+}
 pub fn Question::equal(Self, Self) -> Bool
 pub fn Question::not_equal(Self, Self) -> Bool
 pub fn Question::to_repr(Self) -> @debug.Repr

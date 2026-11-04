@@ -1,11 +1,13 @@
 ///|
 /// One device the account can switch the page to.
+#derive(Debug, Eq)
 pub(all) struct DeviceChoice {
   id : String
   name : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Account {
   login : String
   avatar : String
@@ -15,7 +17,7 @@ pub(all) struct Account {
   device : DeviceChoice?
   // The account's online devices, in roster order; the selector offers these.
   online_devices : Array[DeviceChoice]
-} derive(Debug, Eq)
+}
 
 ///|
 /// The action-menu target of the footer's device selector.
@@ -29,15 +31,17 @@ pub const ResizeHandleId : String = "sidebar-resize-handle"
 
 ///|
 /// Chats are Cloud conversations; Work conversations belong to registered projects.
+#derive(Debug, Eq)
 pub(all) enum Mode {
   ChatMode
   WorkMode
-} derive(Debug, Eq)
+}
 
 ///|
 /// The complete plain input of the left sidebar component. Commands are kept
 /// in `Actions`, so this value remains comparable and can drive incremental
 /// Rabbita branches without embedding emitters in application data.
+#derive(Debug, Eq)
 pub(all) struct Input {
   search : @session_search.Model
   locale : @i18n.Locale
@@ -51,7 +55,7 @@ pub(all) struct Input {
   skills_active : Bool
   settings_active : Bool
   account : Account?
-} derive(Debug, Eq)
+}
 
 ///|
 pub(all) struct Actions {

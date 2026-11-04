@@ -9,10 +9,11 @@
 ///|
 /// One tool a connected MCP server registered, under its namespaced name
 /// (`mcp__<server>__<tool>`).
+#derive(Eq, Debug)
 pub(all) struct McpTool {
   name : String
   description : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend McpTool with Eq::{equal, not_equal}
@@ -42,10 +43,11 @@ pub extend McpTool with FromJson::{from_json}
 ///|
 /// How a configured server is reached: a subprocess speaking over stdio, or a
 /// Streamable HTTP endpoint.
+#derive(Eq, Debug)
 pub(all) enum McpTransport {
   Stdio
   Http
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend McpTransport with Eq::{equal, not_equal}
@@ -55,6 +57,7 @@ pub extend McpTransport with Debug::{to_repr}
 
 ///|
 /// What the engine holds of one configured server.
+#derive(Eq, Debug)
 pub(all) enum McpServerState {
   /// Connected, with the tools it registered (never empty).
   Connected(Array[McpTool])
@@ -68,7 +71,7 @@ pub(all) enum McpServerState {
   Failed(String)
   /// Never tried: earlier servers had already used up the tool budget.
   Skipped
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend McpServerState with Eq::{equal, not_equal}
@@ -81,12 +84,13 @@ pub extend McpServerState with Debug::{to_repr}
 /// server of the same name. `target` is its command (stdio) or its URL without credentials (http);
 /// arguments, environment, and headers are never reported because they are
 /// where tokens live.
+#derive(Eq, Debug)
 pub(all) struct McpServerStatus {
   name : String
   transport : McpTransport
   target : String
   state : McpServerState
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend McpServerStatus with Eq::{equal, not_equal}
@@ -180,13 +184,14 @@ pub extend McpServerStatus with FromJson::{from_json}
 
 ///|
 /// What came of reading one configuration file.
+#derive(Eq, Debug)
 pub(all) enum McpConfigState {
   /// It was read and decoded; its servers are among `McpStatus::servers`.
   Loaded
   /// It could not be used — unreadable, not JSON, or not the `mcpServers`
   /// shape — so it contributed no servers.
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend McpConfigState with Eq::{equal, not_equal}
@@ -196,10 +201,11 @@ pub extend McpConfigState with Debug::{to_repr}
 
 ///|
 /// One configuration file the engine was given, in the order it was given.
+#derive(Eq, Debug)
 pub(all) struct McpConfigStatus {
   path : String
   state : McpConfigState
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend McpConfigStatus with Eq::{equal, not_equal}
@@ -240,12 +246,13 @@ pub extend McpConfigStatus with FromJson::{from_json}
 ///|
 /// The engine's MCP configuration files and what came of them. An engine
 /// started without any has no configs and no servers.
+#derive(Eq, Debug)
 pub(all) struct McpStatus {
   /// Every configuration file, in the order the engine was given them.
   configs : Array[McpConfigStatus]
   /// The servers of the loaded files, merged, in configuration order.
   servers : Array[McpServerStatus]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend McpStatus with Eq::{equal, not_equal}

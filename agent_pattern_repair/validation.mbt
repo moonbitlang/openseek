@@ -8,10 +8,11 @@ const PatternRepairValidatorEnv : String = "OPENSEEK_PATTERN_REPAIR_VALIDATOR"
 const MaxPatternValidationDiagnosticUnits : Int32 = 1000
 
 ///|
+#derive(FromJson)
 struct PatternRepairValidator {
   command : String
   prefix_args : Array[String]
-} derive(FromJson)
+}
 
 ///|
 pub extend PatternRepairValidator with FromJson::{from_json}

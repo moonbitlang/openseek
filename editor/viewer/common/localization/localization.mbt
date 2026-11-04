@@ -1,12 +1,13 @@
 ///|
 /// Language of editor-owned controls. Document and provider text are unchanged.
+#derive(Eq, Debug)
 pub(all) enum Language {
   English
   SimplifiedChinese
   TraditionalChinese
   Japanese
   Spanish
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Language with Eq::{equal, not_equal}

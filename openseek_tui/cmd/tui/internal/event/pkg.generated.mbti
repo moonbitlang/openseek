@@ -1,8 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek_tui/cmd/tui/internal/event"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
-pub fn decode_event(Json) -> AgentEvent?
+pub fn decode_event(@json.Json) -> AgentEvent?
 
 // Errors
 

@@ -270,11 +270,12 @@ fn @pathx.Absolute::resource_path(
 ///|
 /// One concrete event from `Watcher::wait`. Rename uses `path` for the new
 /// name and `old_path` for the old one; the other kinds omit `old_path`.
+#derive(ToJson(fields(kind_(rename="kind"))))
 priv struct FsEventPayload {
   kind_ : String
   path : String
   old_path : String?
-} derive(ToJson(fields(kind_(rename="kind"))))
+}
 
 ///|
 /// A filesystem change batch. A new watcher emits `baseline=true` once it is
@@ -317,11 +318,12 @@ test "filesystem events keep their concrete kind and paths on the wire" {
 /// Construction failures are returned by `fs.watch` itself. `root` reports
 /// the active location; `generation` identifies the exact concrete watcher
 /// whose failure may race a replacement.
+#derive(ToJson)
 priv struct FsWatchFailedPayload {
   root : String
   message : String
   generation : String
-} derive(ToJson)
+}
 
 ///|
 test "filesystem watcher failures retain root and generation on the wire" {

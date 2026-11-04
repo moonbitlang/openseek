@@ -36,6 +36,7 @@ pub fn InjectedTextOptions::attached_index(self : InjectedTextOptions) -> Int32 
 ///|
 /// `IModelContentChange` (`model/mirrorTextModel.ts`): one change entry of
 /// the public content-changed payload.
+#derive(Debug)
 pub(all) struct ModelContentChange {
   /// The range that got replaced.
   range : @base_common.Range
@@ -45,7 +46,7 @@ pub(all) struct ModelContentChange {
   range_length : Int32
   /// The new text for the range.
   text : String
-} derive(Debug)
+}
 
 ///|
 pub extend ModelContentChange with Debug::{to_repr}

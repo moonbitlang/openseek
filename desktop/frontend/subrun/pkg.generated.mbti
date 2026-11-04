@@ -14,6 +14,7 @@ pub fn owned_by(Array[Lane], String) -> Array[Lane]
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Lane {
   id : String
   kind : String
@@ -21,7 +22,7 @@ pub(all) struct Lane {
   steps : Int32
   activity : String
   run : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn Lane::equal(Self, Self) -> Bool
 pub fn Lane::not_equal(Self, Self) -> Bool
 pub fn Lane::to_repr(Self) -> @debug.Repr

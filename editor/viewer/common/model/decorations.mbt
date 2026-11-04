@@ -2,12 +2,13 @@
 /// How a decoration's range grows when text is typed at its edges,
 /// `TrackedRangeStickiness` (`model.ts`). Inert in the readonly viewer; carried
 /// for fidelity.
+#derive(Eq, Debug)
 pub(all) enum TrackedRangeStickiness {
   AlwaysGrowsWhenTypingAtEdges
   NeverGrowsWhenTypingAtEdges
   GrowsOnlyWhenTypingBefore
   GrowsOnlyWhenTypingAfter
-} derive(Eq, Debug)
+}
 
 ///|
 /// Numeric value of the stickiness, matching Monaco's
@@ -24,36 +25,40 @@ fn TrackedRangeStickiness::to_int(self : TrackedRangeStickiness) -> Int32 {
 
 ///|
 /// Overview-ruler lane, `OverviewRulerLane` (`model.ts`).
+#derive(Eq, Debug)
 pub(all) enum OverviewRulerLane {
   Left
   Center
   Right
   Full
-} derive(Eq, Debug)
+}
 
 ///|
 /// Minimap decoration position, `MinimapPosition` (`model.ts`).
+#derive(Eq, Debug)
 pub(all) enum MinimapPosition {
   Inline
   Gutter
-} derive(Eq, Debug)
+}
 
 ///|
 /// Overview-ruler decoration options, `IModelDecorationOverviewRulerOptions`.
 /// `color` is a theme-color id (`themeColorFromId`), carried inert (no overview
 /// ruler part paints it — plan D4).
+#derive(Eq, Debug)
 pub(all) struct ModelDecorationOverviewRulerOptions {
   color : String?
   position : OverviewRulerLane
-} derive(Eq, Debug)
+}
 
 ///|
 /// Minimap decoration options, `IModelDecorationMinimapOptions`. `color` is a
 /// theme-color id, carried inert (plan D4).
+#derive(Eq, Debug)
 pub(all) struct ModelDecorationMinimapOptions {
   color : String
   position : MinimapPosition
-} derive(Eq, Debug)
+}
 
 ///|
 /// `cleanClassName` (`textModel.ts:2355-2357`): `[^a-z0-9\-_]/gi → ' '`,
@@ -85,6 +90,7 @@ fn clean_class_name(class_name : String) -> String {
 /// height decorations), `textDirection`, `glyphMargin` lane options (glyph
 /// margin view part deferred). `overview_ruler`/`minimap` colors are carried
 /// as strings — no theme-object resolution (recorded theming design).
+#derive(Debug)
 pub struct ModelDecorationOptions {
   class_name : String
   message : String?
@@ -112,7 +118,7 @@ pub struct ModelDecorationOptions {
   /// `model.ts`), stored in the interval tree's injected-text slot.
   before : InjectedTextOptions?
   after : InjectedTextOptions?
-} derive(Debug)
+}
 
 ///|
 /// `InjectedTextOptions` at the model tier (`model.ts`): the rendered
@@ -121,36 +127,40 @@ pub struct ModelDecorationOptions {
 /// `cursorStops` is unported — the readonly viewer treats
 /// every injection as `InjectedTextCursorStops.Both` (the default), see
 /// `normalize_projected_column_around_injections`.
+#derive(Debug, Eq)
 struct InjectedTextOptions {
   content : String
   inline_class_name : String?
   /// `attachedData` reduced to a producer-defined index (`-1` = none), carried
   /// through the projection into hit-testing lookup.
   attached_index : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// A (range, options) pair handed to `TextModel::delta_decorations` —
 /// Monaco's `IModelDeltaDecoration`.
+#derive(Debug)
 pub(all) struct ModelDeltaDecoration {
   range : @base_common.Range
   options : ModelDecorationOptions
-} derive(Debug)
+}
 
 ///|
 /// A decoration query result — Monaco's `IModelDecoration` (id + ownerId +
 /// range + options). Monaco returns the tree's `IntervalNode`s cast to this
 /// interface; the port materializes value copies (same data, no aliasing).
+#derive(Debug)
 pub(all) struct ModelDecoration {
   id : String
   owner_id : Int32
   range : @base_common.Range
   options : ModelDecorationOptions
-} derive(Debug)
+}
 
 ///|
 /// `IModelDecorationsChangedEvent` (`textModelEvents.ts`), fired by
 /// `TextModel::on_did_change_decorations`.
+#derive(Eq, Debug)
 pub struct ModelDecorationsChangedEvent {
   affects_minimap : Bool
   affects_overview_ruler : Bool
@@ -161,7 +171,7 @@ pub struct ModelDecorationsChangedEvent {
   /// when set).
   affects_injected_text : Bool
   affects_line_number : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The single decoration-options constructor. Monaco's `register`/

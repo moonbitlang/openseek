@@ -3,44 +3,50 @@
 // checked-in source.
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScrollDimensions {
   width : Double
   scroll_width : Double
   height : Double
   scroll_height : Double
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScrollDimensionsUpdate {
   width : Double?
   scroll_width : Double?
   height : Double?
   scroll_height : Double?
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScrollPosition {
   scroll_left : Double
   scroll_top : Double
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ScrollPositionUpdate {
   scroll_left : Double?
   scroll_top : Double?
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct SmoothScrollPosition {
   scroll_left : Double
   scroll_top : Double
   width : Double
   height : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Monaco `ScrollEvent` plus the compatibility facts existing viewer callers
 /// consume. Old/new geometry and all six change flags are exact source data.
+#derive(Eq, Debug)
 pub(all) struct ScrollChange {
   position : ScrollPosition
   delta_left : Double
@@ -67,12 +73,13 @@ pub(all) struct ScrollChange {
   height_changed : Bool
   scroll_height_changed : Bool
   scroll_top_changed : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Complete Monaco `ScrollState` (`scrollable.ts:43-179`). Raw positions are
 /// retained before validation so a later dimension expansion can recover a
 /// position that was temporarily clamped.
+#derive(Eq, Debug)
 pub struct ScrollState {
   force_integer_values : Bool
   raw_scroll_left : Double
@@ -83,7 +90,7 @@ pub struct ScrollState {
   height : Double
   scroll_height : Double
   scroll_top : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ScrollState::ScrollState(
@@ -250,11 +257,12 @@ pub fn ScrollState::create_scroll_event(
 }
 
 ///|
+#derive(Eq, Debug)
 pub struct SmoothScrollingUpdate {
   scroll_left : Double
   scroll_top : Double
   is_done : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn SmoothScrollingUpdate::SmoothScrollingUpdate(
@@ -726,6 +734,7 @@ pub fn Scrollable::scroll_by(
 
 ///|
 /// Monaco `EditorScrollDimensions` (`viewLayout.ts:19-71`).
+#derive(Eq, Debug)
 pub struct EditorScrollDimensions {
   width : Double
   content_width : Double
@@ -733,7 +742,7 @@ pub struct EditorScrollDimensions {
   height : Double
   content_height : Double
   scroll_height : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn EditorScrollDimensions::EditorScrollDimensions(
@@ -757,12 +766,13 @@ pub fn EditorScrollDimensions::EditorScrollDimensions(
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct ContentSizeChange {
   old_content_width : Double
   old_content_height : Double
   content_width : Double
   content_height : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Complete Monaco `EditorScrollable` (`viewLayout.ts:73-154`).

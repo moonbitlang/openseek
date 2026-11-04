@@ -32,21 +32,23 @@ let max_unresolved_chars : Int32 = 1_000
 ///|
 /// One supporting reference: a workspace `file:line`, or the source/`.mbti`
 /// path `moon ide doc` reported for a stdlib or dependency claim.
+#derive(Debug, Eq, ToJson, FromJson)
 struct Citation {
   file : String
   line : Int32?
   note : String?
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// The child's full answer. `unresolved` names what it could NOT determine —
 /// stated ignorance beats a fabricated claim.
+#derive(Debug, Eq, ToJson, FromJson)
 pub struct ExploreReport {
   priv schema_version : Int32
   answer : String
   citations : Array[Citation]
   priv unresolved : String?
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// Validate a report against the contract. Returns the list of problems; an

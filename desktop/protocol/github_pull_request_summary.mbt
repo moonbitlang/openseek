@@ -1,9 +1,10 @@
 ///|
 /// A pull request lookup by address alone, with no checkout or conversation
 /// behind it.
+#derive(Eq, Debug)
 pub(all) struct GithubPullRequestSummaryPayload {
   url : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubPullRequestSummaryPayload with fn from_json(
@@ -22,9 +23,10 @@ pub impl ToJson for GithubPullRequestSummaryPayload with fn to_json(self) {
 ///|
 /// `pull_request` is absent when the address is not a pull request's; a
 /// lookup that failed answers through the error channel instead.
+#derive(Eq, Debug)
 pub(all) struct GithubPullRequestSummaryReply {
   pull_request : GitPullRequest?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for GithubPullRequestSummaryReply with fn from_json(

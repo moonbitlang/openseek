@@ -2,11 +2,12 @@
 /// A project component key includes its source. Two sidebar sections may
 /// point at the same directory, but they are independent UI branches and
 /// must not share disclosure or preview state.
+#derive(Debug, Eq, Hash)
 pub(all) struct Id {
   source : String
   channel : String
   root : String
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub fn Id::Id(source~ : String, channel~ : String, root~ : String) -> Id {
@@ -35,13 +36,15 @@ pub fn Id::key(self : Id) -> String {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Host {
   name : String
   online : Bool
   details : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
   title : String
@@ -54,7 +57,7 @@ pub(all) struct Input {
   can_start : Bool
   managed : Bool
   conversations : Array[@conversation.Input]
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn Input::id(self : Input) -> Id {
@@ -80,16 +83,18 @@ priv enum Msg {
 /// A fold is stamped with the activation it was made under, so revealing is
 /// edge-triggered without watching input transitions: only an activation
 /// different from the stamped one forces the branch open.
+#derive(Eq)
 priv enum Fold {
   Open
   Folded(during~ : String?, preview_limit~ : Int32)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct State {
   fold : Fold
   preview_limit : Int32
-} derive(Eq)
+}
 
 ///|
 const PreviewLimit : Int32 = 5

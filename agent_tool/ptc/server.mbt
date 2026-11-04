@@ -64,12 +64,13 @@ struct Service {
 
 ///|
 /// Metadata persisted in the trace for one image snapshot file.
+#derive(ToJson)
 priv struct ImageSnapshot {
   path : String
   call_index : Int32
   media_type : String
   bytes : Int32
-} derive(ToJson)
+}
 
 ///|
 /// Images from one tool call and the metadata for their retained snapshot files.

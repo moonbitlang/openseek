@@ -8,9 +8,11 @@ fn management_dialog_view(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   skills_html : @html.Html,
+  archived_chats_html : @html.Html,
 ) -> @html.Html {
   let title = match model.management_dialog {
     Some(Settings) => @settings.text(model.locale, Settings)
+    Some(ArchivedChats) => @archived_chats.text(model.locale, Title)
     Some(Skills) => @sidebar_messages.text(model.locale, Skills)
     Some(Schedules) => ui(model.locale, ScheduledTasks)
     None => ""
@@ -18,7 +20,13 @@ fn management_dialog_view(
   @html.dialog(
     id="management-dialog",
     class="modal management-dialog",
-    on_cancel=dispatch(CloseManagementDialog),
+    on_cancel=dispatch(
+      if model.delete_confirm is Some(_) {
+        CancelDeleteSession
+      } else {
+        CloseManagementDialog
+      },
+    ),
     attrs=@html.Attrs::build()
       .aria_label(title)
       .on_click(event => {
@@ -67,9 +75,16 @@ fn management_dialog_view(
             ),
           ]
         Some(Settings) => [settings_page(dispatch, model)]
+        Some(ArchivedChats) => [archived_chats_html]
         Some(Skills) => [skills_html]
         Some(Schedules) => [schedules_page(dispatch, model)]
         None => []
+      },
+      if model.management_dialog is Some(ArchivedChats) &&
+        model.delete_confirm is Some(confirm) {
+        delete_modal(locale=model.locale, dispatch, confirm, model.cloud)
+      } else {
+        @html.nothing
       },
     ],
   )

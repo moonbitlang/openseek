@@ -1,41 +1,47 @@
 ///|
 /// Browser uploads carry bytes; native selections carry a host-local path.
+#derive(Debug, Eq)
 pub(all) enum AttachmentSource {
   AttachmentPath(String)
   AttachmentBytes(name~ : String, data_base64~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct PrepareAttachmentPayload {
   session : String
   workspace : String
   source : AttachmentSource
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum PrepareAttachmentReply {
   WorkspaceAttachment(path~ : String)
   AttachmentUploadRequired(name~ : String)
   AttachmentImage(name~ : String, url~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct ImportAttachmentReply {
   path : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct PickAttachmentReply {
   path : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct StageAttachmentsPayload {
   session : String
   workspace : String
   source_root : String
   paths : Array[String]
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for StageAttachmentsPayload with fn from_json(json, path) {

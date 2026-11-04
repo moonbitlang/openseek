@@ -475,9 +475,7 @@ test('blank Cloud drafts do not create sessions or expose files, while archived 
   await expect(page.getByRole('button', { name: 'Show panel', exact: true })).toHaveCount(0);
   expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toEqual([]);
   expect(cloud.fileRequests).toEqual([]);
-  const archived = page.getByRole('button', { name: /^Archived chats \(/ });
-  if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
-  await cloud.row(sessionB).click();
+  await cloud.openArchived(sessionB);
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
   await openText(page);
@@ -1331,9 +1329,7 @@ for (const batch of [true, false]) {
       expect(request.command.content).toContain('Keep this in my draft');
     }
     expect(cloud.postCount).toBe(0);
-    const archived = page.getByRole('button', { name: /^Archived chats \(/ });
-    if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
-    await cloud.row(sessionB).click();
+    await cloud.openArchived(sessionB);
     await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
     await openText(page);
     const line = source(page).locator('.view-lines .view-line').nth(1);

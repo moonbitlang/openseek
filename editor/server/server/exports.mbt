@@ -1,12 +1,13 @@
 ///|
 /// Parsed remote directory URI. The root uses an empty path and display name
 /// `workspace`.
+#derive(Debug)
 pub(all) enum RemoteDirectoryResult {
   /// Root-relative directory path ("" for the workspace root itself) plus
   /// the directory's display name.
   ParsedRemoteDirectory(String, String)
   RemoteDirectoryError(@remote_protocol.ProtocolError)
-} derive(Debug)
+}
 
 ///|
 /// Resolves a directory URI to its root-relative path. Accepts the bare

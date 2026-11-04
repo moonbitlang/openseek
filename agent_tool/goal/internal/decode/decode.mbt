@@ -1,5 +1,6 @@
 ///|
 /// A decoded verdict about the standing session goal.
+#derive(Debug)
 pub enum GoalStatus {
   /// The goal is fully achieved and verified.
   Met
@@ -7,7 +8,7 @@ pub enum GoalStatus {
   Continuing(String)
   /// Progress requires user action or an external-state change.
   Blocked(String)
-} derive(Debug)
+}
 
 ///|
 /// Decode and validate `goal` tool-call arguments.

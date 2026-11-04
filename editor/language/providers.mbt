@@ -1,84 +1,93 @@
 ///|
 /// Hover payload shape. Markdown content is rendered by browser hover
 /// participants; plaintext is escaped and shown verbatim.
+#derive(Eq, Debug)
 pub(all) enum HoverContent {
   PlainText(String)
   Markdown(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Hover result anchored to a line/column `Range`, matching Monaco's `Hover`.
+#derive(Debug)
 pub(all) struct Hover {
   range : @base_common.Range
   contents : Array[HoverContent]
-} derive(Debug)
+}
 
 ///|
 /// One whole-line Markdown source-comment block. `line_range` uses the
 /// repository's 1-based half-open line convention.
+#derive(Eq, Debug)
 pub(all) struct MarkdownCommentBlock {
   line_range : @base_common.LineRange
   markdown : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Diagnostic severity levels accepted from semantic providers. `Hint`
 /// matches Monaco's `MarkerSeverity.Hint`.
+#derive(Eq, Debug)
 pub(all) enum DiagnosticSeverity {
   Error
   Warning
   Info
   Hint
-} derive(Eq, Debug)
+}
 
 ///|
 /// Diagnostic tag, mirroring Monaco's `MarkerTag` (`markers.ts:51`). Kept
 /// local to `language`
 /// rather than reusing `viewer/common/markers`'s `MarkerTag`, since `language`
 /// sits below `viewer` in the package graph.
+#derive(Eq, Debug)
 pub(all) enum DiagnosticTag {
   Unnecessary
   Deprecated
-} derive(Eq, Debug)
+}
 
 ///|
 /// Problem marker over a source range. `range` is a line/column `Range`,
 /// matching Monaco's `IMarkerData`.
+#derive(Eq, Debug)
 pub(all) struct Diagnostic {
   range : @base_common.Range
   severity : DiagnosticSeverity
   message : String
   tags : Array[DiagnosticTag]?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Cross-document location result for definition and reference providers.
 /// `range` is a line/column `Range`, matching Monaco's `Location`.
+#derive(Debug)
 pub(all) struct Location {
   uri : @base_common.Uri
   range : @base_common.Range
   // None when the provider does not classify test references.
   is_test : Bool?
-} derive(Debug)
+}
 
 ///|
 /// Symbol outline item for the current document. `range` is a line/column
 /// `Range`, matching Monaco's `DocumentSymbol`.
+#derive(Debug)
 pub(all) struct DocumentSymbol {
   name : String
   kind : String
   range : @base_common.Range
-} derive(Debug)
+}
 
 ///|
 /// A complete inline action. The provider owns execution and its captured
 /// data; the editor cancels the request token when this result becomes stale.
+#derive(Debug)
 pub(all) struct CodeLens {
   range : @base_common.Range
   title : String
   tooltip : String?
   execute : async () -> Unit noraise
-} derive(Debug)
+}
 
 ///|
 /// Asynchronous hover provider for a readonly text model and the repository's

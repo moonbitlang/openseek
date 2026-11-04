@@ -4,11 +4,12 @@
 /// one-line description, and the file path to read — the body itself stays
 /// out of the prompt until the model decides it is relevant, so a large
 /// skill library costs a few listing lines, not its full text.
+#derive(Debug)
 struct Skill {
   name : String
   description : String
   path : String
-} derive(Debug)
+}
 
 ///|
 /// Parse `name:` and `description:` from a markdown frontmatter block — the

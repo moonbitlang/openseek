@@ -11,9 +11,10 @@ import {
 ///|
 /// A custom error is a `suberror`, never `type Error` or a trait. Match its
 /// constructors when callers need to tell cases apart.
+#derive(Debug)
 suberror ParseError {
   InvalidInput(String)
-} derive(Debug)
+}
 
 ///|
 /// `raise ParseError` names the exact error this function may let escape.

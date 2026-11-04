@@ -454,10 +454,11 @@ fn MemoryWorkspace::model(
 }
 
 ///|
+#derive(Eq)
 priv enum EmbedSourcePresentation {
   Code
   Markdown
-} derive(Eq)
+}
 
 ///|
 fn EmbedSourcePresentation::label(self : EmbedSourcePresentation) -> String {
@@ -477,13 +478,14 @@ fn embed_source_presentation(uri : @base_common.Uri) -> EmbedSourcePresentation 
 }
 
 ///|
+#derive(Eq)
 priv struct EmbedModel {
   status : String
   diff_visible : Bool
   inline_layout : Bool
   sash_enabled : Bool
   source_presentation : EmbedSourcePresentation
-} derive(Eq)
+}
 
 ///|
 priv enum EmbedMsg {

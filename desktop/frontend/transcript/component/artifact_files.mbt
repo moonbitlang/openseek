@@ -1,11 +1,12 @@
 ///|
+#derive(Eq)
 priv struct ArtifactOwner {
   channel : @interop.ChannelId?
   session : String
   workspace : @common.Uri?
   checkout : @common.Uri?
   archived : Bool
-} derive(Eq)
+}
 
 ///|
 fn Input::artifact_owner(self : Input) -> ArtifactOwner {
@@ -30,14 +31,16 @@ fn ArtifactOwner::key(self : ArtifactOwner) -> String {
 }
 
 ///|
+#derive(Eq)
 priv enum ArtifactFileState {
   LoadingArtifact
   ReadyArtifact(String)
   FailedArtifact(String)
-} derive(Eq)
+}
 
 ///|
-priv struct ArtifactFileCache(Map[String, ArtifactFileState]) derive(Eq)
+#derive(Eq)
+priv struct ArtifactFileCache(Map[String, ArtifactFileState])
 
 ///|
 fn ArtifactFileCache::empty() -> ArtifactFileCache {

@@ -20,6 +20,7 @@
 ///|
 /// One resolved call, as the host read it from the journal. Mirrors the
 /// `workflow.entry` payload field for field; the bridge converts.
+#derive(Eq, @debug.Debug)
 pub(all) struct Entry {
   workflow : String
   session : String
@@ -36,7 +37,7 @@ pub(all) struct Entry {
   /// Milliseconds since the epoch.
   started_at : Double?
   finished_at : Double?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend Entry with Eq::{equal, not_equal}
@@ -46,6 +47,7 @@ pub extend Entry with @debug.Debug::{to_repr}
 
 ///|
 /// One subagent of a run. `status` is `None` while the child is running.
+#derive(Eq, @debug.Debug)
 pub struct Row {
   /// The child's session id, `<parent>-sr-N`: what the sidebar folds under
   /// the parent and what a click opens.
@@ -64,7 +66,7 @@ pub struct Row {
   /// Milliseconds since the epoch.
   started_at : Double?
   finished_at : Double?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend Row with Eq::{equal, not_equal}
@@ -75,6 +77,7 @@ pub extend Row with @debug.Debug::{to_repr}
 ///|
 /// One run. `closed` flips at `workflow_finished`; rows are kept, because a
 /// finished run is exactly what a reader wants to look back over.
+#derive(Eq, @debug.Debug)
 pub struct Run {
   id : String
   session : String
@@ -82,7 +85,7 @@ pub struct Run {
   child_count : Int32
   closed : Bool
   rows : Array[Row]
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend Run with Eq::{equal, not_equal}

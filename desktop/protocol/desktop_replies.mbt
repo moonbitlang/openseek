@@ -10,9 +10,10 @@
 
 ///|
 /// Object-shaped input for methods with no arguments.
+#derive(Debug, Eq)
 pub(all) enum EmptyPayload {
   NoPayload
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for EmptyPayload with fn to_json(_self) {
@@ -30,9 +31,10 @@ pub impl FromJson for EmptyPayload with fn from_json(json, path) {
 ///|
 /// Object-shaped acknowledgement for methods whose successful result has no
 /// additional data.
+#derive(Debug, Eq)
 pub(all) enum EmptyReply {
   Acknowledged
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for EmptyReply with fn to_json(_self) {
@@ -54,20 +56,22 @@ pub impl FromJson for EmptyReply with fn from_json(json, path) {
 /// one — the host does not deduplicate a resent `submission_id`, and a start
 /// that opens no turn raises instead. A client that resends a prompt it could
 /// not confirm risks a second copy of the text; read the record first.
+#derive(Debug, Eq)
 pub(all) struct StartReply {
   run_id : String
   status : String
   exit_code : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// The run the cancellation reached, absent when no turn was open. Absence is
 /// an answer rather than a failure — a Stop racing a turn that just ended
 /// wanted the run over, and it is. A cancel that could not be delivered
 /// raises instead.
+#derive(Debug, Eq)
 pub(all) struct CancelReply {
   run_id : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Omitted rather than `null` when there was nothing to cancel: the key's
@@ -99,15 +103,17 @@ pub impl FromJson for CancelReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SteerReply {
   steered : Bool
   run_id : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct QueueReply {
   accepted : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for QueueReply with fn from_json(json, path) {
@@ -121,13 +127,14 @@ pub impl ToJson for QueueReply with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct ApprovalReply {
   // Whether the decision reached a live engine that could still be waiting
   // for it. False means the question is already gone — the turn that asked it
   // ended — so the run this decision would have resumed is over. Nothing
   // behind the question times out; that is not one of the ways this is false.
   delivered : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// One reconnect-safe completion returned by `agent.runs`. It answers "how
@@ -138,13 +145,14 @@ pub(all) struct ApprovalReply {
 /// for a run whose Started carried one, and `exit_code` only for a run whose
 /// process exited, so both read absent, `null` and a wrong-typed value alike
 /// as "not reported".
+#derive(Debug, Eq)
 pub(all) struct RunSettlementPayload {
   run_id : String
   session : String
   submission_id : String?
   status : String
   exit_code : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for RunSettlementPayload with fn to_json(self) {
@@ -195,6 +203,7 @@ pub impl FromJson for RunSettlementPayload with fn from_json(json, path) {
 /// holding it up. The host outlives that reload and is the only party that
 /// still knows, which is why this rides the same snapshot `agent.runs` already
 /// uses to tell a rejoining client what is in flight.
+#derive(Debug, Eq)
 pub(all) struct PendingApprovalPayload {
   /// The host accepted an answer for delivery; engine resolution is still pending.
   answered : Bool
@@ -207,9 +216,10 @@ pub(all) struct PendingApprovalPayload {
   detail : String
   /// What would run. Absent for an asker with nothing to show.
   body : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct RunsReply {
   approval_generation : Int32
   runs : Array[StartedPayload]
@@ -217,18 +227,19 @@ pub(all) struct RunsReply {
   /// Unresolved questions, including accepted answers awaiting engine resolution.
   /// Empty for a host with none, and for every engine that never asks.
   approvals : Array[PendingApprovalPayload]
-} derive(Debug, Eq)
+}
 
 ///|
 /// The subset of `sessions list --format=json` consumed by Desktop.
 /// `updated_at_ms` is the engine's last-activity stamp (session file mtime in
 /// milliseconds); the engine sends an explicit `null` for a damaged directory
 /// it cannot stat, so decoding accepts absent, `null`, and number alike.
+#derive(Debug, Eq)
 pub(all) struct SessionListEntry {
   id : String
   title : String?
   updated_at_ms : Double?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SessionListEntry with fn from_json(json, path) {
@@ -250,38 +261,42 @@ pub impl FromJson for SessionListEntry with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionGroup {
   workspace : String
   name : String
   session_root : String
   sessions : Array[SessionListEntry]
   error : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionsReply {
   groups : Array[SessionGroup]
-} derive(Debug, Eq)
+}
 
 ///|
 /// The expected, recoverable refusal from `session.archive`: the bound
 /// checkout is dirty, so the caller must explicitly retry with `force` before
 /// any local-only work may be discarded. `dirty_paths` is a bounded preview;
 /// `dirty_path_count` is the complete number of porcelain status rows.
+#derive(Debug, Eq)
 pub(all) struct ArchiveNeedsForceReply {
   worktree : String
   dirty_paths : Array[String]
   dirty_path_count : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// `session.archive` keeps the legacy `SessionsReply` JSON shape on success so
 /// older clients can consume replies from a newer host. A dirty checkout is a
 /// normal confirmation state rather than a rejected bridge operation.
+#derive(Debug, Eq)
 pub(all) enum ArchiveReply {
   Archived(SessionsReply)
   NeedsForce(ArchiveNeedsForceReply)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for ArchiveReply with fn to_json(self) {
@@ -330,11 +345,12 @@ pub impl FromJson for ArchiveReply with fn from_json(json, path) {
 /// uncommitted and untracked paths and `dirty_path_count` their complete
 /// number; both are empty for a clean checkout, whose ignored files are
 /// removed all the same.
+#derive(Debug, Eq)
 pub(all) struct CheckoutRemoval {
   worktree : String
   dirty_paths : Array[String]
   dirty_path_count : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for CheckoutRemoval with fn to_json(self) {
@@ -368,9 +384,10 @@ pub impl FromJson for CheckoutRemoval with fn from_json(json, path) {
 /// `session.delete_check`: what the delete would remove besides the
 /// conversation record. `checkout` is absent when the conversation has no
 /// worktree checkout on disk.
+#derive(Debug, Eq)
 pub(all) struct SessionDeleteCheckReply {
   checkout : CheckoutRemoval?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for SessionDeleteCheckReply with fn to_json(self) {
@@ -399,10 +416,11 @@ pub impl FromJson for SessionDeleteCheckReply with fn from_json(json, path) {
 /// checkout so the caller can confirm again. A committed deletion carries no
 /// list: every client, the requester included, learns each removed identity
 /// from `session.changed`.
+#derive(Debug, Eq)
 pub(all) enum SessionDeleteReply {
   Deleted
   Unconfirmed(CheckoutRemoval)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for SessionDeleteReply with fn to_json(self) {
@@ -434,11 +452,12 @@ pub impl FromJson for SessionDeleteReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionToolCall {
   id : String
   name : String
   arguments : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// A durable user prompt as the store recorded it.
@@ -449,10 +468,11 @@ pub(all) struct SessionToolCall {
 /// record written before the field existed). It is what lets a delivery be
 /// reconciled by exact id instead of by matching text, since two clients can
 /// submit identical text into one session.
+#derive(Debug, Eq)
 pub(all) struct SessionUserMessage {
   content : @wire.Content
   submission_id : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Omit an absent tag rather than writing `null`, matching the store.
@@ -496,12 +516,13 @@ pub impl FromJson for SessionUserMessage with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionAssistantMessage {
   content : String
   tool_calls : Array[SessionToolCall]?
   reasoning_content : String?
   is_replay : Bool?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Preserve the store's compact assistant payload: optional fields are absent
@@ -555,6 +576,7 @@ pub impl FromJson for SessionAssistantMessage with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionToolResult {
   tool_call_id : String
   tool_name : String
@@ -562,7 +584,7 @@ pub(all) struct SessionToolResult {
   is_error : Bool
   brief : String?
   data : Json?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Optional display annotations are omitted when absent, matching the durable
@@ -635,9 +657,10 @@ pub impl FromJson for SessionToolResult with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionRuntimeNotice {
   content : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for SessionRuntimeNotice with fn to_json(self) {
@@ -656,16 +679,18 @@ pub impl FromJson for SessionRuntimeNotice with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub struct SessionSummary {
   content : String
   from_sequence : Int32
   to_sequence : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Mirrors the engine's `TurnTerminal` storage kinds. Logs written before
 /// `context_yield` and `max_steps_exhausted` existed saved those endings as
 /// `finished` and `failed`; they decode as such here and render the same.
+#derive(Debug, Eq)
 pub(all) enum SessionTerminal {
   Finished(String)
   ContextYield(String)
@@ -673,7 +698,7 @@ pub(all) enum SessionTerminal {
   Interrupted(String)
   MaxStepsExhausted
   Failed(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for SessionTerminal with fn to_json(self) {
@@ -716,6 +741,7 @@ pub impl FromJson for SessionTerminal with fn from_json(json, path) {
 /// raw item so an older Desktop can load and forward records written by a newer
 /// engine without pretending to understand them. `UnknownTerminal` additionally
 /// retains the known top-level terminal boundary when only its payload is new.
+#derive(Debug, Eq)
 pub(all) enum SessionItem {
   User(SessionUserMessage)
   Assistant(SessionAssistantMessage)
@@ -725,7 +751,7 @@ pub(all) enum SessionItem {
   Terminal(SessionTerminal)
   UnknownTerminal(Json)
   Unknown(Json)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for SessionItem with fn to_json(self) {
@@ -785,29 +811,32 @@ pub impl FromJson for SessionItem with fn from_json(json, path) {
 ///|
 /// One append-only durable event. `ts` is optional for compatibility with old
 /// stores and test fixtures written before timestamps were added.
+#derive(Debug, Eq)
 pub(all) struct SessionEvent {
   sequence : Int32
   ts : Double?
   item : SessionItem
-} derive(Debug, Eq)
+}
 
 ///|
 /// The session document returned by the engine. Metadata added by newer
 /// engines stays optional; Desktop's transcript is defined by `events`, whose
 /// unknown items remain available for forward-compatible round trips.
+#derive(Debug, Eq)
 pub(all) struct SessionDocument {
   version : Int32?
   id : String?
   system_prompt : String?
   events : Array[SessionEvent]?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct LoadSessionReply {
   session : SessionDocument
   watermark : Int32?
   prediction : @wire.PredictionRecord?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Prediction is required and explicitly null when this snapshot has no cache.
@@ -857,10 +886,11 @@ pub impl ToJson for LoadSessionReply with fn to_json(self) {
 /// The destination selected by the native save dialog. `None` means the user
 /// closed the dialog without saving. `opened` reports whether the saved file
 /// was handed to the platform opener; it stays false when nothing was saved.
+#derive(Debug, Eq)
 pub(all) struct SessionExportReply {
   path : String?
   opened : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// Missing and null paths both mean that the save dialog was cancelled.
@@ -891,10 +921,11 @@ pub impl ToJson for SessionExportReply with fn to_json(self) {
 /// unchanged. Success keeps the legacy `{workspaces:[...]}` shape; the
 /// refusal rides in the reply body as `{error:"..."}` because the local
 /// bridge summarizes raised handler errors down to "op <name> failed".
+#derive(Debug, Eq)
 pub(all) enum WorkspacesReply {
   Workspaces(Array[String], chat_root~ : ChatWorkspaceRoot?)
   WorkspaceError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for WorkspacesReply with fn to_json(self) {
@@ -940,6 +971,7 @@ pub impl FromJson for WorkspacesReply with fn from_json(json, path) {
 /// `codex_thread` instead and has no members. A row with neither is tolerated
 /// only for hand-edited registries and is never claimed by either
 /// conversation source.
+#derive(Debug, Eq)
 pub(all) struct WorktreeInfo {
   name : String
   // Legacy placement branch; detached placements omit it. Live HEAD is read
@@ -950,7 +982,7 @@ pub(all) struct WorktreeInfo {
   codex_thread : String?
   path : String
   present : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for WorktreeInfo with fn from_json(json, path) {
@@ -996,26 +1028,29 @@ pub impl ToJson for WorktreeInfo with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct WorktreesReply {
   worktrees : Array[WorktreeInfo]
-} derive(Debug, Eq)
+}
 
 ///|
 /// A create's reply names the worktree it made — the client sends no name
 /// and needs the generated one to start the bound conversation.
+#derive(Debug, Eq)
 pub(all) struct WorktreeCreateReply {
   name : String
   worktrees : Array[WorktreeInfo]
-} derive(Debug, Eq)
+}
 
 ///|
 /// A worktree creation either returns the existing success object or a safe
 /// domain refusal. Refusals ride in the reply body because the local Proton
 /// boundary deliberately hides arbitrary handler diagnostics.
+#derive(Debug, Eq)
 pub(all) enum WorktreeCreateResult {
   WorktreeCreatedReply(WorktreeCreateReply)
   WorktreeCreateError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for WorktreeCreateResult with fn to_json(self) {
@@ -1041,6 +1076,7 @@ pub impl FromJson for WorktreeCreateResult with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct OpenPathEditorTarget {
   // Absolute URI path on the device that answered the request.
   path : String
@@ -1048,17 +1084,19 @@ pub(all) struct OpenPathEditorTarget {
   // `:line[:column]` or `#Lline` suffix.
   line : Int32?
   column : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct OpenPathDirectoryTarget {
   // Slash-separated path relative to the conversation's resolved checkout.
   path : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// Reply to `open_path`. Text and browser targets carry absolute URI paths; directory
 /// targets remain relative to the conversation checkout for its Files tree.
+#derive(Debug, Eq)
 pub(all) enum OpenPathReply {
   // The host handed a non-text path (or any path outside the checkout's
   // built-in text/directory policy) to the system opener.
@@ -1073,7 +1111,7 @@ pub(all) enum OpenPathReply {
   // The open failed (missing path or opener failure). The frontend shows this message
   // instead of the bridge's generic `op … failed` text.
   Refused(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for OpenPathReply with fn to_json(self) {
@@ -1135,10 +1173,11 @@ pub impl FromJson for OpenPathReply with fn from_json(json, path) {
 /// Result of asking the host file manager to show a referenced path. A
 /// refusal remains data so the frontend can display the host's exact reason
 /// instead of the bridge's generic endpoint failure.
+#derive(Debug, Eq)
 pub(all) enum RevealPathReply {
   Revealed
   RevealRefused(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for RevealPathReply with fn to_json(self) {
@@ -1168,11 +1207,13 @@ pub impl FromJson for RevealPathReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct ApplyUpdateReply {
   applied : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct MarketSkill {
   name : String
   module_name : String
@@ -1181,9 +1222,10 @@ pub(all) struct MarketSkill {
   description : String
   author : String
   repository : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct InstalledSkill {
   id : String
   name : String
@@ -1195,7 +1237,7 @@ pub(all) struct InstalledSkill {
   enabled : Bool
   // Membership in the host's builtin manifest, independent of enablement.
   builtin : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// This branch's whole line delta, measured locally: from where it left the
@@ -1205,33 +1247,36 @@ pub(all) struct InstalledSkill {
 /// offered none — then the count covers uncommitted work alone. `partial`
 /// marks a count that stopped short of every untracked file, so the composer
 /// can say the number is a floor rather than quietly under-reporting.
+#derive(Debug, Eq)
 pub(all) struct GitDiffStat {
   added : Int32
   removed : Int32
   files : Int32
   base : String?
   partial : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// `diffstat` is absent for the same reasons `branch` is (no repository, no
 /// git), and additionally when the diff itself failed — the branch chip is
 /// worth showing on its own. Older peers omit the field entirely, which
 /// decodes to the same absence.
+#derive(Debug, Eq)
 pub(all) struct GitBranchReply {
   branch : String?
   diffstat : GitDiffStat?
-} derive(Debug, Eq)
+}
 
 ///|
 /// The CI rollup for a pull request's head commit, bucketed into the three
 /// states a chip can show. Skipped, neutral, and cancelled checks count as
 /// passed: they are finished and not something to act on.
+#derive(Debug, Eq)
 pub(all) struct GitChecks {
   passed : Int32
   failed : Int32
   pending : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// One pull request as GitHub reports it. `state` is `open`, `merged`, or
@@ -1244,6 +1289,7 @@ pub(all) struct GitChecks {
 /// and the only source for it: a branch records nothing about where it came
 /// from, and a base that is another feature branch (a stacked pull request)
 /// is not something any local rule would guess.
+#derive(Debug, Eq)
 pub(all) struct GitPullRequest {
   number : Int32
   title : String
@@ -1255,7 +1301,7 @@ pub(all) struct GitPullRequest {
   deletions : Int32
   changed_files : Int32
   checks : GitChecks?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Reply to `git.pull_request`. `pull_request` and `compare_url` both absent
@@ -1269,11 +1315,12 @@ pub(all) struct GitPullRequest {
 /// `HEAD` itself, and an agent can move the checkout in between. The client
 /// labels the answer with this rather than with its own request, so a pull
 /// request can never be shown against a branch it does not belong to.
+#derive(Debug, Eq)
 pub(all) struct GitPullRequestReply {
   pull_request : GitPullRequest?
   compare_url : String?
   branch : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// One current-path row from the active review comparison. HEAD-based
@@ -1285,13 +1332,14 @@ pub(all) struct GitPullRequestReply {
 /// `type-changed`, `untracked`, `submodule`, or `symlink` (with unknown future
 /// statuses falling back to `modified`).
 /// Renames and copies carry their source path separately.
+#derive(Debug, Eq)
 pub(all) struct GitChange {
   path : String
   original_path : String?
   index_status : String
   worktree_status : String
   kind : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// The active checkout's change inventory plus its immutable comparison
@@ -1302,6 +1350,7 @@ pub(all) struct GitChange {
 /// both report `repository=false`; once a repository is recognized,
 /// operational failures are request errors rather than an ambiguous empty
 /// list.
+#derive(Debug, Eq)
 pub(all) struct GitChangesReply {
   repository : Bool
   // The commit object currently named by HEAD. `None` covers an unborn HEAD,
@@ -1312,72 +1361,79 @@ pub(all) struct GitChangesReply {
   // host that omitted the field.
   baseline : String?
   changes : Array[GitChange]
-} derive(Debug, Eq)
+}
 
 ///|
 /// One named ref selected for the Review graph. `kind` is `current`,
 /// `upstream`, `base`, or `head`; revisions are always full commit identities.
+#derive(Debug, Eq)
 pub(all) struct GitHistoryRef {
   name : String
   revision : String
   kind : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// The immutable ref selection shared by every page of one graph read.
+#derive(Debug, Eq)
 pub(all) struct GitHistorySnapshot {
   head : String?
   branch : String?
   refs : Array[GitHistoryRef]
   tips : Array[String]
-} derive(Debug, Eq)
+}
 
 ///|
 /// One commit row. Parent identities are sufficient for the frontend to draw
 /// the graph lanes without asking Git for presentation-specific topology.
+#derive(Debug, Eq)
 pub(all) struct GitHistoryCommit {
   id : String
   parent_ids : Array[String]
   subject : String
   author : String
   authored_at : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct GitHistoryReply {
   repository : Bool
   snapshot : GitHistorySnapshot
   commits : Array[GitHistoryCommit]
   has_more : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// One historical path change. Status and tree-object kind stay independent:
 /// a renamed symlink is still a rename, while `kind` keeps it out of text Diff.
+#derive(Debug, Eq)
 pub(all) struct GitHistoricalChange {
   path : String
   original_path : String?
   status : String
   kind : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct GitCommitChangesReply {
   commit : String
   parent : String?
   changes : Array[GitHistoricalChange]
-} derive(Debug, Eq)
+}
 
 ///|
 /// One path's comparison blob for quick diff. `Missing` is the legitimate
 /// baseline for an added/untracked file or an unborn `HEAD`; withheld blobs
 /// mirror the ordinary file reader's binary and one-megabyte policies.
+#derive(Debug, Eq)
 pub(all) enum GitOriginalFileReply {
   Missing
   BinaryOriginal
   OversizedOriginal
   OriginalContent(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for GitOriginalFileReply with fn to_json(self) {
@@ -1412,58 +1468,65 @@ pub impl FromJson for GitOriginalFileReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct DirEntry {
   name : String
   is_dir : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct ReadDirReply {
   entries : Array[DirEntry]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SearchFilesReply {
   files : Array[String]
   from_cache : Bool
   limit_hit : Bool
   cancelled : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// One match range within the source line. Columns are one-based UTF-16
 /// code-unit offsets and the end is exclusive, matching the editor Viewer
 /// contract.
+#derive(Debug, Eq)
 pub(all) struct TextSearchRange {
   start_column : Int32
   end_column : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// A matching source line. `path` is relative to the searched root;
 /// `preview_start_column` maps a clipped preview back onto the source line.
+#derive(Debug, Eq)
 pub(all) struct TextSearchMatch {
   path : String
   line_number : Int32
   preview : String
   preview_start_column : Int32
   ranges : Array[TextSearchRange]
-} derive(Debug, Eq)
+}
 
 ///|
 /// A text-search failure carried inside the successful bridge response. Keeping
 /// code and message together makes a half-populated wire error impossible to
 /// construct inside the Host or frontend.
+#derive(Debug, Eq)
 pub(all) struct TextSearchError {
   code : String
   message : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// A complete bounded text-search response. Operational failures stay in the
 /// typed reply so the Search panel can distinguish invalid regexes, missing
 /// bundled assets, permissions, and ordinary errors without failing unrelated
 /// bridge methods. Success omits both optional error fields on the wire.
+#derive(Debug, Eq)
 pub(all) struct SearchTextReply {
   root : String
   generation : Int32
@@ -1473,17 +1536,18 @@ pub(all) struct SearchTextReply {
   limit_hit : Bool
   cancelled : Bool
   error : TextSearchError?
-} derive(Debug, Eq)
+}
 
 ///|
 /// One source line from a semantic-search hit's surrounding context.
 /// `line`/`is_match` mirror moongrep's `source_context` entries; `text` has a
 /// single trailing `\r` stripped so Windows CRLF files render cleanly.
+#derive(Debug, Eq)
 pub(all) struct SemanticContextLine {
   line : Int32
   text : String
   is_match : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// One structural match reported by moongrep. `path` is workspace-relative and
@@ -1492,6 +1556,7 @@ pub(all) struct SemanticContextLine {
 /// anonymous pattern, which has no rule description. The range is the matched
 /// node's one-based line/column extent; `matched_source` is the matched source
 /// with `\n` line endings; `source_context` is moongrep's +/-2-line window.
+#derive(Debug, Eq)
 pub(all) struct SemanticSearchHit {
   path : String
   rule_id : String
@@ -1502,20 +1567,22 @@ pub(all) struct SemanticSearchHit {
   end_column : Int32
   matched_source : String
   source_context : Array[SemanticContextLine]
-} derive(Debug, Eq)
+}
 
 ///|
 /// A semantic-search failure carried inside the successful bridge response,
 /// mirroring `TextSearchError`.
+#derive(Debug, Eq)
 pub(all) struct SemanticSearchError {
   code : String
   message : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// A complete bounded semantic-search response, shaped like `SearchTextReply`
 /// so the Search panel treats both modes uniformly. Success omits both
 /// optional error fields on the wire.
+#derive(Debug, Eq)
 pub(all) struct SearchSemanticReply {
   root : String
   generation : Int32
@@ -1526,23 +1593,25 @@ pub(all) struct SearchSemanticReply {
   cancelled : Bool
   partial : Bool
   error : SemanticSearchError?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ReadFileReply {
   Binary
   Oversized
   BinaryContent(data_base64~ : String, media_type~ : String, sig~ : String)
   Content(content~ : String, absolute~ : String, sig~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// The workspace-relative file created for a large semantic-search selection.
+#derive(Debug, Eq)
 pub(all) struct MaterializeSemanticSelectionReply {
   path : String
   match_count : Int32
   file_count : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for ReadFileReply with fn to_json(self) {
@@ -1569,12 +1638,13 @@ pub impl ToJson for ReadFileReply with fn to_json(self) {
 ///|
 /// Closed validation outcome for a Pattern Repair candidate. Kept separate
 /// from `message` so clients never infer recovery behavior from diagnostics.
+#derive(Debug, Eq)
 pub(all) enum PatternRepairStatus {
   Passed
   Unavailable
   TimedOut
   Failed
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend PatternRepairStatus with Debug::{to_repr}
@@ -1586,6 +1656,7 @@ pub extend PatternRepairStatus with Eq::{equal, not_equal}
 /// Candidate produced by one Pattern Repair request. The Host marks it `Passed`
 /// after validation; the one-click code-search UI applies a current, validated
 /// candidate immediately and starts a new semantic search.
+#derive(Debug, Eq)
 pub(all) struct PatternRepairReply {
   root : String
   generation : Int32
@@ -1596,7 +1667,7 @@ pub(all) struct PatternRepairReply {
   message : String
   /// Bounded, content-filtered progress retained for failure diagnosis.
   trace : Array[String]
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend PatternRepairReply with Debug::{to_repr}
@@ -1639,11 +1710,12 @@ pub impl FromJson for ReadFileReply with fn from_json(json, path) {
 /// `Failed` is every other stat error with the host's message. The three stay
 /// distinct on the wire so a file the host cannot inspect never reads as one
 /// that is gone.
+#derive(Debug, Eq)
 pub(all) enum FileSignature {
   Missing
   Present(String)
   Failed(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for FileSignature with fn to_json(self) {
@@ -1681,10 +1753,11 @@ pub impl FromJson for FileSignature with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct FileStat {
   path : String
   signature : FileSignature
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for FileStat with fn to_json(self) {
@@ -1704,9 +1777,10 @@ pub impl FromJson for FileStat with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct StatFilesReply {
   stats : Array[FileStat]
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for StatFilesReply with fn to_json(self) {
@@ -1726,6 +1800,7 @@ pub impl FromJson for StatFilesReply with fn from_json(json, path) {
 /// legacy `{path,parent?,entries}` shape; the refusal rides in the reply
 /// body as `{error:"..."}` because the local bridge summarizes raised
 /// handler errors down to "op <name> failed".
+#derive(Debug, Eq)
 pub(all) enum BrowseDirectoryReply {
   Listing(path~ : String, parent~ : String?, entries~ : Array[String])
   // Windows only: the virtual level above the drive roots, reached by
@@ -1733,7 +1808,7 @@ pub(all) enum BrowseDirectoryReply {
   // as "C:"; the drive root itself is the resource path "/C:/".
   Drives(entries~ : Array[String])
   BrowseError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for BrowseDirectoryReply with fn to_json(self) {
@@ -1788,9 +1863,10 @@ pub impl FromJson for BrowseDirectoryReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminalOpenReply {
   id : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for TerminalOpenReply with fn from_json(json, path) {
@@ -1806,6 +1882,7 @@ pub impl ToJson for TerminalOpenReply with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct MoonIdeLocation {
   path : String
   start_line : Int32
@@ -1814,7 +1891,7 @@ pub(all) struct MoonIdeLocation {
   end_column : Int32
   // Definition results and unclassified providers omit this annotation.
   is_test : Bool?
-} derive(Debug, Eq)
+}
 
 ///|
 // Required coordinates reject missing/null/malformed values; unknown fields
@@ -1870,19 +1947,21 @@ pub impl ToJson for MoonIdeLocation with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct MoonIdeLocationsReply {
   locations : Array[MoonIdeLocation]
-} derive(Debug, Eq)
+}
 
 ///|
 /// The result of asking the Host to run `moon tree --package --json` for an
 /// opened module manifest. Operational failures stay in-band so the local
 /// Proton bridge cannot replace the useful Moon error with a generic rejected
 /// command message, and the already-loaded manifest source remains usable.
+#derive(Debug, Eq)
 pub(all) enum MoonPackageGraphReply {
   PackageGraphSource(source~ : String)
   PackageGraphError(message~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for MoonPackageGraphReply with fn to_json(self) {
@@ -1922,26 +2001,29 @@ pub impl FromJson for MoonPackageGraphReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct LspPosition {
   line : Int32
   character : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct LspRange {
   start : LspPosition
   end : LspPosition
-} derive(Debug, Eq)
+}
 
 ///|
 /// The two reference actions emitted by the supported Moon IDE CodeLens
 /// command. The host converts `position` to zero-based LSP coordinates. Local locations
 /// have already been canonicalized by the host and carry the navigation
 /// protocol's one-based numeric ranges.
+#derive(Debug, Eq)
 pub(all) enum MoonIdeCodeLensAction {
   Local(position~ : LspPosition, locations~ : Array[MoonIdeLocation])
   Outside(position~ : LspPosition)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for MoonIdeCodeLensAction with fn to_json(self) {
@@ -1978,11 +2060,12 @@ pub impl FromJson for MoonIdeCodeLensAction with fn from_json(json, path) {
 ///|
 /// One source CodeLens. Its anchor range and action position retain Moon
 /// IDE's ranges converted to zero-based LSP coordinates by the host.
+#derive(Debug, Eq)
 pub(all) struct MoonIdeCodeLens {
   range : LspRange
   title : String
   action : MoonIdeCodeLensAction
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for MoonIdeCodeLens with fn from_json(json, path) {
@@ -2006,9 +2089,10 @@ pub impl ToJson for MoonIdeCodeLens with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct MoonIdeCodeLensReply {
   lenses : Array[MoonIdeCodeLens]
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for MoonIdeCodeLensReply with fn from_json(json, path) {
@@ -2027,22 +2111,25 @@ pub impl ToJson for MoonIdeCodeLensReply with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct LspDiagnostic {
   range : LspRange
   message : String
   severity : Int32?
   tags : Array[Int32]?
-} derive(Debug, Eq)
+}
 
 ///|
 /// The field is absent when the check itself could not run — "no data", which
 /// the client answers by keeping the markers it has, distinct from the empty
 /// array's "no problems", which clears them.
+#derive(Debug, Eq)
 pub(all) struct LspDiagnosticsReply {
   diagnostics : Array[LspDiagnostic]?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct LspHoverReply {
   value : String
   markdown : Bool
@@ -2051,35 +2138,40 @@ pub(all) struct LspHoverReply {
   start_character : Int32
   end_line : Int32
   end_character : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SymbolPosition {
   line : Int32
   col : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SymbolRange {
   start : SymbolPosition
   end : SymbolPosition
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SymbolItem {
   name : String
   kind : Int32?
   container : String?
   path : String
   range : SymbolRange
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct WorkspaceSymbolsReply {
   symbols : Array[SymbolItem]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum CheckUpdateReply {
   UpToDate
   Available(
@@ -2090,7 +2182,7 @@ pub(all) enum CheckUpdateReply {
   Unreachable(reason~ : String)
   Malformed(reason~ : String)
   Broken(version~ : String, reason~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for CheckUpdateReply with fn to_json(self) {
@@ -2163,14 +2255,16 @@ pub impl FromJson for CheckUpdateReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct DownloadUpdateAcceptedReply {
   accepted : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct OpenExternalReply {
   opened : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend ApplyUpdateReply with Debug::{to_repr}

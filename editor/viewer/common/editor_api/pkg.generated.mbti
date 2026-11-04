@@ -12,6 +12,7 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum CursorChangeReason {
   NotSet
   ContentFlush
@@ -20,19 +21,21 @@ pub(all) enum CursorChangeReason {
   Paste
   Undo
   Redo
-} derive(Eq, @debug.Debug)
+}
 pub fn CursorChangeReason::equal(Self, Self) -> Bool
 pub fn CursorChangeReason::not_equal(Self, Self) -> Bool
 pub fn CursorChangeReason::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct CursorPositionChangedEvent {
   position : @common.Position
   secondary_positions : Array[@common.Position]
   reason : CursorChangeReason
   source : String
-} derive(@debug.Debug)
+}
 pub fn CursorPositionChangedEvent::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct CursorSelectionChangedEvent {
   selection : @core.Selection
   secondary_selections : Array[@core.Selection]
@@ -41,45 +44,50 @@ pub(all) struct CursorSelectionChangedEvent {
   old_model_version_id : Int32
   source : String
   reason : CursorChangeReason
-} derive(@debug.Debug)
+}
 pub fn CursorSelectionChangedEvent::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct ModelChangedEvent {
   old_model_url : @common.Uri?
   new_model_url : @common.Uri?
-} derive(@debug.Debug)
+}
 pub fn ModelChangedEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RenderLineHighlight {
   None
   Gutter
   Line
   All
-} derive(Eq, @debug.Debug)
+}
 pub fn RenderLineHighlight::equal(Self, Self) -> Bool
 pub fn RenderLineHighlight::not_equal(Self, Self) -> Bool
 pub fn RenderLineHighlight::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RenderValidationDecorations {
   Editable
   On
   Off
-} derive(Eq, @debug.Debug)
+}
 pub fn RenderValidationDecorations::equal(Self, Self) -> Bool
 pub fn RenderValidationDecorations::not_equal(Self, Self) -> Bool
 pub fn RenderValidationDecorations::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RenderWhitespace {
   None
   Boundary
   Selection
   Trailing
   All
-} derive(Eq, @debug.Debug)
+}
 pub fn RenderWhitespace::equal(Self, Self) -> Bool
 pub fn RenderWhitespace::not_equal(Self, Self) -> Bool
 pub fn RenderWhitespace::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct ScrollEvent {
   scroll_top : Double
   scroll_left : Double
@@ -89,33 +97,36 @@ pub(all) struct ScrollEvent {
   scroll_left_changed : Bool
   scroll_width_changed : Bool
   scroll_height_changed : Bool
-} derive(@debug.Debug)
+}
 pub fn ScrollEvent::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScrolledVisiblePosition {
   top : Double
   left : Double
   height : Double
-} derive(Eq, @debug.Debug)
+}
 pub fn ScrolledVisiblePosition::equal(Self, Self) -> Bool
 pub fn ScrolledVisiblePosition::not_equal(Self, Self) -> Bool
 pub fn ScrolledVisiblePosition::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ShowFoldingControls {
   Always
   Never
   Mouseover
-} derive(Eq, @debug.Debug)
+}
 pub fn ShowFoldingControls::equal(Self, Self) -> Bool
 pub fn ShowFoldingControls::not_equal(Self, Self) -> Bool
 pub fn ShowFoldingControls::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WrappingIndent {
   None
   Same
   Indent
   DeepIndent
-} derive(Eq, @debug.Debug)
+}
 pub fn WrappingIndent::equal(Self, Self) -> Bool
 pub fn WrappingIndent::not_equal(Self, Self) -> Bool
 pub fn WrappingIndent::to_repr(Self) -> @debug.Repr

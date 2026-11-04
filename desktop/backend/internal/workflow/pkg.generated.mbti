@@ -18,22 +18,24 @@ pub fn in_block(Int32, first_child~ : Int32, child_count~ : Int32) -> Bool
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ChildFinished {
   child : String
   status : String
   steps : Int32
   tokens : Int32
   unaccounted : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn ChildFinished::equal(Self, Self) -> Bool
 pub fn ChildFinished::not_equal(Self, Self) -> Bool
 pub fn ChildFinished::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ChildStarted {
   child : String
   kind : String
   label : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ChildStarted::equal(Self, Self) -> Bool
 pub fn ChildStarted::not_equal(Self, Self) -> Bool
 pub fn ChildStarted::to_repr(Self) -> @debug.Repr

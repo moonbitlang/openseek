@@ -1,13 +1,15 @@
 ///|
+#derive(Eq)
 pub(all) struct Session {
   id : String
   title : String?
   updated_at : Double?
   generating : Bool
   archived : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct Record {
   task_id : String
   kind : String
@@ -15,9 +17,10 @@ pub(all) struct Record {
   created_at : Double
   // Native User sequence; absent for service-only submissions.
   engine_sequence : Int32?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct History {
   etag : String?
   offset : Int32?
@@ -25,52 +28,57 @@ pub(all) struct History {
   session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
-} derive(Eq)
+}
 
 ///|
 pub extend History with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) struct Event {
   session_id : String
   task_id : String
   seq : Int32
   kind : String
   data : Json
-} derive(Eq)
+}
 
 ///|
 /// Only a submitted snapshot is retained here. The shared composer owns all
 /// editable drafts, their revisions, and delivery acknowledgement.
+#derive(Eq)
 pub struct Submission {
   content : @wire.Content
   known_tasks : Array[String]
   result_id : String?
-} derive(Eq)
+}
 
 ///|
 /// Recovery includes the fresh stream's history synchronization. Definitive
 /// errors disconnect until the conversation is explicitly opened again.
+#derive(Eq)
 pub(all) enum WatchStatus {
   Watching
   Reconnecting
   Disconnected
-} derive(Eq)
+}
 
 ///|
 pub extend WatchStatus with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub struct PendingAssistant {
   task : String
   history_request : Int32
   item : @transcript.TranscriptItem
-} derive(Eq)
+}
 
 ///|
 pub extend PendingAssistant with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) struct Conversation {
   records : Array[Record]
   history_cached : Bool
@@ -127,7 +135,7 @@ pub(all) struct Conversation {
   retrying : @composer.RunStage?
   controls : @engine_session.State
   notice : String?
-} derive(Eq)
+}
 
 ///|
 fn Conversation::empty() -> Conversation {
@@ -184,21 +192,24 @@ fn Conversation::empty() -> Conversation {
 }
 
 ///|
+#derive(Eq)
 pub struct Creation {
   // A page-local composer entry, never sent as a Cloud session ID.
   id : String
   request : Int32
   navigation : Int32
-} derive(Eq)
+}
 
 ///|
 /// One unsent submission, retained on the conversation until its HTTP handoff.
+#derive(Eq)
 pub struct PendingCommand {
   request : Int32
   input : CommandInput
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub enum CommandInput {
   Native(@wire.Command)
   Terminal(@composer.ShellCommand?)
@@ -207,13 +218,14 @@ pub enum CommandInput {
     draft~ : @composer.Draft,
     attachments~ : Array[@protocol.AttachmentSource]
   )
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
-} derive(Eq)
+}
 
 ///|
 impl ToJson for SessionEdit with fn to_json(self) {
@@ -224,11 +236,12 @@ impl ToJson for SessionEdit with fn to_json(self) {
 }
 
 ///|
+#derive(Eq)
 pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
-} derive(Eq)
+}
 
 ///|
 pub extend SessionEdit with Eq::{equal, not_equal}
@@ -237,16 +250,18 @@ pub extend SessionEdit with Eq::{equal, not_equal}
 pub extend MetadataSave with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum SessionListStatus {
   Idle
   Retrying
   Failed
-} derive(Eq)
+}
 
 ///|
 pub extend SessionListStatus with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) struct State {
   user_id : String?
   epoch : Int32
@@ -263,7 +278,7 @@ pub(all) struct State {
   retired : Array[String]
   creation : Creation?
   notice : String?
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {
