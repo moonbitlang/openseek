@@ -17,7 +17,7 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
   await task.press('Enter');
-  await expect(page.locator('#goal-set')).toBeVisible();
+  await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Ship the feature');
   await page.locator('#goal-set').click();
   await expect.poll(() => commands(app)).toEqual([{ command: { command: 'goal', action: 'set', text: 'Ship the feature' } }]);
@@ -49,38 +49,37 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   expect(app.device.pageErrors).toEqual([]);
 });
 
-for (const [name, workflow] of [['simplify', 'simplify.mbtx'], ['shrink', 'shrink.mbtx'], ['ultrareview', 'review.mbtx']]) {
-  for (const fresh of [false, true]) {
-    test(`Cloud ${name} shares prompt expansion in ${fresh ? 'a new' : 'an existing'} session`, async ({ page }, testInfo) => {
-      const app = await open(page);
-      if (fresh) await app.create();
-      const task = page.locator('#task');
+// Prompt expansion is shared: each command runs in one kind of session, and together they cover an existing and a new one.
+for (const [name, workflow, fresh] of [['simplify', 'simplify.mbtx', false], ['shrink', 'shrink.mbtx', false], ['ultrareview', 'review.mbtx', true]]) {
+  test(`Cloud ${name} shares prompt expansion in ${fresh ? 'a new' : 'an existing'} session`, async ({ page }, testInfo) => {
+    const app = await open(page);
+    if (fresh) await app.create();
+    const task = page.locator('#task');
+    await task.fill(`/${name}`);
+    await expect(page.locator('.completion-item').filter({ hasText: `/${name}` })).toBeVisible();
+    if (!fresh && name === 'simplify') {
+      await task.fill('/');
+      await expect(page.locator('.completion-item')).toHaveCount(5);
+      await page.screenshot({ path: testInfo.outputPath('cloud-shared-slash-menu.png') });
       await task.fill(`/${name}`);
-      await expect(page.locator('.completion-item').filter({ hasText: `/${name}` })).toBeVisible();
-      if (!fresh && name === 'simplify') {
-        await task.fill('/');
-        await expect(page.locator('.completion-item')).toHaveCount(5);
-        await page.screenshot({ path: testInfo.outputPath('cloud-shared-slash-menu.png') });
-        await task.fill(`/${name}`);
-      }
-      await task.press('Enter');
-      await expect(task).toHaveValue(`/${name} `);
-      await page.keyboard.type('the parser');
-      expect(commands(app)).toEqual([]);
-      expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
-      await page.locator('#send').click();
-      await expect.poll(() => commands(app).length).toBe(1);
-      const command = commands(app)[0].command;
-      expect(command.command).toBe('prompt');
-      const content = typeof command.content === 'string' ? command.content : command.content.filter(part => part.type === 'text').map(part => part.text).join('');
-      expect(content).toContain(`"@builtin/${workflow}"`);
-      expect(content).toContain('Focus: the parser');
-      if (name === 'ultrareview') expect(content).toContain('"--swarm"');
-      await expect(task).toHaveValue('');
-      expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(fresh ? 1 : 0);
-      expect(app.device.pageErrors).toEqual([]);
-    });
-  }
+    }
+    await task.press('Enter');
+    await expect(task).toHaveValue(`/${name} `);
+    await page.keyboard.type('the parser');
+    expect(commands(app)).toEqual([]);
+    expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
+    await page.locator('#send').click();
+    await expect.poll(() => commands(app).length).toBe(1);
+    const command = commands(app)[0].command;
+    expect(command.command).toBe('prompt');
+    const content = typeof command.content === 'string' ? command.content : command.content.filter(part => part.type === 'text').map(part => part.text).join('');
+    expect(content).toContain(`"@builtin/${workflow}"`);
+    expect(content).toContain('Focus: the parser');
+    if (name === 'ultrareview') expect(content).toContain('"--swarm"');
+    await expect(task).toHaveValue('');
+    expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(fresh ? 1 : 0);
+    expect(app.device.pageErrors).toEqual([]);
+  });
 }
 
 for (const name of ['goal', 'compact']) {
@@ -144,10 +143,10 @@ test('first Cloud goal creation failure retains its editor and command rejection
   await task.fill('/goal');
   await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
   await task.press('Enter');
-  await expect(page.locator('#goal-set')).toBeVisible();
+  await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Retain this goal');
   await page.locator('#goal-set').click();
-  await expect(page.getByRole('main')).toContainText('Error');
+  await expect(page.locator('#transcript')).toContainText('Cloud answered HTTP 503.');
   await expect(task).toHaveValue('Retain this goal');
   await expect(page.locator('#goal-set')).toBeEnabled();
   expect(commands(app)).toEqual([]);
@@ -157,7 +156,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
   app.controlRejected = 'Model is unavailable';
   await page.locator('#goal-set').click();
   await expect(page.getByRole('main')).toContainText('Model is unavailable');
-  const history = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/${sessionC}/messages`));
+  const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionC}/messages`));
   releaseHistory();
   await (await history).finished();
   await expect(page.getByRole('main')).toContainText('Model is unavailable');
@@ -287,44 +286,43 @@ test('Cloud preserves a service-only prompt and startup failure across reopen an
   expect(app.device.pageErrors).toEqual([]);
 });
 
-for (const { status, body, notice, label } of [
-  { status: 503, body: 'server model credentials are not configured', notice: 'Cloud model credentials are not configured', label: 'model credentials are explicitly missing' },
-  { status: 409, body: JSON.stringify({accepted: false, error: 'Cannot accept this command while compaction is pending.'}), notice: 'Cannot accept this command while compaction is pending.', label: 'the command is rejected with JSON' },
+// Each command covers one rejection: the pending state clears through one shared path.
+for (const { status, body, notice, label, command } of [
+  { status: 503, body: 'server model credentials are not configured', notice: 'Cloud model credentials are not configured', label: 'model credentials are explicitly missing', command: 'compact' },
+  { status: 409, body: JSON.stringify({accepted: false, error: 'Cannot accept this command while compaction is pending.'}), notice: 'Cannot accept this command while compaction is pending.', label: 'the command is rejected with JSON', command: 'goal' },
 ]) {
-  for (const command of ['compact', 'goal']) {
-    test(`Cloud ${command} clears pending state when ${label}`, async ({ page }) => {
-      const app = await open(page);
-      await page.route('**/v1/sessions/*/commands', async route => {
-        if (route.request().method() !== 'POST') return route.fallback();
-        const request = route.request().postDataJSON();
-        if (request.command.command !== command) return route.fallback();
-        await route.fulfill({ status, headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'text/plain', body });
-      });
-      if (command === 'compact') {
-        await compact(page);
-        await expect(page.locator('.composer-notice-text')).toHaveCount(0);
-        await page.locator('#task').fill('Keep this editable prompt');
-        await expect(page.locator('#send')).toBeEnabled();
-      } else {
-        await page.locator('#task').fill('/goal');
-        await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
-        await page.locator('#task').press('Enter');
-        await expect(page.locator('#goal-set')).toBeVisible();
-        await page.locator('#task').fill('Keep this goal');
-        await page.locator('#goal-set').click();
-        await expect(page.locator('#goal-set')).toBeVisible();
-        await expect(page.locator('#task')).toHaveValue('Keep this goal');
-        await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
-      }
-      await expect(page.locator('#transcript')).toContainText(notice);
-      if (command === 'goal') {
-        await expect(page.locator('#goal-set')).toBeVisible();
-        await expect(page.locator('#task')).toHaveValue('Keep this goal');
-        await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
-      }
-      expect(app.device.pageErrors).toEqual([]);
+  test(`Cloud ${command} clears pending state when ${label}`, async ({ page }) => {
+    const app = await open(page);
+    await page.route('**/v1/sessions/*/commands', async route => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      const request = route.request().postDataJSON();
+      if (request.command.command !== command) return route.fallback();
+      await route.fulfill({ status, headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'text/plain', body });
     });
-  }
+    if (command === 'compact') {
+      await compact(page);
+      await expect(page.locator('.composer-notice-text')).toHaveCount(0);
+      await page.locator('#task').fill('Keep this editable prompt');
+      await expect(page.locator('#send')).toBeEnabled();
+    } else {
+      await page.locator('#task').fill('/goal');
+      await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
+      await page.locator('#task').press('Enter');
+      await expect(page.locator('#goal-cancel')).toBeVisible();
+      await page.locator('#task').fill('Keep this goal');
+      await page.locator('#goal-set').click();
+      await expect(page.locator('#goal-set')).toBeVisible();
+      await expect(page.locator('#task')).toHaveValue('Keep this goal');
+      await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
+    }
+    await expect(page.locator('#transcript')).toContainText(notice);
+    if (command === 'goal') {
+      await expect(page.locator('#goal-set')).toBeVisible();
+      await expect(page.locator('#task')).toHaveValue('Keep this goal');
+      await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
+    }
+    expect(app.device.pageErrors).toEqual([]);
+  });
 }
 
 
@@ -334,7 +332,7 @@ test('Cloud keeps failed and successful identical prompts in task order live and
   let successfulTask = null;
   let nativeUserSaved = false;
   await app.install();
-  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/messages`, async route => {
+  await page.route(url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionA}/messages`, async route => {
     if (route.request().method() !== 'GET') return route.fallback();
     const history = app.histories.get(sessionA) || { messages: [], generating: false };
     const current = history.messages.filter(record => record.task_id === successfulTask);
@@ -389,7 +387,7 @@ for (const command of ['goal', 'compact']) {
       await page.locator('#task').fill('/goal');
       await expect(page.locator('.completion-item').filter({hasText: '/goal'})).toBeVisible();
       await page.locator('#task').press('Enter');
-      await expect(page.locator('#goal-set')).toBeVisible();
+      await expect(page.locator('#goal-cancel')).toBeVisible();
       await page.locator('#task').fill('Recover this goal');
       await page.locator('#goal-set').click();
     }

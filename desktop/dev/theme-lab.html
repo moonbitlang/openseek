@@ -1,7 +1,6 @@
 <!doctype html>
-<!-- Development palette sketch; not bundled with the application.
-     Current presets read ../styles/palette-{light,dark}.css on page load.
-     The preview is illustrative, not the production frontend. -->
+<!-- Development palette editor; not bundled with the application.
+     Run node desktop/dev/theme-lab.mjs for the real frontend with fixture data. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -244,13 +243,16 @@
       }
       iframe {
         display: block;
-        width: 1200px;
-        height: 680px;
+        width: 100%;
+        height: 760px;
         border: 0;
-        transform-origin: top left;
-        position: absolute;
-        left: 0;
-        top: 0;
+      }
+      iframe[hidden] {
+        display: none;
+      }
+      #preview-help {
+        padding: 32px;
+        line-height: 1.7;
       }
       .preview-caption {
         display: flex;
@@ -539,10 +541,15 @@
           >
         </div>
         <div class="preview-frame">
-          <iframe id="preview" title="SeekMoon live palette preview"></iframe>
+          <div id="preview-help">
+            <p>Run the real SeekMoon frontend with demo data:</p>
+            <code>node desktop/dev/theme-lab.mjs</code>
+            <p>The launcher builds the current frontend and opens this editor in Chromium. No account, model, or running Host is needed.</p>
+          </div>
+          <iframe id="preview" title="SeekMoon live palette preview" hidden></iframe>
         </div>
         <div class="preview-caption">
-          <span>Same layout and content · Colors update live</span
+          <span>Real Rabbita components · Colors update live</span
           ><span>Application code stays unchanged</span>
         </div>
         <div class="samples" id="samples" aria-label="Component color samples">
@@ -796,160 +803,164 @@
             source: null,
           },
           {
-            id: "light-paper",
+            id: "light-github",
             mode: "light",
-            name: "Paper Light",
-            description: "A custom light palette with soft paper-white backgrounds and clear blue accents.",
-            colors: {
-              "bg-canvas": "#f7f8fa",
-              "bg-surface": "#ffffff",
-              "bg-subtle": "#eef1f5",
-              "text-primary": "#242830",
-              "text-secondary": "#565e6c",
-              "text-muted": "#78818f",
-              "text-faint": "#78818f",
-              border: "#dde2e9",
-              "border-subtle": "#dde2e9",
-              accent: "#3269d9",
-              "accent-strong": "#2351b0",
-              "on-accent": "#ffffff",
-              "on-accent-strong": "#ffffff",
-              "accent-soft": "#eaf0ff",
-              "accent-border": "#dde2e9",
-              "text-selection": "#eaf0ff",
-              success: "#237a50",
-              danger: "#bd423d",
-              "danger-soft": "#fbeceb",
-              "danger-border": "#e8c3c0",
-              warning: "#946515",
-              code: "#242830",
-            },
-            source: null,
-          },
-          {
-            id: "light-flat",
-            mode: "light",
-            name: "Flat Light",
-            description: "A custom light palette with similar surface brightness and subtle divisions and borders.",
-            colors: {
-              "bg-canvas": "#f5f5f5",
-              "bg-surface": "#f8f8f8",
-              "bg-subtle": "#eeeeee",
-              "text-primary": "#292929",
-              "text-secondary": "#626262",
-              "text-muted": "#808080",
-              "text-faint": "#808080",
-              border: "#e3e3e3",
-              "border-subtle": "#e3e3e3",
-              accent: "#356dcc",
-              "accent-strong": "#2854a1",
-              "on-accent": "#ffffff",
-              "on-accent-strong": "#ffffff",
-              "accent-soft": "#e7eefb",
-              "accent-border": "#e3e3e3",
-              "text-selection": "#e7eefb",
-              success: "#347d53",
-              danger: "#b84d49",
-              "danger-soft": "#fbeceb",
-              "danger-border": "#e8c3c0",
-              warning: "#916714",
-              code: "#292929",
-            },
-            source: null,
-          },
-          {
-            id: "light-cool",
-            mode: "light",
-            name: "Cool Light",
-            description: "A custom light palette with cool gray backgrounds and distinct panel layers.",
-            colors: {
-              "bg-canvas": "#edf1f6",
-              "bg-surface": "#ffffff",
-              "bg-subtle": "#e3e9f1",
-              "text-primary": "#202c3a",
-              "text-secondary": "#506176",
-              "text-muted": "#758397",
-              "text-faint": "#758397",
-              border: "#ced8e4",
-              "border-subtle": "#ced8e4",
-              accent: "#2869ca",
-              "accent-strong": "#2057a6",
-              "on-accent": "#ffffff",
-              "on-accent-strong": "#ffffff",
-              "accent-soft": "#dfeafa",
-              "accent-border": "#ced8e4",
-              "text-selection": "#dfeafa",
-              success: "#217a60",
-              danger: "#bd454d",
-              "danger-soft": "#fbeceb",
-              "danger-border": "#e8c3c0",
-              warning: "#91650e",
-              code: "#202c3a",
-            },
-            source: null,
-          },
-          {
-            id: "light-warm",
-            mode: "light",
-            name: "Warm Light",
+            name: "GitHub Light",
             description:
-              "A custom light palette with warm ivory backgrounds, soft gray text, and blue accents.",
-            colors: {
-              "bg-canvas": "#faf8f3",
-              "bg-surface": "#fffefa",
-              "bg-subtle": "#f1eee6",
-              "text-primary": "#302e29",
-              "text-secondary": "#676259",
-              "text-muted": "#8b8376",
-              "text-faint": "#8b8376",
-              border: "#e5dfd3",
-              "border-subtle": "#e5dfd3",
-              accent: "#4268bc",
-              "accent-strong": "#315294",
-              "on-accent": "#ffffff",
-              "on-accent-strong": "#ffffff",
-              "accent-soft": "#e8edf8",
-              "accent-border": "#e5dfd3",
-              "text-selection": "#e8edf8",
-              success: "#527a4b",
-              danger: "#b44d41",
-              "danger-soft": "#fbeceb",
-              "danger-border": "#e8c3c0",
-              warning: "#946617",
-              code: "#302e29",
-            },
-            source: null,
-          },
-          {
-            id: "light-contrast",
-            mode: "light",
-            name: "Clear Light",
-            description: "A custom light palette with pure white backgrounds and darker text for stronger contrast.",
+              "Neutral white and gray surfaces with GitHub blue accents. Adapted from Primer.",
             colors: {
               "bg-canvas": "#ffffff",
-              "bg-surface": "#f2f3f5",
-              "bg-subtle": "#e7e9ed",
-              "text-primary": "#111820",
-              "text-secondary": "#3d4855",
-              "text-muted": "#606c79",
-              "text-faint": "#606c79",
-              border: "#c7ced7",
-              "border-subtle": "#c7ced7",
-              accent: "#175ecb",
-              "accent-strong": "#104999",
+              "bg-surface": "#f6f8fa",
+              "bg-subtle": "#eaeef2",
+              "text-primary": "#1f2328",
+              "text-secondary": "#59636e",
+              "text-muted": "#59636e",
+              "text-faint": "#818b98",
+              border: "#d1d9e0",
+              "border-subtle": "#eaeef2",
+              accent: "#0969da",
+              "accent-strong": "#0550ae",
               "on-accent": "#ffffff",
               "on-accent-strong": "#ffffff",
-              "accent-soft": "#e2ecfd",
-              "accent-border": "#c7ced7",
-              "text-selection": "#e2ecfd",
-              success: "#146c43",
-              danger: "#b42b34",
-              "danger-soft": "#fbeceb",
-              "danger-border": "#e8c3c0",
-              warning: "#805700",
-              code: "#111820",
+              "accent-soft": "#ddf4ff",
+              "accent-border": "#54aeff",
+              "text-selection": "#b6e3ff",
+              success: "#1a7f37",
+              danger: "#cf222e",
+              "danger-soft": "#ffebe9",
+              "danger-border": "#ff8182",
+              warning: "#9a6700",
+              code: "#1f2328",
             },
-            source: null,
+            source: "https://github.com/primer/primitives",
+          },
+          {
+            id: "light-one",
+            mode: "light",
+            name: "Atom One Light",
+            description:
+              "A soft neutral canvas with blue accents and the One Light syntax palette, adapted to application roles.",
+            colors: {
+              "bg-canvas": "#fafafa",
+              "bg-surface": "#f0f0f1",
+              "bg-subtle": "#e5e5e6",
+              "text-primary": "#383a42",
+              "text-secondary": "#696c77",
+              "text-muted": "#696c77",
+              "text-faint": "#a0a1a7",
+              border: "#d4d4d5",
+              "border-subtle": "#e5e5e6",
+              accent: "#4078f2",
+              "accent-strong": "#315fbd",
+              "on-accent": "#ffffff",
+              "on-accent-strong": "#ffffff",
+              "accent-soft": "#e8eefb",
+              "accent-border": "#a7bff8",
+              "text-selection": "#d3e1fa",
+              success: "#50a14f",
+              danger: "#e45649",
+              "danger-soft": "#fcecea",
+              "danger-border": "#eba49d",
+              warning: "#986801",
+              code: "#383a42",
+            },
+            source: "https://github.com/atom/one-light-syntax/blob/master/styles/colors.less",
+          },
+          {
+            id: "light-latte",
+            mode: "light",
+            name: "Catppuccin Latte",
+            description:
+              "Pastel gray layers, blue accents, and Catppuccin Latte text and status colors, adapted to application roles.",
+            colors: {
+              "bg-canvas": "#eff1f5",
+              "bg-surface": "#e6e9ef",
+              "bg-subtle": "#dce0e8",
+              "text-primary": "#4c4f69",
+              "text-secondary": "#5c5f77",
+              "text-muted": "#6c6f85",
+              "text-faint": "#7c7f93",
+              border: "#bcc0cc",
+              "border-subtle": "#ccd0da",
+              accent: "#1e66f5",
+              "accent-strong": "#1e66f5",
+              "on-accent": "#ffffff",
+              "on-accent-strong": "#ffffff",
+              "accent-soft": "#dce6fc",
+              "accent-border": "#9dbaf9",
+              "text-selection": "#c2d5fc",
+              success: "#40a02b",
+              danger: "#d20f39",
+              "danger-soft": "#fbe2e8",
+              "danger-border": "#e7a0af",
+              warning: "#8f5d13",
+              code: "#4c4f69",
+            },
+            source: "https://catppuccin.com/palette/",
+          },
+          {
+            id: "light-rose-pine",
+            mode: "light",
+            name: "Rosé Pine Dawn",
+            description:
+              "Warm cream layers with muted purple text and pine accents, adapted from Rosé Pine Dawn.",
+            colors: {
+              "bg-canvas": "#faf4ed",
+              "bg-surface": "#fffaf3",
+              "bg-subtle": "#f2e9e1",
+              "text-primary": "#575279",
+              "text-secondary": "#797593",
+              "text-muted": "#797593",
+              "text-faint": "#9893a5",
+              border: "#cecacd",
+              "border-subtle": "#dfdad9",
+              accent: "#286983",
+              "accent-strong": "#286983",
+              "on-accent": "#fffaf3",
+              "on-accent-strong": "#fffaf3",
+              "accent-soft": "#e4edf0",
+              "accent-border": "#a9c5cf",
+              "text-selection": "#c9dce3",
+              success: "#286983",
+              danger: "#b4637a",
+              "danger-soft": "#f4e4e9",
+              "danger-border": "#d8a5b4",
+              warning: "#91621e",
+              code: "#575279",
+            },
+            source: "https://rosepinetheme.com/palette/",
+          },
+          {
+            id: "light-solarized",
+            mode: "light",
+            name: "Solarized Light",
+            description:
+              "Solarized cream backgrounds, slate text, and blue accents adapted to application roles.",
+            colors: {
+              "bg-canvas": "#fdf6e3",
+              "bg-surface": "#eee8d5",
+              "bg-subtle": "#e4decb",
+              "text-primary": "#657b83",
+              "text-secondary": "#586e75",
+              "text-muted": "#657b83",
+              "text-faint": "#839496",
+              border: "#c9c5b5",
+              "border-subtle": "#ded8c6",
+              accent: "#268bd2",
+              "accent-strong": "#1b6b9f",
+              "on-accent": "#fdf6e3",
+              "on-accent-strong": "#fdf6e3",
+              "accent-soft": "#e2eef1",
+              "accent-border": "#91bdd0",
+              "text-selection": "#b8d8e7",
+              success: "#859900",
+              danger: "#dc322f",
+              "danger-soft": "#fae2d8",
+              "danger-border": "#e69b8e",
+              warning: "#9b7500",
+              code: "#586e75",
+            },
+            source: "https://ethanschoonover.com/solarized/",
           },
         ],
       );
@@ -997,8 +1008,6 @@
           ],
         ],
       ];
-      const PREVIEW =
-        '<!doctype html><html lang="en"><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;background:#101114;color:#ededf0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}.page{padding:34px 40px;width:1280px}.eyebrow{font-size:11px;letter-spacing:2.5px;color:#8e919a;margin-bottom:10px}.heading{display:flex;align-items:baseline;gap:18px;margin-bottom:24px}h1{font-size:28px;font-weight:600;margin:0}.caption{color:#a0a2ac;font-size:14px}.window{height:650px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg-canvas);color:var(--text-primary);display:grid;grid-template-columns:220px 1fr 250px;font-size:13px;line-height:1.6;box-shadow:0 18px 60px #0004}.sidebar{background:var(--bg-surface);border-right:1px solid var(--border);display:flex;flex-direction:column}.bar{height:48px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 17px;gap:9px}.dot{height:11px;width:11px;border-radius:50%;display:inline-block}.tools{margin-left:auto;color:var(--text-secondary)}.sidebody{padding:22px 12px}.sect{font-size:11px;letter-spacing:1px;color:var(--text-muted);margin:0 10px 8px}.row{padding:7px 10px;border-radius:6px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row.active{color:var(--accent-strong);background:var(--accent-soft)}.gap{height:22px}.footer{margin-top:auto;padding:14px 22px;border-top:1px solid var(--border);color:var(--text-secondary)}.chat{display:flex;flex-direction:column;min-width:0}.chat .bar{justify-content:space-between}.small{font-size:11px;color:var(--text-muted)}.conversation{padding:27px 32px;flex:1}.who{font-size:11px;color:var(--text-secondary);margin-bottom:9px;font-weight:600}.user{margin-bottom:27px}.answer{margin-bottom:16px}.tool{font:12px SFMono-Regular,Menlo,monospace;padding:11px 13px;border:1px solid var(--border);border-radius:6px;margin:13px 0;color:var(--text-secondary);background:var(--bg-surface)}.ok{color:var(--success)}.link{color:var(--accent-strong)}.code{background:var(--bg-surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}.codehead{padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted)}pre{font:12px/1.8 SFMono-Regular,Menlo,monospace;margin:10px 13px;color:var(--text-primary)}.kw{color:var(--accent-strong)}.str{color:var(--success)}.note{font-size:11px;color:var(--text-muted);margin-top:12px}.compose{padding:15px 22px 18px;border-top:1px solid var(--border)}.input{background:var(--bg-surface);border:1px solid var(--border);border-radius:9px;padding:13px}.placeholder{color:var(--text-muted);margin-bottom:26px}.inputbar{display:flex;gap:14px;align-items:center;color:var(--text-secondary);font-size:11px}.send{margin-left:auto;background:var(--accent);color:var(--on-accent);border-radius:6px;width:27px;height:27px;text-align:center;line-height:27px;font-size:17px}.files{background:var(--bg-surface);border-left:1px solid var(--border)}.filetabs{display:flex;gap:19px;padding:14px 16px;border-bottom:1px solid var(--border);height:48px}.selected{color:var(--accent-strong)}.tree{padding:16px 9px}.tree .row{font-size:12px}.indent{padding-left:26px}.diff{margin:9px 15px;border-top:1px solid var(--border);padding-top:14px;color:var(--text-secondary);font-size:11px}.stat{float:right;color:var(--success)}.danger{color:var(--danger)}.swatches{display:flex;gap:22px;margin-top:24px}.swatch{display:flex;gap:9px;align-items:center;font-size:11px;color:#a0a2ac}.chip{width:32px;height:32px;border-radius:7px;border:1px solid #ffffff20}.hex{display:block;color:#e1e2e7;font:11px/1.8 Menlo,monospace}.nav{display:flex;gap:9px;padding:18px 40px 0}.nav button{border:1px solid #444;background:#25262d;color:#eee;padding:9px 16px;border-radius:7px;cursor:pointer}.nav button.active{background:#e3e4eb;color:#18191d}body{background:var(--bg-canvas)}.window{width:1200px;height:680px;border-radius:0;border:0;box-shadow:none}.kw{color:var(--accent-strong)}.code pre{color:var(--code)}.send{background:var(--accent);color:var(--on-accent)}.str{color:var(--success)}.row:hover{background:var(--bg-subtle)}::selection{background:var(--text-selection)}</style><div class="window"><aside class="sidebar"><div class="bar"><i class="dot" style="background:#ff5f57"></i><i class="dot" style="background:#febc2e"></i><i class="dot" style="background:#28c840"></i><span class="tools">◫</span></div><div class="sidebody"><div class="sect">CHATS <span style="float:right">＋</span></div><div class="row">New chat</div><div class="gap"></div><div class="sect">PROJECTS</div><div class="row">⌄ &nbsp; SeekMoon</div><div class="row active">Fix window layout</div><div class="row">Export and share chats</div><div class="row">File tree accessibility</div><div class="row">Review path filters</div><div class="gap"></div><div class="row">› &nbsp; Proton</div><div class="row">› &nbsp; MoonBit</div></div><div class="footer">⚙ &nbsp; Settings</div></aside><main class="chat"><div class="bar"><span>Fix window layout <span class="small"> &nbsp; SeekMoon</span></span><span class="tools">⇧ &nbsp; ◫</span></div><div class="conversation"><div class="user"><div class="who">YOU</div>Check the window layout when the save dialog opens.</div><div class="who">SEEKMOON</div><div class="answer">The traffic light buttons were being laid out repeatedly.<br>The window now updates only when their final positions change.</div><div class="tool"><span class="ok">✓</span> &nbsp; moon test --target native <span style="float:right" class="ok">passed</span></div><div class="code"><div class="codehead">MoonBit <span style="float:right">Copy</span></div><pre><span class="kw">let</span> appearance = @proton.system_appearance()\n<span class="kw">let</span> title = <span class="str">"SeekMoon"</span>\n\n<span class="kw">// Keep the window appearance consistent.</span></pre></div><div style="margin-top:16px">The changes are in the <span class="link">window layout code</span>. Export is ready to test.</div><div class="note"><span class="ok">✓</span> Completed &nbsp; · &nbsp; 3 files changed &nbsp; · &nbsp; 24s</div></div><div class="compose"><div class="input"><div class="placeholder">Ask a follow-up, or type / for commands…</div><div class="inputbar"><span>＋</span><span>SeekMoon ▾</span><span>DS Flash ▾</span><span>◐ High</span><span class="send">↑</span></div></div></div></main><aside class="files"><div class="filetabs"><span class="selected">Files</span><span>Review</span><span>Terminal</span></div><div class="tree"><div class="row">⌄ &nbsp; desktop</div><div class="row indent">⌄ &nbsp; frontend</div><div class="row indent">&nbsp; &nbsp; ◇ view.mbt</div><div class="row indent">&nbsp; &nbsp; ◇ update.mbt</div><div class="row indent">⌄ &nbsp; styles</div><div class="row active indent">&nbsp; &nbsp; # tokens.css</div><div class="row indent">&nbsp; &nbsp; # sidebar.css</div><div class="row">› &nbsp; backend</div><div class="row">◇ moon.work</div></div><div class="diff">CHANGES <span class="stat">+18 <span class="danger">−9</span></span><p>3 files changed</p><p><span class="ok">●</span> &nbsp; Tests passed</p><p style="color:var(--warning)">△ &nbsp; Native review pending</p></div></aside></div></html>';
       const $ = (s) => document.querySelector(s),
         storageKey = "seekmoon-theme-lab-v1";
       let selected = "current",
@@ -1173,6 +1182,7 @@
         return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
       }
       function render() {
+        syncPreview();
         const p = preset(),
           c = compare ? original().colors : current();
         for (const button of document.querySelectorAll("[data-mode]"))
@@ -1196,8 +1206,10 @@
         const doc = $("#preview").contentDocument;
         if (doc) {
           doc.documentElement.style.colorScheme = mode();
+          doc.documentElement.dataset.theme = mode();
           for (const [k, v] of Object.entries(c))
-            doc.documentElement.style.setProperty("--" + k, v);
+            doc.documentElement.style.setProperty(`--${mode()}-${k}`, v);
+          doc.defaultView.dispatchEvent(new Event("theme-lab-palette"));
         }
         const pairs = [
           ["Body text / canvas", "text-primary", "bg-canvas"],
@@ -1215,7 +1227,7 @@
         const source = $("#source");
         source.replaceChildren();
         source.append(
-          "This is a palette preview, not the running SeekMoon app. Classic themes are adapted to application color roles.",
+          "The preview runs the current SeekMoon frontend with demo data. Native window chrome and system dialogs are not included. Classic themes are adapted to application color roles.",
         );
         if (p.source) {
           const a = document.createElement("a");
@@ -1227,14 +1239,19 @@
         }
         source.append(" Contrast ratios cover only the three color pairs above.");
       }
+      let previewMode;
+      function syncPreview() {
+        if (window.themeLabSetMode && previewMode !== mode()) {
+          previewMode = mode();
+          window.themeLabSetMode(previewMode);
+        }
+      }
       $("#preview").addEventListener("load", render);
-      $("#preview").srcdoc = PREVIEW;
-      new ResizeObserver(() => {
-        const width = $(".preview-frame").clientWidth,
-          scale = width / 1200;
-        $("#preview").style.transform = `scale(${scale})`;
-        $(".preview-frame").style.height = `${680 * scale}px`;
-      }).observe($(".preview-frame"));
+      if (window.themeLabSetMode) {
+        $("#preview-help").hidden = true;
+        $("#preview").hidden = false;
+        $("#preview").src = "/device/device-a/chat/session/session-1";
+      }
       $("#preset").onchange = (e) => choose(e.target.value);
       $("#compare").onchange = (e) => {
         compare = e.target.checked;

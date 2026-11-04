@@ -1,6 +1,8 @@
 import {
   "moonbitlang/core/json",
   "moonbitlang/core/string",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/openseek/workspace_file_ref",
   "moonbitlang/editor/base/common",
   "openseek_desktop/protocol",
 }

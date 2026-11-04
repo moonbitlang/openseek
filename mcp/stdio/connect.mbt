@@ -70,7 +70,7 @@ pub async fn[X] connect(
       inherit_env=true,
       stdin=child_stdin,
       stdout=child_stdout,
-      cwd?=cwd.map(dir => dir.view()),
+      cwd?=cwd.map(dir => dir.clamped_view()),
       no_wait=true,
     )
     (stdin_writer, stdout_reader, process)

@@ -10,14 +10,19 @@ const MaxBodyBytes : Int32 = 65536
 const MaxWireBytes : Int32 = 131072
 
 ///|
+/// The decoded body or total wire bytes exceeded the request limit.
+pub suberror RequestTooLarge {
+  RequestTooLarge(String)
+}
+
+///|
 /// A single bounded HTTP request: `POST /call` with a JSON body, the one
 /// request a loopback capability service (PTC, the MCP host) accepts per
 /// connection. No pipelining, upgrades, trailers, or ambiguous message
 /// framing. The general HTTP server parses unbounded headers before its
 /// callback, so admission reads this small envelope directly from the
 /// accepted socket: `head` first, so a caller can authenticate before any
-/// body is read, then `body`. Every failure raises; a caller answers all of
-/// them alike.
+/// body is read, then `body`. Every failure raises for the caller to report.
 struct RequestReader {
   socket : @socket.Tcp
   mut buffer : Bytes
@@ -39,7 +44,7 @@ async fn RequestReader::byte(self : RequestReader) -> Byte {
     }
     self.wire_bytes += bytes.length()
     guard self.wire_bytes <= MaxWireBytes else {
-      fail("Request framing too large")
+      raise RequestTooLarge("Request framing too large")
     }
     self.buffer = bytes
     self.offset = 0
@@ -114,9 +119,12 @@ pub async fn RequestReader::body(
       guard !length.is_empty() && length.all(c => c.is_ascii_digit()) else {
         fail("Invalid Content-Length")
       }
-      let size = @string.parse_int(length)
+      let size = @string.parse_int(length) catch {
+        // Only digits remain, so a parse failure is an oversized length.
+        _ => raise RequestTooLarge("Request exceeds 64 KiB")
+      }
       guard size >= 0 && size <= MaxBodyBytes else {
-        fail("Request exceeds 64 KiB")
+        raise RequestTooLarge("Request exceeds 64 KiB")
       }
       for _ in 0..<size {
         bytes.push(self.byte())
@@ -128,9 +136,11 @@ pub async fn RequestReader::body(
         guard !line.is_empty() && line.all(c => c.is_ascii_hexdigit()) else {
           fail("Invalid chunk size")
         }
-        let size = @string.parse_int(line, base=16)
+        let size = @string.parse_int(line, base=16) catch {
+          _ => raise RequestTooLarge("Request exceeds 64 KiB")
+        }
         guard size >= 0 && size <= MaxBodyBytes - bytes.length() else {
-          fail("Request exceeds 64 KiB")
+          raise RequestTooLarge("Request exceeds 64 KiB")
         }
         if size == 0 {
           guard self.line(2).is_empty() else { fail("Trailers unsupported") }

@@ -12,7 +12,7 @@ async function expectHeader(page, title) {
   })).toBe(true);
 }
 
-test('empty projects and settings pages share one persistent header', async ({ page }, testInfo) => {
+test('management dialogs preserve the empty project header', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   app.workspaces = [];
   app.liveSessions = [];
@@ -22,26 +22,20 @@ test('empty projects and settings pages share one persistent header', async ({ p
   const original = await page.locator('main > .topbar').elementHandle();
   for (const [button, title] of [['Settings', 'Settings'], ['Skills', 'Skills'], ['Scheduled', 'Scheduled tasks']]) {
     await page.getByRole('button', { name: button, exact: true }).click();
-    await expectHeader(page, title);
+    await expect(page.getByRole('dialog')).toHaveAccessibleName(title);
     expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
     await expect(page.locator('main h1')).toHaveCount(1);
     await expect(page.locator('.management-page-content')).toBeVisible();
-    const back = page.getByRole('button', { name: 'Back', exact: true });
-    await expect(back).toHaveAttribute('title', 'Back');
-    await expect(back).toHaveText('');
-    await expect(page.locator('.navigation-controls > button:first-child')).toHaveAccessibleName('Back');
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
     await expectHeader(page, 'SeekMoon');
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('settings-header.png') });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('button', { name: 'Show sidebar', exact: true })).toBeVisible();
-  await expect(page.locator('aside')).toBeHidden();
-  await expectHeader(page, 'Settings');
-  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeInViewport();
+  await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true })).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath('settings-header-narrow.png') });
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expectHeader(page, 'SeekMoon');
   expect(app.pageErrors).toEqual([]);
 });
@@ -72,8 +66,10 @@ test('loading and failure retain the selected conversation title', async ({ page
   await composer.fill('Keep my unfinished draft');
   for (const name of ['Settings', 'Skills', 'Scheduled']) {
     await page.getByRole('button', { name, exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).not.toBeVisible();
   }
-  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expectHeader(page, title);
   await expect(composer).toHaveValue('Keep my unfinished draft');
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);

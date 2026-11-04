@@ -36,6 +36,7 @@ pub struct SearchPage {
   total : Int32
   next_offset : Int32?
 }
+pub impl Show for SearchPage
 
 pub struct Tool {
   server : String

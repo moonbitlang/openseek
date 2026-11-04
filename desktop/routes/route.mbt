@@ -88,11 +88,6 @@ pub fn parse(path : String) -> Result[Location, RouteError] {
     ["codex", "new"] => CodexNew
     ["codex", "thread", id] => Thread(id)
     ["codex", "draft", id] => CodexDraft(id)
-    ["settings"] => Settings
-    ["skills"] => Skills
-    ["skills", "installed", id] => InstalledSkill(id)
-    ["skills", "market", source] => MarketSkill(source)
-    ["schedules"] => Schedules
     _ => return Err(InvalidRoute)
   }
   Ok({ device: Some(device), target, })
@@ -105,7 +100,7 @@ pub fn device_entry_path(device : String) -> String {
 }
 
 ///|
-/// Encode an application target; account identity never enters the URL.
+/// Encode a work destination; account identity never enters the URL.
 pub fn Location::path(self : Location) -> String? {
   match self.target {
     Cloud => return Some("/cloud")
@@ -125,11 +120,6 @@ pub fn Location::path(self : Location) -> String? {
     CodexNew => "codex/new"
     Thread(id) => "codex/thread/" + @percent.encode(id)
     CodexDraft(id) => "codex/draft/" + @percent.encode(id)
-    Settings => "settings"
-    Skills => "skills"
-    InstalledSkill(id) => "skills/installed/" + @percent.encode(id)
-    MarketSkill(source) => "skills/market/" + @percent.encode(source)
-    Schedules => "schedules"
   }
   Some("/device/" + @percent.encode(device) + "/" + suffix)
 }

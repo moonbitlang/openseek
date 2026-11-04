@@ -1,7 +1,7 @@
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
 }
 ---
 
@@ -15,8 +15,7 @@ async fn main {
   let out = @shell.Cmd("rg", [
     // A regex needle is one ordinary string element, so double the
     // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
-    "-n", "protect_from_cancel\\(",
-    "-g", "*.mbt", "src",
+    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
   ]).output()
   // For redirect with `Cmd(.., stdout=ToFile(...))` to a file under
   // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the

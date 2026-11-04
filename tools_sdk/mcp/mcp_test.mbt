@@ -33,16 +33,17 @@ async fn with_host(
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       defer server.close()
       let worker = group.spawn(no_wait=true, () => {
-        server.run_forever((req, request, conn) => {
+        server.run_forever((req, conn) => {
           defer conn.close()
           assert_true(req.meth is Post)
+          assert_eq(req.headers.get("Content-Type"), Some("application/json"))
           assert_eq(req.path, "/call")
           assert_eq(req.headers.get("Authorization"), Some("Bearer \{token}"))
-          let input = @json.parse(request.read_all().text())
+          let input = @json.parse(conn.text.read_all())
           received.push(input)
           let (status, envelope) = reply(input)
           conn.send_response(status, if status == 200 { "OK" } else { "Error" })
-          conn.write(envelope)
+          conn.text.write_json(envelope)
           conn.end_response()
         })
       })
@@ -257,6 +258,7 @@ async test "the first search downloads every page of the catalog" {
   assert_eq(page.total, 3)
   assert_true(page.next_offset is None)
   assert_true(page.instructions is None)
+  assert_eq("\{page}", page.text)
   assert_true(page.text.has_prefix("3 MCP tools across 2 servers."))
   assert_true(
     page.text.contains(
@@ -298,6 +300,7 @@ async test "an empty catalog and an unavailable server are ordinary pages" {
   let pages = []
   ignore(with_host(catalog_host([[]]), () => pages.push(@mcp.search())))
   assert_eq(pages[0].text, "No MCP servers are configured.")
+  inspect(pages[0], content="No MCP servers are configured.")
   assert_true(pages[0].tools.is_empty())
   assert_eq(pages[0].total, 0)
   ignore(
@@ -306,6 +309,7 @@ async test "an empty catalog and an unavailable server are ordinary pages" {
     }),
   )
   assert_eq(pages[1].text, "`billing` is unavailable: connection refused")
+  inspect(pages[1], content="`billing` is unavailable: connection refused")
   assert_true(pages[1].tools.is_empty())
 }
 

@@ -21,7 +21,7 @@ fn mount_fps_overlay() -> @sub.RunningSub? {
   overlay.set_attribute("id", "fps-overlay")
   overlay.set_attribute("aria-live", "off")
   overlay.set_attribute(
-    "style", "position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:2147483647;pointer-events:none;app-region:no-drag;padding:6px 10px;border-radius:6px;background:#111e;color:#fff;font:12px/18px monospace;white-space:nowrap;font-variant-numeric:tabular-nums",
+    "style", "position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:2147483647;pointer-events:none;app-region:no-drag;padding:0.5em calc(10em / 12);border-radius:6px;background:#111e;color:#fff;font:var(--font-size-xs)/1.5 monospace;white-space:nowrap;font-variant-numeric:tabular-nums",
   )
   let text = document.create_text_node("rAF · sampling…")
   overlay.append_child(text.as_node())

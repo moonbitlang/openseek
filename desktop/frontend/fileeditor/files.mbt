@@ -354,6 +354,7 @@ async fn read_file_snapshot(
   }
   let target = @resource.join_relative(root, path)
   let reply = @interop.bridge_request(owner.channel, @commands.fs_read_file, {
+    max_bytes: None,
     path: target.path,
     root: None,
   }) catch {

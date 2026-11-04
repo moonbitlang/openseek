@@ -1,7 +1,7 @@
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/sys",
@@ -10,7 +10,7 @@ import {
 
 ///|
 /// Leave room below mbtx's 48,000-byte transport limit, as read.mbtx does.
-const OutputBytes : Int = 40_000
+const OutputBytes : Int32 = 40_000
 
 ///|
 /// Placed before the caller's arguments. rg lets a later flag override an

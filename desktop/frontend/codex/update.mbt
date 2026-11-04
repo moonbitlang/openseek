@@ -73,24 +73,6 @@ fn update_message(
     SkillsFailed(cwd~) => (@cmd.none, state.with_skill_failure(cwd))
     ModelChanged(value) => (@cmd.none, state.with_selected_model(value))
     EffortChanged(value) => (@cmd.none, state.with_selected_effort(value))
-    TogglePermissionMenu =>
-      if state.can_choose_permission() {
-        (
-          @cmd.none,
-          {
-            ..state,
-            permission_picker: state.permission_picker.toggle(),
-            git_details_open: false,
-          },
-        )
-      } else {
-        (@cmd.none, state)
-      }
-    DismissPermissionMenu =>
-      (
-        @cmd.none,
-        { ..state, permission_picker: state.permission_picker.close(), },
-      )
     ChoosePermission(mode) =>
       if state.can_choose_permission() {
         (
@@ -1284,18 +1266,10 @@ test "Codex permission picker confirms full access and freezes while running" {
     "thread": { "id": "thread-1", "turns": [] },
   })
   assert_eq(idle.permission_mode(), @protocol.AutoReview)
-  let (_, opened) = update(
-    dispatch,
-    TogglePermissionMenu,
-    idle,
-    @interop.ChannelId::Local,
-    open_external,
-  )
-  assert_true(opened.permission_picker is CodexPermissionOpen(_))
   let (_, requested) = update(
     dispatch,
     ChoosePermission(@protocol.RequestApproval),
-    opened,
+    idle,
     @interop.ChannelId::Local,
     open_external,
   )
@@ -1307,9 +1281,12 @@ test "Codex permission picker confirms full access and freezes while running" {
     @interop.ChannelId::Local,
     open_external,
   )
+  assert_true(requested.can_open_permission_menu())
   assert_true(
     warning.permission_picker is CodexPermissionConfirmingFullAccess(_),
   )
+  // The dialog owns the choice until it is answered.
+  assert_true(!warning.can_open_permission_menu())
   assert_eq(warning.permission_mode(), @protocol.RequestApproval)
   let (_, cancelled) = update(
     dispatch,
@@ -1459,8 +1436,6 @@ test "Codex update handlers are pure and idempotent" {
     ),
     ModelChanged("gpt-test"),
     EffortChanged("high"),
-    TogglePermissionMenu,
-    DismissPermissionMenu,
     ChoosePermission(@protocol.RequestApproval),
     ChoosePermission(@protocol.AutoReview),
     ChoosePermission(@protocol.FullAccess),

@@ -15,35 +15,38 @@ pub fn Model::view(
     @settings.row(
       text(locale, AdditionalPrompt),
       [
-        @select_control.Control::{
-          id: "prompt-choice",
-          groups: [
+        @select_control.Control(
+          id="prompt-choice",
+          groups=[
             {
               label: text(locale, AdditionalPrompt),
               options: [
-                {
-                  value: "builtin_moonbit_guide",
-                  label: text(locale, MoonBitGuide),
-                },
-                { value: "custom", label: text(locale, CustomPrompt), },
+                @select_control.ViewOption(
+                  value="builtin_moonbit_guide",
+                  label=text(locale, MoonBitGuide),
+                ),
+                @select_control.ViewOption(
+                  value="custom",
+                  label=text(locale, CustomPrompt),
+                ),
               ],
             },
           ],
-          selected: match self.source {
+          selected=match self.source {
             Builtin => "builtin_moonbit_guide"
             Custom => "custom"
           },
-          disabled: !ready || saving,
-          open,
-          toggle,
-          dismiss,
-          change: @cmd.Emit(value => {
+          disabled=!ready || saving,
+          open~,
+          toggle~,
+          dismiss~,
+          change=@cmd.Emit(value => {
             @cmd.batch([dispatch(Selected(value)), dismiss])
           }),
-          title: text(locale, AdditionalPrompt),
-          aria_label: text(locale, AdditionalPrompt),
-          presentation: Setting,
-        }.render(),
+          title=text(locale, AdditionalPrompt),
+          aria_label=text(locale, AdditionalPrompt),
+          presentation=Setting,
+        ).render(),
       ],
       desc=text(locale, AdditionalPromptDescription),
     ),

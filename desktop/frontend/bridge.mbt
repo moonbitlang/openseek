@@ -366,7 +366,7 @@ fn DeviceState::bridge_subscription(
         websocket_epoch=self.websocket_epoch,
         reconnect_attempt=self.reconnect_attempt,
         dispatch=bridge_dispatch,
-        account~,
+        account=if device == "host" { None } else { account },
       )
     }
   }
@@ -1690,9 +1690,18 @@ fn bridge_notification(
 ) -> @cmd.Cmd {
   match notification {
     TerminalOutput(payload) =>
-      @terminal.output(channel, payload.id, payload.sequence, payload.data)
+      @terminal.output(
+        @terminal.Host(channel),
+        payload.id,
+        payload.sequence,
+        payload.data,
+      )
     TerminalExit(payload) =>
-      @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
+      @terminal.SessionExited(
+        channel=@terminal.Host(channel),
+        id=payload.id,
+        code=payload.code,
+      )
       |> Terminal
       |> dispatch
     _ =>

@@ -40,6 +40,8 @@ fn cloud_notification_model() -> Model {
     prediction: None,
     session: document,
     generating: true,
+    etag: None,
+    offset: None,
     messages: [
       {
         task_id: "cloud-run",
@@ -134,7 +136,7 @@ test "Cloud completion notifications ignore duplicate terminals and history repl
   let model = cloud_notification_model()
   let (_, finished) = cloud_notification_finish(model)
   let (duplicate, next) = cloud_notification_event(
-    { ..finished, screen: Settings, },
+    { ..finished, management_dialog: Some(Settings), },
     99,
     "task_finished",
     { "status": "completed", "result": { "status": "completed" } },
@@ -154,6 +156,8 @@ test "Cloud completion notifications ignore duplicate terminals and history repl
       prediction: None,
       generating: false,
       session: model.cloud.conversations["cloud-a"].document,
+      etag: None,
+      offset: None,
       messages: [
         {
           task_id: "cloud-run",
@@ -167,7 +171,7 @@ test "Cloud completion notifications ignore duplicate terminals and history repl
   )
   let (_, recovered) = update(test_dispatch(), CloudAction(replay), {
     ..model,
-    screen: Settings,
+    management_dialog: Some(Settings),
   })
   assert_true(
     cloud_finished_notification(model.cloud, recovered.cloud, replay) is None,
@@ -193,6 +197,8 @@ test "Cloud live completion is notified when its history reply arrives first" {
           prediction: None,
           generating: false,
           session: model.cloud.conversations["cloud-a"].document,
+          etag: None,
+          offset: None,
           messages: [
             {
               task_id: "cloud-run",
@@ -244,7 +250,10 @@ test "Cloud notifications preserve cancellation and engine result semantics" {
 test "Cloud notification targets are isolated by account and retired conversations" {
   let model = cloud_notification_model()
   let payload = model.cloud_identity().unwrap().key()
-  let (_, finished) = cloud_notification_finish({ ..model, screen: Settings, })
+  let (_, finished) = cloud_notification_finish({
+    ..model,
+    management_dialog: Some(Settings),
+  })
   let (_, signed_out) = update(
     test_dispatch(),
     CloudAction(@cloud.AccountChanged(None)),
@@ -354,7 +363,7 @@ test "Local and Cloud unread completions share one badge without reading each ot
   assert_eq(local_finished.notification_badge_count(), 1)
   let (_, both) = cloud_notification_finish({
     ..local_finished,
-    screen: Settings,
+    management_dialog: Some(Settings),
   })
   assert_eq(both.notification_badge_count(), 2)
   let (_, cloud_read) = update(

@@ -257,7 +257,7 @@ async test "a worktree an earlier engine left is handed over, once, with its ses
 /// The nonce prefix the launcher gives the worktrees of session `parent`.
 fn nonce_prefix(parent : String) -> String {
   let digest = @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(parent)))
-  "\{digest.view(end_offset=8)}-"
+  "\{digest.exact_view(end=8)}-"
 }
 
 ///|

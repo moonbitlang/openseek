@@ -27,6 +27,8 @@ fn deletion_state() -> State {
     Loaded(2, "a", request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
+      offset: None,
       messages: [],
       generating: false,
     }),
@@ -34,7 +36,7 @@ fn deletion_state() -> State {
     token="fixture",
     navigation=0,
   )
-  state
+  state.replace("a", { ..state.conversations["a"], last_seq: Some(0), })
 }
 
 ///|
@@ -74,6 +76,8 @@ test "deletion retires history and late list or poll responses" {
       Loaded(2, "a", history_request, {
         prediction: None,
         session: native_document([]),
+        etag: None,
+        offset: None,
         messages: [],
         generating: true,
       }),
@@ -251,6 +255,8 @@ test "completed history supersedes an earlier generating list row for deletion" 
     Loaded(2, "a", request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
+      offset: None,
       messages: [],
       generating: false,
     }),

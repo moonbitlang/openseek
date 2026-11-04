@@ -1,3 +1,9 @@
+---
+import {
+  "moonbitlang/core/debug",
+}
+---
+
 ///|
 /// Parameters including `self` are never `mut`: a function that needs a changed
 /// value rebinds a local with `let mut`.
@@ -32,10 +38,10 @@ fn main raise {
   for n in [1, 2, 3] {
     total += n
   }
-  assert_eq(total, 6)
+  @debug.assert_eq(total, 6)
   assert_eq(total.clamp(min=0, max=5), 5)
   assert_eq(collatz_steps(6), 8)
-  let counter = { count: 0, step: 2 }
+  let counter = { count: 0, step: 2, }
   counter.bump()
   assert_eq(counter.count, 2)
   // Negation is the `!` prefix; `Bool` has no `not` method.

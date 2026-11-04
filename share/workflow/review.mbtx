@@ -1,7 +1,7 @@
 ---
 import {
-  "moonbitlang/openseek_tools@0.2.0" @tools,
-  "moonbitlang/async",
+  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/core/async",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
@@ -45,8 +45,8 @@ async fn main {
   let criteria : Array[String] = []
   let mut swarm = false
   let selected : Array[String] = []
-  let mut verify : Int? = None
-  let mut max_tokens : Int? = None
+  let mut verify : Int32? = None
+  let mut max_tokens : Int32? = None
   for args = @env.args()[1:] {
     match args {
       [] => break
@@ -199,7 +199,7 @@ async fn start(
   kind : String,
   input : Json,
   label : String,
-  max_steps : Int,
+  max_steps : Int32,
 ) -> Launch {
   let started = @tools.call("subagent", {
     "kind": kind,
@@ -244,8 +244,8 @@ async fn wait_all(launches : Array[Launch]) -> Unit {
 ///|
 /// What an ended child left, and what it spent either way.
 priv enum Outcome {
-  Reported(Json, tokens~ : Int)
-  NoReport(String, tokens~ : Int)
+  Reported(Json, tokens~ : Int32)
+  NoReport(String, tokens~ : Int32)
 }
 
 ///|
@@ -258,7 +258,9 @@ async fn outcome(id : String) -> Outcome {
       "job_id": id,
       "offset": text.to_string().char_length(),
     })
-    guard read.data is Some(data) else { return NoReport(read.content, tokens~) }
+    guard read.data is Some(data) else {
+      return NoReport(read.content, tokens~)
+    }
     if data
       is {
         "subagent": {
@@ -299,7 +301,7 @@ fn review_input(goal : String, sha : String?, dirty : Bool) -> Json {
 
 ///|
 /// A non-negative integer argument of at most `maximum`.
-fn count(flag : String, value : String, maximum : Int) -> Int raise {
+fn count(flag : String, value : String, maximum : Int32) -> Int32 raise {
   guard !value.is_empty() && value.length() <= 9 else {
     fail("\{flag} takes a number from 0 to \{maximum}\n\{Usage}")
   }
@@ -345,20 +347,20 @@ let default_lenses : Array[String] = ["correctness", "architecture", "tests"]
 
 ///|
 /// Step budget for one lens reviewer: what single mode gives its reviewer.
-const LensSteps : Int = 100
+const LensSteps : Int32 = 100
 
 ///|
 /// Step budget for one verifier: it checks one claim, not the whole change.
-const VerifySteps : Int = 40
+const VerifySteps : Int32 = 40
 
 ///|
 /// How many findings are verified when `--verify` is not given.
-const DefaultVerifiers : Int = 6
+const DefaultVerifiers : Int32 = 6
 
 ///|
 /// The most verifiers one run starts. With five lenses that is 13 children,
 /// inside the session's 16 at once and a script's 64 in all.
-const MaxVerifiers : Int = 8
+const MaxVerifiers : Int32 = 8
 
 ///|
 /// Severities, most severe first, as the review contract orders them.
@@ -366,7 +368,7 @@ let severities : Array[String] = ["blocker", "high", "medium", "low", "nit"]
 
 ///|
 /// A severity's rank: 0 for a blocker, larger for less severe.
-fn rank(severity : String) -> Int {
+fn rank(severity : String) -> Int32 {
   match severities.search(severity) {
     Some(index) => index
     None => severities.length()
@@ -379,11 +381,11 @@ fn rank(severity : String) -> Int {
 priv struct Claim {
   // The finding as its most severe reporter wrote it.
   mut finding : Json
-  mut rank : Int
+  mut rank : Int32
   // What later findings are matched against: the first report's location
   // and title words.
   file : String
-  line : Int?
+  line : Int32?
   words : Array[String]
   lenses : Array[String]
   // What its verifier concluded; `None` when nobody verified it.
@@ -394,7 +396,7 @@ priv struct Claim {
 /// Where the claim's own finding points: the location shown with its text,
 /// which can differ by a few lines from the match key above when a more
 /// severe report from another lens took over the claim.
-fn location(claim : Claim) -> (String, Int?) {
+fn location(claim : Claim) -> (String, Int32?) {
   (normalize_file(text_field(claim.finding, "file")), line_field(claim.finding))
 }
 
@@ -411,7 +413,7 @@ fn text_field(finding : Json, name : String) -> String {
 }
 
 ///|
-fn line_field(finding : Json) -> Int? {
+fn line_field(finding : Json) -> Int32? {
   match finding {
     { "line": Number(line, ..), .. } => Some(line.to_int())
     _ => None
@@ -457,7 +459,7 @@ fn title_words(title : String) -> Array[String] {
 fn same_claim(
   claim : Claim,
   file : String,
-  line : Int?,
+  line : Int32?,
   words : Array[String],
 ) -> Bool {
   guard claim.file == file else { return false }
@@ -580,10 +582,7 @@ priv enum Verdict {
 /// verdict. A literal `\n` also ends the line: live verifiers wrote one
 /// there rather than a newline.
 fn verdict(report : Json, claim : Claim) -> Verdict {
-  let summary = text_field(report, "summary").replace_all(
-    old="\\n",
-    new="\n",
-  )
+  let summary = text_field(report, "summary").replace_all(old="\\n", new="\n")
   let (head, evidence) = match summary.trim().split("\n").to_array() {
     [] => ("", "")
     [head, .. rest] =>
@@ -653,7 +652,7 @@ fn stat_text(report : Json, name : String) -> String {
 }
 
 ///|
-fn stat_number(report : Json, name : String) -> Int {
+fn stat_number(report : Json, name : String) -> Int32 {
   match report {
     { "stats": Object(stats), .. } =>
       match stats.get(name) {
@@ -682,8 +681,8 @@ async fn run_swarm(
   sha : String?,
   dirty : Bool,
   names : Array[String],
-  verify~ : Int,
-  max_tokens~ : Int?,
+  verify~ : Int32,
+  max_tokens~ : Int32?,
 ) -> Unit {
   let launches : Array[Launch] = []
   for name in names {

@@ -220,9 +220,8 @@ pub fn State::project_draft(
   self : State,
   context : SidebarContext,
   root : String,
-  include_selected~ : Bool = false,
 ) -> @conversation.Input? {
-  guard (include_selected || !context.selected) &&
+  guard !context.selected &&
     context.project_registered(root) &&
     self.active_draft() is Some(draft) &&
     CodexProject(draft.grouping_root()) == CodexProject(root) else {
@@ -536,7 +535,11 @@ pub fn State::header(
   if !narrow {
     topbar.push(
       @html.button(
-        class=if terminal_open { "panel-toggle active" } else { "panel-toggle" },
+        class=if terminal_open {
+          "panel-toggle terminal-toggle active"
+        } else {
+          "panel-toggle terminal-toggle"
+        },
         attrs=@html.Attrs::build().disabled(!terminal_available),
         title=if terminal_open {
           ui(locale, HideTerminal)

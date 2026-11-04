@@ -30,17 +30,19 @@ fn activate_navigation(
   let model = { ..model, screen: navigation_screen(location.target), }
   guard model.navigation.phase is Waiting else { return (@cmd.none, model) }
   if location.target is Cloud {
-    return (
-      @cmd.none,
-      {
-        ..model,
-        selected_conversation: None,
-        loading_conversation: None,
-        api_setup_open: false,
-        sidebar_mode: @sidebar.ChatMode,
-        navigation: { ..model.navigation, phase: Active, },
-      },
-    )
+    let next = {
+      ..model,
+      selected_conversation: None,
+      loading_conversation: None,
+      api_setup_open: false,
+      sidebar_mode: @sidebar.ChatMode,
+      navigation: { ..model.navigation, phase: Active, },
+    }
+    if next.account is Some(account) &&
+      next.cloud.user_id == Some(account.user.user_id) {
+      return update_cloud(dispatch, @cloud.Create, next)
+    }
+    return (@cmd.none, next)
   }
   if location.target is CloudSession(account=owner, session~) {
     guard model.account is Some(account) &&
@@ -103,13 +105,6 @@ fn activate_navigation(
       },
     )
   }
-  if location.target is Settings {
-    let (command, next) = update_msg(dispatch, OpenSetup, model)
-    return (
-      command,
-      { ..next, navigation: { ..next.navigation, phase: Active, }, },
-    )
-  }
   // Browser authentication and device gates own connectivity UI. Do not turn
   // an unconnected or not-yet-listed target into a missing target.
   guard location.device is Some(_) &&
@@ -117,17 +112,24 @@ fn activate_navigation(
     dev.bridge is Connected else {
     return (@cmd.none, model)
   }
+  // Session inventory can arrive before the workspace snapshot identifies
+  // retired standalone chats. Resolve their ownership before restoring a URL.
+  if location.target is (Session(_) | ChatDraft(_) | Thread(_) | CodexDraft(_)) {
+    match dev.project_catalog {
+      None => return (@cmd.none, model)
+      Some(Err(message)) =>
+        return (
+          @cmd.none,
+          {
+            ..model,
+            navigation: { ..model.navigation, phase: Failed(message), },
+          },
+        )
+      Some(Ok(_)) => ()
+    }
+  }
   let (command, next, phase) = match location.target {
-    Cloud | CloudSession(..) | CloudDraft(..) | Settings =>
-      (@cmd.none, model, Active)
-    Schedules => {
-      let (cmd, next) = open_schedules(dispatch, model)
-      (cmd, next, Active)
-    }
-    Skills => {
-      let (cmd, next) = update_msg(dispatch, OpenSkills, model)
-      (cmd, next, Active)
-    }
+    Cloud | CloudSession(..) | CloudDraft(..) => (@cmd.none, model, Active)
     Chat | Codex => {
       let target : @routes.Target = if location.target is Chat {
         ChatNew
@@ -269,41 +271,7 @@ fn activate_navigation(
       } else {
         return replace_with_new_navigation(dispatch, model, CodexNew)
       }
-    InstalledSkill(id) | MarketSkill(id) as target => {
-      let detail : @skills.Detail = if target is InstalledSkill(_) {
-        InstalledRef(id)
-      } else {
-        MarketRef(id)
-      }
-      if target is InstalledSkill(_) && model.navigation.skills is None {
-        return (@cmd.none, model)
-      }
-      if target is InstalledSkill(_) &&
-        model.navigation.skills is Some(Err(message)) {
-        return (
-          @cmd.none,
-          {
-            ..model,
-            navigation: { ..model.navigation, phase: Failed(message), },
-          },
-        )
-      }
-      let (cmd, skills, resolution) = model.skills.open_detail(
-        dispatch.map(msg => Skills(msg)),
-        model.skills_input(),
-        detail,
-      )
-      (
-        cmd,
-        { ..model, skills, },
-        match resolution {
-          Waiting => Waiting
-          Opened => Active
-          Missing => Missing
-          Failed(message) => Failed(message)
-        },
-      )
-    }
   }
-  (command, { ..next, navigation: { ..next.navigation, phase, }, })
+  let next = { ..next, navigation: { ..next.navigation, phase, }, }
+  (command, next)
 }

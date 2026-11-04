@@ -1,10 +1,5 @@
 ///|
-pub using @protocol {
-  type Content,
-  type ContentPart,
-  type Image,
-  type ImageError,
-}
+pub using @protocol {type Content}
 
 ///|
 /// Project durable parts into API content without changing stored history.

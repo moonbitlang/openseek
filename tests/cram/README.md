@@ -5,6 +5,8 @@ Use them for a script's arguments, printed output, and exit status. Start with
 [Reading files with `read.mbtx`](read-workflow.md) for a complete `.mbtx` example.
 For scripts that run Moon commands, see
 [Checking, testing, and formatting](validation-workflows.md).
+For ordinary HTML packaging and session file references, see
+[Creating interactive file artifacts](file-artifacts.md).
 
 ## Run the examples
 

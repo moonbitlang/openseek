@@ -1,12 +1,12 @@
 ///|
 /// Both capture paths use the same anchored composer and delivery handshake.
-pub(all) enum RegionFeedbackPreview {
+pub enum RegionFeedbackPreview {
   Pdf(PdfCapturePreview)
   Office(OfficeRegionPreview)
 } derive(Eq)
 
 ///|
-pub(all) struct RegionFeedbackDraft {
+pub struct RegionFeedbackDraft {
   preview : RegionFeedbackPreview
   comment : String
 } derive(Eq)

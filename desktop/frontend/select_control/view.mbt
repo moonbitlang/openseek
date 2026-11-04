@@ -1,9 +1,21 @@
 ///|
 /// One selectable value. Labels are deliberately separate from wire values so
 /// compact triggers and readable menu rows never have to expose protocol text.
+/// A description is a second, quieter line explaining what choosing it does.
 pub(all) struct ViewOption {
   value : String
   label : String
+  description : String?
+}
+
+///|
+/// A row without a description reads as a single line.
+pub fn ViewOption::ViewOption(
+  value~ : String,
+  label~ : String,
+  description? : String,
+) -> ViewOption {
+  { value, label, description, }
 }
 
 ///|
@@ -38,7 +50,41 @@ pub(all) struct Control {
   change : @cmd.Emit[String]
   title : String
   aria_label : String
+  // A heading names the choice the menu makes, above its rows.
+  heading : String?
   presentation : Presentation
+}
+
+///|
+/// A menu without a heading opens straight onto its rows.
+pub fn Control::Control(
+  id~ : String,
+  groups~ : Array[Group],
+  selected~ : String,
+  disabled~ : Bool,
+  open~ : Bool,
+  toggle~ : @cmd.Cmd,
+  dismiss~ : @cmd.Cmd,
+  change~ : @cmd.Emit[String],
+  title~ : String,
+  aria_label~ : String,
+  heading? : String,
+  presentation~ : Presentation,
+) -> Control {
+  {
+    id,
+    groups,
+    selected,
+    disabled,
+    open,
+    toggle,
+    dismiss,
+    change,
+    title,
+    aria_label,
+    heading,
+    presentation,
+  }
 }
 
 ///|
@@ -253,6 +299,30 @@ fn Control::option_attrs(
 }
 
 ///|
+fn ViewOption::row_contents(
+  self : ViewOption,
+  selected : Bool,
+) -> Array[@html.Html] {
+  let check = @html.span(
+    class="custom-select-option-check",
+    if selected {
+      "✓"
+    } else {
+      ""
+    },
+  )
+  let text = if self.description is Some(description) {
+    @html.span(class="custom-select-option-text", [
+      @html.span(class="custom-select-option-label", self.label),
+      @html.span(class="custom-select-option-description", description),
+    ])
+  } else {
+    @html.span(class="custom-select-option-label", self.label)
+  }
+  [text, check]
+}
+
+///|
 pub fn Control::render(self : Control) -> @html.Html {
   let mut selected_label = self.selected
   let mut selected_index = 0
@@ -279,6 +349,9 @@ pub fn Control::render(self : Control) -> @html.Html {
   ]
   if self.open && !self.disabled {
     let menu : Array[@html.Html] = []
+    if self.heading is Some(heading) {
+      menu.push(@html.div(class="custom-select-heading", heading))
+    }
     let flat = self.groups.length() <= 1
     let mut index = 0
     for group in self.groups {
@@ -304,17 +377,7 @@ pub fn Control::render(self : Control) -> @html.Html {
             title=option.label,
             on_click=choose,
             attrs=self.option_attrs(index, option_count, selected),
-            [
-              @html.span(class="custom-select-option-label", option.label),
-              @html.span(
-                class="custom-select-option-check",
-                if selected {
-                  "✓"
-                } else {
-                  ""
-                },
-              ),
-            ],
+            option.row_contents(selected),
           ),
         )
         index += 1

@@ -5,7 +5,7 @@ using @cmd {trait Scheduler}
 /// The working-tree document behind Token/Tree's synthetic Modified models.
 /// Historical comparisons and a deleted working file deliberately carry no
 /// live document because current-checkout IDE requests would be misleading.
-pub(all) struct SemanticReviewLiveDocument {
+pub struct SemanticReviewLiveDocument {
   resource : @common.Uri
   path : @pathx.Relative
 } derive(Eq, Debug)
@@ -14,7 +14,7 @@ pub(all) struct SemanticReviewLiveDocument {
 /// The smallest input that can change a Token/Tree section plan. Layout is
 /// deliberately absent: switching split/inline updates existing DiffEditors
 /// and never reruns MoonDiff.
-pub(all) struct SemanticReviewInput {
+pub struct SemanticReviewInput {
   old_name : String
   new_name : String
   old_source : String

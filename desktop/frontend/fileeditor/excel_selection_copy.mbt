@@ -1,5 +1,5 @@
 ///|
-pub(all) enum ExcelCopyFormat {
+pub enum ExcelCopyFormat {
   Tsv
   Markdown
 } derive(Eq)
@@ -22,7 +22,7 @@ pub struct ExcelSelectionTable {
 pub extend ExcelSelectionTable with Eq::{equal, not_equal}
 
 ///|
-pub(all) enum ExcelCopyStatus {
+pub enum ExcelCopyStatus {
   Copying
   Copied
   Failed
@@ -32,7 +32,7 @@ pub(all) enum ExcelCopyStatus {
 pub extend ExcelCopyStatus with Eq::{equal, not_equal}
 
 ///|
-pub(all) struct ExcelCopyFeedback {
+pub struct ExcelCopyFeedback {
   preview : OfficeSelectionPreview
   generation : Int32
   format : ExcelCopyFormat
@@ -256,6 +256,8 @@ fn excel_copy_controls(
         .to_keyboard_event()
         .map(key => key.key() == "Escape")
         .unwrap_or(false) {
+        // Clearing the selection spends this Escape; it closes no layer.
+        event.prevent_default()
         dispatch(ExcelSelectionCleared(preview))
       } else {
         @cmd.none

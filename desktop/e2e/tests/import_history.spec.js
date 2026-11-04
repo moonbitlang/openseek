@@ -15,13 +15,8 @@ const json = JSON.stringify({
 const success = session_id => ({ status: 'success', session_id });
 const failed = message => ({ status: 'failed', message });
 
-async function setup(page, worktree = false, unplaced = false) {
+async function setup(page, worktree = false) {
   const app = new DesktopBrowserHarness(page);
-  if (unplaced) {
-    app.workspaces = [];
-    app.liveSessions = [];
-    app.sessionGroups = sessions => ({ groups: app.workspaces.map(workspace => ({ workspace, name: 'Unnamed workspace', session_root: `${workspace}/.openseek`, sessions, error: '' })) });
-  }
   const original = app.replyFor.bind(app);
   app.importFailure = null;
   app.imports = new Map();
@@ -52,11 +47,7 @@ async function setup(page, worktree = false, unplaced = false) {
   };
   await app.install();
   await app.goto();
-  if (unplaced) {
-    await page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name: 'Chat', exact: true }).click();
-  } else {
-    await app.openSession();
-  }
+  await app.openSession();
   await openImport(page);
   const dialog = page.getByRole('dialog', { name: 'Import conversation' });
   await expect(dialog).toBeVisible();
@@ -125,23 +116,6 @@ test('closing a pending import does not navigate away and narrow dialog fits', a
 });
 
 
-test('Chat import creates a chat workspace and appears in Chats after reload', async ({ page }, testInfo) => {
-  const { app, dialog } = await setup(page, false, true);
-  await dialog.getByRole('textbox').fill('https://shares.example/v1/shares/sh_test');
-  await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
-  await expectWritable(page, app);
-  const request = app.requests.find(request => request.method === 'session.import');
-  expect(request.params.workspace).toBe(`${app.chatRoot}/Unnamed workspace`);
-  expect(app.requests.filter(request => request.method === 'fs.create_unnamed_workspace')).toHaveLength(1);
-  await expect(page.locator('.workspace-row')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Imported fixture', exact: true })).toBeVisible();
-  await page.reload();
-  await page.getByRole('button', { name: 'Imported fixture', exact: true }).click();
-  await expectWritable(page, app);
-  await page.screenshot({ path: testInfo.outputPath('imported-chat.png') });
-});
-
-
 test('imported session accepts a new prompt using the selected workspace', async ({ page }) => {
   const { app, dialog } = await setup(page, true);
   await chooseJson(page, dialog);
@@ -173,36 +147,25 @@ test('leaving while the imported catalog loads prevents a late navigation', asyn
   await chooseJson(page, dialog);
   await expect(page.locator('.navigation-notice')).toContainText('Loading destination');
   expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'desktop-import-0')).toBe(false);
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.goBack();
   await expect(page.getByRole('button', { name: 'Imported fixture', exact: true })).toBeVisible();
   await expect(page.locator('#transcript')).toContainText('Show the browser fixture');
   expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'desktop-import-0')).toBe(false);
 });
 
-for (const failure of ['import', 'registration']) {
-  test(`Chat import reuses its workspace after ${failure} failures`, async ({ page }) => {
-    const { app, dialog } = await setup(page, false, true);
-    const link = 'https://shares.example/v1/shares/sh_test';
-    await dialog.getByRole('textbox').fill(link);
-    const error = failure === 'import' ? 'The share has expired.' : 'Could not register workspace.';
-    if (failure === 'import') app.importFailure = error;
-    else app.workspaceFailure = error;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
-      await expect(dialog.getByRole('status')).toHaveText(error);
-      await expect(dialog.getByRole('textbox')).toHaveValue(link);
-      await expect(dialog.getByRole('button', { name: 'Import link', exact: true })).toBeEnabled();
-    }
-    app.importFailure = null;
-    app.workspaceFailure = null;
-    await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
-    await expectWritable(page, app);
-    expect(app.requests.filter(request => request.method === 'session.import').at(-1).params.source).toEqual({ kind: 'share', url: link });
-    expect(app.requests.filter(request => request.method === 'fs.create_unnamed_workspace')).toHaveLength(1);
-    const registrations = app.requests.filter(request => request.method === 'workspace.add');
-    expect(registrations).toHaveLength(failure === 'registration' ? 3 : 1);
-    const destinations = [...registrations.map(request => request.params.path),
-      ...app.requests.filter(request => request.method === 'session.import').map(request => request.params.workspace)];
-    expect(new Set(destinations).size).toBe(1);
-  });
-}
+test('a failed project import retains its destination and input for retry', async ({ page }) => {
+  const { app, dialog } = await setup(page);
+  const link = 'https://shares.example/v1/shares/sh_test';
+  await dialog.getByRole('textbox').fill(link);
+  app.importFailure = 'The share has expired.';
+  await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
+  await expect(dialog.getByRole('status')).toHaveText(app.importFailure);
+  await expect(dialog.getByRole('textbox')).toHaveValue(link);
+  app.importFailure = null;
+  await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
+  await expectWritable(page, app);
+  const requests = app.requests.filter(request => request.method === 'session.import');
+  expect(requests).toHaveLength(2);
+  expect(requests.map(request => request.params.workspace)).toEqual(['/workspace', '/workspace']);
+  expect(requests[1].params.source).toEqual({ kind: 'share', url: link });
+});

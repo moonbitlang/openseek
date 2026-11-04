@@ -1,7 +1,7 @@
 ///|
 /// One hunk's true changed lines in full-file coordinates. The same normalized
 /// value also stores accumulated Line/Token/Tree review coverage.
-pub(all) struct ReviewHunk {
+pub struct ReviewHunk {
   priv old_ranges : Array[@common.LineRange]
   priv new_ranges : Array[@common.LineRange]
 } derive(Eq)
@@ -91,13 +91,13 @@ priv enum ReviewHunkState {
 } derive(Eq)
 
 ///|
-pub(all) enum ReviewFileProgress {
+pub enum ReviewFileProgress {
   ReviewFileInProgress(ReviewHunk)
   ReviewFileComplete
 } derive(Eq)
 
 ///|
-pub(all) struct ChangedFileReview {
+pub struct ChangedFileReview {
   priv change : ChangedFile
   priv progress : ReviewFileProgress
 } derive(Eq)
@@ -110,7 +110,7 @@ priv enum ReviewCompletionState {
 }
 
 ///|
-pub(all) struct ReviewActiveHunk {
+pub struct ReviewActiveHunk {
   priv change : ChangedFile
   priv review_generation : Int32
   priv surface_generation : Int32
@@ -122,7 +122,7 @@ pub(all) struct ReviewActiveHunk {
 } derive(Eq)
 
 ///|
-pub(all) struct ReviewHunkPosition {
+pub struct ReviewHunkPosition {
   priv current : Int32
   priv total : Int32
 } derive(Eq)

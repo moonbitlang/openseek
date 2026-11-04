@@ -23,7 +23,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply])
+pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply], @cmd.Emit[CommandResult])
 
 pub fn dirty_paths_preview(Array[String], Int32) -> String
 
@@ -46,6 +46,8 @@ pub(all) enum Action {
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
   ShellCommandSubmitted(identity~ : Identity, command~ : String)
+  CommandResultRecovered(identity~ : Identity)
+  CommandResultSubmitted(identity~ : Identity, id~ : String, text~ : String, choice~ : FollowupChoice?)
   ShellTerminalRequested(identity~ : Identity, index~ : Int32)
   MentionOpened(identity~ : Identity, mention~ : Mention)
   GoalEditStarted(identity~ : Identity)
@@ -69,7 +71,8 @@ pub(all) enum Action {
   PermissionSelected(identity~ : Identity, mode~ : @protocol.CodexPermissionMode)
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
-  ApprovalModeToggled(identity~ : Identity)
+  ApprovalMenuToggled(identity~ : Identity)
+  ApprovalSelected(identity~ : Identity, mode~ : @protocol.OpenSeekApproval)
   ApiSetupRequested(identity~ : Identity)
   QueuedInputEditRequested(identity~ : Identity, id~ : String)
   QueuedInputSteerRequested(identity~ : Identity, id~ : String)
@@ -88,8 +91,9 @@ pub(all) struct ApprovalNotice {
   answered : Bool
 } derive(Eq)
 
-pub(all) struct ApprovalToggle {
-  on : Bool
+pub(all) struct ApprovalSelect {
+  mode : @protocol.OpenSeekApproval
+  open : Bool
   enabled : Bool
 } derive(Eq)
 
@@ -104,6 +108,12 @@ pub(all) struct CodexRequestInput {
   answers : Map[String, String]
 } derive(Eq)
 
+pub(all) enum CommandResult {
+  Ready(Input, String, String)
+  Restore(Input, String)
+  Settled(@interop.ConversationIdentity, String, Bool)
+}
+
 pub(all) enum ContextComponent {
   ConnectionBanner(device_name~ : String?)
   SubrunDock(lanes~ : Array[@subrun.Lane])
@@ -117,7 +127,6 @@ pub(all) enum ContextComponent {
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
 } derive(Eq)
-pub fn ContextComponent::render(locale? : @i18n.Locale, Self, Identity, @cmd.Emit[Action]) -> @html.Html
 
 pub(all) struct Draft {
   task : String
@@ -132,6 +141,7 @@ pub fn Draft::not_equal(Self, Self) -> Bool
 pub fn Draft::prompt(Self) -> String
 pub fn Draft::to_repr(Self) -> @debug.Repr
 pub fn Draft::user_item(Self) -> @transcript.ItemKind
+pub fn Draft::with_artifact_snapshot(Self, @mention_context.ArtifactSnapshot) -> Self
 pub fn Draft::with_mention(Self, Mention) -> Self
 pub fn Draft::with_office_selection(Self, String?) -> Self
 pub fn Draft::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
@@ -183,9 +193,7 @@ pub(all) struct GitControl {
 type GitPresentation derive(Eq)
 pub fn GitPresentation::GitPresentation(branch~ : String, changes? : GitChanges, pull_request? : GitPullRequest, compare_url? : String, missing_pull_request? : String) -> Self
 pub fn GitPresentation::equal(Self, Self) -> Bool
-pub fn GitPresentation::label(Self) -> String
 pub fn GitPresentation::not_equal(Self, Self) -> Bool
-pub fn GitPresentation::summary(locale? : @i18n.Locale, Self) -> String
 pub fn GitPresentation::tone(Self) -> String
 
 type GitPullRequest derive(Eq)
@@ -262,14 +270,6 @@ pub fn Mention::editor_annotation(String, @common.Range, String, String, side? :
 pub fn Mention::equal(Self, Self) -> Bool
 pub fn Mention::not_equal(Self, Self) -> Bool
 pub fn Mention::to_repr(Self) -> @debug.Repr
-
-type Menu[T] derive(Eq)
-pub fn[T] Menu::Menu(Array[T], loading~ : Bool, draft_without_token~ : String) -> Self[T]
-pub fn[T] Menu::current(Self[T]) -> T?
-pub fn[T : Eq] Menu::equal(Self[T], Self[T]) -> Bool
-pub fn[T : Eq] Menu::not_equal(Self[T], Self[T]) -> Bool
-pub fn[T] Menu::selected(Self[T]) -> Int32
-pub fn[T] Menu::shifted(Self[T], Int32) -> Self[T]
 
 pub(all) struct MissingWorktreeNotice {
   name : String
@@ -397,6 +397,13 @@ pub fn RunningSubmit::equal(Self, Self) -> Bool
 pub fn RunningSubmit::not_equal(Self, Self) -> Bool
 pub fn RunningSubmit::to_repr(Self) -> @debug.Repr
 
+pub(all) struct ShellCommand {
+  id : String
+  command : String
+} derive(Eq)
+pub fn ShellCommand::equal(Self, Self) -> Bool
+pub fn ShellCommand::not_equal(Self, Self) -> Bool
+
 pub(all) struct SlashCommand {
   label : String
   detail : String
@@ -413,17 +420,8 @@ pub(all) enum StatusComponent {
   PermissionStatus(PermissionControl)
   GitStatus(GitControl)
   WorktreeStatus(WorktreeControl)
-  ApprovalStatus(ApprovalToggle)
+  ApprovalStatus(ApprovalSelect)
 } derive(Eq)
-
-type Trigger derive(Eq)
-pub fn Trigger::draft_without_token(Self) -> String
-pub fn Trigger::equal(Self, Self) -> Bool
-pub fn Trigger::marker(Self) -> String
-pub fn Trigger::matches(Self, Array[String]) -> Bool
-pub fn Trigger::not_equal(Self, Self) -> Bool
-pub fn Trigger::parse(String, inline_markers~ : String) -> Self?
-pub fn Trigger::query(Self) -> String
 
 pub(all) struct WorktreeArchiveDialog {
   refusal : @protocol.ArchiveNeedsForceReply

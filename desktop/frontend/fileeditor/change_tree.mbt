@@ -1,7 +1,7 @@
 ///|
 /// Keep exact Git rows as identities: a deletion and a recreated untracked
 /// file may share a path without sharing review progress or selection.
-pub(all) enum ChangeTreeItem {
+pub enum ChangeTreeItem {
   ChangeDirectory(@pathx.Relative)
   ChangeFile(ChangedFile)
 } derive(Eq)

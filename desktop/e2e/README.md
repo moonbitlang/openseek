@@ -34,10 +34,11 @@ just test-browser
 The repository root keeps `just desktop-test-browser` as an alias. After the
 bundle has been built, `npm test` in this directory runs Playwright alone.
 
-CI builds with `node package/build.mjs browser --release` from `desktop/` so
-each fresh page loads the smaller production bundle. Local `just test-browser`
-keeps the debug bundle for diagnosis. Both use the same static-server script
-compiled for native release to avoid Wasm transfer overhead.
+CI and local `just test-browser` build with
+`node package/build.mjs browser --release` from `desktop/`. The smaller bundle
+keeps mocked resource responses below Chromium's 100 MiB DevTools pipe limit;
+large debug bundles can exceed it after base64 encoding. Both use the same
+static-server script compiled for native release to avoid Wasm transfer overhead.
 
 CI runs the browser tests in the official Playwright image, which includes
 Chromium, WebKit, and their system dependencies. Keep `PLAYWRIGHT_IMAGE` in
@@ -65,3 +66,19 @@ a distinct integration path or reproduce a browser-specific regression.
 Avoid checks that only memorialize a removed control or feature, or pin icon
 paths, decorative pixel dimensions, alignment, and theme colors. Keep layout
 checks tied to observable behavior such as clipping, reachability, or scrolling.
+
+## Offline interactive answers
+
+The artifact runner compiles the Rabbita starter and runs four standalone
+component cases plus five state/composer flows. Six file-preview cases use a
+self-contained HTML fixture. Run `npm run test:artifact-offline` or
+`just desktop-test-artifacts`.
+
+For explicit live-model acceptance, see `tests/integration/README.md`. Given its generated page, `OPENSEEK_LIVE_COMPONENT_HTML=... node --test desktop/e2e/artifact-generation-live.test.mjs` independently tests the retained source and browser behavior. Set `OPENSEEK_LIVE_SELECTION_OUT` to capture a selected state for the live follow-up check. Live calls stay outside offline CI.
+
+## Offline file artifacts
+
+Run `npm run test:artifact-offline` to build the production frontend and exercise
+self-contained HTML previews with fixture transport in a headless browser.
+Set `OPENSEEK_UI_CAPTURE_DIR` for local captures. From the repository root, run
+`node desktop/e2e/run-artifact-offline.mjs`.

@@ -44,6 +44,7 @@ pub(all) struct InstalledItem {
   // Whether the library advertises this entry to new sessions. Disabled
   // entries stay listed and previewable, and new installs default to enabled.
   enabled : Bool
+  builtin : Bool
 } derive(Eq)
 
 ///|
@@ -95,7 +96,7 @@ pub fn installed_from_reply(
   reply : @protocol.InstalledSkillsReply,
 ) -> Array[InstalledItem] raise SkillReplyError {
   let entries = match reply {
-    InstalledSkills(skills) => skills
+    InstalledSkills(skills, ..) => skills
     InstalledSkillsError(message) => raise SkillReplyError(message)
   }
   let items : Array[InstalledItem] = []
@@ -112,6 +113,7 @@ pub fn installed_from_reply(
       source: entry.source,
       registry: entry.registry,
       enabled: entry.enabled,
+      builtin: entry.builtin,
     })
   }
   items

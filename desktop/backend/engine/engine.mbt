@@ -1610,7 +1610,7 @@ async fn[G] start_serve_engine(
     stdin=child_stdin,
     stdout=child_stdout,
     stderr=child_stderr,
-    cwd?=config.cwd.map(cwd => cwd.to_string().view()),
+    cwd?=config.cwd.map(cwd => cwd.to_string().clamped_view()),
     // The GUI-subsystem host has no console, so a console-subsystem child
     // would otherwise open its own visible conhost window on Windows.
     no_console_window=true,

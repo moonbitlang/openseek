@@ -1,5 +1,5 @@
 ///|
-pub(all) enum MessageReceipt {
+pub enum MessageReceipt {
   Applied
   Dropped
   Closed

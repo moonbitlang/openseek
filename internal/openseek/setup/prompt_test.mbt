@@ -230,3 +230,76 @@ async test "configured system prompt uses the selected built-in prompt" {
     assert_eq(prefix, "\{@prompt.system_prompt_for_model(model)}\n\n")
   }
 }
+
+///|
+async test "configured MCP servers are named in the prompt tail" {
+  @vfs.with_tmpdir(prefix="openseek-prompt-mcp-", dir => {
+    @vfs.FileSystem({
+      "first.json": (
+        #|{"mcpServers": {"github": {"command": "gh-mcp"}, "linear": {"url": "https://mcp.linear.app/mcp"}}}
+      ),
+      "broken.json": "{",
+      "second.json": (
+        #|{"mcpServers": {"github": {"url": "https://api.githubcopilot.com/mcp/"}, "slack": {"url": "${OPENSEEK_TEST_UNSET_SLACK_URL}"}}}
+      ),
+    }).write_to(dir)
+    let parsed = @testkit.run_matches(
+      argv=[
+        "--mcp-config",
+        "\{dir}/first.json",
+        "--mcp-config",
+        "\{dir}/broken.json",
+        "--mcp-config",
+        "\{dir}/missing.json",
+        "--mcp-config",
+        "\{dir}/second.json",
+        "write",
+        "MoonBit",
+      ],
+      env={
+        "DEEPSEEK": "test-key",
+        "OPENSEEK_GLOBAL_SKILLS_DIR": "\{dir}/no-global-skills",
+      },
+    )
+    let prompt = @setup.configured_system_prompt(
+      parsed,
+      Deepseek(V4Flash),
+      workspace_root=dir,
+    )
+    // The section comes after the environment block, and an unusable file
+    // only drops its own servers: a replaced server keeps its first position,
+    // and a reference to an unset variable does not hide a server's name.
+    let (_, tail) = split_composed_prompt(prompt)
+    guard tail.split_once("\n## MCP servers\n") is Some((_, section)) else {
+      fail("prompt tail carries no MCP servers section:\n\{tail}")
+    }
+    assert_true(
+      section.contains("Configured MCP servers: `github`, `linear`, `slack`.\n"),
+      msg=section,
+    )
+  })
+}
+
+///|
+async test "prompt has no MCP servers section without a configured server" {
+  @vfs.with_tmpdir(prefix="openseek-prompt-mcp-", dir => {
+    @vfs.FileSystem({ "empty.json": "{\"mcpServers\": {}}" }).write_to(dir)
+    for
+      argv in [
+        ["write", "MoonBit"],
+        ["--mcp-config", "\{dir}/empty.json", "write", "MoonBit"],
+      ] {
+      let parsed = @testkit.run_matches(argv~, env={
+        "DEEPSEEK": "test-key",
+        "OPENSEEK_GLOBAL_SKILLS_DIR": "\{dir}/no-global-skills",
+      })
+      let prompt = @setup.configured_system_prompt(
+        parsed,
+        Deepseek(V4Flash),
+        workspace_root=dir,
+      )
+      // Line-anchored: the base prompt has a `### MCP servers with …` heading.
+      assert_true(!prompt.contains("\n## MCP servers\n"), msg=argv.join(" "))
+    }
+  })
+}

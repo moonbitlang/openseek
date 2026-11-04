@@ -50,7 +50,7 @@ fn decode(text : String, imported : String) -> Array[Record] raise {
       raise SessionImportError("Expected one conversation and its subruns.")
     }
     ids[id] = true
-    let suffix = id.view(start_offset=parent.length()).to_owned()
+    let suffix = id.exact_view(start=parent.length()).to_owned()
     guard suffix
       .iter()
       .all(c => c.is_ascii_digit() || c == '-' || c == 's' || c == 'r') else {

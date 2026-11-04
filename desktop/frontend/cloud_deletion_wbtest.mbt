@@ -53,7 +53,7 @@ test "Cloud deletion falls back within Cloud regardless of the sidebar mode" {
   assert_false(removed.cloud.conversations.contains("cloud-a"))
   assert_true(removed.navigation.location == removed.navigation_location())
   let (_, settings) = update(test_dispatch(), OpenSetup, removed)
-  let (_, back) = update(test_dispatch(), Navigation(Back), settings)
+  let (_, back) = update(test_dispatch(), CloseManagementDialog, settings)
   assert_true(back.cloud_draft_identity() == removed.cloud_draft_identity())
 }
 
@@ -67,8 +67,8 @@ test "Cloud deletion preserves another page and ignores another account's replie
     CloudAction(@cloud.Deleted(3, "cloud-a", request)),
     settings,
   )
-  assert_true(removed.screen is Settings)
-  assert_true(removed.cloud.creation is None)
+  assert_true(removed.management_dialog is Some(Settings))
+  assert_true(removed.cloud.creation is Some(_))
   let (_, switched) = update(
     test_dispatch(),
     CloudAction(@cloud.AccountChanged(Some("other"))),

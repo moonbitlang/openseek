@@ -1163,7 +1163,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await page.keyboard.press('Escape');
   await expect(reply).toHaveCount(0);
   await openReply(first);
-  await page.locator('.topbar-title').click();
+  await page.locator('main .topbar-title').click();
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
 
@@ -1183,7 +1183,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   const settled = () => page.evaluate(() => new Promise(resolve => {
     setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 0);
   }));
-  const title = page.locator('.topbar-title');
+  const title = page.locator('main .topbar-title');
   await press(title);
   await settled();
   await expect(bar).toHaveCount(0);
@@ -1820,6 +1820,35 @@ test('desktop shell and modal stay inside a narrow browser viewport', async ({ p
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
   await expect.poll(() => page.evaluate(() =>
     document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a browser close request closes a workspace settings menu before its dialog', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'CloseWatcher is Chromium-only');
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  // Escape is Chromium's desktop close request. Hiding it from the page's
+  // listeners leaves only the close request, which is what Android's Back
+  // sends an installed web app.
+  await page.evaluate(() => addEventListener('keydown', event => {
+    if (event.key === 'Escape') event.stopImmediatePropagation();
+  }, true));
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByTitle('More actions').click();
+  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Workspace settings' });
+  await expect(dialog).toBeVisible();
+  const launchMode = page.getByRole('button', { name: 'New chats' });
+  await expect(launchMode).toBeEnabled();
+  await launchMode.click();
+  const option = page.getByRole('option', { name: 'Worktree' });
+  await expect(option).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(option).toBeHidden();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
 

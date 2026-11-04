@@ -23,19 +23,19 @@ fn SelectMenu::setting_control(
   change~ : @cmd.Emit[String],
   disabled~ : Bool = false,
 ) -> @html.Html {
-  @select_control.Control::{
-    id,
-    groups: [{ label: aria_label, options, }],
-    selected,
-    disabled,
-    open: model.select_menu is Some(menu) && menu == self,
-    toggle: dispatch(ToggleSelectMenu(self)),
-    dismiss: dispatch(CloseSelectMenu),
-    change,
-    title: aria_label,
-    aria_label,
-    presentation: Setting,
-  }.render()
+  @select_control.Control(
+    id~,
+    groups=[{ label: aria_label, options, }],
+    selected~,
+    disabled~,
+    open=model.select_menu is Some(menu) && menu == self,
+    toggle=dispatch(ToggleSelectMenu(self)),
+    dismiss=dispatch(CloseSelectMenu),
+    change~,
+    title=aria_label,
+    aria_label~,
+    presentation=Setting,
+  ).render()
 }
 
 ///|
@@ -208,7 +208,6 @@ fn Model::push_group_component_inputs(
   workspace : @common.Uri,
   listed~ : (String) -> Bool,
   archived~ : (String) -> Bool,
-  standalone~ : Bool = false,
 ) -> Unit {
   let composing = self.composing_new_chat()
   // Every row in this group shares the group's store placement; it becomes
@@ -230,10 +229,10 @@ fn Model::push_group_component_inputs(
     // The new-chat page belongs to the highlighted project until it becomes
     // real work. Do not manufacture a selected child row merely because its
     // client-local session id already exists.
-    if composing && on_screen && !standalone {
+    if composing && on_screen {
       continue
     }
-    if !worth_keeping && !standalone {
+    if !worth_keeping {
       continue
     }
     // A fresh worktree conversation knows its binding locally; once the
@@ -246,16 +245,7 @@ fn Model::push_group_component_inputs(
     local_worktrees[conv.session_id] = worktree
     items.push({
       id: conv.session_id,
-      title: Some(
-        if standalone &&
-          !conv.has_begun() &&
-          conv.task.is_empty() &&
-          conv.pending_prompt is None {
-          shell_text(self.locale, NewChatLabel)
-        } else {
-          unlisted_conversation_label(locale=self.locale, conv)
-        },
-      ),
+      title: Some(unlisted_conversation_label(locale=self.locale, conv)),
       workspace,
       workspace_name: workspace.path,
       updated_at_ms: None,
@@ -297,7 +287,7 @@ fn Model::push_group_component_inputs(
           dev.channel,
           child.id,
           child_label,
-          nested=!standalone,
+          nested=true,
           subrun=true,
           root~,
         ),
@@ -324,7 +314,7 @@ fn Model::push_group_component_inputs(
           // parent in another store), so it remains independently archivable;
           // once beside its archived parent, family restore picks it up.
           archivable=!local_worktrees.contains(tree.item.id),
-          nested=!standalone,
+          nested=true,
           worktree?=match local_worktrees.get(tree.item.id) {
             Some(worktree) => worktree
             None => worktree_name_for(dev, workspace, tree.item.id)
@@ -391,12 +381,19 @@ fn Model::sidebar_component_sections(
   self : Model,
   dev : DeviceState,
 ) -> Array[@section.Input] {
+  let channel = dev.channel.uri_authority()
+  if self.sidebar_mode is ChatMode {
+    return if dev.channel == self.focused {
+      self.chat_sidebar_sections(channel)
+    } else {
+      []
+    }
+  }
   let listed = (id : String) => dev.sessions.any(item => item.id == id)
   // An archived record has moved out of the live store, so the live list
   // normally cannot contain it; the filter covers the moment between the
   // archive reply and the list refetch that follows it.
   let archived = (id : String) => dev.archived.any(item => item.id == id)
-  let channel = dev.channel.uri_authority()
   let chat_selected = !self.cloud_selected() &&
     self.screen is Chat &&
     dev.channel == self.focused
@@ -421,31 +418,19 @@ fn Model::sidebar_component_sections(
     None
   }
   let projects : Array[@section.Entry] = []
-  let local_rows : Array[(RowStamp, @conversation.Input)] = []
-  let mut local_activation : String? = None
   for path in dev.projects {
-    let standalone = dev.is_chat_workspace(path)
+    if dev.is_chat_workspace(path) {
+      continue
+    }
     let stamped : Array[(RowStamp, @conversation.Input)] = []
-    self.push_group_component_inputs(
-      stamped,
-      dev,
-      path,
-      listed~,
-      archived~,
-      standalone~,
-    )
+    self.push_group_component_inputs(stamped, dev, path, listed~, archived~)
     let mut codex_activation : String? = None
     if codex_context is Some(context) &&
       @resource.path_for(path, dev.channel) is Some(root) {
       // The selected Codex draft is the project's new-chat page, not a child
       // conversation yet. `project_draft` returns only an off-screen draft
       // that needs a recovery row.
-      if self.codex.project_draft(
-          locale=self.locale,
-          context,
-          root,
-          include_selected=standalone,
-        )
+      if self.codex.project_draft(locale=self.locale, context, root)
         is Some(draft) {
         stamped.push((ComposingNow, draft))
       }
@@ -466,18 +451,6 @@ fn Model::sidebar_component_sections(
     let openseek_activation = activation(
       dev.active_project is Some(project) && project == path,
     )
-    if standalone {
-      for (stamp, row) in stamped {
-        local_rows.push((stamp, { ..row, nested: false, }))
-      }
-      if openseek_activation is Some(_) {
-        local_activation = openseek_activation
-      }
-      if codex_activation is Some(_) {
-        local_activation = codex_activation
-      }
-      continue
-    }
     let conversations = ordered_by_recency(stamped)
     let host_name = if dev.channel == Local {
       None
@@ -525,6 +498,13 @@ fn Model::sidebar_component_sections(
     // Codex threads in unregistered roots keep top-level rows at the end of
     // the section, as they did in the retired Codex section.
     for entry in self.codex.loose_entries(locale=self.locale, context) {
+      if entry is @section.Conversation(row) &&
+        row.id
+        .root()
+        .bind(path => @resource.of_path(dev.channel, path))
+        .map_or(false, path => dev.is_chat_workspace(path)) {
+        continue
+      }
       projects.push(
         match entry {
           @section.Conversation(input) =>
@@ -543,9 +523,7 @@ fn Model::sidebar_component_sections(
     initially_collapsed: false,
     activation: if openseek_section_activation is Some(_) {
       openseek_section_activation
-    } else if codex_context is Some(context) &&
-      context.selected &&
-      local_activation is None {
+    } else if codex_context is Some(context) && context.selected {
       self.codex.active_id()
     } else {
       None
@@ -556,21 +534,7 @@ fn Model::sidebar_component_sections(
     }),
     entries: projects,
   }
-  match self.sidebar_mode {
-    ChatMode => {
-      if dev.channel == self.focused {
-        sections.push(self.cloud_chat_section(channel))
-      }
-      sections.push(
-        self.local_chat_section(
-          channel~,
-          activation=local_activation,
-          rows=local_rows,
-        ),
-      )
-    }
-    WorkMode => sections.push(work)
-  }
+  sections.push(work)
   // Archived conversations fold behind a collapsed section at the end of the
   // list. Their records live in the store's `archived` twin, so they come
   // from the host's archived reply, not the live list; each row carries a
@@ -579,7 +543,10 @@ fn Model::sidebar_component_sections(
   // or delete the root row and the host moves the complete family together.
   // An old orphan child still owns a row and can therefore be restored.
   let archived_entries : Array[@section.Entry] = []
-  for tree in @transcript.session_tree(dev.archived) {
+  let archived = dev.archived.filter(item => {
+    !dev.is_chat_workspace(item.workspace)
+  })
+  for tree in @transcript.session_tree(archived) {
     let item = tree.item
     let active = self.focused == dev.channel &&
       self.active_session == item.id &&
@@ -622,6 +589,13 @@ fn Model::sidebar_component_sections(
         locale=self.locale,
         dev.channel,
       ) {
+      if entry is @section.Conversation(row) &&
+        row.id
+        .root()
+        .bind(path => @resource.of_path(dev.channel, path))
+        .map_or(false, path => dev.is_chat_workspace(path)) {
+        continue
+      }
       archived_entries.push(
         match entry {
           @section.Conversation(input) =>
@@ -631,25 +605,11 @@ fn Model::sidebar_component_sections(
       )
     }
   }
-  if self.sidebar_mode is ChatMode && dev.channel == self.focused {
-    for row in ordered_by_recency(self.cloud_chat_rows(archived=true)) {
-      archived_entries.push(@section.Conversation(row))
-    }
-  }
   if !self.session_search.query().is_blank() {
-    let scoped : Array[@section.Entry] = []
     for entry in archived_entries {
       guard entry is @section.Conversation(row) else { continue }
       let root = row.id().root()
-      let chat = row.id().source() is @conversation.CloudArchived ||
-        root
-        .bind(path => @resource.of_path(dev.channel, path))
-        .map_or(false, path => dev.is_chat_workspace(path))
-      if self.sidebar_mode is ChatMode {
-        if chat {
-          scoped.push(entry)
-        }
-      } else if !chat && root is Some(root) {
+      if root is Some(root) {
         let row = { ..row, nested: true, }
         let mut found = false
         for index, entry in projects {
@@ -692,9 +652,6 @@ fn Model::sidebar_component_sections(
       }
     }
     archived_entries.clear()
-    for entry in scoped {
-      archived_entries.push(entry)
-    }
   }
   sections.push({
     id: @section.Id(source="archived", channel~),
@@ -730,9 +687,8 @@ fn Model::codex_sidebar_context(
 
 ///|
 /// The list holding the conversation on screen, with that conversation's
-/// identity; `None` on a page that shows no conversation. It classifies the
-/// same way `sidebar_component_sections` files rows: a conversation is a chat
-/// exactly when its workspace is under the host's managed chat root.
+/// identity; `None` on a page that shows no conversation. Cloud conversations
+/// belong to Chats; registered project conversations belong to Work.
 fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
   if self.cloud_draft_identity() is Some(_) {
     return None
@@ -744,24 +700,12 @@ fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
   match self.screen {
     Chat => {
       guard dev.active_project is Some(project) else { return None }
-      let mode : @sidebar.Mode = if dev.is_chat_workspace(project) {
-        ChatMode
-      } else {
-        WorkMode
+      if dev.is_chat_workspace(project) {
+        return None
       }
-      Some((mode, self.active_session))
+      Some((WorkMode, self.active_session))
     }
-    Codex => {
-      guard self.codex.active_id() is Some(id) else { return None }
-      let context = self.codex_sidebar_context(dev)
-      let chat = dev.projects.any(path => {
-        dev.is_chat_workspace(path) &&
-        @resource.path_for(path, dev.channel) is Some(root) &&
-        self.codex.project_activation(context, root) is Some(_)
-      })
-      Some((if chat { ChatMode } else { WorkMode }, id))
-    }
-    Skills | Schedules | Settings => None
+    Codex => self.codex.active_id().map(id => (WorkMode, id))
   }
 }
 
@@ -823,31 +767,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
           }
         }
         if self.sidebar_mode is ChatMode {
-          let archived_entries = ordered_by_recency(
-            self.cloud_chat_rows(archived=true),
-          ).map(row => @section.Conversation(row))
-          [
-            self.cloud_chat_section(self.focused.uri_authority()),
-            self.local_chat_section(
-              channel=self.focused.uri_authority(),
-              activation=None,
-              rows=[],
-            ),
-            {
-              id: @section.Id(
-                source="archived",
-                channel=self.focused.uri_authority(),
-              ),
-              label: @sidebar_messages.text(
-                self.locale,
-                ArchivedChats(archived_entries.length()),
-              ),
-              initially_collapsed: true,
-              activation: None,
-              action: None,
-              entries: archived_entries,
-            },
-          ]
+          self.chat_sidebar_sections(self.focused.uri_authority())
         } else {
           []
         }
@@ -867,40 +787,43 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     RestartingForUpdate(..) => Some(shell_text(self.locale, RestartingLabel))
     _ => None
   }
-  // The browser console's account row: who is signed in, a roster refresh,
-  // and the sign-out — with the last account-level failure inline beneath
-  // it. The desktop window's session is its own host's, with nothing to sign
-  // out of, so it shows no account.
-  let account : @sidebar.Account? = match self.console.auth {
-    AuthSignedIn(login~, avatar~) if !self.is_desktop =>
-      Some({
-        login,
-        avatar,
-        busy: self.console.busy,
-        notice: self.console.notice,
-        device: self.console.page_device.bind(id => {
-          self.console.roster
-          .iter()
-          .find_first(meta => meta.id == id)
-          .map(meta => meta.device_choice())
-        }),
-        online_devices: self.console.roster
-        .filter(meta => meta.online)
-        .map(meta => meta.device_choice()),
-      })
-    _ => None
+  // Local host access is not a Cloud account. The Local Console displays
+  // its independent Cloud account, while a relay browser owns its own sign-in.
+  let account_identity = if self.is_local_console() {
+    self.account.map(account => (account.user.login, account.user.avatar_url))
+  } else {
+    match self.console.auth {
+      AuthSignedIn(login~, avatar~) if !self.is_desktop => Some((login, avatar))
+      _ => None
+    }
   }
+  let account : @sidebar.Account? = account_identity.map(identity => {
+    login: identity.0,
+    avatar: identity.1,
+    busy: self.console.busy,
+    notice: self.console.notice,
+    device: self.console.page_device.bind(id => {
+      self.console.roster
+      .iter()
+      .find_first(meta => meta.id == id)
+      .map(meta => meta.device_choice())
+    }),
+    online_devices: self.console.roster
+    .filter(meta => meta.online)
+    .map(meta => meta.device_choice()),
+  })
   @sidebar.Input::{
     search: self.session_search,
     notices,
     locale: self.locale,
     mode: self.sidebar_mode,
+    has_host: self.has_host(),
     sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
-    schedules_active: self.screen is Schedules,
-    skills_active: self.screen is Skills,
-    settings_active: self.screen is Settings,
+    schedules_active: self.management_dialog is Some(Schedules),
+    skills_active: self.management_dialog is Some(Skills),
+    settings_active: self.management_dialog is Some(Settings),
     account,
   }.filtered()
 }
@@ -1083,8 +1006,7 @@ fn remote_access_rows(
   let rows : Array[@html.Html] = []
   // A development build serves this very frontend on loopback for the
   // system browser, so the console can be worked on against this host with
-  // no relay in between. Open carries the launch token that grants the
-  // browser its session.
+  // no relay in between. Open uses a stable URL with no browser authorization.
   if model.is_desktop && model.console_url is Some(url) {
     rows.push(
       @settings.row(
@@ -1486,13 +1408,19 @@ fn api_settings_rows(
           model,
           id="api-provider-select",
           options=[
-            {
-              value: "deepseek",
-              label: @settings.text(model.locale, DeepseekOfficial),
-            },
-            { value: "glm", label: @settings.text(model.locale, GlmOfficial), },
-            { value: "openrouter", label: "OpenRouter", },
-            { value: "custom", label: @settings.text(model.locale, CustomUrl), },
+            @select_control.ViewOption(
+              value="deepseek",
+              label=@settings.text(model.locale, DeepseekOfficial),
+            ),
+            @select_control.ViewOption(
+              value="glm",
+              label=@settings.text(model.locale, GlmOfficial),
+            ),
+            @select_control.ViewOption(value="openrouter", label="OpenRouter"),
+            @select_control.ViewOption(
+              value="custom",
+              label=@settings.text(model.locale, CustomUrl),
+            ),
           ],
           selected=model.api_provider.wire(),
           aria_label=@settings.text(model.locale, ApiEndpoint),
@@ -1572,13 +1500,13 @@ fn api_settings_rows(
 }
 
 ///|
-/// The Settings page, shown in the main area in place of the conversation
-/// inside the shared management shell with explicit return navigation.
+/// Settings content for the shared management dialog.
 /// While the configured endpoint is unusable the BYOK guide leads the API
 /// group, and the composer keeps Send disabled until a usable endpoint is
 /// saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let locale = model.locale
+  let has_host = model.has_host()
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
   // All providers use the composer's model selector; API setup only chooses
@@ -1632,8 +1560,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       []
     },
-    @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
-    @settings.group(icon_key, "API", api_rows),
+    ..if has_host {
+      [
+        @settings.group(
+          icon_sparkle,
+          @settings.text(locale, Engine),
+          engine_rows,
+        ),
+        @settings.group(icon_key, "API", api_rows),
+      ]
+    },
     @settings.group(
       icon_key,
       @settings.text(locale, Account) +
@@ -1641,11 +1577,15 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @settings.text(locale, RemoteAccess),
       remote_access_rows(dispatch, model),
     ),
-    @settings.group(
-      icon_extensions,
-      "Codex",
-      codex_account_rows(dispatch, model),
-    ),
+    ..if has_host {
+      [
+        @settings.group(
+          icon_extensions,
+          "Codex",
+          codex_account_rows(dispatch, model),
+        ),
+      ]
+    },
     @settings.group(icon_layout, @settings.text(locale, Interface), [
       @settings.row(
         @settings.text(locale, Language),
@@ -1655,12 +1595,15 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             model,
             id="language-select",
             options=[
-              { value: "system", label: @settings.text(locale, System), },
-              { value: "en", label: "English", },
-              { value: "zh-Hans", label: "简体中文", },
-              { value: "zh-Hant", label: "繁體中文", },
-              { value: "ja", label: "日本語", },
-              { value: "es", label: "Español", },
+              @select_control.ViewOption(
+                value="system",
+                label=@settings.text(locale, System),
+              ),
+              @select_control.ViewOption(value="en", label="English"),
+              @select_control.ViewOption(value="zh-Hans", label="简体中文"),
+              @select_control.ViewOption(value="zh-Hant", label="繁體中文"),
+              @select_control.ViewOption(value="ja", label="日本語"),
+              @select_control.ViewOption(value="es", label="Español"),
             ],
             selected=model.language.wire(),
             aria_label=@settings.text(locale, Language),
@@ -1679,8 +1622,14 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             model,
             id="followup-behavior-select",
             options=[
-              { value: "steer", label: @settings.text(locale, Steer), },
-              { value: "queue", label: @settings.text(locale, Queue), },
+              @select_control.ViewOption(
+                value="steer",
+                label=@settings.text(locale, Steer),
+              ),
+              @select_control.ViewOption(
+                value="queue",
+                label=@settings.text(locale, Queue),
+              ),
             ],
             selected=model.followup_behavior.wire(),
             aria_label=@settings.text(locale, Followup),
@@ -1698,9 +1647,18 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             model,
             id="theme-select",
             options=[
-              { value: "system", label: @settings.text(locale, System), },
-              { value: "light", label: @settings.text(locale, Light), },
-              { value: "dark", label: @settings.text(locale, Dark), },
+              @select_control.ViewOption(
+                value="system",
+                label=@settings.text(locale, System),
+              ),
+              @select_control.ViewOption(
+                value="light",
+                label=@settings.text(locale, Light),
+              ),
+              @select_control.ViewOption(
+                value="dark",
+                label=@settings.text(locale, Dark),
+              ),
             ],
             selected=model.theme.wire(),
             aria_label=@settings.text(locale, Theme),
@@ -1748,16 +1706,22 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             model,
             id="notification-corner-select",
             options=[
-              {
-                value: "bottom-right",
-                label: @settings.text(locale, BottomRight),
-              },
-              {
-                value: "bottom-left",
-                label: @settings.text(locale, BottomLeft),
-              },
-              { value: "top-right", label: @settings.text(locale, TopRight), },
-              { value: "top-left", label: @settings.text(locale, TopLeft), },
+              @select_control.ViewOption(
+                value="bottom-right",
+                label=@settings.text(locale, BottomRight),
+              ),
+              @select_control.ViewOption(
+                value="bottom-left",
+                label=@settings.text(locale, BottomLeft),
+              ),
+              @select_control.ViewOption(
+                value="top-right",
+                label=@settings.text(locale, TopRight),
+              ),
+              @select_control.ViewOption(
+                value="top-left",
+                label=@settings.text(locale, TopLeft),
+              ),
             ],
             selected=model.notification_corner.wire(),
             aria_label=@settings.text(locale, NotificationCorner),
@@ -1774,14 +1738,14 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             model,
             id="tree-layout-select",
             options=[
-              {
-                value: "right-sidebar",
-                label: @settings.text(locale, RightSidebar),
-              },
-              {
-                value: "bottom-panel",
-                label: @settings.text(locale, BottomPanel),
-              },
+              @select_control.ViewOption(
+                value="right-sidebar",
+                label=@settings.text(locale, RightSidebar),
+              ),
+              @select_control.ViewOption(
+                value="bottom-panel",
+                label=@settings.text(locale, BottomPanel),
+              ),
             ],
             selected=model.tree_layout.wire(),
             aria_label=@settings.text(locale, FileTreeLayout),
@@ -1828,21 +1792,27 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @page_shell.body(class="settings-page", [
     @html.div(class="settings-header", [
       @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
-      @html.div(
-        class="settings-subtitle",
-        if !settings_loaded {
-          @settings.text(locale, LoadingSettings)
-        } else if ready {
-          @settings.text(locale, RuntimeSettings)
-        } else {
-          match model.api_provider {
-            Deepseek => @settings.text(locale, DeepseekKey)
-            Glm => @settings.text(locale, GlmKey)
-            OpenRouter => @settings.text(locale, OpenRouterKey)
-            Custom => @settings.text(locale, CustomEndpoint)
-          }
-        },
-      ),
+      // The subtitle describes host runtime settings, which a page without a
+      // host never loads.
+      if has_host {
+        @html.div(
+          class="settings-subtitle",
+          if !settings_loaded {
+            @settings.text(locale, LoadingSettings)
+          } else if ready {
+            @settings.text(locale, RuntimeSettings)
+          } else {
+            match model.api_provider {
+              Deepseek => @settings.text(locale, DeepseekKey)
+              Glm => @settings.text(locale, GlmKey)
+              OpenRouter => @settings.text(locale, OpenRouterKey)
+              Custom => @settings.text(locale, CustomEndpoint)
+            }
+          },
+        )
+      } else {
+        @html.nothing
+      },
     ]),
     @html.div(class="settings", groups),
   ])
@@ -2017,6 +1987,27 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
 }
 
 ///|
+fn Model::terminal_toggle(self : Model, toggle : @cmd.Cmd) -> @html.Html {
+  @html.button(
+    class=if self.terminal.is_open() {
+      "panel-toggle terminal-toggle active"
+    } else {
+      "panel-toggle terminal-toggle"
+    },
+    title=shell_text(
+      self.locale,
+      if self.terminal.is_open() {
+        HideTerminal
+      } else {
+        ShowTerminal
+      },
+    ),
+    on_click=toggle,
+    icon(icon_terminal),
+  )
+}
+
+///|
 /// Top bar: conversation identity on the left (session id and workspace in
 /// the tooltip), live run state and conversation controls on the right.
 fn conversation_header(
@@ -2054,22 +2045,7 @@ fn conversation_header(
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
   if !model.narrow {
-    items.push(
-      @html.button(
-        class=if model.terminal.is_open() {
-          "panel-toggle active"
-        } else {
-          "panel-toggle"
-        },
-        title=if model.terminal.is_open() {
-          shell_text(model.locale, HideTerminal)
-        } else {
-          shell_text(model.locale, ShowTerminal)
-        },
-        on_click=toggle_terminal,
-        icon(icon_terminal),
-      ),
-    )
+    items.push(model.terminal_toggle(toggle_terminal))
   }
   // The overview is the only place the conversation's connectors are shown,
   // so the narrow layout keeps it: there it is always the panel over the
@@ -2276,8 +2252,12 @@ fn app_shell_class(sidebar_open : Bool) -> String {
 /// navigation never closes terminal state or PTYs, but non-conversation pages
 /// have no active workspace surface to place the panel under.
 fn Model::terminal_panel_visible(self : Model) -> Bool {
-  !self.cloud_selected() &&
   self.terminal.is_open() &&
+  (
+    !self.cloud_selected() ||
+    self.cloud_identity() is Some(_) ||
+    self.cloud_draft_identity() is Some(_)
+  ) &&
   (
     self.screen is Chat ||
     (
@@ -2409,6 +2389,17 @@ fn view(
           } else {
             @html.nothing
           },
+          if !model.narrow &&
+            model.account is Some(_) &&
+            !model.cloud_archived() &&
+            (
+              model.cloud_identity() is Some(_) ||
+              model.cloud_draft_identity() is Some(_)
+            ) {
+            model.terminal_toggle(toggle_terminal)
+          } else {
+            @html.nothing
+          },
         ]
       } else {
         match model.chat_column() {
@@ -2436,16 +2427,8 @@ fn view(
         narrow=model.narrow,
         codex_actions,
       )
-    Settings => @page_shell.header(@settings.text(model.locale, Settings))
-    Skills =>
-      model.skills.header(
-        locale=model.locale,
-        @sidebar_messages.text(model.locale, Skills),
-      )
-    Schedules => @page_shell.header(ui(model.locale, ScheduledTasks))
   }
-  if @interop.is_native_ssh(model.focused) &&
-    model.screen.work_screen() is Some(_) {
+  if @interop.is_native_ssh(model.focused) {
     header.insert(0, ssh_context(dispatch, model))
   }
   let content = match model.screen {
@@ -2556,9 +2539,6 @@ fn view(
       }
       page
     }
-    Schedules => [schedules_page(dispatch, model)]
-    Skills => [skills_html]
-    Settings => [settings_page(dispatch, model)]
   }
   // An incompatible host can drive no page. Show why wherever the page is,
   // not only in a conversation header; Cloud pages do not need the host.
@@ -2651,7 +2631,6 @@ fn view(
       attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
       icon(icon_layout_sidebar_left),
     ),
-    navigation_controls(dispatch, model),
     sidebar_html,
     @html.div(class=content_class, [
       // One fixed control owns both states, outside the animated pane tracks.
@@ -2673,6 +2652,7 @@ fn view(
       right_panel_html,
       terminal_html,
     ]),
+    management_dialog_view(dispatch, model, skills_html),
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,
@@ -3042,24 +3022,10 @@ test "the token pill reads the same count as the composer's running row" {
 }
 
 ///|
-fn Model::local_chat_section(
+fn Model::chat_sidebar_sections(
   self : Model,
-  channel~ : String,
-  activation~ : String?,
-  rows~ : Array[(RowStamp, @conversation.Input)],
-) -> @section.Input {
-  {
-    id: @section.Id(source="openseek.chats", channel~),
-    label: @sidebar_messages.text(self.locale, Local),
-    initially_collapsed: false,
-    activation,
-    action: None,
-    entries: ordered_by_recency(rows).map(row => @section.Conversation(row)),
-  }
-}
-
-///|
-fn Model::cloud_chat_section(self : Model, channel : String) -> @section.Input {
+  channel : String,
+) -> Array[@section.Input] {
   let entries : Array[@section.Entry] = []
   if self.account is None {
     entries.push(
@@ -3075,13 +3041,36 @@ fn Model::cloud_chat_section(self : Model, channel : String) -> @section.Input {
         }),
       }),
     )
+  } else if self.cloud.list_status is (@cloud.Retrying | @cloud.Failed) {
+    let loading = self.cloud.list_status is @cloud.Retrying
+    let label = shell_text(
+      self.locale,
+      if loading {
+        LoadingConversations
+      } else {
+        CannotLoadConversations
+      },
+    )
+    entries.push(
+      @section.Placeholder({
+        id: "cloud-list-status",
+        label,
+        class_name: "",
+        nested: false,
+        openable: false,
+        action: Some({
+          title: shell_text(self.locale, RetryLabel),
+          disabled: loading,
+        }),
+      }),
+    )
   }
   for row in ordered_by_recency(self.cloud_chat_rows()) {
     entries.push(@section.Conversation(row))
   }
-  {
+  let chats : @section.Input = {
     id: @section.Id(source="cloud.chats", channel~),
-    label: @sidebar_messages.text(self.locale, Cloud),
+    label: @sidebar_messages.text(self.locale, Chats),
     initially_collapsed: false,
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
@@ -3090,18 +3079,38 @@ fn Model::cloud_chat_section(self : Model, channel : String) -> @section.Input {
     }),
     entries,
   }
+  let archived = ordered_by_recency(self.cloud_chat_rows(archived=true)).map(row => {
+    @section.Conversation(row)
+  })
+  [
+    chats,
+    {
+      id: @section.Id(source="archived", channel~),
+      label: @sidebar_messages.text(
+        self.locale,
+        ArchivedChats(archived.length()),
+      ),
+      initially_collapsed: true,
+      activation: None,
+      action: None,
+      entries: archived,
+    },
+  ]
 }
 
 ///|
 fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @html.section(class="cloud-home management-page", [
-    @html.h2(@sidebar_messages.text(model.locale, Cloud)),
-    if model.account is Some(_) {
-      @html.button(
-        class="button primary",
-        on_click=dispatch(CloudAction(@cloud.Create)),
-        shell_text(model.locale, NewChatLabel),
-      )
+    @html.h2(@sidebar_messages.text(model.locale, Chats)),
+    if model.is_local_console() && model.remote_error is Some(message) {
+      @html.div([
+        @html.p(message),
+        @html.button(
+          class="button",
+          on_click=dispatch(Console(RefreshClicked)),
+          shell_text(model.locale, TryAgain),
+        ),
+      ])
     } else if model.console.auth is AuthChecking {
       @html.div([
         @html.p(

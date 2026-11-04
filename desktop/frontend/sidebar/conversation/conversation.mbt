@@ -195,15 +195,13 @@ fn highlighted(value : String, query : String) -> @html.Html {
   let mut rest = value
   while !query.is_empty() {
     guard rest.to_lower().find(query) is Some(offset) else { break }
-    children.push(@html.span(rest.view(end_offset=offset).to_owned()))
+    children.push(@html.span(rest.clamped_view(end=offset).to_owned()))
     children.push(
       @html.strong(
-        rest
-        .view(start_offset=offset, end_offset=offset + query.length())
-        .to_owned(),
+        rest.clamped_view(start=offset, end=offset + query.length()).to_owned(),
       ),
     )
-    rest = rest.view(start_offset=offset + query.length()).to_owned()
+    rest = rest.clamped_view(start=offset + query.length()).to_owned()
   }
   children.push(@html.span(rest))
   @html.span(children)

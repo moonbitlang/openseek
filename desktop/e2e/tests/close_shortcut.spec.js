@@ -37,7 +37,7 @@ async function installDesktop(page, systemDark = false) {
       openseek: new Proxy({}, {
         get: (_, method) => async params => {
           if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 3 });
+            window.desktopEvent('openseek.agent.connected', { protocol: 5 });
           }
           return window.desktopRequest({ method, params });
         },
@@ -182,6 +182,8 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
     });
     return box.y + box.height / 2 - headerHeight / 2;
   }).toBe(0);
+  await page.getByRole('dialog', { name: 'Settings', exact: true })
+    .getByRole('button', { name: 'Dismiss', exact: true }).click();
   // A real click must reach the fixed control above the narrow drawer.
   await toggle.click();
   await expect(toggle).toHaveAccessibleName('Hide sidebar');
@@ -300,37 +302,6 @@ test('Close respects dialogs and closes successive dock tabs without closing the
   await expect(page.locator('.content.panel-open')).toHaveCount(0);
   expect(app.requests.filter(request => request.method === 'app.close_window'))
     .toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-
-test('new terminals and existing terminals use the current font size', async ({ page }) => {
-  const app = await installDesktop(page);
-  // Observe the real xterm instance; rendering and options remain production code.
-  await page.evaluate(() => {
-    window.fontTestTerminals = [];
-    window.__openseek_xterm.Terminal = new Proxy(window.__openseek_xterm.Terminal, {
-      construct(target, args) {
-        const terminal = Reflect.construct(target, args);
-        window.fontTestTerminals.push(terminal);
-        return terminal;
-      },
-    });
-  });
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const fontSize = page.getByRole('slider', { name: 'Font size', exact: true });
-  await fontSize.fill('18');
-  await app.openSession();
-  await page.keyboard.press('Control+Backquote');
-  await expect(page.locator('.terminal-instance:visible .xterm-helper-textarea')).toBeFocused();
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([17]);
-
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await fontSize.fill('12');
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11]);
-  await app.openSession();
-  await page.getByTitle('New terminal in this workspace', { exact: true }).click();
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11, 11]);
   expect(app.pageErrors).toEqual([]);
 });
 

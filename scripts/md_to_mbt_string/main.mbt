@@ -170,7 +170,7 @@ async fn output_matches(output : StringView, source : StringView) -> Bool {
 #warnings("-method_shadowing")
 #cfg(platform="windows")
 fn @path.Path::basename(path : @path.Path) -> StringView {
-  let trimmed = for view = path.0.view() {
+  let trimmed = for view = path.0.clamped_view() {
     match view {
       [] => break view
       [.. rest, '/' | '\\'] => continue rest
@@ -190,7 +190,7 @@ fn @path.Path::basename(path : @path.Path) -> StringView {
 #cfg(platform="windows")
 fn trim_windows_drive_prefix(path : StringView) -> StringView {
   match path {
-    ['a'..='z' | 'A'..='Z', ':', .. rest] => rest
+    ['a'..<='z' | 'A'..<='Z', ':', .. rest] => rest
     _ => path
   }
 }

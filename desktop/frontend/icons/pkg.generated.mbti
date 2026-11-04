@@ -106,6 +106,8 @@ pub fn icon_more() -> @html.Html
 
 pub fn icon_new_chat() -> @html.Html
 
+pub fn icon_newline() -> @html.Html
+
 pub fn icon_organization() -> @html.Html
 
 pub fn icon_package() -> @html.Html
@@ -137,6 +139,8 @@ pub fn icon_settings_gear() -> @html.Html
 pub fn icon_shield() -> @html.Html
 
 pub fn icon_sparkle() -> @html.Html
+
+pub fn icon_stop_circle() -> @html.Html
 
 pub fn icon_sync() -> @html.Html
 

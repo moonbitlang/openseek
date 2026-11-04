@@ -1,29 +1,18 @@
-// The mooncakes.io skill registry client: the catalog of published skills,
-// and the per-skill API that locates one skill's archive (`skills.zip`) and
-// the digest the download is verified against.
+// Adapt moonbit-community/skills to the Desktop catalog and transactional
+// local library. The client owns registry JSON, HTTP and download validation.
 
 ///|
-/// The registry API host. Overridable per call so tests can
-/// run against a local server — there is no user-facing registry setting.
+/// Overridable per call for local registry tests.
 const DefaultRegistry = "https://mooncakes.io"
 
 ///|
-/// Published source files live on a separate host from the registry API.
-const DefaultSourceRegistry = "https://assets.mooncakes.io"
-
-///|
-/// Keep preview parsing bounded so a malformed or unexpectedly large registry
-/// document cannot stall the frontend renderer.
+/// Keep documents passed to the frontend renderer bounded.
 const MaxPreviewBytes : Int32 = 512 * 1024
 
 ///|
-/// Decompression floor and ratio for one downloaded archive. How large a
-/// published archive may be is the registry's publish policy, not ours — but
-/// a zip's decompressed size is not bounded by its packaged size (deflate
-/// reaches ~1000:1), publishing is open to anyone, and this reader inflates
-/// in memory, so a small hostile package must not expand without limit. A
-/// generous multiple of the packaged bytes never brakes a legitimately large
-/// skill, while the floor keeps small archives clear of the edge.
+/// The staging decoder retains bounded, cancellation-aware extraction after
+/// the client has validated the downloaded archive. Its ceilings scale with
+/// packaged size; the client also applies the standalone registry's limits.
 const ArchiveExpansionFloorBytes : Int32 = 256 * 1024 * 1024
 
 ///|
@@ -58,14 +47,13 @@ pub(all) suberror SkillMarketError {
 }
 
 ///|
-/// One installable catalog entry: a published MoonBit package that shipped a
-/// skill archive next to its wasm entry point.
+/// One standalone skill from the registry, projected into the host protocol.
 pub struct MarketSkill {
-  // Skill display name from registry metadata, matching SKILL.md frontmatter;
-  // the registry entry name is used when no usable metadata name is supplied.
+  // The standalone skill name, matching SKILL.md frontmatter.
   name : String
+  // The host protocol retains this field for the owner/name skill identity.
   module_name : String
-  // Subpackage path relative to the module root; "" for a root skill.
+  // Standalone skills have no subpackage; always empty for new catalog rows.
   package_path : String
   version : String
   description : String
@@ -87,175 +75,28 @@ impl ToJson for MarketSkill with fn to_json(self) {
 }
 
 ///|
-/// Redirect hops one fetch will follow. The registry's download host hands
-/// archives to its object store through a redirect; the cap keeps a
-/// misconfigured server from looping forever.
-const MaxRedirects = 5
-
-///|
-/// GET `url`, following redirects, and return the final status code and
-/// body. Transport failures (DNS, TLS, a refused connection) become a
-/// `SkillMarketError`; non-200 final codes are returned for the caller to
-/// judge with context of its own. A redirect hop from https onto plain
-/// http is always refused: metadata and preview content take their whole
-/// trust from the channel, and even the digest-checked archive download
-/// has no reason to leave TLS.
-async fn fetch_response(url : String) -> (Int32, &@io.Data) {
-  let mut current = url
-  for _ in 0..<MaxRedirects {
-    let (response, data) = @http.get(current) catch {
-      error => raise SkillMarketError("GET \{current} failed: \{error}")
-    }
-    guard response.code is (301 | 302 | 303 | 307 | 308) &&
-      response.headers.get("Location") is Some(location) else {
-      return (response.code, data)
-    }
-    let target = redirect_target(current, location)
-    guard !insecure_downgrade(current, target) else {
-      raise SkillMarketError(
-        "the skill registry redirected to an insecure address",
-      )
-    }
-    current = target
-  }
-  raise SkillMarketError("the skill registry redirected too many times")
-}
-
-///|
-/// Whether following a redirect from `current` to `target` drops TLS.
-fn insecure_downgrade(current : String, target : String) -> Bool {
-  current.has_prefix("https://") && target.has_prefix("http://")
-}
-
-///|
-/// The absolute URL a redirect points at. `Location` may be absolute or
-/// host-relative — the only forms real registries emit; anything else is
-/// refused rather than guessed at.
-fn redirect_target(
-  current : String,
-  location : String,
-) -> String raise SkillMarketError {
-  if location.has_prefix("http://") || location.has_prefix("https://") {
-    return location
-  }
-  guard location.has_prefix("/") &&
-    current.split_once("://") is Some((scheme, rest)) else {
-    raise SkillMarketError("the skill registry sent an unsupported redirect")
-  }
-  // Host-relative: keep `current`'s origin and take `location` as the path.
-  let origin = match rest.split_once("/") {
-    Some((host, _)) => "\{scheme}://\{host}"
-    None => current
-  }
-  "\{origin}\{location}"
-}
-
-///|
-/// The registry's skill catalog: every published skill at its latest module
-/// version, installable entries only.
+/// List independently published skills. Keep the existing host payload shape:
+/// module_name carries owner/name, and package_path is empty.
 pub async fn fetch_catalog(
   registry~ : String = DefaultRegistry,
 ) -> Array[MarketSkill] {
-  let url = "\{registry}/api/v0/skills"
-  let (code, data) = fetch_response(url)
-  guard code == 200 else {
-    raise SkillMarketError("GET \{url} returned HTTP \{code}")
+  let skills = @skills.Client(registry~).list() catch {
+    error => raise SkillMarketError("skill catalog from \{registry}: \{error}")
   }
-  let json = data.json() catch {
-    error =>
-      raise SkillMarketError("GET \{url}: invalid catalog JSON: \{error}")
-  }
-  decode_catalog(json) catch {
-    SkillMarketError(message) =>
-      raise SkillMarketError("GET \{url}: \{message}")
-  }
+  skills.map(skill => {
+    name: skill.name,
+    module_name: "\{skill.owner}/\{skill.name}",
+    package_path: "",
+    version: skill.version,
+    description: skill.description,
+    author: skill.owner,
+    // The standalone API does not expose a source repository.
+    repository: "",
+  })
 }
 
 ///|
-/// Decode the `/api/v0/skills` payload. The registry catalogs every wasm
-/// entry point; only entries that publish a skill archive — non-empty
-/// `archive_url` and `archive_digest` — and carry a description are kept.
-/// (Install re-resolves the archive through the per-skill API rather than
-/// trusting catalog data.)
-fn decode_catalog(json : Json) -> Array[MarketSkill] raise SkillMarketError {
-  // The plain catalog is a bare array; filtered responses (`?recent=N`)
-  // arrive wrapped in an object. Accept both so a server-side default change
-  // cannot break the panel.
-  let items = match json {
-    Array(items) => items
-    { "all": Array(items), .. } => items
-    _ => raise SkillMarketError("skill registry returned a malformed catalog")
-  }
-  let skills : Array[MarketSkill] = []
-  for item in items {
-    guard item
-      is {
-        "module": String(module_name),
-        "version": String(version),
-        "name": String(entry_name),
-        ..
-      } else {
-      continue
-    }
-    guard item
-      is {
-        "archive_url": String(archive_url),
-        "archive_digest": String(archive_digest),
-        ..
-      } &&
-      !archive_url.is_empty() &&
-      !archive_digest.is_empty() else {
-      continue
-    }
-    let name = if item is { "metadata": { "name": String(name), .. }, .. } &&
-      !name.is_blank() {
-      name.trim().to_owned()
-    } else {
-      entry_name
-    }
-    let description = if item
-      is { "metadata": { "description": String(description), .. }, .. } &&
-      !description.is_blank() {
-      description
-    } else if item is { "description": String(description), .. } &&
-      !description.is_blank() {
-      description
-    } else {
-      continue
-    }
-    let package_path = if item is { "package": String(package_path), .. } {
-      package_path
-    } else {
-      ""
-    }
-    let author = if item is { "author": String(author), .. } {
-      author
-    } else if module_name.split_once("/") is Some((owner, _)) {
-      owner.to_owned()
-    } else {
-      module_name
-    }
-    let repository = if item is { "repository": String(repository), .. } {
-      repository
-    } else {
-      ""
-    }
-    skills.push({
-      name,
-      module_name,
-      package_path,
-      version,
-      description,
-      author,
-      repository,
-    })
-  }
-  skills
-}
-
-///|
-/// The registry path naming one skill: `module@version`, plus the
-/// subpackage path when the skill lives in one.
+/// Source labels retain legacy subpackage paths when reading old sidecars.
 fn entry_path(
   module_name : String,
   version : String,
@@ -269,204 +110,62 @@ fn entry_path(
 }
 
 ///|
-/// Where one published skill's archive lives and the digest it must hash to.
-priv struct ArchiveSource {
-  url : String
-  digest : String
+/// New registry references name a standalone skill, never a module subpackage.
+fn skill_reference(
+  module_name : String,
+  version : String,
+  package_path : String,
+) -> String raise SkillMarketError {
+  guard package_path.is_empty() else {
+    raise SkillMarketError("standalone skills do not have a package path")
+  }
+  "\{module_name}@\{version}"
 }
 
 ///|
-/// Confirm `entry` (`module@version[/package]`) is a published skill via the
-/// registry's per-skill API, and return where its archive lives. The skills
-/// API 404s for anything that is not a registered skill; a registered skill
-/// without archive coordinates has nothing this client can install.
-async fn fetch_archive_source(
+/// The client verifies the download's SHA-256, archive layout and metadata
+/// before writing a temporary ZIP. Decode it for our existing staging layer;
+/// only the complete staged directory is ever made live in the local library.
+async fn fetch_archive(
   registry : String,
   entry : String,
-) -> ArchiveSource {
-  let (code, data) = fetch_response("\{registry}/api/v0/skills/\{entry}")
-  if code == 404 {
-    raise SkillMarketError("\{entry} is not a published skill")
-  }
-  guard code == 200 else {
-    raise SkillMarketError("skill lookup for \{entry} returned HTTP \{code}")
-  }
-  let json = data.json() catch {
-    _ =>
-      raise SkillMarketError(
-        "skill registry returned a malformed entry for \{entry}",
-      )
-  }
-  guard json is Object(fields) else {
-    raise SkillMarketError(
-      "skill registry returned a malformed entry for \{entry}",
+) -> (@zip.Archive, String) {
+  try {
+    let temporary = @fs.tmpdir(prefix="openseek-skill-download-")
+    defer @fs.rmdir(temporary, recursive=true)
+    let download = @skills.Client(registry~).download(
+      entry,
+      output="\{temporary}/skill.zip",
     )
-  }
-  // Absent coordinates are the one legitimate "no archive" shape; a present
-  // field of the wrong type or an empty string is registry corruption, not
-  // absence, and deserves its own diagnosis.
-  match (fields.get("archive_url"), fields.get("archive_digest")) {
-    (None, None) =>
-      raise SkillMarketError("\{entry} does not publish a skill archive")
-    (Some(String(url)), Some(String(digest))) if !url.is_empty() &&
-      !digest.is_empty() =>
-      { url, digest: digest.trim().to_owned().to_lower(), }
-    _ =>
-      raise SkillMarketError(
-        "skill registry returned a malformed entry for \{entry}",
-      )
+    let bytes = @fs.read_file(download.path).binary()
+    let archive = @zip.read(
+      bytes,
+      limits=archive_limits(bytes.length()),
+      cancelled=@async.is_being_cancelled,
+    )
+    (archive, "sha256:\{download.skill.archive_sha256}")
+  } catch {
+    error => raise SkillMarketError("skill download for \{entry}: \{error}")
   }
 }
 
 ///|
-/// Download the archive behind `source` and decode it. Every byte is checked
-/// against the digest the registry declared before any entry is trusted, and
-/// decompression runs under ceilings scaled to the packaged size. The
-/// download itself is not size-capped here: publish limits are the
-/// registry's policy, and the digest pins the content either way.
-async fn fetch_archive(entry : String, source : ArchiveSource) -> @zip.Archive {
-  let (code, data) = fetch_response(source.url)
-  if code == 404 {
-    raise SkillMarketError(
-      "the archive for \{entry} is missing from the registry",
-    )
-  }
-  guard code == 200 else {
-    raise SkillMarketError("skill archive download returned HTTP \{code}")
-  }
-  let bytes = data.binary()
-  guard content_digest(bytes) == source.digest else {
-    raise SkillMarketError(
-      "the archive for \{entry} does not match its published digest",
-    )
-  }
-  let limits = archive_limits(bytes.length())
-  @zip.read(bytes, limits~, cancelled=@async.is_being_cancelled) catch {
-    ZipError(_, message) =>
-      raise SkillMarketError(
-        "the archive for \{entry} cannot be unpacked: \{message}",
-      )
-  }
-}
-
-///|
-/// Fetch the published instructions without changing the local library.
-/// The registry publishes each skill's bare SKILL.md under its source tree,
-/// and that one small fetch is the whole preview: an archive can inflate to
-/// arbitrarily much work for the sake of one file, so preview never touches
-/// it, and a 404 already answers "no such skill instructions".
+/// Preview the readme from the versioned skill detail response. This does not
+/// download an archive or change the local library.
 pub async fn fetch_skill_content(
   module_name~ : String,
   version~ : String,
   package_path~ : String,
-  registry~ : String = DefaultSourceRegistry,
+  registry~ : String = DefaultRegistry,
 ) -> String {
-  let entry = entry_path(module_name, version, package_path)
-  let url = "\{registry}/source/\{entry}/SKILL.md"
-  let (code, data) = fetch_response(url)
-  if code == 404 {
-    raise SkillMarketError(
-      "GET \{url} returned HTTP 404: \{entry} does not publish a SKILL.md",
-    )
+  let entry = skill_reference(module_name, version, package_path)
+  let detail = @skills.Client(registry~).get(entry) catch {
+    error => raise SkillMarketError("skill preview for \{entry}: \{error}")
   }
-  guard code == 200 else {
-    raise SkillMarketError("GET \{url} returned HTTP \{code}")
-  }
-  guard data.binary().length() <= MaxPreviewBytes else {
+  guard @utf8.encode(detail.readme).length() <= MaxPreviewBytes else {
     raise SkillMarketError("SKILL.md is too large to preview")
   }
-  data.text() catch {
-    _ =>
-      raise SkillMarketError(
-        "the registry serves an unreadable SKILL.md for \{entry}",
-      )
-  }
-}
-
-// The pure halves of the registry client and the library: wire decoding,
-// digest and slug checks, frontmatter parsing.
-
-///|
-test "catalog decoding keeps only entries that publish a skill archive" {
-  let json : Json = [
-    {
-      "module": "alice/alpha",
-      "version": "0.2.0",
-      "name": "alice/alpha/cmd/run",
-      "package": "cmd/run",
-      "author": "alice",
-      "repository": "https://github.com/alice/alpha",
-      "metadata": { "name": "alpha-run", "description": "Run alpha commands" },
-      "archive_url": "https://download.example/skills/alice/alpha@0.2.0/cmd/run/skills.zip",
-      "archive_digest": "sha256:abc",
-    },
-    // No archive: a bare wasm entry without a published skill archive.
-    {
-      "module": "bob/beta",
-      "version": "0.1.0",
-      "name": "bob/beta",
-      "package": "",
-      "author": "bob",
-      "metadata": { "description": "Not installable" },
-    },
-    // An archive whose description never made it into the registry metadata.
-    {
-      "module": "carol/gamma",
-      "version": "0.1.0",
-      "name": "carol/gamma",
-      "archive_url": "https://download.example/skills/carol/gamma@0.1.0/skills.zip",
-      "archive_digest": "sha256:def",
-      "metadata": { "description": "" },
-    },
-    // Malformed entry: skipped, not fatal.
-    "nonsense",
-  ]
-  let skills = decode_catalog(json)
-  guard skills is [skill] else { fail("expected exactly one catalog entry") }
-  assert_eq(skill.name, "alpha-run")
-  assert_eq(skill.module_name, "alice/alpha")
-  assert_eq(skill.package_path, "cmd/run")
-  assert_eq(skill.version, "0.2.0")
-  assert_eq(skill.description, "Run alpha commands")
-  assert_eq(skill.author, "alice")
-  assert_eq(skill.repository, "https://github.com/alice/alpha")
-}
-
-///|
-test "catalog decoding fills optional fields from the module name" {
-  let json : Json = [
-    {
-      "module": "alice/alpha",
-      "version": "0.2.0",
-      "name": "alice/alpha",
-      "archive_url": "https://download.example/skills/alice/alpha@0.2.0/skills.zip",
-      "archive_digest": "sha256:abc",
-      "description": "Root skill",
-      "metadata": { "name": "  " },
-    },
-  ]
-  guard decode_catalog(json) is [skill] else { fail("expected one entry") }
-  assert_eq(skill.name, "alice/alpha")
-  assert_eq(skill.package_path, "")
-  assert_eq(skill.author, "alice")
-  assert_eq(skill.repository, "")
-  assert_eq(skill.description, "Root skill")
-}
-
-///|
-test "a wrapped catalog response decodes like a bare one" {
-  let entry : Json = {
-    "module": "alice/alpha",
-    "version": "0.2.0",
-    "name": "alice/alpha",
-    "archive_url": "https://download.example/skills/alice/alpha@0.2.0/skills.zip",
-    "archive_digest": "sha256:abc",
-    "metadata": { "description": "Root skill" },
-  }
-  guard decode_catalog({ "all": [entry] }) is [skill] else {
-    fail("expected one entry from the wrapped catalog")
-  }
-  assert_eq(skill.name, "alice/alpha")
+  detail.readme
 }
 
 ///|
@@ -487,52 +186,6 @@ test "archive decompression ceilings scale with the packaged size" {
     0x7fff_ffff,
   )
   assert_eq(archive_limits(1024).max_entries, MaxArchiveEntries)
-}
-
-///|
-test "a redirect that drops TLS is recognized" {
-  assert_true(insecure_downgrade("https://a.example/x", "http://b.example/y"))
-  assert_false(insecure_downgrade("http://a.example/x", "http://b.example/y"))
-  assert_false(insecure_downgrade("https://a.example/x", "https://b.example/y"))
-}
-
-///|
-test "redirect targets resolve absolute and host-relative locations" {
-  assert_eq(
-    redirect_target(
-      "https://download.example/skills/a.zip", "http://store.example:9002/blob/a.zip",
-    ),
-    "http://store.example:9002/blob/a.zip",
-  )
-  assert_eq(
-    redirect_target("https://download.example/skills/a.zip", "/blob/a.zip"),
-    "https://download.example/blob/a.zip",
-  )
-  assert_eq(
-    redirect_target("https://download.example", "/blob/a.zip"),
-    "https://download.example/blob/a.zip",
-  )
-  // A relative or garbage location is refused, not guessed at.
-  try {
-    let _ = redirect_target(
-      "https://download.example/skills/a.zip", "blob/a.zip",
-    )
-    fail("a relative redirect must be refused")
-  } catch {
-    SkillMarketError(_) => ()
-    error => raise error
-  }
-}
-
-///|
-test "a non-array catalog is an error" {
-  try {
-    let _ = decode_catalog({ "detail": "Skill not found" })
-    fail("a non-array catalog must be an error")
-  } catch {
-    SkillMarketError(_) => ()
-    error => raise error
-  }
 }
 
 ///|
@@ -571,15 +224,6 @@ test "slug validation rejects anything that could escape the library" {
     long = "\{long}a"
   }
   assert_false(valid_slug(long))
-}
-
-///|
-test "content_digest hashes the exact bytes" {
-  // sha256 of the empty input — the classic known vector.
-  assert_eq(
-    content_digest(b""),
-    "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  )
 }
 
 ///|

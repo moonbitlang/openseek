@@ -1,5 +1,5 @@
 ///|
-pub(all) suberror SshCommandError {
+pub suberror SshCommandError {
   SshCommandError(String)
 }
 

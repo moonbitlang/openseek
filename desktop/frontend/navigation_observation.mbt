@@ -15,10 +15,7 @@ priv struct NavigationObservation {
 ///|
 fn Msg::is_navigation_visit(self : Msg) -> Bool {
   match self {
-    OpenSetup
-    | Ssh(Open)
-    | OpenSchedules
-    | OpenSkills
+    Ssh(Open)
     | OpenCodex
     | OpenCloudConversation(..)
     | CloudAction(@cloud.Create)
@@ -31,7 +28,6 @@ fn Msg::is_navigation_visit(self : Msg) -> Bool {
     | QuickOpen(_)
     | SchedulePage(_)
     | ProjectPicker(_) => true
-    Skills(PreviewInstalled(_) | PreviewMarket(_) | BackToList) => true
     _ => false
   }
 }
@@ -44,8 +40,7 @@ fn observe_navigation_catalogs(message : Msg, model : Model) -> AppNavigation {
     channel == model.focused &&
     model.device_state(channel) is Some(dev) {
     let navigation = match reply {
-      BridgeReady =>
-        { ..model.navigation, sessions: None, archived: None, skills: None, }
+      BridgeReady => { ..model.navigation, sessions: None, archived: None, }
       SessionsLoaded(_, connection_generation~, request_generation~) if connection_generation ==
         dev.connection_generation &&
         request_generation == dev.sessions_request_generation =>
@@ -66,9 +61,6 @@ fn observe_navigation_catalogs(message : Msg, model : Model) -> AppNavigation {
           sessions: Some(Err(message)),
           archived: Some(Err(message)),
         }
-      InstalledSkillsLoaded(_) => { ..model.navigation, skills: Some(Ok(())), }
-      InstalledSkillsFailed(message) =>
-        { ..model.navigation, skills: Some(Err(message)), }
       _ => model.navigation
     }
     return navigation
@@ -186,10 +178,7 @@ fn observe_navigation(
     session_rotated: message is SessionRotated(_),
     explicit,
     repeat_visit: message
-    is (OpenSetup
-    | Ssh(Open)
-    | OpenSkills
-    | OpenSchedules
+    is (Ssh(Open)
     | OpenCodex
     | OpenSession(_, _)
     | OpenSessionHere(_)

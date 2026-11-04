@@ -60,7 +60,6 @@ priv enum UiMessage {
   WaitingPlacement
   RetryWorktreeList
   RetryLabel
-  AskLabel
   ApproveForMe
   FullAccess
   RequestApproval
@@ -71,9 +70,10 @@ priv enum UiMessage {
   PermissionLocked
   PermissionQuestion
   AutoReviewLabel
-  AutoReviewOnHint
-  AutoReviewOffHint
-  AutoReviewLocked
+  ApprovalMode
+  RequestApprovalDescription
+  AutoReviewDescription
+  ApprovalLocked
   KeepWorking
   DiscardAndArchive
   RemoveLabel
@@ -474,11 +474,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, RetryLabel) => "重试"
     (TraditionalChinese, RetryLabel) => "重試"
     (Japanese, RetryLabel) => "再試行"
-    (English, AskLabel) => "Ask"
-    (Spanish, AskLabel) => "Preguntar"
-    (SimplifiedChinese, AskLabel) => "询问"
-    (TraditionalChinese, AskLabel) => "詢問"
-    (Japanese, AskLabel) => "確認する"
     (English, ApproveForMe) => "Approve for me"
     (Spanish, ApproveForMe) => "Aprobar por mí"
     (SimplifiedChinese, ApproveForMe) => "代我审批"
@@ -555,36 +550,41 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, AutoReviewLabel) => "自动审批"
     (TraditionalChinese, AutoReviewLabel) => "自動審批"
     (Japanese, AutoReviewLabel) => "自動レビュー"
-    (English, AutoReviewOnHint) =>
-      "Approve for me is on: a reviewer handles approval requests and asks you only when unsure. Click to answer them yourself."
-    (Spanish, AutoReviewOnHint) =>
-      "Aprobar por mí está activado: un revisor atiende las solicitudes de aprobación y solo te pregunta si duda. Haz clic para responderlas tú."
-    (SimplifiedChinese, AutoReviewOnHint) =>
-      "代我审批已开启：审查器处理审批请求，拿不准时才询问你。点击改为由你自己回答。"
-    (TraditionalChinese, AutoReviewOnHint) =>
-      "代我審批已開啟：審查器處理審批請求，拿不準時才詢問你。點擊改為由你自己回答。"
-    (Japanese, AutoReviewOnHint) =>
-      "代理で承認がオン：レビュアーが承認要求を処理し、判断できない場合のみ確認します。クリックで自分で回答に戻します。"
-    (English, AutoReviewOffHint) =>
-      "Approve for me: let a reviewer handle approval requests and ask you only when unsure"
-    (Spanish, AutoReviewOffHint) =>
-      "Aprobar por mí: deja que un revisor atienda las solicitudes de aprobación y solo te pregunte si duda"
-    (SimplifiedChinese, AutoReviewOffHint) =>
-      "代我审批：让审查器处理审批请求，拿不准时才询问你"
-    (TraditionalChinese, AutoReviewOffHint) =>
-      "代我審批：讓審查器處理審批請求，拿不準時才詢問你"
-    (Japanese, AutoReviewOffHint) =>
-      "代理で承認：レビュアーに承認要求を任せ、判断できない場合のみ確認"
-    (English, AutoReviewLocked) =>
-      "Approve for me cannot change while a turn is running"
-    (Spanish, AutoReviewLocked) =>
-      "Aprobar por mí no se puede cambiar mientras se ejecuta un turno"
-    (SimplifiedChinese, AutoReviewLocked) =>
-      "回合运行期间无法更改代我审批"
-    (TraditionalChinese, AutoReviewLocked) =>
-      "回合執行期間無法更改代我審批"
-    (Japanese, AutoReviewLocked) =>
-      "ターンの実行中は代理で承認を変更できません"
+    (English, ApprovalMode) => "Approval mode"
+    (Spanish, ApprovalMode) => "Modo de aprobación"
+    (SimplifiedChinese, ApprovalMode) => "审批模式"
+    (TraditionalChinese, ApprovalMode) => "審批模式"
+    (Japanese, ApprovalMode) => "承認モード"
+    (English, RequestApprovalDescription) =>
+      "You answer every permission request yourself"
+    (Spanish, RequestApprovalDescription) =>
+      "Respondes tú mismo a cada solicitud de permiso"
+    (SimplifiedChinese, RequestApprovalDescription) =>
+      "每个权限请求都由你亲自回答"
+    (TraditionalChinese, RequestApprovalDescription) =>
+      "每個權限請求都由你親自回答"
+    (Japanese, RequestApprovalDescription) =>
+      "すべての権限リクエストに自分で回答します"
+    (English, AutoReviewDescription) =>
+      "A reviewer handles permission requests and asks you only when unsure"
+    (Spanish, AutoReviewDescription) =>
+      "Un revisor atiende las solicitudes de permiso y solo te pregunta si duda"
+    (SimplifiedChinese, AutoReviewDescription) =>
+      "审查器处理权限请求，拿不准时才询问你"
+    (TraditionalChinese, AutoReviewDescription) =>
+      "審查器處理權限請求，拿不準時才詢問你"
+    (Japanese, AutoReviewDescription) =>
+      "レビュアーが権限リクエストを処理し、判断できない場合のみ確認します"
+    (English, ApprovalLocked) =>
+      "The approval mode cannot change while a turn is running"
+    (Spanish, ApprovalLocked) =>
+      "El modo de aprobación no se puede cambiar mientras se ejecuta un turno"
+    (SimplifiedChinese, ApprovalLocked) =>
+      "回合运行期间无法更改审批模式"
+    (TraditionalChinese, ApprovalLocked) =>
+      "回合執行期間無法更改審批模式"
+    (Japanese, ApprovalLocked) =>
+      "ターンの実行中は承認モードを変更できません"
     (English, KeepWorking) => "Keep working"
     (Spanish, KeepWorking) => "Seguir trabajando"
     (SimplifiedChinese, KeepWorking) => "继续工作"

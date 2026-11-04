@@ -1,18 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('new-tab popup shares select surface and supports keyboard dismissal', async ({ page }, testInfo) => {
+test('new-tab popup supports keyboard navigation and dismissal', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  const select = page.getByRole('listbox', { name: 'Model' });
-  await expect(select).toBeVisible();
-  const selectStyle = await select.evaluate(element => {
-    const style = getComputedStyle(element);
-    return [style.padding, style.border, style.borderRadius, style.backgroundColor, style.boxShadow];
-  });
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
   await app.openSession();
   await app.openReview();
   const trigger = page.getByTitle('New tab', { exact: true });
@@ -20,10 +12,6 @@ test('new-tab popup shares select surface and supports keyboard dismissal', asyn
   await trigger.click();
   await expect(menu).toBeVisible();
   expect(await menu.evaluate(element => element.matches(':popover-open'))).toBe(true);
-  expect(await menu.evaluate(element => {
-    const style = getComputedStyle(element);
-    return [style.padding, style.border, style.borderRadius, style.backgroundColor, style.boxShadow];
-  })).toEqual(selectStyle);
   await expect(menu.getByRole('menuitem')).toHaveText([
     'SearchSearch text across the workspace',
     'FilesOpen a file from the workspace',

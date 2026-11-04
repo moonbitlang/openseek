@@ -1,29 +1,24 @@
 // Stamp, upload, and publish Desktop releases.
 //
 //   node scripts/release.mjs stamp X.Y.Z       stamp the version every packager builds from
-//   node scripts/release.mjs upload [vX.Y.Z]   upload the checkout's artifacts to OSS and S3
-//   node scripts/release.mjs upload-oss [vX.Y.Z] upload or restore canonical OSS artifacts
-//   node scripts/release.mjs upload-s3 [vX.Y.Z] mirror those artifacts to S3 and stage the Browser
+//   node scripts/release.mjs upload [vX.Y.Z]   attach the checkout's artifacts to a draft GitHub release
 //   node scripts/release.mjs publish [vX.Y.Z]  make the uploaded version live
 //   node scripts/release.mjs verify [vX.Y.Z]   check the live release through its public URLs
 //   node scripts/release.mjs rollback vX.Y.Z   republish an existing version
 //   node scripts/release.mjs status            list API-owned release state
 //
-// OSS and S3 store identical artifacts. openseek-api generates and atomically
-// replaces latest.json from the filenames and SHA-256 digests it is told
-// about, so a release becomes visible once every file is in place, and
+// GitHub Releases store the artifacts: the release tagged vX.Y.Z holds one
+// asset per file below. Manifests link to openseek-api's own
+// `/desktop/releases/<version>/<file>` route, which redirects to the asset, so
+// moving storage later is a server configuration change. The API generates and
+// atomically replaces latest.json from the filenames and SHA-256 digests it is
+// told about, so a release becomes visible once every file is in place, and
 // rolling back is publishing an older version again.
 //
-// Upload commands, publish, and rollback need OPENSEEK_OSS_BUCKET,
-// OPENSEEK_OSS_REGION, OPENSEEK_API_ORIGIN, and OPENSEEK_DEPLOY_TOKEN, plus
-// ossutil 2.x with its OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET. The standard
-// API origins select their OSS prefixes; other deployments set
-// OPENSEEK_OSS_PREFIX. verify needs only OPENSEEK_API_ORIGIN and the checkout's
-// archives in dist/. upload, upload-s3, publish, and rollback also require
-// OPENSEEK_S3_BUCKET, OPENSEEK_S3_REGION and AWS CLI v2 credentials. CI runs
-// upload-oss first, then acquires fresh GitHub OIDC credentials immediately
-// before upload-s3 and publish. OPENSEEK_S3_PREFIX overrides the channel
-// prefix used by OSS.
+// upload, publish, and rollback need OPENSEEK_API_ORIGIN,
+// OPENSEEK_DEPLOY_TOKEN, GITHUB_REPOSITORY (owner/name), and an authenticated
+// gh CLI; upload also needs GITHUB_SHA, the commit a new release tags. verify
+// needs only OPENSEEK_API_ORIGIN and the checkout's archives in dist/.
 
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -33,17 +28,16 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Everything one release ships, in upload order. `file` is both the name in
-// dist/ and the immutable download name under the version directory; `label`
-// names the download in the release summary.
+// dist/ and the asset name in the version's GitHub release; `label` names the
+// download in the release summary.
 const Artifacts = [
-  { platform: "macos-arm64", label: "Updater ZIP", file: "SeekMoon.app.zip", contentType: "application/zip" },
-  { platform: "macos-arm64-dmg", label: "Installer DMG", file: "SeekMoon.dmg", contentType: "application/x-apple-diskimage" },
+  { platform: "macos-arm64", label: "Updater ZIP", file: "SeekMoon.app.zip" },
+  { platform: "macos-arm64-dmg", label: "Installer DMG", file: "SeekMoon.dmg" },
   // Also uploaded to the API: `/console/` serves it from the API origin.
-  { platform: "browser", label: "Browser bundle", file: "SeekMoon.browser.tar.gz", contentType: "application/gzip" },
+  { platform: "browser", label: "Browser bundle", file: "SeekMoon.browser.tar.gz" },
+  { platform: "android", label: "Android APK", file: "SeekMoon-android.apk" },
   // Renamed from Proton's `seekmoon-setup.exe` by the release workflow.
-  // Rollbacks preserve older ZIP downloads or releases without Windows.
-  { platform: "windows-x64", label: "Windows installer", file: "SeekMoon-windows-x64-setup.exe", contentType: "application/octet-stream",
-    optionalOnRollback: true, rollbackFiles: ["SeekMoon-windows-x64.zip"] },
+  { platform: "windows-x64", label: "Windows installer", file: "SeekMoon-windows-x64-setup.exe" },
 ];
 const Browser = Artifacts.find(artifact => artifact.platform === "browser");
 
@@ -56,16 +50,9 @@ const StampedModules = [
   { path: "frontend/moon.mod", pins: ["openseek_desktop"] },
 ];
 
-const OssPrefixes = {
-  "https://openseek-api.moonbitlang.cn": "openseek/desktop/releases",
-  "https://openseek-api-staging.moonbitlang.cn": "openseek/staging/desktop/releases",
-};
-
 const Usage = `usage:
   node scripts/release.mjs stamp X.Y.Z
   node scripts/release.mjs upload [vX.Y.Z]
-  node scripts/release.mjs upload-oss [vX.Y.Z]
-  node scripts/release.mjs upload-s3 [vX.Y.Z]
   node scripts/release.mjs publish [vX.Y.Z]
   node scripts/release.mjs verify [vX.Y.Z]
   node scripts/release.mjs rollback vX.Y.Z
@@ -87,50 +74,40 @@ export class Release {
     return this.env("OPENSEEK_API_ORIGIN").replace(/\/$/, "");
   }
 
-  oss() {
-    const origin = this.apiOrigin();
-    const prefix = process.env.OPENSEEK_OSS_PREFIX?.replace(/^\/+|\/+$/g, "") || OssPrefixes[origin];
-    if (!prefix) throw new Error(`no OSS prefix mapped for ${origin}; set OPENSEEK_OSS_PREFIX`);
-    return { bucket: this.env("OPENSEEK_OSS_BUCKET"), region: this.env("OPENSEEK_OSS_REGION"), prefix };
+  repository() {
+    return this.env("GITHUB_REPOSITORY");
   }
 
-  s3() {
-    const prefix = process.env.OPENSEEK_S3_PREFIX?.replace(/^\/+|\/+$/g, "") || this.oss().prefix;
-    return { bucket: this.env("OPENSEEK_S3_BUCKET"), region: this.env("OPENSEEK_S3_REGION"), prefix };
-  }
-
-  s3Key(version, artifact) {
-    return `${this.s3().prefix}/${version}/${artifact.file}`;
-  }
-
-  headS3Object(version, artifact) {
-    const s3 = this.s3();
-    const result = spawnSync("aws", ["s3api", "head-object", "--region", s3.region,
-      "--bucket", s3.bucket, "--key", this.s3Key(version, artifact), "--output", "json", "--no-cli-pager"],
-    { cwd: this.desktop, encoding: "utf8" });
+  gh(args) {
+    const result = spawnSync("gh", args, { cwd: this.desktop, encoding: "utf8" });
     if (result.error) throw result.error;
-    if (result.status !== 0) {
-      throw new Error(`S3 head-object failed for ${artifact.platform} ${version}: ${result.stdout}${result.stderr}`);
-    }
-    const object = JSON.parse(result.stdout);
-    return { size: String(object.ContentLength), sha256: object.Metadata?.sha256 };
+    if (result.status !== 0) throw new Error(`gh ${args.slice(0, 2).join(" ")} failed: ${result.stderr.trim()}`);
+    return result.stdout;
   }
 
-  verifyS3(version, artifact, expected) {
-    const served = this.headS3Object(version, artifact);
-    if (served.size !== String(expected.size) || served.sha256 !== expected.sha256) {
-      throw new Error(`S3 object does not match the released artifact: ${artifact.platform}`);
-    }
+  // The release behind a version tag, draft or public. A draft has no tag
+  // until it is published, so the tags endpoint cannot find it; scan the
+  // repository's releases instead.
+  githubRelease(version) {
+    const found = this.gh(["api", "--paginate", `repos/${this.repository()}/releases?per_page=100`,
+      "--jq", `.[] | select(.tag_name == ${JSON.stringify(version)})`])
+      .split("\n").filter(line => line.trim()).map(line => JSON.parse(line));
+    if (found.length > 1) throw new Error(`${found.length} GitHub releases are tagged ${version}`);
+    return found[0];
   }
 
-  uploadS3Artifact(version, artifact, local) {
-    const s3 = this.s3();
-    this.commandRun("aws", ["s3", "cp", local.path, `s3://${s3.bucket}/${this.s3Key(version, artifact)}`,
-      "--region", s3.region, "--content-type", artifact.contentType,
-      "--cache-control", "public, max-age=31536000, immutable",
-      "--metadata", `sha256=${local.sha256}`, "--checksum-algorithm", "SHA256", "--only-show-errors"]);
-    this.verifyS3(version, artifact, local);
-    console.log(`${artifact.platform} verified in S3`);
+  // The asset GitHub serves for an artifact: present, with the digest GitHub
+  // computed on upload, and, when the checkout holds the artifact, the very
+  // bytes the checkout holds.
+  githubAsset(release, artifact, local) {
+    const asset = release.assets.find(asset => asset.name === artifact.file);
+    if (!asset) throw new Error(`GitHub release ${release.tag_name} has no ${artifact.file}`);
+    const sha256 = asset.digest?.match(/^sha256:([0-9a-f]{64})$/)?.[1];
+    if (!sha256) throw new Error(`GitHub reports no SHA-256 digest for ${artifact.file}`);
+    if (local && (asset.size !== local.size || sha256 !== local.sha256)) {
+      throw new Error(`GitHub asset does not match the built artifact: ${artifact.platform}`);
+    }
+    return { size: asset.size, sha256 };
   }
 
   async moduleVersion() {
@@ -177,35 +154,6 @@ export class Release {
     return JSON.parse(text);
   }
 
-  // ossutil appends an elapsed-time line to structured output unless quiet
-  // mode is on; the HeadObject JSON must stay parseable. Only OSS's own
-  // NoSuchKey answer reads as `missing`: credentials, network, or a wrong
-  // bucket are failures, so a rollback cannot mistake an outage for a
-  // release that predates a platform.
-  headObject(version, artifact) {
-    const oss = this.oss();
-    const result = spawnSync("ossutil", ["api", "head-object", "--region", oss.region, "--bucket", oss.bucket,
-      "--key", `${oss.prefix}/${version}/${artifact.file}`, "--output-format", "json", "--quiet"],
-    { cwd: this.desktop, encoding: "utf8" });
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      const detail = `${result.stdout}${result.stderr}`.trim();
-      if (/^Error Code: NoSuchKey\.?\s*$/m.test(detail)) return { missing: true };
-      throw new Error(`ossutil head-object failed for ${artifact.platform} ${version}: ${detail}`);
-    }
-    const header = JSON.parse(result.stdout).Header;
-    return {
-      size: header["Content-Length"]?.[0],
-      sha256: header["X-Oss-Meta-Sha256"]?.[0],
-      crc64: header["X-Oss-Hash-Crc64ecma"]?.[0],
-    };
-  }
-
-  ossUrl(version, artifact) {
-    const oss = this.oss();
-    return `oss://${oss.bucket}/${oss.prefix}/${version}/${artifact.file}`;
-  }
-
   async localArtifact(artifact) {
     const path = join(this.dist, artifact.file);
     const size = await stat(path).then(info => info.size, error => {
@@ -213,20 +161,6 @@ export class Release {
       throw error;
     });
     return { path, size, sha256: await this.digest(path) };
-  }
-
-  // What OSS serves must be a complete object whose metadata describes it,
-  // and, when the checkout built it, the very bytes the checkout holds.
-  async verifyServed(version, artifact, local) {
-    const served = this.headObject(version, artifact);
-    if (served.missing) throw new Error(`OSS object is missing for ${artifact.platform} ${version}`);
-    if (!served.crc64 || !/^[0-9a-f]{64}$/.test(served.sha256 ?? "")) {
-      throw new Error(`OSS metadata is incomplete for ${artifact.platform}`);
-    }
-    if (local && (served.size !== String(local.size) || served.sha256 !== local.sha256)) {
-      throw new Error(`OSS object does not match the built artifact: ${artifact.platform}`);
-    }
-    return served;
   }
 
   async stamp(version) {
@@ -279,12 +213,6 @@ export class Release {
     console.log(`stamped ${version}`);
   }
 
-  async upload(version) {
-    this.s3(); // The combined command still requires both destinations up front.
-    await this.uploadOss(version);
-    await this.uploadS3(version);
-  }
-
   async isPublished(version) {
     const sealed = await this.fetch(`/console/releases/${version}/index.html`);
     await sealed.body?.cancel();
@@ -293,70 +221,61 @@ export class Release {
     throw new Error(`could not determine whether ${version} is published: HTTP ${sealed.status}`);
   }
 
-  async uploadOss(version) {
+  async upload(version) {
     await this.checkoutVersion(version);
-    const oss = this.oss();
-    // A published Browser directory is the API-owned per-version seal. If a
-    // previous attempt reached API publish but the job failed afterwards, its
-    // OSS bytes must be reused instead of overwritten by a fresh rebuild.
-    if (await this.isPublished(version)) {
-      console.log(`${version} is already published by the API; reusing its OSS artifacts`);
-      for (const artifact of Artifacts) {
-        this.commandRun("ossutil", ["cp", "--force", "--region", oss.region,
-          this.ossUrl(version, artifact), join(this.dist, artifact.file)]);
-        const local = await this.localArtifact(artifact);
-        await this.verifyServed(version, artifact, local);
-        console.log(`${artifact.platform} restored: ${this.ossUrl(version, artifact)}`);
+    const repository = this.repository();
+    const commit = this.env("GITHUB_SHA");
+    let release = this.githubRelease(version);
+    if (release && !release.draft) {
+      // Publish makes the release public just before the API publish, so a
+      // public release may never have reached latest.json. The next scheduled
+      // run then resolves the same version from a newer commit, and adopting
+      // the older assets would ship that commit's version without its changes.
+      if (release.target_commitish !== commit) {
+        throw new Error(`${version} is public on GitHub from ${release.target_commitish}, not ${commit}; ` +
+          `publish it by re-running the run that built it, or release this commit under an unused version`);
       }
-      await this.unpackBrowser();
-      console.log(`${version} OSS artifacts restored`);
-      return;
-    }
-
-    console.log(`${version} is unpublished; uploading replaceable OSS artifacts`);
-    for (const artifact of Artifacts) {
-      const local = await this.localArtifact(artifact);
-      // Rebuilds are not byte-identical. Until the API publishes this version,
-      // a retry must replace provisional bytes instead of keeping an older run.
-      this.commandRun("ossutil", ["cp", "--force", "--region", oss.region,
-        "--content-type", artifact.contentType,
-        "--cache-control", "public, max-age=31536000, immutable",
-        "--metadata", `sha256=${local.sha256}`,
-        local.path, this.ossUrl(version, artifact)]);
-      // Verify against OSS directly. Accessing the CDN before publication can
-      // cache provisional bytes under the immutable version URL.
-      await this.verifyServed(version, artifact, local);
-      console.log(`${artifact.platform} verified in OSS`);
+      // A public release serves its assets under immutable URLs that CDNs may
+      // already cache. A retry after that point adopts those bytes instead of
+      // replacing them with a nondeterministic rebuild.
+      console.log(`${version} is already public on GitHub; reusing its assets`);
+      this.gh(["release", "download", version, "--repo", repository, "--dir", this.dist, "--clobber",
+        ...Artifacts.flatMap(artifact => ["--pattern", artifact.file])]);
+      for (const artifact of Artifacts) this.githubAsset(release, artifact, await this.localArtifact(artifact));
+    } else {
+      // Until the release is public, a retry replaces the provisional assets
+      // of an earlier attempt, and the tag it will create follows them to
+      // this run's commit.
+      if (!release) {
+        this.gh(["release", "create", version, "--repo", repository, "--draft",
+          "--target", commit, "--title", `SeekMoon ${version}`,
+          "--notes", `SeekMoon Desktop ${version}.`]);
+      } else if (release.target_commitish !== commit) {
+        this.gh(["release", "edit", version, "--repo", repository, "--target", commit]);
+      }
+      for (const artifact of Artifacts) {
+        const local = await this.localArtifact(artifact);
+        this.gh(["release", "upload", version, local.path, "--repo", repository, "--clobber"]);
+      }
+      release = this.githubRelease(version);
+      for (const artifact of Artifacts) {
+        this.githubAsset(release, artifact, await this.localArtifact(artifact));
+        console.log(`${artifact.platform} verified on GitHub`);
+      }
     }
     await this.unpackBrowser();
-    console.log(`${version} OSS artifacts uploaded`);
-  }
-
-  // Run after upload-oss has selected the canonical bytes in dist/. Keeping
-  // every OSS transfer ahead of this stage lets CI acquire AWS credentials
-  // only once the slow transfers have finished.
-  async uploadS3(version) {
-    await this.checkoutVersion(version);
-    this.s3();
-    const published = await this.isPublished(version);
-    const digests = {};
-    for (const artifact of Artifacts) {
-      const local = await this.localArtifact(artifact);
-      await this.verifyServed(version, artifact, local);
-      this.uploadS3Artifact(version, artifact, local);
-      digests[artifact.platform] = local.sha256;
-    }
-    if (published) {
+    if (await this.isPublished(version)) {
       console.log(`${version} is ready to publish again`);
       return;
     }
 
-    // `/console/` remains on the API origin, so only the much smaller Browser
-    // archive is also uploaded to the API. Desktop packages live in OSS and S3.
+    // `/console/` remains on the API origin, so the Browser archive is also
+    // uploaded to the API. Desktop packages live only on GitHub.
+    const browser = await this.localArtifact(Browser);
     const recorded = await this.fetchJson(`/desktop/releases/${version}/${Browser.file}?platform=browser`, {
-      method: "PUT", body: await readFile(join(this.dist, Browser.file)),
+      method: "PUT", body: await readFile(browser.path),
     });
-    if (recorded.sha256 !== digests.browser) {
+    if (recorded.sha256 !== browser.sha256) {
       throw new Error(`DIGEST MISMATCH: API recorded ${recorded.sha256} for Browser`);
     }
     console.log(`${version} is ready to publish`);
@@ -364,48 +283,44 @@ export class Release {
 
   // The publishing runner builds nothing, so the Browser directory that the
   // console verification compares against is unpacked from the archive in
-  // dist/: the bytes OSS holds and the API received.
+  // dist/: the bytes GitHub holds and the API received.
   async unpackBrowser() {
     await rm(join(this.dist, "browser"), { recursive: true, force: true });
     this.commandRun("tar", ["-xzf", join(this.dist, Browser.file), "-C", this.dist]);
   }
 
-  // Publish and rollback share the same API contract. The runner knows OSS and
-  // supplies trusted filenames and SHA-256 values; the API knows only the
+  // Publish and rollback share the same API contract. The runner supplies the
+  // filenames and the SHA-256 digests GitHub computed; the API knows only the
   // public release base URL and owns latest.json generation.
   async publish(version, { fromCheckout }) {
     if (fromCheckout) await this.checkoutVersion(version);
     else if (!/^v[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(version)) throw new Error(`invalid rollback version: ${version}`);
+    const release = this.githubRelease(version);
+    if (!release) throw new Error(`${version} has no GitHub release`);
     const platforms = {};
-    for (let artifact of Artifacts) {
-      if (!fromCheckout && artifact.optionalOnRollback) {
-        const file = [artifact.file, ...(artifact.rollbackFiles ?? [])].find(file =>
-          !this.headObject(version, { ...artifact, file }).missing);
-        if (file === undefined) {
-          console.log(`${artifact.platform} was never uploaded for ${version}; republishing without it`);
-          continue;
-        }
-        artifact = { ...artifact, file };
-      }
+    for (const artifact of Artifacts) {
       const local = fromCheckout ? await this.localArtifact(artifact) : undefined;
-      const served = await this.verifyServed(version, artifact, local);
-      this.verifyS3(version, artifact, served);
+      const served = this.githubAsset(release, artifact, local);
       platforms[artifact.platform] = { file: artifact.file, sha256: served.sha256 };
     }
 
+    // The manifest sends clients to these assets, which anonymous clients can
+    // only download once the release is public. Marking it latest keeps the
+    // repository's latest release in step with latest.json, rollbacks included.
+    this.gh(["release", "edit", version, "--repo", this.repository(), "--draft=false", "--latest"]);
     const response = await this.fetchJson(`/desktop/releases/${version}/publish`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ platforms }),
     });
     this.verifyManifest(response.published, version, platforms);
     // Read the canonical file back from the API. This verifies that publish
-    // wrote the same manifest it returned; no manifest is copied to OSS.
+    // wrote the same manifest it returned.
     const latest = await this.fetchJson("/desktop/releases/latest.json");
     this.verifyManifest(latest, version, platforms);
     console.log(JSON.stringify(latest, null, 2));
   }
 
   // The API must have published exactly the requested platforms, each at its
-  // versioned file with the digest OSS reported.
+  // versioned file with the digest GitHub reported.
   verifyManifest(manifest, version, platforms) {
     if (manifest?.version !== version.replace(/^v/, "")) {
       throw new Error(`manifest version ${manifest?.version} is not ${version}`);
@@ -422,7 +337,7 @@ export class Release {
 
   // The release as a user meets it, needing no credentials: the manifest the
   // API serves, the download URLs it names, and the console it selects, each
-  // compared with the archives in dist/ (the OSS bytes once `upload` ran).
+  // compared with the archives in dist/ (the GitHub bytes once `upload` ran).
   async verify(version) {
     await this.checkoutVersion(version);
     const manifest = await this.fetchJson("/desktop/releases/latest.json", { auth: false });
@@ -470,20 +385,10 @@ export class Release {
   }
 
   async verifyDownloads(manifest) {
-    // Follow public redirects through either CDN. Check the actual streamed
-    // bytes as well as metadata, so a successful HEAD alone cannot pass.
+    // Follow GitHub's redirect to its asset host and hash the streamed bytes.
     for (const artifact of Artifacts) {
       const { url } = manifest.platforms[artifact.platform];
       const local = await this.localArtifact(artifact);
-      const response = await fetch(url, { method: "HEAD", headers: { "accept-encoding": "identity" } });
-      if (!response.ok) throw new Error(`HEAD ${url} failed: HTTP ${response.status}`);
-      const served = {
-        size: response.headers.get("content-length"),
-        sha256: response.headers.get("x-amz-meta-sha256") ?? response.headers.get("x-oss-meta-sha256"),
-      };
-      if (served.size !== String(local.size) || served.sha256 !== local.sha256) {
-        throw new Error(`${url} does not serve the released ${artifact.platform} archive`);
-      }
       const download = await fetch(url, { headers: { "accept-encoding": "identity" } });
       if (!download.ok) throw new Error(`GET ${url} failed: HTTP ${download.status}`);
       const hash = createHash("sha256");
@@ -511,8 +416,6 @@ export class Release {
     switch (command) {
       case "stamp": return await this.stamp(argument ?? "");
       case "upload": return await this.upload(await version());
-      case "upload-oss": return await this.uploadOss(await version());
-      case "upload-s3": return await this.uploadS3(await version());
       case "publish": return await this.publish(await version(), { fromCheckout: true });
       case "verify": return await this.verify(await version());
       case "rollback": return await this.publish(argument ?? "", { fromCheckout: false });

@@ -530,13 +530,6 @@ pub let fs_browse : Command[
 ] = Command("fs.browse")
 
 ///|
-/// Allocate a persistent unnamed workspace folder; workspace.add registers it.
-pub let fs_create_unnamed_workspace : Command[
-  @protocol.EmptyPayload,
-  @protocol.BrowseDirectoryReply,
-] = Command("fs.create_unnamed_workspace")
-
-///|
 pub let fs_create_directory : Command[
   @protocol.CreateDirectoryPayload,
   @protocol.BrowseDirectoryReply,

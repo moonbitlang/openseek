@@ -26,7 +26,10 @@ async fn save_download(
   write : async (@fs.File) -> Unit,
 ) -> String {
   let extension = @pathx.Path(name).extname().to_owned()
-  let stem = name.strip_suffix(extension).unwrap_or(name.view()).to_owned()
+  let stem = name
+    .strip_suffix(extension)
+    .unwrap_or(name.clamped_view())
+    .to_owned()
   for index = 0; ; index = index + 1 {
     let name = if index == 0 { name } else { "\{stem} (\{index})\{extension}" }
     let path = @pathx.Path(directory).join(Relative(name)).to_string()

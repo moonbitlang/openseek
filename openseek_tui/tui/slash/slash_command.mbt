@@ -73,7 +73,7 @@ pub fn SlashCommandInvocation::parse(text : String) -> SlashCommandInvocation? {
   // slash (`//`, `//e`) is not a command invocation, and treating it as the name
   // `/`/`/e` would let it match a command by its `/`-prefixed display label.
   guard !name.is_empty() && !name.has_prefix("/") else { return None }
-  let arguments = rest.view(start_offset=name.length()).trim().to_owned()
+  let arguments = rest.exact_view(start=name.length()).trim().to_owned()
   Some({ name, arguments, })
 }
 

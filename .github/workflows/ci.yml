@@ -322,3 +322,55 @@ jobs:
             cmd/viz_app/e2e/test-results
           if-no-files-found: ignore
           retention-days: 7
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          # The action defaults to the retired `tools` package.
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: 'false'
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Test release publisher
+        run: node --test desktop/scripts/release.test.mjs
+
+      - name: Set up MoonBit
+        run: |
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          "$HOME/.moon/bin/moon" update
+
+      # No production signing credentials are exposed to pull requests.
+      - name: Build debug APK, lint and test native code
+        run: node android/build.mjs
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-android-debug-${{ github.sha }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

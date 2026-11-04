@@ -1,5 +1,5 @@
 ///|
-test "managed local chats remain accessible and user named workspaces remain projects" {
+test "Chats exclude retired local history and user named workspaces remain projects" {
   let channel = @interop.ChannelId::Local
   let root = channel.test_resource("/app-data/workspaces")
   let managed = channel.test_resource("/app-data/workspaces/Unnamed workspace")
@@ -36,26 +36,17 @@ test "managed local chats remain accessible and user named workspaces remain pro
     model.sidebar_component_sections(model.dev()).map(section => section.label)
   }
   let work = { ..model, sidebar_mode: WorkMode, }
-  assert_eq(labels(work), ["Projects", "Archived chats (1)"])
+  assert_eq(labels(work), ["Projects", "Archived chats"])
   assert_eq(work.sidebar_component_sections(work.dev())[0].entries.length(), 2)
   let chat = { ..model, sidebar_mode: ChatMode, }
-  assert_eq(labels(chat), ["Cloud", "Local", "Archived chats (1)"])
-  let chats = chat.sidebar_component_sections(chat.dev())[1]
-  assert_eq(chats.activation, Some(chat.active_session))
-  assert_true(
-    chats.entries is [@section.Conversation({ id, nested: false, .. })] &&
-    id.source() is @conversation.OpenSeekLive,
-  )
-  assert_true(
-    chat.sidebar_component_sections(chat.dev())[2].entries
-    is [@section.Conversation({ id, .. })] &&
-    id.source() is @conversation.OpenSeekArchived,
-  )
+  assert_eq(labels(chat), ["Chats", "Archived chats"])
+  assert_true(chat.sidebar_component_sections(chat.dev())[0].entries is [_])
+  assert_true(chat.sidebar_component_sections(chat.dev())[1].entries.is_empty())
   assert_true(chat.account is None)
 }
 
 ///|
-test "existing managed Codex chats reuse their original rows and activation" {
+test "managed Codex chats are excluded from Chat and Work lists" {
   let root = @interop.ChannelId::Local.test_resource("/app-data/workspaces")
   let managed = @interop.ChannelId::Local.test_resource(
     "/app-data/workspaces/codex-chat",
@@ -80,13 +71,14 @@ test "existing managed Codex chats reuse their original rows and activation" {
       },
     }),
   }
-  let chats = model.sidebar_component_sections(model.dev())[1]
-  assert_eq(chats.activation, Some("local-codex"))
-  assert_true(
-    chats.entries
-    is [@section.Conversation({ id, nested: false, active: true, .. })] &&
-    id.source() is @conversation.CodexLive,
-  )
+  for mode in ([ChatMode, WorkMode] : Array[@sidebar.Mode]) {
+    let model = { ..model, sidebar_mode: mode, }
+    for section in model.sidebar_component_sections(model.dev()) {
+      assert_false(
+        section.entries.any(entry => entry is @section.Conversation(_)),
+      )
+    }
+  }
 }
 
 ///|
@@ -113,21 +105,20 @@ test "the sidebar mode follows the conversation on screen and keeps a manual pic
   assert_eq(browsing.active_session, model.active_session)
   let (_, settled) = update(dispatch, ToggleSidebar, browsing)
   assert_true(settled.sidebar_mode is ChatMode)
-  // A page without a conversation claims no list.
+  // A dialog preserves the conversation's list and the manual pick.
   let (_, settings) = update(dispatch, OpenSetup, settled)
-  assert_true(settings.sidebar_activation() is None)
+  assert_true(settings.sidebar_activation() == settled.sidebar_activation())
   assert_true(settings.sidebar_mode is ChatMode)
-  // A chat coming on screen by any route brings the Chats list with it.
+  // Retired standalone chats no longer claim a sidebar list.
   let in_work = { ..model, sidebar_mode: WorkMode, }
   let (_, revealed) = update(
     dispatch,
     ToggleSidebar,
     in_work.with_active_project(Some(managed)),
   )
-  assert_true(revealed.sidebar_mode is ChatMode)
-  // The stored pick only decides a page with no conversation yet.
+  assert_true(revealed.sidebar_activation() is None)
   let (_, ignored) = update(dispatch, SidebarModeLoaded(WorkMode), revealed)
-  assert_true(ignored.sidebar_mode is ChatMode)
+  assert_true(ignored.sidebar_mode is WorkMode)
   let empty = test_model().with_dev(dev => { ..dev, active_project: None, })
   let (_, restored) = update(dispatch, SidebarModeLoaded(ChatMode), empty)
   assert_true(restored.sidebar_mode is ChatMode)
@@ -209,4 +200,108 @@ test "failed chat metadata preserves ordinary project snapshots and reports its 
     removed,
   )
   assert_true(recovered.sidebar_component_input().notices.is_empty())
+}
+
+///|
+test "Host catalogs retain project history and exclude retired standalone history" {
+  let dispatch = test_dispatch()
+  let channel = @interop.ChannelId::Local
+  let project = channel.test_project()
+  let root = channel.test_resource("/app-data/workspaces")
+  let retired = channel.test_resource("/app-data/workspaces/old")
+  let (_, model) = update_dev(
+    dispatch,
+    ProjectsChanged([project, retired], chat_root=Some(Ok(root))),
+    test_model(),
+  )
+  assert_eq(model.dev().projects, [project])
+  let ordinary : @transcript.SessionListItem = {
+    id: "project-live",
+    title: Some("Project history"),
+    workspace: project,
+    workspace_name: "project",
+    updated_at_ms: None,
+  }
+  let old = { ..ordinary, id: "retired-live", workspace: retired, }
+  let (_, model) = update_dev(
+    dispatch,
+    SessionsLoaded(
+      [ordinary, old],
+      connection_generation=model.dev().connection_generation,
+      request_generation=model.dev().sessions_request_generation,
+    ),
+    model,
+  )
+  assert_eq(model.dev().sessions.map(item => item.id), [ordinary.id])
+  let archived = { ..ordinary, id: "project-archived", }
+  let (_, model) = update_dev(
+    dispatch,
+    ArchivedLoaded(
+      [archived, { ..old, id: "retired-archived", }],
+      connection_generation=model.dev().connection_generation,
+      request_generation=model.dev().archived_request_generation,
+      fresh_session="archive-fallback",
+    ),
+    model,
+  )
+  assert_eq(model.dev().archived.map(item => item.id), [archived.id])
+  let work = { ..model, sidebar_mode: WorkMode, }
+  assert_eq(work.sidebar_component_sections(work.dev())[1].entries.length(), 1)
+  let chat = { ..model, sidebar_mode: ChatMode, }
+  assert_true(chat.chat_sidebar_sections("local")[1].entries.is_empty())
+}
+
+///|
+test "navigation does not restore retired standalone Codex conversations" {
+  let channel = @interop.ChannelId::Local
+  let root = channel.test_resource("/app-data/workspaces")
+  let old = channel.test_resource("/app-data/workspaces/old")
+  let model = {
+    ..test_model().with_dev(dev => { ..dev, chat_root: Some(Ok(root)), }),
+    screen: Codex,
+    codex: @codex.State::from_thread_snapshot({
+      "thread": {
+        "id": "retired-codex",
+        "cwd": old.path,
+        "projectRoot": old.path,
+        "turns": [],
+      },
+    }),
+  }
+  let (_, unavailable) = update(test_dispatch(), ToggleSidebar, model)
+  assert_true(unavailable.navigation.phase is Missing)
+}
+
+///|
+test "restoring a Host session waits for workspace classification and reports its failure" {
+  let model = {
+    ..test_model().with_dev(dev => { ..dev, project_catalog: None, }),
+    selected_conversation: None,
+    loading_conversation: None,
+    navigation: {
+      ..AppNavigation::empty(),
+      location: Some({ device: Some("host"), target: Session("desktop-test"), }),
+      phase: Waiting,
+    },
+  }
+  let (_, waiting) = activate_navigation(test_dispatch(), model)
+  assert_true(waiting.navigation.phase is Waiting)
+  assert_true(waiting.loading_conversation is None)
+  let (_, failed) = update(
+    test_dispatch(),
+    FromDevice(
+      Local,
+      ProjectsLoadFailed(
+        message="directory unavailable",
+        connection_generation=0,
+        request_generation=0,
+      ),
+    ),
+    waiting,
+  )
+  assert_true(failed.navigation.phase is Failed("directory unavailable"))
+  let (_, retry) = update(test_dispatch(), Navigation(Retry), failed)
+  assert_true(retry.dev().project_catalog is None)
+  assert_true(retry.navigation.phase is Waiting)
+  assert_eq(retry.dev().projects_request_generation, 1)
 }

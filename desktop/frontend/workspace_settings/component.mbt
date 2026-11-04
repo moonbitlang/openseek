@@ -119,21 +119,21 @@ fn setting_select(
       change(target.channel, target.workspace, value),
     ])
   }
-  @select_control.Control::{
-    id,
-    groups: [{ label: aria_label, options, }],
-    selected,
-    disabled: input.settings is Unloaded,
-    open: state.menu is Some(current) &&
-    current == menu &&
-    state.key == input.target,
-    toggle: emit(ToggleMenu(menu)),
-    dismiss: emit(CloseMenu),
-    change,
-    title: aria_label,
-    aria_label,
-    presentation: Setting,
-  }
+  @select_control.Control(
+    id~,
+    groups=[{ label: aria_label, options, }],
+    selected~,
+    disabled=input.settings is Unloaded,
+    open=state.menu is Some(current) &&
+      current == menu &&
+      state.key == input.target,
+    toggle=emit(ToggleMenu(menu)),
+    dismiss=emit(CloseMenu),
+    change~,
+    title=aria_label,
+    aria_label~,
+    presentation=Setting,
+  )
 }
 
 ///|
@@ -170,8 +170,14 @@ fn dialog_contents(
           emit,
           id="workspace-default-mode-select",
           options=[
-            { value: "local", label: ui(locale, LocalLabel), },
-            { value: "worktree", label: ui(locale, WorktreeLabel), },
+            @select_control.ViewOption(
+              value="local",
+              label=ui(locale, LocalLabel),
+            ),
+            @select_control.ViewOption(
+              value="worktree",
+              label=ui(locale, WorktreeLabel),
+            ),
           ],
           selected=if worktree_mode { "worktree" } else { "local" },
           aria_label=ui(locale, NewChatsLabel),
@@ -193,8 +199,14 @@ fn dialog_contents(
           emit,
           id="workspace-submodules-select",
           options=[
-            { value: "checkout", label: ui(locale, InitializeLabel), },
-            { value: "skip", label: ui(locale, LeaveUninitialized), },
+            @select_control.ViewOption(
+              value="checkout",
+              label=ui(locale, InitializeLabel),
+            ),
+            @select_control.ViewOption(
+              value="skip",
+              label=ui(locale, LeaveUninitialized),
+            ),
           ],
           selected=if checkout_submodules { "checkout" } else { "skip" },
           aria_label=ui(locale, WorktreeSubmodules),
@@ -214,10 +226,16 @@ fn dialog_contents(
           emit,
           id="workspace-submodule-timeout-select",
           options=[
-            { value: "5", label: ui(locale, FiveSeconds), },
-            { value: "10", label: ui(locale, TenSeconds), },
-            { value: "30", label: ui(locale, ThirtySeconds), },
-            { value: "60", label: ui(locale, SixtySeconds), },
+            @select_control.ViewOption(value="5", label=ui(locale, FiveSeconds)),
+            @select_control.ViewOption(value="10", label=ui(locale, TenSeconds)),
+            @select_control.ViewOption(
+              value="30",
+              label=ui(locale, ThirtySeconds),
+            ),
+            @select_control.ViewOption(
+              value="60",
+              label=ui(locale, SixtySeconds),
+            ),
           ],
           selected=submodule_checkout_timeout_seconds.to_string(),
           aria_label=ui(locale, SubmoduleTimeout),
@@ -300,11 +318,18 @@ fn dialog_component(
     update=(state, input, msg, emit) => state.update(input, msg, emit),
     subscriptions=(state, input, emit) => {
       if state.menu is Some(_) && state.key == input.target {
-        @dismiss.on_outside_click(
-          "workspace-settings-select-dismiss",
-          trigger=".custom-select-button",
-          emit.map(_ => CloseMenu),
-        )
+        @sub.batch([
+          @dismiss.on_outside_click(
+            "workspace-settings-select-dismiss",
+            trigger=".custom-select-button",
+            emit.map(_ => CloseMenu),
+          ),
+          @dismiss.on_back(
+            "workspace-settings-select-back",
+            level=TopLayer,
+            emit.map(_ => CloseMenu),
+          ),
+        ])
       } else {
         @sub.none
       }

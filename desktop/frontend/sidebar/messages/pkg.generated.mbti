@@ -15,8 +15,6 @@ pub(all) enum Message {
   SearchConversations
   NoMatchingConversations
   Chats
-  Cloud
-  Local
   CloudSignInHint
   Projects
   NewChat

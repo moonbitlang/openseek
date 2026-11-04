@@ -47,40 +47,7 @@ fn target() -> @session_import.Target {
   {
     channel: Local,
     connection_generation: 1,
-    workspace: Registered("/workspace"),
+    workspace: "/workspace",
     worktree_of: None,
-  }
-}
-
-///|
-test "workspace progress is pure, survives failure and ignores stale completion" {
-  let emit : @cmd.Emit[@session_import.Msg] = @cmd.Emit(_ => @cmd.none)
-  for workspace in [@session_import.Allocated("/chat"), Registered("/chat")] {
-    let (_, opened) = @session_import.Model().open({
-      ..target(),
-      workspace: Unplaced,
-    })
-    let (_, typed, _) = opened.update(
-      emit,
-      LinkChanged("https://example/v1/shares/sh_a"),
-    )
-    let (_, pending, _) = typed.update(emit, ImportLink)
-    let progress = @session_import.WorkspaceChanged(2, workspace)
-    let (_, ready, _) = pending.update(emit, progress)
-    let (_, repeated, _) = pending.update(emit, progress)
-    assert_eq(ready, repeated)
-    let (_, failed, _) = ready.update(emit, Imported(2, Failed("retry")))
-    let (_, retry, _) = failed.update(emit, ImportLink)
-    let (_, _, outcome) = retry.update(emit, Imported(3, Success("imported")))
-    guard outcome is Some((target, _)) else {
-      fail("expected completed import")
-    }
-    assert_eq(target.workspace, workspace)
-    let (_, closed, _) = pending.update(emit, Close)
-    let (_, stale, _) = closed.update(emit, progress)
-    assert_eq(stale, closed)
-    let (_, reopened) = closed.open({ ..target, workspace: Unplaced, })
-    let (_, stale, _) = reopened.update(emit, progress)
-    assert_eq(stale, reopened)
   }
 }

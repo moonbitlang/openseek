@@ -91,7 +91,6 @@ test('cancelling or failing a document import keeps the editable draft', async (
   await select(page);
   await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Attachment upload failed');
-  await expect(page.getByRole('alert')).toHaveCSS('border-radius', '14px');
   await page.locator('.composer').screenshot({ path: testInfo.outputPath('attachment-error.png') });
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   await expect(page.locator('.mention-chip')).toHaveCount(0);

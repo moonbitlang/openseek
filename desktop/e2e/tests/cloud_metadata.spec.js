@@ -113,9 +113,9 @@ for (const status of [401, 404]) {
     expect(patches(cloud).map(request => JSON.parse(request.body))).toEqual([{ archived: true }]);
     await archivedGroup(page);
     await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.archived:/);
-    const history = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/v1/sessions/${sessionA}/messages`));
+    const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/v1/sessions/${sessionA}/messages`));
     await cloud.row(sessionA).click();
-    await (await history).finished();
+    expect((await history).status()).toBe(304);
     await expect(page.locator('main h1')).toHaveText('Cloud fixture A');
     await expect(page.locator('#transcript')).toContainText('Earlier Cloud answer.');
     await expect(page.locator('.archived-read-only')).toHaveText('Archived conversation · Read onlyRestore');

@@ -34,7 +34,7 @@ async fn git_run(
       args,
       extra_env=env,
       inherit_env=false,
-      cwd=cwd.view(),
+      cwd=cwd.clamped_view(),
     )
   }) catch {
     error => return { exit_code: -1, output: "git spawn failed: \{error}", }

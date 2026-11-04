@@ -17,6 +17,7 @@ pub struct CallResult {
 /// One page of an MCP tool search. The same tools appear twice: `text` renders
 /// them for the model once a script prints it, and `tools` holds them as
 /// records with their raw JSON Schemas for the script to select from.
+/// Printing the page directly displays `text`.
 pub struct SearchPage {
   /// The page rendered for the model.
   text : String
@@ -29,6 +30,16 @@ pub struct SearchPage {
   /// The `offset` that continues the listing, when more tools match.
   next_offset : Int32?
 }
+
+///|
+pub impl Show for SearchPage with fn output(self, logger) {
+  logger.write_string(self.text)
+}
+
+///|
+#deprecated
+#doc(hidden)
+pub extend SearchPage with Show::{to_string, output}
 
 ///|
 /// An MCP tool as its server describes it. `server` and `name` are what

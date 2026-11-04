@@ -168,7 +168,26 @@ fn Model::quote_screen(self : Model) -> QuoteScreen? {
           !self.scheduled_session_read_only(conv) => Some(ChatQuote)
         _ => None
       }
-    Skills | Schedules | Settings => None
+  }
+}
+
+///|
+fn Model::artifact_quote_target(self : Model, slot : String) -> QuoteTarget? {
+  guard self.transcript_slot().map(active => active.key()) == Some(slot) else {
+    return None
+  }
+  match self.quote_screen() {
+    Some(ChatQuote) =>
+      self
+      .composer_input()
+      .quote_target()
+      .map(identity => ChatComposer(identity))
+    Some(CodexQuote) =>
+      self
+      .codex_composer_input()
+      .quote_target()
+      .map(identity => CodexComposer(identity))
+    None => None
   }
 }
 
@@ -425,6 +444,8 @@ fn SidebarDispatcher::placeholder_open(
 ) -> @cmd.Cmd {
   if id == "cloud-sign-in" {
     self.emit(RemoteConnectClicked)
+  } else if id == "cloud-list-status" {
+    self.emit(CloudAction(@cloud.Refresh))
   } else {
     self.unroutable("placeholder action", id)
   }
@@ -482,19 +503,72 @@ fn main {
   // created, so this is a one-time read of the page's environment, not a
   // wait for something that may still arrive.
   let desktop = @interop.openseek_api() is Some(_)
+  // This nonsecret marker comes from the loopback server on every document
+  // route, including /cloud after a reload that no longer carries ?device=.
+  let local_console = @dom.document()
+    .query_selector("meta[name='seekmoon-local-console']")
+    .to_option()
+    is Some(_)
   @crash_page.install()
   let app = @rabbita.new(() => {
     // The root routes editor events; the composer created below owns its draft.
     let composer_reply : Ref[@cmd.Emit[@composer.QuoteReply]] = Ref(
       @cmd.Emit(_ => @cmd.none),
     )
+    let composer_result : Ref[@cmd.Emit[@composer.CommandResult]] = Ref(
+      @cmd.Emit(_ => @cmd.none),
+    )
+    let codex_reply : Ref[@cmd.Emit[@composer.QuoteReply]] = Ref(
+      @cmd.Emit(_ => @cmd.none),
+    )
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.
-      init=emit => (initial_model(desktop~), emit(Init)),
+      init=emit => (initial_model(desktop~, local_console~), emit(Init)),
       update=(model, msg, emit) => {
         let (cmd, next) = match msg {
           ComposerReply(reply) => ((composer_reply.val)(reply), model)
+          ComposerCommandResult(result) => {
+            let result = match result {
+              @composer.Ready(input, id, text) =>
+                model
+                .command_result_input(input.identity.owner)
+                .map(input => @composer.Ready(input, id, text))
+              @composer.Restore(input, text) =>
+                model
+                .command_result_input(input.identity.owner)
+                .map(input => @composer.Restore(input, text))
+              other => Some(other)
+            }
+            (
+              result.map_or(@cmd.none, result => (composer_result.val)(result)),
+              model,
+            )
+          }
+          TranscriptArtifactContextRequested(slot~, snapshot) =>
+            match model.artifact_quote_target(slot) {
+              Some(target) => {
+                let (identity, deliver) = match target {
+                  ChatComposer(identity) => (identity, composer_reply.val)
+                  CodexComposer(identity) => (identity, codex_reply.val)
+                }
+                (
+                  deliver({
+                    identity,
+                    content: @composer.Annotation({
+                      ref_: @mention_context.InteractiveAnswer(snapshot),
+                      range: None,
+                    }),
+                    images: [],
+                    send: false,
+                    accepted: @cmd.none,
+                    declined: @cmd.none,
+                  }),
+                  model,
+                )
+              }
+              None => (@cmd.none, model)
+            }
           _ => update(emit, msg, model)
         }
         (next, cmd)
@@ -525,9 +599,7 @@ fn main {
             emit.map(message => CloudAction(message)),
           ),
         ]
-        if model.screen.work_screen() is None && !model.is_console_gated() {
-          subs.push(management_navigation_subscription(emit))
-        }
+        subs.append(back_layers(model, emit))
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
         subs.push(
@@ -703,6 +775,9 @@ fn main {
           open_review_changes: emit.map(selection => {
             TranscriptReviewChangesOpened(slot~, selection~)
           }),
+          artifact_context: emit.map(snapshot => {
+            TranscriptArtifactContextRequested(slot~, snapshot)
+          }),
           choose_project: emit.map(project => ProjectMenuProjectChosen(project)),
           new_project: emit(AddProjectRequested),
           toggle_project_menu: emit(ToggleSelectMenu(ProjectMenu)),
@@ -713,6 +788,7 @@ fn main {
           // Bound to the slot at construction: by the time the report
           // arrives the model already shows the next conversation.
           departed: emit.map(scroll => TranscriptLeft(slot~, scroll~)),
+          load_older: emit(TranscriptLoadOlder(slot)),
         } : @transcript_component.Actions)
     }
     // One transcript component per conversation on screen. Switching
@@ -740,18 +816,20 @@ fn main {
         },
       )
     let composer_input = state.map(model => model.composer_input())
-    let (composer_html, composer_quote) = @composer.component(
+    let (composer_html, composer_quote, command_result) = @composer.component(
       state.map(model => model.locale),
       composer_input,
       emit.map(action => ComposerAction(action)),
     )
     composer_reply.val = composer_quote
+    composer_result.val = command_result
     let codex_composer_input = state.map(model => model.codex_composer_input())
-    let (codex_composer_html, codex_composer_quote) = @composer.component(
+    let (codex_composer_html, codex_composer_quote, _) = @composer.component(
       state.map(model => model.locale),
       codex_composer_input,
       emit.map(action => CodexComposerAction(action)),
     )
+    codex_reply.val = codex_composer_quote
     let sidebar_input = state.map(model => model.sidebar_component_input())
     let sidebar_html = @sidebar.component(
       sidebar_input,

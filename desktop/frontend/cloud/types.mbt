@@ -19,11 +19,16 @@ pub(all) struct Record {
 
 ///|
 pub(all) struct History {
+  etag : String?
+  offset : Int32?
   prediction : @wire.PredictionRecord?
   session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
-}
+} derive(Eq)
+
+///|
+pub extend History with Eq::{equal, not_equal}
 
 ///|
 pub(all) struct Event {
@@ -40,6 +45,7 @@ pub(all) struct Event {
 pub struct Submission {
   content : @wire.Content
   known_tasks : Array[String]
+  result_id : String?
 } derive(Eq)
 
 ///|
@@ -57,6 +63,15 @@ pub extend WatchStatus with Eq::{equal, not_equal}
 ///|
 pub(all) struct Conversation {
   records : Array[Record]
+  history_cached : Bool
+  history_etag : String?
+  history_reading : Bool
+  history_pages : Map[Int32, History]
+  // Request, requested offset, and the navigation that owns the prepend.
+  history_older_request : (Int32, Int32, Int32)?
+  // Compare the first snapshot after a revisit that shares an earlier read.
+  history_resume_baseline : (String?, Int32?)?
+  history_refresh_after_read : Bool
   // Last task lifecycle event supplies status while canonical history reloads.
   events : Array[Event]
   document : @protocol.SessionDocument
@@ -81,6 +96,7 @@ pub(all) struct Conversation {
   initial_submission : @composer.Draft?
   initial_attachments : Array[@protocol.AttachmentSource]
   uploads : Array[UploadedAttachment]
+  shell_commands : Array[@composer.ShellCommand]
   pending : Submission?
   // One command waiting for session creation or the first SSE snapshot.
   outgoing : PendingCommand?
@@ -104,6 +120,13 @@ pub(all) struct Conversation {
 fn Conversation::empty() -> Conversation {
   {
     records: [],
+    history_cached: false,
+    history_etag: None,
+    history_reading: false,
+    history_pages: Map([]),
+    history_older_request: None,
+    history_resume_baseline: None,
+    history_refresh_after_read: false,
     events: [],
     document: {
       version: None,
@@ -126,6 +149,7 @@ fn Conversation::empty() -> Conversation {
     initial_submission: None,
     initial_attachments: [],
     uploads: [],
+    shell_commands: [],
     pending: None,
     outgoing: None,
     stream: None,
@@ -160,8 +184,9 @@ pub struct PendingCommand {
 } derive(Eq)
 
 ///|
-pub(all) enum CommandInput {
+pub enum CommandInput {
   Native(@wire.Command)
+  Terminal(@composer.ShellCommand?)
   Prompt(
     content~ : @wire.Content,
     draft~ : @composer.Draft,
@@ -184,7 +209,7 @@ impl ToJson for SessionEdit with fn to_json(self) {
 }
 
 ///|
-pub(all) struct MetadataSave {
+pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
@@ -197,6 +222,16 @@ pub extend SessionEdit with Eq::{equal, not_equal}
 pub extend MetadataSave with Eq::{equal, not_equal}
 
 ///|
+pub(all) enum SessionListStatus {
+  Idle
+  Retrying
+  Failed
+} derive(Eq)
+
+///|
+pub extend SessionListStatus with Eq::{equal, not_equal}
+
+///|
 pub(all) struct State {
   user_id : String?
   epoch : Int32
@@ -205,6 +240,7 @@ pub(all) struct State {
   conversations : Map[String, Conversation]
   sequence : Int32
   list_request : Int32
+  list_status : SessionListStatus
   deletions : Map[String, Int32]
   metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
@@ -222,6 +258,7 @@ pub fn State::empty() -> State {
     conversations: Map([]),
     sequence: 0,
     list_request: 0,
+    list_status: Idle,
     deletions: {},
     metadata_saves: {},
     retired: [],
@@ -246,6 +283,8 @@ pub(all) enum Msg {
   Edited(Int32, String, Int32)
   EditFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
+  TerminalRequested(@interop.ConversationIdentity, @composer.ShellCommand?)
+  TerminalReady(Int32, String, @composer.ShellCommand?)
   SubmitAttachments(
     @interop.ConversationIdentity,
     @composer.Draft,
@@ -256,6 +295,10 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, Failure)
   Loaded(Int32, String, Int32, History)
+  LoadOlder(String)
+  OlderLoaded(Int32, String, Int32, History)
+  OlderFailed(Int32, String, Int32, Failure)
+  HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, Failure)
   WatchOpened(Int32, String, StreamLease)
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
@@ -381,6 +424,13 @@ fn decode_history(json : Json) -> History raise RequestError {
     _ => None
   }
   {
+    etag: None,
+    offset: match json {
+      { "page": { "offset": Number(offset, ..), .. }, .. } if offset >= 0 &&
+        offset == offset.to_int().to_double() => Some(offset.to_int())
+      Object(fields) if !fields.contains("page") => None
+      _ => raise @cloud_client.RequestError(Malformed)
+    },
     session,
     messages,
     prediction,

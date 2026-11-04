@@ -7,8 +7,6 @@ import {
 }
 
 // Values
-pub fn arguments(String) -> Array[String] raise
-
 pub async fn askpass_main() -> Unit
 
 pub async fn profiles() -> @protocol.SshProfiles

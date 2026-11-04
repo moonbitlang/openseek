@@ -126,14 +126,16 @@ Full entries from the repository root: `just desktop-test-browser`,
   access. This covers the Proton renderer, authenticated relay clients, and
   code the user deliberately builds or executes. Workspace and path checks
   express product scope within that authority.
-- Authenticate frontends before granting a Desktop command channel. Keep
-  unauthenticated peers, unrelated web origins, and content processed as data
-  outside that authority. Rendered Markdown, diffs, file previews, tool output,
+- Authenticate relay frontends before granting a Desktop command channel.
+  The development loopback console grants local access without a token or
+  cookie. Keep unrelated web origins and content processed as data outside
+  that authority. Rendered Markdown, diffs, file previews, tool output,
   and model output remain data, including when they originate in a checkout.
   Distinguish deliberate code execution from displaying or parsing a file.
 - A security finding identifies the less-trusted principal, the boundary it
   crosses, and the new capability it gains. Evaluate these boundaries
   independently of which controls the normal UI exposes.
-- Release and development builds use the same trust model. For the development
-  loopback console, preserve the launch token, session cookie, and `Origin`
-  check that fence web origins; loopback binding controls reachability only.
+- The development loopback console supports direct links and fresh browsers
+  without an authorization step. Bind to loopback, validate `Host` against
+  the bound address, and require any supplied `Origin` to match the console
+  origin. These checks fence unrelated web origins without browser credentials.

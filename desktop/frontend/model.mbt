@@ -277,13 +277,15 @@ const SidebarModeStorageKey : String = "openseek.sidebar_mode"
 const ConversationModelsStorageKey : String = "openseek.conversation_models"
 
 ///|
-/// Every conversation switched to Approve for me, so reopening one keeps its
-/// reviewer. Only that choice is stored: a conversation missing here asks,
-/// which is also what a new conversation does — the reviewer is opted into
-/// per conversation, never inherited from an unrelated one. Rows are keys
-/// (`conversation_model_key`), newest first, capped at
-/// `ConversationModelsLimit`.
-const ConversationApprovalsStorageKey : String = "openseek.conversation_approvals"
+/// Every conversation set to request approval, so reopening one keeps
+/// asking. Only that choice is stored: a conversation missing here is
+/// auto-reviewed, which is also what a new conversation does — asking is
+/// opted into per conversation, never inherited from an unrelated one. Rows
+/// are keys (`conversation_model_key`), newest first, capped at
+/// `ConversationModelsLimit`. Builds that asked by default stored the opposite
+/// list under `openseek.conversation_approvals`; it is no longer read, since
+/// every conversation it held is auto-reviewed now anyway.
+const ConversationApprovalsStorageKey : String = "openseek.conversation_asks"
 
 ///|
 /// How many conversations remember their tier. Conversations are unbounded
@@ -364,13 +366,6 @@ fn AppFontSize::wire(self : AppFontSize) -> String {
 fn AppFontSize::base_pixels(self : AppFontSize) -> Int32 {
   let AppFontSize(pixels) = self
   pixels
-}
-
-///|
-/// Measured monospace surfaces use one pixel less than the selected app base.
-/// Their larger-looking glyphs then align with surrounding system-sans text.
-fn AppFontSize::pixels(self : AppFontSize) -> Double {
-  (self.base_pixels() - 1).to_double()
 }
 
 ///|
@@ -832,10 +827,7 @@ priv struct Conversation {
 ///|
 /// One `!` command in flight. `id` names its terminal tab, so the tab's
 /// report retires exactly this command even when the same text runs twice.
-priv struct ShellCommand {
-  id : String
-  command : String
-} derive(Eq)
+using @composer {type ShellCommand}
 
 ///|
 /// One follow-up submitted into an open run. A queued follow-up waits for its
@@ -944,14 +936,14 @@ priv struct BufferedCommit {
 } derive(Eq)
 
 ///|
-/// What the main area shows: a conversation, Skills, Scheduled tasks, or
-/// Settings. Selecting a conversation (or rotating to a new one) always
-/// returns to the chat. While the
-/// configured endpoint is unusable the chat stays reachable, the API-setup
-/// modal takes over until dismissed, and the composer keeps Send disabled.
+/// The work surface remains mounted beneath management dialogs.
 priv enum Screen {
   Chat
   Codex
+} derive(Eq)
+
+///|
+priv enum ManagementDialog {
   Skills
   Schedules
   Settings
@@ -1106,6 +1098,7 @@ priv struct DeviceState {
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
   projects : Array[@common.Uri]
+  project_catalog : Result[Unit, String]?
   chat_root : Result[@common.Uri, String]?
   // Each project's worktree registry rows, refreshed with the project list
   // and replaced wholesale by `worktree.changed`. The sidebar's name
@@ -1144,6 +1137,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     archived: [],
     archive_overrides: [],
     projects: [],
+    project_catalog: None,
     chat_root: None,
     worktrees: [],
     workspace_settings: [],
@@ -1164,8 +1158,10 @@ type ComposerActionIdentity = @composer.Identity
 priv enum SelectMenu {
   OpenSeekModelMenu
   OpenSeekReasoningMenu
+  OpenSeekApprovalMenu
   CodexModelMenu
   CodexReasoningMenu
+  CodexPermissionMenu
   ApiProviderMenu
   PromptMenu
   FollowupBehaviorMenu
@@ -1268,9 +1264,9 @@ priv struct Model {
   // default an unrelated chat has moved to since. Reopening recovers from
   // here; `default_model` is only for conversations this list has never held.
   conversation_models : Array[StoredConversationModel]
-  // The conversations whose permission questions a reviewer answers (see
-  // `ConversationApprovalsStorageKey`); every other conversation asks.
-  reviewed_conversations : Array[String]
+  // The conversations whose permission questions the person answers (see
+  // `ConversationApprovalsStorageKey`); a reviewer answers every other one.
+  asking_conversations : Array[String]
   // The DeepSeek (and non-GLM custom-model) reasoning choice sent on the next
   // OpenSeek operation. GLM keeps a separate preference below because its
   // forced-thinking low mode is the useful default for ordinary tasks.
@@ -1456,8 +1452,7 @@ priv struct Model {
   // A confirmed add waiting for its registry snapshot; None otherwise.
   pending_project_adoption : ProjectAdoption?
   screen : Screen
-  // Which work surface management pages cover; independent of back history.
-  management_return : WorkScreen?
+  management_dialog : ManagementDialog?
   // Destination identities and history; page data stays in its owning state.
   navigation : AppNavigation
   navigation_initial : String?
@@ -1660,6 +1655,11 @@ priv enum Msg {
   OpenCloudConversation(account~ : String, session~ : String)
   ComposerAction(@composer.Action)
   ComposerReply(@composer.QuoteReply)
+  ComposerCommandResult(@composer.CommandResult)
+  TranscriptArtifactContextRequested(
+    slot~ : String,
+    @mention_context.ArtifactSnapshot
+  )
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
   // be mistaken for an OpenSeek conversation owned by the root store.
@@ -1767,6 +1767,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
+  CloseManagementDialog
   OpenLocalApiSettings
   Navigation(NavigationMsg)
   // The API-setup modal's "Not now" button and its backdrop click.
@@ -1993,12 +1994,17 @@ priv enum Msg {
   ToggleOverview
   OverviewLoaded(Bool)
   Overview(@conversation_overview.Msg)
-  // Clicks away from a transient menu, one per menu. Each is separate from
-  // its toggle on purpose: a dismissal must never reopen what it closed.
+  // Clicks away from a transient menu, one per menu, and Back on a narrow
+  // layout's overlays. Each is separate from its toggle on purpose: a
+  // dismissal must never reopen what it closed.
   CloseGitDetails
+  CloseSidebar
+  CloseOverview
+  CloseRightPanel
   // The transcript component reports where its reader was as it leaves the
   // screen; the root remembers it for the conversation's next visit.
   TranscriptLeft(slot~ : String, scroll~ : @transcript_component.ScrollPosition)
+  TranscriptLoadOlder(String)
   TranscriptReviewChangesOpened(
     slot~ : String,
     selection~ : @mention_context.ReviewChanges
@@ -2153,7 +2159,10 @@ priv enum DeviceMsg {
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.
-  InstalledSkillsLoaded(Array[@skills.InstalledItem])
+  InstalledSkillsLoaded(
+    Array[@skills.InstalledItem],
+    builtin_errors~ : Array[@protocol.BuiltinSkillError]
+  )
   InstalledSkillsFailed(String)
   // Another client changed this host's library; the focused client re-reads
   // it so the Skills page and `$` completion share the new contents.
@@ -2580,7 +2589,7 @@ fn empty_conversation(
 /// `desktop` is whether this page runs inside the proton window rather than
 /// as a browser console: one bundle serves both, and `main` reads the
 /// difference once from the bridge the host installs before any page script.
-fn initial_model(desktop~ : Bool) -> Model {
+fn initial_model(desktop~ : Bool, local_console~ : Bool = false) -> Model {
   // Read once here (main runs before the first render); afterwards the
   // resize subscription keeps the flag current through `ViewportResized`.
   // No window (a headless test runtime) reads as the wide layout.
@@ -2594,6 +2603,8 @@ fn initial_model(desktop~ : Bool) -> Model {
   // optional `?workspace=` places that device's first conversation.
   let page_device = if desktop {
     Some(@interop.LocalDeviceId)
+  } else if local_console {
+    Some("host")
   } else if navigation_device_from_location() is Some(device) {
     Some(device)
   } else {
@@ -2649,7 +2660,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     default_prompt: @prompt.Model::new(),
     default_agent: OpenSeekAgent,
     conversation_models: [],
-    reviewed_conversations: [],
+    asking_conversations: [],
     openseek_reasoning: ReasoningHigh,
     glm_reasoning: ReasoningOff,
     max_steps: DefaultMaxSteps,
@@ -2686,7 +2697,11 @@ fn initial_model(desktop~ : Bool) -> Model {
     minimal_transcript: true,
     narrow,
     sidebar_open: !narrow,
-    sidebar_mode: WorkMode,
+    sidebar_mode: if !desktop && page_device is None {
+      ChatMode
+    } else {
+      WorkMode
+    },
     sidebar_revealed: None,
     right_panel_open: false,
     right_panel_menu_open: false,
@@ -2719,7 +2734,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     selected_conversation: None,
     conversation_load_failure: None,
     screen: Chat,
-    management_return: None,
+    management_dialog: None,
     navigation: AppNavigation::empty(),
     navigation_initial: if desktop {
       None
@@ -2767,6 +2782,12 @@ fn initial_model(desktop~ : Bool) -> Model {
 }
 
 ///|
+/// Local host access and Cloud sign-in are independent on this page.
+fn Model::is_local_console(self : Model) -> Bool {
+  !self.is_desktop && self.console.page_device == Some("host")
+}
+
+///|
 /// The state of one connected channel; `None` for a channel this page does
 /// not hold — including a browser page's query-selected device before the
 /// roster verifies and connects it, or after that target is retired.
@@ -2775,6 +2796,13 @@ fn Model::device_state(
   channel : @interop.ChannelId,
 ) -> DeviceState? {
   self.devices.iter().find_first(dev => dev.channel == channel)
+}
+
+///|
+/// Whether this page owns host features, including while its selected device
+/// is offline. A browser Cloud page has no device; Desktop always owns its host.
+fn Model::has_host(self : Model) -> Bool {
+  self.is_desktop || self.console.page_device is Some(_)
 }
 
 ///|
@@ -3074,7 +3102,7 @@ fn Model::settle_api_setup(self : Model) -> Model {
   if self.api_ready() {
     { ..self, api_setup_open: false, api_setup_dismissed: false, select_menu, }
   } else if self.api_setup_dismissed ||
-    self.screen is Settings ||
+    self.management_dialog is Some(Settings) ||
     self.cloud_selected() {
     { ..self, api_setup_open: false, select_menu, }
   } else {
@@ -3469,10 +3497,10 @@ fn Model::approval_for(
   session : String,
 ) -> @protocol.OpenSeekApproval {
   let key = conversation_model_key(channel, session)
-  if self.reviewed_conversations.contains(key) {
-    ApprovalReview
-  } else {
+  if self.asking_conversations.contains(key) {
     ApprovalAsk
+  } else {
+    ApprovalReview
   }
 }
 
@@ -3486,8 +3514,8 @@ fn Model::with_approval(
 ) -> Model {
   {
     ..self,
-    reviewed_conversations: approvals_with(
-      self.reviewed_conversations,
+    asking_conversations: approvals_with(
+      self.asking_conversations,
       conversation_model_key(channel, session),
       approval,
     ),
@@ -3495,19 +3523,15 @@ fn Model::with_approval(
 }
 
 ///|
-/// Fold one conversation's approval choice into the reviewed list: a review
-/// moves the key to the front (dropping the oldest past the cap), an ask
+/// Fold one conversation's approval choice into the asking list: an ask
+/// moves the key to the front (dropping the oldest past the cap), a review
 /// removes it. Free-standing for the same reason as `remembered_with`.
 fn approvals_with(
   keys : Array[String],
   key : String,
   approval : @protocol.OpenSeekApproval,
 ) -> Array[String] {
-  let merged : Array[String] = if approval is ApprovalReview {
-    [key]
-  } else {
-    []
-  }
+  let merged : Array[String] = if approval is ApprovalAsk { [key] } else { [] }
   for existing in keys {
     if existing != key && merged.length() < ConversationModelsLimit {
       merged.push(existing)
@@ -3663,17 +3687,28 @@ fn Model::conversation_is_new_chat(self : Model, conv : Conversation) -> Bool {
 
 ///|
 /// Replace (or add) the entry sharing `conv`'s session id, copy-on-write —
-/// prior model snapshots keep their own conversations array.
+/// prior model snapshots keep their own conversations array. A turn that
+/// starts in the conversation on screen, from this client or another, locks
+/// its approval mode, so the approval menu closes with it.
 fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
+  let select_menu = if self.select_menu is Some(OpenSeekApprovalMenu) &&
+    conv.is_running() &&
+    self.active_conversation() is Some(active) &&
+    active.device == conv.device &&
+    active.session_id == conv.session_id {
+    None
+  } else {
+    self.select_menu
+  }
   let conversations = self.conversations.copy()
   for index, existing in conversations {
     if existing.device == conv.device && existing.session_id == conv.session_id {
       conversations[index] = conv
-      return { ..self, conversations, }
+      return { ..self, conversations, select_menu, }
     }
   }
   conversations.push(conv)
-  { ..self, conversations, }
+  { ..self, conversations, select_menu, }
 }
 
 ///|
@@ -3751,7 +3786,7 @@ fn Model::file_panel_visible(self : Model) -> Bool {
 ///|
 fn Model::transcript_is_visible(self : Model) -> Bool {
   self.window_focused &&
-  (self.screen is Chat || self.screen is Codex) &&
+  self.management_dialog is None &&
   !(self.terminal_panel_visible() && self.terminal.is_maximized()) &&
   !(self.file_panel_visible() && (self.right_panel_expanded || self.narrow))
 }

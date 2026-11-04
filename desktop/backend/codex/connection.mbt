@@ -8,12 +8,12 @@ const HandshakeTimeoutMs : Int32 = 30000
 ///|
 /// The initialized JSON-RPC connection. Its tasks and child process belong to
 /// the task group passed to `connect`; `shutdown` is an eager, idempotent close.
-struct Connection {
+priv struct Connection {
   rpc : @jsonrpc.Client
 }
 
 ///|
-pub async fn Connection::request(
+async fn Connection::request(
   self : Connection,
   method_~ : String,
   params~ : Json,
@@ -22,7 +22,7 @@ pub async fn Connection::request(
 }
 
 ///|
-pub async fn Connection::respond(
+async fn Connection::respond(
   self : Connection,
   request : @jsonrpc.PeerRequest,
   result : Json,
@@ -31,7 +31,7 @@ pub async fn Connection::respond(
 }
 
 ///|
-pub async fn Connection::respond_error(
+async fn Connection::respond_error(
   self : Connection,
   request : @jsonrpc.PeerRequest,
   code~ : Int32,
@@ -41,12 +41,7 @@ pub async fn Connection::respond_error(
 }
 
 ///|
-pub fn Connection::is_closed(self : Connection) -> Bool {
-  self.rpc.is_closed()
-}
-
-///|
-pub fn Connection::shutdown(self : Connection) -> Unit {
+fn Connection::shutdown(self : Connection) -> Unit {
   self.rpc.close()
 }
 
@@ -54,7 +49,7 @@ pub fn Connection::shutdown(self : Connection) -> Unit {
 /// Spawn `codex app-server`, install the two inbound event receivers before
 /// the handshake, then send the required initialize/initialized pair. Raises
 /// the failure after tearing down any spawn, protocol, or timeout failure.
-pub async fn[X] connect(
+async fn[X] connect(
   group : @async.TaskGroup[X],
   command~ : String,
   notification_handler~ : (String, Json) -> Unit,
@@ -62,7 +57,6 @@ pub async fn[X] connect(
   on_closed~ : () -> Unit,
   version~ : String,
   home~ : @pathx.Path?,
-  handshake_timeout_ms~ : Int32 = HandshakeTimeoutMs,
 ) -> Connection {
   // The Desktop's isolated CODEX_HOME must win over anything the login-shell
   // environment inherited. Every process the app-server later spawns inherits
@@ -183,7 +177,7 @@ pub async fn[X] connect(
     ),
   )
   errdefer rpc.close()
-  let _ = @async.with_timeout(handshake_timeout_ms, () => {
+  let _ = @async.with_timeout(HandshakeTimeoutMs, () => {
     rpc.request(method_="initialize", params={
       "clientInfo": {
         "name": "openseek_desktop",
@@ -204,7 +198,7 @@ pub async fn[X] connect(
         @async.TimeoutError =>
           RequestFailed(
             method_="initialize",
-            detail="timed out after \{handshake_timeout_ms} ms",
+            detail="timed out after \{HandshakeTimeoutMs} ms",
           )
         error => RequestFailed(method_="initialize", detail="\{error}")
       }

@@ -1013,7 +1013,7 @@ fn copy_context_menu_theme(
       "--vscode-menu-background", "--vscode-menu-foreground", "--vscode-menu-selectionBackground",
       "--vscode-menu-selectionForeground", "--vscode-menu-selectionBorder", "--vscode-menu-separatorBackground",
       "--vscode-menu-border", "--vscode-shadow-lg", "--vscode-widget-shadow", "--vscode-cornerRadius-medium",
-      "--vscode-cornerRadius-large", "--ui-font-family",
+      "--vscode-cornerRadius-large", "--ui-font-family", "--ui-font-size",
     ] {
     let value = style.get_property_value(name)
     if !value.is_empty() {

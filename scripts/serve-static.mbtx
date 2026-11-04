@@ -48,6 +48,28 @@ fn decode_path(path : StringView) -> String raise {
 }
 
 ///|
+/// Write a complete response on a connection in passthrough mode.
+///
+/// `@http` buffers response bodies 1 KiB at a time, so a multi-megabyte
+/// bundle took thousands of socket writes. Passthrough writes go straight to
+/// the socket. Each connection serves one request and then closes.
+async fn respond(
+  conn : @http.ServerConnection,
+  code : Int32,
+  reason : String,
+  content_type~ : String = "text/plain; charset=utf-8",
+  body~ : Bytes = b"",
+  send_body~ : Bool = true,
+) -> Unit {
+  conn.write(
+    "HTTP/1.1 \{code} \{reason}\r\nContent-Type: \{content_type}\r\nContent-Length: \{body.length()}\r\nConnection: close\r\n\r\n",
+  )
+  if send_body {
+    conn.write(body)
+  }
+}
+
+///|
 /// Loopback-only static asset server for the Desktop and session-viewer tests.
 async fn main {
   guard @env.args() is [_, directory, port] else {
@@ -60,54 +82,55 @@ async fn main {
   )
   server.run_forever((request, _, conn) => {
     defer conn.close()
-    defer conn.end_response()
+    conn.enter_passthrough_mode()
     if !(request.meth is (Get | Head)) {
-      conn.send_response(405, "Method Not Allowed")
+      respond(conn, 405, "Method Not Allowed")
       return
     }
     guard request.path.split("?").head() is Some(raw_path) else {
-      conn.send_response(400, "Bad Request")
+      respond(conn, 400, "Bad Request")
       return
     }
     let path = decode_path(raw_path) catch {
       _ => {
-        conn.send_response(400, "Bad Request")
+        respond(conn, 400, "Bad Request")
         return
       }
     }
     if path.contains("\\") ||
       path.contains("\u0000") ||
       path.split("/").any(part => part == "..") {
-      conn.send_response(403, "Forbidden")
+      respond(conn, 403, "Forbidden")
       return
     }
     let mut file = root + "/" + path.trim_start(chars="/").to_owned()
     if !@fs.exists(file) {
-      conn.send_response(404, "Not Found")
+      respond(conn, 404, "Not Found")
       return
     }
     if @fs.kind(file) == Directory {
       file += "/index.html"
     }
     if !@fs.exists(file) {
-      conn.send_response(404, "Not Found")
+      respond(conn, 404, "Not Found")
       return
     }
     let resolved = @fs.realpath(file).replace(old="\\", new="/")
     if !resolved.has_prefix(root + "/") {
-      conn.send_response(403, "Forbidden")
+      respond(conn, 403, "Forbidden")
       return
     }
     if @fs.kind(file) != Regular {
-      conn.send_response(404, "Not Found")
+      respond(conn, 404, "Not Found")
       return
     }
-    let data = @fs.read_file(file)
-    conn.send_response(200, "OK", extra_headers={
-      "Content-Type": content_type(file),
-    })
-    if request.meth == Get {
-      conn.write(data)
-    }
+    respond(
+      conn,
+      200,
+      "OK",
+      content_type=content_type(file),
+      body=@fs.read_file(file).binary(),
+      send_body=request.meth is Get,
+    )
   })
 }

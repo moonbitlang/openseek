@@ -116,3 +116,35 @@ test "non-paths are left alone" {
   // Dotfiles have an empty stem, so they are not treated as an extension.
   assert_false(is_file_path(".gitignore"))
 }
+
+///|
+test "only a completed explicitly marked file invokes the interactive renderer" {
+  let rendered : Array[String] = []
+  let render = (file : @workspace_file_ref.WorkspaceFileRef) => {
+    rendered.push(file.path)
+    @html.nothing
+  }
+  for
+    (info, closed, deferred) in [
+      ("openseek-file", true, false),
+      ("openseek-file artifact", false, false),
+      ("openseek-file artifact", true, true),
+    ] {
+    let closing = if closed { "\n```" } else { "" }
+    ignore(
+      markdown_nodes(
+        "```\{info}\nscratch/artifact/page.html\{closing}",
+        artifact_view=render,
+        defer_artifacts=deferred,
+      ),
+    )
+  }
+  assert_true(rendered.is_empty())
+  ignore(
+    markdown_nodes(
+      "```openseek-file artifact\nscratch/artifact/page.html\n```",
+      artifact_view=render,
+    ),
+  )
+  assert_eq(rendered, ["scratch/artifact/page.html"])
+}

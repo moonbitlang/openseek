@@ -606,7 +606,7 @@ fn worktree_state(
   state : @wire.WorktreeState,
 ) -> (String, Array[String]) {
   let short = (commit : String) => {
-    commit.view(end_offset=commit.length().min(10)).to_owned()
+    commit.exact_view(end=commit.length().min(10)).to_owned()
   }
   match state {
     Working if ended => (ui(locale, WorktreeUnrecorded), [])

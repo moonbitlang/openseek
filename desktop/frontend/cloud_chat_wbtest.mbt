@@ -52,6 +52,8 @@ fn integrated_cloud_model() -> Model {
             },
           ]),
         },
+        etag: None,
+        offset: None,
         messages: [
           {
             task_id: "finished-task",
@@ -66,7 +68,14 @@ fn integrated_cloud_model() -> Model {
     ),
     model,
   )
-  model
+  model.with_cloud_baseline("cloud-a")
+}
+
+///|
+fn Model::with_cloud_baseline(self : Model, session : String) -> Model {
+  let conversations = self.cloud.conversations.copy()
+  conversations[session] = { ..conversations[session], last_seq: Some(0), }
+  { ..self, cloud: { ..self.cloud, conversations, }, }
 }
 
 ///|
@@ -74,7 +83,7 @@ test "Cloud selection after Settings wins over the previous navigation destinati
   let dispatch = test_dispatch()
   let model = integrated_cloud_model()
   let (_, settings) = update(dispatch, OpenSetup, model)
-  assert_true(settings.screen is Settings)
+  assert_true(settings.management_dialog is Some(Settings))
   let (_, cloud) = update(
     dispatch,
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
@@ -90,9 +99,6 @@ test "Cloud selection after Settings wins over the previous navigation destinati
   }
   let snapshot : @navigation_browser.Snapshot = {
     path: "/cloud/session/cloud-b",
-    settings: false,
-    can_back: true,
-    can_forward: false,
   }
   let (_, direct) = update(dispatch, Navigation(Browser(snapshot)), initial)
   let (_, repeated) = update(dispatch, Navigation(Browser(snapshot)), initial)
@@ -105,11 +111,12 @@ test "Cloud selection after Settings wins over the previous navigation destinati
   assert_false(initial.cloud.conversations.contains("cloud-b"))
   let (_, home) = update(
     dispatch,
-    Navigation(Browser({ ..snapshot, path: "/cloud", })),
+    Navigation(Browser({ path: "/cloud", })),
     direct,
   )
   assert_true(home.cloud_selected() && home.cloud_identity() is None)
-  assert_true(home.cloud.creation is None)
+  assert_true(home.cloud_draft_identity() is Some(_))
+  assert_false(home.cloud.creating_session())
 }
 
 ///|
@@ -117,14 +124,16 @@ test "navigation restores Cloud across Settings and Work without losing its iden
   let dispatch = test_dispatch()
   let model = integrated_cloud_model()
   let (_, settings) = update(dispatch, OpenSetup, model)
-  let (_, back) = update(dispatch, Navigation(Back), settings)
+  let (_, back) = update(dispatch, CloseManagementDialog, settings)
   assert_true(back.screen is Chat)
   assert_true(back.cloud_identity() == model.cloud_identity())
-  let (_, forward) = update(dispatch, Navigation(Forward), back)
-  assert_true(forward.screen is Settings)
   let (_, work) = update(dispatch, OpenSession(Local, "desktop-test"), back)
   assert_true(work.host_selection() is Some({ session: "desktop-test", .. }))
-  let (_, cloud) = update(dispatch, Navigation(Back), work)
+  let (_, cloud) = update(
+    dispatch,
+    OpenCloudConversation(account="fixture-user", session="cloud-a"),
+    work,
+  )
   assert_true(cloud.screen is Chat)
   assert_true(cloud.cloud_identity() == model.cloud_identity())
 }
@@ -151,12 +160,9 @@ test "Cloud navigation works in a browser without any host device" {
     OpenCloudConversation(account="fixture-user", session="cloud-b"),
     settings,
   )
-  assert_true(second.navigation.can_back)
-  let (_, back) = update(dispatch, Navigation(Back), second)
-  assert_true(back.screen is Settings && back.navigation.phase is Active)
-  let (_, forward) = update(dispatch, Navigation(Forward), back)
+  assert_true(second.management_dialog is None)
   assert_true(
-    forward.cloud_identity()
+    second.cloud_identity()
     is Some(@interop.Cloud(account="fixture-user", session="cloud-b")),
   )
 }
@@ -174,11 +180,9 @@ test "Cloud navigation restores Settings while the host is offline" {
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
     settings,
   )
-  let (_, back) = update(dispatch, Navigation(Back), reopened)
-  assert_true(back.screen is Settings && back.navigation.phase is Active)
-  let (_, forward) = update(dispatch, Navigation(Forward), back)
-  assert_true(forward.cloud_identity() == cloud.cloud_identity())
-  assert_true(forward.navigation.phase is Active)
+  assert_true(reopened.management_dialog is None)
+  assert_true(reopened.cloud_identity() == cloud.cloud_identity())
+  assert_true(reopened.navigation.phase is Active)
 }
 
 ///|
@@ -195,7 +199,10 @@ test "navigation cannot restore another account's Cloud conversation" {
     }),
     cloud: { ..@cloud.State::empty(), user_id: Some("other-user"), },
   }
-  let (_, back) = update(dispatch, Navigation(Back), other)
+  let (_, back) = activate_navigation(dispatch, {
+    ..other,
+    navigation: { ..other.navigation, phase: Waiting, },
+  })
   assert_true(back.navigation.phase is Missing)
   assert_true(back.cloud_identity() is None)
   assert_true(back.account == other.account)
@@ -203,14 +210,18 @@ test "navigation cannot restore another account's Cloud conversation" {
 }
 
 ///|
-test "Back prevents a pending Cloud creation from taking foreground later" {
+test "another conversation prevents a pending Cloud creation from taking foreground later" {
   let dispatch = test_dispatch()
   let cloud = integrated_cloud_model()
   let (_, settings) = update(dispatch, OpenSetup, cloud)
   let (_, creating) = update(dispatch, CloudAction(@cloud.Create), settings)
   let creating = submit_blank_cloud(creating)
   let creation = creating.cloud.creation.unwrap()
-  let (_, back) = update(dispatch, Navigation(Back), creating)
+  let (_, back) = update(
+    dispatch,
+    OpenCloudConversation(account="fixture-user", session="cloud-a"),
+    creating,
+  )
   let (_, late) = update(
     dispatch,
     CloudAction(
@@ -218,14 +229,15 @@ test "Back prevents a pending Cloud creation from taking foreground later" {
     ),
     back,
   )
-  assert_true(back.screen is Settings && late.screen is Settings)
+  assert_true(back.cloud_identity() == cloud.cloud_identity())
+  assert_true(late.cloud_identity() == cloud.cloud_identity())
   assert_true(late.navigation.location == back.navigation.location)
   assert_eq(late.navigation.revision, back.navigation.revision)
   assert_true(late.cloud.sessions.any(item => item.id == "late-cloud"))
 }
 
 ///|
-test "Cloud and Local folders keep their own rows, ordering and create action" {
+test "Chats use the shared section with existing ordering and create action" {
   let channel = @interop.ChannelId::Local
   let root = channel.test_resource("/app-data/workspaces")
   let managed = channel.test_resource("/app-data/workspaces/old-chat")
@@ -282,15 +294,13 @@ test "Cloud and Local folders keep their own rows, ordering and create action" {
       }
     })
   }
-  assert_eq(sections.map(section => section.label), [
-    "Cloud", "Local", "Archived chats",
-  ])
+  assert_eq(sections.map(section => section.label), ["Chats", "Archived chats"])
   assert_eq(ids(sections[0]), ["cloud-b", "cloud-a"])
-  assert_eq(ids(sections[1]), ["local-b", "local-a"])
+  assert_true(ids(sections[1]).is_empty())
   assert_true(sections[0].action is Some(_))
   assert_true(sections[1].action is None)
   assert_true(
-    !sections[0].initially_collapsed && !sections[1].initially_collapsed,
+    !sections[0].initially_collapsed && sections[1].initially_collapsed,
   )
 }
 
@@ -306,6 +316,7 @@ test "Cloud uses the existing composer and transcript without a host workspace" 
         description: "",
         source: "local",
         registry: None,
+        builtin: false,
         enabled: true,
       },
     ],
@@ -320,7 +331,7 @@ test "Cloud uses the existing composer and transcript without a host workspace" 
   assert_true(input.file_index is @composer.FileIndexEmpty(epoch=99))
   assert_eq(input.root, file_ctx(model).root())
   assert_true(input.root is Some({ scheme: "openseek-cloud", .. }))
-  assert_false(input.shell_available)
+  assert_true(input.shell_available)
   assert_true(input.presentation.images_enabled)
   assert_eq(input.slash_commands.map(command => command.command), [
     "compact", "goal", "ultrareview", "simplify", "shrink",
@@ -402,6 +413,8 @@ test "same-account sign-out retires old composer actions, while the new entry ca
           system_prompt: None,
           events: Some([]),
         },
+        etag: None,
+        offset: None,
         messages: [],
         generating: false,
       }),
@@ -420,6 +433,7 @@ test "same-account sign-out retires old composer actions, while the new entry ca
   )
   assert_eq(stale.cloud.sequence, loaded.cloud.sequence)
   assert_false(stale.cloud.conversations.get("cloud-a").unwrap().sending)
+  let loaded = loaded.with_cloud_baseline("cloud-a")
   let current = loaded.composer_input().identity
   let (_, sent) = update(
     test_dispatch(),
@@ -497,7 +511,7 @@ test "Codex projection cannot use the remembered Cloud transcript or its capabil
 ///|
 test "a roster focus change preserves remembered Cloud selection on other screens" {
   let cloud = integrated_cloud_model()
-  for screen in [Settings, Codex] {
+  for screen in [Screen::Codex] {
     let model = {
       ..cloud,
       screen,

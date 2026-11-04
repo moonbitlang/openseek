@@ -69,16 +69,21 @@ fn Theme::apply(
 /// matched monospace size and recompute glyph geometry immediately.
 fn AppFontSize::apply(self : AppFontSize) -> @cmd.Cmd {
   let wire = self.wire()
-  let pixels = self.pixels()
-  @cmd.batch([
-    @cmd.custom_cmd(_ => {
-      if @dom.document().get_document_element() is Some(root) {
-        root.set_attribute("data-font-size", wire)
-      }
-    }),
-    @fileeditor.apply_font_size(pixels),
-    @terminal.apply_font_size(pixels),
-  ])
+  @cmd.custom_cmd(scheduler => {
+    guard @dom.document().get_document_element() is Some(root) else { return }
+    root.set_attribute("data-font-size", wire)
+    // The registered <length> resolves rem/calc to pixels, just as it does
+    // when a new terminal mounts. Read after applying the root setting.
+    let size = @dom.window()
+      .get_computed_style(root)
+      .get_property_value("--font-size-sm")
+      .trim()
+      .to_owned()
+    guard size.strip_suffix("px") is Some(value) else { return }
+    let pixels = @string.parse_double(value) catch { _ => return }
+    scheduler.add(@fileeditor.apply_font_size(pixels))
+    scheduler.add(@terminal.apply_font_size(pixels))
+  })
 }
 
 ///|

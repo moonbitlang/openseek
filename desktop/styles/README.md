@@ -27,17 +27,32 @@ visual treatment merely because the engine supports it.
 
 ### Palette playground
 
-Open [`../dev/theme-lab.html`](../dev/theme-lab.html) directly in a browser
-to compare light and dark presets, edit colors, and copy a replacement
-[`palette-light.css`](palette-light.css) or
-[`palette-dark.css`](palette-dark.css). No build step or network is needed;
-keep the HTML inside the checkout so its relative stylesheet link resolves.
-Drafts are saved in the browser's local storage; copy CSS to share a palette.
+From the repository root, run:
 
-The preview is an illustrative layout, not the production frontend. Its
-current presets read both palette files when the page loads. Other presets
-adapt their reference palettes to SeekMoon's semantic roles. Reset the current
-preset to discard a saved browser draft and see the file's colors.
+```sh
+node desktop/dev/theme-lab.mjs
+```
+
+The launcher builds the current browser frontend and opens
+[`../dev/theme-lab.html`](../dev/theme-lab.html) in Chromium (or installed
+Google Chrome when only the headless test browser is available). It reuses the
+[browser-test setup](../e2e/README.md) and transport fixtures: Rabbita renders
+the real application, including its composer, settings, menus, file viewer,
+and xterm terminal. Only the data sources are simulated; no real account,
+Host, shell, or model is connected. Native window chrome and system dialogs
+are outside this browser preview. The launcher's profile and palette drafts
+stay in the ignored `desktop/target/theme-lab-profile/` directory.
+
+The palette editor applies the existing CSS variables to that frontend
+without reloading it. Light/dark changes use the browser's system appearance;
+the development adapter also refreshes existing xterm instances when colors
+change within one mode. The application bundle itself is unchanged.
+
+Opening the HTML directly still allows editing presets and copying CSS, but
+shows launch instructions in place of the application preview. Current
+presets read both palette files when the page loads; other presets adapt
+their reference palettes to SeekMoon's semantic roles. Reset the current
+preset to discard its saved draft and see the file's colors.
 
 Copying does not modify the application. Replace the entire contents of
 the matching `palette-light.css` or `palette-dark.css` with the copied CSS,
@@ -66,8 +81,10 @@ encode component names into global tokens.
 
 ### Typography and appearance settings
 
-`Font size` sets `--font-size-base` (14px by default). Use the existing scale
-for all readable app text, including Jobs, Codex conversations, and dock UI:
+#### Type roles
+
+`Font size` sets `--font-size-base` on `html` (14px by default, range 12–18px).
+Use the proportional type roles for readable application text:
 
 | Role | Token | Default |
 | --- | --- | --- |
@@ -75,49 +92,49 @@ for all readable app text, including Jobs, Codex conversations, and dock UI:
 | Controls and code | `--font-size-sm` | 13px |
 | Timestamps, status, and other metadata | `--font-size-xs` | 12px |
 | Panel headings | `--font-size-lg` | 17px |
+| Small badges and compact metadata | `--font-size-micro`, `--font-size-caption` | 10px, 11px |
+| Emphasized labels and dialog titles | `--font-size-emphasis` | 16px |
+| Section and page titles | `--font-size-title`, `--font-size-page-title` | 20px, 26px |
 
-Do not hardcode text sizes in pixels. Markdown may size headings relative to
-its surrounding text; larger page headings may derive from the base. Use
-unitless line heights so text grows without clipping. Icon glyphs use the
-icon scale and do not acquire text-sizing rules merely to size an SVG. The
-`--icon-xs/sm/md/lg` roles scale with `--font-size-base`, preserving their
-10/12/14/16px sizes at the default 14px setting. Use those roles instead of
-local fixed sizes for control glyphs.
+Ordinary text inherits `--font-family-sans` and `--font-weight-regular` (400),
+with antialiased font smoothing on macOS. Task names may use weight 500 and
+headings 600; Markdown emphasis uses 600. Chat prose and composer input use
+normal letter spacing for mixed Chinese and Latin text. Code surfaces,
+including the editor and terminal, share `--font-family-mono`.
 
-The shared titlebar controls follow `--font-size-base`: their glyph size,
-button size, and inter-button gap scale together from the default 14px, 24px,
-and 4px geometry. This includes sidebar mode, navigation, conversation, and
-panel controls. The header height, horizontal insets, and sidebar mode-switch
-padding follow the same scale. Keep native window-control insets in platform
-pixels and let them set a lower bound on the header's height and insets.
+#### Dimensions and ownership
 
-Generic icon buttons, their compact and edit-copy variants, panel toggles,
-and tab actions scale their hit areas from the same base. Keep these dimensions
-owned by their component classes; changing an icon's font size alone does not
-resize its button.
+- Use `--space-1` through `--space-7` for shared padding, margins and gaps;
+  keep one-off dimensions local as simple `rem` values, not pixel-conversion
+  fractions. Exact ratios belong in shared scales or coupled geometry.
+- Use `em` for text-control geometry and unitless text line heights.
+  Markdown headings may size relative to their surrounding text.
+- Use `--icon-xs/sm/md/lg` for control glyphs, not text-size overrides.
+  Component classes own button geometry: scale text, hit areas and whitespace
+  together, including titlebar controls.
+- Use `%`, `fr` and viewport/container units for available space. Prefer
+  minimum heights and content-driven sizing so text can wrap without clipping.
 
-Ordinary text inherits `--font-family-sans` and `--font-weight-regular` from
-the app (400), with antialiased font smoothing on macOS. Markdown emphasis
-uses 600 rather than the browser's default bold weight. Chat prose and
-composer input use normal letter spacing for mixed Chinese and Latin text.
-Code blocks, commands, logs, and paths displayed as code use
-`--font-family-mono`, the one monospace stack the CSS code surfaces, the editor,
-and the terminal share. Avoid independent font stacks or misspelled fallback
-tokens that bypass it. Task names may use weight 500 and headings 600 to
-express hierarchy.
+#### Exceptions
 
-The code editor and terminal also need their measured options updated:
-`AppFontSize::apply` writes the root type scale and both widgets' measured
-sizes. Both resolve the monospace stack themselves — the editor's default is
-that stack, and a new terminal reads `--font-family-mono` through CSSOM when it
-mounts. New terminals read `--font-size-sm` through CSSOM too, so its
-registered `<length>` type must keep resolving to pixels. The Viewer theme's
-standalone defaults are overridden for every embedded app code surface in
-`tokens.css`.
+Thin borders, deliberate fixed icon grids, resize handles and native window
+geometry may remain in pixels. Native window-control insets set a lower bound
+on header geometry. Document-authored Office typography, zoom and measured
+document coordinates are separate from application UI.
 
-Verify changed typography at the minimum and maximum font settings, after
-reload, and in both light and dark themes; let content wrap or reduce columns
-as text grows.
+Retain the question input's 16px mobile focus floor and the narrow Composer's
+existing 16px override until their mobile-focus policy is reviewed.
+
+The editor and terminal require numerical font sizes for measured layout.
+Resolve those from CSSOM's computed `--font-size-sm`, keeping its registered
+`<length>` type; do not duplicate the CSS ratio in application code.
+
+#### Verification
+
+Verify changed typography at 12px, 14px and 18px, after reload, in existing
+and new editors/terminals, and in both light and dark themes. Include narrow
+panes, control whitespace, clipping, wrapping/scrolling and graph alignment;
+computed font-size assertions alone do not establish layout correctness.
 
 ## Form-field focus ownership
 

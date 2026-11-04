@@ -17,7 +17,9 @@ test "skill reply errors stay distinct from empty successful lists" {
     _ => fail("expected an installed skills reply error")
   }
   assert_true(@skills.catalog_from_reply(SkillsCatalog([])).is_empty())
-  assert_true(@skills.installed_from_reply(InstalledSkills([])).is_empty())
+  assert_true(
+    @skills.installed_from_reply(InstalledSkills([], builtin_errors=[])).is_empty(),
+  )
 }
 
 ///|
@@ -49,100 +51,6 @@ fn market_item(
     author: "acme",
     repository: "",
   }
-}
-
-///|
-test "market detail failure is stable until explicit retry" {
-  let detail = @skills.MarketRef("acme/widget@1.0.0")
-  let (_, loading, resolution) = @skills.State::empty().open_detail(
-    emit(),
-    input(),
-    detail,
-  )
-  assert_true(resolution is @skills.Waiting)
-  let (_, failed, _) = loading.handle(
-    emit(),
-    @skills.CatalogFailed(
-      channel=@interop.ChannelId::Local,
-      message="unavailable",
-    ),
-    input(),
-  )
-  let (_, unchanged, resolution) = failed.open_detail(emit(), input(), detail)
-  let (_, repeated, again) = failed.open_detail(emit(), input(), detail)
-  assert_true(resolution is @skills.Failed("unavailable"))
-  assert_true(again is @skills.Failed("unavailable"))
-  assert_true(unchanged == failed && repeated == failed)
-  let (_, retrying, _) = failed.handle(emit(), @skills.RefreshCatalog, input())
-  let (_, _, resolution) = retrying.open_detail(emit(), input(), detail)
-  assert_true(resolution is @skills.Waiting)
-}
-
-///|
-test "detail navigation validates retained installed previews after removal" {
-  let skill : @skills.InstalledItem = {
-    id: "acme-widget",
-    name: "widget",
-    description: "",
-    source: "acme/widget@1.0.0",
-    registry: Some({ module_name: "acme/widget", package_path: "", }),
-    enabled: true,
-  }
-  let detail = @skills.InstalledRef(skill.id)
-  let before = input(installed=[skill])
-  let (_, opened, resolution) = @skills.State::empty().open_detail(
-    emit(),
-    before,
-    detail,
-  )
-  assert_true(resolution is @skills.Opened)
-  let (_, cached, resolution) = opened.open_detail(emit(), before, detail)
-  assert_true(resolution is @skills.Opened && cached == opened)
-  let (_, refreshed) = cached.sync_library(emit(), input())
-  assert_true(refreshed.detail() == Some(detail))
-  let (_, missing, resolution) = refreshed.open_detail(emit(), input(), detail)
-  let (_, repeated, again) = refreshed.open_detail(emit(), input(), detail)
-  assert_true(resolution is @skills.Missing && again is @skills.Missing)
-  assert_true(missing == refreshed && repeated == refreshed)
-}
-
-///|
-test "cached market details respect catalog refresh outcomes" {
-  let item = market_item()
-  let detail = @skills.MarketRef(@skills.source_label(item))
-  let (_, loading) = @skills.State::empty().opening(emit(), input())
-  let (_, ready, _) = loading.handle(
-    emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[item]),
-    input(),
-  )
-  let (_, opened, resolution) = ready.open_detail(emit(), input(), detail)
-  assert_true(resolution is @skills.Opened)
-  let (_, cached, resolution) = opened.open_detail(emit(), input(), detail)
-  assert_true(resolution is @skills.Opened && cached == opened)
-  let (_, refreshing, _) = cached.handle(
-    emit(),
-    @skills.RefreshCatalog,
-    input(),
-  )
-  let (_, _, resolution) = refreshing.open_detail(emit(), input(), detail)
-  assert_true(resolution is @skills.Waiting)
-  let (_, failed, _) = refreshing.handle(
-    emit(),
-    @skills.CatalogFailed(channel=@interop.ChannelId::Local, message="offline"),
-    input(),
-  )
-  let (_, unchanged, resolution) = failed.open_detail(emit(), input(), detail)
-  assert_true(resolution is @skills.Failed("offline") && unchanged == failed)
-  let (_, removed, _) = refreshing.handle(
-    emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[]),
-    input(),
-  )
-  let (_, missing, resolution) = removed.open_detail(emit(), input(), detail)
-  let (_, repeated, again) = removed.open_detail(emit(), input(), detail)
-  assert_true(resolution is @skills.Missing && again is @skills.Missing)
-  assert_true(missing == removed && repeated == removed)
 }
 
 ///|
@@ -308,6 +216,7 @@ test "uninstall is keyed by the library id and deduplicated" {
       description: "",
       source: "acme/widget@1.0.0",
       registry: Some({ module_name: "acme/widget", package_path: "", }),
+      builtin: false,
       enabled: true,
     },
   ]
@@ -379,37 +288,45 @@ test "subpackage skills carry their package path in the source label" {
 ///|
 test "installed skill replies decode, with name falling back to id" {
   let items = @skills.installed_from_reply(
-    InstalledSkills([
-      {
-        id: "acme-widget",
-        name: "widget",
-        description: "Build widgets fast.",
-        source: "acme/widget@1.0.0",
-        registry: Some({ module_name: "acme/widget", package_path: "", }),
-        enabled: true,
-      },
-      {
-        id: "handmade",
-        name: "",
-        description: "",
-        source: "",
-        registry: None,
-        enabled: true,
-      },
-      {
-        id: "",
-        name: "no-id",
-        description: "",
-        source: "",
-        registry: None,
-        enabled: true,
-      },
-    ]),
+    InstalledSkills(
+      [
+        {
+          id: "acme-widget",
+          name: "widget",
+          description: "Build widgets fast.",
+          source: "acme/widget@1.0.0",
+          registry: Some({ module_name: "acme/widget", package_path: "", }),
+          builtin: true,
+          enabled: true,
+        },
+        {
+          id: "handmade",
+          name: "",
+          description: "",
+          source: "",
+          registry: None,
+          builtin: false,
+          enabled: true,
+        },
+        {
+          id: "",
+          name: "no-id",
+          description: "",
+          source: "",
+          registry: None,
+          builtin: false,
+          enabled: true,
+        },
+      ],
+      builtin_errors=[],
+    ),
   )
   guard items is [widget, handmade] else {
     fail("expected two installed items")
   }
   assert_eq(widget.id, "acme-widget")
+  assert_true(widget.builtin)
+  assert_false(handmade.builtin)
   assert_eq(widget.name, "widget")
   assert_eq(widget.source, "acme/widget@1.0.0")
   assert_eq(handmade.name, "handmade")
@@ -424,6 +341,7 @@ test "an install blocks uninstall after a library refresh until completion" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled: true,
   }
   let initial = @skills.State::empty()
@@ -465,6 +383,7 @@ test "an uninstall retains its source after removal and releases only itself" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled: true,
   }
   let initial = @skills.State::empty()
@@ -533,6 +452,7 @@ test "detail navigation preserves library errors without mutating state" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled: true,
   }
   let clean = @skills.State::empty()

@@ -46,7 +46,7 @@ pub extend Entry with @debug.Debug::{to_repr}
 
 ///|
 /// One subagent of a run. `status` is `None` while the child is running.
-pub(all) struct Row {
+pub struct Row {
   /// The child's session id, `<parent>-sr-N`: what the sidebar folds under
   /// the parent and what a click opens.
   child : String
@@ -75,7 +75,7 @@ pub extend Row with @debug.Debug::{to_repr}
 ///|
 /// One run. `closed` flips at `workflow_finished`; rows are kept, because a
 /// finished run is exactly what a reader wants to look back over.
-pub(all) struct Run {
+pub struct Run {
   id : String
   session : String
   first_child : Int32
@@ -94,7 +94,7 @@ pub extend Run with @debug.Debug::{to_repr}
 /// The ordinal in a sub-run id (`sr-7` → 7), or `None` for any other shape.
 fn ordinal_of(id : String) -> Int32? {
   guard id.has_prefix("sr-") else { return None }
-  let digits = id.view(start_offset=3)
+  let digits = id.exact_view(start=3)
   // Bounded as `@protocol.split_child_session_id` bounds it: nine digits,
   // so a pathological id cannot overflow, and beyond that it is simply not
   // a sub-run id.
@@ -306,7 +306,7 @@ pub fn entry(runs : Array[Run], entry : Entry) -> Array[Run] {
       None => {
         let ordinal = match entry.child.rev_find("-sr-") {
           Some(at) =>
-            ordinal_of(entry.child.view(start_offset=at + 1).to_owned()).unwrap_or(
+            ordinal_of(entry.child.exact_view(start=at + 1).to_owned()).unwrap_or(
               0,
             )
           None => 0
@@ -346,34 +346,17 @@ pub fn Run::ordered_rows(self : Run) -> Array[Row] {
 }
 
 ///|
-/// How many of a run's children are still running.
-pub fn Run::running(self : Run) -> Int32 {
-  self.rows.count_if(row => row.status is None)
-}
-
-///|
 /// Total tokens across the run's resolved children. A floor, not the run's
 /// spend, when `unaccounted` counts any child.
-pub fn Run::tokens(self : Run) -> Int32 {
+fn Run::tokens(self : Run) -> Int32 {
   self.rows.fold(init=0, (sum, row) => sum + row.tokens)
 }
 
 ///|
 /// How many of the run's children spent an amount nobody could account for,
 /// so the totals leave them out.
-pub fn Run::unaccounted(self : Run) -> Int32 {
+fn Run::unaccounted(self : Run) -> Int32 {
   self.rows.count_if(row => row.unaccounted is Some(_))
-}
-
-///|
-/// Total cost across children that reported one; `None` when none did.
-pub fn Run::cost_usd(self : Run) -> Double? {
-  self.rows.fold(init=None, (total : Double?, row) => {
-    match row.cost_usd {
-      Some(cost) => Some(total.unwrap_or(0.0) + cost)
-      None => total
-    }
-  })
 }
 
 ///|
@@ -381,8 +364,8 @@ pub fn Run::cost_usd(self : Run) -> Double? {
 /// running after its run CLOSED never got its finish — the snippet died, or
 /// the finish was lost — and is shown as unresolved rather than pulsing
 /// forever; a run's close is the last word its brackets will say.
-pub fn row_status(
-  locale~ : @i18n.Locale = English,
+fn row_status(
+  locale~ : @i18n.Locale,
   row : Row,
   closed~ : Bool,
 ) -> (String, String) {

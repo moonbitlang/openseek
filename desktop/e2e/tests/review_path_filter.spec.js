@@ -179,3 +179,23 @@ test('shared filters follow the expanded commit even with no working changes', a
   await expect(input).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
+
+test("the host's Back closes the browser-owned File types popover before any layer", async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.gitChanges.push({ path: 'docs/guide.md', index_status: ' ', worktree_status: 'M', kind: 'modified' });
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  // The Android shell's Back: true exactly when something closed.
+  const back = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
+  expect(await back()).toBe(false);
+  await page.getByRole('button', { name: 'Filter by file extension' }).click();
+  const menu = page.getByRole('dialog', { name: 'File types', exact: true });
+  await expect(menu).toBeVisible();
+  expect(await back()).toBe(true);
+  await expect(menu).toBeHidden();
+  await expect(page.locator('#review-changes-body')).toBeVisible();
+  expect(await back()).toBe(false);
+  expect(app.pageErrors).toEqual([]);
+});

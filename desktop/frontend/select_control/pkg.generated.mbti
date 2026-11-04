@@ -22,8 +22,10 @@ pub(all) struct Control {
   change : @cmd.Emit[String]
   title : String
   aria_label : String
+  heading : String?
   presentation : Presentation
 }
+pub fn Control::Control(id~ : String, groups~ : Array[Group], selected~ : String, disabled~ : Bool, open~ : Bool, toggle~ : @cmd.Cmd, dismiss~ : @cmd.Cmd, change~ : @cmd.Emit[String], title~ : String, aria_label~ : String, heading? : String, presentation~ : Presentation) -> Self
 pub fn Control::render(Self) -> @html.Html
 
 pub(all) struct Group {
@@ -39,7 +41,9 @@ pub(all) enum Presentation {
 pub(all) struct ViewOption {
   value : String
   label : String
+  description : String?
 }
+pub fn ViewOption::ViewOption(value~ : String, label~ : String, description? : String) -> Self
 
 // Type aliases
 

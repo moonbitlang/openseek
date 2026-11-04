@@ -475,6 +475,8 @@ fn adopt_projects(
   guard model.device_state(channel) is Some(dev) else {
     return (@cmd.none, model)
   }
+  // Retired standalone chats remain on disk, outside the project catalog.
+  let paths = paths.filter(path => !dev.is_chat_workspace(path))
   // A pending add whose reply already resolved its registry row waits here
   // for that row to exist: the snapshot that contains it consumes the
   // pending and focuses. A snapshot without the row leaves it waiting —
@@ -561,6 +563,7 @@ fn adopt_projects(
       ..dev,
       sessions,
       projects: paths,
+      project_catalog: Some(Ok(())),
       active_project,
       worktrees,
       worktrees_request_generation,
@@ -1425,6 +1428,32 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
 /// is considered unavailable from its first socket loss because its old PTYs
 /// are torn down at that boundary, even before the page escalates to BridgeLost.
 fn terminal_ctx(model : Model) -> @terminal.Ctx {
+  let cloud = match model.cloud_draft_identity() {
+    Some(owner) => Some(owner)
+    None => model.cloud_identity()
+  }
+  if model.cloud_selected() && cloud is Some(@interop.Cloud(account~, session~)) {
+    return @terminal.Ctx::cloud(
+      account~,
+      session~,
+      epoch=model.cloud.epoch,
+      ready=model.cloud_draft_identity() is None &&
+        model.account.map(credentials => credentials.user.user_id) ==
+        Some(account) &&
+        model.cloud.can_compose(session) &&
+        !model.cloud.retired.contains(session),
+      dark_mode=model.theme.is_dark(model.system_dark),
+    )
+  }
+  if model.cloud_selected() {
+    return @terminal.Ctx(
+      channel=model.focused,
+      session="",
+      placement=None,
+      dark_mode=model.theme.is_dark(model.system_dark),
+      connected=false,
+    )
+  }
   let active = model
     .active_checkout()
     .unwrap_or({
@@ -1486,6 +1515,7 @@ fn sync_file_panel(
 /// swallowing the clicks that land there.
 fn covering_overlay(model : Model) -> Bool {
   (model.narrow && model.sidebar_open) ||
+  model.management_dialog is Some(_) ||
   model.project_picker is Some(_) ||
   model.ssh_ui.editor_open ||
   model.ssh_ui.details is Some(_) ||
@@ -1516,7 +1546,6 @@ fn desired_browser_view(model : Model) -> Int32? {
   let git_details_open = match model.screen {
     Chat => model.git_details_open
     Codex => model.codex.git_details_open()
-    Skills | Schedules | Settings => false
   }
   guard model.is_desktop &&
     conversation_screen &&
@@ -1687,11 +1716,9 @@ fn update(
     | CloudAction(@cloud.Create)
     | CodexOpenThread(_)
     | OpenCodex
-    | OpenSetup
-    | OpenLocalApiSettings
-    | OpenSkills
-    | OpenSchedules
-    | Navigation(Back | Forward)
+    | NotificationClicked(..)
+    | NewChatRequested
+    | ExplorerRequested(_)
     | SidebarModeSelected(_) => true
     _ => false
   }
@@ -1705,19 +1732,22 @@ fn update(
   }
   let (cmd, model) = update_msg(dispatch, msg, model)
   let model = model.restore_message_approvals()
-  let model = {
-    ..model,
-    management_return: if model.screen.work_screen() is Some(_) {
-      None
-    } else if previous.screen.work_screen() is Some(origin) {
-      Some(origin)
-    } else {
-      previous.management_return
-    },
+  let model = if navigates {
+    { ..model, management_dialog: None, }
+  } else {
+    model
   }
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
+  let dialog_cmd = if previous.management_dialog == model.management_dialog {
+    @cmd.none
+  } else if model.management_dialog is Some(_) {
+    @dialog.show("management-dialog")
+  } else {
+    @dialog.close("management-dialog")
+  }
+  let cmd = @cmd.batch([cmd, dialog_cmd])
   let (preferences_cmd, model) = sync_account_preferences(
     dispatch, previous, model,
   )
@@ -1799,7 +1829,8 @@ fn update(
     (
       model.active_session != previous.active_session ||
       model.focused != previous.focused ||
-      model.screen != previous.screen
+      model.screen != previous.screen ||
+      model.management_dialog != previous.management_dialog
     ) {
     { ..model, sidebar_open: false, }
   } else {
@@ -2127,6 +2158,40 @@ fn close_dock_tabs(
 }
 
 ///|
+/// Hand a Codex composer action the shell does not own to the Codex package.
+fn codex_composer_action(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  action : @composer.Action,
+) -> (@cmd.Cmd, Model) {
+  let channel = model.focused
+  let (command, codex) = @codex.update(
+    locale=model.locale,
+    dispatch.map(next => Codex(channel~, next)),
+    @codex.Msg::composer_action(action),
+    model.codex,
+    channel,
+    url => open_external_link(dispatch, url),
+  )
+  (command, model.with_codex(codex))
+}
+
+///|
+/// Take Codex's next state. The shell owns its approval menu's open state,
+/// so the menu closes here once the mode can no longer change — a turn
+/// started, from this page or another client — rather than staying open
+/// behind a disabled trigger.
+fn Model::with_codex(self : Model, codex : @codex.State) -> Model {
+  let select_menu = if self.select_menu is Some(CodexPermissionMenu) &&
+    !codex.can_choose_permission() {
+    None
+  } else {
+    self.select_menu
+  }
+  { ..self, codex, select_menu, }
+}
+
+///|
 fn update_msg(
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
@@ -2159,7 +2224,12 @@ fn update_msg(
       }
       (
         @cmd.batch([
-          fetch_account(dispatch, model.is_desktop, model.account_epoch),
+          fetch_account(
+            dispatch,
+            model.is_desktop,
+            model.account_epoch,
+            local_console=model.is_local_console(),
+          ),
           @cmd.custom_cmd(_ => @cloud.discard_legacy_credential()),
           device,
           load_saved_settings(is_desktop=model.is_desktop, dispatch),
@@ -2337,7 +2407,7 @@ fn update_msg(
         conversation_models: remembered
         .map(parse_conversation_models)
         .unwrap_or([]),
-        reviewed_conversations: conversation_approvals
+        asking_conversations: conversation_approvals
         .map(parse_conversation_approvals)
         .unwrap_or([]),
         openseek_reasoning,
@@ -2407,6 +2477,31 @@ fn update_msg(
           }
           update_msg(dispatch, CodexEffortPicked(value), model)
         }
+        @composer.PermissionMenuToggled(identity~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) &&
+            model.codex.can_open_permission_menu() else {
+            return (@cmd.none, model)
+          }
+          update_msg(dispatch, ToggleSelectMenu(CodexPermissionMenu), model)
+        }
+        @composer.PermissionMenuDismissed(identity~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          update_msg(dispatch, CloseSelectMenu, model)
+        }
+        @composer.PermissionSelected(identity~, ..) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          // The menu closes with the choice; Codex applies it, or asks to
+          // confirm Full access first.
+          let (_, closed) = update_msg(dispatch, CloseSelectMenu, model)
+          codex_composer_action(dispatch, closed, action)
+        }
         @composer.ReviewChangesOpened(identity~, selection~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
@@ -2445,25 +2540,37 @@ fn update_msg(
           }
           update_msg(dispatch, FileEditor(@fileeditor.EnsureFileIndex), model)
         }
-        _ => {
-          let channel = model.focused
-          let (command, codex) = @codex.update(
-            locale=model.locale,
-            dispatch.map(next => Codex(channel~, next)),
-            @codex.Msg::composer_action(action),
-            model.codex,
-            channel,
-            url => open_external_link(dispatch, url),
-          )
-          (command, { ..model, codex, })
-        }
+        _ => codex_composer_action(dispatch, model, action)
       }
     ComposerAction(action) => {
+      if action is @composer.CommandResultRecovered(identity~) {
+        return recover_command_result(model, identity)
+      }
+      if action
+        is @composer.CommandResultSubmitted(identity~, id~, text~, choice~) {
+        return submit_command_result(
+          dispatch, model, identity, id, text, choice,
+        )
+      }
       if action.identity().owner is @interop.Cloud(..) {
         guard model.accepts_composer_action(action.identity()) else {
           return (@cmd.none, model)
         }
         match action {
+          @composer.ShellCommandSubmitted(identity~, command~) =>
+            return submit_cloud_shell(dispatch, model, identity.owner, command)
+          @composer.ShellTerminalRequested(identity~, index~) => {
+            guard model.cloud.conversations.get(identity.owner.session())
+              is Some(conv) &&
+              conv.shell_commands.get(index) is Some(pending) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(
+              dispatch,
+              Terminal(@terminal.RevealCommand(shell=pending.id)),
+              model,
+            )
+          }
           @composer.StopRequested(identity~)
           | @composer.FollowupSubmitted(identity~, ..)
           | @composer.QueuedInputEditRequested(identity~, ..)
@@ -2527,7 +2634,9 @@ fn update_msg(
         }
       }
       match action {
-        @composer.DraftAttachmentsSubmitted(..) => (@cmd.none, model)
+        @composer.DraftAttachmentsSubmitted(..)
+        | @composer.CommandResultSubmitted(..)
+        | @composer.CommandResultRecovered(..) => (@cmd.none, model)
         @composer.ModelMenuToggled(..)
         | @composer.ReasoningMenuToggled(..)
         | @composer.SelectMenuDismissed(..)
@@ -2543,7 +2652,8 @@ fn update_msg(
         | @composer.PermissionSelected(..)
         | @composer.GitDetailsToggled(..)
         | @composer.WorktreeModeToggled(..)
-        | @composer.ApprovalModeToggled(..)
+        | @composer.ApprovalMenuToggled(..)
+        | @composer.ApprovalSelected(..)
         | @composer.ApiSetupRequested(..)
         | @composer.QueuedInputEditRequested(..)
         | @composer.QueuedInputSteerRequested(..)
@@ -2691,27 +2801,29 @@ fn update_msg(
                 ArchiveSession(conv.device, conv.session_id),
                 model,
               )
-            @composer.ApprovalModeToggled(..) => {
-              // A running turn keeps the policy its engine started with; the
-              // switch is locked meanwhile, so a late click changes nothing.
-              guard !conv.is_running() else { return (@cmd.none, model) }
+            // A running turn keeps the policy its engine started with; the
+            // menu is locked meanwhile, so a late click changes nothing.
+            @composer.ApprovalMenuToggled(..) =>
+              if conv.is_running() {
+                (@cmd.none, model)
+              } else {
+                update_msg(
+                  dispatch,
+                  ToggleSelectMenu(OpenSeekApprovalMenu),
+                  model,
+                )
+              }
+            @composer.ApprovalSelected(mode=approval, ..) => {
+              let (_, closed) = update_msg(dispatch, CloseSelectMenu, model)
+              guard !conv.is_running() else { return (@cmd.none, closed) }
               // The next start, compaction, or goal carries the choice, and
               // the host gives the conversation a new engine when it differs.
-              let approval : @protocol.OpenSeekApproval = if model.approval_for(
-                  conv.device,
-                  conv.session_id,
-                )
-                is ApprovalReview {
-                ApprovalAsk
-              } else {
-                ApprovalReview
-              }
               (
                 save_conversation_approval(
                   conversation_model_key(conv.device, conv.session_id),
                   approval,
                 ),
-                model.with_approval(conv.device, conv.session_id, approval),
+                closed.with_approval(conv.device, conv.session_id, approval),
               )
             }
             @composer.PermissionMenuToggled(..)
@@ -3110,7 +3222,9 @@ fn update_msg(
       | ApplyEditorFeedback(_) as feedback
     ) => update_editor_feedback(dispatch, feedback, model)
     // Delivered to the component by boot, alongside the other component inputs.
-    ComposerReply(_) => (@cmd.none, model)
+    ComposerReply(_)
+    | ComposerCommandResult(_)
+    | TranscriptArtifactContextRequested(_, ..) => (@cmd.none, model)
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a
@@ -4344,7 +4458,7 @@ fn update_msg(
         cmd,
         {
           ..focused,
-          screen: Settings,
+          management_dialog: Some(Settings),
           setup_api_key: "",
           api_setup_open: false,
         },
@@ -4353,8 +4467,14 @@ fn update_msg(
     OpenSetup =>
       (
         @cmd.none,
-        { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
+        {
+          ..model,
+          management_dialog: Some(Settings),
+          setup_api_key: "",
+          api_setup_open: false,
+        },
       )
+    CloseManagementDialog => (@cmd.none, { ..model, management_dialog: None, })
     Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
       (
@@ -4469,17 +4589,31 @@ fn update_msg(
         channel,
         url => open_external_link(dispatch, url),
       )
-      (cmd, { ..model, codex, })
+      (cmd, model.with_codex(codex))
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
-    SidebarModeSelected(sidebar_mode) => (@cmd.none, { ..model, sidebar_mode, })
+    CloseSidebar => (@cmd.none, { ..model, sidebar_open: false, })
+    SidebarModeSelected(sidebar_mode) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          sidebar_mode: if model.has_host() {
+            sidebar_mode
+          } else {
+            ChatMode
+          },
+        },
+      )
     DeviceChosen(id) => (@nav.load(@routes.device_entry_path(id)), model)
     // A conversation already on screen has claimed the list, and a Cloud
     // destination shows the Chat list; the stored pick only decides what any
     // other empty page shows.
     SidebarModeLoaded(sidebar_mode) =>
-      if model.sidebar_revealed is None &&
+      if !model.has_host() {
+        (@cmd.none, { ..model, sidebar_mode: ChatMode, })
+      } else if model.sidebar_revealed is None &&
         !(model.navigation.location is Some(location) &&
         location.target.is_cloud()) {
         (@cmd.none, { ..model, sidebar_mode, })
@@ -4586,7 +4720,7 @@ fn update_msg(
       )
       (
         @cmd.batch([page_cmd, fetch_installed_skills(dispatch, model.focused)]),
-        { ..model, screen: Skills, skills, },
+        { ..model, management_dialog: Some(Skills), skills, },
       )
     }
     Skills(msg) => {
@@ -5864,18 +5998,24 @@ fn update_msg(
     RevealFile(path) => {
       guard model.is_desktop &&
         model.active_checkout() is Some(active) &&
-        active.owner.channel is Local &&
-        active.placement is Some(placement) &&
-        placement.checkout_root() is Some(cwd) else {
+        active.owner.channel is Local else {
         return (@cmd.none, model)
       }
+      let target = match model.session_file_target(path) {
+        Some(target) => Some(target)
+        None =>
+          active.placement
+          .bind(placement => placement.checkout_root())
+          .map(root => (root, path))
+      }
+      guard target is Some((cwd, relative)) else { return (@cmd.none, model) }
       (
         reveal_file(
           dispatch,
           active.owner.channel,
           active.owner.session,
           cwd,
-          path,
+          relative,
         ),
         model,
       )
@@ -5913,6 +6053,12 @@ fn update_msg(
       let overview_open = !model.overview_open
       (save_overview_open(overview_open), { ..model, overview_open, })
     }
+    CloseOverview =>
+      if model.overview_open {
+        update_msg(dispatch, ToggleOverview, model)
+      } else {
+        (@cmd.none, model)
+      }
     OverviewLoaded(overview_open) => (@cmd.none, { ..model, overview_open, })
     Overview(msg) =>
       (
@@ -5922,6 +6068,14 @@ fn update_msg(
           overview: @conversation_overview.update(msg, model.overview),
         },
       )
+    TranscriptLoadOlder(slot) => {
+      guard model.transcript_slot()
+        is Some(CloudTranscriptSlot(owner) as active) &&
+        active.key() == slot else {
+        return (@cmd.none, model)
+      }
+      update_cloud(dispatch, @cloud.LoadOlder(owner.session()), model)
+    }
     TranscriptLeft(slot~, scroll~) =>
       (
         @cmd.none,
@@ -5952,6 +6106,12 @@ fn update_msg(
       }
       (@cmd.none, model)
     }
+    CloseRightPanel =>
+      if model.right_panel_open {
+        update_msg(dispatch, ToggleRightPanel, model)
+      } else {
+        (@cmd.none, model)
+      }
     ToggleRightPanelMenu =>
       (
         @cmd.none,
@@ -6769,7 +6929,7 @@ fn update_msg(
             shell,
             message,
           )
-        None => (@cmd.none, model)
+        None => cloud_shell_not_started(dispatch, model, shell, message)
       }
     RunShellCommand(channel~, session~, id~, command~, attempt~) =>
       run_shell_command(dispatch, model, channel, session, id, command, attempt)
@@ -6778,6 +6938,27 @@ fn update_msg(
     Terminal(@terminal.InputFailed(message~)) =>
       model.notify_error(dispatch, message)
     Terminal(msg) => {
+      if model.cloud_selected() &&
+        (
+          msg is @terminal.NewTerminal ||
+          (msg is @terminal.ToggleTerminal && !model.terminal.is_open())
+        ) &&
+        model.cloud_identity() is None {
+        let (create, model) = if model.cloud_draft_identity() is None {
+          update_cloud(dispatch, @cloud.Create, model)
+        } else {
+          (@cmd.none, model)
+        }
+        guard model.cloud_draft_identity() is Some(owner) else {
+          return (create, model)
+        }
+        let (start, model) = update_cloud(
+          dispatch,
+          @cloud.TerminalRequested(owner, None),
+          model,
+        )
+        return (@cmd.batch([create, start]), model)
+      }
       let (cmd, terminal) = model.terminal.handle(
         dispatch.map(next => Terminal(next)),
         msg,
@@ -6824,33 +7005,12 @@ fn update_msg(
       (command, { ..model, export_dialog, })
     }
     OpenSessionImport => {
-      let selected = if model.screen is Chat {
-        model.conversation_selection()
-      } else {
-        None
+      guard model.session_import_target() is Some(target) else {
+        return (@cmd.none, model)
       }
-      let workspace = match selected {
-        Some(selected) => Some(selected.workspace.path)
-        None =>
-          if model.sidebar_mode is WorkMode {
-            model
-            .device_state(model.focused)
-            .bind(dev => dev.active_project.map(p => p.path))
-          } else {
-            None
-          }
-      }
-      // Let the host's current registry choose placement even if this
-      // client's worktree inventory has not arrived yet.
-      let worktree_of = selected.map(selected => selected.session)
-      let (cmd, session_import_dialog) = model.session_import_dialog.open({
-        channel: model.focused,
-        connection_generation: model.focused_connection_generation(),
-        workspace: workspace.map_or(@session_import.Unplaced, path => {
-          @session_import.Registered(path)
-        }),
-        worktree_of,
-      })
+      let (cmd, session_import_dialog) = model.session_import_dialog.open(
+        target,
+      )
       (cmd, { ..model, session_import_dialog, })
     }
     SessionImport(msg) => {
@@ -6943,8 +7103,7 @@ fn update_msg(
       // it wants the browser where the user is already signed in.
       if !model.is_desktop {
         (open_browser_link(url), model)
-      } else if (model.screen is Chat || model.screen is Codex) &&
-        @preview.is_web_url(url) {
+      } else if model.management_dialog is None && @preview.is_web_url(url) {
         // Opening or reusing a Browser tab is a newer dock navigation than a
         // transcript text-file link still waiting on `host.open_path`. Spend the
         // shared token before either branch so its delayed reply cannot put a
@@ -7161,12 +7320,14 @@ fn update_device_msg(
     return (@cmd.none, model)
   }
   match msg {
-    InstalledSkillsLoaded(items) => {
+    InstalledSkillsLoaded(items, builtin_errors~) => {
       guard channel == model.focused else { return (@cmd.none, model) }
-      let (cmd, skills) = model.skills.sync_library(
-        dispatch.map(msg => Skills(msg)),
-        { channel, installed: items, },
-      )
+      let (cmd, skills) = model.skills
+        .with_builtin_errors(channel, builtin_errors)
+        .sync_library(dispatch.map(msg => Skills(msg)), {
+          channel,
+          installed: items,
+        })
       (cmd, { ..model, installed_skills: items, skills, })
     }
     InstalledSkillsFailed(message) =>
@@ -7331,6 +7492,7 @@ fn update_device_msg(
         archived_request_generation,
         projects_request_generation,
         archive_overrides: [],
+        project_catalog: None,
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
         // list (or a newer `worktree.changed` broadcast) instead of trusting
@@ -7852,6 +8014,7 @@ fn update_device_msg(
           session: item.id,
           workspace: item.workspace,
         })
+        !dev.is_chat_workspace(item.workspace) &&
         disposition != Some(ArchiveStored) &&
         disposition != Some(ArchiveDeleted)
       })
@@ -8001,7 +8164,9 @@ fn update_device_msg(
       }
       // A failed read preserves the last inventory and any independent add
       // still waiting for its commit. Only mutation failures settle an add.
-      model.notify_error(
+      model
+      .replace_device({ ..dev, project_catalog: Some(Err(message)), })
+      .notify_error(
         dispatch,
         notice_text(model.locale, WorkspaceFailure(message)),
       )
@@ -8404,7 +8569,9 @@ fn update_device_msg(
           session: item.id,
           workspace: item.workspace,
         })
-        disposition != Some(ArchiveLive) && disposition != Some(ArchiveDeleted)
+        !dev.is_chat_workspace(item.workspace) &&
+        disposition != Some(ArchiveLive) &&
+        disposition != Some(ArchiveDeleted)
       })
       for fact in dev.archive_overrides {
         if fact.disposition is ArchiveStored &&
@@ -10215,11 +10382,13 @@ fn test_model() -> Model {
         ..empty_device_state(@interop.ChannelId::Local),
         bridge: Connected,
         projects: [@interop.ChannelId::Local.test_project()],
+        project_catalog: Some(Ok(())),
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
       },
     ],
     focused: @interop.ChannelId::Local,
     console: local_console_state(login_return_to="/console/"),
+    sidebar_mode: WorkMode,
     // The shared fixture represents a connected desktop after its initial
     // settings snapshot. Loading-state tests opt back into revision -1.
     host_settings_revision: 0,
@@ -10387,6 +10556,36 @@ test "viewport resize flips the narrow flag and resets the sidebar" {
   let (_, wide) = update(dispatch, ViewportResized(width=1280), same)
   assert_false(wide.narrow)
   assert_true(wide.sidebar_open)
+}
+
+///|
+test "device-less sidebar mode stays Chat for loaded and selected Work preferences" {
+  let dispatch = test_dispatch()
+  let base = test_model()
+  let cloud = {
+    ..base,
+    devices: [],
+    console: { ..base.console, page_device: None, },
+    sidebar_mode: WorkMode,
+  }
+  for message in [SidebarModeLoaded(WorkMode), SidebarModeSelected(WorkMode)] {
+    let (_, once) = update_msg(dispatch, message, cloud)
+    let (_, twice) = update_msg(dispatch, message, cloud)
+    assert_true(once.sidebar_mode is ChatMode)
+    assert_true(once.sidebar_mode == twice.sidebar_mode)
+    for host in [base, { ..base, devices: [], }] {
+      let (_, selected) = update_msg(dispatch, message, {
+        ..host,
+        sidebar_mode: ChatMode,
+      })
+      let (_, repeated) = update_msg(dispatch, message, {
+        ..host,
+        sidebar_mode: ChatMode,
+      })
+      assert_true(selected.sidebar_mode is WorkMode)
+      assert_true(selected.sidebar_mode == repeated.sidebar_mode)
+    }
+  }
 }
 
 ///|
@@ -11517,7 +11716,7 @@ test "a finish in an unfocused window still needs attention" {
 ///|
 test "a finish behind settings stays unread until the chat is reopened" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), screen: Settings, }
+  let model = { ..running_model(), management_dialog: Some(Settings), }
   let (_, next) = update_dev(
     dispatch,
     Finished(run_id="r7", status="finished", answer=Some("done")),
@@ -11525,12 +11724,7 @@ test "a finish behind settings stays unread until the chat is reopened" {
   )
   inspect(next.active().unseen_finish, content="true")
   inspect(next.notification_badge_count(), content="1")
-  let (_, opened) = open_session_on(
-    dispatch,
-    @interop.ChannelId::Local,
-    next,
-    "desktop-test",
-  )
+  let (_, opened) = update(dispatch, CloseManagementDialog, next)
   assert_true(opened.screen is Chat)
   inspect(opened.active().unseen_finish, content="false")
   inspect(opened.notification_badge_count(), content="0")
@@ -13031,7 +13225,7 @@ test "returning to a fresh active chat does not load a missing session" {
       ..test_conversation(),
       task: "unsent draft",
     }),
-    screen: Skills,
+    management_dialog: Some(Skills),
   }
   let (_, next) = update(
     dispatch,
@@ -15514,10 +15708,10 @@ test "loaded UI preferences parse their wire names" {
   // Its stored approval choice comes back too; a malformed row is skipped.
   assert_true(
     restored.approval_for(@interop.ChannelId::Local, "desktop-test")
-    is ApprovalReview,
+    is ApprovalAsk,
   )
   assert_true(
-    restored.approval_for(@interop.ChannelId::Local, "other") is ApprovalAsk,
+    restored.approval_for(@interop.ChannelId::Local, "other") is ApprovalReview,
   )
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
@@ -16039,7 +16233,7 @@ test "the Codex group's placeholder row opens Settings" {
     test_model(),
   )
   // Sign-in and connection state live in the Settings page's Codex group.
-  assert_true(opened.screen is Settings)
+  assert_true(opened.management_dialog is Some(Settings))
   // A placeholder pick is a doorway, not a model: nothing was selected.
   assert_true(opened.default_agent is OpenSeekAgent)
 }
@@ -16078,7 +16272,7 @@ test "Codex threads share the Projects section's project rows" {
   let sections = model.sidebar_component_sections(model.dev())
   // Work shows Projects, shared across both agents, above Archived.
   assert_eq(sections.length(), 2)
-  inspect(sections[0].label, content="Projects")
+  assert_eq(sections[0].label, "Projects")
   assert_true(!sections[0].initially_collapsed)
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")
@@ -16400,7 +16594,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     ..broken,
     api_setup_open: true,
   })
-  assert_true(on_settings.screen is Settings)
+  assert_true(on_settings.management_dialog is Some(Settings))
   assert_true(!on_settings.api_setup_open)
   // Breaking while the Settings page is open does not pop the modal over
   // the form; the guide there already explains it.
@@ -16412,7 +16606,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     ),
     {
       ..test_model(),
-      screen: Settings,
+      management_dialog: Some(Settings),
       host_settings_revision: 0,
       api_provider: Custom,
       custom_api_url: "https://ok.example/chat",
@@ -16627,13 +16821,13 @@ test "saving from the setup modal stays on the page it opened over" {
   // yank the user to Chat.
   let over_skills = {
     ..test_model(),
-    screen: Skills,
+    management_dialog: Some(Skills),
     api_setup_open: true,
     deepseek_key_saved: false,
   }
   let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), over_skills)
   let (_, saved) = update(dispatch, SaveApiKey, typed)
-  assert_true(saved.screen is Skills)
+  assert_true(saved.management_dialog is Some(Skills))
   assert_true(!saved.api_setup_open)
   // A save that leaves the setup incomplete (Custom, no URL yet) keeps the
   // modal up mid-setup instead of dumping the user on Settings.
@@ -16688,7 +16882,7 @@ test "a settled host save that completes the setup closes the modal" {
   // owned by the Settings page rather than an open setup modal.
   let page = {
     ..typing,
-    screen: Settings,
+    management_dialog: Some(Settings),
     api_setup_open: false,
     select_menu: Some(ApiProviderMenu),
   }.flush_host_settings()
@@ -16906,7 +17100,7 @@ test "saving a key marks the active provider credential only" {
     api_provider: Deepseek,
     deepseek_key_saved: false,
     setup_api_key: "  sk-new  ",
-    screen: Settings,
+    management_dialog: Some(Settings),
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
   assert_true(saved_deepseek.deepseek_key_saved)
@@ -16915,7 +17109,7 @@ test "saving a key marks the active provider credential only" {
   inspect(saved_deepseek.settings_saves, content="1")
   // The save never navigates: a key saved on the Settings page leaves the
   // user on the form they were filling in.
-  assert_true(saved_deepseek.screen is Settings)
+  assert_true(saved_deepseek.management_dialog is Some(Settings))
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
@@ -16924,12 +17118,12 @@ test "saving a key marks the active provider credential only" {
     deepseek_key_saved: false,
     custom_api_url: "https://proxy.example/chat/completions",
     setup_api_key: "  sk-custom-new  ",
-    screen: Settings,
+    management_dialog: Some(Settings),
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
   assert_false(saved_custom.deepseek_key_saved)
   assert_true(saved_custom.custom_key_saved)
-  assert_true(saved_custom.screen is Settings)
+  assert_true(saved_custom.management_dialog is Some(Settings))
   // A GLM key lands in the GLM slot alone.
   let glm = {
     ..test_model(),
@@ -16937,20 +17131,20 @@ test "saving a key marks the active provider credential only" {
     deepseek_key_saved: false,
     glm_key_saved: false,
     setup_api_key: "  glm-new  ",
-    screen: Settings,
+    management_dialog: Some(Settings),
   }
   let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
   assert_true(saved_glm.glm_key_saved)
   assert_false(saved_glm.deepseek_key_saved)
   assert_false(saved_glm.custom_key_saved)
-  assert_true(saved_glm.screen is Settings)
+  assert_true(saved_glm.management_dialog is Some(Settings))
   let openrouter = {
     ..test_model(),
     api_provider: OpenRouter,
     deepseek_key_saved: false,
     custom_key_saved: false,
     setup_api_key: "  sk-openrouter-new  ",
-    screen: Settings,
+    management_dialog: Some(Settings),
   }
   let (_, saved_openrouter) = update(dispatch, SaveApiKey, openrouter)
   assert_true(saved_openrouter.custom_key_saved)
@@ -16962,7 +17156,11 @@ test "saving a key marks the active provider credential only" {
 /// even while the endpoint is unusable (the composer blocks sending then).
 test "sidebar navigation leaves the settings page" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), api_provider: Deepseek, screen: Settings, }
+  let model = {
+    ..test_model(),
+    api_provider: Deepseek,
+    management_dialog: Some(Settings),
+  }
   let (_, next) = update(
     dispatch,
     SessionRotated({ channel: Local, session: "s-fresh", }),
@@ -19165,29 +19363,10 @@ test "theme settings switch fixed palettes and are idempotent" {
 }
 
 ///|
-test "font-size settings switch every text surface and are idempotent" {
-  assert_eq(AppFontSize(12).pixels(), 11.0)
-  assert_eq(AppFontSize(14).pixels(), 13.0)
-  assert_eq(AppFontSize(18).pixels(), 17.0)
-  let dispatch = test_dispatch()
-  let model = test_model()
-  let (_, first) = update(dispatch, FontSizeChanged("15"), model)
-  let (_, second) = update(dispatch, FontSizeChanged("15"), first)
-  assert_eq(first.app_font_size, AppFontSize(15))
-  assert_eq(second.app_font_size, AppFontSize(15))
-  assert_eq(first.app_font_size.pixels(), 14.0)
-  let (_, largest) = update(dispatch, FontSizeChanged("18"), first)
-  assert_eq(largest.app_font_size, AppFontSize(18))
-  assert_eq(largest.app_font_size.pixels(), 17.0)
-  let (_, unchanged) = update(dispatch, FontSizeChanged("unknown"), model)
-  assert_eq(unchanged.app_font_size, AppFontSize(14))
-}
-
-///|
 test "selecting a conversation returns from the skills page to the chat" {
   let dispatch = test_dispatch()
   let (_, opened) = update(dispatch, OpenSkills, test_model())
-  assert_true(opened.screen is Skills)
+  assert_true(opened.management_dialog is Some(Skills))
 
   // Re-selecting the active conversation is enough to switch back…
   let (_, back) = update(
@@ -19318,18 +19497,19 @@ test "Codex sidebar actions close only the narrow drawer" {
   assert_true(opened.screen is Codex)
   assert_false(opened.sidebar_open)
 
-  // A "New chat" from a management page uses the default agent and still
-  // closes only the narrow drawer. An already blank chat is a no-op.
+  // Opening a dialog does not turn the underlying blank chat into a
+  // different destination. New chat dismisses it without replacing the draft.
   let (_, ready) = update(
     dispatch,
     Codex(
       channel=narrow.focused,
       @codex.Msg::status_changed({ "status": "ready" }),
     ),
-    { ..narrow, screen: Settings, default_agent: CodexAgent, },
+    { ..narrow, management_dialog: Some(Settings), default_agent: CodexAgent, },
   )
   let (_, creating) = update(dispatch, NewChat, ready)
-  assert_true(creating.screen is Codex)
+  assert_true(creating.screen is Chat)
+  assert_true(creating.management_dialog is None)
   assert_false(creating.sidebar_open)
 
   // Archiving from the shared sidebar acts on that row without changing the
@@ -19393,15 +19573,23 @@ test "installed skills replies are scoped to their source device" {
       description: "",
       source: "old/source@1.0.0",
       registry: Some({ module_name: "old/source", package_path: "", }),
+      builtin: false,
       enabled: true,
+    },
+  ]
+  let errors : Array[@protocol.BuiltinSkillError] = [
+    {
+      registry: { module_name: "builtin/missing", package_path: "", },
+      message: "Registry offline",
     },
   ]
   let (_, ignored) = update(
     dispatch,
-    FromDevice(Local, InstalledSkillsLoaded(old_host)),
+    FromDevice(Local, InstalledSkillsLoaded(old_host, builtin_errors=errors)),
     focused,
   )
   assert_eq(ignored.installed_skills.length(), 0)
+  assert_true(ignored.skills == focused.skills)
   let new_host : Array[@skills.InstalledItem] = [
     {
       id: "new",
@@ -19409,16 +19597,42 @@ test "installed skills replies are scoped to their source device" {
       description: "",
       source: "new/source@1.0.0",
       registry: Some({ module_name: "new/source", package_path: "", }),
+      builtin: false,
       enabled: true,
     },
   ]
   let (_, applied) = update(
     dispatch,
-    FromDevice(Remote("d_b"), InstalledSkillsLoaded(new_host)),
+    FromDevice(
+      Remote("d_b"),
+      InstalledSkillsLoaded(new_host, builtin_errors=errors),
+    ),
     ignored,
   )
   assert_eq(applied.installed_skills.length(), 1)
   assert_eq(applied.installed_skills[0].id, "new")
+  assert_true(
+    applied.skills == ignored.skills.with_builtin_errors(Remote("d_b"), errors),
+  )
+  let (_, missing) = update(
+    dispatch,
+    FromDevice(Remote("d_b"), InstalledSkillsLoaded([], builtin_errors=errors)),
+    applied,
+  )
+  assert_eq(missing.installed_skills.length(), 0)
+  assert_true(missing.skills == applied.skills)
+  let (_, recovered) = update(
+    dispatch,
+    FromDevice(
+      Remote("d_b"),
+      InstalledSkillsLoaded(new_host, builtin_errors=[]),
+    ),
+    missing,
+  )
+  assert_true(
+    recovered.skills == missing.skills.with_builtin_errors(Remote("d_b"), []),
+  )
+  assert_true(recovered.skills != missing.skills)
 }
 
 ///|
@@ -19443,8 +19657,12 @@ test "file editor context reports the file body actual visibility" {
   assert_false(file_ctx(browser_model).panel_open)
   let launcher_model = file_model.with_dock_state(@dock.DockState::empty())
   assert_false(file_ctx(launcher_model).panel_open)
-  assert_false(file_ctx({ ..file_model, screen: Skills, }).panel_open)
-  assert_false(file_ctx({ ..file_model, screen: Settings, }).panel_open)
+  assert_true(
+    file_ctx({ ..file_model, management_dialog: Some(Skills), }).panel_open,
+  )
+  assert_true(
+    file_ctx({ ..file_model, management_dialog: Some(Settings), }).panel_open,
+  )
 }
 
 ///|
@@ -20991,12 +21209,12 @@ test "AppInfoLoaded replaces the displayed package version idempotently" {
   let dispatch = test_dispatch()
   let info = AppInfoLoaded(
     version="0.2.0",
-    console_url=Some("http://127.0.0.1:27183/?token=sesame"),
+    console_url=Some("http://127.0.0.1:27183/device/host/chat"),
   )
   let (_, once) = update(dispatch, info, test_model())
   let (_, twice) = update(dispatch, info, once)
   assert_eq(once.app_version, "0.2.0")
-  assert_eq(once.console_url, Some("http://127.0.0.1:27183/?token=sesame"))
+  assert_eq(once.console_url, Some("http://127.0.0.1:27183/device/host/chat"))
   assert_eq(twice.app_version, once.app_version)
   assert_eq(twice.notification_seq, once.notification_seq)
 }
@@ -22871,7 +23089,7 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
   let (_, settings) = update(
     dispatch,
     ExternalLinkClicked("https://openseek.test/d/abc"),
-    { ..model, screen: Settings, },
+    { ..model, management_dialog: Some(Settings), },
   )
   assert_eq(settings.dock_state().tabs.length(), 3)
   assert_eq(settings.preview.pages.length(), 3)

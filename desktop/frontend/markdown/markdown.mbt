@@ -24,6 +24,8 @@ pub fn markdown_nodes(
   locale~ : @i18n.Locale = English,
   source : String,
   open_file? : (String) -> @cmd.Cmd,
+  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  defer_artifacts~ : Bool = false,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
@@ -31,6 +33,8 @@ pub fn markdown_nodes(
       locale,
       defs: doc.defs,
       open_file,
+      artifact_view,
+      defer_artifacts,
       citations: [],
       in_sources: false,
     }
@@ -52,6 +56,8 @@ priv struct MarkdownRender {
   defs : Map[String, @cmark.LabelDef]
   // How to make a file path clickable; `None` renders paths inertly.
   open_file : ((String) -> @cmd.Cmd)?
+  artifact_view : ((@workspace_file_ref.WorkspaceFileRef) -> @html.Html)?
+  defer_artifacts : Bool
   // Per-render state: repeated references share one entry, and message-local
   // source actions never depend on document-global fragment IDs.
   citations : Array[Citation]
@@ -85,7 +91,15 @@ fn MarkdownRender::push_block(
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
     CodeBlock(node) | ExtMathBlock(node) =>
-      out.push(code_block(locale=self.locale, node.v, self.open_file))
+      out.push(
+        code_block(
+          locale=self.locale,
+          node.v,
+          self.open_file,
+          artifact_view?=self.artifact_view,
+          defer_artifacts=self.defer_artifacts,
+        ),
+      )
     // Raw HTML is shown as text, not injected; see the module comment.
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
@@ -135,14 +149,31 @@ fn code_block(
   locale~ : @i18n.Locale = English,
   block : @cmark.CodeBlock,
   open_file : ((String) -> @cmd.Cmd)?,
+  artifact_view? : (@workspace_file_ref.WorkspaceFileRef) -> @html.Html,
+  defer_artifacts~ : Bool = false,
 ) -> @html.Html {
   let source = lines_text(block.code)
   let language = code_block_language(block)
   let closed = code_block_is_closed(block)
+  let info = block.info_string
+    .map(info => info.v.trim().to_owned())
+    .unwrap_or(language)
   if language == @workspace_file_ref.FenceLanguage {
-    match @workspace_file_ref.parse(language, source, closed~) {
-      Some(reference) =>
+    if defer_artifacts && info == @workspace_file_ref.ArtifactFenceLanguage {
+      return @html.nothing
+    }
+    match @workspace_file_ref.parse(info, source, closed~) {
+      Some(reference) => {
+        if reference.artifact {
+          if defer_artifacts {
+            return @html.nothing
+          }
+          if artifact_view is Some(render) {
+            return render(reference)
+          }
+        }
         return workspace_file_card(locale, reference, open_file)
+      }
       None => ()
     }
   }
@@ -236,19 +267,21 @@ fn code_block_is_closed(block : @cmark.CodeBlock) -> Bool {
 }
 
 ///|
-fn workspace_file_card(
+/// Render a file reference using the same compact card as workspace outputs.
+pub fn workspace_file_card(
   locale : @i18n.Locale,
   reference : @workspace_file_ref.WorkspaceFileRef,
   open_file : ((String) -> @cmd.Cmd)?,
 ) -> @html.Html {
   let kind_class = workspace_file_kind_class(reference.kind)
   let kind_label = workspace_file_kind_label(locale, reference.kind)
+  let label = if reference.artifact { reference.name } else { reference.path }
   let title = match locale {
-    SimplifiedChinese => "打开 \{reference.path}"
-    TraditionalChinese => "開啟 \{reference.path}"
-    Japanese => "\{reference.path} を開く"
-    English => "Open \{reference.path}"
-    Spanish => "Abrir \{reference.path}"
+    SimplifiedChinese => "打开 \{label}"
+    TraditionalChinese => "開啟 \{label}"
+    Japanese => "\{label} を開く"
+    English => "Open \{label}"
+    Spanish => "Abrir \{label}"
   }
   let attrs = @html.Attrs::build()
     .aria_label(title)
@@ -415,7 +448,9 @@ fn MarkdownRender::table(
       Sep(_) => ()
     }
   }
-  @html.table([@html.thead(head), @html.tbody(body)])
+  @html.div(class="chat-table-scroll", [
+    @html.table([@html.thead(head), @html.tbody(body)]),
+  ])
 }
 
 ///|
@@ -558,7 +593,7 @@ fn trim_bare_url(candidate : String) -> (String, String) {
       break
     }
   }
-  let suffix = candidate.view(start_offset=url.length()).to_owned()
+  let suffix = candidate.exact_view(start=url.length()).to_owned()
   (url, suffix)
 }
 
@@ -583,7 +618,7 @@ fn trim_unmatched_closer(
     (opens, closes)
   }
   if closes > opens {
-    url.view(end_offset=url.length() - 1).to_owned()
+    url.exact_view(end=url.length() - 1).to_owned()
   } else {
     url
   }
@@ -595,12 +630,12 @@ fn trim_unmatched_closer(
 /// the browser can navigate to.
 fn has_web_authority(url : String) -> Bool {
   let scheme_length = if url.length() >= 8 &&
-    url.view(end_offset=8).equal_ignore_ascii_case("https://") {
+    url.clamped_view(end=8).equal_ignore_ascii_case("https://") {
     8
   } else {
     7
   }
-  let rest = url.view(start_offset=scheme_length)
+  let rest = url.exact_view(start=scheme_length)
   for index, ch in rest {
     if ch == '/' || ch == '?' || ch == '#' {
       return index > 0
@@ -615,7 +650,7 @@ fn has_web_authority(url : String) -> Bool {
 /// user's backtick-delimited snippets deliberately bypass this helper.
 pub fn linkified_text_nodes(source : String) -> Array[@html.Html] {
   let out : Array[@html.Html] = []
-  let mut rest = source.view()
+  let mut rest = source.clamped_view()
   while bare_web_url_pattern.execute(rest) is Some(matched) {
     if !matched.before().is_empty() {
       out.push(@html.text(matched.before().to_owned()))
@@ -649,14 +684,14 @@ fn MarkdownRender::prose_nodes(
     return linkified_text_nodes(source)
   }
   let out : Array[@html.Html] = []
-  let mut rest = source.view()
+  let mut rest = source.clamped_view()
   while bare_interactive_pattern.execute(rest) is Some(matched) {
     let before = matched.before()
     if !before.is_empty() {
       out.push(@html.text(before.to_owned()))
     }
     let candidate = matched.content().to_owned()
-    if candidate.view() =~ re"(?i:^https?://)" {
+    if candidate.clamped_view() =~ re"(?i:^https?://)" {
       let (url, suffix) = trim_bare_url(candidate)
       // Keep the URL-only renderer's contract here: prose may only create an
       // HTTP(S) anchor when the destination has a non-empty authority. In
@@ -712,7 +747,8 @@ fn MarkdownRender::link_destination(
 
 ///|
 fn safe_destination(destination : String) -> String? {
-  if @cmark.InlineLink::is_unsafe(destination) {
+  if destination.has_prefix("artifact:") ||
+    @cmark.InlineLink::is_unsafe(destination) {
     None
   } else {
     Some(destination)
@@ -885,7 +921,7 @@ priv struct FileReference(String)
 /// not silently treated as local paths. A fragment is retained only when it is
 /// the supported positive `#Lline` editor position.
 fn FileReference::local_file_uri_path(self : FileReference) -> String? {
-  guard self.0.view() =~ re"(?i:^file://)" else { return None }
+  guard self.0.clamped_view() =~ re"(?i:^file://)" else { return None }
   let uri = @common.Uri::parse(self.0) catch { _ => return None }
   guard uri.scheme.equal_ignore_ascii_case("file") &&
     (
@@ -901,7 +937,7 @@ fn FileReference::local_file_uri_path(self : FileReference) -> String? {
   }
   let position = if fragment.is_empty() {
     ""
-  } else if fragment.view() =~ re"^L[1-9][[:digit:]]*$" {
+  } else if fragment.clamped_view() =~ re"^L[1-9][[:digit:]]*$" {
     "#" + fragment
   } else if @office_location.parse(uri.path + "#" + fragment) is Some(_) {
     "#" + fragment
@@ -938,10 +974,13 @@ fn FileReference::local_file_uri_path(self : FileReference) -> String? {
 ///|
 /// The path before a supported editor position, when one is present.
 fn FileReference::position_path(self : FileReference) -> String? {
-  if self.0.view() =~ (re":[[:digit:]]+(?::[[:digit:]]+)?$", before=path) {
+  if self.0.clamped_view() =~ (
+      re":[[:digit:]]+(?::[[:digit:]]+)?$",
+      before=path,
+    ) {
     return Some(path.to_owned())
   }
-  if self.0.view() =~ (re"#L[[:digit:]]+$", before=path) {
+  if self.0.clamped_view() =~ (re"#L[[:digit:]]+$", before=path) {
     return Some(path.to_owned())
   }
   None
@@ -1053,6 +1092,7 @@ fn is_known_extension(ext : String) -> Bool {
     | "json"
     | "md"
     | "markdown"
+    | "typ"
     | "toml"
     | "yaml"
     | "yml"

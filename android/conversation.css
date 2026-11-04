@@ -1,0 +1,9 @@
+/* Product scope of the Android conversation client. Responsive layout is
+   shared with ordinary browsers in desktop/styles/responsive.css. */
+.android-connect .terminal-toggle,
+.android-connect .right-panel-toggle,
+.android-connect .panel-expand { display: none; }
+
+/* A WebView drops the export's blob download; until the host can hand the
+   file to Android's share sheet, export offers only a share link. */
+.android-connect .export-download { display: none; }

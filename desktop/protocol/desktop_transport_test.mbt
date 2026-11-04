@@ -44,7 +44,6 @@ test "share progress round-trips through the shared notification catalog" {
     ),
     Some(notification),
   )
-  assert_true(@protocol.NotificationKind::all().contains(notification.kind()))
   assert_eq(
     @protocol.Notification::from_wire("session.share_progress", {}),
     None,
@@ -126,7 +125,6 @@ test "a workflow entry round-trips at the wire edge" {
     fail("known notification was rejected")
   }
   assert_eq(event.wire_name(), "workflow.entry")
-  assert_eq(event.kind(), WorkflowEntry)
   guard event is WorkflowEntry(payload) else { fail("wrong case") }
   assert_eq(payload.child, "run7-sr-5")
   assert_eq(payload.phase, Some("survey"))

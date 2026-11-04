@@ -18,7 +18,7 @@ For example, pass this as `source` to mbtx:
 
 ```mbtx
 ---
-import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+import { "moonbitlang/openseek_tools@0.4.0" @tools, "moonbitlang/core/async" }
 ---
 
 async fn main {
@@ -34,8 +34,9 @@ async fn main {
 The SDK is an ordinary version-pinned package import. The host passes only the
 run-scoped connection capability; it does not insert imports, globals, helper
 functions, or types into the source. Saved source and compiler line numbers are
-unchanged. The published SDK is `moonbitlang/openseek_tools@0.2.0`, and the
-integration tests exercise this exact registry import.
+unchanged. SDK `moonbitlang/openseek_tools@0.4.0` uses `moonbitlang/core/async`.
+Before publication, validate this import with a temporary registry containing
+the locally packaged SDK.
 
 ## Results and search
 
@@ -52,14 +53,14 @@ PTC-enabled tools and their argument shapes:
 
 MCP servers' tools are not host tools and never pass through PTC: scripts
 reach them through the engine's MCP host (`mcp/host`, handed over as
-`OPENSEEK_MCP`) with SDK 0.3.0's `@mcp.search` and `@mcp.call`.
+`OPENSEEK_MCP`) with SDK 0.4.0's `@mcp.search` and `@mcp.call`.
 
 SDK 0.1.0 also ships `@tools.edit` and friends as thin wrappers; 0.2.0 removes
 them in favor of `call`, so new scripts should use `call` directly.
 
 ```mbtx
 ---
-import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+import { "moonbitlang/openseek_tools@0.4.0" @tools, "moonbitlang/core/async" }
 ---
 
 async fn main {

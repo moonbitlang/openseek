@@ -2,14 +2,14 @@
 
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
-implementation. The published SDK `moonbitlang/openseek_tools@0.2.0` speaks
-PTC protocol version 1. Runnable examples use this version explicitly.
+implementation. SDK `moonbitlang/openseek_tools@0.4.0` uses
+`moonbitlang/core/async` and speaks PTC protocol version 1. Runnable examples use this version explicitly.
 
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.2.0" @tools,
-  "moonbitlang/async",
+  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/core/async",
 }
 ---
 
@@ -72,15 +72,15 @@ sandboxed `mbtx` run, with or without `ptc=true`.
 ```mbtx
 ---
 import {
-  "moonbitlang/openseek_tools@0.3.0/mcp" @mcp,
-  "moonbitlang/async",
+  "moonbitlang/openseek_tools@0.4.0/mcp" @mcp,
+  "moonbitlang/core/async",
 }
 ---
 
 async fn main {
   // Print the page so the next model request sees the tools and schemas.
   let page = @mcp.search(query="list issues", server="github")
-  println(page.text)
+  println(page)
   guard page.tools is [tool, ..] else { return }
   let result = @mcp.call(tool.server, tool.name, { "repo": "moonbitlang/openseek" })
   if result.is_error { fail(result.content) }
@@ -169,9 +169,12 @@ independent of the host PR.
 
 ## Development and releases
 
-Versions 0.1.0 and 0.2.0 are published; 0.3.0 is prepared here and is not
-published yet. All of them speak wire protocol v1. Keep SDK and wire versions separate. Documentation and host tool additions do not require changing the SDK
-API. For a future SDK release, check and test the independent module first:
+SDK 0.4.0 is prepared here for the migration to `moonbitlang/core/async`;
+0.3.0 and earlier releases use the separate `moonbitlang/async` runtime.
+Use 0.4.0 with core/async scripts. The wire protocol remains v1.
+Publish 0.4.0 before distributing scripts pinned to it. Keep SDK and wire
+versions separate. Documentation and host tool additions do not require
+changing the SDK API. For a future SDK release, check and test the independent module first:
 
 ```sh
 moon -C tools_sdk check --target native --deny-warn

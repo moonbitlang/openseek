@@ -51,7 +51,7 @@ async fn Launcher::resolve_directory(
       "\{path} must be a directory below the session's checkout \{root}",
     )
   }
-  let relative = directory.view(start_offset=root.length() + 1).to_owned()
+  let relative = directory.exact_view(start=root.length() + 1).to_owned()
   guard !relative.split("/").any(part => part is (".git" | ".worktrees")) else {
     return Err(
       "\{path} is git metadata or a worktree, not a directory to work in",

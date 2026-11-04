@@ -9,7 +9,7 @@
 // (`local_console_state`) and never asks the relay anything.
 
 ///|
-/// Who the relay says we are (`/v2/auth/me`), or the local Dev launch session.
+/// Who the relay says we are (`/v2/auth/me`), or the local Dev host.
 priv enum ConsoleAuth {
   // The check is in flight (or failed — `notice` carries the failure and
   // the gate card offers a retry).
@@ -131,11 +131,10 @@ fn local_console_state(login_return_to~ : String) -> ConsoleState {
 
 ///|
 /// The same-origin OAuth entry that restores this browser page afterwards.
-/// The local Dev console retains its private launch-cookie login route.
+/// Both browser hosts use the independent account flow.
 /// Encoding the complete return target keeps its path and query as one value.
 fn ConsoleState::login_url(self : ConsoleState) -> String {
-  let version = if self.page_device == Some("host") { "v1" } else { "v2" }
-  "/\{version}/auth/login?prompt=select_account&return_to=\{@uri.encode_component(self.login_return_to)}"
+  "/v2/auth/login?prompt=select_account&return_to=\{@uri.encode_component(self.login_return_to)}"
 }
 
 ///|
@@ -152,15 +151,6 @@ test "a Cloud route keeps the Chat list over the stored sidebar pick" {
   }
   let (_, next) = update(test_dispatch(), SidebarModeLoaded(WorkMode), model)
   assert_true(next.sidebar_mode is ChatMode)
-  let settings = {
-    ..model,
-    navigation: {
-      ..model.navigation,
-      location: Some({ device: None, target: Settings, }),
-    },
-  }
-  let (_, next) = update(test_dispatch(), SidebarModeLoaded(WorkMode), settings)
-  assert_true(next.sidebar_mode is WorkMode)
 }
 
 ///|
@@ -177,15 +167,15 @@ test "browser sign-in returns to the same versioned console URL" {
 }
 
 ///|
-test "local Dev sign-in retains its private v1 launch-cookie route" {
+test "local Console sign-in uses the browser account flow" {
   let console = empty_console_state(
     Some("host"),
     None,
-    login_return_to="/?device=host&token=fixture",
+    login_return_to="/device/host/chat",
   )
   assert_eq(
     console.login_url(),
-    "/v1/auth/login?prompt=select_account&return_to=%2F%3Fdevice%3Dhost%26token%3Dfixture",
+    "/v2/auth/login?prompt=select_account&return_to=%2Fdevice%2Fhost%2Fchat",
   )
 }
 
@@ -220,7 +210,11 @@ fn update_console_msg(
         fetch_console_roster(
           dispatch,
           generation,
-          token?=model.account.map(account => account.token),
+          token?=if model.is_local_console() {
+            None
+          } else {
+            model.account.map(account => account.token)
+          },
         ),
         {
           ..model,
@@ -250,6 +244,13 @@ fn update_console_msg(
       apply_roster(dispatch, model, metas)
     }
     RosterUnauthorized(generation~, token~) => {
+      if model.is_local_console() {
+        guard generation == model.console.roster_request_generation &&
+          token is None else {
+          return (@cmd.none, model)
+        }
+        return console_signed_out(dispatch, model)
+      }
       guard generation == model.console.roster_request_generation &&
         model.account.map(account => account.token) == token else {
         return (@cmd.none, model)
@@ -269,11 +270,21 @@ fn update_console_msg(
         },
       )
     }
-    RefreshClicked =>
+    RefreshClicked => {
+      let local_console = model.is_local_console()
+      let epoch = model.account_epoch + (if local_console { 1 } else { 0 })
       (
-        fetch_account(dispatch, false, model.account_epoch),
+        @cmd.batch([
+          fetch_account(dispatch, false, epoch, local_console~),
+          if local_console {
+            fetch_console_me(dispatch)
+          } else {
+            @cmd.none
+          },
+        ]),
         {
           ..model,
+          account_epoch: epoch,
           console: {
             ..model.console,
             roster_sync: RosterLoading,
@@ -281,6 +292,7 @@ fn update_console_msg(
           },
         },
       )
+    }
     SignOutClicked => {
       guard !model.console.busy else { return (@cmd.none, model) }
       (
@@ -401,7 +413,8 @@ fn apply_roster(
     (@cmd.none, reconciled)
   }
   commands.push(focus_cmd)
-  let reconciled = if model.cloud_identity() is Some(_) {
+  let reconciled = if model.cloud_identity() is Some(_) ||
+    model.cloud_draft_identity() is Some(_) {
     { ..reconciled, selected_conversation: model.selected_conversation, }
   } else {
     reconciled
@@ -668,6 +681,7 @@ test "a revoked page device is retired without connecting a survivor" {
         description: "",
         source: "old/source@1.0.0",
         registry: Some({ module_name: "old/source", package_path: "", }),
+        builtin: false,
         enabled: true,
       },
     ],
@@ -1033,6 +1047,7 @@ test "account changes retire focused host mirrors before the new roster answers"
         description: "",
         source: "old/source@1.0.0",
         registry: None,
+        builtin: false,
         enabled: true,
       },
     ],

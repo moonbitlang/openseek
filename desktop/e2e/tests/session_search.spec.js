@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 async function openSearch(page, app) {
   await app.install();
@@ -115,14 +115,25 @@ test('Chat search includes Cloud live and archived titles, then removes them on 
   await expect(rows(page)).toHaveCount(2);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(app.row(sessionA)).toHaveCount(0);
+  await expect(app.row(sessionB)).toHaveCount(0);
+  await page.getByRole('dialog', { name: 'Settings', exact: true })
+    .getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await input.fill('matching');
   await expect(rows(page)).toHaveCount(0);
   await input.press('Enter');
   expect(app.device.pageErrors).toEqual([]);
 });
 
 
-test('Chat and Work scope live and archived matches into their existing folders', async ({ page }) => {
-  const app = fixture(page);
+test('Chat and Work searches isolate Cloud and project history, including archives', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  cloud.titles.set(sessionA, 'Matching Cloud live');
+  cloud.titles.set(sessionB, 'Matching Cloud archive');
+  cloud.archived.add(sessionB);
+  const app = cloud.device;
+  // Retired standalone records must not leak into either search scope.
   const chat = `${app.chatRoot}/Managed`;
   app.workspaces = ['/workspace', '/other', chat];
   app.liveSessions = [
@@ -138,21 +149,32 @@ test('Chat and Work scope live and archived matches into their existing folders'
     workspace, name: workspace.split('/').at(-1), session_root: `${workspace}/.openseek`,
     sessions: sessions.filter(session => session.workspace === workspace), error: '',
   })) });
-  const input = await openSearch(page, app);
+  await cloud.install();
+  await page.goto(`${authOrigin}/console/index.html?device=device-a`);
+  const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
   await input.fill('matching');
   await expect(rows(page)).toHaveCount(2);
   await expect(page.locator('.workspace-disclosure')).toHaveCount(1);
   await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
   await rows(page).filter({ hasText: 'Matching work archive' }).click();
-  await expect(page.getByText('Archived conversation · Read only', { exact: true })).toBeVisible();
+  await expect(page.locator('.archived-read-only-text')).toBeVisible();
   await expect(page.locator('#task')).toHaveCount(0);
   await expect(input).toHaveValue('matching');
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await expect(input).toHaveValue('');
   await input.fill('matching');
-  await expect(rows(page)).toHaveCount(2);
-  await expect(rows(page).filter({ hasText: 'Matching work' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Local', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Archived chats/ })).toBeVisible();
+  await expect(rows(page)).toHaveText(['Matching Cloud live', 'Matching Cloud archive']);
+  await expect(page.locator('.workspace-disclosure')).toHaveCount(0);
+  await rows(page).filter({ hasText: 'Matching Cloud archive' }).click();
+  await expect(page.locator('main .topbar-title')).toHaveText('Matching Cloud archive');
+  await expect(page.locator('.archived-read-only-text')).toBeVisible();
+  await expect(page.locator('#task')).toHaveCount(0);
+  await expect(input).toHaveValue('matching');
+  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await expect(input).toHaveValue('');
+  await input.fill('matching');
+  await expect(rows(page)).toHaveText(['Matching work', 'Matching work archive']);
+  await expect(page.locator('.workspace-disclosure')).toHaveText('workspace');
   expect(app.pageErrors).toEqual([]);
 });
 

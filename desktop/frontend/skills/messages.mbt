@@ -3,6 +3,7 @@
 ///|
 priv enum UiMessage {
   HandWritten
+  Builtin
   Removing
   Updating
   UpdateTo(String)
@@ -38,6 +39,11 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, Builtin) => "Built-in"
+    (Spanish, Builtin) => "Integrada"
+    (SimplifiedChinese, Builtin) => "内置"
+    (TraditionalChinese, Builtin) => "內建"
+    (Japanese, Builtin) => "組み込み"
     (English, Updating) => "Updating…"
     (Spanish, Updating) => "Actualizando…"
     (SimplifiedChinese, Updating) => "正在更新…"

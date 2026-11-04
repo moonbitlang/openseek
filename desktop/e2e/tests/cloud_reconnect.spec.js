@@ -43,12 +43,15 @@ for (const nextTurn of [false, true]) {
     connection.resolve();
     await expect.poll(reads).toBeGreaterThan(before);
     await expect(page.locator('.composer-banner')).toContainText('reconnecting');
-    await expect(page.locator('#send')).toBeDisabled();
+    const draft = 'Another explicit prompt';
+    await page.locator('#task').fill(draft);
+    await expect(page.locator('#send:enabled')).toHaveCount(0);
     if (nextTurn) await app.emitSessionEvent(sessionA, 'assistant_delta', { content: 'New turn is live' });
     app.pauseHistory = null;
     history.resolve();
     await expect(page.locator('.composer-banner')).not.toBeVisible();
     await expect(page.locator('#transcript').getByText('Finished while disconnected.', { exact: true })).toHaveCount(1);
+    await expect(page.locator('#task')).toHaveValue(draft);
     if (nextTurn) {
       await expect(page.locator('#stop')).toBeEnabled();
       await expect(page.locator('#transcript')).toContainText('New turn is live');
@@ -56,7 +59,6 @@ for (const nextTurn of [false, true]) {
       await expect(page.locator('#stop')).toBeEnabled();
     } else {
       await expect(page.locator('#stop')).toHaveCount(0);
-      await page.locator('#task').fill('Another explicit prompt');
       await expect(page.locator('#send')).toBeEnabled();
     }
     expect(app.postCount).toBe(1);
@@ -195,7 +197,7 @@ test('Cloud reconnect fences an old history reply and retains newer live message
   const oldTask = app.controlState(sessionA).task_id;
   const oldRead = deferred();
   app.pauseHistory = oldRead.promise;
-  const oldResponse = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/${sessionA}/messages`));
+  const oldResponse = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
   const reads = () => app.requests.filter(request => request.method === 'GET' && request.path.endsWith(`/${sessionA}/messages`)).length;
   const before = reads();
   await app.finishTask();
@@ -258,17 +260,19 @@ test('Cloud recovery retries a failed history synchronization without another st
   await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Completed during the outage' });
   await app.finishTask();
   app.historyStatus = 503;
-  const failed = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith(`/${sessionA}/messages`) && response.status() === 503);
+  const failed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`) && response.status() === 503);
   app.pauseSessionEvents = null;
   connection.resolve();
   await (await failed).finished();
   await expect(page.locator('.composer-banner')).toContainText('reconnecting');
   await expect(page.locator('#transcript')).not.toContainText('HTTP 503');
+  await page.locator('#task').fill('Draft during history retry');
   await expect(page.locator('#send')).toBeDisabled();
   app.historyStatus = 200;
   await expect(page.locator('.composer-banner')).not.toBeVisible();
   await expect(page.locator('#transcript').getByText('Completed during the outage', { exact: true })).toHaveCount(1);
   await expect(page.locator('#stop')).toHaveCount(0);
+  await expect(page.locator('#task')).toHaveValue('Draft during history retry');
   expect(observations(app)).toHaveLength(2);
   expect(app.postCount).toBe(1);
   expect(app.device.pageErrors).toEqual([]);

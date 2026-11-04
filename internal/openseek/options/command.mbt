@@ -14,18 +14,7 @@ fn dir_option() -> @argparse.OptionArg {
 /// `--max-steps`, `--thinking`, `--session`, `--session-root`) are root globals
 /// (see `root_command`) inherited here — redeclaring a global is a build error.
 fn agent_options() -> Array[@argparse.OptionArg] {
-  [
-    dir_option(),
-    ..prompt_options(),
-    OptionArg(
-      "mcp-config",
-      long="mcp-config",
-      action=Append,
-      env="OPENSEEK_MCP_CONFIG",
-      default_values=[""],
-      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP.",
-    ),
-  ]
+  [dir_option(), ..prompt_options()]
 }
 
 ///|
@@ -54,6 +43,14 @@ fn prompt_options() -> Array[@argparse.OptionArg] {
       env="OPENSEEK_GLOBAL_SKILLS_DIR",
       default_values=[""],
       about="User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows.",
+    ),
+    OptionArg(
+      "mcp-config",
+      long="mcp-config",
+      action=Append,
+      env="OPENSEEK_MCP_CONFIG",
+      default_values=[""],
+      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package, and a new session's system prompt names the servers. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP.",
     ),
   ]
 }

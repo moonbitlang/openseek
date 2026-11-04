@@ -146,8 +146,9 @@ from a snippet (`@shell.Cmd("moon", ["test", ...])`).
 
 ## Sandbox policy and source-file protection
 
-The wasm run carries a moonrun policy on every platform. Explicit native FFI
-is refused. The snippet may read anywhere but may write only inside its own
+The wasm run carries a moonrun policy on every platform. Unsupported FFI is
+reported by the wasm compiler through normal build diagnostics. The snippet
+may read anywhere but may write only inside its own
 `@fs.tmpdir()` and any caller-provided scratch lab; changing other workspace
 files belongs to the file tools. Process spawning is checked against the
 implementation's allowlist; the
@@ -279,13 +280,13 @@ async test "mbtx reads a workspace file" {
     )
     let source =
       #|---
-      #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+      #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
       #|---
       #|
       #|async fn main {
-      #|  let text = @fs.read_file("data.txt").text()
+      #|  let text = @fs.read_text("data.txt")
       #|  let lines = [..text.split("\n")].filter(line => !line.is_empty())
-      #|  @stdio.stdout.write("lines=\{lines.length()}\n")
+      #|  @stdio.stdout.text.write("lines=\{lines.length()}\n")
       #|}
     let action = match @mbtx.definition(workspace_root=workspace).execute {
       Async(execute) => execute({ "source": source })
@@ -359,22 +360,22 @@ async test "mbtx can show compiler warnings" {
 ```
 
 Reading and transforming a file (what you pass as `source`) — note the import
-front matter, with `moonbitlang/async` present so `async fn main` compiles:
+front matter, with `moonbitlang/core/async` present so `async fn main` compiles:
 
 ```mbt nocheck
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/stdio",
 }
 ---
 
 ///|
 async fn main {
-  let text = @fs.read_file("data.txt").text()
+  let text = @fs.read_text("data.txt")
   let lines = [..text.split("\n")].filter(l => !l.is_empty())
-  @stdio.stdout.write("lines=\{lines.length()}\n")
+  @stdio.stdout.text.write("lines=\{lines.length()}\n")
 }
 ```
 

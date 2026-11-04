@@ -1,7 +1,7 @@
 ---
 import {
-  "moonbitlang/openseek_tools@0.2.0" @tools,
-  "moonbitlang/async",
+  "moonbitlang/openseek_tools@0.4.0" @tools,
+  "moonbitlang/core/async",
   "moonbitlang/core/json",
 }
 ---
@@ -31,7 +31,9 @@ async fn report(id : String) -> Json? {
       "offset": text.to_string().char_length(),
     })
     guard read.data
-      is Some({ "report": { "chunk": String(chunk), "complete": complete, .. }, .. }) else {
+      is Some(
+        { "report": { "chunk": String(chunk), "complete": complete, .. }, .. }
+      ) else {
       return None
     }
     text.write_string(chunk)
@@ -45,7 +47,9 @@ async fn report(id : String) -> Json? {
 async fn main {
   let ids = [
     scout("Where is X constructed, and by whom? Cite file:line.", "scout:x"),
-    scout("Who calls Y, and what do the callers pass? Cite file:line.", "scout:y"),
+    scout(
+      "Who calls Y, and what do the callers pass? Cite file:line.", "scout:y",
+    ),
     scout("How does Z reach the network? Cite file:line.", "scout:z"),
   ]
   // Each wait returns within a minute with every child's state: drop the

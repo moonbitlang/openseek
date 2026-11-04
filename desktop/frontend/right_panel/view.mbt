@@ -22,7 +22,7 @@ fn panel_view(
         let short = if diff.commit.length() <= 8 {
           diff.commit
         } else {
-          diff.commit.view(end_offset=8).to_owned()
+          diff.commit.exact_view(end=8).to_owned()
         }
         {
           tab,

@@ -16,6 +16,8 @@ pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem, ts? : Do
 
 pub fn decode_engine_event(@openseek_protocol.Event) -> EngineEvent?
 
+pub fn file_target(@common.Uri?, @common.Uri?, String, Bool, String) -> (@common.Uri, String)?
+
 pub fn goal_marker(String) -> GoalMarker?
 
 pub fn program_calls(Json?, String, origin? : TraceOrigin) -> Array[ToolCall]

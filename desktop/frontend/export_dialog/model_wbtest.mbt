@@ -329,6 +329,7 @@ test "the local debug console explains sharing is unsupported without requesting
 test "file sharing survives dismissal and reopening without starting another operation" {
   let emit : @cmd.Emit[Msg] = _ => @cmd.none
   let source = HostFile(@interop.Local, {
+    max_bytes: None,
     root: Some("/workspace"),
     path: "report.bin",
   })
@@ -395,7 +396,11 @@ test "file share failures allow explicit retry and account changes fence hidden 
 test "file sharing uses the existing explicit sign-in and confirmation flow" {
   let emit : @cmd.Emit[Msg] = _ => @cmd.none
   let (_, opened) = Model().open_file(
-    HostFile(@interop.Local, { root: Some("/workspace"), path: "file.bin", }),
+    HostFile(@interop.Local, {
+      max_bytes: None,
+      root: Some("/workspace"),
+      path: "file.bin",
+    }),
   )
   let (_, needs_login) = opened.update(emit, Share)
   assert_true(needs_login.content is Some({ operation: SignInRequired, .. }))

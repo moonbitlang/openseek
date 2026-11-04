@@ -129,7 +129,7 @@ pub fn EngineManager::worktree_host(Self) -> @worktree.WorktreeHost
 
 pub(all) struct EventSink((EngineEvent) -> Unit)
 
-pub(all) enum MessageReceipt {
+pub enum MessageReceipt {
   Applied
   Dropped
   Closed
@@ -143,7 +143,7 @@ pub struct MessageSubmission {
 pub fn MessageSubmission::close(Self) -> Unit
 pub fn MessageSubmission::result(Self) -> MessageReceipt?
 
-pub(all) enum PatternRepairEnvironment {
+pub enum PatternRepairEnvironment {
   Ready(Map[String, String])
   Configuration(String)
   Unavailable

@@ -23,8 +23,8 @@ string:
 ```mbtx
 ---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
 }
 ---
 

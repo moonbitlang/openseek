@@ -250,6 +250,8 @@ test "a completed archive wins over an earlier history response's running flag" 
   let old_history = Loaded(2, "a", pending.conversations["a"].request, {
     prediction: None,
     session: native_document([]),
+    etag: None,
+    offset: None,
     messages: [],
     generating: true,
   })
@@ -274,6 +276,8 @@ test "a completed archive wins over an earlier history response's running flag" 
     let old_history = Loaded(2, "a", state.conversations["a"].request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
+      offset: None,
       messages: [],
       generating: true,
     })
@@ -281,7 +285,11 @@ test "a completed archive wins over an earlier history response's running flag" 
       state,
       Edited(2, "a", state.metadata_saves["a"].request),
     )
-    assert_true(archived.conversations["a"].loading)
+    assert_true(archived.conversations["a"].history_reading)
+    assert_eq(
+      archived.conversations["a"].loading,
+      !state.conversations["a"].history_cached,
+    )
     assert_false(archived.sessions[0].generating)
     assert_false(archived.conversations["a"].generating)
     assert_true(archived.can_edit("a", Archive(false)))
@@ -309,6 +317,8 @@ test "a completed archive wins over an earlier history response's running flag" 
       Loaded(2, "a", late.conversations["a"].request, {
         prediction: None,
         session: native_document([]),
+        etag: None,
+        offset: None,
         messages: [
           {
             task_id: "finished",
@@ -321,6 +331,10 @@ test "a completed archive wins over an earlier history response's running flag" 
         generating: false,
       }),
     )
+    let ready = ready.replace("a", {
+      ..ready.conversations["a"],
+      last_seq: Some(0),
+    })
     assert_true(ready.can_send("a"))
     assert_eq(ready.conversations["a"].records[0].data, {
       "content": "Final answer",
@@ -359,6 +373,8 @@ test "externally archived inventory fences pending history through restoration" 
   let old_history = Loaded(2, "a", old_request, {
     prediction: None,
     session: native_document([]),
+    etag: None,
+    offset: None,
     messages: [],
     generating: true,
   })
@@ -381,10 +397,17 @@ test "externally archived inventory fences pending history through restoration" 
     Loaded(2, "a", restored.conversations["a"].request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
+      offset: None,
       messages: [],
       generating: false,
     }),
   )
+  assert_false(ready.can_send("a"))
+  let ready = ready.replace("a", {
+    ..ready.conversations["a"],
+    last_seq: Some(0),
+  })
   assert_true(ready.can_send("a"))
   assert_false(
     ready.sessions.iter().find_first(item => item.id == "a").unwrap().generating,

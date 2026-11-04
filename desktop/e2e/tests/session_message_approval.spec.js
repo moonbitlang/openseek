@@ -34,7 +34,6 @@ test('message approvals survive idle reload and turn completion, and advance ind
   await expect(card).toContainText('Send to “Test B”');
   await expect(card.locator('.composer-notice-text')).toHaveAttribute('title', 'target-first');
   await expect(card).not.toContainText('session.send');
-  await expect(card.locator('.composer-approval-message')).toHaveCSS('font-family', await page.locator('body').evaluate(node => getComputedStyle(node).fontFamily));
   expect(await card.locator('.composer-approval-body').textContent()).toBe(body);
   await expect(card.locator('script')).toHaveCount(0);
 

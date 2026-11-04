@@ -149,13 +149,18 @@ pub fn definition(
   AgentToolDefinition(
     name="mbtx",
     description=description(
-      background=bg_runtime is Some(_),
-      escalation=approval is Some(_),
-      delegation=subagents,
-      auto_background_after_ms~,
-      foreground_timeout_ms~,
-      build_timeout_ms~,
-    ),
+        background=bg_runtime is Some(_),
+        escalation=approval is Some(_),
+        delegation=subagents,
+        auto_background_after_ms~,
+        foreground_timeout_ms~,
+        build_timeout_ms~,
+      ) +
+      (if scratch_dir is Some(_) {
+        "\nFile artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
+      } else {
+        ""
+      }),
     schema=JsonSchema(
       schema(
         escalation=approval is Some(_),
@@ -427,16 +432,6 @@ async fn execute(
         (source, filename, Some(path))
       }
     }
-  }
-  // Keep the early diagnostic for unsupported FFI. The wasm compiler also
-  // rejects `extern "c"` and `extern "js"`; this scan only explains the
-  // refusal before building. Match the quoted syntax, not the bare word,
-  // which may appear in prose and string literals.
-  if source.contains("extern \"") {
-    return @agent_tool.respond(
-      "mbtx refuses this program: it uses native FFI (extern), which the wasm backend cannot compile or run sandboxed.",
-      is_error=true,
-    )
   }
   // The program's working directory (default: the workspace root, so relative
   // `@fs` paths reach workspace files). An explicit relative `cwd` resolves
@@ -1587,7 +1582,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
                 "ptc",
                 Json({
                   "type": "boolean",
-                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.2.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for runs without escalated; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with escalated.",
+                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.4.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for runs without escalated; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with escalated.",
                 }),
               ),
             ]
@@ -1647,7 +1642,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
 /// MoonBit is the system prompt's to teach — it is how a snippet does its
 /// work, not advice handed out after a refusal — so the refusal text below
 /// names no table. The default system prompt owns the
-/// `moonbitlang/async/shell` tutorial and worked examples; those teach one
+/// `moonbitlang/core/async/shell` tutorial and worked examples; those teach one
 /// role's workflow rather than describing what the tool enforces.
 ///
 /// The spawn list is RENDERED from `spawnable_commands` by
@@ -1713,7 +1708,7 @@ fn description(
     #|Omit unused fields entirely; do not send null.
     #|
     #|For example, create and run a reusable script with
-    #|`{"description":"Save and run a greeting","source":"fn main { println(42) }","filename":"scripts/greet.mbtx"}`.
+    #|`{"description":"Save and run a greeting","source":"---\nimport {\n  \"moonbitlang/core/env\",\n}\n---\n\nfn main {\n  println(@env.args()[1:])\n}\n","filename":"scripts/greet.mbtx"}`.
     #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
     #|A filename-only call cannot create a script. Missing parent directories are
     #|created. Identical existing content is reused; different content is never

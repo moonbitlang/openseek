@@ -143,13 +143,6 @@ pub fn UserMessage::content(self : UserMessage) -> Content {
 }
 
 ///|
-/// Return the submitting controller's tag, exactly as stored; None for
-/// untagged input.
-pub fn UserMessage::submission_id(self : UserMessage) -> String? {
-  self.submission_id
-}
-
-///|
 /// Assistant output returned by the model for one event.
 ///
 /// This stores visible assistant text, requested tool calls, and optional
@@ -310,7 +303,7 @@ struct ToolResult {
 pub fn ToolResult::ToolResult(
   tool_call_id~ : String,
   tool_name~ : String,
-  content~ : Array[ContentPart],
+  content~ : Array[@protocol.ContentPart],
   is_error~ : Bool = false,
   brief? : String,
   data? : Json,
@@ -954,9 +947,3 @@ pub extend UserMessage with Eq::{equal, not_equal}
 #doc(hidden)
 #deprecated
 pub extend UserMessage with ToJson::{to_json}
-
-///|
-/// Optional machine-readable metadata; never included in model messages.
-pub fn ToolResult::data(self : ToolResult) -> Json? {
-  self.data
-}

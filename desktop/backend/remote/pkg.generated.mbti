@@ -8,8 +8,6 @@ import {
 }
 
 // Values
-pub const LocalConsoleDevice : String = "host"
-
 pub async fn serve_app_server(@api.ApiState, &@io.Reader, &@io.Writer) -> Unit
 
 // Errors
@@ -17,14 +15,12 @@ pub async fn serve_app_server(@api.ApiState, &@io.Reader, &@io.Writer) -> Unit
 // Types and methods
 pub struct LocalConsole {
   server : @http.Server
-  token : String
-  cookie_name : String
   name : String
+  // private fields
 }
-pub async fn LocalConsole::bind(port~ : Int32) -> Self
+pub async fn LocalConsole::bind(port~ : Int32, account_origin? : String) -> Self
 pub fn LocalConsole::entry_url(Self) -> String
 pub fn LocalConsole::origin(Self) -> String
-pub fn LocalConsole::port(Self) -> Int32
 pub async fn LocalConsole::run(Self, @api.ApiState, root~ : String, entry~ : String) -> Unit
 
 type RelayActor

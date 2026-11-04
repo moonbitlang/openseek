@@ -53,15 +53,19 @@ async fn request(
   let request : Json = { "version": 1, "name": name, "arguments": arguments }
   // No retries: a lost response does not prove an edit failed to execute.
   async fn send() -> Json {
-    let (response, body) = @http.post(url, request, headers={
+    let client = @http.post(url, headers={
       "Authorization": "Bearer \{token}",
+      "Content-Type": "application/json",
     })
+    defer client.close()
+    client.text.write_json(request)
+    let response = client.end_request()
     guard response.code == 200 else {
       raise TransportError(
         "PTC transport failed (HTTP \{response.code}); execution outcome may be unknown",
       )
     }
-    body.json()
+    @json.parse(client.text.read_all())
   }
   // The host identifies calls that can wait for human input. Ordinary calls
   // retain their transport deadline; caller cancellation always propagates.

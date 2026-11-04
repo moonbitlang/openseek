@@ -43,6 +43,93 @@ test('phone conversation sends once, stops, reconnects and keeps the composer vi
   expect(app.pageErrors).toEqual([]);
 });
 
+test('Back closes the topmost layer first and reports when none is open', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.gitBranch = { branch: 'phone/back', diffstat: { added: 1, removed: 0, files: 1, partial: false } };
+  await app.install();
+  await app.goto();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
+  // The Android shell's Back: true exactly when a layer took it.
+  const back = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
+  expect(await back()).toBe(false);
+  await page.locator('.sidebar-toggle').click();
+  await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
+  await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
+  const menu = page.getByRole('menu', { name: 'Workspace actions' });
+  await expect(menu).toBeVisible();
+  // The menu opened over the drawer, so it closes first.
+  expect(await back()).toBe(true);
+  await expect(menu).toBeHidden();
+  await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
+  expect(await back()).toBe(true);
+  await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
+  expect(await back()).toBe(false);
+  // Escape reaches the same layers from a keyboard, including the Git menu,
+  // which has no Escape handling of its own.
+  await page.locator('.sidebar-toggle').click();
+  await app.openSession();
+  await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
+  await page.locator('.composer-git-button').click();
+  await expect(page.locator('.composer-git-menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.composer-git-menu')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a browser close request closes one layer at a time, as Back does in an installed web app', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'CloseWatcher is Chromium-only');
+  const app = await installConsole(page);
+  await app.goto();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
+  // Escape is Chromium's desktop close request. Hiding it from the page's
+  // listeners leaves only the close request, which is what Android's Back
+  // sends an installed web app.
+  await page.evaluate(() => addEventListener('keydown', event => {
+    if (event.key === 'Escape') event.stopImmediatePropagation();
+  }, true));
+  await page.locator('.sidebar-toggle').click();
+  await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
+  await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
+  const menu = page.getByRole('menu', { name: 'Workspace actions' });
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a held, modified or consumed Escape closes only what one press would', async ({ page }) => {
+  const app = await installConsole(page);
+  await app.goto();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
+  await page.locator('.sidebar-toggle').click();
+  const drawer = page.locator('.sidebar-backdrop');
+  await expect(drawer).toHaveClass(/open/);
+  // The drawer has no Escape handling of its own; only Back closes it.
+  await page.keyboard.press('Shift+Escape');
+  await expect(drawer).toHaveClass(/open/);
+  // A focused control that consumes Escape by stopping it keeps it.
+  const search = page.getByRole('textbox', { name: 'Search conversations' });
+  await search.evaluate(input => input.addEventListener('keydown', event => {
+    if (event.key === 'Escape') event.stopPropagation();
+  }));
+  await search.focus();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveClass(/open/);
+  await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
+  const menu = page.getByRole('menu', { name: 'Workspace actions' });
+  await expect(menu).toBeVisible();
+  // The second keydown of a held key repeats.
+  await page.keyboard.down('Escape');
+  await page.keyboard.down('Escape');
+  await page.keyboard.up('Escape');
+  await expect(menu).toBeHidden();
+  await expect(drawer).toHaveClass(/open/);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('long engine-start failures remain readable within the phone viewport and restore the draft', async ({ page }, info) => {
   const app = await installConsole(page);
   const failure = 'Engine failed to start: invalid option\nUsage: openseek serve [OPTIONS]\n' +
@@ -143,9 +230,7 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
-  await expect(page.getByRole('main').getByRole('heading', { name: 'Cloud', level: 2, exact: true })).toBeVisible();
-  await page.getByRole('main').getByRole('button', { name: 'New chat', exact: true }).click();
-  await expect(page.locator('#task')).toBeVisible();
+  await expect(page.locator('#task')).toBeEnabled();
   await page.locator('#task').fill('A mobile browser Cloud message');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);

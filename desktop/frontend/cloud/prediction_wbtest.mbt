@@ -143,6 +143,8 @@ test "Cloud predictions ahead of history wait for the exact frontier and survive
     received,
     Loaded(1, "session", conversation.request, {
       session: prediction_document(20),
+      etag: None,
+      offset: None,
       messages: [],
       generating: false,
       prediction: None,
@@ -160,6 +162,8 @@ test "Cloud predictions ahead of history wait for the exact frontier and survive
     loaded,
     Loaded(1, "session", conversation.request, {
       session: prediction_document(21),
+      etag: None,
+      offset: None,
       messages: [],
       generating: false,
       prediction: Some(prediction_record(20)),

@@ -47,10 +47,10 @@
   box-shadow: 0 8px 30px -8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.25));
   border-radius: 9px;
   box-sizing: border-box;
-  padding: 10px;
+  padding: 0.75em;
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 0.5em;
   font: var(--ui-font-size, 13px) / 1.5 var(--ui-font-family, system-ui, sans-serif);
   white-space: normal;
   animation: agentFeedbackInputAppear 0.15s ease-out;
@@ -78,9 +78,9 @@
   box-sizing: border-box;
   flex: 1;
   min-width: 0;
-  min-height: 30px;
-  max-height: 140px;
-  padding: 4px 0;
+  min-height: 2.5em;
+  max-height: 11em;
+  padding: 0.25em 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -105,17 +105,18 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 0.5em;
 }
 
 .agent-feedback-input-widget .agent-feedback-input-action {
+  font: inherit;
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 30px;
-  height: 30px;
+  width: 2.5em;
+  height: 2.5em;
   padding: 0;
   border: 0;
   border-radius: 6px;
@@ -147,8 +148,8 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
-  min-height: 30px;
+  gap: 0.25em;
+  min-height: 2.5em;
   color: var(--vscode-descriptionForeground, var(--vscode-foreground));
   cursor: pointer;
   white-space: nowrap;
@@ -177,12 +178,12 @@
   position: absolute;
   pointer-events: auto;
   max-width: 280px;
-  min-width: 180px;
+  min-width: 15em;
   background-color: var(--vscode-editorWidget-background);
   border: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, #454545));
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-size, 13px) * 12 / 13);
   line-height: 1.4;
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
@@ -204,12 +205,12 @@
 .agent-feedback-widget-header {
   display: flex;
   align-items: center;
-  padding: 4px 4px 4px 8px;
+  padding: 0.25em 0.25em 0.25em 0.75em;
   border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
   border-radius: 6px 6px 0 0;
   overflow: hidden;
   cursor: pointer;
-  gap: 6px;
+  gap: 0.5em;
 }
 
 .agent-feedback-widget.collapsed .agent-feedback-widget-header {
@@ -230,7 +231,7 @@
 
 .agent-feedback-widget-title {
   font-weight: 600;
-  line-height: 16px;
+  line-height: 1.35;
   color: var(--vscode-foreground);
   white-space: nowrap;
   overflow: hidden;
@@ -246,9 +247,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
+  width: 2em;
+  height: 2em;
+  min-width: 2em;
   border-radius: 4px;
   cursor: pointer;
   color: var(--vscode-foreground);
@@ -289,11 +290,11 @@
 .agent-feedback-widget-item {
   display: flex;
   flex-direction: column;
-  padding: 4px 4px 8px 8px;
+  padding: 0.25em 0.25em 0.75em 0.75em;
   border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
   cursor: pointer;
   position: relative;
-  gap: 6px;
+  gap: 0.5em;
 }
 
 .agent-feedback-widget-item:last-child {
@@ -313,13 +314,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 0.75em;
 }
 
 .agent-feedback-widget-item-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.5em;
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -331,7 +332,7 @@
   visibility: hidden;
   pointer-events: none;
   display: flex;
-  gap: 2px;
+  gap: 0.25em;
 }
 
 .agent-feedback-widget-item:hover .agent-feedback-widget-item-actions {
@@ -341,9 +342,10 @@
 }
 
 .agent-feedback-widget-action {
-  width: 16px;
-  height: 16px;
-  padding: 2px;
+  font: inherit;
+  width: 1.5em;
+  height: 1.5em;
+  padding: 0.25em;
   border: none;
   border-radius: 3px;
   background: transparent;
@@ -378,9 +380,9 @@
 .agent-feedback-widget-item-type {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: 0.25em 0.5em;
   border-radius: 2px;
-  font-size: 10px;
+  font-size: 0.85em;
   font-weight: 600;
   letter-spacing: 0.2px;
   background: color-mix(in srgb, var(--vscode-charts-purple, #b180d7) 22%, var(--vscode-editorWidget-background));
@@ -388,7 +390,7 @@
 }
 
 .agent-feedback-widget-line-info {
-  font-size: 10px;
+  font-size: 0.85em;
   font-weight: 600;
   color: var(--vscode-descriptionForeground);
   text-transform: uppercase;
@@ -411,8 +413,8 @@
 .agent-feedback-widget-text code,
 .agent-feedback-widget-reply-text code {
   font-family: var(--monaco-monospace-font, monospace);
-  font-size: 10px;
-  padding: 1px 4px;
+  font-size: 0.85em;
+  padding: 0.125em 0.25em;
   border-radius: 2px;
   background: color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 25%, transparent);
 }
@@ -439,19 +441,18 @@
 }
 
 .agent-feedback-widget-text.editing {
-  padding: 0 4px 0 0;
+  padding: 0 0.25em 0 0;
 }
 
 .agent-feedback-widget-edit-textarea {
   width: 100%;
-  min-height: 22px;
-  padding: 4px 6px;
+  min-height: 2em;
+  padding: 0.25em 0.5em;
   border: 1px solid var(--vscode-focusBorder);
   border-radius: 2px;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font: inherit;
-  font-size: 12px;
   line-height: 1.4;
   resize: none;
   overflow: hidden;
@@ -466,11 +467,11 @@
 .agent-feedback-widget-replies {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0.25em;
 }
 
 .agent-feedback-widget-reply {
-  padding-top: 4px;
+  padding-top: 0.25em;
   border-top: 1px dashed color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 60%, transparent);
 }
 
@@ -483,7 +484,7 @@
 }
 
 .agent-feedback-widget-add-reply {
-  padding-top: 4px;
+  padding-top: 0.25em;
   border-top: 1px dashed color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 60%, transparent);
 }
 
@@ -494,16 +495,16 @@
 
 .agent-feedback-widget-actions-bar {
   display: flex;
-  gap: 6px;
-  margin-top: 4px;
+  gap: 0.5em;
+  margin-top: 0.25em;
 }
 
 .agent-feedback-widget-actions-bar button {
   flex: 1;
-  padding: 2px 10px;
+  padding: 0.25em 1em;
   width: auto;
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 0.9em;
+  line-height: 1.6;
   border: none;
   border-radius: 2px;
   cursor: pointer;

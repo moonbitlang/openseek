@@ -1,7 +1,10 @@
 ///|
-/// The fence language emitted by a model when it wants to reference one
-/// workspace item without embedding its contents in the conversation.
+/// The fence language for referencing an existing file.
 pub const FenceLanguage : String = "openseek-file"
+
+///|
+/// Explicitly render the referenced HTML/SVG as an interactive answer.
+pub const ArtifactFenceLanguage : String = "openseek-file artifact"
 
 ///|
 /// A coarse presentation category derived from the referenced item's final
@@ -26,14 +29,14 @@ pub extend FileKind with Eq::{equal, not_equal}
 pub extend FileKind with Debug::{to_repr}
 
 ///|
-/// A validated workspace-relative file reference extracted from a fenced
-/// block. The path is kept exactly as authored after outer whitespace is
-/// removed; it is never resolved or read by this package.
+/// A relative file path and its presentation hint extracted from a fenced
+/// block. Path resolution and file reads belong to the owning host.
 pub struct WorkspaceFileRef {
   path : String
   name : String
   extension : String?
   kind : FileKind
+  artifact : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -90,7 +93,9 @@ pub fn parse(
   source : String,
   closed~ : Bool,
 ) -> WorkspaceFileRef? {
-  guard closed && language == FenceLanguage else { return None }
+  let info = language.trim().to_owned()
+  let artifact = info == ArtifactFenceLanguage
+  guard closed && (info == FenceLanguage || artifact) else { return None }
   let path = source.trim().to_owned()
   guard !path.is_empty() && !path.contains("\n") && !path.contains("\r") else {
     return None
@@ -98,7 +103,7 @@ pub fn parse(
   guard !path.contains_char('\u{0}') && !path.contains_char('\t') else {
     return None
   }
-  guard !is_absolute_or_uri(path) else { return None }
+  guard !is_absolute_or_uri(path) && !path.contains("://") else { return None }
   let normalized = path.replace_all(old="\\", new="/")
   guard !normalized.has_suffix("/") else { return None }
   let components = normalized.split("/").collect()
@@ -115,7 +120,16 @@ pub fn parse(
   guard !name.is_empty() && name != "." && name != ".." else { return None }
   let extension = extension_of(name)
   let kind = file_kind(name)
-  { path, name, extension, kind, } |> Some
+  { path, name, extension, kind, artifact, } |> Some
+}
+
+///|
+/// Decode the path inside the session's scratch/artifact directory.
+/// The presentation flag is independent of this storage location.
+pub fn WorkspaceFileRef::artifact_path(self : WorkspaceFileRef) -> String? {
+  let path = self.path.replace_all(old="\\", new="/")
+  guard path.has_prefix("scratch/artifact/") else { return None }
+  Some(path.exact_view(start=17).to_owned())
 }
 
 ///|
@@ -131,11 +145,11 @@ pub fn markdown_parts(source : String) -> Array[MarkdownPart] {
   let mut index = 0
   while index < lines.length() {
     match opening_fence(lines[index]) {
-      Some(fence_length) =>
+      Some((fence_length, info)) =>
         match closing_fence(lines, index + 1, fence_length) {
           Some(close) => {
             let body = join_lines(lines, index + 1, close)
-            match parse(FenceLanguage, body, closed=true) {
+            match parse(info, body, closed=true) {
               Some(reference) => {
                 flush_text(parts, pending)
                 parts.push(File(reference))
@@ -175,8 +189,8 @@ fn join_lines(lines : Array[String], start : Int32, end : Int32) -> String {
 }
 
 ///|
-/// Return the opening backtick count for an exact `openseek-file` fence.
-fn opening_fence(line : String) -> Int32? {
+/// Return the opening backtick count and the recognized file fence info.
+fn opening_fence(line : String) -> (Int32, String)? {
   let candidate = line.trim_start()
   guard candidate.length() >= FenceLanguage.length() + 3 else { return None }
   guard candidate.has_prefix("```") else { return None }
@@ -186,8 +200,10 @@ fn opening_fence(line : String) -> Int32? {
   }
   guard count >= 3 else { return None }
   let info = candidate[count:].trim()
-  guard info == FenceLanguage else { return None }
-  Some(count)
+  guard info == FenceLanguage || info == ArtifactFenceLanguage else {
+    return None
+  }
+  Some((count, info.to_owned()))
 }
 
 ///|
@@ -274,6 +290,28 @@ test "workspace file references accept portable relative paths" {
   assert_eq(reference.name, "matrix.xlsx")
   assert_eq(reference.extension, Some("xlsx"))
   assert_eq(reference.kind, Spreadsheet)
+  assert_false(reference.artifact)
+}
+
+///|
+test "file presentation is explicit and independent of its path" {
+  let path = "scratch/artifact/charts/revenue.html"
+  let card = parse(FenceLanguage, path, closed=true).unwrap()
+  let inline = parse(ArtifactFenceLanguage, path, closed=true).unwrap()
+  assert_false(card.artifact)
+  assert_true(inline.artifact)
+  assert_eq(card.path, inline.path)
+  assert_eq(inline.artifact_path(), Some("charts/revenue.html"))
+  assert_true(
+    parse(ArtifactFenceLanguage, "reports/page.html", closed=true).unwrap().artifact,
+  )
+  assert_true(parse(ArtifactFenceLanguage, path, closed=false) is None)
+  let parts = markdown_parts(
+    "```openseek-file artifact\nscratch/artifact/page.html\n```",
+  )
+  assert_true(
+    parts is [File({ artifact: true, path: "scratch/artifact/page.html", .. })],
+  )
 }
 
 ///|

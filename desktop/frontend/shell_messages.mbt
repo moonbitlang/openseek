@@ -2,8 +2,6 @@
 
 ///|
 priv enum ShellMessage {
-  NavigateBack
-  NavigateForward
   NavigationLoading
   NavigationMissing
   NavigationInvalid
@@ -54,6 +52,7 @@ priv enum ShellMessage {
   SigningOut
   SignOutLabel
   LoadingConversation
+  LoadingConversations
   StatusWaitingBridge
   StatusReconnecting
   StatusReady
@@ -66,6 +65,7 @@ priv enum ShellMessage {
   StatusFailed
   StatusErrored
   CannotLoadConversation
+  CannotLoadConversations
   RetryLabel
   ScheduleReadOnly
   ViewTask
@@ -79,6 +79,7 @@ priv enum ShellMessage {
   SetupEndpoint
   NotNow
   DismissLabel
+  BackToSkills
   CancelLabel
   DeleteChatQuestion
   DeletePermanently
@@ -103,16 +104,6 @@ priv enum ShellMessage {
 ///|
 fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
   match (locale, message) {
-    (English, NavigateBack) => "Back"
-    (Spanish, NavigateBack) => "Atrás"
-    (SimplifiedChinese, NavigateBack) => "后退"
-    (TraditionalChinese, NavigateBack) => "返回"
-    (Japanese, NavigateBack) => "戻る"
-    (English, NavigateForward) => "Forward"
-    (Spanish, NavigateForward) => "Adelante"
-    (SimplifiedChinese, NavigateForward) => "前进"
-    (TraditionalChinese, NavigateForward) => "前進"
-    (Japanese, NavigateForward) => "進む"
     (English, NavigationLoading) => "Loading destination…"
     (Spanish, NavigationLoading) => "Cargando destino…"
     (SimplifiedChinese, NavigationLoading) => "正在加载目标…"
@@ -502,11 +493,24 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, LoadingConversation) => "正在加载对话…"
     (TraditionalChinese, LoadingConversation) => "正在載入對話…"
     (Japanese, LoadingConversation) => "チャットを読み込み中…"
+    (English, LoadingConversations) => "Loading chats…"
+    (Spanish, LoadingConversations) => "Cargando conversaciones…"
+    (SimplifiedChinese, LoadingConversations) => "正在加载对话…"
+    (TraditionalChinese, LoadingConversations) => "正在載入對話…"
+    (Japanese, LoadingConversations) =>
+      "チャット一覧を読み込み中…"
     (English, CannotLoadConversation) => "Could not load conversation"
     (Spanish, CannotLoadConversation) => "No se pudo cargar la conversación"
     (SimplifiedChinese, CannotLoadConversation) => "无法加载对话"
     (TraditionalChinese, CannotLoadConversation) => "無法載入對話"
     (Japanese, CannotLoadConversation) => "チャットを読み込めません"
+    (English, CannotLoadConversations) => "Couldn’t load chats"
+    (Spanish, CannotLoadConversations) =>
+      "No se pudieron cargar las conversaciones"
+    (SimplifiedChinese, CannotLoadConversations) => "无法加载对话"
+    (TraditionalChinese, CannotLoadConversations) => "無法載入對話"
+    (Japanese, CannotLoadConversations) =>
+      "チャット一覧を読み込めません"
     (English, RetryLabel) => "Retry"
     (Spanish, RetryLabel) => "Reintentar"
     (SimplifiedChinese, RetryLabel) => "重试"
@@ -581,6 +585,11 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, DismissLabel) => "关闭"
     (TraditionalChinese, DismissLabel) => "關閉"
     (Japanese, DismissLabel) => "閉じる"
+    (English, BackToSkills) => "Back to skills"
+    (Spanish, BackToSkills) => "Volver a las habilidades"
+    (SimplifiedChinese, BackToSkills) => "返回技能列表"
+    (TraditionalChinese, BackToSkills) => "返回技能列表"
+    (Japanese, BackToSkills) => "スキル一覧に戻る"
     (English, CancelLabel) => "Cancel"
     (Spanish, CancelLabel) => "Cancelar"
     (SimplifiedChinese, CancelLabel) => "取消"

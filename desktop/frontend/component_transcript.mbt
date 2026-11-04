@@ -126,7 +126,6 @@ fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
         Transcript(slot~, ..) | CloudTranscript(slot~) => Some(slot)
         LoadFailed(..) | Loading | Onboarding | CloudHome => None
       }
-    Skills | Schedules | Settings => None
   }
 }
 
@@ -228,6 +227,9 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
 ///|
 fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   if self.cloud_draft_identity() is Some(owner) {
+    let items = self.cloud.conversations
+      .get(owner.session())
+      .map_or([], conversation => conversation.items())
     return @transcript_component.Input(
       locale=self.locale,
       dark_mode=self.theme.is_dark(self.system_dark),
@@ -242,7 +244,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       project_menu_open=false,
       project_query="",
       root=None,
-      items=[],
+      items=@transcript_component.VisibleRow::history(items),
       streaming_response=None,
       streaming_identity="idle",
     )
@@ -265,6 +267,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       project_query="",
       root=None,
       items=@transcript_component.VisibleRow::history(conversation.items()),
+      older_history=conversation.can_load_older_history(),
       streaming_response=conversation.live.response,
       streaming_reasoning?=conversation.live.reasoning.map(r => r.content),
       reasoning_complete=conversation.live.reasoning.map_or(false, r => {
@@ -272,7 +275,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       }),
       // Deltas do not change the committed-event count, so the live bubble
       // keeps one identity until a semantic response/step boundary.
-      streaming_identity="\{conversation.task.unwrap_or("idle")}:\{conversation.document.events.unwrap_or([]).length()}",
+      streaming_identity="\{conversation.task.unwrap_or("idle")}:\{conversation.document.events.unwrap_or([]).last().map_or(0, event => event.sequence)}",
     )
   }
   let content = self.transcript_content()
@@ -289,6 +292,9 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
     source=content.source,
     focused=self.focused,
     active_session=content.session,
+    archived=conversation
+      .map(conv => conv.is_archived_read_only())
+      .unwrap_or(false),
     scroll=self.remembered_scroll(),
     project_label?=content.project.bind(project => {
       self.project_display_label(project)

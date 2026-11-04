@@ -6,6 +6,7 @@ fn wb_skill(enabled~ : Bool, name~ : String = "widget") -> InstalledItem {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled,
   }
 }
@@ -32,12 +33,11 @@ fn wb_pending_request(preview : Preview) -> Int32 raise {
 ///|
 test "enablement-only refresh preserves an open preview and its pending read" {
   let skill = wb_skill(enabled=true)
-  let (_, loading, resolution) = State::empty().open_detail(
+  let (_, loading, _) = State::empty().handle(
     wb_emit(),
+    PreviewInstalled(skill),
     wb_input(installed=[skill]),
-    InstalledRef(skill.id),
   )
-  assert_true(resolution is Opened)
   let request = wb_pending_request(loading.preview)
   let disabled = wb_skill(enabled=false)
   let (_, unchanged) = loading.sync_library(
@@ -60,16 +60,16 @@ test "enablement-only refresh preserves an open preview and its pending read" {
   guard ready.preview is Ready(content="body", ..) else {
     fail("the read issued before the toggle must still settle")
   }
-  assert_true(ready.detail() == Some(InstalledRef(skill.id)))
+  assert_true(ready.detail_open())
 }
 
 ///|
 test "a library change to the document reloads it and drops the old read" {
   let skill = wb_skill(enabled=true)
-  let (_, loading, _) = State::empty().open_detail(
+  let (_, loading, _) = State::empty().handle(
     wb_emit(),
+    PreviewInstalled(skill),
     wb_input(installed=[skill]),
-    InstalledRef(skill.id),
   )
   let old_request = wb_pending_request(loading.preview)
   let renamed = wb_skill(enabled=true, name="renamed")

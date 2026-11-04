@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn builtin_skills() -> Array[RegistrySkillIdentity]
+
 pub async fn fetch_catalog(registry? : String) -> Array[MarketSkill]
 
 pub async fn fetch_skill_content(module_name~ : String, version~ : String, package_path~ : String, registry? : String) -> String
@@ -13,6 +15,8 @@ pub async fn fetch_skill_content(module_name~ : String, version~ : String, packa
 pub async fn install_skill(module_name~ : String, version~ : String, package_path~ : String, registry? : String, library_dir? : @pathx.Path, on_committed? : () -> Unit) -> InstalledSkill
 
 pub async fn installed_skills(library_dir? : @pathx.Path) -> Array[InstalledSkill]
+
+pub fn is_builtin(RegistrySkillIdentity) -> Bool
 
 pub async fn read_skill_content(String, library_dir? : @pathx.Path) -> String
 
@@ -26,6 +30,17 @@ pub(all) suberror SkillMarketError {
 }
 
 // Types and methods
+pub struct BuiltinSkillError {
+  registry : RegistrySkillIdentity
+  message : String
+}
+
+type BuiltinSkills
+pub fn BuiltinSkills::clear_error(Self, module_name~ : String, package_path~ : String) -> Unit
+pub fn BuiltinSkills::errors(Self) -> Array[BuiltinSkillError]
+pub fn BuiltinSkills::new(entries? : Array[RegistrySkillIdentity]) -> Self
+pub async fn BuiltinSkills::sync(Self, registry? : String, library_dir? : @pathx.Path, () -> Unit) -> Unit
+
 pub struct InstalledSkill {
   id : String
   name : String
@@ -46,10 +61,12 @@ pub struct MarketSkill {
 }
 pub fn MarketSkill::to_json(Self) -> Json
 
-pub struct RegistrySkillIdentity {
+pub(all) struct RegistrySkillIdentity {
   module_name : String
   package_path : String
-}
+} derive(Eq)
+pub fn RegistrySkillIdentity::equal(Self, Self) -> Bool
+pub fn RegistrySkillIdentity::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

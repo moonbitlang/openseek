@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
+import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const creations = cloud => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions');
 
@@ -10,13 +10,51 @@ for (const desktop of [false, true]) {
     await cloud.create();
     await expect(page.locator('main h1')).toHaveText('New chat');
     await expect(page.locator('.conversation-open[aria-current="true"]')).toHaveCount(0);
-    await expect(page.locator('main .topbar .panel-toggle')).toHaveCount(0);
+    await expect(page.getByTitle('Show terminal (Ctrl+`)', { exact: true })).toBeVisible();
     await expect(cloud.row(sessionC)).toHaveCount(0);
     await page.locator('#task').fill('Unsubmitted Cloud draft');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
     expect(creations(cloud)).toHaveLength(0);
   });
 }
+
+test('Cloud chat connection errors stay in the chat that triggered them', async ({ page }) => {
+  const cloud = new CloudHarness(page, { desktop: true });
+  const message = 'Cloud is unreachable. Check your connection and try again.';
+  const sidebar = page.locator('aside');
+  const task = page.locator('#task');
+  await cloud.install(); await cloud.goto();
+
+  const history = url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionA}/messages`;
+  const disconnectHistory = route => route.request().method() === 'GET' ? route.abort('failed') : route.fallback();
+  await page.route(history, disconnectHistory);
+  await cloud.row(sessionA).click();
+  await expect(page.locator('.conversation-load-state')).toContainText(message);
+  await expect(sidebar).not.toContainText(message);
+  await page.unroute(history, disconnectHistory);
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+
+  const command = url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionA}/commands`;
+  const disconnectPost = route => route.request().method() === 'POST' ? route.abort('failed') : route.fallback();
+  await page.route(command, disconnectPost);
+  await task.fill('Keep this failed send');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('#transcript')).toContainText(message);
+  await expect(sidebar).not.toContainText(message);
+  await expect(task).toHaveValue('Keep this failed send');
+
+  await cloud.create();
+  await page.route(`${cloudOrigin}/v1/sessions`, disconnectPost);
+  await task.fill('Keep this failed creation');
+  await task.press('Enter');
+  await expect(page.locator('#transcript')).toContainText(message);
+  await expect(sidebar).not.toContainText(message);
+  await expect(task).toHaveValue('Keep this failed creation');
+  await page.unroute(`${cloudOrigin}/v1/sessions`, disconnectPost);
+  await task.press('Enter');
+  await expect(page.locator('#transcript')).toContainText('Keep this failed creation');
+  await expect(page.locator('#transcript')).not.toContainText(message);
+});
 
 test('first Cloud creation locks duplicate submissions and sends the captured message once', async ({ page }) => {
   const cloud = new CloudHarness(page);
@@ -27,7 +65,7 @@ test('first Cloud creation locks duplicate submissions and sends the captured me
   await page.locator('#task').press('Enter');
   await expect.poll(() => creations(cloud).length).toBe(1);
   await expect(page.locator('#task')).toBeDisabled();
-  await expect(page.locator('.section-primary-action[aria-label="New chat"]')).toBeDisabled();
+  await expect(page.locator('aside button[aria-label="New chat"]')).toBeDisabled();
   expect(cloud.postCount).toBe(0);
   finish();
   await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
@@ -107,10 +145,11 @@ test('Cloud blank stays selected across sidebar browsing, shortcuts and Settings
   await expect(sidebar('Chat')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(heading).toHaveText('New chat');
   await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await sidebar('Work').click();
   await page.keyboard.press(shortcut);
   await expect(sidebar('Chat')).toHaveAttribute('aria-pressed', 'true');

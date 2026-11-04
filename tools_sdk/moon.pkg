@@ -1,20 +1,28 @@
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/http",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
 
 import {
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async/socket",
 } for "wbtest"
 
 supported_targets = "+wasm+native"
 
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/http",
+    "moonbitlang/core/async/socket",
+  ],
+)
+
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/http",
+  "moonbitlang/core/async/socket",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 } for "test"

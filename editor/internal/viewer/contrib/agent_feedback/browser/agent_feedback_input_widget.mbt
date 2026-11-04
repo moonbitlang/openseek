@@ -18,12 +18,6 @@ let input_max_width_px : Double = 400.0
 let input_max_width_editor_fraction : Double = 0.9
 
 ///|
-let input_min_height_px : Double = 30.0
-
-///|
-let input_max_height_px : Double = 140.0
-
-///|
 /// The glue-facing seam: submit/cancel routing plus the geometry reads the
 /// widget needs while sizing (the upstream widget reached back into
 /// `ICodeEditor.getLayoutInfo` for these).
@@ -385,11 +379,12 @@ fn AgentFeedbackInputWidget::auto_size(self : AgentFeedbackInputWidget) -> Unit 
   let width = input_default_width_px.min(max_width).max(min_width)
   @base_browser.set_style_property(self.root, "width", "\{width.to_string()}px")
   let height = input_textarea_grown_height(self.textarea)
-  let clamped_height = height.max(input_min_height_px).min(input_max_height_px)
+  // CSS owns the font-relative minimum and cap. The measured draft height
+  // supplies the preferred size without duplicating those constraints here.
   @base_browser.set_style_property(
     self.textarea,
     "height",
-    "\{clamped_height.to_string()}px",
+    "\{height.to_string()}px",
   )
 }
 

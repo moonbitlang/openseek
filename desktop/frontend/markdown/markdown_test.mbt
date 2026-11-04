@@ -199,3 +199,15 @@ test "Office citation fragments preserve encoded sheet and heading values" {
   )
   assert_eq(paths.length(), 4)
 }
+
+///|
+test "markdown links Typst filenames and positioned references" {
+  let paths : Array[String] = []
+  ignore(
+    @markdown.markdown_nodes("[Typst source](notes.typ) and slides.typ:12.", open_file=path => {
+      paths.push(path)
+      @cmd.none
+    }),
+  )
+  assert_eq(paths, ["notes.typ", "slides.typ:12"])
+}

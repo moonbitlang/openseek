@@ -7,6 +7,7 @@ import {
   "moonbitlang/openseek_protocol@0.4.1",
   "moonbit-community/pty@0.4.3",
   "moonbit-community/flate@0.10.0",
+  "moonbit-community/skills@0.1.0",
   "moonbitlang/x@0.5.5",
   "moonbitlang/async@0.22.4",
   "moonbitlang/moonback@0.8.9",

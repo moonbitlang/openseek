@@ -7,8 +7,8 @@
 // best-of-n.mbtx`. Each attempt gets its own `git worktree`, so attempts never
 // share an index or `HEAD`, and neither do they with `myproject`.
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/process",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/process",
 }
 ---
 
@@ -27,7 +27,9 @@ async fn main {
       "--detach",
       "../attempt_\{i}",
     ])
-    guard code == 0 else { fail("git worktree add failed for attempt \{i}") }
+    guard code.exit_code == 0 else {
+      fail("git worktree add failed for attempt \{i}")
+    }
   }
   // The attempts run concurrently. Each writes its answer to stdout and its
   // progress to stderr, and exits 0 only when its task completed.
@@ -36,11 +38,11 @@ async fn main {
     for i in 1..<=attempts {
       group.spawn_bg(() => {
         codes[i - 1] = @process.run(
-          "openseek",
-          ["run", "--dir", "attempt_\{i}", task],
-          stdout=@process.redirect_to_file("answer_\{i}.md"),
-          stderr=@process.redirect_to_file("progress_\{i}.log"),
-        )
+            "openseek",
+            ["run", "--dir", "attempt_\{i}", task],
+            stdout=@process.redirect_to_file("answer_\{i}.md"),
+            stderr=@process.redirect_to_file("progress_\{i}.log"),
+          ).exit_code
       })
     }
   })
