@@ -82,6 +82,7 @@ test "Cloud renders native history through the Local projector including goals a
     prediction: None,
     session: document,
     etag: None,
+    offset: None,
     messages: [],
     generating: false,
   }
@@ -145,6 +146,7 @@ test "Cloud preserves submitted input and startup failure when the native log is
     session: native_document([]),
     generating: false,
     etag: None,
+    offset: None,
     messages: [
       {
         task_id: "failed-start",

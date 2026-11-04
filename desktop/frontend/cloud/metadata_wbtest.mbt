@@ -251,6 +251,7 @@ test "a completed archive wins over an earlier history response's running flag" 
     prediction: None,
     session: native_document([]),
     etag: None,
+    offset: None,
     messages: [],
     generating: true,
   })
@@ -276,6 +277,7 @@ test "a completed archive wins over an earlier history response's running flag" 
       prediction: None,
       session: native_document([]),
       etag: None,
+      offset: None,
       messages: [],
       generating: true,
     })
@@ -316,6 +318,7 @@ test "a completed archive wins over an earlier history response's running flag" 
         prediction: None,
         session: native_document([]),
         etag: None,
+        offset: None,
         messages: [
           {
             task_id: "finished",
@@ -371,6 +374,7 @@ test "externally archived inventory fences pending history through restoration" 
     prediction: None,
     session: native_document([]),
     etag: None,
+    offset: None,
     messages: [],
     generating: true,
   })
@@ -394,6 +398,7 @@ test "externally archived inventory fences pending history through restoration" 
       prediction: None,
       session: native_document([]),
       etag: None,
+      offset: None,
       messages: [],
       generating: false,
     }),
