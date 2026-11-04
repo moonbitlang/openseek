@@ -117,7 +117,9 @@ test "failed Cloud creation retains the composer owner and retries only on submi
   assert_true(
     failed.cloud.creation is Some(_) && !failed.cloud.creating_session(),
   )
-  assert_true(failed.cloud.notice is Some(_))
+  let id = failed.cloud.creation.unwrap().id
+  assert_true(failed.cloud.notice is None)
+  assert_true(failed.cloud.conversations[id].notice is Some(_))
   assert_true(
     failed.composer_input().identity == blank.composer_input().identity,
   )
@@ -126,6 +128,7 @@ test "failed Cloud creation retains the composer owner and retries only on submi
   assert_true(failed.cloud.sessions == blank.cloud.sessions)
   let retried = submit_blank_cloud(failed)
   assert_true(retried.cloud.creation.unwrap().request > request)
+  assert_true(retried.cloud.conversations[id].notice is None)
   assert_true(
     retried.composer_input().identity == blank.composer_input().identity,
   )

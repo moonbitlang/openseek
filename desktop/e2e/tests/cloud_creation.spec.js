@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
+import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const creations = cloud => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions');
 
@@ -17,6 +17,44 @@ for (const desktop of [false, true]) {
     expect(creations(cloud)).toHaveLength(0);
   });
 }
+
+test('Cloud chat connection errors stay in the chat that triggered them', async ({ page }) => {
+  const cloud = new CloudHarness(page, { desktop: true });
+  const message = 'Cloud is unreachable. Check your connection and try again.';
+  const sidebar = page.locator('aside');
+  const task = page.locator('#task');
+  await cloud.install(); await cloud.goto();
+
+  const history = url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionA}/messages`;
+  const disconnectHistory = route => route.request().method() === 'GET' ? route.abort('failed') : route.fallback();
+  await page.route(history, disconnectHistory);
+  await cloud.row(sessionA).click();
+  await expect(page.locator('.conversation-load-state')).toContainText(message);
+  await expect(sidebar).not.toContainText(message);
+  await page.unroute(history, disconnectHistory);
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+
+  const command = url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionA}/commands`;
+  const disconnectPost = route => route.request().method() === 'POST' ? route.abort('failed') : route.fallback();
+  await page.route(command, disconnectPost);
+  await task.fill('Keep this failed send');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('#transcript')).toContainText(message);
+  await expect(sidebar).not.toContainText(message);
+  await expect(task).toHaveValue('Keep this failed send');
+
+  await cloud.create();
+  await page.route(`${cloudOrigin}/v1/sessions`, disconnectPost);
+  await task.fill('Keep this failed creation');
+  await task.press('Enter');
+  await expect(page.locator('#transcript')).toContainText(message);
+  await expect(sidebar).not.toContainText(message);
+  await expect(task).toHaveValue('Keep this failed creation');
+  await page.unroute(`${cloudOrigin}/v1/sessions`, disconnectPost);
+  await task.press('Enter');
+  await expect(page.locator('#transcript')).toContainText('Keep this failed creation');
+  await expect(page.locator('#transcript')).not.toContainText(message);
+});
 
 test('first Cloud creation locks duplicate submissions and sends the captured message once', async ({ page }) => {
   const cloud = new CloudHarness(page);
