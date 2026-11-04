@@ -62,7 +62,7 @@ pub fn OpenSeekApproval::wire(self : OpenSeekApproval) -> String {
 }
 
 ///|
-pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
+fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
   match value {
     "ask" => Some(ApprovalAsk)
     "review" => Some(ApprovalReview)
@@ -72,8 +72,9 @@ pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
 
 ///|
 pub(all) struct StartPayload {
-  // Creation-only choice. None retains the built-in default; saved sessions keep their prompt.
-  moonbit_guide : Bool?
+  // Complete base system prompt for a new session. None uses the engine
+  // default; Some("") supplies an empty base. Saved sessions keep their prompt.
+  system_prompt : String?
   // Original images as data URLs. The engine persists the bytes before upload.
   images : Array[String]
   task : String
@@ -154,7 +155,8 @@ pub(all) struct RunsPayload {
 
 ///|
 pub(all) struct SessionCommandSettings {
-  moonbit_guide : Bool?
+  // Same creation-only base system prompt as StartPayload.system_prompt.
+  system_prompt : String?
   // Native commands address a durable conversation; run-bound commands also carry a run ID.
   session : String
   // A resumed conversation may need a new engine process with these settings.
@@ -256,6 +258,8 @@ pub(all) struct SettingsSetPayload {
   glm_api_key : String?
   custom_api_key : String?
   followup_behavior : String?
+  prompt_source : String?
+  custom_prompt : String?
 } derive(Debug, Eq)
 
 ///|
@@ -268,6 +272,8 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
     glm_api_key: object.optional_string("glm_api_key"),
     custom_api_key: object.optional_string("custom_api_key"),
     followup_behavior: object.optional_string("followup_behavior"),
+    prompt_source: object.optional_string("prompt_source"),
+    custom_prompt: object.optional_string("custom_prompt"),
   }
 }
 
@@ -291,6 +297,12 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   }
   if self.custom_api_key is Some(value) {
     fields["custom_api_key"] = Json(value)
+  }
+  if self.prompt_source is Some(value) {
+    fields["prompt_source"] = Json(value)
+  }
+  if self.custom_prompt is Some(value) {
+    fields["custom_prompt"] = Json(value)
   }
   Json(fields)
 }
@@ -352,7 +364,7 @@ pub impl ToJson for WorktreeCreatePayload with fn to_json(self) {
 ///|
 /// `worktree.remove` — `force` discards uncommitted changes in the checkout;
 /// the branch survives either way.
-pub(all) struct WorktreeRemovePayload {
+pub struct WorktreeRemovePayload {
   workspace : String
   name : String
   force : Bool?
@@ -592,6 +604,9 @@ pub(all) struct ReadFilePayload {
   // `path` is relative to it; the host validates that pair before opening.
   path : String
   root : String?
+  // fs.read_file callers may request a larger preview; absent uses the
+  // editor/Office default for the detected format.
+  max_bytes : Int32?
 } derive(Debug, Eq)
 
 ///|
@@ -1393,6 +1408,8 @@ pub(all) struct SettingsStatusPayload {
   has_glm_key : Bool
   has_custom_key : Bool
   followup_behavior : String
+  prompt_source : String
+  custom_prompt : String
 } derive(Debug, Eq)
 
 ///|
@@ -1406,6 +1423,8 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
     has_glm_key: object.required_bool("has_glm_key"),
     has_custom_key: object.required_bool("has_custom_key"),
     followup_behavior: object.required_string("followup_behavior"),
+    prompt_source: object.required_string("prompt_source"),
+    custom_prompt: object.required_string("custom_prompt"),
   }
 }
 
@@ -1418,6 +1437,8 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
     "has_glm_key": Json(self.has_glm_key),
     "has_custom_key": Json(self.has_custom_key),
     "followup_behavior": Json(self.followup_behavior),
+    "prompt_source": Json(self.prompt_source),
+    "custom_prompt": Json(self.custom_prompt),
   }
   if self.custom_api_url is Some(value) {
     fields["custom_api_url"] = Json(value)
@@ -1431,7 +1452,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 2
+pub const HostProtocolRevision : Int32 = 5
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads
@@ -3249,6 +3270,11 @@ pub impl FromJson for ReadFilePayload with fn from_json(json, path) {
       object.required_json("path"),
       path=path.add_key("path"),
     ),
+    max_bytes: match object.optional_json("max_bytes") {
+      None => None
+      Some(value) =>
+        Some(@json.from_json(value, path=path.add_key("max_bytes")))
+    },
     root: match object.optional_json("root") {
       None => None
       Some(value) => Some(@json.from_json(value, path=path.add_key("root")))
@@ -3262,6 +3288,9 @@ pub impl ToJson for ReadFilePayload with fn to_json(self) {
   fields["path"] = Json(self.path)
   if self.root is Some(value) {
     fields["root"] = Json(value)
+  }
+  if self.max_bytes is Some(value) {
+    fields["max_bytes"] = Json(value)
   }
   Json(fields)
 }

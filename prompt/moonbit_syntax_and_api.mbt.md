@@ -5,8 +5,12 @@ Each language section states its rules and links a verified example: a script un
 
 ## Writing mbtx programs
 
-A script is a whole program — imports plus vanilla MoonBit
+A script is a whole program: front matter holding its imports, then vanilla
+MoonBit.
 
+- The file opens with the front matter: a `---` line, the `import { ... }`
+  block in `moon.pkg` syntax, and a closing `---` line. Nothing, not even a
+  comment, comes before the opening `---`.
 - Import every package it uses separately, core packages included and by
   their real path: `moonbitlang/core/encoding/base64`, not
   `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
@@ -35,7 +39,7 @@ Below is a complete example of CLI parsing using argparse:
 
 For a nonzero exit,import `"moonbitlang/x/sys"`, and call `@sys.exit(1)`.
 
-## Shell EDSL with moonbitlang/async/shell
+## Shell EDSL with moonbitlang/core/async/shell
 
 Use `@shell.Cmd` to run an external program and capture its output.
 
@@ -45,7 +49,7 @@ Shell utilities can be expressed in MoonBit, including on Windows:
 |-------------|------------------|
 | ls          | @fs.readdir(dir) |
 | find        | @shell.glob(pattern), spread into args as `[..files]` |
-| cat         | @fs.read_file(p).text() |
+| cat         | @fs.read_text(p) |
 | head/tail   | slice the split text; wc -l → count it |
 | grep        | `@builtin/rg.mbtx` (ripgrep flags and regex, not POSIX grep), or .split("\n").filter(...) on captured output |
 | sort/uniq   | .sort(), a Set, or a Map |
@@ -67,7 +71,7 @@ An example of using rg in `mbtx`:
 
 [share/examples/command_output.mbtx](../share/examples/command_output.mbtx)
 
-Use `moon ide doc @moonbitlang/async/shell` for the full API.
+Use `moon ide doc @moonbitlang/core/async/shell` for the full API.
 
 For compiler feedback, stream the line-delimited JSON from one `moon check`
 rather than collecting it and parsing it afterward:
@@ -92,10 +96,12 @@ This bounded monitor discovers the current branch's PR, watches registered
 checks, then gives late workflows one settle interval to appear:
 
 ```mbtx
+---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
 }
+---
 
 async fn main {
   @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
@@ -197,7 +203,7 @@ version = "0.1.0"
 preferred_target = "native"
 
 import {
-  "moonbitlang/async@0.22.5", // import modules(`username/modulename`) with version
+  "moonbitlang/x@0.5.5", // import registry modules(`username/modulename`) with version
 }
 warnings = "+test_unqualified_package" // `moon explain --diagnostic test_unqualified_package` to learn more
 ```
@@ -206,9 +212,9 @@ Example native CLI package:
 
 ```moon.pkg
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs", // package
-  "moonbitlang/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs", // package
+  "moonbitlang/core/async/stdio",
   "moonbitlang/core/argparse",
 }
 

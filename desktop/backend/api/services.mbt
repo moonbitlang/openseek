@@ -13,6 +13,9 @@ pub async fn[G] ApiState::start_services(
   group : @async.TaskGroup[G],
 ) -> Unit {
   prepare_workspaces()
+  group.spawn_bg(allow_failure=true, () => {
+    self.host.sync_builtin_skills(() => self.publish(SkillsChanged))
+  })
   group.spawn_bg(() => self.run_session_messages())
   group.spawn_bg(() => self.run_user_questions())
   group.spawn_bg(allow_failure=true, () => {

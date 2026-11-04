@@ -79,15 +79,19 @@ async fn post(
 ) -> Reply raise TransportError {
   // No retries: a lost response does not prove a call failed to execute.
   async fn send() -> Json {
-    let (response, body) = @http.post(url, request, headers={
+    let client = @http.post(url, headers={
       "Authorization": "Bearer \{token}",
+      "Content-Type": "application/json",
     })
+    defer client.close()
+    client.text.write_json(request)
+    let response = client.end_request()
     guard response.code == 200 else {
       raise TransportError(
         "MCP host transport failed (HTTP \{response.code}); execution outcome may be unknown",
       )
     }
-    body.json()
+    @json.parse(client.text.read_all())
   }
   // Caller cancellation always propagates.
   let result = @async.with_timeout(timeout_ms, send) catch {

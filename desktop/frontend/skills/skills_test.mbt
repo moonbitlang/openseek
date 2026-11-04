@@ -17,7 +17,9 @@ test "skill reply errors stay distinct from empty successful lists" {
     _ => fail("expected an installed skills reply error")
   }
   assert_true(@skills.catalog_from_reply(SkillsCatalog([])).is_empty())
-  assert_true(@skills.installed_from_reply(InstalledSkills([])).is_empty())
+  assert_true(
+    @skills.installed_from_reply(InstalledSkills([], builtin_errors=[])).is_empty(),
+  )
 }
 
 ///|
@@ -86,6 +88,7 @@ test "detail navigation validates retained installed previews after removal" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled: true,
   }
   let detail = @skills.InstalledRef(skill.id)
@@ -308,6 +311,7 @@ test "uninstall is keyed by the library id and deduplicated" {
       description: "",
       source: "acme/widget@1.0.0",
       registry: Some({ module_name: "acme/widget", package_path: "", }),
+      builtin: false,
       enabled: true,
     },
   ]
@@ -379,37 +383,45 @@ test "subpackage skills carry their package path in the source label" {
 ///|
 test "installed skill replies decode, with name falling back to id" {
   let items = @skills.installed_from_reply(
-    InstalledSkills([
-      {
-        id: "acme-widget",
-        name: "widget",
-        description: "Build widgets fast.",
-        source: "acme/widget@1.0.0",
-        registry: Some({ module_name: "acme/widget", package_path: "", }),
-        enabled: true,
-      },
-      {
-        id: "handmade",
-        name: "",
-        description: "",
-        source: "",
-        registry: None,
-        enabled: true,
-      },
-      {
-        id: "",
-        name: "no-id",
-        description: "",
-        source: "",
-        registry: None,
-        enabled: true,
-      },
-    ]),
+    InstalledSkills(
+      [
+        {
+          id: "acme-widget",
+          name: "widget",
+          description: "Build widgets fast.",
+          source: "acme/widget@1.0.0",
+          registry: Some({ module_name: "acme/widget", package_path: "", }),
+          builtin: true,
+          enabled: true,
+        },
+        {
+          id: "handmade",
+          name: "",
+          description: "",
+          source: "",
+          registry: None,
+          builtin: false,
+          enabled: true,
+        },
+        {
+          id: "",
+          name: "no-id",
+          description: "",
+          source: "",
+          registry: None,
+          builtin: false,
+          enabled: true,
+        },
+      ],
+      builtin_errors=[],
+    ),
   )
   guard items is [widget, handmade] else {
     fail("expected two installed items")
   }
   assert_eq(widget.id, "acme-widget")
+  assert_true(widget.builtin)
+  assert_false(handmade.builtin)
   assert_eq(widget.name, "widget")
   assert_eq(widget.source, "acme/widget@1.0.0")
   assert_eq(handmade.name, "handmade")
@@ -424,6 +436,7 @@ test "an install blocks uninstall after a library refresh until completion" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled: true,
   }
   let initial = @skills.State::empty()
@@ -465,6 +478,7 @@ test "an uninstall retains its source after removal and releases only itself" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled: true,
   }
   let initial = @skills.State::empty()
@@ -533,6 +547,7 @@ test "detail navigation preserves library errors without mutating state" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled: true,
   }
   let clean = @skills.State::empty()

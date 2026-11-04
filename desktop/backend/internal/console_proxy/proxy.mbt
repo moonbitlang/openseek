@@ -28,20 +28,12 @@ pub(all) enum Upstream {
 pub const DefaultRelay : String = "https://seekmoon.moonbitlang.com"
 
 ///|
-/// One sign-in in flight, keyed by its OAuth `state`.
-priv struct PendingSignIn {
-  verifier : String
-  return_to : String
-}
-
-///|
 /// What the routes share: where traffic goes, the bundle, this listener's
 /// port, and the sign-ins it has started.
 priv struct Proxy {
   upstream : Upstream
   bundle : String
-  port : Int32
-  pending : Map[String, PendingSignIn]
+  sign_in : @browser_signin.Flow
 }
 
 ///|
@@ -55,9 +47,19 @@ pub async fn serve(
   on_ready? : (String) -> Unit,
 ) -> Unit {
   let server = @moonback.listen(dual_stack=false, port=port.to_uint16())
-  let proxy = { upstream, bundle, port: server.addr.port(), pending: Map([]), }
+  let proxy = {
+    upstream,
+    bundle,
+    sign_in: Flow(
+      relay=match upstream {
+        Relay(relay) => relay
+        Demo => DefaultRelay
+      },
+      port=server.addr.port(),
+    ),
+  }
   if on_ready is Some(on_ready) {
-    on_ready("http://127.0.0.1:\{proxy.port}")
+    on_ready("http://127.0.0.1:\{server.addr.port()}")
   }
   let app = @moonback.App(Module(ctx => proxy.install(ctx)))
   defer app.close()

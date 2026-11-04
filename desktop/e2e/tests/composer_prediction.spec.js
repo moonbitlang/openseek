@@ -99,7 +99,7 @@ test('whitespace preserves the draft and lets Tab move focus', async ({ page }) 
     await expect(input).toHaveValue(text);
     await expect(input).not.toBeFocused();
     await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
-    if (text !== '\u3000') await expect(page.locator('#send')).toBeDisabled();
+    if (text !== '\u3000') await expect(page.locator('#send')).toHaveCount(0);
   }
   await input.fill('');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');

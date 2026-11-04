@@ -36,6 +36,42 @@ pub fn ToolResult::brief(self : ToolResult) -> String? {
 }
 
 ///|
+/// Re-export the protocol image type that durable user and tool content carries
+/// in `Image(image)` parts. Production callers name `Content` instead (see
+/// `content.mbt`); tests of other packages reach the protocol image
+/// constructors as `@agent_session.Image::from_bytes` / `from_base64`:
+/// `agent` (`read_image_test.mbt`, `images_test.mbt`, `ptc_test.mbt`), `viz`
+/// (`viz_test.mbt`), `inspect` (`main_wbtest.mbt`),
+/// `internal/openseek/serve` (`state_wbtest.mbt`), and
+/// `agent_session/store` (`images_test.mbt`, `images_realworld_test.mbt`,
+/// `store_test.mbt`).
+pub using @protocol {type Image}
+
+///|
+/// Return the optional machine-readable metadata recorded with a tool result;
+/// never included in model messages.
+///
+/// The field is durable — it round-trips through the session JSON — and this
+/// accessor is how its tests read it back: this package's own
+/// `program_data_test.mbt`, and `agent/ptc_test.mbt`, which checks that a
+/// program's nested trace is persisted but stays out of model context.
+pub fn ToolResult::data(self : ToolResult) -> Json? {
+  self.data
+}
+
+///|
+/// Return the submitting controller's tag, exactly as stored; None for
+/// untagged input.
+///
+/// The tag is durable — it is part of the stored user payload — and this
+/// accessor is how tests read it back: `agent/steer_test.mbt` (a steer echoes
+/// its tag) and `agent_session/store/store_test.mbt` (a legacy line that
+/// carries a tag decodes to it).
+pub fn UserMessage::submission_id(self : UserMessage) -> String? {
+  self.submission_id
+}
+
+///|
 /// Return the id of the assistant tool call this result answers. Protocol
 /// matching uses this to pair a result with its call; consumers (e.g. a
 /// visualizer) can use it to correlate a projected tool message back to its

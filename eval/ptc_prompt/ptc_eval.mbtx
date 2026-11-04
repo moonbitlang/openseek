@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -12,6 +12,7 @@ import {
   "moonbitlang/core/string",
   "moonbitlang/x/crypto",
 }
+---
 
 // Bounded live PTC evaluations. Credentials are inherited, never recorded.
 // Run from the repository root:

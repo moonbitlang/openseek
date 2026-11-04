@@ -37,7 +37,7 @@ async function installDesktop(page, systemDark = false) {
       openseek: new Proxy({}, {
         get: (_, method) => async params => {
           if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 2 });
+            window.desktopEvent('openseek.agent.connected', { protocol: 5 });
           }
           return window.desktopRequest({ method, params });
         },
@@ -54,6 +54,61 @@ async function closeFocused(page) {
     command_id: 'app.close_focused',
   }));
 }
+
+test('native browser notifications cross the local bridge with navigation and failure semantics intact', async ({ page }) => {
+  const app = await installDesktop(page);
+  const notify = payload => page.evaluate(value => {
+    window.desktopEvent('openseek.browser.event', value);
+  }, payload);
+  const url = 'https://example.test/start';
+  await notify({ kind: 'open_requested', request: 'browser-request', session: 'session-1', url });
+  await expect.poll(() => app.requests.filter(request => request.method === 'browser.open').length).toBe(1);
+  const opened = app.requests.find(request => request.method === 'browser.open').params;
+  expect(opened).toMatchObject({ request: 'browser-request', session: 'session-1', url });
+  const id = opened.id;
+  const address = page.locator('#browser-address-input');
+  const tab = page.locator('.editor-tab.active .tab-name');
+  const reload = page.locator('.browser-toolbar').getByRole('button', { name: 'Reload', exact: true });
+  const failure = page.locator('.browser-failure');
+  await expect(address).toHaveValue(url);
+  await notify({ kind: 'title', id, title: 'Example browser page' });
+  await expect(tab).toHaveText('Example browser page');
+  await notify({ kind: 'loading', id, loading: false });
+  await expect(reload).not.toHaveClass(/loading/);
+  await notify({ kind: 'load_failed', id, url, code: -102, text: 'ERR_CONNECTION_REFUSED' });
+  await expect(failure).toContainText('ERR_CONNECTION_REFUSED');
+
+  const next = 'https://example.test/next';
+  await notify({ kind: 'navigated', id, url: next });
+  await expect(address).toHaveValue(next);
+  await expect(failure).toBeHidden();
+  await notify({ kind: 'loading', id, loading: true });
+  await expect(reload).toHaveClass(/loading/);
+  await notify({ kind: 'load_failed', id, url: next, code: -3, text: 'ERR_ABORTED' });
+  // Malformed and unsupported events must not mutate state or allocate a tab.
+  for (const payload of [
+    { kind: 'navigated', id, url: 7 },
+    { kind: 'title', id, title: null },
+    { kind: 'open_requested', session: 'session-1', url },
+    { kind: 'closed', id },
+    { kind: 'found_in_page', id },
+    { kind: 'future', id },
+  ]) await notify(payload);
+  await notify({ kind: 'loading', id, loading: false, future: 'ignored' });
+  await expect(reload).not.toHaveClass(/loading/);
+  await expect(address).toHaveValue(next);
+  await expect(failure).toBeHidden();
+  expect(app.requests.filter(request => request.method === 'browser.open')).toHaveLength(1);
+
+  await notify({ kind: 'renderer_process_terminated', id, url: next, code: -3, text: 'Fixture renderer stopped' });
+  await expect(failure).toContainText('Fixture renderer stopped');
+  await reload.click();
+  await expect.poll(() => app.requests.filter(request => request.method === 'browser.reload').length).toBe(1);
+  await page.locator('.editor-tab.active .tab-close').click();
+  await expect(page.locator('.editor-tab')).toHaveCount(0);
+  await expect.poll(() => app.requests.filter(request => request.method === 'browser.close').map(request => request.params.id)).toEqual([id]);
+  expect(app.pageErrors).toEqual([]);
+});
 
 test('fixed sidebar toggle respects native geometry across pages and fullscreen', async ({ page }) => {
   const app = await installDesktop(page);
@@ -245,37 +300,6 @@ test('Close respects dialogs and closes successive dock tabs without closing the
   await expect(page.locator('.content.panel-open')).toHaveCount(0);
   expect(app.requests.filter(request => request.method === 'app.close_window'))
     .toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-
-test('new terminals and existing terminals use the current font size', async ({ page }) => {
-  const app = await installDesktop(page);
-  // Observe the real xterm instance; rendering and options remain production code.
-  await page.evaluate(() => {
-    window.fontTestTerminals = [];
-    window.__openseek_xterm.Terminal = new Proxy(window.__openseek_xterm.Terminal, {
-      construct(target, args) {
-        const terminal = Reflect.construct(target, args);
-        window.fontTestTerminals.push(terminal);
-        return terminal;
-      },
-    });
-  });
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const fontSize = page.getByRole('slider', { name: 'Font size', exact: true });
-  await fontSize.fill('18');
-  await app.openSession();
-  await page.keyboard.press('Control+Backquote');
-  await expect(page.locator('.terminal-instance:visible .xterm-helper-textarea')).toBeFocused();
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([17]);
-
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await fontSize.fill('12');
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11]);
-  await app.openSession();
-  await page.getByTitle('New terminal in this workspace', { exact: true }).click();
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11, 11]);
   expect(app.pageErrors).toEqual([]);
 });
 

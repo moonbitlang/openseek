@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
+---
 
 ///|
 /// The real CLI with a durable session starts two explore subagents, first
@@ -73,11 +74,13 @@ fn job_of(messages : String, label : String) -> String? {
 /// `@tools.call`, waited for with the bounded job_wait, their reports read
 /// in chunks with job_output.
 let fan_out : String =
+  #|---
   #|import {
   #|  "moonbitlang/openseek_tools@0.2.0" @tools,
   #|  "moonbitlang/async",
   #|  "moonbitlang/core/json",
   #|}
+  #|---
   #|
   #|async fn start(query : String, label : String) -> String {
   #|  let started = @tools.call("subagent", {

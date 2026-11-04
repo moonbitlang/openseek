@@ -311,10 +311,12 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   }
   // Check the size before reading the body so a large build artifact produces
   // the notice without a host-sized allocation.
-  let size_limit = match office_media_type {
+  let default_limit = match office_media_type {
     Some(_) => @openpath.MaxOfficeFileBytes
     None => @openpath.MaxEditorFileBytes
   }
+  let size_limit = payload.max_bytes.unwrap_or(default_limit)
+  guard size_limit > 0 else { raise HostError("max_bytes must be positive") }
   if source.size() > size_limit.to_int64() {
     return Oversized
   }
@@ -357,6 +359,10 @@ fn office_media_type(path : String) -> String? {
     Some(
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+  } else if lower.has_suffix(".pptx") {
+    Some(
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    )
   } else if lower.has_suffix(".xlsx") {
     Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
   } else if lower.has_suffix(".pdf") {
@@ -381,7 +387,7 @@ async test "PDF reads preserve bytes and use the document limit with or without 
       .unwrap()
       .to_uri_path()
       .unwrap()
-    match read_file_op({ path: absolute, root: None, }) {
+    match read_file_op({ max_bytes: None, path: absolute, root: None, }) {
       BinaryContent(data_base64~, media_type~, sig~) => {
         assert_eq(media_type, "application/pdf")
         assert_eq(@base64.decode(data_base64), bytes)
@@ -394,7 +400,10 @@ async test "PDF reads preserve bytes and use the document limit with or without 
       "%PDF-1.7\n" + "x".repeat(@openpath.MaxOfficeFileBytes),
       create_mode=TruncateExisting,
     )
-    assert_eq(read_file_op({ path: absolute, root: None, }), Oversized)
+    assert_eq(
+      read_file_op({ max_bytes: None, path: absolute, root: None, }),
+      Oversized,
+    )
   }
 }
 
@@ -413,7 +422,7 @@ async test "binary file reads expose only recognized raster signatures" {
     .to_uri_path()
     .unwrap()
   assert_true(
-    read_file_op({ path: absolute, root: None, })
+    read_file_op({ max_bytes: None, path: absolute, root: None, })
     is BinaryContent(
       data_base64="iVBORw0KGgpzbWFsbA==",
       media_type="image/png",
@@ -426,7 +435,7 @@ async test "binary file reads expose only recognized raster signatures" {
     .to_uri_path()
     .unwrap()
   assert_true(
-    read_file_op({ path: "image.png", root: Some(root), })
+    read_file_op({ max_bytes: None, path: "image.png", root: Some(root), })
     is BinaryContent(
       data_base64="iVBORw0KGgpzbWFsbA==",
       media_type="image/png",
@@ -440,7 +449,10 @@ async test "binary file reads expose only recognized raster signatures" {
     .unwrap()
     .to_uri_path()
     .unwrap()
-  assert_eq(read_file_op({ path: disguised_absolute, root: None, }), Binary)
+  assert_eq(
+    read_file_op({ max_bytes: None, path: disguised_absolute, root: None, }),
+    Binary,
+  )
   @fs.rmdir(dir, recursive=true)
 }
 
@@ -459,7 +471,7 @@ async test "Office file reads return original package bytes and media type" {
     .unwrap()
     .to_uri_path()
     .unwrap()
-  match read_file_op({ path: absolute, root: None, }) {
+  match read_file_op({ max_bytes: None, path: absolute, root: None, }) {
     BinaryContent(data_base64~, media_type~, sig~) => {
       assert_eq(
         media_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

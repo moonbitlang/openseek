@@ -45,7 +45,7 @@ fn office_feedback_command(
     }
     guard @dom.document().get_element_by_id(OfficeSurfaceId).to_option()
       is Some(surface) &&
-      surface.get_parent_element() is Some(viewport) else {
+      surface.closest(".viewer-stack") is Some(viewport) else {
       return
     }
     // Excel prevents the pointer default while selecting cells. Give the

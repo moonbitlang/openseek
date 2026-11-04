@@ -33,8 +33,8 @@ configuration. There is one difference: import paths can optionally include a ve
 ```mbt
 ///|
 import {
-  "moonbitlang/async@0.20.2/fs",
-  "moonbitlang/async@0.20.2",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async",
 }
 
 ///|

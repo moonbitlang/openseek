@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/encoding/hex",
@@ -13,6 +13,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
+---
 
 ///|
 enum Scenario {
@@ -107,7 +108,9 @@ async fn run_case(
     ""
   }
   let source =
+    $|---
     $|import { "moonbitlang/async", "moonbitlang/async/fs" }
+    $|---
     $|async fn main {
     $|\{prefix}  while !@fs.exists("release") { @async.sleep(10) }
     $|  println("BACKGROUND-RESULT")

@@ -32,7 +32,8 @@ fn document_name(name : String) -> Bool {
   let name = name.to_lower()
   name.has_suffix(".pdf") ||
   name.has_suffix(".docx") ||
-  name.has_suffix(".xlsx")
+  name.has_suffix(".xlsx") ||
+  name.has_suffix(".pptx")
 }
 
 ///|
@@ -75,9 +76,9 @@ fn Selection::pick(
   input.set_attribute(
     "accept",
     if allow_images {
-      "image/png,image/jpeg,image/webp,image/gif,.pdf,.docx,.xlsx"
+      "image/png,image/jpeg,image/webp,image/gif,.pdf,.docx,.xlsx,.pptx"
     } else {
-      ".pdf,.docx,.xlsx"
+      ".pdf,.docx,.xlsx,.pptx"
     },
   )
   input.set_attribute("multiple", "")
@@ -269,15 +270,15 @@ async fn Selection::load(
       return Failed(
         match locale {
           SimplifiedChinese =>
-            "当前模型不支持图片，请选择 PDF、DOCX 或 XLSX 文档。"
+            "当前模型不支持图片，请选择 PDF、DOCX、XLSX 或 PPTX 文档。"
           TraditionalChinese =>
-            "目前模型不支援圖片，請選擇 PDF、DOCX 或 XLSX 文件。"
+            "目前模型不支援圖片，請選擇 PDF、DOCX、XLSX 或 PPTX 文件。"
           Japanese =>
-            "このモデルは画像をサポートしていません。PDF、DOCX、XLSX の文書を選択してください。"
+            "このモデルは画像をサポートしていません。PDF、DOCX、XLSX、PPTX の文書を選択してください。"
           English =>
-            "This model does not support images. Choose PDF, DOCX or XLSX documents."
+            "This model does not support images. Choose PDF, DOCX, XLSX or PPTX documents."
           Spanish =>
-            "Este modelo no admite imágenes. Elige documentos PDF, DOCX o XLSX."
+            "Este modelo no admite imágenes. Elige documentos PDF, DOCX, XLSX o PPTX."
         },
       )
     }
@@ -311,15 +312,15 @@ async fn Selection::load(
         return Failed(
           match locale {
             SimplifiedChinese =>
-              "请选择 PNG、JPEG、WebP、GIF 图片或 PDF、DOCX、XLSX 文档：\{file.name()}"
+              "请选择 PNG、JPEG、WebP、GIF 图片或 PDF、DOCX、XLSX、PPTX 文档：\{file.name()}"
             TraditionalChinese =>
-              "請選擇 PNG、JPEG、WebP、GIF 圖片或 PDF、DOCX、XLSX 文件：\{file.name()}"
+              "請選擇 PNG、JPEG、WebP、GIF 圖片或 PDF、DOCX、XLSX、PPTX 文件：\{file.name()}"
             Japanese =>
-              "PNG、JPEG、WebP、GIF の画像、または PDF、DOCX、XLSX の文書を選択してください：\{file.name()}"
+              "PNG、JPEG、WebP、GIF の画像、または PDF、DOCX、XLSX、PPTX の文書を選択してください：\{file.name()}"
             English =>
-              "Choose PNG, JPEG, WebP or GIF images, or PDF, DOCX or XLSX documents: \{file.name()}"
+              "Choose PNG, JPEG, WebP or GIF images, or PDF, DOCX, XLSX or PPTX documents: \{file.name()}"
             Spanish =>
-              "Elige imágenes PNG, JPEG, WebP o GIF, o documentos PDF, DOCX o XLSX: \{file.name()}"
+              "Elige imágenes PNG, JPEG, WebP o GIF, o documentos PDF, DOCX, XLSX o PPTX: \{file.name()}"
           },
         )
     }

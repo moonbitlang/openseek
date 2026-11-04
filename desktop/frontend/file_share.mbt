@@ -8,14 +8,22 @@ fn Model::share_file(
   guard self.workspace_file(path) is Some(file) else {
     return (@cmd.none, self)
   }
-  guard ctx.root() is Some(root) &&
+  let file_root = match self.session_file_target(path) {
+    Some((root, _)) => Some(root)
+    None => ctx.root()
+  }
+  guard file_root is Some(root) &&
     @resource.relative_to(file, root) is Some(relative) &&
     !relative.0.is_empty() else {
     return (@cmd.none, self)
   }
   let source : @export_dialog.FileSource = match ctx.owner {
     Host(owner) =>
-      HostFile(owner.channel, { path: relative.0, root: Some(root.path), })
+      HostFile(owner.channel, {
+        path: relative.0,
+        root: Some(root.path),
+        max_bytes: None,
+      })
     Cloud(account~, session~) => {
       guard self.account is Some(current) && current.user.user_id == account else {
         return (@cmd.none, self)
@@ -37,6 +45,9 @@ fn Model::share_file(
 /// Resolve menu targets against the owning workspace without opening a preview.
 /// Rendered references have already removed editor/Office location suffixes.
 fn Model::workspace_file(self : Model, path : String) -> @common.Uri? {
+  if self.session_file_target(path) is Some((root, relative)) {
+    return Some(@resource.join_relative(root, Relative(relative)))
+  }
   let ctx = file_ctx(self)
   guard ctx.root() is Some(root) else { return None }
   let file = if path.contains("://") {
@@ -44,7 +55,7 @@ fn Model::workspace_file(self : Model, path : String) -> @common.Uri? {
       _ => return None
     }
   } else if ctx.owner is @interop.Host(owner) &&
-    (path.has_prefix("/") || path.view() =~ re"^[A-Za-z]:[\\/]") {
+    (path.has_prefix("/") || path.clamped_view() =~ re"^[A-Za-z]:[\\/]") {
     guard @resource.of_path(owner.channel, @common.Uri::file(path).path)
       is Some(file) else {
       return None

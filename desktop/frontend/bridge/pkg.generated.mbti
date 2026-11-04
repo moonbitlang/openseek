@@ -23,7 +23,7 @@ pub enum Event {
   ChannelDown(channel~ : @interop.ChannelId, websocket_epoch~ : Int32)
   AccountUnauthorized(channel~ : @interop.ChannelId, websocket_epoch~ : Int32, token~ : String)
   SystemAppearanceChanged
-  BrowserEvent(payload~ : Map[String, Json])
+  BrowserEvent(payload~ : @protocol.BrowserEventPayload)
   MenuCommand(command_id~ : String)
   NotificationClicked(run_id~ : String)
 }

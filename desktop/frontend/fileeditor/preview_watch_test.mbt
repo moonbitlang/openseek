@@ -1,4 +1,9 @@
 ///|
+/// Public contract only: `sync` arms the workspace watcher from a dock that
+/// holds native previews and opens no text document. The polling fallback this
+/// scenario also covers (`State::polled_files`, `Ctx::observed_files`) is
+/// package-private, so that half of the coverage is a whitebox test in
+/// `fileeditor_wbtest.mbt`.
 test "PDF-only dock retains the watcher without opening text documents" {
   let root = @resource.of_path(@interop.ChannelId::Local, "/work").unwrap()
   let preview = @resource.of_path(
@@ -37,19 +42,6 @@ test "PDF-only dock retains the watcher without opening text documents" {
   }
   assert_true(watching.files.contains(@pathx.Relative("_build/report.pdf")))
   assert_true(state.docs.is_empty())
-  assert_true(state.polled_files(ctx).is_empty())
-  assert_true(
-    state.polled_files({ ..ctx, preview_rechecks: [preview], }) == [preview],
-  )
-  assert_true(ctx.observed_files() == [preview])
-  let duplicate = {
-    ..ctx,
-    open_files: [preview],
-    preview_files: [preview, preview],
-  }
-  assert_true(duplicate.observed_files() == [preview])
-  let failed = { ..state, watch_error: Some("watch stopped"), }
-  assert_true(failed.polled_files(duplicate) == [preview])
   let outside = @resource.of_path(
     @interop.ChannelId::Local,
     "/outside/report.pdf",
@@ -59,24 +51,4 @@ test "PDF-only dock retains the watcher without opening text documents" {
     preview_files: [outside],
   })
   assert_true(closed.watching is None)
-  assert_true(
-    closed.polled_files({ ..ctx, preview_files: [outside], }) == [outside],
-  )
-  assert_true(
-    state.polled_files({ ..ctx, placement: None, preview_files: [outside], }) ==
-    [outside],
-  )
-  let remote_root = @resource.of_path(
-    @interop.ChannelId::Remote("device"),
-    "/work",
-  ).unwrap()
-  let remote = {
-    ..ctx,
-    owner: @interop.Host({
-      channel: @interop.ChannelId::Remote("device"),
-      session: "remote",
-    }),
-    placement: Some(@interop.WorkspaceRoot(root=remote_root)),
-  }
-  assert_true(state.polled_files(remote) == [preview])
 }

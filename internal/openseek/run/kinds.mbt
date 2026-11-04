@@ -8,6 +8,9 @@ priv enum Kind {
   /// A review: the goal audit behind the review gate (`goal`), or a code
   /// review of `base...HEAD` (`base`).
   Review
+  /// The reviewer behind `--approval review`: decides one permission
+  /// request against the user's own words.
+  Approval
   /// A write-capable child confined to a provisioned git worktree.
   Worker
   /// A candidate-only structural pattern repair.
@@ -21,6 +24,7 @@ fn Kind::parse(name : StringView) -> Kind? {
   match name {
     "explore" => Some(Explore)
     "review" => Some(Review)
+    "approval" => Some(Approval)
     "worker" => Some(Worker)
     "pattern-repair" => Some(PatternRepair)
     "echo" => Some(Echo)
@@ -51,6 +55,11 @@ fn Kind::check_input(self : Kind, input : Json) -> String? {
       }
     Review =>
       match ReviewTarget::parse(input) {
+        Ok(_) => None
+        Err(reason) => Some(reason)
+      }
+    Approval =>
+      match @agent_approval.ReviewRequest::parse(input) {
         Ok(_) => None
         Err(reason) => Some(reason)
       }
@@ -145,9 +154,9 @@ fn step_ceiling(
 ///|
 /// Run `kind` on `input` in this process. Input is validated before an API key
 /// is required, so a miswired caller learns the exact defect even keylessly.
-/// Every model-driven kind but `worker` and `pattern-repair` gets its own
-/// scratch lab: a temporary directory where the otherwise read-only child may
-/// scaffold projects and write source to check its claims.
+/// Every model-driven kind but `approval`, `worker`, and `pattern-repair` gets
+/// its own scratch lab: a temporary directory where the otherwise read-only
+/// child may scaffold projects and write source to check its claims.
 async fn Kind::run(
   self : Kind,
   input : Json,
@@ -240,6 +249,34 @@ async fn Kind::run(
           )
       }
       Ran(report=report.map(report => Json(report)))
+    }
+    Approval => {
+      let request = match @agent_approval.ReviewRequest::parse(input) {
+        Ok(request) => request
+        Err(reason) => return Rejected(reason)
+      }
+      let api_key = api_key()
+      // No scratch lab: the one experiment a reviewer might want — running
+      // the operation under review — is the harm the review exists to
+      // prevent.
+      let verdict = @agent_approval.run_approval_review(
+        request~,
+        api_key~,
+        model~,
+        max_steps=step_ceiling(
+          matches,
+          launch.requested_max_steps,
+          @agent_approval.default_approval_review_max_steps,
+        ),
+        thinking~,
+        api_url?,
+        retry_attempts?,
+        retry_backoff_ms?,
+        workspace_root~,
+        session_id=launch.session_id,
+        append_item=launch.append_item,
+      )
+      Ran(report=verdict.map(verdict => Json(verdict)))
     }
     Worker => {
       let api_key = api_key()

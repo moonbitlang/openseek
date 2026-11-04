@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/async@0.22.4/fs",
@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/x@0.5.5/crypto",
 }
+---
 
 ///|
 /// Package the already-built native CLI. Run from the repository root.

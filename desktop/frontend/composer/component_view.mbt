@@ -110,28 +110,34 @@ fn GoalInput::first_line(_self : GoalInput, text : String) -> String {
 }
 
 ///|
-/// Render the stable standing-goal row. All user operations leave the package
-/// as owner-bound actions instead of dispatching root messages directly.
+/// Render the standing-goal row, or nothing when no goal stands. All user
+/// operations leave the package as owner-bound actions instead of dispatching
+/// root messages directly.
 fn GoalInput::view(
   locale~ : @i18n.Locale = English,
   self : GoalInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
-) -> @html.Html {
+) -> @html.Html? {
   ignore(locale)
   if self.draft is Some(_) {
-    return @html.div(class="composer-context-row composer-goal editing", [
-      @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_target)),
-      @html.span(class="composer-goal-text", ui(locale, EditingGoal)),
-      @html.button(
-        id="goal-cancel",
-        class="composer-goal-action",
-        type_="button",
-        title=ui(locale, CancelGoalEditing),
-        on_click=action_emit(GoalCancelled(identity~)),
-        @icons.icon(@icons.icon_close),
-      ),
-    ])
+    return Some(
+      @html.div(class="composer-context-row composer-goal editing", [
+        @html.span(
+          class="composer-notice-icon",
+          @icons.icon(@icons.icon_target),
+        ),
+        @html.span(class="composer-goal-text", ui(locale, EditingGoal)),
+        @html.button(
+          id="goal-cancel",
+          class="composer-goal-action",
+          type_="button",
+          title=ui(locale, CancelGoalEditing),
+          on_click=action_emit(GoalCancelled(identity~)),
+          @icons.icon(@icons.icon_close),
+        ),
+      ]),
+    )
   }
   let (row_class, text, title, editable) = if self.pending is Some(pending) {
     match pending {
@@ -151,9 +157,7 @@ fn GoalInput::view(
         )
     }
   } else {
-    guard self.standing is Some(goal) else {
-      return @html.div(class="composer-context-row composer-goal hidden", "")
-    }
+    guard self.standing is Some(goal) else { return None }
     if goal.blocked is Some(reason) {
       (
         "composer-context-row composer-goal blocked",
@@ -186,20 +190,25 @@ fn GoalInput::view(
   } else {
     []
   }
-  @html.div(
-    class=row_class,
-    [
-      @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_target)),
-      @html.span(class="composer-goal-text", title~, text),
-      ..edit,
-      @html.button(
-        class="composer-goal-action",
-        type_="button",
-        title=ui(locale, ClearGoal),
-        on_click=action_emit(GoalCleared(identity~)),
-        @icons.icon(@icons.icon_close),
-      ),
-    ],
+  Some(
+    @html.div(
+      class=row_class,
+      [
+        @html.span(
+          class="composer-notice-icon",
+          @icons.icon(@icons.icon_target),
+        ),
+        @html.span(class="composer-goal-text", title~, text),
+        ..edit,
+        @html.button(
+          class="composer-goal-action",
+          type_="button",
+          title=ui(locale, ClearGoal),
+          on_click=action_emit(GoalCleared(identity~)),
+          @icons.icon(@icons.icon_close),
+        ),
+      ],
+    ),
   )
 }
 
@@ -213,6 +222,7 @@ fn Entry::action_buttons(
 ) -> Array[ActionButton] {
   let goal_mode = input.goal.draft is Some(_)
   if goal_mode {
+    guard !self.goal_draft.unwrap_or("").is_blank() else { return [] }
     return [
       {
         id: "goal-set",
@@ -220,12 +230,15 @@ fn Entry::action_buttons(
         title: ui(locale, SetGoal),
         disabled: self.goal_draft.unwrap_or("").is_blank(),
         command: emit(SubmitRequested),
-        content: @icons.icon(@icons.icon_arrow_up),
+        content: @icons.icon(@icons.icon_newline),
       },
     ]
   }
   match input.presentation.primary_action {
-    Send(available~) | SaveQueuedInput(available~) =>
+    Send(available~) | SaveQueuedInput(available~) => {
+      guard !self.draft.is_blank() || !self.attachment_requests.is_empty() else {
+        return []
+      }
       [
         {
           id: "send",
@@ -246,9 +259,10 @@ fn Entry::action_buttons(
             command.is_blank()
           ),
           command: emit(SubmitRequested),
-          content: @icons.icon(@icons.icon_arrow_up),
+          content: @icons.icon(@icons.icon_newline),
         },
       ]
+    }
     Running(steer_available~, can_stop~, submit~, ..) => {
       let submit = self.running_submit(submit)
       let actions : Array[ActionButton] = [
@@ -258,7 +272,7 @@ fn Entry::action_buttons(
           title: ui(locale, StopLabel),
           disabled: !can_stop,
           command: action_emit(StopRequested(identity=self.identity())),
-          content: @icons.icon(@icons.icon_debug_stop),
+          content: @icons.icon(@icons.icon_stop_circle),
         },
       ]
       if steer_available &&
@@ -279,7 +293,7 @@ fn Entry::action_buttons(
           },
           disabled: !self.can_send(input),
           command: emit(SubmitRequested),
-          content: @icons.icon(@icons.icon_arrow_up),
+          content: @icons.icon(@icons.icon_newline),
         })
       }
       actions
@@ -317,13 +331,19 @@ fn Entry::view(
       WorktreePlacementNotice => "worktree-placement"
       MissingWorktreeNoticeComponent(_) => "missing-worktree"
     }
-    context[key] = component.render(locale~, self.identity(), action_emit)
+    if component.render(locale~, self.identity(), action_emit) is Some(html) {
+      context[key] = html
+    }
   }
   // Closest to the textarea: the turn's own liveness is what the person
   // waiting is watching for, and the wait is spent looking here rather than
   // at the top bar.
-  context["running"] = running_row(locale~, input.run, clock_ms~)
-  context["goal"] = input.goal.view(locale~, self.identity(), action_emit)
+  if running_row(locale~, input.run, clock_ms~) is Some(row) {
+    context["running"] = row
+  }
+  if input.goal.view(locale~, self.identity(), action_emit) is Some(row) {
+    context["goal"] = row
+  }
   let image_emit = emit.map(event => {
     ImageRead(self.identity(), self.root, event)
   })
@@ -334,27 +354,28 @@ fn Entry::view(
     !input.presentation.disabled &&
     !goal_mode &&
     shell_command is None
-  // Keep a permanent first slot so hiding the attachment button does not
-  // rebuild the model and workspace controls that follow it.
-  let status : Array[@html.Html] = [
-    @html.div(
-      class="composer-add",
-      if can_attach {
-        [
-          @html.button(
-            class="composer-attach",
-            type_="button",
-            title=ui(locale, AttachHint),
-            on_click=pick_attachments(locale, input, image_emit),
-            attrs=@html.Attrs::build().aria_label(ui(locale, AttachImages)),
-            @icons.icon(@icons.icon_add),
-          ),
-        ]
-      } else {
-        ([] : Array[@html.Html])
-      },
-    ),
-  ]
+  // A permanent slot, so hiding the attachment button does not shift the
+  // input wrapper that follows it.
+  let attach = @html.div(
+    class="composer-add",
+    if can_attach {
+      [
+        @html.button(
+          class="composer-attach",
+          type_="button",
+          title=ui(locale, AttachHint),
+          on_click=pick_attachments(locale, input, image_emit),
+          attrs=@html.Attrs::build().aria_label(ui(locale, AttachImages)),
+          @icons.icon(@icons.icon_add),
+        ),
+      ]
+    } else {
+      ([] : Array[@html.Html])
+    },
+  )
+  // How the turn may act leads the toolbar; which model runs it trails.
+  let leading : Array[@html.Html] = []
+  let trailing : Array[@html.Html] = []
   for component in input.presentation.status {
     // A transfer snapshots completed content. Let attachment reads/uploads
     // finish before the user can move their owner to another agent.
@@ -364,9 +385,16 @@ fn Entry::view(
         ModelStatus({ ..control, disabled: true, })
       other => other
     }
-    status.push(
-      component.render(locale~, self.identity(), self.draft, action_emit),
+    let rendered = component.render(
+      locale~,
+      self.identity(),
+      self.draft,
+      action_emit,
     )
+    match component {
+      ModelStatus(_) | ReasoningStatus(_) => trailing.push(rendered)
+      _ => leading.push(rendered)
+    }
   }
   if self.image_reads > 0 {
     context["image-reading"] = @html.div(
@@ -381,8 +409,8 @@ fn Entry::view(
       message,
     )
   }
-  for index, confirmation in self.attachment_confirmations(locale, emit) {
-    context["attachment-\{index}"] = confirmation
+  for (id, confirmation) in self.attachment_confirmations(locale, emit) {
+    context["attachment-\{id}"] = confirmation
   }
   View::{
     allow_images: input.presentation.images_enabled,
@@ -441,7 +469,9 @@ fn Entry::view(
         None
       },
     },
-    status,
+    attach,
+    leading,
+    trailing,
     actions,
     // A command is not a follow-up: it never steers or queues behind the turn.
     followup_menu: if shell_command is Some(_) {
@@ -498,29 +528,35 @@ fn Entry::followup_menu(
     return None
   }
   Some(
-    @select_control.Control::{
-      id: "composer-followup-select",
-      groups: [
+    @select_control.Control(
+      id="composer-followup-select",
+      groups=[
         {
           label: ui(locale, ThisMessage),
           options: [
-            { value: "steer", label: ui(locale, SteerNowLabel), },
-            { value: "queue", label: ui(locale, QueueNextLabel), },
+            @select_control.ViewOption(
+              value="steer",
+              label=ui(locale, SteerNowLabel),
+            ),
+            @select_control.ViewOption(
+              value="queue",
+              label=ui(locale, QueueNextLabel),
+            ),
           ],
         },
       ],
-      selected: match choice {
+      selected=match choice {
         SteerNow => "steer"
         QueueNext => "queue"
       },
-      disabled: !steer_available || self.image_reads > 0,
-      open: self.followup_menu_open,
-      toggle: emit(FollowupMenuToggled),
-      dismiss: emit(FollowupMenuDismissed),
-      change: emit.map(value => FollowupSelected(value)),
-      title: ui(locale, FollowupHint),
-      aria_label: ui(locale, FollowupAction),
-      presentation: Composer(@icons.icon(@icons.icon_indent), true),
-    }.render(),
+      disabled=!steer_available || self.image_reads > 0,
+      open=self.followup_menu_open,
+      toggle=emit(FollowupMenuToggled),
+      dismiss=emit(FollowupMenuDismissed),
+      change=emit.map(value => FollowupSelected(value)),
+      title=ui(locale, FollowupHint),
+      aria_label=ui(locale, FollowupAction),
+      presentation=Composer(@icons.icon(@icons.icon_indent), true),
+    ).render(),
   )
 }

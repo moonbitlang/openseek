@@ -5,58 +5,65 @@ test "session_root defaults to .openseek beside the workspace" {
 }
 
 ///|
-async test "MoonBit guide defaults affect new prompts and leave saved sessions unchanged" {
-  @vfs.with_tmpdir(prefix="openseek-guide-", root => {
+async test "complete system prompts load verbatim and saved sessions keep their prompt" {
+  @vfs.with_tmpdir(prefix="openseek-prompt-", root => {
     let store = @store.SessionStore("\{root}/store")
     @fs.write_file(
       "\{root}/AGENTS.md",
       "project rule",
       create_mode=CreateOrTruncate,
     )
-    for enabled in [true, false] {
-      let value = if enabled { "on" } else { "off" }
+    let model : @deepseek.Model = Deepseek(V4Pro)
+    let choices : Array[String?] = [
+      None,
+      Some(""),
+      Some(
+        @prompt.system_prompt_for_model(
+          model,
+          prompt=Custom("  Custom instructions\n中文\n"),
+        ),
+      ),
+    ]
+    for i, base in choices {
+      if base is Some(text) {
+        @fs.write_file("\{root}/custom.md", text, create_mode=CreateOrTruncate)
+      }
       let parsed = @testkit.run_matches(
         argv=[
-          "--moonbit-guide",
-          value,
+          ..base.map_or([], _ => ["--system-prompt-file", "custom.md"]),
           "--global-skills-dir",
           "\{root}/skills",
           "hello",
         ],
         env=Map([]),
       )
-      let id = @agent_session.SessionId("guide-\{value}")
+      let id = @agent_session.SessionId("prompt-\{i}")
       let session = @setup.load_or_new_session(
         store,
         id,
         parsed,
-        Deepseek(V4Pro),
+        model,
         workspace_root=root,
       )
       assert_true(
         session
         .system_prompt()
         .has_prefix(
-          @prompt.system_prompt_for_model(
-            Deepseek(V4Pro),
-            moonbit_guide=enabled,
-          ) +
+          base.unwrap_or(@prompt.system_prompt_for_model(model)) +
           "\n\n## Environment",
         ),
       )
       assert_true(session.system_prompt().contains("project rule"))
       ignore(store.append(session, User(UserMessage(Content([Text("hello")])))))
-      let record = @fs.read_file(store.session_file(id)).text()
-      let header = record.split_once("\n").unwrap().0
-      assert_false(header.contains("\"moonbit_guide\":"))
-      let current_default = @testkit.run_matches(
+      @fs.write_file(
+        "\{root}/custom.md",
+        "Changed instructions",
+        create_mode=CreateOrTruncate,
+      )
+      let changed = @testkit.run_matches(
         argv=[
-          "--moonbit-guide",
-          if enabled {
-            "off"
-          } else {
-            "on"
-          },
+          "--system-prompt-file",
+          "custom.md",
           "--global-skills-dir",
           "\{root}/skills",
           "hello",
@@ -66,8 +73,8 @@ async test "MoonBit guide defaults affect new prompts and leave saved sessions u
       let resumed = @setup.load_or_new_session(
         store,
         id,
-        current_default,
-        Deepseek(V4Pro),
+        changed,
+        model,
         workspace_root=root,
       )
       assert_eq(resumed.system_prompt(), session.system_prompt())

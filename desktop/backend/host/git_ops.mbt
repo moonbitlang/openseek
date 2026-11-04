@@ -531,9 +531,9 @@ fn parse_git_status_z(output : String) -> Array[GitChange] {
       index += 1
       continue
     }
-    let index_status = record.view(end_offset=1).to_owned()
-    let worktree_status = record.view(start_offset=1, end_offset=2).to_owned()
-    let path = record.view(start_offset=3).to_owned()
+    let index_status = record.exact_view(end=1).to_owned()
+    let worktree_status = record.exact_view(start=1, end=2).to_owned()
+    let path = record.exact_view(start=3).to_owned()
     let has_source = index_status == "R" ||
       worktree_status == "R" ||
       index_status == "C" ||
@@ -578,7 +578,7 @@ fn parse_git_diff_name_status_z(output : String) -> Array[GitChange] {
     if status.is_empty() {
       continue
     }
-    let code = status.view(end_offset=1).to_owned()
+    let code = status.exact_view(end=1).to_owned()
     let has_source = code == "R" || code == "C"
     let field_count = if has_source { 2 } else { 1 }
     if index + field_count > fields.length() {
@@ -685,7 +685,7 @@ fn git_path_relative_to_workspace(
     path
   } else {
     guard path.has_prefix(workspace_prefix) else { return None }
-    path.view(start_offset=workspace_prefix.length()).to_owned()
+    path.exact_view(start=workspace_prefix.length()).to_owned()
   }
   if path.is_empty() {
     None

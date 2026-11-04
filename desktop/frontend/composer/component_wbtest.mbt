@@ -239,6 +239,7 @@ test "disabled installed skills stay out of skill completion" {
     description: "",
     source: "",
     registry: None,
+    builtin: false,
     enabled: true,
   }
   let disabled = {

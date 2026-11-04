@@ -18,7 +18,8 @@ fn is_document_attachment(name : String) -> Bool {
   let name = name.to_lower()
   name.has_suffix(".pdf") ||
   name.has_suffix(".docx") ||
-  name.has_suffix(".xlsx")
+  name.has_suffix(".xlsx") ||
+  name.has_suffix(".pptx")
 }
 
 ///|
@@ -77,7 +78,9 @@ async fn load_attachment(
   }
   guard is_document_attachment(loaded.name) ||
     @filekind.classify(loaded.bytes) is Image(_) else {
-    raise HostError("choose PNG, JPEG, WebP, GIF, PDF, DOCX or XLSX files")
+    raise HostError(
+      "choose PNG, JPEG, WebP, GIF, PDF, DOCX, XLSX or PPTX files",
+    )
   }
   loaded
 }

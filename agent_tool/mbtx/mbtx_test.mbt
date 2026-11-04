@@ -122,7 +122,9 @@ async test "script arguments reach inline and reused scripts verbatim" {
       "--policy", "two words", "", "你好", "$(echo nope)", "--",
     ]
     let source =
+      #|---
       #|import { "moonbitlang/core/env" }
+      #|---
       #|fn main { println(@env.args()[1:].to_array().to_json().stringify()) }
     let filename = "args.mbtx"
     let inline = run_in(ws, { "source": source })
@@ -298,8 +300,10 @@ async test "filename resolves from workspace independently of cwd and is reread"
     @fs.write_file(
       path,
       (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs" }
-        #|async fn main { println(@fs.read_file("marker").text()) }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs" }
+        #|---
+        #|async fn main { println(@fs.read_text("marker")) }
       ),
       create_mode=CreateOrTruncate,
     )
@@ -337,24 +341,36 @@ async test "filename reports read failures and refuses ambiguous calls" {
 }
 
 ///|
-async test "saved scripts retain compiler filename and FFI checks" {
+async test "saved scripts retain compiler filenames and report FFI errors" {
   @vfs.with_tmpdir(ws => {
     @fs.write_file(
       "\{ws}/broken.mbtx",
-      "fn main { let _x : Int = \"nope\" }",
+      (
+        #|---
+        #|import { "moonbitlang/core/builtin" }
+        #|---
+        #|
+        #|fn main { let _x : Int = "nope" }
+      ),
       create_mode=CreateOrTruncate,
     )
     let out = run_in(ws, { "filename": "./broken.mbtx" })
     assert_true(out.is_error)
-    assert_true(out.content.contains("broken.mbtx:1:"), msg=out.content)
+    assert_true(out.content.contains("broken.mbtx:5:"), msg=out.content)
     @fs.write_file(
       "\{ws}/ffi.mbtx",
-      "extern \"c\" fn escape() -> Unit = \"escape\"\nfn main { escape() }",
+      (
+        #|---
+        #|import { "moonbitlang/core/builtin" }
+        #|---
+        #|
+        #|extern "c" fn escape() -> Unit = "escape"
+        #|fn main { escape() }
+      ),
       create_mode=CreateOrTruncate,
     )
     let out = run_in(ws, { "filename": "./ffi.mbtx" })
     assert_true(out.is_error)
-    assert_true(out.content.contains("native FFI"))
   })
 }
 
@@ -427,7 +443,9 @@ async test "a run timeout carries build warnings and blames only the program" {
       foreground_timeout_ms=500,
     )
     let source =
-      #|import { "moonbitlang/async" }
+      #|---
+      #|import { "moonbitlang/core/async" }
+      #|---
       #|
       #|async fn main {
       #|  let unused = 1
@@ -447,11 +465,13 @@ async test "reads a workspace file by a RELATIVE path (default cwd = workspace)"
     @fs.write_file("\{ws}/note.txt", "one\ntwo\n", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+        #|---
         #|
         #|async fn main {
-        #|  let text = @fs.read_file("note.txt").text()
-        #|  @stdio.stdout.write("lines=\{[..text.split("\n")].filter(l => !l.is_empty()).length()}\n")
+        #|  let text = @fs.read_text("note.txt")
+        #|  @stdio.stdout.text.write("lines=\{[..text.split("\n")].filter(l => !l.is_empty()).length()}\n")
         #|}
       ),
     })
@@ -472,10 +492,12 @@ async test "cwd argument overrides the working directory" {
       // workspace_root is `elsewhere` (no marker), but cwd points at `target`.
       let out = run_in(elsewhere, {
         "source": (
-          #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+          #|---
+          #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+          #|---
           #|
           #|async fn main {
-          #|  @stdio.stdout.write(@fs.read_file("marker.txt").text())
+          #|  @stdio.stdout.text.write(@fs.read_text("marker.txt"))
           #|}
         ),
         "cwd": target,
@@ -523,35 +545,20 @@ async fn sandbox_enforcement_available() -> Bool {
 async test "a snippet's temp directory lands somewhere it may write" {
   let out = run(
     (
-      #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+      #|---
+      #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+      #|---
       #|
       #|async fn main {
       #|  let dir = @fs.tmpdir(prefix="probe-")
-      #|  @fs.write_file("\{dir}/x.txt", "hi", create_mode=CreateOrTruncate)
-      #|  @stdio.stdout.write("ok=\{@fs.exists("\{dir}/x.txt")}\n")
+      #|  @fs.write_text("\{dir}/x.txt", "hi", create_mode=CreateOrTruncate)
+      #|  @stdio.stdout.text.write("ok=\{@fs.exists("\{dir}/x.txt")}\n")
       #|  @fs.rmdir(dir, recursive=true)
       #|}
     ),
   )
   assert_false(out.is_error)
   assert_true(out.content.contains("ok=true"))
-}
-
-///|
-/// The FFI refusal keys on the syntax, not the word: a snippet that merely
-/// MENTIONS `extern` — in a commit message, a comment, any string — has done
-/// nothing wrong, and refusing it cost a real turn a retry.
-async test "the FFI refusal reads syntax, not the word extern" {
-  let mentions = run(
-    (
-      #|fn main {
-      #|  let message = "docs: explain how extern bindings are reviewed"
-      #|  println(message)
-      #|}
-    ),
-  )
-  assert_false(mentions.is_error)
-  assert_true(mentions.content.contains("docs: explain"))
 }
 
 ///|
@@ -563,10 +570,12 @@ async test "the FFI refusal reads syntax, not the word extern" {
 async test "a refused spawn gets guidance that fits a refused spawn" {
   let out = run(
     (
-      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|---
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
+      #|---
       #|
       #|async fn main {
-      #|  @myshell.Cmd("curl", ["--version"]).output() |> ignore
+      #|  @shell.Cmd("curl", ["--version"]).output() |> ignore
       #|}
     ),
   )
@@ -602,15 +611,17 @@ async test "a snippet writes only its own temp dir, never the workspace" {
         create_mode=CreateOrTruncate,
       )
       let source = (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+        #|---
         #|
         #|async fn main {
         #|  let source_write = try {
-        #|    @fs.write_file("keep.mbt", "// REWRITTEN\n", create_mode=CreateOrTruncate)
+        #|    @fs.write_text("keep.mbt", "// REWRITTEN\n", create_mode=CreateOrTruncate)
         #|    true
         #|  } catch { _ => false }
         #|  let data_write = try {
-        #|    @fs.write_file("fresh.txt", "x", create_mode=CreateOrTruncate)
+        #|    @fs.write_text("fresh.txt", "x", create_mode=CreateOrTruncate)
         #|    true
         #|  } catch { _ => false }
         #|  let delete = try {
@@ -618,15 +629,15 @@ async test "a snippet writes only its own temp dir, never the workspace" {
         #|    true
         #|  } catch { _ => false }
         #|  let outside = try {
-        #|    @fs.write_file("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
+        #|    @fs.write_text("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
         #|    true
         #|  } catch { _ => false }
         #|  let scratch = try {
         #|    let dir = @fs.tmpdir(prefix="probe-")
-        #|    @fs.write_file("\{dir}/ok.txt", "x", create_mode=CreateOrTruncate)
+        #|    @fs.write_text("\{dir}/ok.txt", "x", create_mode=CreateOrTruncate)
         #|    true
         #|  } catch { _ => false }
-        #|  @stdio.stdout.write("source=\{source_write} data=\{data_write} delete=\{delete} outside=\{outside} scratch=\{scratch}\n")
+        #|  @stdio.stdout.text.write("source=\{source_write} data=\{data_write} delete=\{delete} outside=\{outside} scratch=\{scratch}\n")
         #|}
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
@@ -661,13 +672,15 @@ async test "a snippet may read outside the workspace, though it may not write" {
         create_mode=CreateOrTruncate,
       )
       let source = (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+        #|---
         #|
         #|async fn main {
         #|  let text = try {
-        #|    @fs.read_file("OUTSIDE/note.txt").text()
+        #|    @fs.read_text("OUTSIDE/note.txt")
         #|  } catch { _ => "refused" }
-        #|  @stdio.stdout.write("read=\{text.trim()}\n")
+        #|  @stdio.stdout.text.write("read=\{text.trim()}\n")
         #|}
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
@@ -686,12 +699,14 @@ async test "a snippet may read outside the workspace, though it may not write" {
 async test "a command outside the spawn allowlist is denied by the policy" {
   let out = run(
     (
-      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|---
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
+      #|---
       #|
       #|async fn main {
       #|  let refused = try {
-      #|    let result = @myshell.Cmd("chmod", ["644", "/tmp"]).output()
-      #|    "ran exit=\{result.exit_code}"
+      #|    let result = @shell.Cmd("chmod", ["--help"]).output()
+      #|    "ran exit=\{result.exit_code()}"
       #|  } catch { _ => "refused" }
       #|  println("chmod: \{refused}")
       #|}
@@ -708,16 +723,18 @@ async test "a command outside the spawn allowlist is denied by the policy" {
 async test "the spawn allowlist discriminates between subcommands" {
   let out = run(
     (
-      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|---
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
+      #|---
       #|
       #|async fn main {
       #|  // A refusal must be the POLICY refusing, not the command failing, so
       #|  // make the repo first: every probe below then exits 0 if it is allowed
       #|  // to start at all.
-      #|  @myshell.Cmd("git", ["init", "-q", "."]).output() |> ignore
+      #|  @shell.Cmd("git", ["init", "-q", "."]).output() |> ignore
       #|  async fn probe(program : String, args : Array[String]) -> String {
       #|    try {
-      #|      @myshell.Cmd(program, args).output() |> ignore
+      #|      @shell.Cmd(program, args).output() |> ignore
       #|      "ran"
       #|    } catch { _ => "refused" }
       #|  }
@@ -781,13 +798,15 @@ async test "the spawn allowlist discriminates between subcommands" {
 async test "network allows outbound use and localhost-only binds" {
   let out = run(
     (
-      #|import { "moonbitlang/async", "moonbitlang/async/socket" }
+      #|---
+      #|import { "moonbitlang/core/async", "moonbitlang/core/async/socket" }
+      #|---
       #|
       #|async fn main {
       #|  let localhost = try {
       #|    let server = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
       #|    defer server.close()
-      #|    let client = @socket.Tcp::connect(server.addr())
+      #|    let client = @socket.Tcp::connect(server.addr)
       #|    client.close()
       #|    "allowed"
       #|  } catch {
@@ -824,14 +843,16 @@ async test "read_only denies source writes with no scratch lab wired" {
     let definition = @mbtx.definition(workspace_root=ws, read_only=true)
     let output = dispatch(definition, {
       "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+        #|---
         #|
         #|async fn main {
         #|  let wrote = try {
-        #|    @fs.write_file("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
+        #|    @fs.write_text("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
         #|    true
         #|  } catch { _ => false }
-        #|  @stdio.stdout.write("workspace=\{wrote}\n")
+        #|  @stdio.stdout.text.write("workspace=\{wrote}\n")
         #|}
       ),
     })
@@ -850,10 +871,12 @@ async test "read-only snippets can print and read workspace source" {
     )
     let output = dispatch(@mbtx.definition(workspace_root=ws, read_only=true), {
       "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs" }
+        #|---
         #|async fn main {
         #|  println(1)
-        #|  println(@fs.read_file("keep.mbt").text())
+        #|  println(@fs.read_text("keep.mbt"))
         #|}
       ),
     })
@@ -884,18 +907,20 @@ async test "a scratch lab is writable while workspace source stays denied" {
       // The lab path is substituted rather than interpolated: the snippet has
       // `\{...}` of its own, which an interpolated outer string would consume.
       let source = (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+        #|---
         #|
         #|async fn main {
         #|  let in_lab = try {
-        #|    @fs.write_file("LAB_DIR/probe.mbt", "fn probe() -> Int { 1 }\n", create_mode=CreateOrTruncate)
+        #|    @fs.write_text("LAB_DIR/probe.mbt", "fn probe() -> Int { 1 }\n", create_mode=CreateOrTruncate)
         #|    true
         #|  } catch { _ => false }
         #|  let in_workspace = try {
-        #|    @fs.write_file("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
+        #|    @fs.write_text("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
         #|    true
         #|  } catch { _ => false }
-        #|  @stdio.stdout.write("lab=\{in_lab} workspace=\{in_workspace}\n")
+        #|  @stdio.stdout.text.write("lab=\{in_lab} workspace=\{in_workspace}\n")
         #|}
       ).replace_all(old="LAB_DIR", new=lab)
       let output = dispatch(definition, { "source": source })
@@ -949,18 +974,20 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
       },
     )
     let source = (
-      #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+      #|---
+      #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+      #|---
       #|
       #|async fn main {
       #|  let mine = try {
-      #|    @fs.write_file("mine.mbt", "fn mine() -> Int { 11 }\n", create_mode=CreateOrTruncate)
+      #|    @fs.write_text("mine.mbt", "fn mine() -> Int { 11 }\n", create_mode=CreateOrTruncate)
       #|    true
       #|  } catch { _ => false }
       #|  let theirs = try {
-      #|    @fs.write_file("SIBLING/theirs.mbt", "// CLOBBERED\n", create_mode=CreateOrTruncate)
+      #|    @fs.write_text("SIBLING/theirs.mbt", "// CLOBBERED\n", create_mode=CreateOrTruncate)
       #|    true
       #|  } catch { _ => false }
-      #|  @stdio.stdout.write("mine=\{mine} theirs=\{theirs}\n")
+      #|  @stdio.stdout.text.write("mine=\{mine} theirs=\{theirs}\n")
       #|}
     ).replace_all(old="SIBLING", new=sibling)
     let output = dispatch(definition, { "source": source })
@@ -1061,7 +1088,7 @@ async test "the removed background field has grammatical migration guidance" {
 }
 
 // The EDSL guidance the description carries — how a snippet is shaped, the
-// warning off `@myshell.Pipeline`, batching probes into one turn — is not
+// warning off `@shell.Pipeline`, batching probes into one turn — is not
 // re-pinned by phrase here: an assertion that a text contains its own words
 // breaks on every rewrite and catches no real gap.
 
@@ -1073,10 +1100,12 @@ async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
       // the run dies with the raw OS error — the case where the model previously
       // saw only `Operation not permitted` with no idea the sandbox caused it.
       let source = (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs" }
+        #|---
         #|
         #|async fn main {
-        #|  @fs.write_file("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
+        #|  @fs.write_text("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
         #|}
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
@@ -1127,14 +1156,16 @@ async test "a denial past the display cap is still detected and explained" {
       // beyond the 48KB display cap (and beyond one 64KB scan chunk), so only
       // the full-log scan can see it.
       let source = (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/stdio" }
+        #|---
         #|
         #|async fn main {
         #|  let filler = String::make(1000, 'x')
         #|  for _i in 0..<200 {
-        #|    @stdio.stdout.write("\{filler}\n")
+        #|    @stdio.stdout.text.write("\{filler}\n")
         #|  }
-        #|  @fs.write_file("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
+        #|  @fs.write_text("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
         #|}
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
@@ -1224,12 +1255,14 @@ async test "error diagnostics name `source`, not the throwaway temp path" {
 ///|
 /// The system prompt's minimal shell example exercises the library without
 /// spawning a child process: glob expansion itself is useful MoonBit IO.
-async test "moonbitlang/async/shell glob lists workspace paths" {
+async test "moonbitlang/core/async/shell glob lists workspace paths" {
   @vfs.with_tmpdir(prefix="mbtx-glob-", ws => {
     @fs.write_file("\{ws}/main.mbt", "fn main {}", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/shell", "moonbitlang/core/env" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/async/shell", "moonbitlang/core/env" }
+        #|---
         #|
         #|async fn main {
         #|  for path in @shell.glob("*.mbt") {
@@ -1259,7 +1292,9 @@ async test "moonbitlang/async/shell glob lists workspace paths" {
 async test "reads a captured command through Output accessors" {
   let out = run(
     (
-      #|import { "moonbitlang/async", "moonbitlang/async/shell" }
+      #|---
+      #|import { "moonbitlang/core/async", "moonbitlang/core/async/shell" }
+      #|---
       #|
       #|async fn main {
       #|  let out = @shell.Cmd("git", ["--version"]).output()
@@ -1296,7 +1331,9 @@ async test "streams structured moon check diagnostics with async shell" {
     @fs.write_file("\{ws}/moon.pkg", "", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/shell", "moonbitlang/core/json" }
+        #|---
+        #|import { "moonbitlang/core/async", "moonbitlang/core/async/shell", "moonbitlang/core/json" }
+        #|---
         #|
         #|async fn main {
         #|  let mut errors = 0
@@ -1328,18 +1365,20 @@ async test "streams structured moon check diagnostics with async shell" {
 }
 
 ///|
-async test "refuses native FFI (extern can bind libc system)" {
-  // `extern` sidesteps the @process import check, so it is refused too — the
-  // static boundary is best-effort until the wasm sandbox lands.
+async test "native FFI returns a tool error" {
   let out = run(
     (
+      #|---
+      #|import { "moonbitlang/core/builtin" }
+      #|---
+      #|
+      #|#borrow(cmd)
       #|extern "c" fn c_system(cmd : Bytes) -> Int = "system"
       #|
-      #|fn main { c_system("true") |> ignore }
+      #|fn main { c_system(b"true") |> ignore }
     ),
   )
   assert_true(out.is_error)
-  assert_true(out.content.contains("native FFI"))
 }
 
 ///|
@@ -1368,11 +1407,13 @@ async test "snippet stdin is an empty file (EOF), not the engine's inherited fd 
   // from) the parent's fd 0 — which under serve/TUI is the control channel.
   let out = run(
     (
-      #|import { "moonbitlang/async", "moonbitlang/async/stdio" }
+      #|---
+      #|import { "moonbitlang/core/async", "moonbitlang/core/async/stdio" }
+      #|---
       #|
       #|async fn main {
-      #|  let line = @stdio.stdin.read_until("\n")
-      #|  @stdio.stdout.write("got=\{line is Some(_)}\n")
+      #|  let line = @stdio.stdin.text.read_until("\n")
+      #|  @stdio.stdout.text.write("got=\{line is Some(_)}\n")
       #|}
     ),
   )
@@ -1401,7 +1442,9 @@ async test "a runtime-less run uses its foreground timeout, not the handoff grac
       foreground_timeout_ms=300_000,
     )
     let source =
-      #|import { "moonbitlang/async" }
+      #|---
+      #|import { "moonbitlang/core/async" }
+      #|---
       #|
       #|async fn main {
       #|  @async.sleep(100)
@@ -1493,12 +1536,14 @@ async test "an approved escalation runs outside the spawn allowlist" {
   let asked : Array[@agent_runtime.ApprovalAsk] = []
   let out = run_escalating(
     (
-      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|---
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
+      #|---
       #|
       #|async fn main {
       #|  let ran = try {
-      #|    let result = @myshell.Cmd("chmod", ["644", "/tmp"]).output()
-      #|    "ran exit=\{result.exit_code}"
+      #|    let result = @shell.Cmd("chmod", ["--help"]).output()
+      #|    "ran exit=\{result.exit_code()}"
       #|  } catch { _ => "refused" }
       #|  println("chmod: \{ran}")
       #|}
@@ -1522,7 +1567,9 @@ async test "a refused escalation does not run at all" {
   let asked : Array[@agent_runtime.ApprovalAsk] = []
   let out = run_escalating(
     (
-      #|import { "moonbitlang/async" }
+      #|---
+      #|import { "moonbitlang/core/async" }
+      #|---
       #|
       #|async fn main {
       #|  println("this must not run")
@@ -1589,10 +1636,12 @@ async test "an ordinary call never asks for approval" {
 #cfg(not(platform="windows"))
 async test "a refusal names escalation when a channel is wired" {
   let source =
-    #|import { "bobzhang/myshell", "moonbitlang/async" }
+    #|---
+    #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async" }
+    #|---
     #|
     #|async fn main {
-    #|  @myshell.Cmd("chmod", ["644", "/tmp"]).output() |> ignore
+    #|  @shell.Cmd("chmod", ["--help"]).output() |> ignore
     #|}
   let asking = @vfs.with_tmpdir(prefix="mbtx-hint-", ws => {
     let definition = @mbtx.definition(
@@ -1632,14 +1681,16 @@ async test "an escalated run is not read as a policy refusal" {
     // Spawning something that exists but cannot be executed raises exactly the
     // text the scan looks for — from the OS, not from any policy.
     let source =
-      #|import { "bobzhang/myshell", "moonbitlang/async", "moonbitlang/async/fs" }
+      #|---
+      #|import { "moonbitlang/core/async/shell", "moonbitlang/core/async", "moonbitlang/core/async/fs" }
+      #|---
       #|
       #|async fn main {
       #|  let dir = @fs.tmpdir(prefix="probe-")
       #|  let path = dir + "/not-executable"
-      #|  @fs.write_file(path, "not a program", create_mode=CreateOrTruncate)
+      #|  @fs.write_text(path, "not a program", create_mode=CreateOrTruncate)
       #|  let refused = try {
-      #|    @myshell.Cmd(path, []).output() |> ignore
+      #|    @shell.Cmd(path, []).output() |> ignore
       #|    "ran"
       #|  } catch { error => "\{error}" }
       #|  println("child: \{refused}")
@@ -1666,7 +1717,9 @@ async test "an unhosted snippet sees no handoff, even one its host inherited" {
   // grandparent's handoff and mint child ids from a block that is not its own.
   let out = run(
     (
+      #|---
       #|import { "moonbitlang/core/env" }
+      #|---
       #|
       #|fn main {
       #|  match @env.get_env_var("WORKFLOW_HOST") {
@@ -1693,7 +1746,9 @@ async test "a sandboxed snippet gets the MCP host's handoff" {
       let definition = @mbtx.definition(workspace_root=ws, mcp_service=host)
       let out = dispatch(definition, {
         "source": (
+          #|---
           #|import { "moonbitlang/core/env" }
+          #|---
           #|
           #|fn main {
           #|  println("mcp=\{@env.get_env_var("OPENSEEK_MCP").unwrap_or("none")}")

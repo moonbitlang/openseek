@@ -54,6 +54,7 @@ priv enum ShellMessage {
   SigningOut
   SignOutLabel
   LoadingConversation
+  LoadingConversations
   StatusWaitingBridge
   StatusReconnecting
   StatusReady
@@ -66,6 +67,7 @@ priv enum ShellMessage {
   StatusFailed
   StatusErrored
   CannotLoadConversation
+  CannotLoadConversations
   RetryLabel
   ScheduleReadOnly
   ViewTask
@@ -501,11 +503,24 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, LoadingConversation) => "正在加载对话…"
     (TraditionalChinese, LoadingConversation) => "正在載入對話…"
     (Japanese, LoadingConversation) => "チャットを読み込み中…"
+    (English, LoadingConversations) => "Loading chats…"
+    (Spanish, LoadingConversations) => "Cargando conversaciones…"
+    (SimplifiedChinese, LoadingConversations) => "正在加载对话…"
+    (TraditionalChinese, LoadingConversations) => "正在載入對話…"
+    (Japanese, LoadingConversations) =>
+      "チャット一覧を読み込み中…"
     (English, CannotLoadConversation) => "Could not load conversation"
     (Spanish, CannotLoadConversation) => "No se pudo cargar la conversación"
     (SimplifiedChinese, CannotLoadConversation) => "无法加载对话"
     (TraditionalChinese, CannotLoadConversation) => "無法載入對話"
     (Japanese, CannotLoadConversation) => "チャットを読み込めません"
+    (English, CannotLoadConversations) => "Couldn’t load chats"
+    (Spanish, CannotLoadConversations) =>
+      "No se pudieron cargar las conversaciones"
+    (SimplifiedChinese, CannotLoadConversations) => "无法加载对话"
+    (TraditionalChinese, CannotLoadConversations) => "無法載入對話"
+    (Japanese, CannotLoadConversations) =>
+      "チャット一覧を読み込めません"
     (English, RetryLabel) => "Retry"
     (Spanish, RetryLabel) => "Reintentar"
     (SimplifiedChinese, RetryLabel) => "重试"

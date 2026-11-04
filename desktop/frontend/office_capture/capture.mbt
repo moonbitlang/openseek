@@ -1,6 +1,7 @@
 ///|
 pub(all) enum Format {
   Word
+  PowerPoint
   Excel
   Pdf
 } derive(Eq)
@@ -9,6 +10,7 @@ pub(all) enum Format {
 pub fn Format::name(self : Format) -> String {
   match self {
     Word => "docx"
+    PowerPoint => "pptx"
     Excel => "xlsx"
     Pdf => "pdf"
   }
@@ -67,7 +69,7 @@ pub fn Capture::selection_rects(
   let host = @js.Value::cast_from(surface)
   let nodes = elements(
     host,
-    if self.format == Word {
+    if self.format == Word || self.format == PowerPoint {
       ".word-page"
     } else {
       "section[data-sheet]"

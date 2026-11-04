@@ -308,6 +308,8 @@ fn is_office_media_type(media_type : String) -> Bool {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
   media_type ==
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+  media_type ==
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
   media_type == "application/pdf"
 }
 
@@ -352,6 +354,7 @@ async fn read_file_snapshot(
   }
   let target = @resource.join_relative(root, path)
   let reply = @interop.bridge_request(owner.channel, @commands.fs_read_file, {
+    max_bytes: None,
     path: target.path,
     root: None,
   }) catch {

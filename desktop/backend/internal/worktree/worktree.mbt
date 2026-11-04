@@ -979,9 +979,9 @@ fn archive_dirty_path_preview(
       index += 1
       continue
     }
-    let index_status = record.view(end_offset=1)
-    let worktree_status = record.view(start_offset=1, end_offset=2)
-    let path = record.view(start_offset=3).to_owned()
+    let index_status = record.exact_view(end=1)
+    let worktree_status = record.exact_view(start=1, end=2)
+    let path = record.exact_view(start=3).to_owned()
     count += 1
     if paths.length() < limit {
       paths.push(path)

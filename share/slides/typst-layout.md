@@ -1,5 +1,16 @@
 # Typst Layout Guidelines
 
+## Compile with the MoonBit Typst CLI
+
+Run the CLI directly with `moonx moonbitlang/typst/cli`:
+
+```sh
+moonx moonbitlang/typst/cli -- compile slide.typ slide.pdf
+```
+
+Run this from the directory containing `slide.typ`. `moonx` resolves and runs
+the CLI; there is no need to search SDK caches or create a MoonBit project.
+
 ## Paragraph Justification
 
 Enable paragraph justification unless the user explicitly declines it:

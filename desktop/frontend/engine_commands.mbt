@@ -16,6 +16,7 @@ fn apply_engine_action(
   )
   let next = model.replace_conversation({ ..conv, controls, })
   guard command is Some(command) else { return (@cmd.none, next) }
+  guard conv.prompt_ready() else { return (@cmd.none, model) }
   let (next, _) = next.allocate_submission_id()
   (send_session_command(dispatch, next, conv, id, command), next)
 }
@@ -37,9 +38,9 @@ fn send_session_command(
       _ => None
     },
     settings: {
-      moonbit_guide: Some(conv.moonbit_guide),
+      system_prompt: conv.system_prompt,
       session: conv.session_id,
-      model: Some(conv.engine_model.wire()),
+      model: Some(conv.engine_model.to_string()),
       thinking: conv.engine_model.thinking(
         model.reasoning_for(conv.engine_model),
       ),

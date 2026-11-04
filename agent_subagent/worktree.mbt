@@ -80,7 +80,7 @@ fn Launcher::nonce_prefix(self : Launcher) -> String {
   let digest = @crypto.bytes_to_hex_string(
     @crypto.sha256(@utf8.encode(self.children.parent())),
   )
-  "\{digest.view(end_offset=8)}-"
+  "\{digest.exact_view(end=8)}-"
 }
 
 ///|

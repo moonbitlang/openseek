@@ -143,9 +143,13 @@ fn LocalBridgeSub::wire(
     scheduler.add((self.dispatch)(SystemAppearanceChanged))
   })
   // Native browser-view events are intentionally window-local rather than
-  // shared protocol notifications. The parent frontend owns their UI decode.
+  // shared protocol notifications. Decode the shared payload before dispatch;
+  // unknown kinds and malformed events never enter the application's model.
   self.subscribe(extension_events, "openseek.browser.event", event => {
-    guard event_payload(event) is Some(payload) else { return }
+    guard event_payload(event) is Some(fields) else { return }
+    let payload : @protocol.BrowserEventPayload = @json.from_json(Json(fields)) catch {
+      _ => return
+    }
     scheduler.add((self.dispatch)(BrowserEvent(payload~)))
   })
   // Application events use `__MoonBit__.app.on`; keep their command id typed

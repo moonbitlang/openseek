@@ -174,13 +174,15 @@ pub async fn[X] Service::start(
         }
         Some((program, reader.body(headers)))
       }) catch {
-        _ => {
-          send(
-            conn,
-            error_result(
-              "Invalid PTC request: expected bounded HTTP and UTF-8 JSON within 5 seconds; no tool executed",
-            ),
-          )
+        error => {
+          let message = match error {
+            @loopback_http.RequestTooLarge(reason) =>
+              "PTC request too large: \{reason}; no tool executed"
+            @async.TimeoutError =>
+              "PTC request receive timed out after \{AdmissionTimeoutMs / 1000} seconds; no tool executed"
+            _ => "Invalid PTC request: \{error}; no tool executed"
+          }
+          send(conn, error_result(message))
           return
         }
       }

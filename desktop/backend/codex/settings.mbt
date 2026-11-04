@@ -17,13 +17,3 @@ pub struct CodexSettings {
 pub fn CodexSettings::default() -> CodexSettings {
   { command: DefaultCodexCommand, home: None, require_home: false, }
 }
-
-///|
-/// Explicit settings with the given command and isolated home.
-pub fn CodexSettings::CodexSettings(
-  command~ : String,
-  home~ : @pathx.Path?,
-  require_home~ : Bool = false,
-) -> CodexSettings {
-  { command, home, require_home, }
-}

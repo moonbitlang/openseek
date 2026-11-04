@@ -32,7 +32,11 @@ async fn FileSignatureApi::read_text(
   self : FileSignatureApi,
   path : String,
 ) -> (String, String) {
-  let payload : @protocol.ReadFilePayload = { path, root: None, }
+  let payload : @protocol.ReadFilePayload = {
+    path,
+    root: None,
+    max_bytes: None,
+  }
   let reply : @protocol.ReadFileReply = @json.from_json(
     self.read.invoke(payload.to_json()),
   )

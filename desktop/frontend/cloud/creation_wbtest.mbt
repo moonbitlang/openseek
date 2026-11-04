@@ -262,6 +262,7 @@ test "a first command waits for a new observer after a definitive observation fa
     Loaded(1, "session", reopened.conversations["session"].request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [],
       generating: false,
     }),

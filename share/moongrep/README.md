@@ -21,11 +21,12 @@ The same call from a snippet — each argument is its own array element, because
 string:
 
 ```mbtx
-///|
+---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
 }
+---
 
 ///|
 async fn main {

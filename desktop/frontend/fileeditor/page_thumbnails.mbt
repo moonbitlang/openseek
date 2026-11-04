@@ -68,8 +68,12 @@ fn office_pages_command(
   @cmd.batch([
     @office_viewer.page_thumbnails_command(
       config,
-      OfficePageListId,
-      enabled=state.office_pages_open,
+      if config.kind == Some(PowerPoint) {
+        OfficeSlideListId
+      } else {
+        OfficePageListId
+      },
+      enabled=config.kind == Some(PowerPoint) || state.office_pages_open,
       // Root-absolute: the page route never moves the shared resources.
       runtime_url="/assets/page-thumbnails.js",
     ),

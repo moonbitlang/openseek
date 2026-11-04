@@ -752,7 +752,7 @@ these are ordinary command replies, with no transport-level wrapper.
 | method | params | result |
 |---|---|---|
 | `skills.catalog` | `{}` | `{skills: […]}` — the registry's installable skills |
-| `skills.installed` | `{}` | `{skills: […]}` — the global library's contents |
+| `skills.installed` | `{}` | `{skills: […], builtin_errors: [{registry: {module_name, package_path}, message}]}` — the global library and current startup sync failures |
 | `skills.content` | `{module_name, version, package_path?}` | `{content}` — the published SKILL.md |
 | `skills.installed_content` | `{id}` | `{content}` — the installed SKILL.md |
 | `skills.install` | `{module_name, version, package_path?}` | `{installed}` |
@@ -764,6 +764,22 @@ identifying the installed registry skill. Root packages use `package_path: ""`;
 non-registry skills omit `registry`. Every installed entry includes a required
 `enabled: boolean`, derived from its location. Both enabled and disabled entries
 are listed and can be previewed; hand-written entries can also be toggled.
+Every installed entry also includes a required `builtin: boolean`, derived from
+its registry identity and the current host built-in list. Built-in entries can
+be toggled and updated; `skills.uninstall` returns an error directing the user
+to disable them instead. The installed-library success reply includes a required
+`builtin_errors` array (empty on success), whose entries pair a registry identity
+with a startup-sync failure message. These failures coexist with installed
+entries, including an empty library, and clear when the corresponding manual
+installation or update commits.
+
+Each desktop backend checks the built-in list once at startup in a background
+task. It installs missing entries and updates entries whose source differs from
+the catalog. Existing enablement and installation transactions are preserved;
+if a manual install changes the local source during an automatic download, the
+automatic commit is skipped. A failed sync leaves existing installations usable
+and retries at the next startup; users can refresh the market and install or
+update manually while the app remains open.
 
 The Installed update action reuses `skills.install` with the catalog's module,
 package, and displayed version. The trusted registry guarantees that published
@@ -780,7 +796,7 @@ Notification:
 
 | method | params |
 |---|---|
-| `skills.changed` | `{}` — broadcast after an install, update, uninstall, or enablement change commits; every client re-reads `skills.installed`, including clients that did not make the request |
+| `skills.changed` | `{}` — broadcast after a library mutation commits or built-in sync failures change; every client re-reads `skills.installed`, including clients that did not make the request |
 
 ### auth.* — account and independent remote access
 

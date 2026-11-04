@@ -888,7 +888,7 @@ fn Model::update(
             {
               ..target.without_attachment(id),
               image_error: Some(
-                "This model does not support images. Choose PDF, DOCX or XLSX documents.",
+                "This model does not support images. Choose PDF, DOCX, XLSX or PPTX documents.",
               ),
             }
           }
@@ -1373,7 +1373,20 @@ fn Model::subscriptions(
     @sub.every(1000, emit(ClockTicked)),
     self.editing_subscriptions(input, emit),
     changes_dismiss_subscription(self.active(input), emit),
+    followup_back_subscription(self.active(input), emit),
   ])
+}
+
+///|
+/// Back closes the follow-up menu. The menu closes itself when focus leaves
+/// it, so it is never left open under another page or the drawer.
+fn followup_back_subscription(entry : Entry, emit : @cmd.Emit[Msg]) -> @sub.Sub {
+  guard entry.followup_menu_open else { return @sub.none }
+  @dismiss.on_back(
+    "composer-followup-back",
+    level=TopLayer,
+    emit.map((_ : Unit) => FollowupMenuDismissed),
+  )
 }
 
 ///|

@@ -18,7 +18,7 @@ fn reference_file(
   match owner {
     Host(_) => path.path
     Cloud(..) =>
-      path.path.strip_prefix("/").unwrap_or(path.path.view()).to_owned()
+      path.path.strip_prefix("/").unwrap_or(path.path.clamped_view()).to_owned()
   }
 }
 
@@ -106,6 +106,7 @@ async fn read_source(
         raise SourceError("file root moved to another host before file read")
       }
       @interop.bridge_request(owner.channel, @commands.fs_read_file, {
+        max_bytes: None,
         path: path.path,
         root: None,
       }) catch {

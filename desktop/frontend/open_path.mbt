@@ -61,6 +61,26 @@ fn FileOpenContext::new(
 }
 
 ///|
+/// Address a session file through the existing workspace filesystem commands.
+fn Model::session_file_target(
+  self : Model,
+  path : String,
+) -> (@common.Uri, String)? {
+  guard !self.cloud_selected() &&
+    @workspace_file_ref.artifact_path(path) is Some(_) &&
+    self.active_conversation() is Some(conversation) else {
+    return None
+  }
+  @transcript.file_target(
+    Some(conversation.workspace.project()),
+    None,
+    conversation.session_id,
+    conversation.is_archived_read_only(),
+    path,
+  )
+}
+
+///|
 fn request_open_path(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -69,6 +89,30 @@ fn request_open_path(
   annotation? : String,
   return_to? : @interop.ConversationKey,
 ) -> (@cmd.Cmd, Model) {
+  if @workspace_file_ref.artifact_path(path) is Some(_) {
+    guard model.active_checkout() is Some(active) &&
+      model.session_file_target(path) is Some((root, relative)) else {
+      return (@cmd.none, model)
+    }
+    let model = model.begin_editor_navigation()
+    let context = FileOpenContext::new(
+      active.owner,
+      model.file_panel.file_link_generation,
+      range?,
+      annotation?,
+      return_to?,
+    )
+    return (
+      open_file(
+        dispatch,
+        context,
+        root,
+        relative,
+        preview_browser=model.is_desktop,
+      ),
+      model,
+    )
+  }
   guard model.active_checkout() is Some(active) &&
     active.placement is Some(placement) &&
     placement.is_ready() &&

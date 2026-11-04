@@ -6,11 +6,15 @@ import {
 }
 
 // Values
-pub fn system_prompt_for_model(@deepseek.Model, moonbit_guide? : Bool) -> String
+pub fn system_prompt_for_model(@deepseek.Model, prompt? : Prompt) -> String
 
 // Errors
 
 // Types and methods
+pub(all) enum Prompt {
+  BuiltinMoonBitGuide
+  Custom(String)
+} derive(Eq)
 
 // Type aliases
 

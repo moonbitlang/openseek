@@ -39,7 +39,7 @@
   .quick-open-row-text {
     align-items: stretch;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-1);
   }
   .quick-open-name {
     max-width: 100%;
@@ -83,7 +83,7 @@
   .activity-row {
     padding-left: 0;
   }
-  .composer-controls {
+  .composer-toolbar {
     flex-wrap: wrap;
   }
 
@@ -141,7 +141,7 @@
   .setting-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: var(--space-4);
   }
   .setting-control {
     width: 100%;
@@ -166,16 +166,16 @@
   /* Account entry uses the same small-screen layout in ordinary browsers and
      embedded hosts. Keep shell toolbar sizes shared. */
   .portal-inner {
-    padding: 24px 20px;
+    padding: var(--space-7) var(--space-7);
   }
   .portal-card {
-    margin-top: 24px;
-    padding: 20px;
+    margin-top: var(--space-7);
+    padding: var(--space-7);
     align-items: stretch;
   }
   .portal-button-link {
     text-align: center;
-    padding: 14px 16px;
+    padding: 1rem var(--space-6);
   }
   .portal-card > button {
     min-height: 48px;
@@ -193,7 +193,7 @@
   /* Portal: the header wraps instead of overflowing. */
   .portal-header {
     flex-wrap: wrap;
-    gap: 10px;
+    gap: var(--space-5);
   }
 }
 

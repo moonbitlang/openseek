@@ -22,14 +22,14 @@ pub async fn open_external(@protocol.ExternalLinkPayload, allow_file? : Bool) ->
 
 pub fn openseek_capability(@api.ApiState, DesktopBridgeActor, BrowserViews, downloads~ : () -> String raise) -> @moonbit-community/proton/extension.RendererCapability
 
-pub fn view_event_json(Int32, @proton.WebContentsEvent) -> Json?
+pub fn view_event_payload(Int32, @proton.WebContentsEvent) -> @protocol.BrowserEventPayload?
 
 // Errors
 
 // Types and methods
 type BrowserViews
 pub async fn BrowserViews::BrowserViews() -> Self
-pub fn BrowserViews::page_attached(Self, async (Json) -> Unit) -> Unit
+pub fn BrowserViews::page_attached(Self, async (@protocol.BrowserEventPayload) -> Unit) -> Unit
 pub fn BrowserViews::view_event(Self, Int32, @proton.WebContentsEvent) -> Unit
 pub fn BrowserViews::window_closed(Self) -> Unit
 pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit
@@ -37,7 +37,7 @@ pub async fn[T] BrowserViews::with_cdp(Self, Int32, async (@cdp.Connection) -> T
 
 type DesktopBridgeActor
 pub fn DesktopBridgeActor::DesktopBridgeActor(@api.ApiState, askpass? : String?) -> Self
-pub async fn DesktopBridgeActor::notify_browser_event(Self, Json) -> Unit
+pub async fn DesktopBridgeActor::notify_browser_event(Self, @protocol.BrowserEventPayload) -> Unit
 pub async fn DesktopBridgeActor::notify_system_appearance_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::notify_window_chrome_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::run(Self) -> Unit

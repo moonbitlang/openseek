@@ -33,11 +33,9 @@ fn AgentChoice::parse(value : String) -> AgentChoice? {
 ///|
 /// One pick in the unified model chip, encoded into the native select's
 /// option value. Codex ids live in their own namespace so one can never be
-/// mistaken for an OpenSeek tier — `EngineModel::parse` adopts any unknown
-/// string as a custom tier, which is exactly the silent misroute the
-/// prefixes exist to prevent.
+/// mistaken for an OpenSeek model, even when both services use the same name.
 priv enum ModelChoice {
-  OpenSeekModel(EngineModel)
+  OpenSeekModel(@deepseek.Model)
   CodexModel(String)
   // The Codex group's only row while no model catalog is usable. Picking it
   // is a request to open the Codex page, where sign-in and connection state
@@ -57,7 +55,7 @@ const CodexUnavailableChoiceWire = "codex.unavailable"
 ///|
 fn ModelChoice::wire(self : ModelChoice) -> String {
   match self {
-    OpenSeekModel(model) => OpenSeekChoicePrefix + model.wire()
+    OpenSeekModel(model) => OpenSeekChoicePrefix + model.to_string()
     CodexModel(id) => CodexChoicePrefix + id
     CodexUnavailablePick => CodexUnavailableChoiceWire
   }
@@ -69,7 +67,7 @@ fn ModelChoice::parse(value : String) -> ModelChoice? {
     return Some(CodexUnavailablePick)
   }
   if value.strip_prefix(OpenSeekChoicePrefix) is Some(rest) {
-    return EngineModel::parse(rest).map(model => OpenSeekModel(model))
+    return parse_engine_model(rest).map(model => OpenSeekModel(model))
   }
   if value.strip_prefix(CodexChoicePrefix) is Some(rest) {
     let id = rest.to_owned()
@@ -83,10 +81,11 @@ fn ModelChoice::parse(value : String) -> ModelChoice? {
 ///|
 test "model choices round-trip and the agent namespaces stay disjoint" {
   assert_true(
-    ModelChoice::parse("openseek:deepseek-v4-pro") is Some(OpenSeekModel(DsPro)),
+    ModelChoice::parse("openseek:deepseek-v4-pro")
+    is Some(OpenSeekModel(Deepseek(V4Pro))),
   )
   assert_true(
-    ModelChoice::parse("openseek:glm-5.3") is Some(OpenSeekModel(Glm53)),
+    ModelChoice::parse("openseek:glm-5.3") is Some(OpenSeekModel(Glm(G53))),
   )
   // A tier's wire name inside the Codex namespace is a Codex id, never a
   // tier — and a bare wire name belongs to neither agent.
@@ -101,7 +100,7 @@ test "model choices round-trip and the agent namespaces stay disjoint" {
   assert_true(ModelChoice::parse("codex:") is None)
   assert_true(ModelChoice::parse("openseek:") is None)
   inspect(
-    ModelChoice::OpenSeekModel(DsFlash).wire(),
+    ModelChoice::OpenSeekModel(Deepseek(V4Flash)).wire(),
     content="openseek:deepseek-flash",
   )
   inspect(ModelChoice::CodexModel("gpt-5.4").wire(), content="codex:gpt-5.4")
@@ -129,13 +128,13 @@ test "agent choices round-trip their wire names" {
 /// the old selector.
 fn openseek_model_group(
   provider : ApiProvider,
-  selected : EngineModel,
+  selected : @deepseek.Model,
 ) -> @composer.ModelGroup {
-  let listed : Array[EngineModel] = match provider {
-    Deepseek => [DsPro, DsFlash]
-    Glm => [Glm53, Glm53Flash]
-    OpenRouter => [DsPro, DsFlash]
-    Custom => [DsPro, DsFlash, Glm53, Glm53Flash]
+  let listed : Array[@deepseek.Model] = match provider {
+    Deepseek => [Deepseek(V4Pro), Deepseek(V4Flash)]
+    Glm => [Glm(G53), Glm(G53Flash)]
+    OpenRouter => [Deepseek(V4Pro), Deepseek(V4Flash)]
+    Custom => [Deepseek(V4Pro), Deepseek(V4Flash), Glm(G53), Glm(G53Flash)]
   }
   let options = listed.map(model => @composer.ModelOption::{
     value: ModelChoice::OpenSeekModel(model).wire(),
@@ -152,25 +151,25 @@ fn openseek_model_group(
 
 ///|
 test "the model group follows the configured provider" {
-  let deepseek = openseek_model_group(Deepseek, DsPro)
+  let deepseek = openseek_model_group(Deepseek, Deepseek(V4Pro))
   assert_eq(deepseek.options.map(option => option.label), ["DS Pro", "DS Flash"])
-  let glm = openseek_model_group(Glm, Glm53)
+  let glm = openseek_model_group(Glm, Glm(G53))
   assert_eq(glm.options.map(option => option.value), [
     "openseek:glm-5.3", "openseek:glm-5.3-flash",
   ])
-  let openrouter = openseek_model_group(OpenRouter, DsFlash)
+  let openrouter = openseek_model_group(OpenRouter, Deepseek(V4Flash))
   assert_eq(openrouter.options.map(option => option.label), [
     "DS Pro", "DS Flash",
   ])
   // A conversation carried across a provider switch keeps its model visible,
-  // same as an unknown wire name always did.
-  let carried = openseek_model_group(Glm, DsPro)
+  // as before.
+  let carried = openseek_model_group(Glm, Deepseek(V4Pro))
   assert_eq(carried.options.map(option => option.label), [
     "GLM 5.3", "GLM 5.3 Flash", "DS Pro",
   ])
-  let custom = openseek_model_group(Custom, Other("proxy-model"))
+  let custom = openseek_model_group(Custom, Kimi(K27Code))
   assert_eq(custom.options.map(option => option.label), [
-    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "proxy-model",
+    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "kimi-k2.7-code",
   ])
 }
 

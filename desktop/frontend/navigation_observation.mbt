@@ -66,7 +66,8 @@ fn observe_navigation_catalogs(message : Msg, model : Model) -> AppNavigation {
           sessions: Some(Err(message)),
           archived: Some(Err(message)),
         }
-      InstalledSkillsLoaded(_) => { ..model.navigation, skills: Some(Ok(())), }
+      InstalledSkillsLoaded(_, ..) =>
+        { ..model.navigation, skills: Some(Ok(())), }
       InstalledSkillsFailed(message) =>
         { ..model.navigation, skills: Some(Err(message)), }
       _ => model.navigation

@@ -71,8 +71,10 @@ fn message_changes_state(
     },
     subscriptions=(state, block, emit) => {
       if state.open && block.changes_id() is Some(id) {
+        // The message's popup is shown as a popover.
         @review_changes.dismiss_subscription(
           id,
+          level=TopLayer,
           emit.map(restore_focus => Dismiss(restore_focus~)),
         )
       } else {

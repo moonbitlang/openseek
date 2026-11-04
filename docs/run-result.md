@@ -55,7 +55,7 @@ one request from stdin instead:
 | --- | --- | --- |
 | `version` | integer | Always `1`. |
 | `request_id` | string, optional | The caller's name for the request, echoed in the result. |
-| `kind` | string, optional | A preset (`explore`, `review`, `worker`, `pattern-repair`, `echo`) or `general`. Absent means `general`. |
+| `kind` | string, optional | A preset (`explore`, `review`, `approval`, `worker`, `pattern-repair`, `echo`) or `general`. Absent means `general`. |
 | `input` | any JSON | `{"task": string}` for a general run; the preset's own input otherwise (the `moonbitlang/workflow` child contract lists each preset's input and report). |
 | `limits.max_steps` | integer ≥ 1, optional | The step ceiling for this request. |
 

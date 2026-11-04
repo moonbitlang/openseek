@@ -8,6 +8,9 @@ import {
 // Values
 
 // Errors
+pub suberror RequestTooLarge {
+  RequestTooLarge(String)
+}
 
 // Types and methods
 type RequestReader

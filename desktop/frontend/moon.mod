@@ -7,7 +7,7 @@ import {
   "moonbit-community/cmark@0.4.11",
   "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/rabbita@0.16.4",
-  "Lampese/office-viewer@0.2.5",
+  "Lampese/office-viewer@0.2.6",
   "moonbitlang/editor@0.4.6",
   "moonbitlang/x@0.5.5",
   "moonbitlang/openseek@0.7.3",

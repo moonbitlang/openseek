@@ -39,7 +39,7 @@ pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) 
 // Errors
 
 // Types and methods
-pub(all) enum CommandInput {
+pub enum CommandInput {
   Native(@openseek_protocol.Command)
   Terminal(@composer.ShellCommand?)
   Prompt(content~ : @openseek_protocol.Content, draft~ : @composer.Draft, attachments~ : Array[@protocol.AttachmentSource])
@@ -61,7 +61,7 @@ pub struct ControlInput {
 pub fn ControlInput::equal(Self, Self) -> Bool
 pub fn ControlInput::not_equal(Self, Self) -> Bool
 
-pub(all) enum ControlOperation {
+pub enum ControlOperation {
   Stop
   Steer(submission_id~ : String, content~ : @openseek_protocol.Content)
   QueueAdd(id~ : String, content~ : @openseek_protocol.Content)
@@ -72,14 +72,14 @@ pub(all) enum ControlOperation {
 pub fn ControlOperation::equal(Self, Self) -> Bool
 pub fn ControlOperation::not_equal(Self, Self) -> Bool
 
-pub(all) enum ControlResult {
+pub enum ControlResult {
   Accepted
   Rejected(String)
 } derive(Eq)
 pub fn ControlResult::equal(Self, Self) -> Bool
 pub fn ControlResult::not_equal(Self, Self) -> Bool
 
-pub(all) enum ControlRunStatus {
+pub enum ControlRunStatus {
   Idle
   Running
   Stopping
@@ -89,7 +89,7 @@ pub fn ControlRunStatus::from_json(Json, @json.JsonPath) -> Self raise @json.Jso
 pub fn ControlRunStatus::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for ControlRunStatus
 
-pub(all) struct ControlSnapshot {
+pub struct ControlSnapshot {
   session_id : String
   task_id : String?
   seq : Int32
@@ -100,7 +100,7 @@ pub fn ControlSnapshot::from_json(Json, @json.JsonPath) -> Self raise @json.Json
 pub fn ControlSnapshot::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for ControlSnapshot
 
-pub(all) struct ControlState {
+pub struct ControlState {
   active_task_id : String?
   status : ControlRunStatus
   paused : Bool
@@ -114,7 +114,7 @@ pub fn ControlState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDec
 pub fn ControlState::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for ControlState
 
-pub(all) enum ControlStreamEvent {
+pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
   NativeEvent(EngineFrame)
@@ -125,6 +125,11 @@ pub fn ControlStreamEvent::not_equal(Self, Self) -> Bool
 
 pub(all) struct Conversation {
   records : Array[Record]
+  history_cached : Bool
+  history_etag : String?
+  history_reading : Bool
+  history_resume_baseline : (String?, Int32?)?
+  history_refresh_after_read : Bool
   events : Array[Event]
   document : @protocol.SessionDocument
   prediction : @openseek_protocol.PredictionRecord?
@@ -176,7 +181,7 @@ pub struct Creation {
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool
 
-pub(all) struct EngineFrame {
+pub struct EngineFrame {
   session_id : String
   task_id : String?
   seq : Int32
@@ -196,13 +201,14 @@ pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 
 pub(all) struct History {
+  etag : String?
   prediction : @openseek_protocol.PredictionRecord?
   session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
 }
 
-pub(all) struct MetadataSave {
+pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
@@ -230,6 +236,7 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
+  HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, @cloud_client.Failure)
   WatchOpened(Int32, String, StreamLease)
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
@@ -258,7 +265,7 @@ pub struct PendingCommand {
 pub fn PendingCommand::equal(Self, Self) -> Bool
 pub fn PendingCommand::not_equal(Self, Self) -> Bool
 
-pub(all) struct QueueEntry {
+pub struct QueueEntry {
   id : String
   content : @openseek_protocol.Content
 } derive(Eq)
@@ -294,6 +301,14 @@ pub(all) enum SessionEdit {
 pub fn SessionEdit::equal(Self, Self) -> Bool
 pub fn SessionEdit::not_equal(Self, Self) -> Bool
 
+pub(all) enum SessionListStatus {
+  Idle
+  Retrying
+  Failed
+} derive(Eq)
+pub fn SessionListStatus::equal(Self, Self) -> Bool
+pub fn SessionListStatus::not_equal(Self, Self) -> Bool
+
 pub(all) struct State {
   user_id : String?
   epoch : Int32
@@ -302,6 +317,7 @@ pub(all) struct State {
   conversations : Map[String, Conversation]
   sequence : Int32
   list_request : Int32
+  list_status : SessionListStatus
   deletions : Map[String, Int32]
   metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
@@ -320,7 +336,7 @@ pub fn State::is_archived(Self, String) -> Bool
 pub fn State::mark_read(Self, String) -> Self
 pub fn State::not_equal(Self, Self) -> Bool
 
-pub(all) struct SteerReceipt {
+pub struct SteerReceipt {
   submission_id : String
   status : SteerStatus
 } derive(Eq)
@@ -329,7 +345,7 @@ pub fn SteerReceipt::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDec
 pub fn SteerReceipt::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for SteerReceipt
 
-pub(all) enum SteerStatus {
+pub enum SteerStatus {
   Pending
   Applied
   Dropped

@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
+---
 
 ///|
 /// The real CLI, started in a plain directory holding two repositories,
@@ -94,10 +95,12 @@ fn parent_turn(messages : String, repos : Array[String]) -> Json {
 ///|
 /// The script a worker puts a committed file back with: plain git.
 let restore : String =
+  #|---
   #|import {
   #|  "moonbitlang/async",
   #|  "moonbitlang/async/shell",
   #|}
+  #|---
   #|
   #|async fn main {
   #|  let code = @shell.Cmd("git", ["restore", "lib/a.txt"]).each_line(line => println(line))

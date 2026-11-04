@@ -187,6 +187,13 @@ async test "single edit waits for the submitted message before deleting its sour
     .append(User(UserMessage(Content([Text("original")]))))
     .append(Terminal(Finished("answer")))
   store.create(source)
+  let custom_prompt = "  Custom instructions\n中文\n"
+  @fsx.write_text_atomic(
+    @pathx.Path(store.session_file(SessionId("source")))
+    .dirname()
+    .join("system-prompt.md"),
+    custom_prompt,
+  )
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
   let payload : @protocol.SessionEditPayload = {
@@ -230,6 +237,7 @@ async test "single edit waits for the submitted message before deleting its sour
       payload,
       start=start => {
         assert_eq(start.task, "edited")
+        assert_eq(start.system_prompt, Some(custom_prompt))
         ignore(
           group.spawn(() => {
             @async.sleep(40)
@@ -239,7 +247,7 @@ async test "single edit waits for the submitted message before deleting its sour
               store.append(
                 Session(
                   SessionId(start.session),
-                  system_prompt="configured prompt",
+                  system_prompt=start.system_prompt.unwrap(),
                 ),
                 User(
                   UserMessage(
@@ -261,7 +269,7 @@ async test "single edit waits for the submitted message before deleting its sour
     assert_false(store.exists(SessionId("source")))
     assert_eq(
       store.load(SessionId(reply.session)).system_prompt(),
-      "configured prompt",
+      custom_prompt,
     )
   })
 }

@@ -23,7 +23,12 @@ test "SkillsCatalogReply owns its success and error wire shapes" {
 
 ///|
 test "InstalledSkillsReply owns its success and error wire shapes" {
-  let success : @protocol.InstalledSkillsReply = InstalledSkills([])
+  let success : @protocol.InstalledSkillsReply = InstalledSkills([], builtin_errors=[
+    {
+      registry: { module_name: "acme/tools", package_path: "widget", },
+      message: "Registry unavailable",
+    },
+  ])
   let decoded : @protocol.InstalledSkillsReply = @json.from_json(
     success.to_json(),
   )
@@ -33,7 +38,15 @@ test "InstalledSkillsReply owns its success and error wire shapes" {
     "unknown": true,
   })
   assert_eq(failure.to_json(), { "error": "HTTP 404" })
-  for malformed in [null, { "error": null }, { "error": 42 }, {}] {
+  for
+    malformed in [
+      null,
+      { "error": null },
+      { "error": 42 },
+      {},
+      { "skills": [] },
+      { "skills": [], "builtin_errors": null },
+    ] {
     try {
       let _ : @protocol.InstalledSkillsReply = @json.from_json(malformed)
     } catch {
@@ -45,21 +58,33 @@ test "InstalledSkillsReply owns its success and error wire shapes" {
 }
 
 ///|
-test "InstalledSkillsReply preserves a disabled entry" {
+test "InstalledSkillsReply preserves independent builtin and enabled flags" {
   let disabled : @protocol.InstalledSkill = {
-    id: "handmade",
-    name: "handmade",
+    id: "office",
+    name: "office-cli",
     description: "",
-    source: "",
-    registry: None,
+    source: "moonbitlang/office@1.0.0",
+    registry: Some({ module_name: "moonbitlang/office", package_path: "", }),
+    builtin: true,
     enabled: false,
   }
-  let reply : @protocol.InstalledSkillsReply = InstalledSkills([disabled])
+  let reply : @protocol.InstalledSkillsReply = InstalledSkills([disabled], builtin_errors=[])
   let decoded : @protocol.InstalledSkillsReply = @json.from_json(
     reply.to_json(),
   )
   assert_eq(decoded, reply)
-  assert_true(decoded is InstalledSkills([entry]) && !entry.enabled)
+  assert_true(
+    decoded is InstalledSkills([entry], ..) && entry.builtin && !entry.enabled,
+  )
+  guard disabled.to_json() is Object(fields) else { fail("expected an object") }
+  fields.remove("builtin")
+  try {
+    let _ : @protocol.InstalledSkill = @json.from_json(Json(fields))
+  } catch {
+    JsonDecodeError(_) => ()
+  } noraise {
+    _ => fail("missing builtin status must be rejected")
+  }
 }
 
 ///|
@@ -70,6 +95,7 @@ test "InstallSkillReply owns its success and error wire shapes" {
     description: "test",
     source: "acme/test@1.0.0",
     registry: Some({ module_name: "acme/test", package_path: "", }),
+    builtin: false,
     enabled: true,
   })
   let decoded : @protocol.InstallSkillReply = @json.from_json(success.to_json())

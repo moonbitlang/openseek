@@ -18,6 +18,7 @@ import {
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/viewer/html" @syntax_html,
   "openseek_desktop/frontend/files",
+  "openseek_desktop/frontend/dismiss",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/labels",
   "openseek_desktop/frontend/interop",

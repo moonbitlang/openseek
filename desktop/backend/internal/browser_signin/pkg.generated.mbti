@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/browser_signin"
+
+// Values
+pub fn sign_in_markup(String, return_to~ : String) -> String
+
+// Errors
+
+// Types and methods
+type Flow
+pub fn Flow::Flow(relay~ : String, port~ : Int32) -> Self
+pub fn Flow::begin(Self, String?) -> String raise
+pub async fn Flow::finish(Self, String?, String?, String?) -> Result[String, (Int32, String)]
+
+// Type aliases
+
+// Traits

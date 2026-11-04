@@ -1,0 +1,163 @@
+---
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+---
+
+///|
+/// The real CLI under `--approval review`: the model asks `remove` to delete
+/// a file the agent did not create, which needs approval, and a real
+/// `run --kind approval` child answers instead of a person. One local server
+/// scripts the parent AND the child (it reaches the server through the
+/// forwarded --api-url); the child is told apart by its `submit_verdict`
+/// tool. The child's verdict decides whether the file is gone, and the child
+/// saw the user's own words.
+fn tool_call(id : String, name : String, args : Json) -> Json {
+  {
+    "tool_calls": [
+      {
+        "index": 0,
+        "id": id,
+        "type": "function",
+        "function": { "name": name, "arguments": args.stringify() },
+      },
+    ],
+  }
+}
+
+///|
+fn tool_names(request : Json) -> Array[String] {
+  guard request is { "tools": Array(tools), .. } else { return [] }
+  tools.filter_map(tool => {
+    match tool {
+      { "function": { "name": String(name), .. }, .. } => Some(name)
+      _ => None
+    }
+  })
+}
+
+///|
+let user_task : String = "Delete notes.txt, it is stale."
+
+///|
+/// One run of the real CLI; `decision` is what the reviewer submits.
+async fn run_case(executable : String, decision~ : String) -> Unit {
+  let directory = @fs.tmpdir(prefix="openseek-approval-review-")
+  defer @fs.rmdir(directory, recursive=true)
+  let store_root = directory + "/store"
+  let workspace = directory + "/ws"
+  @fs.mkdir(workspace, recursive=true)
+  @fs.write_file(workspace + "/notes.txt", "old notes\n")
+  let reviews : Array[String] = []
+  @async.with_timeout(240000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      group.spawn_bg(no_wait=true) <| () => {
+        server.run_forever(
+          (_, body, conn) => {
+            let request = @json.parse(body.read_all().text())
+            // Auxiliary non-streaming requests get a fixed answer.
+            if !(request is { "stream": True, .. }) {
+              conn.send_response(200, "OK", extra_headers={
+                "Content-Type": "application/json",
+              })
+              let response : Json = {
+                "choices": [{ "message": { "content": "{\"text\":null}" } }],
+              }
+              conn.write(response.stringify())
+              conn.end_response()
+              conn.close()
+              return
+            }
+            let messages = request.stringify()
+            let delta = if tool_names(request).contains("submit_verdict") {
+              reviews.push(messages)
+              tool_call("verdict", "submit_verdict", {
+                "decision": decision,
+                "reason": "scripted \{decision}",
+              })
+            } else if messages.contains("\"tool_call_id\":\"remove\"") {
+              tool_call("done", "finish", { "answer": "removal attempted" })
+            } else {
+              tool_call("remove", "remove", {
+                "path": "notes.txt",
+                "reason": "the user asked to delete it",
+              })
+            }
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            let payload : Json = { "choices": [{ "delta": delta }] }
+            conn.write("data: \{payload.stringify()}\n\ndata: [DONE]\n\n")
+            conn.end_response()
+            conn.close()
+          },
+          max_connections=16,
+          allow_failure=false,
+        )
+      }
+      let (reader, child_stdout) = @process.read_from_process()
+      defer reader.close()
+      let (errors, child_stderr) = @process.read_from_process()
+      defer errors.close()
+      let process = @process.spawn(
+        group,
+        executable,
+        [
+          "run", "--dir", workspace, "--api-key", "test-key", "--model", "deepseek-flash",
+          "--api-url", "http://127.0.0.1:\{server.addr.port()}/chat/completions",
+          "--max-steps", "6", "--mcp-config", "", "--approval", "review", "--session",
+          "parent", "--session-root", store_root, user_task,
+        ],
+        extra_env={ "OPENSEEK_RETRY_ATTEMPTS": "1" },
+        stdout=child_stdout,
+        stderr=child_stderr,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout = group.spawn(() => reader.read_all().text())
+      let stderr = group.spawn(() => errors.read_all().text())
+      let code = process.wait()
+      let out = stdout.wait()
+      let err = stderr.wait()
+      guard code == 0 else { fail("CLI exit \{code}\nstdout: \{out}\nstderr: \{err}") }
+      assert_true(out.contains("removal attempted"), msg="stdout: \{out}\nstderr: \{err}")
+      server.close()
+    })
+  })
+  // One question, one reviewer, and it read the ask and the user's words.
+  guard reviews is [review] else {
+    fail("expected one review request, got \{reviews.length()}")
+  }
+  assert_true(review.contains("notes.txt"), msg=review)
+  assert_true(review.contains(user_task), msg=review)
+  let removed = !@fs.exists(workspace + "/notes.txt")
+  assert_eq(removed, decision == "allow")
+  let sessions = @fs.readdir(store_root + "/sessions", sort=true)
+  assert_eq(sessions, ["parent", "parent-sr-1"])
+  // The reviewer's own transcript records the verdict it reached.
+  let transcript = @fs.read_file(
+    store_root + "/sessions/parent-sr-1/openseek_session-parent-sr-1.jsonl",
+  ).text()
+  assert_true(
+    transcript.contains("verdict submitted: \{decision}"),
+    msg=transcript,
+  )
+}
+
+///|
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/approval_review.mbtx EXE")
+  }
+  let executable = @fs.realpath(executable)
+  run_case(executable, decision="allow")
+  println("PASS: a reviewer's allow lets remove delete the file")
+  run_case(executable, decision="deny")
+  println("PASS: a reviewer's deny keeps the file")
+}

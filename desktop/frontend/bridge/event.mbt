@@ -19,7 +19,7 @@ pub enum Event {
     token~ : String
   )
   SystemAppearanceChanged
-  BrowserEvent(payload~ : Map[String, Json])
+  BrowserEvent(payload~ : @protocol.BrowserEventPayload)
   MenuCommand(command_id~ : String)
   NotificationClicked(run_id~ : String)
 }

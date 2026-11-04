@@ -1,0 +1,24 @@
+import {
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_kind",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/mbtx",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/json",
+} for "test"
+
+dev_build(
+  rule: "md_to_mbt_string",
+  input: "approval_system_prompt.mbt.md",
+  output: "generated_approval_system_prompt.mbt",
+)
+
+supported_targets = "+wasm+native"

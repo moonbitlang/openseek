@@ -7,6 +7,7 @@ import {
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/editor/syntax/lang_moonbit",
   "moonbitlang/editor/viewer/html" @syntax_html,
+  "openseek_desktop/frontend/dismiss",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/mention_context",
 }

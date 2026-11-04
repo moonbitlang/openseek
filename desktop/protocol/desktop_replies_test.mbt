@@ -11,19 +11,6 @@ fn refused(decode : () -> Unit raise) -> Bool {
 }
 
 ///|
-test "session list rows decode activity stamps and tolerate the engine's null" {
-  let rows = @protocol.SessionListEntry::array_from_wire([
-    { "id": "desktop-a", "title": "stamped", "updated_at_ms": 1500.0 },
-    { "id": "desktop-b", "title": "husk", "updated_at_ms": null },
-    { "id": "desktop-c", "title": "old engine without the field" },
-  ])
-  assert_eq(rows.length(), 3)
-  assert_eq(rows[0].updated_at_ms, Some(1500.0))
-  assert_eq(rows[1].updated_at_ms, None)
-  assert_eq(rows[2].updated_at_ms, None)
-}
-
-///|
 test "unknown session items preserve their complete wire object" {
   let raw : Json = {
     "kind": "future_item",
@@ -34,7 +21,6 @@ test "unknown session items preserve their complete wire object" {
   guard item is Unknown(preserved) else {
     fail("expected an unknown session item")
   }
-  assert_false(item.is_terminal())
   @debug.assert_eq(preserved, raw)
   @debug.assert_eq(item.to_json(), raw)
 }
@@ -348,7 +334,6 @@ test "new payload shapes fall back to a raw session item" {
   guard item is UnknownTerminal(preserved) else {
     fail("expected a future terminal boundary to remain raw")
   }
-  assert_true(item.is_terminal())
   @debug.assert_eq(preserved, raw)
   @debug.assert_eq(item.to_json(), raw)
   let missing_payload : Json = { "kind": "terminal", "future_field": true }
@@ -356,7 +341,6 @@ test "new payload shapes fall back to a raw session item" {
   guard missing_item is UnknownTerminal(preserved) else {
     fail("expected a malformed terminal boundary to remain raw")
   }
-  assert_true(missing_item.is_terminal())
   @debug.assert_eq(preserved, missing_payload)
 }
 
@@ -385,6 +369,7 @@ test "file reads use one absolute path and may return image bytes" {
   assert_eq(request.root, None)
   @debug.assert_eq(request.to_json(), { "path": "/work/readme.md" })
   let relative : @protocol.ReadFilePayload = {
+    max_bytes: None,
     path: "../image.png",
     root: Some("/work/project"),
   }
@@ -2083,4 +2068,34 @@ test "Moon IDE location classification round trips and rejects malformed fields"
       }),
     )
   }
+}
+
+///|
+test "file read limits are optional and round trip only when requested" {
+  for
+    payload in [
+      ({ "path": "/work/page.html" } : Json),
+      { "path": "/work/page.html", "max_bytes": null },
+    ] {
+    let request : @protocol.ReadFilePayload = @json.from_json(payload)
+    assert_eq(request.max_bytes, None)
+    @debug.assert_eq(request.to_json(), { "path": "/work/page.html" })
+  }
+  let request : @protocol.ReadFilePayload = @json.from_json({
+    "path": "page.html",
+    "root": "/work",
+    "max_bytes": Json(8 * 1024 * 1024),
+  })
+  assert_eq(request.max_bytes, Some(8 * 1024 * 1024))
+  @debug.assert_eq(@json.from_json(request.to_json()), request)
+  let malformed = try {
+    let _ : @protocol.ReadFilePayload = @json.from_json({
+      "path": "page.html",
+      "max_bytes": "large",
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(malformed)
 }

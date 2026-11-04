@@ -289,6 +289,9 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
     source=content.source,
     focused=self.focused,
     active_session=content.session,
+    archived=conversation
+      .map(conv => conv.is_archived_read_only())
+      .unwrap_or(false),
     scroll=self.remembered_scroll(),
     project_label?=content.project.bind(project => {
       self.project_display_label(project)

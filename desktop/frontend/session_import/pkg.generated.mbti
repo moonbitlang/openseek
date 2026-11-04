@@ -31,28 +31,18 @@ pub(all) enum Msg {
   LinkChanged(String)
   ImportLink
   Picked(Int32, Result[String?, String])
-  WorkspaceChanged(Int32, Workspace)
   Imported(Int32, @protocol.SessionImportReply)
 }
 
 pub(all) struct Target {
   channel : @interop.ChannelId
   connection_generation : Int32
-  workspace : Workspace
+  workspace : String
   worktree_of : String?
 } derive(Eq, @debug.Debug)
 pub fn Target::equal(Self, Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool
 pub fn Target::to_repr(Self) -> @debug.Repr
-
-pub(all) enum Workspace {
-  Unplaced
-  Allocated(String)
-  Registered(String)
-} derive(Eq, @debug.Debug)
-pub fn Workspace::equal(Self, Self) -> Bool
-pub fn Workspace::not_equal(Self, Self) -> Bool
-pub fn Workspace::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

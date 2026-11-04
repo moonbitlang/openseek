@@ -114,7 +114,11 @@ test "share request requires explicit authority and rejects account tokens as up
 ///|
 test "file share requests preserve owner-side paths and explicit upload authority" {
   let request : @protocol.FileSharePayload = {
-    source: { root: Some("/workspace"), path: "docs/报告.bin", },
+    source: {
+      max_bytes: None,
+      root: Some("/workspace"),
+      path: "docs/报告.bin",
+    },
     idempotency_key: "a".repeat(64),
     authorization: UploadGrant(upload_token="sug_fixture"),
   }

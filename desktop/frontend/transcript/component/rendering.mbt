@@ -544,11 +544,12 @@ fn Block::render(
   changes? : @review_changes.Control,
   editor? : @html.Html,
   begin_edit~ : @cmd.Cmd,
+  artifact_view? : (String, String) -> @html.Html,
 ) -> @html.Html {
   let on_open = path => (actions.open)(path)
   match self.content {
     Empty(empty) => empty.render(locale~, actions)
-    Minimal(content) => content.render(locale~, actions)
+    Minimal(content) => content.render(locale~, actions, artifact_view?)
     Item(
       item~,
       anchor~,
@@ -560,6 +561,7 @@ fn Block::render(
       edit~
     ) =>
       transcript_item_view(
+        artifact_view?,
         locale~,
         item,
         on_open,
@@ -579,6 +581,7 @@ fn Block::render(
       )
     Live(prose~, reasoning~, reasoning_complete~, step_label~, assistant_name~) =>
       assistant_view(
+        artifact_view?,
         locale~,
         on_open,
         prose?,

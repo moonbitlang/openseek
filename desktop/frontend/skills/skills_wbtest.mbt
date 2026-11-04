@@ -6,6 +6,7 @@ fn wb_skill(enabled~ : Bool, name~ : String = "widget") -> InstalledItem {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    builtin: false,
     enabled,
   }
 }

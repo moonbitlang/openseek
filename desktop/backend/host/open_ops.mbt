@@ -392,7 +392,7 @@ const CodexConfigHeader : String = "# Codex configuration for this desktop's COD
 /// missing so the Settings button works on a fresh home before Codex writes
 /// anything. Without an isolated home the CLI's own resolution applies: the
 /// inherited `CODEX_HOME`, or `~/.codex`.
-pub async fn ensure_codex_config(home : @pathx.Path?) -> String {
+async fn ensure_codex_config(home : @pathx.Path?) -> String {
   let home_path : @pathx.Path = match home {
     Some(home) => home
     None =>
@@ -428,13 +428,4 @@ pub async fn open_codex_config(home : @pathx.Path?) -> Unit {
     error => raise HostError("Could not open \{config}: \{error}")
   }
   guard code == 0 else { raise HostError("Could not open \{config}") }
-}
-
-///|
-/// Route a local desktop file click, including targets for the native browser.
-/// Bound only on the window so a remote path cannot become a local file URL.
-pub async fn open_path_preview(
-  payload : @protocol.OpenPathPayload,
-) -> @protocol.OpenPathReply {
-  open_path_op(payload, preview_browser=true)
 }

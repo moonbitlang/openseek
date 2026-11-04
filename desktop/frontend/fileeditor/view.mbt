@@ -412,6 +412,23 @@ pub fn body_view(
       None => empty_office_surface_config(state)
     },
   )
+  let presentation = office_document is Some({ kind: Some(PowerPoint), .. })
+  let office_surface = @html.div(
+    class=if presentation {
+      "office-surface-layout office-presentation-layout"
+    } else {
+      "office-surface-layout"
+    },
+    [
+      @html.nav(
+        class="office-slide-rail",
+        hidden=!presentation,
+        attrs=@html.Attrs::build().aria_label(ui(locale, OfficePages)),
+        [@office_viewer.render_page_thumbnails(OfficeSlideListId)],
+      ),
+      office_surface,
+    ],
+  )
   let image_surface = @html.div(
     class=if use_image_surface {
       "viewer-host file-image-preview"
@@ -506,6 +523,8 @@ pub fn body_view(
             .map(key => key.key() == "Escape")
             .unwrap_or(false) &&
             state.pending_excel_selection(ctx) is Some(preview) {
+            // Clearing the selection spends this Escape; it closes no layer.
+            event.prevent_default()
             dispatch(ExcelSelectionCleared(preview))
           } else {
             @cmd.none
@@ -2231,7 +2250,7 @@ fn office_viewer_toolbar(
           "↔",
         )
       },
-      if pdf {
+      if pdf || config.kind == Some(PowerPoint) {
         @html.nothing
       } else {
         @html.button(

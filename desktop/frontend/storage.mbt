@@ -19,13 +19,6 @@ fn load_saved_settings(
     scheduler.add(load_language(is_desktop~, dispatch))
     scheduler.add(
       dispatch(
-        MoonBitGuideDefaultLoaded(
-          load_setting(MoonBitGuideStorageKey) != Some("false"),
-        ),
-      ),
-    )
-    scheduler.add(
-      dispatch(
         SettingsLoaded(
           notification_corner=load_setting(NotificationCornerStorageKey),
           tree_layout=load_setting(TreeLayoutStorageKey),
@@ -96,8 +89,8 @@ fn save_fps_overlay(enabled : Bool) -> @cmd.Cmd {
 
 ///|
 /// Persist the tier new conversations start from.
-fn save_default_model(model : EngineModel) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => save_setting(ModelStorageKey, model.wire()))
+fn save_default_model(model : @deepseek.Model) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(ModelStorageKey, model.to_string()))
 }
 
 ///|
@@ -146,14 +139,14 @@ fn OpenSeekReasoning::save_for_glm(self : OpenSeekReasoning) -> @cmd.Cmd {
 ///
 /// The list is written as an array, not an object: newest first is the cap's
 /// eviction order, which an object's key order would not promise.
-fn save_conversation_model(key : String, model : EngineModel) -> @cmd.Cmd {
+fn save_conversation_model(key : String, model : @deepseek.Model) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     let stored = load_setting(ConversationModelsStorageKey)
       .map(parse_conversation_models)
       .unwrap_or([])
     let rows : Array[Json] = remembered_with(stored, key, model).map(entry => {
       "key": Json(entry.key),
-      "model": Json(entry.model.wire()),
+      "model": Json(entry.model.to_string()),
     })
     save_setting(ConversationModelsStorageKey, Json(rows).stringify())
   })
@@ -177,8 +170,8 @@ fn save_conversation_approval(
 }
 
 ///|
-/// Read the reviewed list back; anything that will not parse degrades to
-/// remembering nothing, which is every conversation asking.
+/// Read the asking list back; anything that will not parse degrades to
+/// remembering nothing, which is every conversation auto-reviewed.
 fn parse_conversation_approvals(text : String) -> Array[String] {
   let keys : Array[String] = []
   guard !text.is_blank() else { return keys }
@@ -208,7 +201,7 @@ fn parse_conversation_models(text : String) -> Array[StoredConversationModel] {
       fields.get("key") is Some(String(key)) &&
       !key.is_empty() &&
       fields.get("model") is Some(String(wire)) &&
-      EngineModel::parse(wire) is Some(model) {
+      parse_engine_model(wire) is Some(model) {
       entries.push({ key, model, })
     }
   }
@@ -257,9 +250,4 @@ fn save_minimal_transcript(enabled : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     save_setting(MinimalTranscriptStorageKey, enabled.to_string())
   })
-}
-
-///|
-fn save_default_moonbit_guide(enabled : Bool) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => save_setting(MoonBitGuideStorageKey, enabled.to_string()))
 }

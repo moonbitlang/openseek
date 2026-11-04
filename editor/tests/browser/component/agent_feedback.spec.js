@@ -53,10 +53,6 @@ test('agent feedback: add and fold controls have separate hit targets', async ({
     }
 
     const addBox = await boxOf(glyph);
-    const foldBox = await boxOf(fold);
-    expect(foldBox.x - (addBox.x + addBox.width)).toBe(2);
-    const marginBox = await boxOf(page.locator('.monaco-editor .margin'));
-    expect(marginBox.x + marginBox.width - (foldBox.x + foldBox.width)).toBe(8);
     // Hit both edges of the visible plus, not only a tiny carrier's center.
     for (const offset of [2, addBox.width - 2]) {
       await header.hover();

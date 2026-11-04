@@ -53,6 +53,7 @@ pub(all) struct InstalledItem {
   source : String
   registry : @protocol.RegistrySkillIdentity?
   enabled : Bool
+  builtin : Bool
 } derive(Eq)
 pub fn InstalledItem::equal(Self, Self) -> Bool
 pub fn InstalledItem::not_equal(Self, Self) -> Bool
@@ -121,6 +122,7 @@ pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::open_detail(Self, @cmd.Emit[Msg], Input, Detail) -> (@cmd.Cmd, Self, DetailResolution)
 pub fn State::opening(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
 pub fn State::sync_library(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
+pub fn State::with_builtin_errors(Self, @interop.ChannelId, Array[@protocol.BuiltinSkillError]) -> Self
 pub fn State::with_library_error(Self, String) -> Self
 
 // Type aliases

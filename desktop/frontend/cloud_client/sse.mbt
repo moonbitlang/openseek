@@ -13,7 +13,7 @@ pub fn SseParser::new() -> SseParser {
 
 ///|
 pub fn SseParser::line(self : SseParser, raw : String) -> (String, String)? {
-  let line = raw.strip_suffix("\r").unwrap_or(raw.view())
+  let line = raw.strip_suffix("\r").unwrap_or(raw.clamped_view())
   if line.is_empty() {
     let event = if self.event.is_empty() { "message" } else { self.event }
     let data = self.data
@@ -23,7 +23,7 @@ pub fn SseParser::line(self : SseParser, raw : String) -> (String, String)? {
   }
   let (field, value) = match line.split_once(":") {
     Some((field, value)) => (field, value.strip_prefix(" ").unwrap_or(value))
-    None => (line, "".view())
+    None => (line, "".clamped_view())
   }
   match field {
     "event" => self.event = value.to_owned()

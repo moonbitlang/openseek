@@ -273,60 +273,49 @@ fn Entry::attachment_confirmations(
   self : Entry,
   locale : @i18n.Locale,
   emit : @cmd.Emit[Msg],
-) -> Array[@html.Html] {
+) -> Array[(Int32, @html.Html)] {
   self.attachment_requests.filter_map(request => {
-    match request.phase {
-      AttachmentStaged(_) => None
+    let confirmation = match request.phase {
+      AttachmentStaged(_) => return None
       AttachmentConfirming(name~) =>
-        Some(
-          @html.div(
-            class="composer-context-row composer-attachment-confirm",
-            attrs=@html.Attrs::build()
-              .role("group")
-              .aria_label(ui(locale, UploadAttachment)),
-            [
-              @html.div(class="composer-attachment-name", name),
-              @html.div(
-                class="composer-attachment-question",
-                ui(locale, UploadAttachmentQuestion),
+        @html.div(
+          class="composer-context-row composer-attachment-confirm",
+          attrs=@html.Attrs::build()
+            .role("group")
+            .aria_label(ui(locale, UploadAttachment)),
+          [
+            @html.div(class="composer-attachment-name", name),
+            @html.div(
+              class="composer-attachment-question",
+              ui(locale, UploadAttachmentQuestion),
+            ),
+            @html.div(class="composer-attachment-actions", [
+              @html.button(
+                type_="button",
+                class="composer-goal-action",
+                on_click=emit(
+                  AttachmentConfirmed(self.identity(), request.root, request.id),
+                ),
+                ui(locale, UploadAttachment),
               ),
-              @html.div(class="composer-attachment-actions", [
-                @html.button(
-                  type_="button",
-                  class="composer-goal-action",
-                  on_click=emit(
-                    AttachmentConfirmed(
-                      self.identity(),
-                      request.root,
-                      request.id,
-                    ),
-                  ),
-                  ui(locale, UploadAttachment),
+              @html.button(
+                type_="button",
+                class="composer-goal-action",
+                on_click=emit(
+                  AttachmentCancelled(self.identity(), request.root, request.id),
                 ),
-                @html.button(
-                  type_="button",
-                  class="composer-goal-action",
-                  on_click=emit(
-                    AttachmentCancelled(
-                      self.identity(),
-                      request.root,
-                      request.id,
-                    ),
-                  ),
-                  ui(locale, CancelAttachment),
-                ),
-              ]),
-            ],
-          ),
+                ui(locale, CancelAttachment),
+              ),
+            ]),
+          ],
         )
       AttachmentPreparing | AttachmentImporting =>
-        Some(
-          @html.div(
-            class="composer-context-row composer-image-notice",
-            ui(locale, PreparingAttachment),
-          ),
+        @html.div(
+          class="composer-context-row composer-image-notice",
+          ui(locale, PreparingAttachment),
         )
     }
+    Some((request.id, confirmation))
   })
 }
 

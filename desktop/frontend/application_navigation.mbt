@@ -41,6 +41,10 @@ fn reconcile_navigation(
       },
     }
   }
+  if previous.cloud.user_id != next.cloud.user_id &&
+    next.navigation.location is Some({ target: Cloud, .. }) {
+    next = { ..next, navigation: { ..next.navigation, phase: Waiting, }, }
+  }
   let commands : Array[@cmd.Cmd] = []
   next = { ..next, navigation: observe_navigation_catalogs(message, next), }
   let observation = observe_navigation(message, previous, next)
@@ -99,5 +103,19 @@ fn reconcile_navigation(
   }
   let (activate, next) = activate_navigation(dispatch, next)
   commands.push(activate)
+  let host_project = match next.screen {
+    Chat => next.host_selection().map(selection => selection.workspace)
+    Codex =>
+      next.codex
+      .active_placement(next.focused)
+      .bind(placement => placement.project_root())
+    _ => None
+  }
+  let next = if host_project is Some(project) &&
+    next.focused_device().map_or(false, dev => dev.is_chat_workspace(project)) {
+    { ..next, navigation: { ..next.navigation, phase: Missing, }, }
+  } else {
+    next
+  }
   (@cmd.batch(commands), next)
 }

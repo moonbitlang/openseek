@@ -316,71 +316,44 @@ fn focus_browser_address() -> @cmd.Cmd {
 }
 
 ///|
-/// Decode one `browser.event` notification into the preview subsystem's
-/// message. Unknown kinds and malformed payloads drop.
-fn browser_event_msg(payload : Map[String, Json]) -> Msg? {
-  // The one event about a page that does not exist yet: the host wants a
-  // tab opened, and learns its id from the `browser.open` that follows.
-  if @jsonx.json_text(payload, "kind") == Some("open_requested") {
-    guard @jsonx.json_text(payload, "request") is Some(request) &&
-      @jsonx.json_text(payload, "session") is Some(session) &&
-      @jsonx.json_text(payload, "url") is Some(url) else {
-      return None
-    }
-    return Some(BrowserOpenRequested(request~, session~, url~))
-  }
-  guard @jsonx.json_int(payload, "id") is Some(id) &&
-    @jsonx.json_text(payload, "kind") is Some(kind) else {
-    return None
-  }
-  match kind {
-    "navigated" =>
-      @jsonx.json_text(payload, "url").map(url => {
-        Preview(@preview.Msg::Navigated(id~, url~))
-      })
-    "loading" =>
-      @jsonx.json_bool(payload, "loading").map(loading => {
-        Preview(@preview.Msg::LoadingChanged(id~, loading~))
-      })
-    "title" =>
-      @jsonx.json_text(payload, "title").map(title => {
-        Preview(@preview.Msg::TitleUpdated(id~, title~))
-      })
-    "load_failed" | "renderer_process_terminated" =>
-      // CEF reports ERR_ABORTED (-3) whenever a load is superseded — a new
-      // navigation, an in-page form submit — not when anything actually
-      // failed. It can even arrive after the superseding navigation
-      // cleared the failure state, leaving a stale banner over a healthy
-      // page; the canonical CEF load-error handler ignores it, so do we.
-      // Renderer termination codes are not navigation errors; even -3 must
-      // reach the error display when it describes a terminated process.
-      if kind == "load_failed" && @jsonx.json_int(payload, "code") is Some(-3) {
-        None
-      } else {
-        match
-          (@jsonx.json_text(payload, "url"), @jsonx.json_text(payload, "text")) {
-          (Some(url), Some(text)) =>
-            Some(Preview(@preview.Msg::LoadFailed(id~, url~, text~)))
-          _ => None
-        }
-      }
-    _ => None
+/// Apply UI policy to a decoded window-local browser notification. Every
+/// supported variant is handled here; malformed wire payloads drop at the
+/// bridge boundary before reaching the model.
+fn browser_event_msg(payload : @protocol.BrowserEventPayload) -> Msg? {
+  match payload {
+    OpenRequested(request~, session~, url~) =>
+      Some(BrowserOpenRequested(request~, session~, url~))
+    Navigated(id~, url~) => Some(Preview(@preview.Msg::Navigated(id~, url~)))
+    LoadingChanged(id~, loading~) =>
+      Some(Preview(@preview.Msg::LoadingChanged(id~, loading~)))
+    TitleUpdated(id~, title~) =>
+      Some(Preview(@preview.Msg::TitleUpdated(id~, title~)))
+    // CEF reports ERR_ABORTED when a load is superseded. It must not leave
+    // a stale failure banner over the replacing navigation.
+    LoadFailed(code=-3, ..) => None
+    // Renderer termination codes are not navigation errors: even -3 must
+    // reach the existing error display and reload action.
+    LoadFailed(id~, url~, text~, ..)
+    | RendererProcessTerminated(id~, url~, text~, ..) =>
+      Some(Preview(@preview.Msg::LoadFailed(id~, url~, text~)))
   }
 }
 
 ///|
-test "browser event decode drops ERR_ABORTED but keeps real failures" {
-  let aborted : Map[String, Json] = {
-    "id": Json(1),
-    "kind": "load_failed",
-    "url": "https://www.baidu.com/s?wd=x",
-    "code": Json(-3),
-    "text": "ERR_ABORTED",
-  }
+test "browser event policy drops ERR_ABORTED but keeps real failures" {
+  let aborted : @protocol.BrowserEventPayload = LoadFailed(
+    id=1,
+    url="https://www.baidu.com/s?wd=x",
+    code=-3,
+    text="ERR_ABORTED",
+  )
   assert_true(browser_event_msg(aborted) is None)
-  let terminated = aborted.copy()
-  terminated["kind"] = "renderer_process_terminated"
-  terminated["text"] = "Renderer process terminated (status 3): killed"
+  let terminated : @protocol.BrowserEventPayload = RendererProcessTerminated(
+    id=1,
+    url="https://www.baidu.com/s?wd=x",
+    code=-3,
+    text="Renderer process terminated (status 3): killed",
+  )
   assert_true(
     browser_event_msg(terminated)
     is Some(
@@ -393,22 +366,20 @@ test "browser event decode drops ERR_ABORTED but keeps real failures" {
       )
     ),
   )
-  let refused : Map[String, Json] = {
-    "id": Json(1),
-    "kind": "load_failed",
-    "url": "http://127.0.0.1:5173/",
-    "code": Json(-102),
-    "text": "ERR_CONNECTION_REFUSED",
-  }
+  let refused : @protocol.BrowserEventPayload = LoadFailed(
+    id=1,
+    url="http://127.0.0.1:5173/",
+    code=-102,
+    text="ERR_CONNECTION_REFUSED",
+  )
   assert_true(
     browser_event_msg(refused)
     is Some(Preview(LoadFailed(id=1, url="http://127.0.0.1:5173/", ..))),
   )
-  let navigated : Map[String, Json] = {
-    "id": Json(2),
-    "kind": "navigated",
-    "url": "https://www.google.com/",
-  }
+  let navigated : @protocol.BrowserEventPayload = Navigated(
+    id=2,
+    url="https://www.google.com/",
+  )
   assert_true(
     browser_event_msg(navigated)
     is Some(Preview(Navigated(id=2, url="https://www.google.com/"))),

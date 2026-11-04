@@ -65,27 +65,43 @@ test('browser login and session recovery use only v2 account endpoints', async (
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-{
-  const failure = 'network';
+test('Cloud list retry recovers after a network failure without resending or losing the draft', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  cloud.listOffline = true;
+  await cloud.install();
+  await page.goto(`${authOrigin}/console/index.html?device=device-a`);
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  const sidebar = page.locator('aside');
+  await expect(sidebar.getByText('Couldn’t load chats', { exact: true })).toBeVisible();
+  await cloud.create();
+  const draft = page.locator('#task');
+  await draft.fill('Keep this draft while reconnecting');
+  const draftURL = page.url();
 
-  test(`Cloud ${failure} preserves credentials and retries through the normal chat entry`, async ({ page }) => {
-    const cloud = new CloudHarness(page);
-    cloud.listOffline = failure === 'network';
-    cloud.listStatus = failure === '503' ? 503 : 200;
-    await cloud.install();
-    await page.goto(`${authOrigin}/console/index.html?device=device-a`);
-    await page.getByRole('button', { name: 'Chat', exact: true }).click();
-    await expect(page.locator('aside')).toContainText(failure === 'network' ? 'Cloud is unreachable' : 'Cloud answered HTTP 503');
-    expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
-    cloud.listOffline = false;
-    cloud.listStatus = 200;
-    await cloud.create();
-    expect(cloud.exchangeCount).toBe(0);
-    await page.locator('#task').fill('First message after reconnect');
-    await page.locator('#task').press('Enter');
-    await expect(cloud.row(sessionA)).toBeVisible();
-  });
-}
+  cloud.listOffline = false;
+  let release;
+  cloud.pauseList = new Promise(resolve => { release = resolve; });
+  const reads = () => cloud.requests.filter(request =>
+    request.method === 'GET' && request.path === '/v1/sessions');
+  const previousReads = reads().length;
+  const retry = sidebar.getByRole('button', { name: 'Retry', exact: true });
+  await retry.focus();
+  await retry.press('Enter');
+  try {
+    await expect(sidebar).toContainText('Loading chats…');
+    await expect(retry).toBeDisabled();
+    await expect.poll(() => reads().length).toBe(previousReads + 1);
+  } finally {
+    release();
+  }
+  await expect(cloud.row(sessionA)).toBeVisible();
+  await expect(retry).toHaveCount(0);
+  await expect(page).toHaveURL(draftURL);
+  await expect(draft).toHaveValue('Keep this draft while reconnecting');
+  expect(reads().at(-1).headers.authorization).toBe('Bearer ts_fixture-123');
+  expect(cloud.exchangeCount).toBe(0);
+  expect(cloud.requests.filter(request => request.side === 'cloud' && request.method === 'POST')).toEqual([]);
+});
 
 test('drafts and task admission stay owned by the existing composer during generation', async ({ page }) => {
   const cloud = new CloudHarness(page);
@@ -380,7 +396,7 @@ for (const destination of ['settings', 'not-a-page']) {
     let complete;
     cloud.pauseCreate = new Promise(resolve => { complete = resolve; });
     try {
-      await page.locator('.section-primary-action[aria-label="New chat"]').click();
+      await page.locator('aside button[aria-label="New chat"]').click();
       await page.locator('#task').fill('First Cloud message');
       await page.locator('#task').press('Enter');
       await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);

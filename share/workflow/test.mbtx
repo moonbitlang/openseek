@@ -1,7 +1,9 @@
+---
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/shell",
 }
+---
 
 async fn main {
   let code = @shell.Cmd("moon", ["test"]).each_line(line => println(line))

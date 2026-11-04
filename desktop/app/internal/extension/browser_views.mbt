@@ -21,7 +21,7 @@ struct BrowserViews {
   owners : Map[Int32, String]
   // How the page is told something (a `browser.event`), once the bridge
   // that carries it exists.
-  mut notify : (async (Json) -> Unit)?
+  mut notify : (async (@protocol.BrowserEventPayload) -> Unit)?
   // One lock per tab a tool is navigating, so that two navigations of the
   // same tab happen one after the other: each waits for the page to change
   // from what it was, and two waiting at once would both take the first
@@ -77,7 +77,7 @@ pub fn BrowserViews::window_ready(
 /// `browser.event`. Set once the bridge exists, which is after the views do.
 pub fn BrowserViews::page_attached(
   self : BrowserViews,
-  notify : async (Json) -> Unit,
+  notify : async (@protocol.BrowserEventPayload) -> Unit,
 ) -> Unit {
   self.notify = Some(notify)
 }
@@ -147,55 +147,36 @@ pub fn BrowserViews::view_event(
 }
 
 ///|
-/// A view event as the `browser.event` notification payload the frontend
-/// decodes. Lifecycle notifications without a frontend consumer are omitted.
-pub fn view_event_json(id : Int32, event : @proton.WebContentsEvent) -> Json? {
-  let payload : Json = match event {
+/// A view event supported by the window-local frontend contract. Closed tabs
+/// are already removed by the frontend's close command; find results have no
+/// frontend consumer. Neither becomes a notification.
+pub fn view_event_payload(
+  id : Int32,
+  event : @proton.WebContentsEvent,
+) -> @protocol.BrowserEventPayload? {
+  let payload : @protocol.BrowserEventPayload = match event {
     DidStartLoading
     | DidFinishLoad
     | BridgeFailed(_)
     | ResourceResponse(..)
     | ResourceCompleted(..)
-    | ResourceRequested(..) => return None
-    Navigated(url~) => { "id": Json(id), "kind": "navigated", "url": Json(url) }
-    LoadingChanged(is_loading~) =>
-      { "id": Json(id), "kind": "loading", "loading": Json(is_loading) }
-    TitleUpdated(title~) =>
-      { "id": Json(id), "kind": "title", "title": Json(title) }
+    | ResourceRequested(..)
+    | Closed
+    | FoundInPage(..) => return None
+    Navigated(url~) => Navigated(id~, url~)
+    LoadingChanged(is_loading~) => LoadingChanged(id~, loading=is_loading)
+    TitleUpdated(title~) => TitleUpdated(id~, title~)
     LoadFailed(url~, error_code~, error_text~) =>
-      {
-        "id": Json(id),
-        "kind": "load_failed",
-        "url": Json(url),
-        "code": Json(error_code),
-        "text": Json(error_text),
-      }
+      LoadFailed(id~, url~, code=error_code, text=error_text)
     RendererProcessTerminated(url~, status~, error_code~, detail~) =>
       // Use the tab's existing error display and reload action. Proton leaves
       // the view open after termination, so this must not become a Closed event.
-      {
-        "id": Json(id),
-        "kind": "renderer_process_terminated",
-        "url": Json(url),
-        "code": Json(error_code),
-        "text": Json(
-          "Renderer process terminated (status \{status}): \{detail}",
-        ),
-      }
-    FoundInPage(result~) =>
-      {
-        "id": Json(id),
-        "kind": "found_in_page",
-        "request_id": Json(result.request_id),
-        "active_match_ordinal": Json(result.active_match_ordinal),
-        "matches": Json(result.matches),
-        "selection_x": Json(result.selection_x),
-        "selection_y": Json(result.selection_y),
-        "selection_width": Json(result.selection_width),
-        "selection_height": Json(result.selection_height),
-        "final_update": Json(result.final_update),
-      }
-    Closed => { "id": Json(id), "kind": "closed" }
+      RendererProcessTerminated(
+        id~,
+        url~,
+        code=error_code,
+        text="Renderer process terminated (status \{status}): \{detail}",
+      )
   }
   Some(payload)
 }
@@ -405,43 +386,6 @@ fn BrowserViews::set_theme(
 }
 
 ///|
-/// Open Chromium's developer tools for the SeekMoon frontend page itself.
-fn BrowserViews::open_app_devtools(
-  self : BrowserViews,
-) -> @protocol.EmptyReply raise {
-  self.attached_window().web_contents().open_devtools()
-  Acknowledged
-}
-
-///|
-fn BrowserViews::set_app_titlebar_theme(
-  self : BrowserViews,
-  payload : @protocol.AppTitlebarThemePayload,
-) -> @protocol.EmptyReply raise {
-  let window = self.attached_window()
-  if @async.platform is (Windows | MacOS) {
-    window.set_theme(if payload.dark { Dark } else { Light })
-  }
-  Acknowledged
-}
-
-///|
-/// Match the native titlebar's double-click convention. Reading and applying
-/// the state in one window-side command keeps the frontend from mirroring a
-/// value that can also change through the operating system's window controls.
-fn BrowserViews::toggle_app_maximized(
-  self : BrowserViews,
-) -> @protocol.EmptyReply raise {
-  let window = self.attached_window()
-  if window.state().maximized {
-    window.restore()
-  } else {
-    window.maximize()
-  }
-  Acknowledged
-}
-
-///|
 fn BrowserViews::set_bounds(
   self : BrowserViews,
   payload : @protocol.BrowserBoundsPayload,
@@ -515,11 +459,10 @@ fn BrowserViews::focused_browser(
 }
 
 ///|
-/// The desktop-window endpoints, kept beside the window and native-view
-/// handlers they use. A relay browser owns neither, so none of these commands
-/// enters the shared remote catalog. `browser.navigate` deliberately binds
+/// Native browser-tab endpoints. A relay browser owns no native views, so
+/// none enters the shared remote catalog. `browser.navigate` deliberately binds
 /// the same create-if-missing handler as `browser.open`.
-fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
+fn browser_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
   [
     WindowEndpoint(@commands.browser_pick_element, (_, payload) => {
       views.pick_element(payload)
@@ -530,21 +473,6 @@ fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
         pick.request == payload.request {
         views.cancel_pick()
       }
-      Acknowledged
-    }),
-    WindowEndpoint(@commands.app_language_apply, (_, payload) => {
-      if !(@async.platform is Windows) {
-        views
-        .attached_window()
-        .set_menu(Some(localized_menu(payload.language.unwrap_or("en"))))
-      }
-      Acknowledged
-    }),
-    WindowEndpoint(@commands.app_system_appearance, (_, _) => {
-      dark: @proton.system_appearance().color_scheme == Dark,
-    }),
-    WindowEndpoint(@commands.app_close_window, (_, _) => {
-      views.attached_window().close()
       Acknowledged
     }),
     WindowEndpoint(@commands.app_focused_browser, (_, _) => {
@@ -564,15 +492,6 @@ fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
     WindowEndpoint(@commands.browser_set_theme, (_, payload) => {
       views.set_theme(payload)
     }),
-    WindowEndpoint(@commands.app_open_devtools, (_, _) => {
-      views.open_app_devtools()
-    }),
-    WindowEndpoint(@commands.app_set_titlebar_theme, (_, payload) => {
-      views.set_app_titlebar_theme(payload)
-    }),
-    WindowEndpoint(@commands.app_toggle_maximized, (_, _) => {
-      views.toggle_app_maximized()
-    }),
     WindowEndpoint(@commands.browser_set_bounds, (_, payload) => {
       views.set_bounds(payload)
     }),
@@ -581,28 +500,6 @@ fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
     }),
     WindowEndpoint(@commands.browser_close, (_, payload) => views.close(payload)),
   ]
-}
-
-///|
-async test "native window ops are absent from the relay method catalog" {
-  let state = @api.ApiState(engine="unused")
-  let connection = @host.HostConnection()
-  let catalog = @api.endpoints(state, connection)
-  let window_only = window_endpoints(BrowserViews())
-  assert_true(
-    window_only.any(endpoint => {
-      endpoint.name() == @commands.app_toggle_maximized.name()
-    }),
-  )
-  assert_true(
-    window_only.any(endpoint => {
-      endpoint.name() == @commands.app_set_titlebar_theme.name()
-    }),
-  )
-  for endpoint in window_only {
-    let name = endpoint.name()
-    assert_false(catalog.any(shared => shared.name() == name))
-  }
 }
 
 ///|
@@ -630,8 +527,6 @@ async test "browser ops refuse to run without a window; close tolerates it" {
   assert_true(raises(() => views.forward({ id: 1, })))
   assert_true(raises(() => views.reload({ id: 1, })))
   assert_true(raises(() => views.set_theme({ id: 1, dark: true, })))
-  assert_true(raises(() => views.open_app_devtools()))
-  assert_true(raises(() => views.toggle_app_maximized()))
   assert_true(
     raises(() => views.set_bounds({ id: 1, x: 0, y: 0, width: 10, height: 10, })),
   )

@@ -26,6 +26,8 @@ fn pinned_model(input : Input) -> Model {
     overview: @transcript_overview.State::empty(),
     image_owner: input.image_owner(),
     images: ImageCache::empty(),
+    artifact_owner: input.artifact_owner(),
+    artifact_files: ArtifactFileCache::empty(),
   }
 }
 

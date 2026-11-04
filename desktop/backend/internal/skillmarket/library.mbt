@@ -14,10 +14,10 @@ const SidecarFile = ".mooncakes.json"
 
 ///|
 /// Registry coordinates identifying a skill independently of its version.
-pub struct RegistrySkillIdentity {
+pub(all) struct RegistrySkillIdentity {
   module_name : String
   package_path : String
-}
+} derive(Eq)
 
 ///|
 /// One entry of the local skills library.
@@ -106,14 +106,6 @@ fn slugify(name : String) -> String {
 }
 
 ///|
-/// The `sha256:`-prefixed hex digest of `content`: how a downloaded skill
-/// archive is checked against the digest the registry declares, and what an
-/// install's provenance sidecar records.
-fn content_digest(content : Bytes) -> String {
-  "sha256:\{@crypto.bytes_to_hex_string(@crypto.sha256(content))}"
-}
-
-///|
 /// Parse `name:` and `description:` from a markdown frontmatter block —
 /// the same rules as the engine's `agent_skill` parser, so the panel shows
 /// the names the model will see. Anything missing falls back to
@@ -163,10 +155,24 @@ fn decode_sidecar(text : String) -> InstalledSource? {
   } else {
     ""
   }
-  Some({
-    label: source_label(module_name, version, package_path),
-    registry: { module_name, package_path, },
-  })
+  let identity : RegistrySkillIdentity = { module_name, package_path, }
+  let registry = match json {
+    { "kind": String("standalone"), .. } => identity
+    { "kind": _, .. } => return None
+    _ => standalone_identity(identity)
+  }
+  Some({ label: source_label(module_name, version, package_path), registry, })
+}
+
+///|
+pub extend RegistrySkillIdentity with Eq::{equal, not_equal}
+
+///|
+async fn read_installed_source(target : @pathx.Path) -> InstalledSource? {
+  guard @fsx.try_read_text(target.join(SidecarFile)) is Some(text) else {
+    return None
+  }
+  decode_sidecar(text)
 }
 
 ///|
@@ -187,18 +193,40 @@ pub async fn install_skill(
   library_dir~ : @pathx.Path = library_dir_from_env(),
   on_committed? : () -> Unit,
 ) -> InstalledSkill {
-  let entry = entry_path(module_name, version, package_path)
-  let source = fetch_archive_source(registry, entry)
-  let identity = if package_path.is_empty() {
-    module_name
-  } else {
-    "\{module_name}/\{package_path}"
-  }
-  let slug = slugify(identity)
+  install_skill_impl(
+    module_name~,
+    version~,
+    package_path~,
+    registry~,
+    library_dir~,
+    on_committed?,
+  ).unwrap()
+}
+
+///|
+priv enum InstallMode {
+  Replace
+  IfUnchanged(String?)
+}
+
+///|
+async fn install_skill_impl(
+  module_name~ : String,
+  version~ : String,
+  package_path~ : String,
+  registry~ : String,
+  library_dir~ : @pathx.Path,
+  mode~ : InstallMode = Replace,
+  on_committed? : () -> Unit,
+) -> InstalledSkill? {
+  let entry = skill_reference(module_name, version, package_path)
+  let identity : RegistrySkillIdentity = { module_name, package_path, }
+  let slug = slugify(module_name)
   guard valid_slug(slug) else {
     raise SkillMarketError("registry entry \{entry} has no installable name")
   }
-  let skill = skill_files(fetch_archive(entry, source), entry)
+  let (archive, digest) = fetch_archive(registry, entry)
+  let skill = skill_files(archive, entry)
   let text = @utf8.decode(skill.skill_md) catch {
     _ =>
       raise SkillMarketError(
@@ -207,20 +235,38 @@ pub async fn install_skill(
   }
   let (name, description) = parse_frontmatter(text, slug)
   let provenance : Json = {
+    "kind": "standalone",
     "module": module_name,
     "version": version,
     "package": package_path,
-    "digest": source.digest,
+    "digest": digest,
   }
   library_lock.acquire()
   defer library_lock.release()
   let root : SkillLibrary = { root: library_dir, }
   root.recover_all()
+  // Reuse an older built-in's owned directory, including its disabled location.
+  // Its sidecar is rewritten with standalone coordinates in the same commit.
+  let slug = if legacy_builtin_slug(identity) is Some(legacy) {
+    let previous = root.locate(legacy)
+    if read_installed_source(previous.library.target(legacy)) is Some(source) &&
+      source.registry == identity {
+      legacy
+    } else {
+      slug
+    }
+  } else {
+    slug
+  }
   let location = root.locate(slug)
   let library = location.library
   let target = library.target(slug)
   let flat_target = library.root.join("\{slug}.md")
   let sidecar = target.join(SidecarFile)
+  if mode is IfUnchanged(expected) {
+    let current = read_installed_source(target).map(source => source.label)
+    guard current == expected else { return None }
+  }
   // Check ownership after acquiring the process-wide boundary:
   // another request may have installed this slug while the network fetch ran.
   guard !@fsx.exists(flat_target) &&
@@ -231,14 +277,14 @@ pub async fn install_skill(
   }
   library.stage(slug, skill.files, provenance.stringify())
   library.activate(slug, on_committed?)
-  {
+  Some({
     id: slug,
     name,
     description,
     source: source_label(module_name, version, package_path),
     registry: Some({ module_name, package_path, }),
     enabled: location.enabled,
-  }
+  })
 }
 
 ///|
@@ -362,6 +408,12 @@ pub async fn uninstall_skill(
   guard @fsx.exists(target.join(SidecarFile)) else {
     raise SkillMarketError(
       "\{id} was not installed from the registry; remove it by hand",
+    )
+  }
+  if read_installed_source(target) is Some(source) &&
+    is_builtin(source.registry) {
+    raise SkillMarketError(
+      "built-in skills cannot be uninstalled; disable the skill instead",
     )
   }
   location.library.move_to_trash(id, on_committed?)

@@ -1,27 +1,30 @@
 ///|
-test "url derivations" {
-  inspect(
-    @auth.tunnel_url("https://openseek-api.moonbitlang.cn"),
-    content="wss://openseek-api.moonbitlang.cn/v1/tunnel",
+/// The URL derivations are package-private; their public surface is the
+/// console URL the status shape shows. Override mode derives it from the
+/// `ws(s)://…/v1/tunnel` relay URL and the device id registered on it.
+async test "override status derives the device console url from the relay url" {
+  let store = @auth.AuthStore::load(env_override={
+    relay_url: "wss://relay.example/v1/tunnel",
+    device_token: "dev",
+    device_name: "desktop",
+  })
+  assert_true(store.mark_registered("d_abc"))
+  assert_eq(
+    store.status().device,
+    Some({
+      id: "d_abc",
+      name: "desktop",
+      url: "https://relay.example/device/d_abc/chat",
+    }),
   )
-  inspect(
-    @auth.tunnel_url("http://127.0.0.1:3000/"),
-    content="ws://127.0.0.1:3000/v1/tunnel",
-  )
-  inspect(
-    @auth.device_url("https://relay.example", "d_abc"),
-    content="https://relay.example/device/d_abc/chat",
-  )
-  inspect(
-    @auth.device_url("https://relay.example/", "d a/b"),
-    content="https://relay.example/device/d%20a%2Fb/chat",
-  )
-  inspect(
-    @auth.origin_from_relay_url("wss://relay.example/v1/tunnel"),
-    content="https://relay.example",
-  )
-  inspect(
-    @auth.origin_from_relay_url("ws://127.0.0.1:8080/v1/tunnel"),
-    content="http://127.0.0.1:8080",
+  // The device id is percent-encoded into its path segment.
+  assert_true(store.mark_registered("d a/b"))
+  assert_eq(
+    store.status().device,
+    Some({
+      id: "d a/b",
+      name: "desktop",
+      url: "https://relay.example/device/d%20a%2Fb/chat",
+    }),
   )
 }

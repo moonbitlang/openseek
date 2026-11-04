@@ -13,6 +13,23 @@ fn notice_views(
   for notice in state.notices {
     let message = match notice {
       LibraryLoadFailed(message) => message
+      BuiltinSyncFailed(channel~, error~) => {
+        guard channel == input.channel else { continue }
+        let identity = (error.registry.module_name, error.registry.package_path)
+        if target is Some(target) {
+          let belongs = match target {
+            Market(item) => item.identity() == identity
+            Installed(item) => item.identity() == Some(identity)
+          }
+          guard belongs else { continue }
+        }
+        let source = if error.registry.package_path.is_empty() {
+          error.registry.module_name
+        } else {
+          "\{error.registry.module_name}/\{error.registry.package_path}"
+        }
+        "\{source}: \{error.message}"
+      }
       SkillActionFailed(operation~, message~) => {
         guard operation.channel == input.channel else { continue }
         guard target is Some(target) else {
@@ -67,7 +84,6 @@ fn installed_row(
           skill.source
         },
       ),
-      installed_status(locale, state, channel, skill),
     ]),
   ]
   if !skill.description.is_blank() {
@@ -79,7 +95,10 @@ fn installed_row(
       attrs=@html.Attrs::build().aria_label(skill.name),
       [
         @html.span(class="skill-avatar", icon(icon_extensions)),
-        @html.span(class="skill-name", skill.name),
+        @html.span(class="skill-title", [
+          @html.span(class="skill-name", skill.name),
+          builtin_badge(locale, skill),
+        ]),
       ],
     ),
   ]
@@ -225,16 +244,18 @@ fn detail_shell(
   @page_shell.body(class="skills-page skill-detail-page", [
     @html.div(class="skill-detail-header", [
       @html.div(class="page-eyebrow", ui(locale, Details)),
-      @html.h2(preview_name(target)),
-      @html.div(class="skill-detail-meta skill-meta-line", [
-        @html.span(preview_meta(locale~, target)),
-        if detail_action_target(target, state, input) is Some(Installed(item)) {
-          installed_status(locale, state, input.channel, item)
-        } else {
-          @html.nothing
-        },
+      @html.div(class="skill-header", [
+        @html.div(class="skill-title", [
+          @html.h2(preview_name(target)),
+          if detail_action_target(target, state, input) is Some(Installed(item)) {
+            builtin_badge(locale, item)
+          } else {
+            @html.nothing
+          },
+        ]),
+        detail_action(locale~, target, state, input, emit),
       ]),
-      detail_action(locale~, target, state, input, emit),
+      @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
       @html.div(notice_views(state, input, Some(target))),
     ]),
     @html.div(class="skill-detail-card", [
@@ -526,7 +547,12 @@ fn installed_actions(
       on_click=emit(ToggleEnabled(item.id)),
     ),
   ]
-  if identity is Some(_) {
+  if identity is Some(_) &&
+    (
+      !item.builtin ||
+      state.update_candidate(item) is Some(_) ||
+      pending is Some(_)
+    ) {
     let label = pending
       .map(action => ui(locale, action.label()))
       .unwrap_or(ui(locale, ManageSkill))
@@ -544,13 +570,25 @@ fn installed_actions(
     )
   }
   @html.div(
-    class="skill-actions skill-installed-actions",
+    class="skill-actions",
     attrs=@html.Attrs::build().on_click(event => {
       event.stop_propagation()
       @cmd.none
     }),
-    buttons,
+    [
+      installed_status(locale, state, channel, item),
+      @html.div(class="skill-actions skill-installed-actions", buttons),
+    ],
   )
+}
+
+///|
+fn builtin_badge(locale : @i18n.Locale, item : InstalledItem) -> @html.Html {
+  if item.builtin {
+    @html.span(class="skill-builtin-badge", ui(locale, Builtin))
+  } else {
+    @html.nothing
+  }
 }
 
 ///|

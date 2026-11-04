@@ -38,6 +38,13 @@ redirects a running explore subagent with `subagent_send`: the child's first
 step is held until the instruction is posted, and its next model request must
 carry it.
 
+`tests/integration/approval_review.mbtx` (also under `just test-subagents`)
+runs `run --approval review`: the model asks `remove` to delete a file the
+agent did not create, and a real `--kind approval` child answers the
+permission question. The child's `allow` deletes the file and its `deny`
+keeps it; either way it saw the user's message and its transcript records the
+verdict.
+
 # Bundled workflows
 
 `just test-workflows` runs the native MoonBit fixture package at

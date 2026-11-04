@@ -42,7 +42,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   // Sending needs a live engine and a workspace to run in — nothing about the
   // transcript. The record is what the turn writes, not a precondition for
   // starting one, so a reload in flight or a failed one never gates Send.
-  let root_ready = self.bridge_state() is Connected &&
+  let root_ready = conv.prompt_ready() &&
+    self.bridge_state() is Connected &&
     self.api_ready() &&
     checkout_ready
   let primary_action : @composer.PrimaryAction = if conv.is_running() {
@@ -77,7 +78,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   }
   status.push(
     @composer.ApprovalStatus({
-      on: self.approval_for(conv.device, conv.session_id) is ApprovalReview,
+      mode: self.approval_for(conv.device, conv.session_id),
+      open: self.select_menu is Some(OpenSeekApprovalMenu),
       enabled: !conv.is_running(),
     }),
   )
@@ -104,6 +106,15 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   // availability, and the top-bar status is owned by the run state — without
   // this notice a dismissed setup modal leaves a greyed Send with no
   // explanation and no way back to the form.
+  if !conv.prompt_ready() {
+    context.push(
+      @composer.ApiSetupNotice(
+        text=self.host_settings_error.unwrap_or(
+          @settings.text(self.locale, LoadingSettings),
+        ),
+      ),
+    )
+  }
   if self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
       shell_text(self.locale, NoEndpoint)
@@ -255,7 +266,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: self.active_workspace_file(),
     file_index,
     presentation: {
-      images_enabled: conv.engine_model is DsFlash &&
+      images_enabled: conv.engine_model is Deepseek(V4Flash) &&
       self.api_provider is (Deepseek | Custom),
       context,
       status,
@@ -322,6 +333,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
       locale=self.locale,
       self.select_menu is Some(CodexReasoningMenu),
     ),
+    permission_menu_open: self.select_menu is Some(CodexPermissionMenu),
     file_candidates: search.candidates,
     open_files: if workspace_ready {
       self.live_editor_files()

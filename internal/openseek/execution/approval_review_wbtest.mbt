@@ -3,7 +3,7 @@
 /// every question with `decision` and records what it was shown.
 fn review_channel(
   desk : ApprovalDesk,
-  decision : ReviewDecision,
+  decision : @agent_approval.Decision,
   ask_on_escalate~ : Bool,
   seen? : Array[@agent_runtime.ApprovalAsk],
 ) -> @agent_runtime.ApprovalChannel raise {
@@ -73,32 +73,6 @@ async test "an escalation is refused where nobody can be asked" {
   let channel = review_channel(desk, Escalate, ask_on_escalate=false)
   assert_true(channel.ask(deletion_ask) is Rejected)
   assert_eq(desk.pending.length(), 0)
-}
-
-///|
-test "an explore answer names its decision on the first line" {
-  assert_true(decision_of("ALLOW\nthe user asked for it") is Some(Allow))
-  assert_true(decision_of("  **DENY**\nuncommitted work") is Some(Deny))
-  assert_true(decision_of("Escalate: intent is ambiguous") is Some(Escalate))
-  assert_true(decision_of("ALLOW — notes/ is committed") is Some(Allow))
-}
-
-///|
-/// No decision word means no decision — the reviewer then escalates, never
-/// guesses one from the prose.
-test "an answer without a decision word decides nothing" {
-  assert_true(decision_of("") is None)
-  assert_true(decision_of("I think this should be allowed") is None)
-  assert_true(decision_of("ALLOWED") is None)
-  assert_true(decision_of("Looks fine.\nALLOW") is None)
-}
-
-///|
-test "the query carries the request and the user's words verbatim" {
-  let query = approval_query(deletion_ask, ["delete the notes directory"])
-  assert_true(query.contains(deletion_ask.detail))
-  assert_true(query.contains("{\"path\": \"notes/\"}"))
-  assert_true(query.contains("delete the notes directory"))
 }
 
 ///|

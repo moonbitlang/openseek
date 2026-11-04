@@ -106,7 +106,9 @@ async test "registered mbtx receives the session scratch write permission" {
         @agent_tool.AgentToolCall::from_arguments("mbtx", {
           "description": "Write a session scratch file",
           "source": (
+            #|---
             #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
+            #|---
             #|async fn main { @fs.write_file(@env.args()[1], "retained") }
           ),
           "filename": "\{scratch}/helper.mbtx",

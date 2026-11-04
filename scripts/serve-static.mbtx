@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -10,6 +10,7 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/string",
 }
+---
 
 ///|
 fn content_type(path : String) -> String {

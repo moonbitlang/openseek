@@ -62,7 +62,7 @@ fn Model::cloud_archived(self : Model) -> Bool {
 ///|
 fn Model::cloud_title(self : Model) -> String {
   if self.cloud_identity() is None && self.cloud_draft_identity() is None {
-    return @sidebar_messages.text(self.locale, Cloud)
+    return @sidebar_messages.text(self.locale, Chats)
   }
   if self.selected_conversation is Some(CloudSelection(account~, session~)) &&
     self.cloud.user_id == Some(account) {

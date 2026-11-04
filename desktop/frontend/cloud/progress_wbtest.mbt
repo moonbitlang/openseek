@@ -8,7 +8,12 @@ fn progress_test_state() -> State {
     conversations: Map([
       (
         "session",
-        { ..Conversation::empty(), loading: false, history_required: false, },
+        {
+          ..Conversation::empty(),
+          loading: false,
+          history_required: false,
+          last_seq: Some(0),
+        },
       ),
     ]),
   }
@@ -105,6 +110,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
           },
         },
       ]),
+      etag: None,
       messages: [
         {
           task_id: "task",

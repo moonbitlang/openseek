@@ -258,15 +258,18 @@ fn open_session_on(
     guard model.session_project(channel, session_id) is Some(project) else {
       return (@cmd.none, model)
     }
+    let engine_model = model
+      .remembered_model(channel, session_id)
+      .unwrap_or(model.default_model)
     let conversation = empty_conversation(
       channel,
       session_id,
       project,
       // Reopening a stored conversation recovers the tier it was left on,
       // not whatever was picked last in some other chat.
-      model=model
-        .remembered_model(channel, session_id)
-        .unwrap_or(model.default_model),
+      model=engine_model,
+      // A listed directory may still be an unsent draft with no transcript.
+      system_prompt?=model.draft_system_prompt(channel, engine_model),
     )
     let conversation = if model.device_state(channel) is Some(dev) {
       {
@@ -472,6 +475,8 @@ fn adopt_projects(
   guard model.device_state(channel) is Some(dev) else {
     return (@cmd.none, model)
   }
+  // Retired standalone chats remain on disk, outside the project catalog.
+  let paths = paths.filter(path => !dev.is_chat_workspace(path))
   // A pending add whose reply already resolved its registry row waits here
   // for that row to exist: the snapshot that contains it consumes the
   // pending and focuses. A snapshot without the row leaves it waiting —
@@ -558,6 +563,7 @@ fn adopt_projects(
       ..dev,
       sessions,
       projects: paths,
+      project_catalog: Some(Ok(())),
       active_project,
       worktrees,
       worktrees_request_generation,
@@ -1386,7 +1392,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
       None
     },
     locale: model.locale,
-    model: engine_model.wire(),
+    model: engine_model.to_string(),
     thinking: engine_model.thinking(model.reasoning_for(engine_model)),
     request_epoch: model.file_panel.request_epoch,
     // The native bridge and its watcher survive a page reload. Namespace the
@@ -2150,6 +2156,40 @@ fn close_dock_tabs(
 }
 
 ///|
+/// Hand a Codex composer action the shell does not own to the Codex package.
+fn codex_composer_action(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  action : @composer.Action,
+) -> (@cmd.Cmd, Model) {
+  let channel = model.focused
+  let (command, codex) = @codex.update(
+    locale=model.locale,
+    dispatch.map(next => Codex(channel~, next)),
+    @codex.Msg::composer_action(action),
+    model.codex,
+    channel,
+    url => open_external_link(dispatch, url),
+  )
+  (command, model.with_codex(codex))
+}
+
+///|
+/// Take Codex's next state. The shell owns its approval menu's open state,
+/// so the menu closes here once the mode can no longer change — a turn
+/// started, from this page or another client — rather than staying open
+/// behind a disabled trigger.
+fn Model::with_codex(self : Model, codex : @codex.State) -> Model {
+  let select_menu = if self.select_menu is Some(CodexPermissionMenu) &&
+    !codex.can_choose_permission() {
+    None
+  } else {
+    self.select_menu
+  }
+  { ..self, codex, select_menu, }
+}
+
+///|
 fn update_msg(
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
@@ -2182,7 +2222,12 @@ fn update_msg(
       }
       (
         @cmd.batch([
-          fetch_account(dispatch, model.is_desktop, model.account_epoch),
+          fetch_account(
+            dispatch,
+            model.is_desktop,
+            model.account_epoch,
+            local_console=model.is_local_console(),
+          ),
           @cmd.custom_cmd(_ => @cloud.discard_legacy_credential()),
           device,
           load_saved_settings(is_desktop=model.is_desktop, dispatch),
@@ -2302,7 +2347,7 @@ fn update_msg(
       // tiers here is enough — every conversation minted afterwards reads
       // them.
       let default_model = stored
-        .bind(value => EngineModel::parse(value))
+        .bind(value => parse_engine_model(value))
         .unwrap_or(model.default_model)
       let default_agent = agent
         .bind(AgentChoice::parse)
@@ -2360,7 +2405,7 @@ fn update_msg(
         conversation_models: remembered
         .map(parse_conversation_models)
         .unwrap_or([]),
-        reviewed_conversations: conversation_approvals
+        asking_conversations: conversation_approvals
         .map(parse_conversation_approvals)
         .unwrap_or([]),
         openseek_reasoning,
@@ -2430,6 +2475,31 @@ fn update_msg(
           }
           update_msg(dispatch, CodexEffortPicked(value), model)
         }
+        @composer.PermissionMenuToggled(identity~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) &&
+            model.codex.can_open_permission_menu() else {
+            return (@cmd.none, model)
+          }
+          update_msg(dispatch, ToggleSelectMenu(CodexPermissionMenu), model)
+        }
+        @composer.PermissionMenuDismissed(identity~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          update_msg(dispatch, CloseSelectMenu, model)
+        }
+        @composer.PermissionSelected(identity~, ..) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          // The menu closes with the choice; Codex applies it, or asks to
+          // confirm Full access first.
+          let (_, closed) = update_msg(dispatch, CloseSelectMenu, model)
+          codex_composer_action(dispatch, closed, action)
+        }
         @composer.ReviewChangesOpened(identity~, selection~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
@@ -2468,18 +2538,7 @@ fn update_msg(
           }
           update_msg(dispatch, FileEditor(@fileeditor.EnsureFileIndex), model)
         }
-        _ => {
-          let channel = model.focused
-          let (command, codex) = @codex.update(
-            locale=model.locale,
-            dispatch.map(next => Codex(channel~, next)),
-            @codex.Msg::composer_action(action),
-            model.codex,
-            channel,
-            url => open_external_link(dispatch, url),
-          )
-          (command, { ..model, codex, })
-        }
+        _ => codex_composer_action(dispatch, model, action)
       }
     ComposerAction(action) => {
       if action is @composer.CommandResultRecovered(identity~) {
@@ -2591,7 +2650,8 @@ fn update_msg(
         | @composer.PermissionSelected(..)
         | @composer.GitDetailsToggled(..)
         | @composer.WorktreeModeToggled(..)
-        | @composer.ApprovalModeToggled(..)
+        | @composer.ApprovalMenuToggled(..)
+        | @composer.ApprovalSelected(..)
         | @composer.ApiSetupRequested(..)
         | @composer.QueuedInputEditRequested(..)
         | @composer.QueuedInputSteerRequested(..)
@@ -2628,7 +2688,15 @@ fn update_msg(
             @composer.WorktreeModeToggled(..) =>
               update_msg(dispatch, ToggleWorktreeMode, model)
             @composer.ApiSetupRequested(..) =>
-              update_msg(dispatch, OpenApiSetup, model)
+              update_msg(
+                dispatch,
+                if conv.prompt_ready() {
+                  OpenApiSetup
+                } else {
+                  OpenSetup
+                },
+                model,
+              )
             @composer.QueuedInputEditRequested(id~, ..) => {
               // The composer is frozen while a large semantic selection is
               // written for a submitted draft; loading a queued message over
@@ -2731,27 +2799,29 @@ fn update_msg(
                 ArchiveSession(conv.device, conv.session_id),
                 model,
               )
-            @composer.ApprovalModeToggled(..) => {
-              // A running turn keeps the policy its engine started with; the
-              // switch is locked meanwhile, so a late click changes nothing.
-              guard !conv.is_running() else { return (@cmd.none, model) }
+            // A running turn keeps the policy its engine started with; the
+            // menu is locked meanwhile, so a late click changes nothing.
+            @composer.ApprovalMenuToggled(..) =>
+              if conv.is_running() {
+                (@cmd.none, model)
+              } else {
+                update_msg(
+                  dispatch,
+                  ToggleSelectMenu(OpenSeekApprovalMenu),
+                  model,
+                )
+              }
+            @composer.ApprovalSelected(mode=approval, ..) => {
+              let (_, closed) = update_msg(dispatch, CloseSelectMenu, model)
+              guard !conv.is_running() else { return (@cmd.none, closed) }
               // The next start, compaction, or goal carries the choice, and
               // the host gives the conversation a new engine when it differs.
-              let approval : @protocol.OpenSeekApproval = if model.approval_for(
-                  conv.device,
-                  conv.session_id,
-                )
-                is ApprovalReview {
-                ApprovalAsk
-              } else {
-                ApprovalReview
-              }
               (
                 save_conversation_approval(
                   conversation_model_key(conv.device, conv.session_id),
                   approval,
                 ),
-                model.with_approval(conv.device, conv.session_id, approval),
+                closed.with_approval(conv.device, conv.session_id, approval),
               )
             }
             @composer.PermissionMenuToggled(..)
@@ -3825,7 +3895,10 @@ fn update_msg(
                 session,
                 workspace,
                 model=engine_model,
-                moonbit_guide=model.default_moonbit_guide,
+                system_prompt?=model.draft_system_prompt(
+                  model.focused,
+                  engine_model,
+                ),
               ),
               task: draft.task,
               mentions: draft.mentions,
@@ -3975,7 +4048,7 @@ fn update_msg(
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      if conv.engine_model is (Glm53 | Glm53Flash) {
+      if conv.engine_model is Glm(_) {
         (
           reasoning.save_for_glm(),
           { ..model, glm_reasoning: reasoning, select_menu: None, },
@@ -3987,13 +4060,58 @@ fn update_msg(
         )
       }
     }
-    MoonBitGuideDefaultLoaded(enabled) =>
-      (@cmd.none, { ..model, default_moonbit_guide: enabled, })
-    MoonBitGuideDefaultChanged(enabled) =>
+    RetryHostSettings =>
       (
-        save_default_moonbit_guide(enabled),
-        { ..model, default_moonbit_guide: enabled, },
+        fetch_host_settings(
+          dispatch,
+          model.focused,
+          model.focused_connection_generation(),
+        ),
+        { ..model, host_settings_error: None, },
       )
+    Prompt(msg) => {
+      guard model.host_settings_loaded() && model.settings_saves == 0 else {
+        return (@cmd.none, model)
+      }
+      if msg is @prompt.Edited(_) {
+        let (command, default_prompt) = model.default_prompt.update(msg)
+        return (command, { ..model, default_prompt, })
+      }
+      let (source, text) = match msg {
+        @prompt.Selected(source) if source == "custom" ||
+          source == "builtin_moonbit_guide" => (Some(source), None)
+        @prompt.Save => {
+          guard model.default_prompt.draft_text() is Some(text) else {
+            return (@cmd.none, model)
+          }
+          (None, Some(text))
+        }
+        _ => return (@cmd.none, model)
+      }
+      let patch : @protocol.SettingsSetPayload = {
+        provider: None,
+        custom_api_url: None,
+        deepseek_api_key: None,
+        glm_api_key: None,
+        custom_api_key: None,
+        followup_behavior: None,
+        prompt_source: source,
+        custom_prompt: text,
+      }
+      (
+        push_host_settings(
+          dispatch,
+          model.focused,
+          patch,
+          model.focused_connection_generation(),
+        ),
+        {
+          ..model,
+          settings_saves: model.settings_saves + 1,
+          select_menu: None,
+        },
+      )
+    }
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value, })
     SetupApiKeyChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
@@ -4461,10 +4579,11 @@ fn update_msg(
         channel,
         url => open_external_link(dispatch, url),
       )
-      (cmd, { ..model, codex, })
+      (cmd, model.with_codex(codex))
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
+    CloseSidebar => (@cmd.none, { ..model, sidebar_open: false, })
     SidebarModeSelected(sidebar_mode) => (@cmd.none, { ..model, sidebar_mode, })
     DeviceChosen(id) => (@nav.load(@routes.device_entry_path(id)), model)
     // A conversation already on screen has claimed the list, and a Cloud
@@ -4635,7 +4754,8 @@ fn update_msg(
         .prompt()
         .trim()
         .to_owned()
-      let sendable = conv.draft_sendable() &&
+      let sendable = conv.prompt_ready() &&
+        conv.draft_sendable() &&
         model.bridge_state() is Connected &&
         model.api_ready() &&
         checkout is Some(placement) &&
@@ -4802,37 +4922,33 @@ fn update_msg(
         // (the host names it, binds this conversation) and starts inside
         // it, as one command; every other submit is a plain start — a
         // bound session's cwd comes from the host's registry.
+        let payload = start_payload(
+          task,
+          conv.engine_model,
+          model.reasoning_for(conv.engine_model),
+          model.max_steps,
+          conv.session_id,
+          submission_id,
+          workspace=conv.project(),
+          approval=model.approval_for(conv.device, conv.session_id),
+          system_prompt?=conv.system_prompt,
+          images=conv.images.map(image => image.url),
+        )
         let start_cmd = if fresh_worktree &&
           conv.workspace is Project(root=workspace) {
           start_in_new_worktree(
             locale=model.locale,
             dispatch,
             model.focused,
-            task,
-            submission_id,
-            conv.engine_model,
-            model.reasoning_for(conv.engine_model),
-            model.max_steps,
-            conv.session_id,
+            payload,
             workspace,
-            approval=model.approval_for(conv.device, conv.session_id),
-            moonbit_guide=conv.moonbit_guide,
-            images=conv.images.map(image => image.url),
           )
         } else {
           start_openseek(
             dispatch,
             model.focused,
-            task,
-            submission_id,
-            conv.engine_model,
-            model.reasoning_for(conv.engine_model),
-            model.max_steps,
-            conv.session_id,
+            payload,
             workspace=conv.project(),
-            approval=model.approval_for(conv.device, conv.session_id),
-            moonbit_guide=conv.moonbit_guide,
-            images=conv.images.map(image => image.url),
           )
         }
         // Re-pin now, before the durable User item arrives, so the early
@@ -5859,18 +5975,24 @@ fn update_msg(
     RevealFile(path) => {
       guard model.is_desktop &&
         model.active_checkout() is Some(active) &&
-        active.owner.channel is Local &&
-        active.placement is Some(placement) &&
-        placement.checkout_root() is Some(cwd) else {
+        active.owner.channel is Local else {
         return (@cmd.none, model)
       }
+      let target = match model.session_file_target(path) {
+        Some(target) => Some(target)
+        None =>
+          active.placement
+          .bind(placement => placement.checkout_root())
+          .map(root => (root, path))
+      }
+      guard target is Some((cwd, relative)) else { return (@cmd.none, model) }
       (
         reveal_file(
           dispatch,
           active.owner.channel,
           active.owner.session,
           cwd,
-          path,
+          relative,
         ),
         model,
       )
@@ -5908,6 +6030,12 @@ fn update_msg(
       let overview_open = !model.overview_open
       (save_overview_open(overview_open), { ..model, overview_open, })
     }
+    CloseOverview =>
+      if model.overview_open {
+        update_msg(dispatch, ToggleOverview, model)
+      } else {
+        (@cmd.none, model)
+      }
     OverviewLoaded(overview_open) => (@cmd.none, { ..model, overview_open, })
     Overview(msg) =>
       (
@@ -5947,6 +6075,12 @@ fn update_msg(
       }
       (@cmd.none, model)
     }
+    CloseRightPanel =>
+      if model.right_panel_open {
+        update_msg(dispatch, ToggleRightPanel, model)
+      } else {
+        (@cmd.none, model)
+      }
     ToggleRightPanelMenu =>
       (
         @cmd.none,
@@ -6840,33 +6974,12 @@ fn update_msg(
       (command, { ..model, export_dialog, })
     }
     OpenSessionImport => {
-      let selected = if model.screen is Chat {
-        model.conversation_selection()
-      } else {
-        None
+      guard model.session_import_target() is Some(target) else {
+        return (@cmd.none, model)
       }
-      let workspace = match selected {
-        Some(selected) => Some(selected.workspace.path)
-        None =>
-          if model.sidebar_mode is WorkMode {
-            model
-            .device_state(model.focused)
-            .bind(dev => dev.active_project.map(p => p.path))
-          } else {
-            None
-          }
-      }
-      // Let the host's current registry choose placement even if this
-      // client's worktree inventory has not arrived yet.
-      let worktree_of = selected.map(selected => selected.session)
-      let (cmd, session_import_dialog) = model.session_import_dialog.open({
-        channel: model.focused,
-        connection_generation: model.focused_connection_generation(),
-        workspace: workspace.map_or(@session_import.Unplaced, path => {
-          @session_import.Registered(path)
-        }),
-        worktree_of,
-      })
+      let (cmd, session_import_dialog) = model.session_import_dialog.open(
+        target,
+      )
       (cmd, { ..model, session_import_dialog, })
     }
     SessionImport(msg) => {
@@ -7177,12 +7290,14 @@ fn update_device_msg(
     return (@cmd.none, model)
   }
   match msg {
-    InstalledSkillsLoaded(items) => {
+    InstalledSkillsLoaded(items, builtin_errors~) => {
       guard channel == model.focused else { return (@cmd.none, model) }
-      let (cmd, skills) = model.skills.sync_library(
-        dispatch.map(msg => Skills(msg)),
-        { channel, installed: items, },
-      )
+      let (cmd, skills) = model.skills
+        .with_builtin_errors(channel, builtin_errors)
+        .sync_library(dispatch.map(msg => Skills(msg)), {
+          channel,
+          installed: items,
+        })
       (cmd, { ..model, installed_skills: items, skills, })
     }
     InstalledSkillsFailed(message) =>
@@ -7347,6 +7462,7 @@ fn update_device_msg(
         archived_request_generation,
         projects_request_generation,
         archive_overrides: [],
+        project_catalog: None,
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
         // list (or a newer `worktree.changed` broadcast) instead of trusting
@@ -7515,6 +7631,13 @@ fn update_device_msg(
       // device's fs/diagnostics noise must not re-stat or redraw it.
       guard channel == model.focused else { return (@cmd.none, model) }
       update_msg(dispatch, FileEditor(msg), model)
+    }
+    HostSettingsLoadFailed(message, connection_generation~) => {
+      guard channel == model.focused &&
+        connection_generation == dev.connection_generation else {
+        return (@cmd.none, model)
+      }
+      (@cmd.none, { ..model, host_settings_error: Some(message), })
     }
     HostSettingsLoaded(settings, connection_generation~) => {
       guard connection_generation is None ||
@@ -7861,6 +7984,7 @@ fn update_device_msg(
           session: item.id,
           workspace: item.workspace,
         })
+        !dev.is_chat_workspace(item.workspace) &&
         disposition != Some(ArchiveStored) &&
         disposition != Some(ArchiveDeleted)
       })
@@ -8010,7 +8134,9 @@ fn update_device_msg(
       }
       // A failed read preserves the last inventory and any independent add
       // still waiting for its commit. Only mutation failures settle an add.
-      model.notify_error(
+      model
+      .replace_device({ ..dev, project_catalog: Some(Err(message)), })
+      .notify_error(
         dispatch,
         notice_text(model.locale, WorkspaceFailure(message)),
       )
@@ -8413,7 +8539,9 @@ fn update_device_msg(
           session: item.id,
           workspace: item.workspace,
         })
-        disposition != Some(ArchiveLive) && disposition != Some(ArchiveDeleted)
+        !dev.is_chat_workspace(item.workspace) &&
+        disposition != Some(ArchiveLive) &&
+        disposition != Some(ArchiveDeleted)
       })
       for fact in dev.archive_overrides {
         if fact.disposition is ArchiveStored &&
@@ -10172,6 +10300,7 @@ fn test_conversation() -> Conversation {
     @interop.ChannelId::Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
+    system_prompt=@prompt.Model::new().text(Deepseek(V4Pro)),
   )
 }
 
@@ -10223,6 +10352,7 @@ fn test_model() -> Model {
         ..empty_device_state(@interop.ChannelId::Local),
         bridge: Connected,
         projects: [@interop.ChannelId::Local.test_project()],
+        project_catalog: Some(Ok(())),
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
       },
     ],
@@ -10455,14 +10585,14 @@ test "an approval notification click opens its local conversation" {
 fn encoded_start_workspace(conv : Conversation) -> String? {
   let payload = start_payload(
     "continue",
-    DsPro,
+    Deepseek(V4Pro),
     ReasoningMax,
     "1000",
     conv.session_id,
     "test-submission",
     workspace=conv.project(),
     approval=ApprovalAsk,
-    moonbit_guide=conv.moonbit_guide,
+    system_prompt?=conv.system_prompt,
   )
   let json = payload.to_json()
   guard json is Object(fields) else { return None }
@@ -10578,7 +10708,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     Started(
       run_id="r-first",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("first-start"),
@@ -10631,7 +10761,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     Started(
       run_id="r-second",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some(second_submission),
@@ -10681,7 +10811,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
     Started(
       run_id="r8",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some(second_submission),
@@ -11110,7 +11240,7 @@ test "a new run frontier includes commits already buffered by reload" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -12053,7 +12183,7 @@ test "session list assigns a Started-first conversation to its durable workspace
     Started(
       run_id="foreign-run",
       session="desktop-started-first",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -12109,7 +12239,7 @@ test "Started places a foreign conversation from its host session root" {
     Started(
       run_id="foreign-run",
       session="desktop-workspace-run",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(
         @interop.ChannelId::Local.test_resource("/C:/work/core/.openseek"),
@@ -13610,7 +13740,7 @@ test "started routes by session without restating its placement" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13687,7 +13817,7 @@ test "started for an unknown session materializes its conversation" {
     Started(
       run_id="r7",
       session="desktop-ghost",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -13718,7 +13848,7 @@ test "started for an unknown session materializes its conversation" {
     Started(
       run_id="r8",
       session="desktop-rootless",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13747,7 +13877,7 @@ test "started places a conversation before the registry arrives" {
       Started(
         run_id="r9",
         session~,
-        model=DsPro,
+        model=Deepseek(V4Pro),
         max_steps=1000,
         session_root~,
         submission_id=None,
@@ -13811,7 +13941,7 @@ test "a run boundary discards the previous turn's live state whole" {
     Started(
       run_id="r-new",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13853,7 +13983,7 @@ test "a distinct started id replaces a stale open run as foreign" {
     Started(
       run_id="r-new",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13898,7 +14028,7 @@ test "a repeated started id is idempotent" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -13929,7 +14059,7 @@ test "a start failure cannot close a run opened by a winning push" {
     Started(
       run_id="r-foreign",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("theirs"),
@@ -14032,7 +14162,7 @@ test "a matching Started establishes the run after an undelivered response" {
     Started(
       run_id="r-recovered",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("prompt-id"),
@@ -14074,7 +14204,7 @@ test "an accepted start response opens the run without Started" {
     Started(
       run_id="r-response",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("prompt-id"),
@@ -14137,7 +14267,7 @@ test "an old-host Started without an id is settled by the exact start response" 
     Started(
       run_id="r-old-host",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -14423,7 +14553,7 @@ test "a Started racing ahead of an older runs response stays open" {
     Started(
       run_id="r-after-snapshot",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("foreign-new"),
@@ -14450,7 +14580,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       {
         run_id: "old-run",
         session: "old-session",
-        model: DsPro,
+        model: Deepseek(V4Pro),
         max_steps: 1000,
         session_root: None,
         submission_id: None,
@@ -14546,7 +14676,7 @@ test "an older positive runs row cannot replace a newer Started" {
     Started(
       run_id="r8",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -14561,7 +14691,7 @@ test "an older positive runs row cannot replace a newer Started" {
         {
           run_id: "r7",
           session: "desktop-test",
-          model: DsPro,
+          model: Deepseek(V4Pro),
           max_steps: 1000,
           session_root: None,
           submission_id: None,
@@ -14597,7 +14727,7 @@ test "an older positive runs row cannot resurrect a finished run" {
         {
           run_id: "r7",
           session: "desktop-test",
-          model: DsPro,
+          model: Deepseek(V4Pro),
           max_steps: 1000,
           session_root: None,
           submission_id: None,
@@ -14651,7 +14781,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
     Started(
       run_id="r-fast",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=Some("fast-start"),
@@ -15193,7 +15323,7 @@ test "a foreign background run schedules one causal read after Started" {
     Started(
       run_id="foreign-next",
       session~,
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -15481,7 +15611,7 @@ test "OpenRouter setup requires only its stored custom key" {
   assert_true({ ..openrouter, custom_key_saved: true, }.api_ready())
   // Model choice belongs to the chat, just as with the official endpoint.
   assert_true(
-    { ..openrouter, custom_key_saved: true, default_model: DsPro, }.api_ready(),
+    { ..openrouter, custom_key_saved: true, default_model: Deepseek(V4Pro), }.api_ready(),
   )
 }
 
@@ -15513,19 +15643,19 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.notification_corner is TopLeft)
   assert_true(restored.theme is Dark)
   assert_eq(restored.app_font_size, AppFontSize(15))
-  assert_true(restored.default_model is DsFlash)
+  assert_true(restored.default_model is Deepseek(V4Flash))
   assert_true(restored.default_agent is CodexAgent)
   assert_true(restored.openseek_reasoning is ReasoningHigh)
   assert_true(restored.glm_reasoning is ReasoningMax)
   // The stored conversation outranks the stored default for its own chat.
-  assert_true(restored.active().engine_model is DsPro)
+  assert_true(restored.active().engine_model is Deepseek(V4Pro))
   // Its stored approval choice comes back too; a malformed row is skipped.
   assert_true(
     restored.approval_for(@interop.ChannelId::Local, "desktop-test")
-    is ApprovalReview,
+    is ApprovalAsk,
   )
   assert_true(
-    restored.approval_for(@interop.ChannelId::Local, "other") is ApprovalAsk,
+    restored.approval_for(@interop.ChannelId::Local, "other") is ApprovalReview,
   )
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
@@ -15551,7 +15681,7 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
   assert_eq(unknown.app_font_size, AppFontSize(14))
-  assert_true(unknown.default_model is DsFlash)
+  assert_true(unknown.default_model is Deepseek(V4Flash))
   assert_true(unknown.openseek_reasoning is ReasoningHigh)
   assert_true(unknown.glm_reasoning is ReasoningOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
@@ -15578,7 +15708,7 @@ test "the model selector switches one conversation, not the app" {
     }),
     model,
   )
-  assert_true(flash.active().engine_model is DsFlash)
+  assert_true(flash.active().engine_model is Deepseek(V4Flash))
   // The handler is pure: applying the same message to the same model produces
   // the same selected/default/stored model state.
   let (_, flash_again) = update(
@@ -15601,9 +15731,9 @@ test "the model selector switches one conversation, not the app" {
     is Some(other) else {
     fail("the second conversation vanished")
   }
-  assert_true(other.engine_model is DsPro)
+  assert_true(other.engine_model is Deepseek(V4Pro))
   // The tier just picked is what conversations opened afterwards start from.
-  assert_true(flash.default_model is DsFlash)
+  assert_true(flash.default_model is Deepseek(V4Flash))
   assert_true(
     flash
     .activate(
@@ -15612,7 +15742,7 @@ test "the model selector switches one conversation, not the app" {
       @interop.ChannelId::Local.test_project(),
     )
     .active().engine_model
-    is DsFlash,
+    is Deepseek(V4Flash),
   )
   let (_, pro) = update(
     dispatch,
@@ -15623,7 +15753,7 @@ test "the model selector switches one conversation, not the app" {
     }),
     flash,
   )
-  assert_true(pro.active().engine_model is DsPro)
+  assert_true(pro.active().engine_model is Deepseek(V4Pro))
 }
 
 ///|
@@ -15642,27 +15772,27 @@ test "a start never overrides the tier picked for the next turn" {
     }),
     test_model(),
   )
-  assert_true(queued.active().engine_model is DsFlash)
+  assert_true(queued.active().engine_model is Deepseek(V4Flash))
   let (_, ran) = update_dev(
     dispatch,
     Started(
       run_id="r1",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
     ),
     queued,
   )
-  assert_true(ran.active().engine_model is DsFlash)
+  assert_true(ran.active().engine_model is Deepseek(V4Flash))
 }
 
 ///|
 test "reopening a conversation recovers its own tier, not the last pick" {
   let dispatch = test_dispatch()
-  // Set the chat on screen to DsFlash, then open a different one and put it
-  // back on DsPro. The second pick moves the default new chats inherit — it
+  // Set the chat on screen to Deepseek(V4Flash), then open a different one and put it
+  // back on Deepseek(V4Pro). The second pick moves the default new chats inherit — it
   // must not follow the first conversation home.
   let (_, flash) = update(
     dispatch,
@@ -15678,7 +15808,7 @@ test "reopening a conversation recovers its own tier, not the last pick" {
     "other-chat",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(other.active().engine_model is DsFlash)
+  assert_true(other.active().engine_model is Deepseek(V4Flash))
   let (_, pro) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-pro", draft={
@@ -15688,7 +15818,7 @@ test "reopening a conversation recovers its own tier, not the last pick" {
     }),
     other,
   )
-  assert_true(pro.default_model is DsPro)
+  assert_true(pro.default_model is Deepseek(V4Pro))
   // Reopening drops the conversation and mints it again (nothing was sent,
   // so `activate` does not retain it) — exactly the path that used to hand
   // back the unrelated default.
@@ -15697,20 +15827,20 @@ test "reopening a conversation recovers its own tier, not the last pick" {
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(reopened.active().engine_model is DsFlash)
+  assert_true(reopened.active().engine_model is Deepseek(V4Flash))
 }
 
 ///|
 test "a run pins an inherited tier the user never clicked for" {
   let dispatch = test_dispatch()
-  // This chat never touched the chip — it just inherited DsPro and ran. That
+  // This chat never touched the chip — it just inherited Deepseek(V4Pro) and ran. That
   // still has to pin, or a later toggle elsewhere silently retiers it.
   let (_, ran) = update_dev(
     dispatch,
     Started(
       run_id="r1",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -15719,9 +15849,9 @@ test "a run pins an inherited tier the user never clicked for" {
   )
   assert_true(
     ran.remembered_model(@interop.ChannelId::Local, "desktop-test")
-    is Some(DsPro),
+    is Some(Deepseek(V4Pro)),
   )
-  // Another chat moves the page default to DsFlash...
+  // Another chat moves the page default to Deepseek(V4Flash)...
   let elsewhere = ran.activate(
     @interop.ChannelId::Local,
     "other-chat",
@@ -15736,14 +15866,14 @@ test "a run pins an inherited tier the user never clicked for" {
     }),
     elsewhere,
   )
-  assert_true(moved.default_model is DsFlash)
+  assert_true(moved.default_model is Deepseek(V4Flash))
   // ...and the first one still comes back on the tier it ran with.
   let reopened = moved.activate(
     @interop.ChannelId::Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(reopened.active().engine_model is DsPro)
+  assert_true(reopened.active().engine_model is Deepseek(V4Pro))
 }
 
 ///|
@@ -15990,7 +16120,7 @@ test "a begun conversation never changes agents" {
     Started(
       run_id="r1",
       session="desktop-test",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -16031,7 +16161,7 @@ test "an OpenSeek pick on a composing Codex draft hands the chat back" {
   )
   assert_false(back.codex.composing_draft())
   assert_true(back.default_agent is OpenSeekAgent)
-  assert_true(back.default_model is DsFlash)
+  assert_true(back.default_model is Deepseek(V4Flash))
 }
 
 ///|
@@ -16086,7 +16216,7 @@ test "Codex threads share the Projects section's project rows" {
   let sections = model.sidebar_component_sections(model.dev())
   // Work shows Projects, shared across both agents, above Archived.
   assert_eq(sections.length(), 2)
-  inspect(sections[0].label, content="Projects")
+  assert_eq(sections[0].label, "Projects")
   assert_true(!sections[0].initially_collapsed)
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")
@@ -16119,7 +16249,9 @@ test "remembered tiers survive a round trip through storage" {
     encoded_conversation_models(chosen.conversation_models),
   )
   assert_eq(restored, chosen.conversation_models)
-  assert_true(restored is [{ key: "local/desktop-test", model: DsFlash, }])
+  assert_true(
+    restored is [{ key: "local/desktop-test", model: Deepseek(V4Flash), }],
+  )
 }
 
 ///|
@@ -16129,16 +16261,20 @@ test "a write merges into the stored rows instead of replacing them" {
   // tab's row — that conversation would silently revert to the default.
   let stored = parse_conversation_models(
     encoded_conversation_models([
-      { key: "remote.b/sibling-chat", model: DsFlash, },
-      { key: "remote.a/desktop-test", model: DsPro, },
+      { key: "remote.b/sibling-chat", model: Deepseek(V4Flash), },
+      { key: "remote.a/desktop-test", model: Deepseek(V4Pro), },
     ]),
   )
-  let merged = remembered_with(stored, "remote.a/desktop-test", DsFlash)
+  let merged = remembered_with(
+    stored,
+    "remote.a/desktop-test",
+    Deepseek(V4Flash),
+  )
   assert_true(
     merged
     is [
-      { key: "remote.a/desktop-test", model: DsFlash, },
-      { key: "remote.b/sibling-chat", model: DsFlash, },
+      { key: "remote.a/desktop-test", model: Deepseek(V4Flash), },
+      { key: "remote.b/sibling-chat", model: Deepseek(V4Flash), },
     ],
   )
 }
@@ -16151,7 +16287,7 @@ fn encoded_conversation_models(
 ) -> String {
   let rows : Array[Json] = entries.map(entry => {
     "key": Json(entry.key),
-    "model": Json(entry.model.wire()),
+    "model": Json(entry.model.to_string()),
   })
   Json(rows).stringify()
 }
@@ -16166,9 +16302,9 @@ test "the remembered list stays capped, newest first" {
       @interop.ChannelId::Local,
       "session-\{index}",
       if index % 2 == 0 {
-        DsFlash
+        Deepseek(V4Flash)
       } else {
-        DsPro
+        Deepseek(V4Pro)
       },
     )
   }
@@ -16181,18 +16317,18 @@ test "the remembered list stays capped, newest first" {
       @interop.ChannelId::Local,
       "session-\{ConversationModelsLimit}",
     )
-    is Some(DsFlash),
+    is Some(Deepseek(V4Flash)),
   )
   // Re-choosing an existing conversation moves it, never duplicates it.
   let again = model.remember_model(
     @interop.ChannelId::Local,
     "session-1",
-    DsFlash,
+    Deepseek(V4Flash),
   )
   assert_eq(again.conversation_models.length(), ConversationModelsLimit)
   assert_true(
     again.remembered_model(@interop.ChannelId::Local, "session-1")
-    is Some(DsFlash),
+    is Some(Deepseek(V4Flash)),
   )
 }
 
@@ -16207,7 +16343,7 @@ test "a conversation first met through a live run adopts its tier" {
     Started(
       run_id="r2",
       session="background-chat",
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -16216,7 +16352,7 @@ test "a conversation first met through a live run adopts its tier" {
     // contrasts with both of the things it must not move.
     test_model().replace_conversation({
       ..test_conversation(),
-      engine_model: DsFlash,
+      engine_model: Deepseek(V4Flash),
     }),
   )
   guard background.find_conversation(
@@ -16226,9 +16362,9 @@ test "a conversation first met through a live run adopts its tier" {
     is Some(conv) else {
     fail("the background run materialized no conversation")
   }
-  assert_true(conv.engine_model is DsPro)
-  assert_true(background.active().engine_model is DsFlash)
-  assert_true(background.default_model is DsFlash)
+  assert_true(conv.engine_model is Deepseek(V4Pro))
+  assert_true(background.active().engine_model is Deepseek(V4Flash))
+  assert_true(background.default_model is Deepseek(V4Flash))
 }
 
 ///|
@@ -16248,6 +16384,8 @@ fn host_settings(
     has_glm_key,
     has_custom_key,
     followup_behavior: "steer",
+    prompt_source: "builtin_moonbit_guide",
+    custom_prompt: "",
   }
 }
 
@@ -16453,8 +16591,8 @@ test "the GLM provider aligns only a fresh chat to its model family" {
     glm_key_saved: true,
   })
   assert_true(glm.api_provider is Glm)
-  assert_true(glm.default_model is Glm53)
-  assert_true(glm.active().engine_model is Glm53)
+  assert_true(glm.default_model is Glm(G53))
+  assert_true(glm.active().engine_model is Glm(G53))
   // GLM's forced-thinking default is the shared low wire value, independent
   // from the High preference DeepSeek keeps.
   assert_true(glm.reasoning_for(glm.active().engine_model) is ReasoningOff)
@@ -16469,8 +16607,8 @@ test "the GLM provider aligns only a fresh chat to its model family" {
     ),
     test_model(),
   )
-  assert_true(restored.default_model is Glm53)
-  assert_true(restored.active().engine_model is Glm53)
+  assert_true(restored.default_model is Glm(G53))
+  assert_true(restored.active().engine_model is Glm(G53))
   // Startup is order-independent: if the host's GLM snapshot arrives before
   // localStorage, the later DeepSeek model preference cannot reintroduce a
   // mismatched fresh chat.
@@ -16494,14 +16632,14 @@ test "the GLM provider aligns only a fresh chat to its model family" {
     ),
     restored,
   )
-  assert_true(preferences_after_host.default_model is Glm53)
-  assert_true(preferences_after_host.active().engine_model is Glm53)
+  assert_true(preferences_after_host.default_model is Glm(G53))
+  assert_true(preferences_after_host.active().engine_model is Glm(G53))
   // Once a conversation has begun, its pinned model remains explicit and
   // visible for the user to change rather than being rewritten by Settings.
   let (_, running) = update(dispatch, ProviderChanged("glm"), running_model())
   assert_true(running.api_provider is Glm)
-  assert_true(running.default_model is Glm53)
-  assert_true(running.active().engine_model is DsPro)
+  assert_true(running.default_model is Glm(G53))
+  assert_true(running.active().engine_model is Deepseek(V4Pro))
   assert_true(running.display_status() is Running)
 }
 
@@ -17465,7 +17603,7 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   let dispatch = test_dispatch()
   let glm = test_model().replace_conversation({
     ..test_conversation(),
-    engine_model: Glm53,
+    engine_model: Glm(G53),
   })
   guard glm.openseek_reasoning_chip(glm.active()) is Some(control) else {
     fail("GLM reasoning control was hidden")
@@ -17479,7 +17617,7 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   assert_true(glm_max.openseek_reasoning is ReasoningHigh)
   let deepseek = glm_max.replace_conversation({
     ..glm_max.active(),
-    engine_model: DsPro,
+    engine_model: Deepseek(V4Pro),
   })
   let (_, deepseek_off) = update(dispatch, OpenSeekEffortPicked("no"), deepseek)
   assert_true(deepseek_off.openseek_reasoning is ReasoningOff)
@@ -18352,7 +18490,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     Started(
       run_id="unrelated-run",
       session=deleted_item.id,
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(
         @interop.ChannelId::Local.test_resource("/project/.openseek"),
@@ -18375,7 +18513,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     Started(
       run_id="recreated-run",
       session=deleted_item.id,
-      model=DsPro,
+      model=Deepseek(V4Pro),
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -19165,25 +19303,6 @@ test "theme settings switch fixed palettes and are idempotent" {
 }
 
 ///|
-test "font-size settings switch every text surface and are idempotent" {
-  assert_eq(AppFontSize(12).pixels(), 11.0)
-  assert_eq(AppFontSize(14).pixels(), 13.0)
-  assert_eq(AppFontSize(18).pixels(), 17.0)
-  let dispatch = test_dispatch()
-  let model = test_model()
-  let (_, first) = update(dispatch, FontSizeChanged("15"), model)
-  let (_, second) = update(dispatch, FontSizeChanged("15"), first)
-  assert_eq(first.app_font_size, AppFontSize(15))
-  assert_eq(second.app_font_size, AppFontSize(15))
-  assert_eq(first.app_font_size.pixels(), 14.0)
-  let (_, largest) = update(dispatch, FontSizeChanged("18"), first)
-  assert_eq(largest.app_font_size, AppFontSize(18))
-  assert_eq(largest.app_font_size.pixels(), 17.0)
-  let (_, unchanged) = update(dispatch, FontSizeChanged("unknown"), model)
-  assert_eq(unchanged.app_font_size, AppFontSize(14))
-}
-
-///|
 test "selecting a conversation returns from the skills page to the chat" {
   let dispatch = test_dispatch()
   let (_, opened) = update(dispatch, OpenSkills, test_model())
@@ -19393,15 +19512,23 @@ test "installed skills replies are scoped to their source device" {
       description: "",
       source: "old/source@1.0.0",
       registry: Some({ module_name: "old/source", package_path: "", }),
+      builtin: false,
       enabled: true,
+    },
+  ]
+  let errors : Array[@protocol.BuiltinSkillError] = [
+    {
+      registry: { module_name: "builtin/missing", package_path: "", },
+      message: "Registry offline",
     },
   ]
   let (_, ignored) = update(
     dispatch,
-    FromDevice(Local, InstalledSkillsLoaded(old_host)),
+    FromDevice(Local, InstalledSkillsLoaded(old_host, builtin_errors=errors)),
     focused,
   )
   assert_eq(ignored.installed_skills.length(), 0)
+  assert_true(ignored.skills == focused.skills)
   let new_host : Array[@skills.InstalledItem] = [
     {
       id: "new",
@@ -19409,16 +19536,42 @@ test "installed skills replies are scoped to their source device" {
       description: "",
       source: "new/source@1.0.0",
       registry: Some({ module_name: "new/source", package_path: "", }),
+      builtin: false,
       enabled: true,
     },
   ]
   let (_, applied) = update(
     dispatch,
-    FromDevice(Remote("d_b"), InstalledSkillsLoaded(new_host)),
+    FromDevice(
+      Remote("d_b"),
+      InstalledSkillsLoaded(new_host, builtin_errors=errors),
+    ),
     ignored,
   )
   assert_eq(applied.installed_skills.length(), 1)
   assert_eq(applied.installed_skills[0].id, "new")
+  assert_true(
+    applied.skills == ignored.skills.with_builtin_errors(Remote("d_b"), errors),
+  )
+  let (_, missing) = update(
+    dispatch,
+    FromDevice(Remote("d_b"), InstalledSkillsLoaded([], builtin_errors=errors)),
+    applied,
+  )
+  assert_eq(missing.installed_skills.length(), 0)
+  assert_true(missing.skills == applied.skills)
+  let (_, recovered) = update(
+    dispatch,
+    FromDevice(
+      Remote("d_b"),
+      InstalledSkillsLoaded(new_host, builtin_errors=[]),
+    ),
+    missing,
+  )
+  assert_true(
+    recovered.skills == missing.skills.with_builtin_errors(Remote("d_b"), []),
+  )
+  assert_true(recovered.skills != missing.skills)
 }
 
 ///|
@@ -20991,12 +21144,12 @@ test "AppInfoLoaded replaces the displayed package version idempotently" {
   let dispatch = test_dispatch()
   let info = AppInfoLoaded(
     version="0.2.0",
-    console_url=Some("http://127.0.0.1:27183/?token=sesame"),
+    console_url=Some("http://127.0.0.1:27183/device/host/chat"),
   )
   let (_, once) = update(dispatch, info, test_model())
   let (_, twice) = update(dispatch, info, once)
   assert_eq(once.app_version, "0.2.0")
-  assert_eq(once.console_url, Some("http://127.0.0.1:27183/?token=sesame"))
+  assert_eq(once.console_url, Some("http://127.0.0.1:27183/device/host/chat"))
   assert_eq(twice.app_version, once.app_version)
   assert_eq(twice.notification_seq, once.notification_seq)
 }
@@ -22783,13 +22936,12 @@ test "user and agent tab creation share placement without sharing navigation pri
 }
 
 ///|
-test "the host's request for a tab is decoded without a page id; a partial one drops" {
-  let asked : Map[String, Json] = {
-    "kind": "open_requested",
-    "request": "r-1",
-    "session": "s-1",
-    "url": "https://example.com/",
-  }
+test "the host's typed request for a tab needs no page id" {
+  let asked : @protocol.BrowserEventPayload = OpenRequested(
+    request="r-1",
+    session="s-1",
+    url="https://example.com/",
+  )
   assert_true(
     browser_event_msg(asked)
     is Some(
@@ -22800,11 +22952,6 @@ test "the host's request for a tab is decoded without a page id; a partial one d
       )
     ),
   )
-  for missing in ["request", "session", "url"] {
-    let partial = asked.copy()
-    partial.remove(missing)
-    assert_true(browser_event_msg(partial) is None)
-  }
 }
 
 ///|
@@ -23724,17 +23871,17 @@ test "a workflow entry refines the parent conversation's run" {
 test "file context inherits the conversation model and its reasoning family" {
   let model = {
     ..test_model(),
-    default_model: DsPro,
+    default_model: Deepseek(V4Pro),
     openseek_reasoning: ReasoningMax,
     glm_reasoning: ReasoningOff,
   }
   let conv = test_conversation()
-  for engine_model in [EngineModel::DsFlash, Glm53] {
+  for engine_model in [@deepseek.Model::Deepseek(V4Flash), Glm(G53)] {
     let ctx = file_ctx(model.replace_conversation({ ..conv, engine_model, }))
-    assert_eq(ctx.model, engine_model.wire())
+    assert_eq(ctx.model, engine_model.to_string())
     assert_eq(
       ctx.thinking,
-      if engine_model is Glm53 {
+      if engine_model is Glm(G53) {
         Some(@protocol.ThinkingOff)
       } else {
         Some(@protocol.ThinkingMax)

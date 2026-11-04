@@ -630,7 +630,7 @@ test "a question survives a run handoff inside one snapshot" {
           {
             run_id: "r-successor",
             session: asked.session_id,
-            model: DsPro,
+            model: Deepseek(V4Pro),
             max_steps: 1000,
             session_root: None,
             submission_id: None,

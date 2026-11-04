@@ -147,16 +147,15 @@ Options:
   --review-gate                                                On goal(met), audit the worktree against the goal with a review subagent and inject the findings as an advisory notice.
   --cancel-on-stdin-eof                                        For a parent that launches this run: read the JSON request as one line, keep reading stdin, and cancel the run when it closes. Needs --input-format json. The run delegates no further work.
   --dir <dir>                                                  Workspace directory for relative paths; creates only the final path component if its parent exists. [default: .]
-  --moonbit-guide <moonbit-guide>                              Include the built-in MoonBit syntax and library API guide in a new session (on/off); existing sessions keep their saved prompt. [default: on]
   --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
   --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
   --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
-  --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
+  --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package, and a new session's system prompt names the servers. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
   --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
   --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run). [env: OPENSEEK_APPROVAL] [default: never]
   --result-file <result-file>                                  Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.
   --result-root <result-root>                                  The directory --result-file must be written in: the result must be a new file inside it. A launcher pins it to decide where a run it starts may write.
-  --kind <kind>                                                Run a preset instead of the general agent: explore, review, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.
+  --kind <kind>                                                Run a preset instead of the general agent: explore, review, approval, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.
   --claim <claim>                                              Start the --kind run in the --session its launcher claimed for it, presenting the claim's token. Without it, a --kind run refuses a session that already exists.
   --input-format <input-format>                                text: the task is the command-line words. json: read one JSON request from stdin instead (see docs/run-result.md). [default: text]
 ```
@@ -340,6 +339,30 @@ error: no turn of session demo ends at sequence 1
 exit-non-zero
 demo
 retry
+```
+
+The fork's prompt also names the configured MCP servers, as a new session's
+does, so the fork's engine is not left with servers the model was never told
+of. Only the names are read: a server whose URL needs a variable this process
+does not have is still named.
+
+```mooncram
+$ sh <<'EOF'
+> tmp=$(mktemp -d)
+> mkdir -p "$tmp/sessions/demo"
+> cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
+> {"version":1,"id":"demo","system_prompt":"system"}
+> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+> {"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
+> JSONL
+> cat > "$tmp/mcp.json" <<'JSON'
+> {"mcpServers": {"tracker": {"command": "tracker-mcp"}, "host": {"url": "${OPENSEEK_CRAM_UNSET_URL}"}}}
+> JSON
+> env -u DEEPSEEK openseek.exe sessions fork demo --as with-mcp --session-root "$tmp" --mcp-config "$tmp/mcp.json" >/dev/null
+> env -u DEEPSEEK openseek.exe sessions show with-mcp --session-root "$tmp" | grep -o 'Configured MCP servers: [^.]*'
+> rm -rf "$tmp"
+> EOF
+Configured MCP servers: `tracker`, `host`
 ```
 
 ## `openseek run` Records A Session By Default

@@ -72,6 +72,7 @@ test-subagents:
     moon run tests/integration/review_workflow.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
     moon run tests/integration/subagent_send.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
     moon run tests/integration/workers.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+    moon run tests/integration/approval_review.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
     moon run tests/integration/directory_workers.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
     moon run tests/integration/directory_recovery.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
 
@@ -107,6 +108,10 @@ editor-test-browser:
 # Run Desktop's Rabbita views in Chromium through the browser-console bundle.
 desktop-test-browser:
     just --justfile desktop/justfile test-browser
+
+# Build the frontend and exercise file artifact previews with fixture transport.
+desktop-test-artifacts:
+    node desktop/e2e/run-artifact-offline.mjs
 
 # Check the Proton window host, which builds in its own desktop/app/moon.work.
 desktop-app-check:

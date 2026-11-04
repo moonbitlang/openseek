@@ -48,7 +48,7 @@ fn show_pdf_capture_feedback(
       is Some(host) &&
       @dom.document().get_element_by_id(OfficeSurfaceId).to_option()
       is Some(surface) &&
-      surface.get_parent_element() is Some(viewport) &&
+      surface.closest(".viewer-stack") is Some(viewport) &&
       viewer_state.services is Some(services) else {
       return
     }
@@ -172,20 +172,5 @@ pub fn region_feedback_subscription(
         update_tagger: _ => (),
       })
     },
-  )
-}
-
-///|
-pub fn pdf_capture_feedback_subscription(
-  emit : @cmd.Emit[Msg],
-  draft : PdfCaptureDraft,
-  batch~ : Bool,
-  submit : (String, Bool) -> @cmd.Cmd,
-) -> @sub.Sub {
-  region_feedback_subscription(
-    emit,
-    { preview: Pdf(draft.preview), comment: draft.comment, },
-    batch~,
-    submit,
   )
 }

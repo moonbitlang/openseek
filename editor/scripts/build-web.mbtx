@@ -1,7 +1,9 @@
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
 }
+---
 
 ///|
 async fn build_layout_contains(

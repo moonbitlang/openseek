@@ -16,7 +16,7 @@ fn pdf_capture_model(
     guard model.active_conversation() is Some(conv) else {
       fail("missing conversation")
     }
-    model.replace_conversation({ ..conv, engine_model: DsFlash, })
+    model.replace_conversation({ ..conv, engine_model: Deepseek(V4Flash), })
   }
   let docs = model.file_panel.docs.copy()
   let doc = docs[path]
@@ -214,7 +214,10 @@ test "unsupported image model refuses PDF screenshots and explains declined feed
   guard model.active_conversation() is Some(conv) else {
     fail("missing conversation")
   }
-  let model = model.replace_conversation({ ..conv, engine_model: DsPro, })
+  let model = model.replace_conversation({
+    ..conv,
+    engine_model: Deepseek(V4Pro),
+  })
   assert_false(model.can_attach_pdf_capture())
   let (_, rejected) = update_msg(test_dispatch(), captured(ctx, path), model)
   assert_true(rejected.composer_input().draft.images.is_empty())
@@ -234,7 +237,10 @@ test "unsupported image model refuses PDF screenshots and explains declined feed
   guard pending.active_conversation() is Some(conv) else {
     fail("missing conversation")
   }
-  let pending = pending.replace_conversation({ ..conv, engine_model: DsPro, })
+  let pending = pending.replace_conversation({
+    ..conv,
+    engine_model: Deepseek(V4Pro),
+  })
   let msg = FileEditor(@fileeditor.PdfCaptureSubmissionDeclined(draft.preview))
   // Commands remain inert without a browser; equal inputs give equal models.
   let (_, first) = update_msg(test_dispatch(), msg, pending)

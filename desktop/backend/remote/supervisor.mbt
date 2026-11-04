@@ -23,57 +23,6 @@ struct RelayActor {
 }
 
 ///|
-pub fn RelayActor::RelayActor(
-  state : @api.ApiState,
-  announce~ : (String) -> Unit,
-) -> RelayActor {
-  { state, announce, }
-}
-
-///|
-/// Run for the host's lifetime (spawned once from main). `announce` preserves
-/// the startup log line on every successful registration.
-pub async fn RelayActor::run(self : RelayActor) -> Unit {
-  let store = self.state.auth_store()
-  for ;; {
-    match store.desired_connector() {
-      // Idle: nothing to run until someone pokes the store.
-      None => store.wakeups().get()
-      Some(config) => {
-        let end : SessionEnd = @async.any([
-          () => {
-            store.wakeups().get()
-            Poked
-          },
-          () => Refused(self.run_connector(config)),
-        ])
-        match end {
-          // The config changed: `any` already cancelled the old connector
-          // (tearing its control socket down); re-read and start over.
-          Poked => ()
-          Refused(message) => {
-            @xlog.warn(category="remote") <?
-              { "message": "relay refused registration", "error": message }
-            store.handle_refusal(expected=config) catch {
-              error =>
-                // The relay already rejected this token. Keep the actor
-                // alive and parked on the cleared in-memory state even if
-                // persisting its signed-out marker failed.
-                @xlog.warn(category="remote") <?
-                  {
-                    "message": "could not persist refused sign-out",
-                    "error": "\{error}",
-                  }
-            }
-            self.state.publish(AuthChanged(auth_changed_params(self.state)))
-          }
-        }
-      }
-    }
-  }
-}
-
-///|
 fn RelayActor::registered(self : RelayActor, device : String) -> Unit {
   (self.announce)(device)
   if self.state.auth_store().mark_registered(device) {

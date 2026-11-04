@@ -345,7 +345,9 @@ async test "a finished background job queues a notice and wakes the controller" 
     })
     guard tools.find("mbtx") is Some(mbtx) else { fail("mbtx tool missing") }
     let source =
+      #|---
       #|import { "moonbitlang/async" }
+      #|---
       #|
       #|async fn main {
       #|  @async.sleep(5_500)

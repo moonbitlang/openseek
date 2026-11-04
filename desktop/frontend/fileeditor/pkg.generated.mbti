@@ -28,8 +28,6 @@ pub fn activate(@cmd.Emit[Msg], State, Ctx, @common.Uri) -> (@cmd.Cmd, State)
 
 pub fn activate_history_diff(@cmd.Emit[Msg], State, Ctx, @dock.GitHistoryDiff) -> (@cmd.Cmd, State)
 
-pub fn apply_font_family(String) -> @cmd.Cmd
-
 pub fn apply_font_size(Double) -> @cmd.Cmd
 
 pub fn apply_language(@i18n.Locale) -> @cmd.Cmd
@@ -64,15 +62,11 @@ pub fn office_feedback_subscription(@cmd.Emit[Msg], OfficeSelectionPreview, Stri
 
 pub fn open_changed_document(@cmd.Emit[Msg], State, Ctx, ChangedFile, had_active~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn open_document(@cmd.Emit[Msg], State, Ctx, @common.Uri, name~ : String, file_link_generation? : Int32, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
-
 pub fn open_file(@cmd.Emit[Msg], State, Ctx, @common.Uri, file_link_generation? : Int32, range~ : @common.Range?, annotation? : String, office_target? : @office_location.Target, had_active~ : Bool) -> (@cmd.Cmd, State)
 
 pub fn open_history_diff(@cmd.Emit[Msg], State, Ctx, @dock.GitHistoryDiff) -> (@cmd.Cmd, State)
 
 pub fn panel_toggle_cmds(@cmd.Emit[Msg], State, Ctx, opening~ : Bool) -> (@cmd.Cmd, State)
-
-pub fn pdf_capture_feedback_subscription(@cmd.Emit[Msg], PdfCaptureDraft, batch~ : Bool, (String, Bool) -> @cmd.Cmd) -> @sub.Sub
 
 pub fn region_feedback_subscription(@cmd.Emit[Msg], RegionFeedbackDraft, batch~ : Bool, (String, Bool) -> @cmd.Cmd) -> @sub.Sub
 
@@ -122,7 +116,7 @@ pub(all) enum ChangeList {
 pub fn ChangeList::equal(Self, Self) -> Bool
 pub fn ChangeList::not_equal(Self, Self) -> Bool
 
-pub(all) enum ChangeTreeItem {
+pub enum ChangeTreeItem {
   ChangeDirectory(@pathx.Relative)
   ChangeFile(ChangedFile)
 } derive(Eq)
@@ -139,7 +133,7 @@ pub(all) struct ChangedFile {
 pub fn ChangedFile::equal(Self, Self) -> Bool
 pub fn ChangedFile::not_equal(Self, Self) -> Bool
 
-pub(all) struct ChangedFileReview {
+pub struct ChangedFileReview {
   // private fields
 } derive(Eq)
 pub fn ChangedFileReview::equal(Self, Self) -> Bool
@@ -176,7 +170,6 @@ pub(all) struct Ctx {
 } derive(Eq)
 pub fn Ctx::equal(Self, Self) -> Bool
 pub fn Ctx::not_equal(Self, Self) -> Bool
-pub fn Ctx::observed_files(Self) -> Array[@common.Uri]
 pub fn Ctx::root(Self) -> @common.Uri?
 
 pub(all) struct Doc {
@@ -188,7 +181,7 @@ pub(all) struct Doc {
 pub fn Doc::equal(Self, Self) -> Bool
 pub fn Doc::not_equal(Self, Self) -> Bool
 
-pub(all) struct ExcelCopyFeedback {
+pub struct ExcelCopyFeedback {
   preview : OfficeSelectionPreview
   generation : Int32
   format : ExcelCopyFormat
@@ -197,14 +190,14 @@ pub(all) struct ExcelCopyFeedback {
 pub fn ExcelCopyFeedback::equal(Self, Self) -> Bool
 pub fn ExcelCopyFeedback::not_equal(Self, Self) -> Bool
 
-pub(all) enum ExcelCopyFormat {
+pub enum ExcelCopyFormat {
   Tsv
   Markdown
 } derive(Eq)
 pub fn ExcelCopyFormat::equal(Self, Self) -> Bool
 pub fn ExcelCopyFormat::not_equal(Self, Self) -> Bool
 
-pub(all) enum ExcelCopyStatus {
+pub enum ExcelCopyStatus {
   Copying
   Copied
   Failed
@@ -247,7 +240,7 @@ pub(all) enum FileContent {
   Content(content~ : String, sig~ : String)
 }
 
-pub(all) struct FileEntry {
+pub struct FileEntry {
   name : String
   path : @pathx.Relative
   is_dir : Bool
@@ -264,12 +257,12 @@ pub enum FileIndex {
 pub fn FileIndex::equal(Self, Self) -> Bool
 pub fn FileIndex::not_equal(Self, Self) -> Bool
 
-pub(all) struct FileStat {
+pub struct FileStat {
   path : @common.Uri
   signature : @protocol.FileSignature
 }
 
-pub(all) enum GitCommitFiles {
+pub enum GitCommitFiles {
   GitCommitFilesIdle
   GitCommitFilesLoading(commit~ : String)
   GitCommitFilesFailed(commit~ : String, message~ : String)
@@ -287,7 +280,7 @@ type GraphLane derive(Eq)
 
 type GraphRow derive(Eq)
 
-pub(all) enum HistoryBlob {
+pub enum HistoryBlob {
   HistoryBlobLoading
   HistoryBlobMissing
   HistoryBlobBinary
@@ -296,14 +289,14 @@ pub(all) enum HistoryBlob {
   HistoryBlobError(String)
 } derive(Eq)
 
-pub(all) struct HistoryDiffDoc {
+pub struct HistoryDiffDoc {
   diff : @dock.GitHistoryDiff
   generation : Int32
   original : HistoryBlob
   modified : HistoryBlob
 } derive(Eq)
 
-pub(all) enum HistoryDiffSide {
+pub enum HistoryDiffSide {
   HistoryOriginal
   HistoryModified
 } derive(Eq)
@@ -319,7 +312,7 @@ pub struct ModelUri(String)
 pub fn ModelUri::of(@common.Uri) -> Self
 pub fn ModelUri::resource(Self) -> @common.Uri
 
-pub(all) enum MoonModViewMode {
+pub enum MoonModViewMode {
   MoonModDependencies
   MoonModSource
 } derive(Eq)
@@ -457,7 +450,7 @@ pub(all) enum Msg {
   DiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int32?, modified_line_number~ : Int32?, quote~ : String, comment~ : String, resource~ : ModelUri?, feedback_id~ : String?)
 }
 
-pub(all) struct OfficeCitationNavigation {
+pub struct OfficeCitationNavigation {
   owner : @interop.ConversationIdentity
   epoch : Int32
   generation : Int32
@@ -480,10 +473,9 @@ pub(all) struct OfficeRegionPreview {
   capture : @office_capture.Capture
 } derive(Eq)
 pub fn OfficeRegionPreview::equal(Self, Self) -> Bool
-pub fn OfficeRegionPreview::materialized_selection(Self, String) -> String
 pub fn OfficeRegionPreview::not_equal(Self, Self) -> Bool
 
-pub(all) struct OfficeRegionRequest {
+pub struct OfficeRegionRequest {
   id : Int64
   owner : @interop.ConversationIdentity
   epoch : Int32
@@ -508,14 +500,14 @@ pub fn OfficeSelectionPreview::equal(Self, Self) -> Bool
 pub fn OfficeSelectionPreview::materialized_selection(Self, String) -> String?
 pub fn OfficeSelectionPreview::not_equal(Self, Self) -> Bool
 
-pub(all) struct OfficeZoomPreference {
+pub struct OfficeZoomPreference {
   fit_width : Bool
   zoom : Int32
 } derive(Eq)
 pub fn OfficeZoomPreference::equal(Self, Self) -> Bool
 pub fn OfficeZoomPreference::not_equal(Self, Self) -> Bool
 
-pub(all) enum PackageGraphState {
+pub enum PackageGraphState {
   PackageGraphLoading(Int32)
   PackageGraphReady(Int32, String)
   PackageGraphFailed(Int32, String)
@@ -540,7 +532,6 @@ pub(all) struct PdfCapturePreview {
   capture : @pdf_capture.Capture
 } derive(Eq)
 pub fn PdfCapturePreview::equal(Self, Self) -> Bool
-pub fn PdfCapturePreview::materialized_selection(Self, String) -> String
 pub fn PdfCapturePreview::not_equal(Self, Self) -> Bool
 
 pub(all) struct PdfDocument {
@@ -571,19 +562,18 @@ pub(all) enum ReconciledPlacement {
   PlacementParked(last_known~ : @interop.CheckoutPlacement?)
 } derive(Eq)
 pub fn ReconciledPlacement::equal(Self, Self) -> Bool
-pub fn ReconciledPlacement::identity(Self) -> @interop.CheckoutPlacement?
 pub fn ReconciledPlacement::is_parked(Self) -> Bool
 pub fn ReconciledPlacement::not_equal(Self, Self) -> Bool
 pub fn ReconciledPlacement::reconcile(Self, @interop.CheckoutPlacement?) -> Self
 
-pub(all) struct RegionFeedbackDraft {
+pub struct RegionFeedbackDraft {
   preview : RegionFeedbackPreview
   comment : String
 } derive(Eq)
 pub fn RegionFeedbackDraft::equal(Self, Self) -> Bool
 pub fn RegionFeedbackDraft::not_equal(Self, Self) -> Bool
 
-pub(all) enum RegionFeedbackPreview {
+pub enum RegionFeedbackPreview {
   Pdf(PdfCapturePreview)
   Office(OfficeRegionPreview)
 } derive(Eq)
@@ -600,7 +590,7 @@ type RemovedDirectoryRead derive(Eq)
 pub fn RemovedDirectoryRead::equal(Self, Self) -> Bool
 pub fn RemovedDirectoryRead::not_equal(Self, Self) -> Bool
 
-pub(all) struct ReviewActiveHunk {
+pub struct ReviewActiveHunk {
   // private fields
 } derive(Eq)
 pub fn ReviewActiveHunk::equal(Self, Self) -> Bool
@@ -617,33 +607,33 @@ pub(all) enum ReviewBaseline {
 pub fn ReviewBaseline::equal(Self, Self) -> Bool
 pub fn ReviewBaseline::not_equal(Self, Self) -> Bool
 
-pub(all) enum ReviewDiffLayout {
+pub enum ReviewDiffLayout {
   ReviewSideBySide
   ReviewInline
 } derive(Eq)
 pub fn ReviewDiffLayout::equal(Self, Self) -> Bool
 pub fn ReviewDiffLayout::not_equal(Self, Self) -> Bool
 
-pub(all) enum ReviewDiffMode {
+pub enum ReviewDiffMode {
   ReviewDiffLine
   ReviewDiffToken
   ReviewDiffTree
 } derive(Eq, @debug.Debug)
 
-pub(all) enum ReviewFileProgress {
+pub enum ReviewFileProgress {
   ReviewFileInProgress(ReviewHunk)
   ReviewFileComplete
 } derive(Eq)
 pub fn ReviewFileProgress::equal(Self, Self) -> Bool
 pub fn ReviewFileProgress::not_equal(Self, Self) -> Bool
 
-pub(all) struct ReviewHunk {
+pub struct ReviewHunk {
   // private fields
 } derive(Eq)
 pub fn ReviewHunk::equal(Self, Self) -> Bool
 pub fn ReviewHunk::not_equal(Self, Self) -> Bool
 
-pub(all) struct ReviewHunkPosition {
+pub struct ReviewHunkPosition {
   // private fields
 } derive(Eq)
 pub fn ReviewHunkPosition::equal(Self, Self) -> Bool
@@ -676,7 +666,7 @@ pub(all) enum ReviewViewMode {
 pub fn ReviewViewMode::equal(Self, Self) -> Bool
 pub fn ReviewViewMode::not_equal(Self, Self) -> Bool
 
-pub(all) struct SemanticReviewInput {
+pub struct SemanticReviewInput {
   old_name : String
   new_name : String
   old_source : String
@@ -691,7 +681,7 @@ pub fn SemanticReviewInput::equal(Self, Self) -> Bool
 pub fn SemanticReviewInput::not_equal(Self, Self) -> Bool
 pub fn SemanticReviewInput::to_repr(Self) -> @debug.Repr
 
-pub(all) struct SemanticReviewLiveDocument {
+pub struct SemanticReviewLiveDocument {
   resource : @common.Uri
   path : @pathx.Relative
 } derive(Eq, @debug.Debug)
@@ -793,7 +783,6 @@ pub fn State::accepts_office_region(Self, Ctx, OfficeRegionRequest) -> Bool
 pub fn State::accepts_pdf_callback(Self, Ctx, @interop.ConversationIdentity, Int32, @common.Uri, String, Int32) -> Bool
 pub fn State::accepts_review_context(Self, @mention_context.ReviewChanges) -> Bool
 pub fn State::dismiss_office_selection(Self, Ctx, OfficeSelectionPreview) -> (@cmd.Cmd, Self)
-pub fn State::dismiss_pdf_capture(Self, Ctx, PdfCapturePreview) -> (@cmd.Cmd, Self)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::has_pinned_office_selection(Self, Ctx) -> Bool
@@ -803,7 +792,6 @@ pub fn State::pending_office_region(Self, Ctx) -> OfficeRegionDraft?
 pub fn State::pending_office_selection(Self, Ctx) -> OfficeSelectionPreview?
 pub fn State::pending_pdf_capture(Self, Ctx) -> PdfCaptureDraft?
 pub fn State::pending_region_feedback(Self, Ctx) -> RegionFeedbackDraft?
-pub fn State::polled_files(Self, Ctx) -> Array[@common.Uri]
 pub fn State::prepare_owner(Self, @interop.ConversationIdentity, Array[@common.Uri], cloud_epoch? : Int32) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
 pub fn State::start_office_region(Self, Ctx, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)

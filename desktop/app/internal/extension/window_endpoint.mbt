@@ -45,3 +45,30 @@ fn bind_shared(
   )
   registrar.bind(command, (_, payload) => endpoint.invoke(payload))
 }
+
+///|
+async test "native window ops are absent from the relay method catalog" {
+  let state = @api.ApiState(engine="unused")
+  let connection = @host.HostConnection()
+  let catalog = @api.endpoints(state, connection)
+  let views = BrowserViews()
+  let window_only = app_window_endpoints(() => views.attached_window())
+  window_only.append(browser_endpoints(views))
+  assert_true(
+    window_only.any(endpoint => {
+      endpoint.name() == @commands.app_toggle_maximized.name()
+    }),
+  )
+  assert_true(
+    window_only.any(endpoint => {
+      endpoint.name() == @commands.app_set_titlebar_theme.name()
+    }),
+  )
+  let names : Set[String] = Set([])
+  for endpoint in window_only {
+    let name = endpoint.name()
+    assert_false(names.contains(name))
+    names.add(name)
+    assert_false(catalog.any(shared => shared.name() == name))
+  }
+}

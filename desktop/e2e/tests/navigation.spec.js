@@ -77,7 +77,7 @@ for (const [target, title] of [
           jsonrpc: '2.0', id: request.id, result: await app.replyFor(request),
         }));
       });
-      socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: 2 } }));
+      socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: app.hostProtocol } }));
     });
     const destination = `/device/host/${target}`;
     await page.goto(destination);
@@ -87,7 +87,7 @@ for (const [target, title] of [
     await expect.poll(() => signInChecks).toBe(2);
     await expect(heading(page)).toHaveText(title);
     expect(new URL(page.url()).search).toBe('');
-    expect(app.socketURLs).toHaveLength(2);
+    await expect.poll(() => app.socketURLs.length).toBe(2);
     expect(app.ticketRequests).toEqual([]);
     expect(app.pageErrors).toEqual([]);
   });
@@ -238,6 +238,21 @@ test('session deep links wait for catalogs and distinguish missing from failed l
   await page.goto(path('chat/session/does-not-exist'));
   await expect(page.locator('.navigation-notice')).toContainText('catalog unavailable');
   await expect(page.locator('.navigation-notice')).not.toContainText('no longer exists');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test("a management page answers the host's Back only with a level to return to", async ({ page }) => {
+  const app = new DesktopBrowserHarness(page); skills(app);
+  await app.install(); await page.goto(path('skills'));
+  await expect(page.locator('.skill-summary', { hasText: 'route-skill' })).toBeVisible();
+  // The Android shell's Back: true exactly when something closed. Opened
+  // directly, the page has no level to return to, so Back is the host's.
+  const hostBack = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
+  expect(await hostBack()).toBe(false);
+  await page.locator('.skill-summary', { hasText: 'route-skill' }).click();
+  await expect(page.locator('.skill-preview-markdown')).toContainText('Detail reached.');
+  expect(await hostBack()).toBe(true);
+  await expect(page).toHaveURL(new RegExp(path('skills') + '$'));
   expect(app.pageErrors).toEqual([]);
 });
 

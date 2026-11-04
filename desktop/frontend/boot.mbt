@@ -425,6 +425,8 @@ fn SidebarDispatcher::placeholder_open(
 ) -> @cmd.Cmd {
   if id == "cloud-sign-in" {
     self.emit(RemoteConnectClicked)
+  } else if id == "cloud-list-status" {
+    self.emit(CloudAction(@cloud.Refresh))
   } else {
     self.unroutable("placeholder action", id)
   }
@@ -482,6 +484,12 @@ fn main {
   // created, so this is a one-time read of the page's environment, not a
   // wait for something that may still arrive.
   let desktop = @interop.openseek_api() is Some(_)
+  // This nonsecret marker comes from the loopback server on every document
+  // route, including /cloud after a reload that no longer carries ?device=.
+  let local_console = @dom.document()
+    .query_selector("meta[name='seekmoon-local-console']")
+    .to_option()
+    is Some(_)
   @crash_page.install()
   let app = @rabbita.new(() => {
     // The root routes editor events; the composer created below owns its draft.
@@ -494,7 +502,7 @@ fn main {
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.
-      init=emit => (initial_model(desktop~), emit(Init)),
+      init=emit => (initial_model(desktop~, local_console~), emit(Init)),
       update=(model, msg, emit) => {
         let (cmd, next) = match msg {
           ComposerReply(reply) => ((composer_reply.val)(reply), model)
@@ -545,9 +553,7 @@ fn main {
             emit.map(message => CloudAction(message)),
           ),
         ]
-        if model.screen.work_screen() is None && !model.is_console_gated() {
-          subs.push(management_navigation_subscription(emit))
-        }
+        subs.append(back_layers(model, emit))
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
         subs.push(

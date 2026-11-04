@@ -1,5 +1,6 @@
 import {
   "moonbitlang/core/env",
+  "moonbitlang/openseek/agent_approval",
   "moonbitlang/openseek/agent_explore",
   "moonbitlang/openseek/agent_worker",
   "moonbitlang/openseek/agent_review",

@@ -438,3 +438,72 @@ test('Excel annotation hides outside either horizontal edge and restores its dra
   }
   expect(app.pageErrors).toEqual([]);
 });
+
+test('PowerPoint opens every slide with searchable text, cropped images and page navigation', async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const app = new DesktopBrowserHarness(page);
+  app.officeFiles['docs/slides.pptx'] = {
+    data_base64: readFileSync(new URL('../fixtures/office/static-slides.pptx', import.meta.url)).toString('base64'),
+    media_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    sig: 'office:static-slides',
+  };
+  app.directoryEntries['/workspace'] = [{ name: 'docs', is_dir: true }];
+  app.directoryEntries['/workspace/docs'] = [{ name: 'slides.pptx', is_dir: false }];
+  app.searchFiles = ['docs/slides.pptx'];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await app.openReview({ waitForHistory: false });
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await app.openQuickOpen();
+  await page.locator('#quick-open-input').fill('slides.pptx');
+  await expect(page.getByRole('option', { name: /slides\.pptx/ })).toBeVisible();
+  await page.locator('#quick-open-input').press('Enter');
+  const surface = page.locator('#openseek-office-surface');
+  const slides = surface.locator('.pptx-slide');
+  await expect(slides).toHaveCount(2);
+  await expect(slides.first()).toContainText('PPTX preview');
+  await expect(slides.nth(1)).toContainText('Second slide');
+  await expect(surface.locator('.office-font-substitutions')).toContainText('Arial');
+  await expect(slides.locator('svg image')).toHaveCount(2);
+  expect(await slides.locator('clipPath').evaluateAll(nodes => nodes.map(node => node.id))).toEqual(['page1-c1', 'page2-c1']);
+  await expect(page.getByRole('button', { name: 'Document fonts', exact: true })).toHaveCount(0);
+  const thumbnails = page.locator('#openseek-office-slide-list button');
+  await expect(thumbnails).toHaveCount(2);
+  await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('Second');
+  await expect(slides.nth(1).locator('text.office-search-hit')).toHaveCount(1);
+  await thumbnails.nth(1).click();
+  await expect(thumbnails.nth(1)).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect(slides.nth(1)).toHaveCSS('zoom', '1.1');
+  await pinchZoom(page, slides.nth(1).locator('svg text').first());
+  await expect(slides.nth(1)).toHaveCSS('zoom', '1.22');
+  await page.screenshot({ path: testInfo.outputPath('powerpoint-preview.png') });
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option', { name: /^DS Flash(?: ✓)?$/ }).click();
+  await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('');
+  await thumbnails.nth(1).click();
+  const box = await slides.nth(1).boundingBox();
+  await page.getByRole('button', { name: 'Annotate region', exact: true }).click();
+  await expect(page.locator('.office-region-capture')).toBeVisible();
+  await page.mouse.move(box.x+40,box.y+45);
+  await page.mouse.down();
+  await page.mouse.move(box.x+300,box.y+160,{steps:8});
+  await page.mouse.up();
+  const feedback = page.locator('.pdf-capture-feedback');
+  await expect(feedback.locator('textarea')).toBeVisible();
+  await feedback.locator('textarea').fill('Inspect this slide');
+  await feedback.getByRole('checkbox').check();
+  await feedback.locator('.agent-feedback-input-action').click();
+  await expect(page.locator('.composer-image img')).toHaveCount(1);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
+  const request = app.requests.find(r => r.method === 'agent.start');
+  const params = JSON.stringify(request.params);
+  expect(params).toContain('pptx');
+  expect(params).toContain('office-region');
+  expect(params).toContain('Inspect this slide');
+  expect(app.pageErrors).toEqual([]);
+});

@@ -514,7 +514,7 @@ test "a blocked marker pauses the standing goal without clearing it" {
 
 ///|
 test "durable content replays mixed content without provider IDs" {
-  let parts : Array[@agent_session.ContentPart] = [
+  let parts : Array[@protocol.ContentPart] = [
     Text("before"),
     Image(
       @agent_session.Image::from_base64(

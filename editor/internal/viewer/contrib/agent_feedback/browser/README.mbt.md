@@ -45,6 +45,12 @@ moon check internal/viewer/contrib/agent_feedback/browser --target js
 moon test internal/viewer/contrib/agent_feedback/browser --target js
 ```
 
+Application text and text-control geometry follow the host-neutral
+`--ui-font-size` token (13px standalone default). CSS owns the input's
+font-relative minimum and maximum height; the widget only measures the draft
+and supplies its preferred height. Gutter glyph grids and document coordinates
+remain independent of this UI scale.
+
 The inline input uses a Batch checkbox and one submit button. With Batch off
 (the initial choice), Enter or the button adds the draft and applies the
 accepted feedback. With Batch on, they only add it to the batch. The choice

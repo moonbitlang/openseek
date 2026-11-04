@@ -44,6 +44,7 @@ struct HostState {
   moon : MoonCliState
   updates : SelfUpdate
   resources : HostResources
+  skills : @skillmarket.BuiltinSkills
 }
 
 ///|
@@ -89,6 +90,7 @@ pub fn new_host_state(
     moon: MoonCliState(engine, runtime_dir?, source=resources.moonbit),
     updates: SelfUpdate(runtime_dir, executable, app_version~),
     resources,
+    skills: @skillmarket.BuiltinSkills::new(),
   }
 }
 
@@ -188,14 +190,6 @@ pub async fn HostConnection::run(
 }
 
 ///|
-/// A desktop page reload cannot reclaim its old emulator instances. Retire
-/// those PTYs before attaching the new page; WebSocket-owned sessions are
-/// cancelled automatically with their connection task group.
-pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
-  @terminal.close_all_terminals(self.terminal)
-}
-
-///|
 /// Host-owned endpoints are assembled next to the private operations they
 /// invoke. The API package concatenates this catalog with engine/auth
 /// endpoints, so these operations do not need one public forwarding method
@@ -286,9 +280,6 @@ pub fn endpoints(
       Acknowledged
     }),
     Endpoint(@commands.fs_browse, payload => browse_directory_op(payload)),
-    Endpoint(@commands.fs_create_unnamed_workspace, _ => {
-      create_unnamed_workspace_op()
-    }),
     Endpoint(@commands.fs_create_directory, payload => {
       create_directory_op(payload)
     }),
@@ -333,9 +324,9 @@ pub fn endpoints(
     Endpoint(@commands.skills_installed_content, payload => {
       installed_skill_content_op(payload)
     }),
-    Endpoint(@commands.skills_installed, _ => installed_skills_op()),
+    Endpoint(@commands.skills_installed, _ => installed_skills_op(state)),
     Endpoint(@commands.skills_install, payload => {
-      install_skill_op(payload, on_skills_changed)
+      install_skill_op(state, payload, on_skills_changed)
     }),
     Endpoint(@commands.skills_uninstall, payload => {
       uninstall_skill_op(payload, on_skills_changed)

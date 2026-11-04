@@ -109,7 +109,7 @@ pub fn page_ws_origin() -> String? {
 ///|
 /// A device's protocol WebSocket URL: same origin, the relay's
 /// `/v2/devices/<device>/ws` ticket route. The local Dev console
-/// uses its launch cookie on the existing v1 route, without a ticket.
+/// connects directly to its v1 route without credentials or a ticket.
 fn ws_url(device : String, ticket? : String) -> String? {
   guard page_ws_origin() is Some(origin) else { return None }
   let version = if ticket is Some(_) { "v2" } else { "v1" }

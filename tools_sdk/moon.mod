@@ -1,10 +1,6 @@
 name = "moonbitlang/openseek_tools"
 
-version = "0.3.0"
-
-import {
-  "moonbitlang/async@0.22.4",
-}
+version = "0.4.0"
 
 readme = "README.mbt.md"
 

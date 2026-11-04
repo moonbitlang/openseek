@@ -11,7 +11,9 @@ async test "direct and unprinted PTC image results reach the next request and re
       let first = if ptc {
         ptc_payload(
           (
+            #|---
             #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+            #|---
             #|async fn main {
             #|  let result = @tools.call("read_image", { "path": "picture" })
             #|  if result.is_error { fail(result.content) }

@@ -1,4 +1,4 @@
-///|
+---
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
+---
 
 ///|
 /// The real CLI with a durable session starts a directory worker, and the

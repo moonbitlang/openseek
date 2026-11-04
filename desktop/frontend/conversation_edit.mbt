@@ -90,7 +90,7 @@ fn Model::edit_user_message(
     session: source.session,
     workspace: source.workspace.path,
     through: edit.through,
-    model: conv.engine_model.wire(),
+    model: conv.engine_model.to_string(),
     source_title: self.selected_conversation_title(),
     source_sequence: conv.durable_frontier(),
     task: draft.prompt(),

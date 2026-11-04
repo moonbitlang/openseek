@@ -66,10 +66,10 @@ fn duration_label(milliseconds : Int32) -> String {
 /// Tool definition for `mbtx`: compile and run a self-contained MoonBit
 /// program and return its merged stdout/stderr and exit status.
 ///
-/// The program is a `.mbtx` single-file script — it may open with an inline
-/// `import { "pkg", … }` block (comma-separated module paths) naming the
-/// standard packages it uses, followed by the program including its own
-/// `main`. It runs via `moon run` with your workspace as the working directory
+/// The program is a `.mbtx` single-file script — it may open with `---` front
+/// matter holding an `import { "pkg", … }` block (comma-separated module
+/// paths) naming the packages it uses, followed by the program including its
+/// own `main`. It runs via `moon run` with your workspace as the working directory
 /// by default — so relative `@fs` paths (e.g. `@fs.read_file("data.json")`)
 /// resolve to workspace files, and any output the program writes lands in the
 /// workspace. Pass `cwd` to run somewhere else. Build artifacts never touch
@@ -149,13 +149,18 @@ pub fn definition(
   AgentToolDefinition(
     name="mbtx",
     description=description(
-      background=bg_runtime is Some(_),
-      escalation=approval is Some(_),
-      delegation=subagents,
-      auto_background_after_ms~,
-      foreground_timeout_ms~,
-      build_timeout_ms~,
-    ),
+        background=bg_runtime is Some(_),
+        escalation=approval is Some(_),
+        delegation=subagents,
+        auto_background_after_ms~,
+        foreground_timeout_ms~,
+        build_timeout_ms~,
+      ) +
+      (if scratch_dir is Some(_) {
+        "\nFile artifacts: write completed files under the artifact/ subdirectory of the session scratch path shown in Environment. Use that actual path as an explicit script argument and new filenames for revisions, then reference scratch/artifact/FILENAME in an openseek-file fence in the final answer. Add the artifact marker to display completed HTML/SVG interactively. Read <bundled-resources>/artifact/README.md for normal MoonBit/Rabbita interactive HTML generation."
+      } else {
+        ""
+      }),
     schema=JsonSchema(
       schema(
         escalation=approval is Some(_),
@@ -427,16 +432,6 @@ async fn execute(
         (source, filename, Some(path))
       }
     }
-  }
-  // Keep the early diagnostic for unsupported FFI. The wasm compiler also
-  // rejects `extern "c"` and `extern "js"`; this scan only explains the
-  // refusal before building. Match the quoted syntax, not the bare word,
-  // which may appear in prose and string literals.
-  if source.contains("extern \"") {
-    return @agent_tool.respond(
-      "mbtx refuses this program: it uses native FFI (extern), which the wasm backend cannot compile or run sandboxed.",
-      is_error=true,
-    )
   }
   // The program's working directory (default: the workspace root, so relative
   // `@fs` paths reach workspace files). An explicit relative `cwd` resolves
@@ -1587,7 +1582,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
                 "ptc",
                 Json({
                   "type": "boolean",
-                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.2.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for runs without escalated; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with escalated.",
+                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.4.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for runs without escalated; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with escalated.",
                 }),
               ),
             ]
@@ -1647,7 +1642,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
 /// MoonBit is the system prompt's to teach — it is how a snippet does its
 /// work, not advice handed out after a refusal — so the refusal text below
 /// names no table. The default system prompt owns the
-/// `moonbitlang/async/shell` tutorial and worked examples; those teach one
+/// `moonbitlang/core/async/shell` tutorial and worked examples; those teach one
 /// role's workflow rather than describing what the tool enforces.
 ///
 /// The spawn list is RENDERED from `spawnable_commands` by

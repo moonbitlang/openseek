@@ -9,7 +9,7 @@ priv struct ConversationFork {
   source : ConversationSelection
   source_title : String
   kind : ConversationForkKind
-  engine_model : EngineModel
+  engine_model : @deepseek.Model
   // The source's approval choice, which the fork keeps like its tier.
   approval : @protocol.OpenSeekApproval
   connection_generation : Int32
@@ -218,7 +218,7 @@ fn fork_conversation(
                 session: pending.source.session,
                 workspace: pending.source.workspace.path,
                 through,
-                model: pending.engine_model.wire(),
+                model: pending.engine_model.to_string(),
                 source_title: pending.source_title,
                 side_chat: None,
               },

@@ -1,11 +1,12 @@
-///|
-/// Checked errors are an effect on a function, not a value it returns: a
-/// parser returns its result directly and failures travel in `raise`. This
-/// file is verified by CI (type-checked under deny-warn and run), so what it
-/// shows is what the compiler accepts today.
+---
+// Checked errors are an effect on a function, not a value it returns: a
+// parser returns its result directly and failures travel in `raise`. This
+// file is verified by CI (type-checked under deny-warn and run), so what it
+// shows is what the compiler accepts today.
 import {
   "moonbitlang/core/string",
 }
+---
 
 ///|
 /// A custom error is a `suberror`, never `type Error` or a trait. Match its

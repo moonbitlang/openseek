@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/prompt" @content,
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/settings",
+  "openseek_desktop/frontend/select_control",
+}
+
+supported_targets = "js"

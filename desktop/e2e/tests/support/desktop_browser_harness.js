@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { extname, resolve, sep } from 'node:path';
 
 const officeFixture = name =>
   readFileSync(new URL(`../../fixtures/office/${name}`, import.meta.url)).toString('base64');
@@ -10,7 +11,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 2;
+    this.hostProtocol = 5;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -84,7 +85,10 @@ export class DesktopBrowserHarness {
       has_glm_key: false,
       has_custom_key: false,
       followup_behavior: 'steer',
+      prompt_source: 'builtin_moonbit_guide',
+      custom_prompt: '',
     };
+    this.builtinSkillErrors = [];
     this.installedSkills = [
       {
         id: 'moonbit',
@@ -92,6 +96,7 @@ export class DesktopBrowserHarness {
         description: 'Authoritative MoonBit guidance',
         source: '',
         enabled: true,
+        builtin: false,
       },
     ];
     this.codexRequiresAuth = false;
@@ -527,13 +532,25 @@ export class DesktopBrowserHarness {
     };
   }
 
-  async install() {
+  async install({ offlineAssets = process.env.OPENSEEK_DESKTOP_OFFLINE_ASSETS } = {}) {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
+    if (offlineAssets) {
+      const root = resolve(offlineAssets);
+      const types = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.wasm': 'application/wasm' };
+      await this.page.route('http://127.0.0.1:5175/**', async route => {
+        const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
+        const file = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
+        if (!file.startsWith(root + sep)) return route.fulfill({ status: 404, body: '' });
+        try { await route.fulfill({ contentType: types[extname(file)] || 'application/octet-stream', body: readFileSync(file) }); }
+        catch { await route.fulfill({ status: 404, body: '' }); }
+      });
+    }
     // Match openseek-api: every page route (`/device/:device/*page`, `/cloud`
     // and `/cloud/*page`) serves the one current document.
     await this.page.route(url => url.pathname.startsWith('/device/') || url.pathname === '/cloud' ||
       url.pathname.startsWith('/cloud/'), async route => {
       if (!route.request().isNavigationRequest()) return route.continue();
+      if (offlineAssets) return route.fulfill({ contentType: 'text/html', body: readFileSync(resolve(offlineAssets, 'index.html')) });
       const url = new URL('/index.html', route.request().url());
       const response = await route.fetch({ url: url.href });
       await route.fulfill({ response });
@@ -678,11 +695,13 @@ export class DesktopBrowserHarness {
           'deepseek_api_key',
           'glm_api_key',
           'custom_api_key',
+          'prompt_source',
+          'custom_prompt',
         ]) {
           if (patch[key] === undefined) {
             continue;
           }
-          if (key === 'provider' || key === 'custom_api_url') {
+          if (['provider', 'custom_api_url', 'prompt_source', 'custom_prompt'].includes(key)) {
             this.hostSettings[key] = patch[key];
           } else {
             const savedKey = `has_${key.replace('_api_key', '')}_key`;
@@ -693,7 +712,7 @@ export class DesktopBrowserHarness {
         return this.hostSettings;
       }
       case 'skills.installed':
-        return { skills: this.installedSkills };
+        return { skills: this.installedSkills, builtin_errors: this.builtinSkillErrors };
       case 'skills.catalog':
         return {
           skills: [
@@ -730,6 +749,7 @@ export class DesktopBrowserHarness {
           source: 'rabbita@0.15.4/moonbitlang/rabbita',
           registry: { module_name: 'rabbita', package_path: 'moonbitlang/rabbita' },
           enabled: true,
+          builtin: false,
         };
         if (!this.installedSkills.some(skill => skill.id === installed.id)) {
           this.installedSkills.push(installed);
@@ -1015,18 +1035,13 @@ export class DesktopBrowserHarness {
           pdf: 'application/pdf',
           docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         }[extension];
         this.officeFiles[path] = { data_base64: source.data_base64, media_type, sig: `upload:${id}` };
         return { path };
       }
       case 'fs.stage_attachments':
         return {};
-      case 'fs.create_unnamed_workspace':
-        return {
-          path: '/Users/test/Library/Application Support/SeekMoon/workspaces/Unnamed workspace',
-          parent: '/Users/test/Library/Application Support/SeekMoon/workspaces',
-          entries: [],
-        };
       case 'fs.browse':
         return {
           path: '/Users/test',

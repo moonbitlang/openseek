@@ -1,9 +1,10 @@
-///|
-/// Strings, views, collections, and JSON values as the compiler accepts them
-/// today: this file is verified by CI (type-checked under deny-warn and run).
+---
+// Strings, views, collections, and JSON values as the compiler accepts them
+// today: this file is verified by CI (type-checked under deny-warn and run).
 import {
   "moonbitlang/core/string",
 }
+---
 
 ///|
 fn main raise {

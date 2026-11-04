@@ -11,7 +11,9 @@ test('Chinese covers feature pages, composer and dock after live switching', asy
     window.dispatchEvent(new Event('languagechange'));
   });
   await expect(page.locator('#task')).toHaveAttribute('placeholder', '让 SeekMoon 检查、编辑或解释此工作区。');
+  await page.locator('#task').fill('检查工作区');
   await expect(page.getByRole('button', { name: '发送', exact: true })).toBeVisible();
+  await page.locator('#task').fill('');
   await page.getByRole('button', { name: '显示面板', exact: true }).click();
   await expect(page.getByRole('button', { name: /搜索 在工作区中搜索文本/ })).toBeVisible();
   await page.getByRole('button', { name: '技能', exact: true }).click();
