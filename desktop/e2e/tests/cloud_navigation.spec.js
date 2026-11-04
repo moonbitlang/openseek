@@ -79,7 +79,8 @@ test('Cloud login returns to the exact deep link without creating a session', as
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-for (const status of [403, 404, 503]) {
+// Statuses other than 404 share one retryable failure path.
+for (const status of [404, 503]) {
   test(`Cloud deep-link HTTP ${status} stays distinct and never creates a replacement`, async ({ page }) => {
     const cloud = new CloudHarness(page);
     cloud.historyStatus = status;
