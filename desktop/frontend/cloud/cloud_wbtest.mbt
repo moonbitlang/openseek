@@ -104,6 +104,7 @@ test "Busy cannot allow another send before authoritative history recovers" {
     Loaded(1, "session", request, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [],
       generating: false,
     }),
@@ -111,6 +112,10 @@ test "Busy cannot allow another send before authoritative history recovers" {
     token="ts_fixture",
     navigation=0,
   )
+  let loaded = loaded.replace("session", {
+    ..loaded.conversations["session"],
+    last_seq: Some(0),
+  })
   let owner = @interop.Cloud(account="user", session="session")
   let draft : @composer.Draft = { task: "question", images: [], mentions: [], }
   let (sending, _, _) = update(
@@ -149,6 +154,7 @@ test "Busy cannot allow another send before authoritative history recovers" {
     Loaded(1, "session", blocked.sequence, {
       prediction: None,
       session: native_document([]),
+      etag: None,
       messages: [],
       generating: false,
     }),
@@ -184,6 +190,7 @@ test "history recovery clears a send error only when the pending submission was 
               ..Conversation::empty(),
               loading: false,
               history_required: false,
+              last_seq: Some(0),
             },
           ),
         ]),
@@ -207,6 +214,7 @@ test "history recovery clears a send error only when the pending submission was 
       let history : History = {
         prediction: None,
         session: native_document([]),
+        etag: None,
         messages: if admitted {
           [
             {
@@ -269,7 +277,12 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     conversations: Map([
       (
         "session",
-        { ..Conversation::empty(), loading: false, history_required: false, },
+        {
+          ..Conversation::empty(),
+          loading: false,
+          history_required: false,
+          last_seq: Some(0),
+        },
       ),
     ]),
   }
@@ -307,6 +320,7 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
         { "kind": "user", "payload": { "content": "hello" } },
         { "kind": "assistant", "payload": { "content": "你好 🌙" } },
       ]),
+      etag: None,
       messages: [
         {
           task_id: "task",

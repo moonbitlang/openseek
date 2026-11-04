@@ -19,6 +19,7 @@ pub(all) struct Record {
 
 ///|
 pub(all) struct History {
+  etag : String?
   prediction : @wire.PredictionRecord?
   session : @protocol.SessionDocument
   messages : Array[Record]
@@ -57,6 +58,12 @@ pub extend WatchStatus with Eq::{equal, not_equal}
 ///|
 pub(all) struct Conversation {
   records : Array[Record]
+  history_cached : Bool
+  history_etag : String?
+  history_reading : Bool
+  // Compare the first snapshot after a revisit that shares an earlier read.
+  history_resume_baseline : (String?, Int32?)?
+  history_refresh_after_read : Bool
   // Last task lifecycle event supplies status while canonical history reloads.
   events : Array[Event]
   document : @protocol.SessionDocument
@@ -104,6 +111,11 @@ pub(all) struct Conversation {
 fn Conversation::empty() -> Conversation {
   {
     records: [],
+    history_cached: false,
+    history_etag: None,
+    history_reading: false,
+    history_resume_baseline: None,
+    history_refresh_after_read: false,
     events: [],
     document: {
       version: None,
@@ -256,6 +268,7 @@ pub(all) enum Msg {
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, Failure)
   Loaded(Int32, String, Int32, History)
+  HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, Failure)
   WatchOpened(Int32, String, StreamLease)
   WatchEvent(Int32, String, StreamLease, ControlStreamEvent)
@@ -381,6 +394,7 @@ fn decode_history(json : Json) -> History raise RequestError {
     _ => None
   }
   {
+    etag: None,
     session,
     messages,
     prediction,

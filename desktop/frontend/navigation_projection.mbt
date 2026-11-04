@@ -6,7 +6,12 @@ fn Model::navigation_location(self : Model) -> @routes.Location? {
     Chat =>
       if self.cloud_draft_identity()
         is Some(@interop.Cloud(account~, session=id)) {
-        CloudDraft(account=Some(account), id~)
+        // The landing draft can be recreated after a reload at /cloud.
+        if self.navigation.location is Some({ target: Cloud, .. }) {
+          Cloud
+        } else {
+          CloudDraft(account=Some(account), id~)
+        }
       } else if self.cloud_identity()
         is Some(@interop.Cloud(account~, session~)) {
         CloudSession(account=Some(account), session~)

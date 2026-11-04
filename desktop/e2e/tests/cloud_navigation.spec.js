@@ -4,26 +4,27 @@ import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './suppor
 const sessionURL = id => `${authOrigin}/cloud/session/${id}`;
 const creations = cloud => cloud.requests.filter(r => r.side === 'cloud' && r.path === '/v1/sessions' && r.method === 'POST');
 
-test('Cloud home refresh is passive and first send promotes the draft URL to its session', async ({ page }, testInfo) => {
+test('Cloud home opens the composer and creates a session only on first send', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
-  await expect(page.locator('.cloud-home')).toBeVisible();
-  await expect(page.locator('.cloud-home button')).toHaveText('New chat');
+  const composer = page.locator('#task');
+  await expect(composer).toBeEnabled();
+  await expect(page).toHaveURL(`${authOrigin}/cloud`);
   await page.reload();
-  await expect(page.locator('.cloud-home button')).toHaveText('New chat');
+  await expect(composer).toBeEnabled();
+  await expect(page).toHaveURL(`${authOrigin}/cloud`);
   expect(creations(cloud)).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('cloud-home.png'), fullPage: true });
-  await page.locator('.cloud-home button').click();
-  await expect(page).toHaveURL(new RegExp(`^${authOrigin}/cloud/draft/[^/]+$`));
+  await composer.fill('First Cloud message');
   expect(creations(cloud)).toEqual([]);
-  await page.locator('#task').fill('First Cloud message');
-  await page.locator('#task').press('Enter');
+  await composer.press('Enter');
   await expect(page).toHaveURL(sessionURL(sessionC));
   expect(creations(cloud)).toHaveLength(1);
   await page.goBack();
   await expect(page).toHaveURL(`${authOrigin}/cloud`);
-  await expect(page.locator('.cloud-home')).toBeVisible();
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue('');
   expect(creations(cloud)).toHaveLength(1);
   expect(cloud.device.ticketRequests).toHaveLength(0);
   expect(cloud.device.pageErrors).toEqual([]);
@@ -47,6 +48,19 @@ test('Cloud session direct access and refresh do not depend on catalog membershi
   expect(creations(cloud)).toEqual([]);
   expect(cloud.device.ticketRequests).toHaveLength(0);
   expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud home opens the composer after sign-in', async ({ page }) => {
+  const cloud = new CloudHarness(page, { cached: false });
+  await cloud.install();
+  await page.goto(`${authOrigin}/cloud`);
+  const login = page.locator('main').getByRole('button', { name: 'Sign in with GitHub' });
+  await expect(login).toBeVisible();
+  await expect(page.locator('#task')).toHaveCount(0);
+  await login.click();
+  await expect(page.locator('#task')).toBeEnabled();
+  await expect(page).toHaveURL(`${authOrigin}/cloud`);
+  expect(creations(cloud)).toEqual([]);
 });
 
 test('Cloud login returns to the exact deep link without creating a session', async ({ page }) => {
@@ -102,6 +116,154 @@ test('late Cloud history cannot replace a newer URL selection', async ({ page })
   expect(creations(cloud)).toEqual([]);
 });
 
+test('Cloud revisits show cached history during conditional reads and pick up another device’s message', async ({ page, context }) => {
+  const cloud = new CloudHarness(page);
+  cloud.histories.set(sessionA, {
+    messages: [{ task_id: 'original', kind: 'user', data: { content: 'Cached Cloud message' }, created_at: 1000 }],
+    generating: false,
+  });
+  await cloud.install();
+  await cloud.goto();
+  const historyPath = `/v1/sessions/${sessionA}/messages`;
+  const reads = () => cloud.requests.filter(r => r.method === 'GET' && r.path === historyPath);
+  const historyResponse = () => page.waitForResponse(r => r.request().method() === 'GET' && r.url().endsWith(historyPath));
+  const transcript = page.locator('#transcript');
+  const composer = page.locator('#task');
+  const first = historyResponse();
+  await cloud.open(sessionA);
+  const firstTag = (await first).headers().etag;
+  expect(firstTag).toBeTruthy();
+  await expect(transcript).toContainText('Cached Cloud message');
+  await cloud.open(sessionB);
+
+  let release;
+  cloud.pauseHistory = new Promise(resolve => { release = resolve; });
+  const revalidated = historyResponse();
+  try {
+    await cloud.open(sessionA);
+    await expect(transcript).toContainText('Cached Cloud message');
+    await composer.fill('Keep this local draft');
+    await expect(page.locator('#send')).toBeEnabled();
+    await expect.poll(() => reads().length).toBe(2);
+    await cloud.open(sessionB);
+    await cloud.open(sessionA);
+    await expect(transcript).toContainText('Cached Cloud message');
+    await expect(composer).toHaveValue('Keep this local draft');
+    await expect(page.locator('#send')).toBeEnabled();
+    expect(reads()).toHaveLength(2);
+    expect(reads()[1].headers['if-none-match']).toBe(firstTag);
+  } finally {
+    cloud.pauseHistory = null;
+    release();
+  }
+  expect((await revalidated).status()).toBe(304);
+  await cloud.open(sessionB);
+
+  const otherPage = await context.newPage();
+  try {
+    const other = new CloudHarness(otherPage);
+    other.histories = cloud.histories;
+    await other.install();
+    await other.goto();
+    await other.open(sessionA);
+    await otherPage.locator('#task').fill('Added from another device');
+    await otherPage.locator('#send').click();
+    await expect(otherPage.locator('#transcript')).toContainText('calculation complete.');
+  } finally {
+    await otherPage.close();
+  }
+  const changed = historyResponse();
+  await cloud.open(sessionA);
+  const updated = await changed;
+  expect(updated.status()).toBe(200);
+  expect(updated.headers().etag).not.toBe(firstTag);
+  expect(reads()[2].headers['if-none-match']).toBe(firstTag);
+  await expect(transcript).toContainText('Added from another device');
+  await expect(composer).toHaveValue('Keep this local draft');
+  await cloud.open(sessionB);
+  const current = historyResponse();
+  await cloud.open(sessionA);
+  expect((await current).status()).toBe(304);
+  expect(reads()[3].headers['if-none-match']).toBe(updated.headers().etag);
+  await expect(transcript).toContainText('Added from another device');
+});
+
+test('Cloud cached revisits keep the draft editable while waiting for the first snapshot', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  const path = `/v1/sessions/${sessionA}/events`;
+  const observations = () => cloud.requests.filter(r => r.path === path);
+  await cloud.install();
+  await cloud.goto();
+  await cloud.open(sessionA);
+  const task = page.locator('#task');
+  await task.fill('Keep this prompt');
+  await expect(page.locator('#send')).toBeEnabled();
+  await cloud.open(sessionB);
+
+  let release;
+  cloud.pauseSessionEvents = new Promise(resolve => { release = resolve; });
+  try {
+    await cloud.open(sessionA);
+    await expect.poll(() => observations().length).toBe(2);
+    await expect(task).toBeEditable();
+    await expect(task).toHaveValue('Keep this prompt');
+    await expect(page.locator('#send')).toBeDisabled();
+    await task.press('Enter');
+    expect(cloud.postCount).toBe(0);
+  } finally {
+    cloud.pauseSessionEvents = null;
+    release();
+  }
+  await expect(page.locator('#send')).toBeEnabled();
+  await expect(task).toHaveValue('Keep this prompt');
+});
+
+test('Cloud catches up after an old conditional response spans an observation gap', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  const oldMessage = { task_id: 'original', kind: 'user', data: { content: 'Before switching' }, created_at: 1000 };
+  const path = `/v1/sessions/${sessionA}/messages`;
+  const reads = () => cloud.requests.filter(r => r.method === 'GET' && r.path === path);
+  cloud.histories.set(sessionA, { messages: [oldMessage], generating: false });
+  await cloud.install();
+  await cloud.goto();
+  await cloud.open(sessionA);
+  const transcript = page.locator('#transcript');
+  const task = page.locator('#task');
+  await expect(transcript).toContainText('Before switching');
+  await task.fill('Keep this draft across the gap');
+  await expect(page.locator('#send')).toBeEnabled();
+  await cloud.open(sessionB);
+
+  let release;
+  cloud.pauseHistory = new Promise(resolve => { release = resolve; });
+  const unchanged = page.waitForResponse(r => r.url().endsWith(path) && r.status() === 304);
+  try {
+    await cloud.open(sessionA);
+    await expect(page.locator('#send')).toBeEnabled();
+    await expect.poll(() => reads().length).toBe(2);
+    await cloud.open(sessionB);
+    cloud.histories.set(sessionA, {
+      messages: [oldMessage, { task_id: 'remote', kind: 'user', data: { content: 'Added during the gap' }, created_at: 2000 }],
+      generating: false,
+    });
+    const snapshot = cloud.controlState(sessionA);
+    cloud.controlSnapshots.set(sessionA, { ...snapshot, task_id: 'remote', seq: snapshot.seq + 3 });
+
+    await cloud.open(sessionA);
+    await expect(page.locator('#send')).toBeEnabled();
+    await expect(transcript).toContainText('Before switching');
+    expect(reads()).toHaveLength(2);
+  } finally {
+    cloud.pauseHistory = null;
+    release();
+  }
+  await unchanged;
+  await expect(transcript).toContainText('Added during the gap');
+  await expect(task).toHaveValue('Keep this draft across the gap');
+  expect(reads()).toHaveLength(3);
+  expect(reads()[2].headers['if-none-match']).toBe(reads()[1].headers['if-none-match']);
+});
+
 test('malformed Cloud destinations show invalid route rather than creating a session', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
@@ -114,11 +276,24 @@ test('malformed Cloud destinations show invalid route rather than creating a ses
 test('Cloud landing remains selected while a retained device connects', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
+  let releaseRoster;
+  const rosterReady = new Promise(resolve => { releaseRoster = resolve; });
+  await page.route('**/v2/devices', async route => {
+    await rosterReady;
+    await route.fallback();
+  });
   await page.goto(`${authOrigin}/cloud?device=device-a`);
-  await expect(page.locator('.cloud-home')).toBeVisible();
+  const composer = page.locator('#task');
+  try {
+    await expect(composer).toBeEnabled();
+    await composer.fill('Cloud draft while the device connects');
+  } finally {
+    releaseRoster();
+  }
   await expect.poll(() => cloud.device.requests.some(request => request.method === 'session.list')).toBe(true);
-  await expect(page.locator('.cloud-home')).toBeVisible();
-  await expect(page.locator('#task')).toHaveCount(0);
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue('Cloud draft while the device connects');
+  await expect(page.locator('main h1')).toHaveText('New chat');
   expect(creations(cloud)).toEqual([]);
 });
 
@@ -137,7 +312,9 @@ test('a Cloud URL is reauthorized after account change without retaining the old
   await expect(page.locator('.conversation-load-state')).toContainText('HTTP 403');
   await expect(page).toHaveURL(sessionURL(sessionA));
   await expect(page.getByText('First account history', { exact: true })).toHaveCount(0);
-  expect(cloud.requests.filter(r => r.path === `/v1/sessions/${sessionA}/messages`).at(-1).headers.authorization).toBe('Bearer ts_fixture-456');
+  const reauthorized = cloud.requests.filter(r => r.path === `/v1/sessions/${sessionA}/messages`).at(-1);
+  expect(reauthorized.headers.authorization).toBe('Bearer ts_fixture-456');
+  expect(reauthorized.headers['if-none-match']).toBeUndefined();
   expect(creations(cloud)).toEqual([]);
 });
 

@@ -35,17 +35,19 @@ fn activate_navigation(
     model
   }
   if location.target is Cloud {
-    return (
-      @cmd.none,
-      {
-        ..model,
-        selected_conversation: None,
-        loading_conversation: None,
-        api_setup_open: false,
-        sidebar_mode: @sidebar.ChatMode,
-        navigation: { ..model.navigation, phase: Active, },
-      },
-    )
+    let next = {
+      ..model,
+      selected_conversation: None,
+      loading_conversation: None,
+      api_setup_open: false,
+      sidebar_mode: @sidebar.ChatMode,
+      navigation: { ..model.navigation, phase: Active, },
+    }
+    if next.account is Some(account) &&
+      next.cloud.user_id == Some(account.user.user_id) {
+      return update_cloud(dispatch, @cloud.Create, next)
+    }
+    return (@cmd.none, next)
   }
   if location.target is CloudSession(account=owner, session~) {
     guard model.account is Some(account) &&

@@ -319,7 +319,8 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   await expect.poll(() => cloud.postCount).toBe(1);
   const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
   expect(JSON.parse(request.body).command.content).toBe('Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeVisible();
+  await expect(page.locator('main .run-status')).toHaveText('Finished');
+  await expect(input).toHaveValue('');
   await input.press('ArrowUp');
   await expect(input).toHaveValue('Update the heading');
   await expect(chip).toContainText('index.html');

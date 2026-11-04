@@ -41,6 +41,10 @@ fn reconcile_navigation(
       },
     }
   }
+  if previous.cloud.user_id != next.cloud.user_id &&
+    next.navigation.location is Some({ target: Cloud, .. }) {
+    next = { ..next, navigation: { ..next.navigation, phase: Waiting, }, }
+  }
   let commands : Array[@cmd.Cmd] = []
   next = { ..next, navigation: observe_navigation_catalogs(message, next), }
   let observation = observe_navigation(message, previous, next)
