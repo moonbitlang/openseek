@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -47,6 +48,20 @@ internal class AppUpdater(private val activity: Activity) {
             }
             if (ready != null) activity.runOnUiThread { offer(ready.first, ready.second) }
         }
+    }
+
+    /**
+     * Android may destroy the activity, or the whole process, while the user
+     * is in Settings granting "install unknown apps". The pending APK stays in
+     * the cache; its path travels in the saved state so [onResume] continues.
+     */
+    fun saveState(outState: Bundle) {
+        awaitingPermission?.let { outState.putString(AWAITING_PERMISSION, it.path) }
+    }
+
+    fun restoreState(savedState: Bundle?) {
+        val path = savedState?.getString(AWAITING_PERMISSION) ?: return
+        awaitingPermission = File(path).takeIf { it.isFile }
     }
 
     /** Resumes an installation that was waiting for the "install unknown apps" setting. */
@@ -159,6 +174,7 @@ internal class AppUpdater(private val activity: Activity) {
 
     companion object {
         private const val TAG = "AppUpdater"
+        private const val AWAITING_PERMISSION = "appUpdater.awaitingPermission"
     }
 }
 

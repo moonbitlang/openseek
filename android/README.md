@@ -79,7 +79,9 @@ Installing goes through `PackageInstaller`. The first time, Android asks the
 user to allow installs from SeekMoon (`REQUEST_INSTALL_PACKAGES`); the app
 then continues the installation when it returns from Settings. Android shows
 its own confirmation unless the device is on Android 12+ and this app
-installed the current version itself. Android rejects an APK signed with a
+installed the current version itself (`UPDATE_PACKAGES_WITHOUT_USER_ACTION`).
+If Android destroys the app while the user is in Settings, the pending
+installation is restored from the saved state. Android rejects an APK signed with a
 different key, which is why every release must keep the same keystore.
 Debug builds (`.debug`) never check for updates.
 
