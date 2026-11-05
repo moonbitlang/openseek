@@ -1304,7 +1304,7 @@ button.row-twisty:hover {
   background: var(--color-bg-surface);
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
   color: var(--color-text-muted);
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-emphasis);
 }
 .sidebar-search:focus-within {
   outline: 2px solid var(--color-focus-ring);
