@@ -1,4 +1,8 @@
 import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/js",
+  "moonbitlang/core/string",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/icons",

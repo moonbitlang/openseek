@@ -72,6 +72,7 @@ priv struct ContextState {
 priv enum ContextMsg {
   Requested(ContextRequest, Int32, Int32, String?)
   CloseContext
+  NativeClosed(ContextOpen)
 }
 
 ///|
@@ -493,71 +494,76 @@ pub fn context_component(
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => ({ open_context: None, }, @cmd.none),
-    update=(_state, input, msg, _) => {
+    update=(state, input, msg, _) => {
       match msg {
         Requested(request, x, y, restore_focus_id) => {
           guard context_definition(input, request, actions) is Some(definition) &&
-            definition.enabled_indices() is [_, ..] else {
+            definition.has_enabled_actions() else {
             return ({ open_context: None, }, @cmd.none)
           }
           let open : ContextOpen = { request, x, y, restore_focus_id, }
-          (
-            { open_context: Some(open), },
-            @cmd.batch([
-              position(GlobalContextTarget, Pointer(x, y)),
-              focus_element(menu_id(GlobalContextTarget), true),
-            ]),
-          )
+          ({ open_context: Some(open), }, @cmd.none)
         }
         CloseContext => ({ open_context: None, }, @cmd.none)
+        NativeClosed(open) =>
+          if state.open_context == Some(open) {
+            ({ open_context: None, }, @cmd.none)
+          } else {
+            (state, @cmd.none)
+          }
       }
     },
-    subscriptions=(state, input, emit) => {
-      let requests = context_menu_subscription(emit)
-      guard state.open_context is Some(open) else { return requests }
-      let enabled = context_definition(input, open.request, actions).bind(definition => {
-        let enabled = definition.enabled_indices()
-        if enabled.is_empty() {
-          None
-        } else {
-          Some(enabled)
-        }
-      })
-      let focus = focus_subscription(
-        GlobalContextTarget,
-        enabled,
-        emit.map((_ : Unit) => CloseContext),
-      )
-      let subs = [
-        requests,
-        dismiss_subscription(
-          GlobalContextTarget,
-          emit.map((_ : Unit) => CloseContext),
-          dismiss_on_context=false,
-        ),
-        focus,
-      ]
-      // The menu renders only with an enabled action to offer.
-      if enabled is Some(_) {
-        subs.push(
-          @dismiss.on_back(
-            "context-menu-back",
-            emit.map((_ : Unit) => CloseContext),
-          ),
-        )
+    subscriptions=(_, _, emit) => context_menu_subscription(emit),
+  )
+  let localized = input.map2(locale, (input, locale) => (input, locale))
+  state
+  .map(state => state.open_context)
+  .switch_by(
+    current => {
+      match current {
+        None => @rabbita.Val::constant(@html.nothing)
+        Some(open) =>
+          menu_component(
+            localized,
+            open.as_menu_open(),
+            localized => {
+              context_definition(
+                locale=localized.1,
+                localized.0,
+                open.request,
+                actions,
+              ).bind(definition => {
+                if definition.has_enabled_actions() {
+                  Some(definition)
+                } else {
+                  None
+                }
+              })
+            },
+            emit(NativeClosed(open)),
+          )
       }
-      @sub.batch(subs)
+    },
+    by=current => {
+      match current {
+        None => "closed"
+        Some(open) => {
+          let target = match open.request.target {
+            NoTarget => "none"
+            WebLink(url) => "web:" + url
+            EmailLink(url~, address~) => "email:" + url + ":" + address
+            FileLink(url, workspace_file~) =>
+              "file:" + url + ":" + workspace_file.unwrap_or("")
+          }
+          open.as_menu_open().key() +
+          ":" +
+          target +
+          ":" +
+          open.request.selected_text.unwrap_or("")
+        }
+      }
     },
   )
-  state.map3(input, locale, (state, input, locale) => {
-    guard state.open_context is Some(open) &&
-      context_definition(locale~, input, open.request, actions)
-      is Some(definition) &&
-      !definition.enabled_indices().is_empty() else {
-      return @html.nothing
-    }
-    render_menu(open.as_menu_open(), definition, emit(CloseContext))
-  })
 }
 
 ///|

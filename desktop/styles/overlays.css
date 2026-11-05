@@ -1,20 +1,4 @@
-/* Shared themed menu surface for stable row actions and ephemeral app-shell
-   context. The action-menu module positions it inside the visual viewport. */
-.action-menu {
-  --icon-size: var(--icon-md);
-  position: fixed;
-  min-width: 180px;
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-  box-shadow: var(--shadow-overlay);
-  z-index: var(--z-menu);
-}
-.action-menu[data-positioned="false"] {
-  visibility: hidden;
-}
-.action-menu-item {
+.selection-actions .action-menu-item {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -29,41 +13,36 @@
   text-align: left;
   cursor: pointer;
 }
-.action-menu-item:hover,
-.action-menu-item:focus-visible {
+.selection-actions .action-menu-item:hover,
+.selection-actions .action-menu-item:focus-visible {
   outline: none;
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
 }
-.action-menu-item:disabled {
+.selection-actions .action-menu-item:disabled {
   cursor: default;
   opacity: 0.5;
 }
-.action-menu-item:disabled:hover {
+.selection-actions .action-menu-item:disabled:hover {
   background: transparent;
   color: var(--color-text-primary);
 }
-.action-menu-item.destructive:hover,
-.action-menu-item.destructive:focus-visible {
+.selection-actions .action-menu-item.destructive:hover,
+.selection-actions .action-menu-item.destructive:focus-visible {
   background: var(--color-danger-soft);
   color: var(--color-danger);
 }
-.action-menu-item > .icon {
+.selection-actions .action-menu-item > .icon {
   color: var(--color-text-muted);
 }
-.action-menu-item:hover > .icon,
-.action-menu-item:focus-visible > .icon {
+.selection-actions .action-menu-item:hover > .icon,
+.selection-actions .action-menu-item:focus-visible > .icon {
   color: inherit;
 }
 .action-menu-icon-placeholder {
   flex: 0 0 var(--icon-size);
   width: var(--icon-size);
   height: var(--icon-size);
-}
-.action-menu-separator {
-  height: 1px;
-  margin: var(--space-2);
-  background: var(--color-border);
 }
 
 /* Floating reply beside a fresh text selection. The action-menu module
