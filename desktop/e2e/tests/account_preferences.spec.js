@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, settledResponse, cloudOrigin } from './support/cloud_harness.js';
 
 const label = 'Help improve SeekMoon';

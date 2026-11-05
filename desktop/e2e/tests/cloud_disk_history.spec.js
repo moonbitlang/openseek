@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 test('desktop reopens cached Cloud turns offline and revalidates them after restart', async ({ page }, testInfo) => {

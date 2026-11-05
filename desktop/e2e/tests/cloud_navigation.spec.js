@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const sessionURL = id => `${authOrigin}/cloud/session/${id}`;

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA } from './support/cloud_harness.js';
 
 test('Cloud detail toggle updates the transcript and preserves the preference across narrow layouts and reloads', async ({ page }, testInfo) => {

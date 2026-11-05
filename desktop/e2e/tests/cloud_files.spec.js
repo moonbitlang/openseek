@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';

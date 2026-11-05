@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { SshBrowserHarness } from './support/ssh_browser_harness.js';
 
 const warning = [

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // These cases exercise the detailed transcript's reasoning and tool cards.
@@ -46,7 +46,7 @@ test('Codex partial output and result-only calls retain pending status until com
   expect(app.pageErrors).toEqual([]);
 });
 
-test('tool success and failure preserve each call’s selected inputs and independent status', async ({ page }) => {
+test('tool success and failure preserve each call’s selected inputs and independent status', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const outcomes = [
     { id: 'success-call', isError: false, description: 'Successful check' },

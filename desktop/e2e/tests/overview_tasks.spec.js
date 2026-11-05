@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const command = 'npm run dev -- --host 127.0.0.1 --port 5173 --strictPort --open false';
