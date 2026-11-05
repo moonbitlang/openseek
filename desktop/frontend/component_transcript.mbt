@@ -271,6 +271,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       root=None,
       items=@transcript_component.VisibleRow::history(conversation.items()),
       older_history=conversation.can_load_older_history(),
+      loading_older_history=conversation.history_older_request is Some(_),
       streaming_response=conversation.live.response,
       streaming_reasoning?=conversation.live.reasoning.map(r => r.content),
       reasoning_complete=conversation.live.reasoning.map_or(false, r => {

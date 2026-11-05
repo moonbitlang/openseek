@@ -90,6 +90,7 @@ struct Input {
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
   older_history : Bool
+  loading_older_history : Bool
   // The registered project that owns this conversation, kept separate from
   // `root`: a managed worktree resolves files from its checkout while the
   // empty-state question should still name the project the user selected.
@@ -136,6 +137,7 @@ pub fn Input::Input(
   editable_users~ : Array[Int32] = [],
   scroll~ : ScrollPosition = Pinned,
   older_history~ : Bool = false,
+  loading_older_history~ : Bool = false,
   project_label? : String,
   current_project~ : @common.Uri?,
   projects~ : Array[ProjectChoice],
@@ -165,6 +167,7 @@ pub fn Input::Input(
     identity: identity.unwrap_or(active_session),
     scroll,
     older_history,
+    loading_older_history,
     project_label,
     current_project,
     projects,

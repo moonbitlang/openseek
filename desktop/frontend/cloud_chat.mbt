@@ -629,7 +629,9 @@ fn Model::cloud_chat_rows(
         nested: false,
         subrun: false,
         active,
-        loading: conversation.map_or(false, conversation => conversation.loading),
+        loading: conversation.map_or(false, conversation => {
+          conversation.loading || conversation.history_older_request is Some(_)
+        }),
         load_failed: conversation.map_or(false, conversation => {
           conversation.history_required && conversation.notice is Some(_)
         }),
