@@ -30,27 +30,27 @@ dialog.desktop-dialog::backdrop {
   dialog.desktop-dialog {
     scale: 0.99;
     transition:
-      scale 90ms ease-in,
-      display 90ms allow-discrete,
-      overlay 90ms allow-discrete;
+      scale 60ms ease-in,
+      display 60ms allow-discrete,
+      overlay 60ms allow-discrete;
   }
 
   dialog.desktop-dialog[open] {
     scale: none;
-    transition-duration: 140ms;
+    transition-duration: 60ms;
     transition-timing-function: cubic-bezier(0.2, 1.4, 0.4, 1);
   }
 
   /* Keep the backdrop solid until the closing window leaves the top layer. */
   dialog.desktop-dialog::backdrop {
     transition:
-      display 90ms allow-discrete,
-      overlay 90ms allow-discrete;
+      display 60ms allow-discrete,
+      overlay 60ms allow-discrete;
   }
 
   @starting-style {
     dialog.desktop-dialog[open] {
-      scale: 0.96;
+      scale: 0.99;
     }
   }
 }
