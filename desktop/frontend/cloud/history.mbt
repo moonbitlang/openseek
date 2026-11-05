@@ -284,7 +284,7 @@ fn Conversation::acknowledge_assistants(
   }
   let matched = self.assistant_handoffs.copy()
   let pending_assistants = self.pending_assistants.filter(pending => {
-    guard request >= pending.history_request &&
+    guard pending.history_request.map_or(true, first => request >= first) &&
       pending.item.kind is @transcript.Assistant(prose~, reasoning~, ..) else {
       return true
     }

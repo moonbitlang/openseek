@@ -713,6 +713,8 @@ pub fn update(
           ..conversation,
           stream: Some(stream),
           last_seq: None,
+          // Frames before this connection's baseline may have been missed.
+          live_task: None,
         }),
         @cmd.none,
         None,
@@ -872,6 +874,7 @@ pub fn update(
       let request = state.sequence + 1
       let next = state.replace(id, {
         ..conversation.clear_progress().fence_history(request),
+        live_task: None,
         // Fence history reads from the interrupted connection. Only a fresh
         // snapshot can establish the run state for the following history read.
         stream: None,
@@ -1413,6 +1416,11 @@ pub fn update(
           conversation.events
         },
         task: Some(event.task_id),
+        live_task: if event.kind == "task_started" {
+          Some(event.task_id)
+        } else {
+          conversation.live_task
+        },
         last_seq: Some(event.seq),
         generating: event.kind != "task_finished",
         observed_task: if event.kind == "task_finished" {

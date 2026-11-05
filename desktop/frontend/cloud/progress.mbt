@@ -57,7 +57,7 @@ pub fn Conversation::run_heartbeat(
 fn Conversation::live_progress(
   self : Conversation,
   wire : @wire.Event,
-  history_request : Int32,
+  history_request : Int32?,
 ) -> Conversation {
   let progress = @transcript.decode_engine_event(wire)
   let self = if progress.map_or(false, event => event.ends_retry()) ||
@@ -93,10 +93,17 @@ fn Conversation::live_progress(
     } else {
       self.pending_assistants
     }
-    return {
+    let next = {
       ..self.clear_streams(),
       notification_answer: Some(content),
       pending_assistants,
+    }
+    // A read can land before the notification it covers. Hand the preview
+    // off at once when its record is already here.
+    return if history_request is None {
+      next.acknowledge_assistants(0, next.document, next.records)
+    } else {
+      next
     }
   }
   if wire is @wire.ToolResult(..) {

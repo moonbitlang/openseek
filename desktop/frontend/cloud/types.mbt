@@ -70,7 +70,11 @@ pub extend WatchStatus with Eq::{equal, not_equal}
 #derive(Eq)
 pub struct PendingAssistant {
   task : String
-  history_request : Int32
+  // The first history read that may retire this preview. `None` when this
+  // connection observed the task from its start: every reply of the task then
+  // has its own preview, created in order, so any read holding the next
+  // unclaimed matching record owns it.
+  history_request : Int32?
   item : @transcript.TranscriptItem
 }
 
@@ -136,6 +140,8 @@ pub(all) struct Conversation {
   reasoning_frontier : Int32
   // Committed replies waiting for the history read triggered by their SSE.
   pending_assistants : Array[PendingAssistant]
+  // The task whose start this observation connection delivered.
+  live_task : String?
   assistant_handoffs : Map[String, Int32]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
@@ -192,6 +198,7 @@ fn Conversation::empty() -> Conversation {
     live: @engine_session.Stream::empty(),
     reasoning_frontier: 0,
     pending_assistants: [],
+    live_task: None,
     assistant_handoffs: Map([]),
     heartbeat: None,
     retrying: None,

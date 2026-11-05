@@ -394,18 +394,11 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
       },
     ],
   }
-  // The task start's read began before the reply's notification. Even when it
-  // covers the record, it cannot retire the preview, and a reply event starts
-  // no read of its own: its record may not be saved yet.
-  let earlier = pending.latest_read(committed)
-  assert_false(earlier.conversations["session"].history_reading)
-  assert_eq(earlier.conversations["session"].pending_assistants.length(), 1)
-  // The terminal barrier is sent only after the reply's record is saved.
-  let finishing = earlier.progress_test_event(7, "agent_finished", {
-    "answer": "Answer",
-  })
-  assert_true(finishing.conversations["session"].history_reading)
-  let canonical = finishing.latest_read(committed)
+  // The task start's read began before the reply's notification, but its
+  // snapshot holds the record. This connection saw the task start, so every
+  // reply of the task has a preview and the read hands this one off at once.
+  let canonical = pending.latest_read(committed)
+  assert_false(canonical.conversations["session"].history_reading)
   let conversation = canonical.conversations["session"]
   assert_true(conversation.live.reasoning.map(r => r.content) is None)
   assert_eq(conversation.items().length(), 2)
@@ -654,6 +647,67 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
 }
 
 ///|
+fn hello_page(items : Array[Json], markers : Array[Int32]) -> History {
+  {
+    offset: Some(0),
+    etag: Some("hello-\{items.length()}"),
+    generating: true,
+    prediction: None,
+    session: native_document(items),
+    messages: markers.map(sequence => {
+      task_id: "task",
+      kind: "assistant_message",
+      data: {},
+      created_at: 2,
+      engine_sequence: Some(sequence),
+    }),
+  }
+}
+
+///|
+test "Cloud hands a reply to a read that began before its notification when the task was observed from its start" {
+  let question : Json = { "kind": "user", "payload": { "content": "Hello" } }
+  let reply : Json = { "kind": "assistant", "payload": { "content": "Hello!" } }
+  // The task start's read is in flight when the first step begins, so the
+  // step's read follows it and is still in flight when the reply arrives.
+  let stepping = progress_test_state()
+    .progress_test_event(1, "task_started", {})
+    .progress_test_event(2, "step", { "step": 1 })
+    .latest_read(hello_page([question], []))
+  assert_true(stepping.conversations["session"].history_reading)
+  let replied = stepping.progress_test_event(3, "assistant_message", {
+    "content": "Hello!",
+  })
+  // That read's snapshot was taken after the reply was saved. Showing the
+  // record while keeping the preview would render the reply twice.
+  let settled = replied.latest_read(hello_page([question, reply], [2]))
+  let conversation = settled.conversations["session"]
+  assert_true(conversation.pending_assistants.is_empty())
+  assert_true(
+    conversation.items()
+    is [
+      { kind: User(..), sequence: Some(1), .. },
+      { kind: Assistant(prose=Some("Hello!"), ..), sequence: Some(2), .. },
+    ],
+  )
+  // A record read before its notification arrives is handed off when the
+  // notification creates the preview, without waiting for another read.
+  let early = stepping.latest_read(hello_page([question, reply], [2]))
+  let notified = early.progress_test_event(3, "assistant_message", {
+    "content": "Hello!",
+  })
+  let conversation = notified.conversations["session"]
+  assert_true(conversation.pending_assistants.is_empty())
+  assert_true(
+    conversation.items()
+    is [
+      { kind: User(..), sequence: Some(1), .. },
+      { kind: Assistant(prose=Some("Hello!"), ..), sequence: Some(2), .. },
+    ],
+  )
+}
+
+///|
 test "Cloud tool loop hands identical replies to their own native records" {
   let reply : Json = {
     "kind": "assistant",
@@ -702,42 +756,21 @@ test "Cloud tool loop hands identical replies to their own native records" {
   assert_true(first.conversations["session"].request > reading)
   assert_eq(first.conversations["session"].pending_assistants.length(), 1)
   // The second reply's notification arrives while the follow-up read is in
-  // flight. The record is saved soon after, so the read already covers it,
-  // yet it started too early to own that reply.
+  // flight. The record is saved soon after, so the read already covers it.
+  // This connection saw the task start, so the read hands it off at once.
   let looped = first.progress_test_event(5, "assistant_message", {
     "content": "Repeated",
   })
-  let following = looped.conversations["session"].request
-  assert_eq(following, first.conversations["session"].request)
+  assert_eq(
+    looped.conversations["session"].request,
+    first.conversations["session"].request,
+  )
   let covered = looped.latest_read({
     ..page,
     session: native_document([reply, tool, reply]),
     messages: [marker, { ..marker, engine_sequence: Some(3), }],
   })
   let conversation = covered.conversations["session"]
-  assert_false(conversation.history_reading)
-  assert_true(
-    conversation.items()
-    is [
-      { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. },
-      { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(3), .. },
-      { kind: Assistant(prose=Some("Repeated"), ..), sequence: None, .. },
-    ],
-  )
-  // The terminal barrier starts a read after the second reply was saved.
-  let covered = covered.progress_test_event(6, "agent_finished", {
-    "answer": "Repeated",
-  })
-  let conversation = covered.conversations["session"]
-  assert_true(conversation.history_reading)
-  assert_true(conversation.request > following)
-  // A 304 for that read validates the cached page, which holds the second
-  // record, so that preview hands off in the same update.
-  let validated = metadata_update(
-    covered,
-    HistoryUnchanged(1, "session", conversation.request, "page"),
-  )
-  let conversation = validated.conversations["session"]
   assert_false(conversation.history_reading)
   assert_true(conversation.pending_assistants.is_empty())
   assert_true(
@@ -746,5 +779,47 @@ test "Cloud tool loop hands identical replies to their own native records" {
       { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. },
       { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(3), .. },
     ],
+  )
+}
+
+///|
+test "Cloud keeps a joined task's preview until a read that began after its notification" {
+  let reply : Json = {
+    "kind": "assistant",
+    "payload": { "content": "Repeated" },
+  }
+  let started = progress_test_state().progress_test_event(1, "task_started", {})
+  // Join the running task without its start, as after a reconnect. An older
+  // identical reply may then have no preview of its own.
+  let joined = started.replace("session", {
+    ..started.conversations["session"],
+    live_task: None,
+  })
+  let replied = joined.progress_test_event(2, "assistant_message", {
+    "content": "Repeated",
+  })
+  // The read in flight began before the notification. Its matching record is
+  // no proof of ownership, so the preview stays.
+  let cached = replied.latest_read(hello_page([reply], [1]))
+  assert_eq(cached.conversations["session"].pending_assistants.length(), 1)
+  // The terminal barrier's read gets a 304. The cached page it validates holds
+  // the record, so the preview hands off in the same update.
+  let finishing = cached.progress_test_event(3, "agent_finished", {
+    "answer": "Repeated",
+  })
+  let validated = metadata_update(
+    finishing,
+    HistoryUnchanged(
+      1,
+      "session",
+      finishing.conversations["session"].request,
+      "hello-1",
+    ),
+  )
+  let conversation = validated.conversations["session"]
+  assert_true(conversation.pending_assistants.is_empty())
+  assert_true(
+    conversation.items()
+    is [{ kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. }],
   )
 }
