@@ -28,7 +28,7 @@ dialog.desktop-dialog::backdrop {
 
 @media (prefers-reduced-motion: no-preference) {
   dialog.desktop-dialog {
-    scale: 0.99;
+    scale: 0.995;
     transition:
       scale 60ms ease-in,
       display 60ms allow-discrete,
@@ -50,7 +50,7 @@ dialog.desktop-dialog::backdrop {
 
   @starting-style {
     dialog.desktop-dialog[open] {
-      scale: 0.99;
+      scale: 0.995;
     }
   }
 }
