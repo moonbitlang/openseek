@@ -433,3 +433,100 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
     @session_changes.summary(one, None, asked),
   )
 }
+
+///|
+test "merged pull requests fold into one row the user can unfold" {
+  let one = conversation("s-1")
+  let state = loaded(one, [pull(1), pull(2), pull(3), branch("feature")])
+  let summarize = (state : @session_changes.State, number, reply) => {
+    @session_changes.update(
+      quiet(),
+      Summarized(url=pull(number).url, generation=state.generation, reply),
+      state,
+    ).1
+  }
+  let state = summarize(state, 1, described(1, "open"))
+  let state = summarize(state, 2, described(2, "merged"))
+  let state = summarize(state, 3, described(3, "merged"))
+  // Pull request 1 and the branch keep their rows; 2 and 3 are one row.
+  assert_false(state.merged_open)
+  assert_true(@session_changes.rows(one, None, state, quiet()).length() == 3)
+  // The folded card's summary still counts every attached pull request.
+  assert_true(
+    @session_changes.summary(one, None, state) == Some("3 PRs · 1 branch"),
+  )
+  let (_, unfolded) = @session_changes.update(
+    quiet(),
+    MergedToggled(one),
+    state,
+  )
+  assert_true(unfolded.merged_open)
+  assert_true(@session_changes.rows(one, None, unfolded, quiet()).length() == 5)
+  // Another conversation's toggle is not this one's.
+  let (_, ignored) = @session_changes.update(
+    quiet(),
+    MergedToggled(conversation("s-2")),
+    unfolded,
+  )
+  assert_true(ignored == unfolded)
+  // The list read again keeps the fold as the user left it.
+  let (_, changed) = @session_changes.update(quiet(), Changed(one), unfolded)
+  assert_true(changed.merged_open)
+  // Another conversation starts folded.
+  let (_, other) = @session_changes.update(
+    quiet(),
+    Opened(conversation("s-2")),
+    unfolded,
+  )
+  assert_false(other.merged_open)
+  // With nothing merged, there is no fold row.
+  let open = loaded(one, [pull(1)])
+  let open = summarize(open, 1, described(1, "open"))
+  assert_true(@session_changes.rows(one, None, open, quiet()).length() == 1)
+}
+
+///|
+test "removing every merged pull request removes each one once" {
+  let one = conversation("s-1")
+  let state = loaded(one, [pull(1), pull(2), pull(3)])
+  // Pull request 2 is already being removed on its own.
+  let (_, removing) = @session_changes.update(
+    quiet(),
+    Remove(one, pull(2)),
+    state,
+  )
+  let (_, all) = @session_changes.update(
+    quiet(),
+    RemoveAll(one, [pull(2), pull(3)]),
+    removing,
+  )
+  assert_true(all.removing == [pull(2), pull(3)])
+  // Asking again while they are out changes nothing; so does asking for
+  // another conversation.
+  let (_, again) = @session_changes.update(
+    quiet(),
+    RemoveAll(one, [pull(2), pull(3)]),
+    all,
+  )
+  assert_true(again == all)
+  let (_, other) = @session_changes.update(
+    quiet(),
+    RemoveAll(conversation("s-2"), [pull(1)]),
+    all,
+  )
+  assert_true(other == all)
+  // Each answers on its own, and the last one leaves nothing being removed.
+  let (_, first) = @session_changes.update(
+    quiet(),
+    Removed(one, pull(2), listed([pull(1), pull(3)])),
+    all,
+  )
+  assert_true(first.removing == [pull(3)])
+  let (_, second) = @session_changes.update(
+    quiet(),
+    Removed(one, pull(3), listed([pull(1)])),
+    first,
+  )
+  assert_true(second.removing.is_empty())
+  assert_true(second.phase is Reloading([item]) && item == pull(1))
+}
