@@ -5,8 +5,8 @@
   --rui-popover-foreground: var(--color-text-primary);
   --rui-muted-foreground: var(--color-text-muted);
   --rui-border: var(--color-border);
-  --rui-accent: var(--color-accent-soft);
-  --rui-accent-foreground: var(--color-accent-strong);
+  --rui-accent: var(--color-hover-subtle);
+  --rui-accent-foreground: var(--color-text-primary);
   --rui-destructive: var(--color-danger);
   --rui-destructive-subtle: var(--color-danger-soft);
   --rui-radius: var(--radius-md);
