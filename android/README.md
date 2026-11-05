@@ -1,4 +1,4 @@
-# OpenSeek Connect for Android
+# SeekMoon for Android
 
 Remote conversations through Connect. Kotlin hosts the shared MoonBit/Rabbita
 frontend; Connect conversations and commands run on the selected computer.
@@ -64,6 +64,24 @@ overrides it for a direct Gradle build. Versions follow the release workflow's
 `major.minor.patch` range (major <= 9999, minor/patch <= 99), with a monotonic
 Android `versionCode` of `major * 10000 + minor * 100 + patch + 1`.
 Older releases predating Android remain valid rollback targets.
+
+## Self-update
+
+Release builds update themselves from the same manifest as Desktop
+(`https://openseek-api.moonbitlang.cn/desktop/releases/latest.json`). On each
+launch the app compares the manifest's `version` with its own `versionName`,
+downloads `platforms.android` into its cache in the background, and checks
+the SHA-256. When the APK is ready, a dialog offers to install it. If no
+newer release exists, or the release has no APK, the app shows nothing, and
+network failures only reach the log.
+
+Installing goes through `PackageInstaller`. The first time, Android asks the
+user to allow installs from SeekMoon (`REQUEST_INSTALL_PACKAGES`); the app
+then continues the installation when it returns from Settings. Android shows
+its own confirmation unless the device is on Android 12+ and this app
+installed the current version itself. Android rejects an APK signed with a
+different key, which is why every release must keep the same keystore.
+Debug builds (`.debug`) never check for updates.
 
 The launcher icon uses the white rabbit paths from
 `desktop/package/macos/appicon.svg` and the blue background (`#3B6EF5`) from
