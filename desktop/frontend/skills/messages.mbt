@@ -37,6 +37,11 @@ priv enum UiMessage {
 }
 
 ///|
+pub fn detail_title(locale : @i18n.Locale) -> String {
+  ui(locale, Details)
+}
+
+///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
     (English, Builtin) => "Built-in"

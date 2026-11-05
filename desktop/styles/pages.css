@@ -115,7 +115,7 @@ a:where(.setting-link) {
 
 #skill-detail-dialog {
   --dialog-width: 52rem;
-  max-height: min(40rem, 80dvh);
+  max-height: min(52rem, 80dvh);
 }
 
 /* Management pages keep their own content spacing; the shell owns scrolling. */
@@ -841,8 +841,6 @@ button.archived-chat-open:hover .archived-chat-title {
 
 .skill-preview-markdown {
   min-width: 0;
-  max-height: min(62vh, 720px);
-  overflow: auto;
   white-space: normal;
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
@@ -907,10 +905,6 @@ button.archived-chat-open:hover .archived-chat-title {
   max-width: 840px;
 }
 
-.skill-back {
-  justify-self: start;
-}
-
 .skill-detail-header {
   display: grid;
   gap: var(--space-4);
@@ -929,24 +923,14 @@ button.archived-chat-open:hover .archived-chat-title {
   justify-self: start;
 }
 
-.skill-detail-card {
-  min-width: 0;
-  padding: var(--space-7) var(--space-7);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-}
-
 .skill-file-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
   min-height: 40px;
-  margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-7)) var(--space-6);
-  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-6);
+  padding-block: var(--space-3);
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
 }
 
 .skill-file-name {

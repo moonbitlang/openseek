@@ -15,6 +15,8 @@ pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketItem] rai
 
 pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @cmd.Emit[Msg]) -> @rabbita.Val[(@html.Html, @html.Html)]
 
+pub fn detail_title(@i18n.Locale) -> String
+
 pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Array[InstalledItem] raise SkillReplyError
 
 pub fn source_label(MarketItem) -> String

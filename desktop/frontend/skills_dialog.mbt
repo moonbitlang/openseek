@@ -19,20 +19,10 @@ fn skills_detail_dialog_view(
     on_cancel=dispatch(Skills(@skills.BackToList)),
     [
       @ui.dialog_header([
-        @html.div(class="desktop-dialog-heading", [
-          @html.button(
-            class="icon-button",
-            attrs=@html.Attrs::build().aria_label(
-              shell_text(model.locale, BackToSkills),
-            ),
-            on_click=dispatch(Skills(@skills.BackToList)),
-            @icons.icon(@icons.icon_arrow_left),
-          ),
-          @ui.dialog_title(
-            id="skill-detail-dialog-title",
-            @sidebar_messages.text(model.locale, Skills),
-          ),
-        ]),
+        @ui.dialog_title(
+          id="skill-detail-dialog-title",
+          @skills.detail_title(model.locale),
+        ),
         @html.button(
           type_="button",
           class="icon-button",

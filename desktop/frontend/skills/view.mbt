@@ -243,7 +243,6 @@ fn detail_shell(
 ) -> @html.Html {
   @page_shell.body(class="skills-page skill-detail-page", [
     @html.div(class="skill-detail-header", [
-      @html.div(class="page-eyebrow", ui(locale, Details)),
       @html.div(class="skill-header", [
         @html.div(class="skill-title", [
           @html.h2(preview_name(target)),
@@ -258,22 +257,20 @@ fn detail_shell(
       @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
       @html.div(notice_views(state, input, Some(target))),
     ]),
-    @html.div(class="skill-detail-card", [
-      @html.div(class="skill-file-bar", [
-        @html.span(class="skill-file-name", "SKILL.md"),
-        match state.preview {
-          Ready(content~, ..) =>
-            @html.button(
-              class="button secondary skill-copy-button",
-              attrs=@html.Attrs::build().aria_label(ui(locale, CopyDocument)),
-              on_click=copy_content(content),
-              ui(locale, Copy),
-            )
-          _ => @html.span(class="skill-file-status", ui(locale, Loading))
-        },
-      ]),
-      content,
+    @html.div(class="skill-file-bar", [
+      @html.span(class="skill-file-name", "SKILL.md"),
+      match state.preview {
+        Ready(content~, ..) =>
+          @html.button(
+            class="button secondary skill-copy-button",
+            attrs=@html.Attrs::build().aria_label(ui(locale, CopyDocument)),
+            on_click=copy_content(content),
+            ui(locale, Copy),
+          )
+        _ => @html.span(class="skill-file-status", ui(locale, Loading))
+      },
     ]),
+    content,
   ])
 }
 
