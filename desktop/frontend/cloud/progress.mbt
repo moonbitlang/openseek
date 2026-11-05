@@ -4,6 +4,31 @@ fn Conversation::clear_streams(self : Conversation) -> Conversation {
 }
 
 ///|
+/// The highest native sequence this conversation has read.
+fn Conversation::durable_frontier(self : Conversation) -> Int32 {
+  self.document.events
+  .unwrap_or([])
+  .fold(init=0, (frontier, event) => {
+    if event.sequence > frontier {
+      event.sequence
+    } else {
+      frontier
+    }
+  })
+}
+
+///|
+/// The provisional reasoning to render beside `items`, the transcript built
+/// by `Conversation::items`. Hides only a sealed preview whose durable record
+/// this step already read, as Local does.
+pub fn Conversation::visible_reasoning(
+  self : Conversation,
+  items : Array[@transcript.TranscriptItem],
+) -> (String?, Bool) {
+  self.live.visible_reasoning(items, frontier=self.reasoning_frontier)
+}
+
+///|
 fn Conversation::clear_progress(self : Conversation) -> Conversation {
   { ..self.clear_streams(), heartbeat: None, retrying: None, }
 }
@@ -83,6 +108,7 @@ fn Conversation::live_progress(
     AgentStep(step) =>
       {
         ..self.clear_streams(),
+        reasoning_frontier: self.durable_frontier(),
         heartbeat: self.heartbeat.map(heartbeat => {
           ..heartbeat,
           stage: match step {

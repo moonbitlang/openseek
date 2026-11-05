@@ -24,6 +24,9 @@ A native command without extra interaction uses `Send(command)`.
   in-flight request on the same observation connection.
 - `State::event`, `State::restore_goal`, and `Stream::event` handle native receipts,
   durable confirmation, and provisional text. They do not append a second transcript.
+- `Stream::visible_reasoning` hides a sealed reasoning preview once the same
+  reasoning is committed after the step's durable frontier. Local and Cloud
+  each advance that frontier at `agent_step`.
 - Local's adapter resolves placement and launch settings, then calls `agent.command`.
   The host uses native commands with shared launch settings and its existing
   admission checks and writer. Retired goal/compact endpoints have no adapters. Run-bound operations

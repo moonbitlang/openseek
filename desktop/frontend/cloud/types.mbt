@@ -131,6 +131,9 @@ pub(all) struct Conversation {
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
   live : @engine_session.Stream
+  // Highest native sequence read when the current model step began. Only
+  // reasoning committed after it can hide this step's sealed preview.
+  reasoning_frontier : Int32
   // Committed replies waiting for the history read triggered by their SSE.
   pending_assistants : Array[PendingAssistant]
   assistant_handoffs : Map[String, Int32]
@@ -187,6 +190,7 @@ fn Conversation::empty() -> Conversation {
     task: None,
     last_seq: None,
     live: @engine_session.Stream::empty(),
+    reasoning_frontier: 0,
     pending_assistants: [],
     assistant_handoffs: Map([]),
     heartbeat: None,

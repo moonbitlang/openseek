@@ -216,6 +216,57 @@ test "Cloud rereads a turn cached while running once the next turn is latest" {
 }
 
 ///|
+test "Cloud hides a sealed reasoning preview only after this step committed it" {
+  let question : Json = { "kind": "user", "payload": { "content": "question" } }
+  let earlier : Json = {
+    "kind": "assistant",
+    "payload": { "content": "Earlier", "reasoning_content": "Plan" },
+  }
+  let page : History = {
+    offset: Some(0),
+    etag: Some("page"),
+    generating: true,
+    prediction: None,
+    session: native_document([question, earlier]),
+    messages: [],
+  }
+  let streaming = progress_test_state()
+    .progress_test_event(1, "task_started", {})
+    .latest_read(page)
+    // The tool result's read is still in flight when the next step starts.
+    .progress_test_event(2, "tool_result", {
+      "tool_call_id": "call",
+      "tool_name": "read",
+      "content": "ok",
+      "is_error": false,
+    })
+    .progress_test_event(3, "step", { "step": 2 })
+    .progress_test_event(4, "reasoning_delta", { "content": "Plan" })
+    .progress_test_event(5, "assistant_delta", { "content": "Answer" })
+  let conversation = streaming.conversations["session"]
+  assert_eq(conversation.reasoning_frontier, 2)
+  // Identical reasoning from an earlier step is a different reply.
+  assert_eq(
+    conversation.visible_reasoning(conversation.items()),
+    (Some("Plan"), true),
+  )
+  // The delayed read pinned the journal after this step was saved.
+  let committed = streaming.latest_read({
+    ..page,
+    session: native_document([
+      question,
+      earlier,
+      {
+        "kind": "assistant",
+        "payload": { "content": "Answer", "reasoning_content": "Plan" },
+      },
+    ]),
+  })
+  let conversation = committed.conversations["session"]
+  assert_eq(conversation.visible_reasoning(conversation.items()), (None, true))
+}
+
+///|
 test "Cloud keeps an assistant preview when the latest page moves past its turn" {
   let pending = progress_test_state()
     .progress_test_event(1, "task_started", {})

@@ -1374,6 +1374,7 @@ pub fn update(
       let conversation = if event.kind == "task_started" {
         {
           ..conversation.clear_streams(),
+          reasoning_frontier: conversation.durable_frontier(),
           notification_answer: None,
           heartbeat: Some({
             stage: @composer.Thinking,
