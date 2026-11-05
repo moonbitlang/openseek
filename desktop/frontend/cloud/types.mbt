@@ -74,6 +74,7 @@ pub(all) struct Conversation {
   history_etag : String?
   history_reading : Bool
   history_disk_request : Int32?
+  history_disk_write_fence : Int32?
   history_pages : Map[Int32, History]
   // Request, requested offset, and the navigation that owns the prepend.
   history_older_request : (Int32, Int32, Int32)?
@@ -120,7 +121,8 @@ pub(all) struct Conversation {
   live : @engine_session.Stream
   // Committed records that the history pages do not contain yet.
   pushed_records : Array[@protocol.SessionEvent]
-  terminal_record_task : String?
+  turn_start_sequence : Int32?
+  terminal_record : (String, Int32)?
   last_record_sequence : Int32
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
@@ -136,6 +138,7 @@ fn Conversation::empty() -> Conversation {
     history_etag: None,
     history_reading: false,
     history_disk_request: None,
+    history_disk_write_fence: None,
     history_pages: Map([]),
     history_older_request: None,
     history_resume_baseline: None,
@@ -175,7 +178,8 @@ fn Conversation::empty() -> Conversation {
     last_seq: None,
     live: @engine_session.Stream::empty(),
     pushed_records: [],
-    terminal_record_task: None,
+    turn_start_sequence: None,
+    terminal_record: None,
     last_record_sequence: 0,
     heartbeat: None,
     retrying: None,

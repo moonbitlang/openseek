@@ -146,8 +146,16 @@ fn State::session_record(
           Some(reply.content)
         },
       }
-    @protocol.Terminal(_) | @protocol.UnknownTerminal(_) =>
-      { ..conversation, terminal_record_task: task, }
+    @protocol.Terminal(_) | @protocol.UnknownTerminal(_) if task is Some(id) =>
+      {
+        ..conversation,
+        terminal_record: Some((id, record.sequence)),
+        notification_answer: match record.item {
+          @protocol.Terminal(@protocol.Finished(answer)) if !answer.is_blank() =>
+            Some(answer)
+          _ => conversation.notification_answer
+        },
+      }
     _ => conversation
   }
   let next = self.replace(session, conversation)

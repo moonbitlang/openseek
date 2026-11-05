@@ -242,7 +242,15 @@ fn cloud_finished_notification(
     Finished(ContextYield) => "context_yield"
     _ => "failed"
   }
-  let answer = after.notification_answer
+  let answer = if !(after.terminal_record is Some((task, _)) &&
+    task == event.task_id) &&
+    event.data
+    is { "result": { "output": { "answer": String(answer), .. }, .. }, .. } &&
+    !answer.is_blank() {
+    Some(answer)
+  } else {
+    after.notification_answer
+  }
   let owner : @interop.ConversationIdentity = Cloud(account~, session=id)
   Some((id, { payload: owner.key(), status, answer, }))
 }

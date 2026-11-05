@@ -601,3 +601,31 @@ test "Cloud keeps a recovered startup failure after the earlier pushed turn" {
     ],
   )
 }
+
+///|
+test "Cloud shows the native failure once before loading history" {
+  let document = native_document([
+    { "kind": "user", "payload": { "content": "Start" } },
+    { "kind": "user", "payload": { "content": "Steer" } },
+    {
+      "kind": "terminal",
+      "payload": { "kind": "failed", "message": "Native failure" },
+    },
+  ])
+  let conversation = {
+    ..Conversation::empty(),
+    document,
+    terminal_record: Some(("task", 3)),
+    events: [
+      {
+        session_id: "session",
+        task_id: "task",
+        seq: 5,
+        kind: "task_finished",
+        data: { "status": "failed", "reason": "Cloud failure" },
+      },
+    ],
+  }
+  let failures = conversation.items().filter(item => item.kind is Failure(_))
+  assert_true(failures is [{ kind: Failure("Native failure"), .. }])
+}

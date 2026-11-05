@@ -21,8 +21,11 @@ test('Cloud background completion uses the shared notification, badge and click 
   await app.open(sessionB);
   let releaseHistory;
   app.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
-  await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'The Cloud task is done.' });
-  await app.finishTask();
+  await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'I have prepared the result.' });
+  await app.emitSessionEvent(sessionA, 'task_finished', {
+    status: 'completed',
+    result: { output: { answer: 'The Cloud task is done.' } },
+  });
   await expect.poll(() => shown(app).length).toBe(1);
   expect(shown(app)[0].params).toMatchObject({ title: 'Task finished', body: 'The Cloud task is done.' });
   await expect.poll(() => badge(app)).toBe(1);

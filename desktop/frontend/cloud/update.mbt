@@ -697,6 +697,11 @@ pub fn update(
               snapshot.data.queue.any(item => item.id == id)
             }),
             task: snapshot.task_id,
+            turn_start_sequence: if snapshot.task_id == conversation.task {
+              conversation.turn_start_sequence
+            } else {
+              None
+            },
             notification_answer: if snapshot.task_id == conversation.task {
               conversation.notification_answer
             } else {
@@ -749,6 +754,7 @@ pub fn update(
             emit,
             token?,
             navigation~,
+            desktop_history~,
           )
         }
         EngineFailed(session~, seq~, error~) => {
@@ -1108,7 +1114,10 @@ pub fn update(
         next,
         @cmd.batch([
           refresh,
-          if desktop_history {
+          if desktop_history &&
+            conversation.history_disk_write_fence.map_or(true, fence => {
+              request > fence
+            }) {
             cache_mutation(
               true,
               token,
@@ -1246,6 +1255,13 @@ pub fn update(
         {
           ..conversation.clear_streams(),
           notification_answer: None,
+          turn_start_sequence: Some(
+            conversation.document.events
+            .unwrap_or([])
+            .last()
+            .map_or(0, event => event.sequence) +
+            1,
+          ),
           heartbeat: Some({
             stage: @composer.Thinking,
             started_ms: None,
@@ -1292,10 +1308,21 @@ pub fn update(
         },
       })
       if event.kind is ("task_finished" | "task_started") {
-        let (next, history) = if event.kind == "task_finished" &&
-          conversation.terminal_record_task != Some(event.task_id) {
+        let (next, history) = if event.kind != "task_finished" {
+          (next, @cmd.none)
+        } else if !(conversation.terminal_record is Some((task, _)) &&
+          task == event.task_id) {
           // Startup failures and interrupted engines can lack a terminal record.
           next.load(id, token, emit)
+        } else if desktop_history &&
+          conversation.completed_cache_page(event) is Some(page) {
+          (
+            next.replace(id, {
+              ..next.conversations[id],
+              history_disk_write_fence: Some(state.sequence),
+            }),
+            cache_mutation(true, token, Write(session=id, page~)),
+          )
         } else {
           (next, @cmd.none)
         }

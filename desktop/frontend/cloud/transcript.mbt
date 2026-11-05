@@ -87,6 +87,21 @@ pub fn Conversation::items(
   let mut native_failure = false
   for (task_id, kind, data, ts, engine_sequence) in service {
     guard service_item(kind, data) is Some(item) else { continue }
+    if kind == "task_finished" &&
+      self.terminal_record is Some((native_task, sequence)) &&
+      native_task == task_id &&
+      native.search_by(event => event.sequence == sequence) is Some(index) &&
+      index >= cursor {
+      // The live terminal identifies its own turn even before history
+      // supplies a service User anchor or after native steering inputs.
+      ignore(append_native(items, native, cursor, index))
+      let failed = append_native(items, native, index, index + 1)
+      cursor = index + 1
+      if !failed {
+        ignore(@transcript.apply_session_item(items, item, ts?))
+      }
+      continue
+    }
     if task != Some(task_id) {
       native_failure = false
       task = Some(task_id)

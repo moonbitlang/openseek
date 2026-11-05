@@ -139,6 +139,7 @@ pub(all) struct Conversation {
   history_etag : String?
   history_reading : Bool
   history_disk_request : Int32?
+  history_disk_write_fence : Int32?
   history_pages : Map[Int32, History]
   history_older_request : (Int32, Int32, Int32)?
   history_resume_baseline : (String?, Int32?)?
@@ -173,7 +174,8 @@ pub(all) struct Conversation {
   last_seq : Int32?
   live : @engine_session.Stream
   pushed_records : Array[@protocol.SessionEvent]
-  terminal_record_task : String?
+  turn_start_sequence : Int32?
+  terminal_record : (String, Int32)?
   last_record_sequence : Int32
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?

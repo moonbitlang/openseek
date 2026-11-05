@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 test('desktop reopens cached Cloud turns offline and revalidates them after restart', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page, { desktop: true });
@@ -81,4 +81,37 @@ test('desktop reopens cached Cloud turns offline and revalidates them after rest
   expect(files.has(sessionB)).toBe(true);
   expect(cloud.requests.some(request => request.method === 'DELETE' && request.path === `/v1/sessions/${sessionA}`)).toBe(true);
   expect(cloud.device.pageErrors).toEqual([]);
+});
+
+
+test('desktop restores a completed SSE turn after an offline restart', async ({ page }) => {
+  const cloud = new CloudHarness(page, { desktop: true });
+  const files = new Map();
+  cloud.historyCache = ({ action, session, page: history }) => {
+    if (action === 'write') files.set(session, history);
+    if (action === 'read') return { kind: 'page', page: files.get(session) ?? null };
+    if (action === 'list') return {
+      kind: 'entries',
+      entries: Array.from(files, ([session, history]) => ({ session, label: history.messages[0].data.content })),
+    };
+    return { kind: 'done' };
+  };
+  await cloud.install();
+  await cloud.goto();
+  await cloud.create();
+  await page.locator('#task').fill('Remember this Cloud turn');
+  await page.locator('#task').press('Enter');
+  await expect.poll(() => files.get(sessionC)?.session.events.at(-1).item.kind).toBe('terminal');
+  expect(files.get(sessionC).etag).toBeNull();
+  expect(cloud.historyReads.filter(read => read.session === sessionC)).toHaveLength(0);
+
+  cloud.listStatus = 503;
+  cloud.historyStatus = 503;
+  await page.reload();
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await cloud.row(sessionC).click();
+  const transcript = page.locator('#transcript');
+  await expect(transcript.getByText('Remember this Cloud turn', { exact: true })).toHaveCount(1);
+  await expect(transcript.getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
+  await expect(cloud.row(sessionC)).toHaveText('Remember this Cloud turn');
 });
