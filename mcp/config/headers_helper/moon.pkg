@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/mcp/config",
   "moonbitlang/async",
   "moonbitlang/async/process",
   "moonbitlang/async/stdio",

@@ -158,12 +158,7 @@ test "a server's target identifies it without its secrets" {
   )
   assert_eq(stdio.target(), "npx")
   fn http(url : String) -> String {
-    @config.McpServer::Http(
-      name="remote",
-      url~,
-      headers={},
-      headers_helper=None,
-    ).target()
+    @config.McpServer::Http(name="remote", url~, headers={}, headers_helpers=[]).target()
   }
 
   assert_eq(

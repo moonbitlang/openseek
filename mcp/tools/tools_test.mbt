@@ -383,7 +383,7 @@ async test "connect reaches an HTTP server's tools directly and through the MCP 
     let scope = @agent_runtime.AgentTaskScope(group)
     let servers = [
       @config.Http(
-        headers_helper=None,
+        headers_helpers=[],
         name="remote",
         url="http://127.0.0.1:\{server.addr.port()}/mcp",
         headers=Map([]),

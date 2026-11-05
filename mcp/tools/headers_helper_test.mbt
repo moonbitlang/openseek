@@ -60,18 +60,23 @@ async test "HTTP helpers resolve once before connect and leave configuration unc
       })
     })
     let scope = @agent_runtime.AgentTaskScope(group)
-    let configured_headers : Map[String, String] = {
-      "authorization": "static",
-      "X-Static": "preserved",
+    let servers = @config.decode({
+      "mcpServers": {
+        "remote": {
+          "url": "http://127.0.0.1:\{server.addr.port()}/mcp",
+          "headers": { "authorization": "static", "X-Static": "preserved" },
+          "headersHelper": [
+            "moonx",
+            "cli/sh@0.1.1",
+            "helper.sh",
+            Json(filename),
+          ],
+        },
+      },
+    })
+    guard servers is [Http(headers=configured_headers, ..)] else {
+      fail("expected an HTTP configuration")
     }
-    let servers = [
-      @config.Http(
-        name="remote",
-        url="http://127.0.0.1:\{server.addr.port()}/mcp",
-        headers=configured_headers,
-        headers_helper=Some(["moonx", "cli/sh@0.1.1", "helper.sh", filename]),
-      ),
-    ]
     let entries = @tools.connect(
       scope,
       servers,

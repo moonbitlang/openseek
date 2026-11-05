@@ -13,7 +13,7 @@ async test "helper returns headers with literal arguments workspace cwd and stdi
   )
   assert_eq(
     @headers_helper.run(
-      ["moonx", "cli/sh@0.1.1", "helper.sh", filename],
+      { command: "moonx", arguments: ["cli/sh@0.1.1", "helper.sh", filename], },
       cwd=dir,
     ),
     { "Authorization": "Bearer fixture" },

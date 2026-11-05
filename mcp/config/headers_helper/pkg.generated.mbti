@@ -1,8 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek/mcp/config/headers_helper"
 
+import {
+  "moonbitlang/openseek/mcp/config",
+}
+
 // Values
-pub async fn run(Array[String], cwd? : String) -> Map[String, String]
+pub async fn run(@config.HeadersHelperCommand, cwd? : String) -> Map[String, String]
 
 // Errors
 
