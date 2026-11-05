@@ -118,15 +118,7 @@ a:where(.setting-link) {
   --dialog-max-height: min(52rem, 80dvh);
 }
 
-#skill-detail-dialog [data-slot="dialog-body"] {
-  padding-inline: var(--space-7);
-  overflow-x: hidden;
-}
-
 /* Management pages keep their own content spacing; the shell owns scrolling. */
-#management-dialog > [data-slot="dialog-content"] > [data-slot="dialog-body"] {
-  padding: 0;
-}
 .management-dialog-pane:not([hidden]) {
   display: contents;
 }

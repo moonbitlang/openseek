@@ -1520,7 +1520,7 @@ test('sidebar menu dismissal and pending selection follow the clicked row', { ta
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
 
   app.rpcDelays.set('session.load', 10000);
-  await first.click({ button: 'right', position: { x: 18, y: 18 } });
+  await first.locator('.conversation-open').click({ button: 'right', delay: 200 });
   await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
   const second = page.locator('.conversation-row[title="session-2"]');
   await second.click();

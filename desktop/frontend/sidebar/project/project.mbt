@@ -245,8 +245,8 @@ fn Actions::conversation_component(
 ///|
 /// One keyed project component owns disclosure and compact-preview state.
 /// Those values therefore cannot leak to an equal path rendered by a
-/// different sidebar source. The shared action-menu component owns the one
-/// menu overlay.
+/// different sidebar source. The shared action-menu component owns the
+/// context-menu overlay.
 /// Conversations stay mounted inside the branch while it animates closed.
 pub fn component(
   input : @rabbita.Val[Input],
@@ -273,13 +273,35 @@ pub fn component(
     },
     by=conversation => conversation.1.id(),
   )
+  let menu = input
+    .map2(locale, (input, locale) => (input, locale))
+    .switch_by(
+      pair => {
+        let (input, locale) = pair
+        if !input.managed {
+          return @rabbita.Val::constant(@html.nothing)
+        }
+        @action_menu.dropdown(
+          input.id.key(),
+          {
+            label: @messages.text(locale, WorkspaceActions),
+            entries: input.menu_entries(actions, locale~),
+          },
+          class="row-archive workspace-menu-button",
+          @icons.icon(@icons.icon_more),
+        )
+      },
+      by=pair => pair.0.id.key(),
+    )
+  let input = input.map2(menu, (input, menu) => (input, menu))
   state.map5(input, conversation_rows, locale, search, (
     state,
-    input,
+    pair,
     conversation_rows,
     locale,
     search,
   ) => {
+    let (input, menu) = pair
     let searching = !search.query.is_blank()
     let collapsed = !searching && state.folded(input)
     let mut class = if collapsed {
@@ -351,18 +373,7 @@ pub fn component(
     let controls : Array[@html.Html] = []
     // Keep the action order aligned with the sidebar: menu first, new chat last.
     if input.managed {
-      controls.push(
-        @rui.popover_trigger(
-          id=input.id.key() + ":actions-trigger",
-          target_id=input.id.key() + ":actions-content",
-          class="row-archive workspace-menu-button",
-          title=@messages.text(locale, MoreActions),
-          attrs=@action_menu.button_attrs(input.id.key()).aria_label(
-            @messages.text(locale, WorkspaceActions),
-          ),
-          @icons.icon(@icons.icon_more),
-        ),
-      )
+      controls.push(menu)
     }
     if input.can_start {
       controls.push(

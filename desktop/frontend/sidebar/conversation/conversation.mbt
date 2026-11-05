@@ -513,13 +513,33 @@ pub fn component(
     },
     by=child => child.1.id(),
   )
+  let menu = input
+    .map2(locale, (input, locale) => (input, locale))
+    .switch_by(
+      pair => {
+        let (input, locale) = pair
+        guard input.menu_kind() is Some(LiveMenu) &&
+          input.menu_entries(locale~, actions) is Some(entries) else {
+          return @rabbita.Val::constant(@html.nothing)
+        }
+        @action_menu.dropdown(
+          input.id.key(),
+          { label: @messages.text(locale, ConversationActions), entries, },
+          class="row-archive row-menu-button",
+          @icons.icon(@icons.icon_more),
+        )
+      },
+      by=pair => pair.0.id.key(),
+    )
+  let input = input.map2(menu, (input, menu) => (input, menu))
   state.map5(input, child_rows, locale, search, (
     state,
-    input,
+    pair,
     child_rows,
     locale,
     search,
   ) => {
+    let (input, menu) = pair
     // Opening a workflow child must keep its selected row visible under the parent.
     let children_open = !search.query.is_blank() ||
       state.children_open ||
@@ -694,20 +714,7 @@ pub fn component(
     // Archived rows keep their direct Restore and Delete buttons.
     let buttons : Array[@html.Html] = []
     if menu_kind is Some(LiveMenu) {
-      buttons.push(
-        @rui.popover_trigger(
-          id=input.id.key() + ":actions-trigger",
-          target_id=input.id.key() + ":actions-content",
-          class="row-archive row-menu-button",
-          // Named for its row kind: a project row's trigger sits right above
-          // and opens a different menu.
-          title=@messages.text(locale, ConversationActions),
-          attrs=@action_menu.button_attrs(input.id.key()).aria_label(
-            @messages.text(locale, ConversationActions),
-          ),
-          @icons.icon(@icons.icon_more),
-        ),
-      )
+      buttons.push(menu)
     }
     let trailing_actions = if menu_kind is Some(LiveMenu) {
       []

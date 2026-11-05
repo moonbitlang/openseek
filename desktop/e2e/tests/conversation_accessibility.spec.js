@@ -44,7 +44,7 @@ test('conversation titles support keyboard activation and independent row action
   await expect(actions).toBeFocused();
   await page.keyboard.press('Enter');
   const menu = page.getByRole('menu', { name: 'Conversation actions' });
-  await expect(menu).toBeFocused();
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
   await page.keyboard.press('End');
   await expect(menu.getByRole('menuitem', { name: 'Delete…' })).toBeFocused();
   await page.keyboard.press('ArrowUp');

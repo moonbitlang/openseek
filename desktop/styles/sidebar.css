@@ -313,6 +313,9 @@ html.is-resizing .sidebar-resize-handle {
    (visibility, not display) so the label doesn't shift as it appears. */
 .row-archive {
   --icon-size: var(--icon-md);
+  --rui-button-bg: transparent;
+  --rui-button-fg: var(--color-text-muted);
+  --rui-control-radius: var(--radius-sm);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -333,6 +336,8 @@ html.is-resizing .sidebar-resize-handle {
   visibility: visible;
 }
 .row-archive:hover {
+  --rui-button-bg: var(--color-hover-subtle);
+  --rui-button-fg: var(--color-text-primary);
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
@@ -377,6 +382,8 @@ html.is-resizing .sidebar-resize-handle {
 /* An open conversation menu keeps its hover-revealed trigger in place of the
    status glyphs while the pointer moves into the floating surface. */
 .row-menu-button[aria-expanded="true"] {
+  --rui-button-bg: var(--color-hover-subtle);
+  --rui-button-fg: var(--color-text-primary);
   visibility: visible;
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
@@ -725,11 +732,6 @@ button.row-twisty:hover {
 
 #project-picker-dialog {
   max-height: min(40rem, calc(100dvh - 2rem));
-}
-.picker-content[data-slot="dialog-body"] {
-  display: flex;
-  flex-direction: column;
-  padding: 0;
 }
 .picker-header-leading {
   display: flex;

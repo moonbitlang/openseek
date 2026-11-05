@@ -325,6 +325,59 @@ fn surface_attrs(open : Open) -> @html.Attrs {
 }
 
 ///|
+/// A row's button and menu share one scope; context menus remain owned by
+/// the sidebar overlay so right-click keeps its pointer anchor and focus.
+pub fn dropdown(
+  target : String,
+  definition : Definition,
+  class~ : String,
+  icon : @html.Html,
+) -> @rabbita.Val[@html.Html] {
+  @rui.dropdown_menu(
+    id=target + ":actions",
+    attrs=@html.Attrs::build().on_click(event => {
+      event.stop_propagation()
+      @cmd.none
+    }),
+    scope => {
+      @html.fragment([
+        @rui.dropdown_menu_trigger(
+          scope,
+          variant=Ghost,
+          size=IconXs,
+          class~,
+          title=definition.label,
+          aria_label=definition.label,
+          icon,
+        ),
+        @rui.dropdown_menu_content(
+          scope,
+          align=End,
+          aria_label=definition.label,
+          class="action-menu",
+          attrs=@html.Attrs::build().data_set("action-menu-surface", target),
+          definition.entries.map(entry => {
+            match entry {
+              Separator => @rui.dropdown_menu_separator()
+              Action(item) =>
+                @rui.dropdown_menu_item(
+                  scope,
+                  disabled=!item.enabled,
+                  destructive=item.destructive,
+                  on_select=item.command,
+                  class="action-menu-item",
+                  title=item.title,
+                  item_children(item),
+                )
+            }
+          }),
+        ),
+      ])
+    },
+  )
+}
+
+///|
 fn item_children(item : Item) -> Array[@html.Html] {
   [
     item.icon.unwrap_or(@html.span(class="action-menu-icon-placeholder", "")),
@@ -374,81 +427,93 @@ fn[Input : Eq] menu_component(
           } else {
             @rui.End
           }
-          input.switch_by(input => @rui.dropdown_menu(
-            id=open.target + ":actions",
-            default_open=true,
-            on_open_change=changed,
-            scope => {
-              guard resolve(input) is Some(definition) else {
-                return @html.nothing
-              }
-              @rui.dropdown_menu_content(
-                scope,
-                side~,
-                align~,
-                aria_label=definition.label,
-                class="action-menu",
-                attrs=surface_attrs(open),
-                definition.entries.map(entry => {
-                  match entry {
-                    Separator => @rui.dropdown_menu_separator()
-                    Action(item) =>
-                      @rui.dropdown_menu_item(
-                        scope,
-                        disabled=!item.enabled,
-                        destructive=item.destructive,
-                        on_select=item.command,
-                        class="action-menu-item",
-                        title=item.title,
-                        item_children(item),
-                      )
+          input.switch_by(
+            input => {
+              @rui.dropdown_menu(
+                id=open.target + ":actions",
+                default_open=true,
+                on_open_change=changed,
+                scope => {
+                  guard resolve(input) is Some(definition) else {
+                    return @html.nothing
                   }
-                }),
+                  @rui.dropdown_menu_content(
+                    scope,
+                    side~,
+                    align~,
+                    aria_label=definition.label,
+                    class="action-menu",
+                    attrs=surface_attrs(open),
+                    definition.entries.map(entry => {
+                      match entry {
+                        Separator => @rui.dropdown_menu_separator()
+                        Action(item) =>
+                          @rui.dropdown_menu_item(
+                            scope,
+                            disabled=!item.enabled,
+                            destructive=item.destructive,
+                            on_select=item.command,
+                            class="action-menu-item",
+                            title=item.title,
+                            item_children(item),
+                          )
+                      }
+                    }),
+                  )
+                },
               )
             },
-          ), by=_ => "menu")
+            by=_ => "menu",
+          )
         }
         Pointer(x, y) =>
-          input.switch_by(input => @rui.dropdown_menu(
-            id=open.target + ":pointer-menu",
-            default_open=true,
-            on_open_change=changed,
-            scope => {
-              guard resolve(input) is Some(definition) else {
-                return @html.nothing
-              }
-              @html.fragment([
-                @rui.popover_anchor(
-                  id=open.target + ":pointer-menu-trigger",
-                  style=["position:fixed;left:\{x}px;top:\{y}px;width:0;height:0"],
-                  @html.nothing,
-                ),
-                @rui.dropdown_menu_content(
-                scope,
-                align=Start,
-                side_offset=0,
-                aria_label=definition.label,
-                class="action-menu",
-                attrs=surface_attrs(open),
-                definition.entries.map(entry => {
-                  match entry {
-                    Separator => @rui.dropdown_menu_separator()
-                    Action(item) =>
-                      @rui.dropdown_menu_item(
-                        scope,
-                        disabled=!item.enabled,
-                        destructive=item.destructive,
-                        on_select=item.command,
-                        class="action-menu-item",
-                        title=item.title,
-                        item_children(item),
-                      )
+          input.switch_by(
+            input => {
+              @rui.dropdown_menu(
+                id=open.target + ":pointer-menu",
+                default_open=true,
+                on_open_change=changed,
+                scope => {
+                  guard resolve(input) is Some(definition) else {
+                    return @html.nothing
                   }
-                }),
-                ),
-              ])
+                  @html.fragment([
+                    @rui.popover_anchor(
+                      id=open.target + ":pointer-menu-trigger",
+                      style=[
+                        "position:fixed;left:\{x}px;top:\{y}px;width:0;height:0",
+                      ],
+                      @html.nothing,
+                    ),
+                    @rui.dropdown_menu_content(
+                      scope,
+                      align=Start,
+                      side_offset=0,
+                      aria_label=definition.label,
+                      class="action-menu",
+                      attrs=surface_attrs(open),
+                      definition.entries.map(entry => {
+                        match entry {
+                          Separator => @rui.dropdown_menu_separator()
+                          Action(item) =>
+                            @rui.dropdown_menu_item(
+                              scope,
+                              disabled=!item.enabled,
+                              destructive=item.destructive,
+                              on_select=item.command,
+                              class="action-menu-item",
+                              title=item.title,
+                              item_children(item),
+                            )
+                        }
+                      }),
+                    ),
+                  ])
+                },
+              )
             },
-          ), by=_ => "menu")
+            by=_ => "menu",
+          )
       }
     },
     by=available => available.to_string(),
