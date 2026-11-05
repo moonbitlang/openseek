@@ -6,7 +6,7 @@
 /// authorization deadlines, token expiry, refresh and persistence; cancellation
 /// of the caller still terminates the subprocess.
 pub async fn run(command : Array[String], cwd? : String) -> Map[String, String] {
-  guard !command.is_empty() && !command[0].is_empty() else {
+  guard command is [cmd, .. args] else {
     fail("MCP headersHelper needs an executable")
   }
   let (stdin, writer) = @process.write_to_process()
@@ -22,8 +22,8 @@ pub async fn run(command : Array[String], cwd? : String) -> Map[String, String] 
       }
     })
     @process.collect_stdout(
-      command[0],
-      command[1:],
+      cmd,
+      args,
       stdin~,
       stderr=stderr_pipe,
       cwd?=cwd.map(value => value),
