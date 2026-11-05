@@ -93,6 +93,34 @@ fn HistoryWindow::reattach(self : HistoryWindow) -> HistoryWindow {
 }
 
 ///|
+/// The first turn cached while it was running that is no longer the latest.
+/// A later turn exists, so that turn has finished and must be read again.
+fn HistoryWindow::stale_offset(self : HistoryWindow) -> Int32? {
+  for index in 0..<(self.pages.length() - 1) {
+    if !self.pages[index].turn_complete() {
+      return Some(self.lo + index)
+    }
+  }
+  None
+}
+
+///|
+/// Replace an earlier turn read again. The latest turn is owned by latest
+/// reads, and a turn outside the window is not rendered.
+fn HistoryWindow::with_turn(
+  self : HistoryWindow,
+  offset : Int32,
+  page : History,
+) -> HistoryWindow? {
+  guard offset >= self.lo && offset < self.lo + self.pages.length() - 1 else {
+    return None
+  }
+  let pages = self.pages.copy()
+  pages[offset - self.lo] = page
+  Some({ ..self, pages, })
+}
+
+///|
 /// The response's generating flag belongs to the whole conversation. A
 /// terminal service record proves this page's turn is complete.
 fn History::turn_complete(self : History) -> Bool {
@@ -167,6 +195,23 @@ fn Conversation::with_older_page(
 ) -> Conversation {
   guard history.offset is Some(offset) &&
     self.history_window.with_older(offset, history) is Some(window) else {
+    return self
+  }
+  self
+  .acknowledge_assistants(request, history.session, history.messages)
+  .with_history_window(window)
+}
+
+///|
+/// Apply a finished turn read again because it was cached while running.
+fn Conversation::with_turn_page(
+  self : Conversation,
+  offset : Int32,
+  history : History,
+  request : Int32,
+) -> Conversation {
+  guard history.offset == Some(offset) &&
+    self.history_window.with_turn(offset, history) is Some(window) else {
     return self
   }
   self

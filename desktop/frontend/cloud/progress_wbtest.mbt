@@ -73,6 +73,149 @@ fn State::latest_read(self : State, history : History) -> State {
 }
 
 ///|
+/// Native events numbered from `first`, as a page after earlier turns has them.
+fn native_turn(first : Int32, items : Array[Json]) -> @protocol.SessionDocument {
+  @json.from_json({
+    "events": Json(
+      items.mapi((index, item) => {
+        "sequence": Json(first + index),
+        "ts": 100,
+        "item": item,
+      }),
+    ),
+  }) catch {
+    _ => abort("invalid test document")
+  }
+}
+
+///|
+test "Cloud rereads a turn cached while running once the next turn is latest" {
+  let question : Json = { "kind": "user", "payload": { "content": "question" } }
+  let user : Record = {
+    task_id: "task",
+    kind: "user",
+    data: {},
+    created_at: 1,
+    engine_sequence: Some(1),
+  }
+  let running : History = {
+    offset: Some(0),
+    etag: Some("running"),
+    generating: true,
+    prediction: None,
+    session: native_turn(1, [question]),
+    messages: [user],
+  }
+  let pending = progress_test_state()
+    .progress_test_event(1, "task_started", {})
+    .latest_read(running)
+    .progress_test_event(2, "assistant_message", { "content": "First answer" })
+  // A queued prompt starts the next turn before a read covers the reply.
+  let next_user : Record = {
+    ..user,
+    task_id: "next",
+    created_at: 3,
+    engine_sequence: Some(3),
+  }
+  let moved = pending.latest_read({
+    ..running,
+    offset: Some(1),
+    etag: Some("next"),
+    session: native_turn(3, [
+      { "kind": "user", "payload": { "content": "again" } },
+    ]),
+    messages: [next_user],
+  })
+  let conversation = moved.conversations["session"]
+  guard conversation.history_turn_request is Some((request, 0)) else {
+    fail("the turn cached while running is read again")
+  }
+  assert_eq(conversation.pending_assistants.length(), 1)
+  // A failed reread keeps the preview and leaves the turn for the next read.
+  let failed = metadata_update(
+    moved,
+    TurnFailed(1, "session", request, Unreachable),
+  )
+  assert_eq(failed.conversations["session"].pending_assistants.length(), 1)
+  assert_true(failed.conversations["session"].history_turn_request is None)
+  // A 304 for the next latest read still retries the stale turn.
+  let validating = failed.load("session", Some("fixture"), _ => @cmd.none).0
+  let retried = metadata_update(
+    validating,
+    HistoryUnchanged(
+      1,
+      "session",
+      validating.conversations["session"].request,
+      "next",
+    ),
+  )
+  guard retried.conversations["session"].history_turn_request
+    is Some((misplaced, 0)) else {
+    fail("the next latest read retries the stale turn")
+  }
+  // A reply for another turn is not applied and does not ask again at once.
+  let misplaced = metadata_update(
+    retried,
+    TurnLoaded(1, "session", misplaced, { ..running, offset: Some(4), }),
+  )
+  assert_true(misplaced.conversations["session"].history_turn_request is None)
+  assert_eq(misplaced.sequence, retried.sequence)
+  assert_eq(misplaced.conversations["session"].pending_assistants.length(), 1)
+  let validating = misplaced.load("session", Some("fixture"), _ => @cmd.none).0
+  let retried = metadata_update(
+    validating,
+    HistoryUnchanged(
+      1,
+      "session",
+      validating.conversations["session"].request,
+      "next",
+    ),
+  )
+  guard retried.conversations["session"].history_turn_request
+    is Some((request, 0)) else {
+    fail("a later latest read retries the stale turn")
+  }
+  let settled = metadata_update(
+    retried,
+    TurnLoaded(1, "session", request, {
+      ..running,
+      session: native_turn(1, [
+        question,
+        { "kind": "assistant", "payload": { "content": "First answer" } },
+      ]),
+      messages: [
+        user,
+        {
+          task_id: "task",
+          kind: "assistant_message",
+          data: {},
+          created_at: 2,
+          engine_sequence: Some(2),
+        },
+        {
+          task_id: "task",
+          kind: "task_finished",
+          data: { "status": "completed" },
+          created_at: 2,
+          engine_sequence: None,
+        },
+      ],
+    }),
+  )
+  let conversation = settled.conversations["session"]
+  assert_true(conversation.pending_assistants.is_empty())
+  assert_true(conversation.history_turn_request is None)
+  assert_true(
+    conversation.items()
+    is [
+      { kind: User(..), sequence: Some(1), .. },
+      { kind: Assistant(prose=Some("First answer"), ..), sequence: Some(2), .. },
+      { kind: User(..), sequence: Some(3), .. },
+    ],
+  )
+}
+
+///|
 test "Cloud keeps an assistant preview when the latest page moves past its turn" {
   let pending = progress_test_state()
     .progress_test_event(1, "task_started", {})

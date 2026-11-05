@@ -87,10 +87,49 @@ fn State::load(
   (
     { ..next, sequence: request, },
     run(emit, () => {
-      load_history(token, id, conversation.history_etag, self.epoch, request) catch {
+      load_latest_history(
+        token,
+        id,
+        conversation.history_etag,
+        self.epoch,
+        request,
+      ) catch {
         @cloud_client.RequestError(error) =>
           LoadFailed(self.epoch, id, request, error)
         _ => LoadFailed(self.epoch, id, request, Unreachable)
+      }
+    }),
+  )
+}
+
+///|
+/// Read again the first turn cached while it was running once a later turn
+/// became the latest page. Its records, and any preview waiting for them,
+/// are otherwise never refreshed.
+fn State::reread_turn(
+  self : State,
+  id : String,
+  token : String?,
+  emit : @cmd.Emit[Msg],
+) -> (State, @cmd.Cmd) {
+  guard token is Some(token) &&
+    self.conversations.get(id) is Some(conversation) &&
+    conversation.history_turn_request is None &&
+    conversation.history_window.stale_offset() is Some(offset) else {
+    return (self, @cmd.none)
+  }
+  let request = self.sequence + 1
+  let next = self.replace(id, {
+    ..conversation,
+    history_turn_request: Some((request, offset)),
+  })
+  (
+    { ..next, sequence: request, },
+    run(emit, () => {
+      TurnLoaded(self.epoch, id, request, load_turn_history(token, id, offset)) catch {
+        @cloud_client.RequestError(error) =>
+          TurnFailed(self.epoch, id, request, error)
+        _ => TurnFailed(self.epoch, id, request, Unreachable)
       }
     }),
   )
@@ -965,7 +1004,12 @@ pub fn update(
       (
         { ..next, sequence: request, },
         run(emit, () => {
-          load_history(token, id, None, state.epoch, request, offset~) catch {
+          OlderLoaded(
+            state.epoch,
+            id,
+            request,
+            load_turn_history(token, id, offset),
+          ) catch {
             @cloud_client.RequestError(error) =>
               OlderFailed(state.epoch, id, request, error)
             _ => OlderFailed(state.epoch, id, request, Unreachable)
@@ -988,6 +1032,48 @@ pub fn update(
         conversation
       }
       (state.replace(id, next), @cmd.none, None)
+    }
+    TurnLoaded(epoch, id, request, history) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_turn_request is Some((pending, offset)) &&
+        request == pending else {
+        return (state, @cmd.none, None)
+      }
+      // A later turn exists, so this one is finished whatever the
+      // session-wide generating flag says.
+      let settled = conversation.with_turn_page(
+        offset,
+        { ..history, generating: false, },
+        request,
+      )
+      let next = state.replace(id, { ..settled, history_turn_request: None, })
+      // A reply that no longer fits the window waits for the next latest
+      // read rather than asking for the same turn again.
+      if settled.history_window == conversation.history_window {
+        return (next, @cmd.none, None)
+      }
+      let (next, command) = next.reread_turn(id, token, emit)
+      (next, command, None)
+    }
+    TurnFailed(epoch, id, request, error) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.history_turn_request is Some((pending, _)) &&
+        request == pending else {
+        return (state, @cmd.none, None)
+      }
+      // Previews stay. The next latest read tries the stale turn again.
+      let next = state.replace(id, {
+        ..conversation,
+        history_turn_request: None,
+      })
+      let (next, command) = if error is Unauthorized {
+        next.failed(error)
+      } else {
+        (next, @cmd.none)
+      }
+      (next, command, None)
     }
     OlderFailed(epoch, id, request, error) => {
       guard epoch == state.epoch &&
@@ -1125,10 +1211,12 @@ pub fn update(
       } else {
         @cmd.none
       }
+      let (next, turn) = next.reread_turn(id, token, emit)
       (
         next,
         @cmd.batch([
           refresh,
+          turn,
           if desktop_history {
             cache_mutation(
               true,
@@ -1172,13 +1260,17 @@ pub fn update(
           conversation.watch_status
         },
       })
+      let (next, turn) = next.reread_turn(id, token, emit)
       (
         next,
-        if conversation.generating && !observing {
-          poll(epoch, id, request, emit)
-        } else {
-          @cmd.none
-        },
+        @cmd.batch([
+          turn,
+          if conversation.generating && !observing {
+            poll(epoch, id, request, emit)
+          } else {
+            @cmd.none
+          },
+        ]),
         None,
       )
     }

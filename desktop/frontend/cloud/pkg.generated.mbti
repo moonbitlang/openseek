@@ -140,6 +140,7 @@ pub(all) struct Conversation {
   history_disk_request : Int32?
   history_window : HistoryWindow
   history_older_request : (Int32, Int32, Int32)?
+  history_turn_request : (Int32, Int32)?
   history_resume_baseline : (String?, Int32?)?
   history_refresh_after_read : Bool
   events : Array[Event]
@@ -274,6 +275,8 @@ pub(all) enum Msg {
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, @cloud_client.Failure)
+  TurnLoaded(Int32, String, Int32, History)
+  TurnFailed(Int32, String, Int32, @cloud_client.Failure)
   HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, @cloud_client.Failure)
   WatchOpened(Int32, String, StreamLease)

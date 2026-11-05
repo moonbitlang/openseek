@@ -88,6 +88,8 @@ pub(all) struct Conversation {
   history_window : HistoryWindow
   // Request, requested offset, and the navigation that owns the prepend.
   history_older_request : (Int32, Int32, Int32)?
+  // Request and offset rereading a turn cached while it was running.
+  history_turn_request : (Int32, Int32)?
   // Compare the first snapshot after a revisit that shares an earlier read.
   history_resume_baseline : (String?, Int32?)?
   history_refresh_after_read : Bool
@@ -148,6 +150,7 @@ fn Conversation::empty() -> Conversation {
     history_disk_request: None,
     history_window: HistoryWindow::empty(),
     history_older_request: None,
+    history_turn_request: None,
     history_resume_baseline: None,
     history_refresh_after_read: false,
     events: [],
@@ -336,6 +339,8 @@ pub(all) enum Msg {
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, Failure)
+  TurnLoaded(Int32, String, Int32, History)
+  TurnFailed(Int32, String, Int32, Failure)
   HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, Failure)
   WatchOpened(Int32, String, StreamLease)
