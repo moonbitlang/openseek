@@ -479,11 +479,7 @@ test "Cloud history consumes each linked native reply only once" {
     session: native_document([reply]),
     messages: [first, { ..first, engine_sequence: Some(3), }],
   }
-  let stale = conversation.with_history_page(
-    partial,
-    request=first_request,
-    latest=true,
-  )
+  let stale = conversation.with_latest_page(partial, request=first_request)
   assert_eq(stale.pending_assistants.length(), 1)
   let unchanged = stale.acknowledge_assistants(
     current_request,
@@ -498,7 +494,7 @@ test "Cloud history consumes each linked native reply only once" {
       { kind: Assistant(prose=Some("Repeated"), ..), sequence: None, .. },
     ],
   )
-  let completed = unchanged.with_history_page(
+  let completed = unchanged.with_latest_page(
     {
       ..partial,
       session: native_document([
@@ -516,7 +512,6 @@ test "Cloud history consumes each linked native reply only once" {
       ]),
     },
     request=current_request,
-    latest=true,
   )
   assert_true(completed.pending_assistants.is_empty())
   assert_true(
