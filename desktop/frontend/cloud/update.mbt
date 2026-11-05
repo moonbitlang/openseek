@@ -1137,17 +1137,25 @@ pub fn update(
       let offset = conversation.history_pages
         .keys()
         .fold(init=0, (max, key) => max.max(key))
-      let page_records = conversation.history_pages
-        .get(offset)
-        .map(page => page.messages)
+      let conversation = match conversation.history_pages.get(offset) {
+        Some(page) =>
+          conversation.acknowledge_assistants(
+            request,
+            page.session,
+            page.messages,
+          )
+        None =>
+          conversation.acknowledge_assistants(
+            request,
+            conversation.document,
+            conversation.records,
+          )
+      }
       let next = state.replace(id, {
         ..conversation,
         history_etag: Some(etag),
         history_reading: false,
         history_disk_request: None,
-        pending_assistants: conversation.uncovered_assistants(
-          request, page_records,
-        ),
         loading: false,
         history_required: false,
         watch_status: if observing && conversation.last_seq is Some(_) {

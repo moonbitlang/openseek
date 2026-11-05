@@ -30,12 +30,24 @@ fn cached_history_label(
   session : String,
 ) -> String {
   for message in page.messages {
-    guard message is { "kind": "user", "data": { "content": content, .. }, .. } else {
-      continue
-    }
-    let text = match content {
-      String(text) => text
-      Array(parts) =>
+    guard message is { "kind": "user", .. } else { continue }
+    let text = match message {
+      { "engine_sequence": Number(sequence, ..), .. } if sequence > 0 &&
+        sequence == sequence.to_int().to_double() =>
+        page.session.events
+        .unwrap_or([])
+        .iter()
+        .find_first(event => {
+          event.sequence == sequence.to_int() && event.item is User(_)
+        })
+        .map_or("", event => {
+          match event.item {
+            User(user) => user.content.text()
+            _ => ""
+          }
+        })
+      { "data": { "content": String(text), .. }, .. } => text
+      { "data": { "content": Array(parts), .. }, .. } =>
         parts
         .iter()
         .filter_map(part => {

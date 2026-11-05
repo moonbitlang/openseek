@@ -86,12 +86,12 @@ pub fn Conversation::items(
   let mut task : String? = None
   let mut native_failure = false
   for (task_id, kind, data, ts, engine_sequence) in service {
-    guard service_item(kind, data) is Some(item) else { continue }
+    guard kind is ("user" | "task_finished") else { continue }
     if task != Some(task_id) {
       native_failure = false
       task = Some(task_id)
     }
-    if item is @protocol.User(_) &&
+    if kind == "user" &&
       engine_sequence is Some(sequence) &&
       native.search_by(event => {
         event.sequence == sequence && event.item is @protocol.User(_)
@@ -106,6 +106,7 @@ pub fn Conversation::items(
       }
       continue
     }
+    guard service_item(kind, data) is Some(item) else { continue }
     // Keep the current native turn ahead of its service result, and place
     // missing service turns before the next native User anchor.
     let mut end = cursor

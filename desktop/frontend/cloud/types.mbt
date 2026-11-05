@@ -131,6 +131,7 @@ pub(all) struct Conversation {
   live : @engine_session.Stream
   // Committed replies waiting for the history read triggered by their SSE.
   pending_assistants : Array[PendingAssistant]
+  assistant_handoffs : Map[String, Int32]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
@@ -184,6 +185,7 @@ fn Conversation::empty() -> Conversation {
     last_seq: None,
     live: @engine_session.Stream::empty(),
     pending_assistants: [],
+    assistant_handoffs: Map([]),
     heartbeat: None,
     retrying: None,
     controls: @engine_session.State::empty(),

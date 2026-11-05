@@ -46,8 +46,8 @@ fn cloud_notification_model() -> Model {
       {
         task_id: "cloud-run",
         kind: "assistant_message",
-        data: { "content": "Cloud final answer" },
-        engine_sequence: None,
+        data: {},
+        engine_sequence: Some(1),
         created_at: 100,
       },
     ],

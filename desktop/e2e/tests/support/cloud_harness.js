@@ -83,6 +83,7 @@ export class CloudHarness {
     this.archived = new Set();
     this.histories = new Map();
     this.historyTurns = new Map();
+    this.trimHistory = false;
     this.nativeNotices = new Map();
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
@@ -471,11 +472,15 @@ export class CloudHarness {
       if (record.kind === 'user') {
         const mapped = { ...record, engine_sequence: items.length + 1 };
         items.push({ kind: record.kind, payload: record.data });
+        if (this.trimHistory) mapped.data = record.data.submission_id ? { submission_id: record.data.submission_id } : {};
         return mapped;
       }
       const payload = record.data;
       if (['tool_result', 'runtime_notice', 'summary'].includes(record.kind)) items.push({ kind: record.kind, payload });
-      if (record.kind === 'assistant_message') items.push({ kind: 'assistant', payload });
+      if (record.kind === 'assistant_message') {
+        items.push({ kind: 'assistant', payload });
+        if (this.trimHistory) return { ...record, data: {}, engine_sequence: items.length };
+      }
       if (record.kind === 'tool_call') {
         const call = payload.function ? { id: payload.id, name: payload.function.name, arguments: payload.function.arguments } : payload;
         items.push({ kind: 'assistant', payload: { content: '', tool_calls: [call] } });
@@ -489,7 +494,10 @@ export class CloudHarness {
       return record;
     });
     items.push(...(this.nativeNotices.get(session) || []));
-    return { messages, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
+    const projected = this.trimHistory
+      ? messages.filter(record => ['user', 'assistant_message', 'task_finished'].includes(record.kind))
+      : messages;
+    return { messages: projected, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
   }
 
   controlState(session) {
