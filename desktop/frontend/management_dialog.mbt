@@ -24,53 +24,35 @@ fn management_dialog_view(
       content,
     )
   }
-  @html.dialog(
+  @dialog_shell.view(
     id="management-dialog",
-    class="modal management-dialog",
-    on_cancel=dispatch(
+    title~,
+    close_label=shell_text(model.locale, DismissLabel),
+    size=Large,
+    closedby="any",
+    on_dismiss=dispatch(
       if model.delete_confirm is Some(_) {
         CancelDeleteSession
       } else {
         CloseManagementDialog
       },
     ),
-    attrs=@html.Attrs::build()
-      .aria_label(title)
-      .on_click(event => {
-        if event.target().to_element() is Some(element) &&
-          element.get_property("id").to_option() is Some("management-dialog") {
-          dispatch(CloseManagementDialog)
-        } else {
-          @cmd.none
-        }
-      }),
-    [
-      @html.div(class="management-dialog-header", [
-        @html.div(class="management-dialog-heading", [
-          if model.management_dialog is Some(Skills) &&
-            model.skills.detail_open() {
-            @html.button(
-              class="icon-button",
-              attrs=@html.Attrs::build().aria_label(
-                shell_text(model.locale, BackToSkills),
-              ),
-              on_click=dispatch(Skills(@skills.BackToList)),
-              @icons.icon(@icons.icon_arrow_left),
-            )
-          } else {
-            @html.nothing
-          },
-          @html.h1(class="topbar-title", title),
-        ]),
+    leading?=if model.management_dialog is Some(Skills) &&
+      model.skills.detail_open() {
+      Some(
         @html.button(
           class="icon-button",
           attrs=@html.Attrs::build().aria_label(
-            shell_text(model.locale, DismissLabel),
+            shell_text(model.locale, BackToSkills),
           ),
-          on_click=dispatch(CloseManagementDialog),
-          @icons.icon(@icons.icon_close),
+          on_click=dispatch(Skills(@skills.BackToList)),
+          @icons.icon(@icons.icon_arrow_left),
         ),
-      ]),
+      )
+    } else {
+      None
+    },
+    body=@html.fragment([
       // Stable panes retain their DOM while the shared dialog is closed.
       pane(Settings, settings_page(dispatch, model)),
       pane(ArchivedChats, archived_chats_html),
@@ -92,6 +74,6 @@ fn management_dialog_view(
       } else {
         @html.nothing
       },
-    ],
+    ]),
   )
 }

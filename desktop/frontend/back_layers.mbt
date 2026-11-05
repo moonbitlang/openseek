@@ -55,7 +55,15 @@ fn back_layers(model : Model, emit : @cmd.Emit[Msg]) -> Array[@sub.Sub] {
     layer("back-codex-confirmation", Codex(channel=model.focused, msg))
   }
   if model.management_dialog is Some(_) {
-    layer_at(TopLayer, "back-management-dialog", CloseManagementDialog)
+    layer_at(
+      TopLayer,
+      "back-management-dialog",
+      if model.delete_confirm is Some(_) {
+        CancelDeleteSession
+      } else {
+        CloseManagementDialog
+      },
+    )
   }
   if model.workspace_settings_dialog is Some(_) {
     layer_at(TopLayer, "back-workspace-settings", CloseWorkspaceSettings)

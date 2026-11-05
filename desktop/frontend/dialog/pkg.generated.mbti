@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn view(id~ : String, title~ : String, close_label~ : String, size~ : Size, closedby? : String, on_dismiss~ : @cmd.Cmd, body~ : @html.Html, actions? : @html.Html) -> @html.Html
+pub fn view(id~ : String, title~ : String, close_label~ : String, size~ : Size, closedby? : String, on_dismiss~ : @cmd.Cmd, body~ : @html.Html, leading? : @html.Html, actions? : @html.Html) -> @html.Html
 
 // Errors
 

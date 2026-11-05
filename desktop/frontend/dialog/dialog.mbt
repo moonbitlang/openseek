@@ -23,6 +23,7 @@ pub fn view(
   closedby? : String,
   on_dismiss~ : @cmd.Cmd,
   body~ : @html.Html,
+  leading? : @html.Html,
   actions? : @html.Html,
 ) -> @html.Html {
   let title_id = id + "-title"
@@ -34,7 +35,13 @@ pub fn view(
     attrs=@html.Attrs::build().aria_labelledby(title_id),
     [
       @html.div(class="desktop-dialog-header", [
-        @html.h2(id=title_id, class="desktop-dialog-title", title),
+        @html.div(
+          class="desktop-dialog-heading",
+          [
+            ..leading.map_or([], content => [content]),
+            @html.h2(id=title_id, class="desktop-dialog-title", title),
+          ],
+        ),
         @html.button(
           type_="button",
           class="icon-button desktop-dialog-close",

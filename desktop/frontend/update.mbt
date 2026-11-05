@@ -1739,7 +1739,8 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
-  let dialog_cmd = if previous.management_dialog == model.management_dialog {
+  let dialog_cmd = if (previous.management_dialog is Some(_)) ==
+    (model.management_dialog is Some(_)) {
     @cmd.none
   } else if model.management_dialog is Some(_) {
     @dialog.show("management-dialog")
