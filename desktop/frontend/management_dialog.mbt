@@ -17,6 +17,13 @@ fn management_dialog_view(
     Some(Schedules) => ui(model.locale, ScheduledTasks)
     None => ""
   }
+  fn pane(kind : ManagementDialog, content : @html.Html) -> @html.Html {
+    @html.div(
+      class="management-dialog-pane",
+      hidden=model.host_incompatible() || model.management_dialog != Some(kind),
+      content,
+    )
+  }
   @html.dialog(
     id="management-dialog",
     class="modal management-dialog",
@@ -64,21 +71,20 @@ fn management_dialog_view(
           @icons.icon(@icons.icon_close),
         ),
       ]),
-      ..match model.management_dialog {
-        Some(_) if model.host_incompatible() =>
-          [
-            console_gate_view(
-              locale=model.locale,
-              dispatch,
-              model.console,
-              host_incompatible=true,
-            ),
-          ]
-        Some(Settings) => [settings_page(dispatch, model)]
-        Some(ArchivedChats) => [archived_chats_html]
-        Some(Skills) => [skills_html]
-        Some(Schedules) => [schedules_page(dispatch, model)]
-        None => []
+      // Stable panes retain their DOM while the shared dialog is closed.
+      pane(Settings, settings_page(dispatch, model)),
+      pane(ArchivedChats, archived_chats_html),
+      pane(Skills, skills_html),
+      pane(Schedules, schedules_page(dispatch, model)),
+      if model.management_dialog is Some(_) && model.host_incompatible() {
+        console_gate_view(
+          locale=model.locale,
+          dispatch,
+          model.console,
+          host_incompatible=true,
+        )
+      } else {
+        @html.nothing
       },
       if model.management_dialog is Some(ArchivedChats) &&
         model.delete_confirm is Some(confirm) {
