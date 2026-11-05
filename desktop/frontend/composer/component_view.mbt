@@ -263,7 +263,7 @@ fn Entry::action_buttons(
         },
       ]
     }
-    Running(steer_available~, can_stop~, submit~, ..) => {
+    Running(can_stop~, submit~, ..) => {
       let submit = self.running_submit(submit)
       let actions : Array[ActionButton] = [
         {
@@ -275,13 +275,14 @@ fn Entry::action_buttons(
           content: @icons.icon(@icons.icon_stop_circle),
         },
       ]
-      if steer_available &&
+      // A draft keeps its submit action at the end, where Send was, even
+      // while the run cannot take a follow-up yet; it stays disabled until it
+      // can. Leaving the slot to Stop would turn a press aimed at Send into a
+      // cancellation of the run that has just started.
+      if !self.draft.is_blank() ||
         (
-          !self.draft.is_blank() ||
-          (
-            self.owner is @interop.Cloud(..) &&
-            !self.attachment_requests.is_empty()
-          )
+          self.owner is @interop.Cloud(..) &&
+          !self.attachment_requests.is_empty()
         ) {
         actions.push({
           id: "send",
