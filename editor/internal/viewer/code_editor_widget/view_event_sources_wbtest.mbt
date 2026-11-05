@@ -39,33 +39,34 @@ fn test_configuration_changed_event(
 /// These white-box adapters keep source-fact assertions precise without
 /// widening the consolidated view package's production API. The event payload
 /// fields remain private; JS white-box tests inspect their emitted runtime
-/// representation directly.
+/// representation directly. A MoonBit `Array` is emitted as `{ buf, len }`,
+/// where `buf` may hold spare capacity past `len`.
 extern "js" fn test_view_configuration_changed_options_length(
   event : @view.ViewConfigurationChangedEvent,
-) -> Int32 = "(event) => event.changed_options.length"
+) -> Int32 = "(event) => event.changed_options.len"
 
 ///|
 extern "js" fn test_view_configuration_has_changed(
   event : @view.ViewConfigurationChangedEvent,
   option : @view.ViewConfigurationOption,
-) -> Bool = "(event, option) => event.changed_options.includes(option)"
+) -> Bool = "(event, option) => event.changed_options.buf.slice(0, event.changed_options.len).includes(option)"
 
 ///|
 extern "js" fn test_view_tokens_range_count(
   event : @view.ViewTokensChangedEvent,
-) -> Int32 = "(event) => event.ranges.length"
+) -> Int32 = "(event) => event.ranges.len"
 
 ///|
 extern "js" fn test_view_tokens_range_from(
   event : @view.ViewTokensChangedEvent,
   index : Int32,
-) -> Int32 = "(event, index) => event.ranges[index].from_line_number"
+) -> Int32 = "(event, index) => event.ranges.buf[index].from_line_number"
 
 ///|
 extern "js" fn test_view_tokens_range_to(
   event : @view.ViewTokensChangedEvent,
   index : Int32,
-) -> Int32 = "(event, index) => event.ranges[index].to_line_number"
+) -> Int32 = "(event, index) => event.ranges.buf[index].to_line_number"
 
 ///|
 extern "js" fn test_view_scroll_width(
@@ -86,7 +87,7 @@ extern "js" fn test_view_scroll_flags(
 ///|
 extern "js" fn test_view_cursor_selections(
   event : @view.ViewCursorStateChangedEvent,
-) -> FixedArray[@core.Selection] = "(event) => event.selections"
+) -> FixedArray[@core.Selection] = "(event) => event.selections.buf.slice(0, event.selections.len)"
 
 ///|
 test "view configuration source preserves independent paint axes and no-op" {

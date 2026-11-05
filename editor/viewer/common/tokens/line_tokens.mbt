@@ -42,12 +42,13 @@ enum ViewLineTokens {
 /// Direct-constructor callers must supply an even number of words with
 /// nondecreasing end offsets. For a complete line with at least one token, the
 /// last end offset is the text's UTF-16 length.
+#derive(Debug)
 struct LineTokens {
   tokens : Array[UInt32]
   tokens_count : Int32
   text : String
   language_id_codec : @services.LanguageIdCodec
-} derive(Debug)
+}
 
 ///|
 pub fn LineTokens::LineTokens(

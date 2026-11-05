@@ -9,8 +9,14 @@ fn Conversation::older_history_start(self : Conversation) -> Int32? {
   }
   // A fresh tail can jump ahead if another device sent several turns.
   // Close any gap before walking beyond the cached prefix.
+  // The response's generating flag belongs to the whole conversation.
+  // A terminal service record proves this page's turn is complete.
   while start > 0 &&
-        self.history_pages.get(start - 1) is Some({ generating: false, .. }) {
+        self.history_pages.get(start - 1) is Some(page) &&
+        (
+          !page.generating ||
+          page.messages.any(record => record.kind == "task_finished")
+        ) {
     start -= 1
   }
   if start > 0 {
@@ -29,13 +35,22 @@ pub fn Conversation::can_load_older_history(self : Conversation) -> Bool {
 fn Conversation::with_history_page(
   self : Conversation,
   history : History,
+  request? : Int32,
   latest~ : Bool,
 ) -> Conversation {
+  // Disk hydration supplies no request because its snapshot can predate SSE.
+  let pending_assistants = request.map_or(self.pending_assistants, request => {
+    self.uncovered_assistants(
+      request,
+      history.offset.map(_ => history.messages),
+    )
+  })
   guard history.offset is Some(offset) else {
     return {
       ..self,
       records: history.messages,
       document: history.session,
+      pending_assistants,
       history_pages: Map([]),
       history_older_request: None,
     }
@@ -72,6 +87,26 @@ fn Conversation::with_history_page(
       !latest || request.1 < offset
     }),
     records,
+    pending_assistants,
     document: { ..tail.session, events: Some(events), },
   }
+}
+
+///|
+/// SSE publishes assistants after commit. A read started after the event
+/// includes that commit if it covers the task's turn. A read for a different
+/// turn or an older in-flight page cannot replace the temporary reply.
+fn Conversation::uncovered_assistants(
+  self : Conversation,
+  request : Int32,
+  page_records : Array[Record]?,
+) -> Array[PendingAssistant] {
+  self.pending_assistants.filter(pending => {
+    request < pending.history_request ||
+    page_records.map_or(false, records => {
+      !records.any(record => {
+        record.task_id == pending.task && record.kind == "assistant_message"
+      })
+    })
+  })
 }

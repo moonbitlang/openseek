@@ -15,6 +15,7 @@
 // `content_left = line_numbers_width + decorations_width`.
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct EditorLayoutInfo {
   /// Full editor width.
   width : Double
@@ -40,7 +41,7 @@ pub(all) struct EditorLayoutInfo {
   horizontal_scrollbar_height : Double
   /// The width of the vertical scrollbar.
   vertical_scrollbar_width : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend EditorLayoutInfo with Debug::{to_repr}

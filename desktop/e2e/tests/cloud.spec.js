@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
+import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 for (const desktop of [false, true]) {
   test(`${desktop ? 'desktop' : 'browser'} restores Cloud in the ordinary chat UI without an online device`, async ({ page }) => {
@@ -285,13 +285,25 @@ test('Cloud renders each text fragment before completion and replaces the previe
   await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(0);
   first();
   await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(1);
+  let releaseHistory;
+  cloud.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
+  const path = `/v1/sessions/${sessionA}/messages`;
+  const handoff = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
   second();
+  await handoff;
   await expect(page.locator('#transcript .streaming')).toHaveCount(0);
-  await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(1);
-  const recovered = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
-  final(); await (await recovered).finished();
+  const answer = page.locator('#transcript').getByText('你好 🌙', { exact: true });
+  await expect(answer).toBeVisible();
+  const finished = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
+  final();
+  const finalRead = await finished;
+  await expect(answer).toBeVisible();
+  releaseHistory();
+  const recovered = await finalRead.response();
+  expect(recovered.status()).toBe(200);
+  await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
-  await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(1);
+  await expect(answer).toHaveCount(1);
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
@@ -305,8 +317,8 @@ test('Cloud disconnect replaces provisional text with authoritative history and 
   await page.locator('#task').fill('Question'); await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toBeVisible();
   await page.locator('#task').fill('Draft after admission');
-  const recovered = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
-  disconnect(); await (await recovered).finished();
+  const recovered = settledResponse(page, response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
+  disconnect(); await recovered;
   await expect(page.locator('#transcript').getByText('Authoritative answer', { exact: true })).toHaveCount(1);
   await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Draft after admission');

@@ -11,6 +11,7 @@ import {
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) struct AgentFeedback {
   id : String
   text : String
@@ -20,19 +21,21 @@ pub(all) struct AgentFeedback {
   kind : AgentFeedbackKind
   replies : Array[String]
   state : AgentFeedbackState
-} derive(@debug.Debug)
+}
 pub fn AgentFeedback::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct AgentFeedbackAddedEvent {
   feedback : AgentFeedback
   has_existing_feedback_for_file : Bool
-} derive(@debug.Debug)
+}
 pub fn AgentFeedbackAddedEvent::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct AgentFeedbackChangeEvent {
   resource : @common.Uri
   feedback_items : Array[AgentFeedback]
-} derive(@debug.Debug)
+}
 pub fn AgentFeedbackChangeEvent::to_repr(Self) -> @debug.Repr
 
 type AgentFeedbackHandle
@@ -50,39 +53,43 @@ pub fn AgentFeedbackHandle::remove_feedback(Self, @common.Uri, String) -> Unit
 pub fn AgentFeedbackHandle::set_navigation_anchor(Self, @common.Uri, String?) -> Unit
 pub fn AgentFeedbackHandle::update_feedback(Self, @common.Uri, String, String) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AgentFeedbackKind {
   UserReview
   AgentReview
-} derive(Eq, @debug.Debug)
+}
 pub fn AgentFeedbackKind::equal(Self, Self) -> Bool
 pub fn AgentFeedbackKind::not_equal(Self, Self) -> Bool
 pub fn AgentFeedbackKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct AgentFeedbackNavigationBearing {
   active_idx : Int32
   total_count : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn AgentFeedbackNavigationBearing::equal(Self, Self) -> Bool
 pub fn AgentFeedbackNavigationBearing::not_equal(Self, Self) -> Bool
 pub fn AgentFeedbackNavigationBearing::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum AgentFeedbackState {
   Created
   Accepted
   Submitted
   Resolved
-} derive(Eq, @debug.Debug)
+}
 pub fn AgentFeedbackState::equal(Self, Self) -> Bool
 pub fn AgentFeedbackState::not_equal(Self, Self) -> Bool
 pub fn AgentFeedbackState::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct AgentFeedbackSubmittedEvent {
   resource : @common.Uri
   items : Array[AgentFeedback]
   user_count : Int32
   agent_review_count : Int32
   reply_count : Int32
-} derive(@debug.Debug)
+}
 pub fn AgentFeedbackSubmittedEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases

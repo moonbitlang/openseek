@@ -3,6 +3,7 @@ package "openseek_desktop/frontend/mention_context"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "openseek_desktop/protocol",
 }
@@ -33,56 +34,63 @@ pub fn with_review_changes(Array[MentionRef], ReviewChanges, adding~ : Bool) -> 
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum AnnotationSide {
   WorkingRevision
   OriginalRevision
-} derive(Eq, @debug.Debug)
+}
 pub fn AnnotationSide::equal(Self, Self) -> Bool
 pub fn AnnotationSide::not_equal(Self, Self) -> Bool
 pub fn AnnotationSide::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ArtifactSnapshot {
   reference : String
   title : String
-  state : Json
-} derive(Eq, @debug.Debug)
+  state : @json.Json
+}
 pub fn ArtifactSnapshot::equal(Self, Self) -> Bool
 pub fn ArtifactSnapshot::not_equal(Self, Self) -> Bool
 pub fn ArtifactSnapshot::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ChangeExcerpt {
   original : Array[ChangeLine]
   modified : Array[ChangeLine]
-} derive(Eq, @debug.Debug)
+}
 pub fn ChangeExcerpt::equal(Self, Self) -> Bool
 pub fn ChangeExcerpt::is_empty(Self) -> Bool
 pub fn ChangeExcerpt::not_equal(Self, Self) -> Bool
 pub fn ChangeExcerpt::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ChangeLine {
   number : Int32
   text : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ChangeLine::equal(Self, Self) -> Bool
 pub fn ChangeLine::not_equal(Self, Self) -> Bool
 pub fn ChangeLine::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ContextCoverage {
   NotIncluded
   PartlyIncluded
   Included
-} derive(Eq, @debug.Debug)
+}
 pub fn ContextCoverage::equal(Self, Self) -> Bool
 pub fn ContextCoverage::not_equal(Self, Self) -> Bool
 pub fn ContextCoverage::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct MentionMessage {
   mentions : Array[MentionRef]
   task : String
-} derive(@debug.Debug)
+}
 pub fn MentionMessage::display_text(Self) -> String
 pub fn MentionMessage::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum MentionRef {
   BrowserAnnotation(element~ : @protocol.BrowserElement)
   ReviewChanges(ReviewChanges)
@@ -94,51 +102,56 @@ pub(all) enum MentionRef {
   OfficeSelection(materialized~ : String)
   InteractiveAnswer(ArtifactSnapshot)
   Annotation(file~ : String, start_line~ : Int32, end_line~ : Int32, quote~ : String, comment~ : String, side~ : AnnotationSide)
-} derive(Eq, @debug.Debug)
+}
 pub fn MentionRef::comment(Self) -> String?
 pub fn MentionRef::equal(Self, Self) -> Bool
 pub fn MentionRef::not_equal(Self, Self) -> Bool
 pub fn MentionRef::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct OfficeSelectionSummary {
   file : String
   text : String?
   location : String?
-} derive(Eq)
+}
 pub fn OfficeSelectionSummary::equal(Self, Self) -> Bool
 pub fn OfficeSelectionSummary::heading(Self) -> String
 pub fn OfficeSelectionSummary::not_equal(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ReviewChanges {
   source : ReviewSource
   excerpts : Array[ChangeExcerpt]
-} derive(Eq, @debug.Debug)
+}
 pub fn ReviewChanges::coverage(Self, Array[Self]) -> ContextCoverage
 pub fn ReviewChanges::equal(Self, Self) -> Bool
 pub fn ReviewChanges::not_equal(Self, Self) -> Bool
 pub fn ReviewChanges::to_repr(Self) -> @debug.Repr
 pub fn ReviewChanges::without(Self, Self) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ReviewSource {
   workspace : String
   file : String
   original_file : String?
   base : String?
   version : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ReviewSource::equal(Self, Self) -> Bool
 pub fn ReviewSource::not_equal(Self, Self) -> Bool
 pub fn ReviewSource::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SemanticSearchArtifact {
   path : String
   pattern_count : Int32
   match_count : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn SemanticSearchArtifact::equal(Self, Self) -> Bool
 pub fn SemanticSearchArtifact::not_equal(Self, Self) -> Bool
 pub fn SemanticSearchArtifact::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SemanticSearchReference {
   id : String
   root : String
@@ -146,18 +159,19 @@ pub(all) struct SemanticSearchReference {
   include_glob : String
   exclude_glob : String
   matches : Array[@protocol.SemanticSelectionMatch]
-} derive(Eq, @debug.Debug)
+}
 pub fn SemanticSearchReference::equal(Self, Self) -> Bool
 pub fn SemanticSearchReference::is_inlineable(Self) -> Bool
 pub fn SemanticSearchReference::materialize_payload(Self, root~ : String) -> @protocol.MaterializeSemanticSelectionPayload
 pub fn SemanticSearchReference::not_equal(Self, Self) -> Bool
 pub fn SemanticSearchReference::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct Target {
   file : String
   range : @common.Range?
   annotation : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn Target::equal(Self, Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool
 pub fn Target::to_repr(Self) -> @debug.Repr

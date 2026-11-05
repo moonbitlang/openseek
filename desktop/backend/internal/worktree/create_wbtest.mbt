@@ -5,18 +5,20 @@ async test "worktree creation reads settings using a resource path" {
   defer worktree_env_test_lock.release()
   let root = worktree_test_root("openseek-worktree-windows-")
   let windows = @async.platform is Windows
-  defer (if windows {
-    // Git objects are read-only on Windows; fs.rmdir cannot remove them.
-    let (code, _, stderr) = @processx.collect_output_no_stdin(
-      "powershell.exe",
-      [
-        "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; $fixture = [IO.Path]::GetFullPath($env:OPENSEEK_WORKTREE_TEST_ROOT); $temp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()); if (!$fixture.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -or !([IO.Path]::GetFileName($fixture)).StartsWith('openseek-worktree-windows-')) { throw 'Unexpected fixture path' }; Remove-Item -LiteralPath $fixture -Recurse -Force",
-      ],
-      extra_env={ "OPENSEEK_WORKTREE_TEST_ROOT": root.to_string() },
-    )
-    assert_eq(code, 0, msg=stderr.text())
-  } else {
-    @fs.rmdir(root.to_string(), recursive=true)
+  defer @async.protect_from_cancel(() => {
+    if windows {
+      // Git objects are read-only on Windows; fs.rmdir cannot remove them.
+      let (code, _, stderr) = @processx.collect_output_no_stdin(
+        "powershell.exe",
+        [
+          "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; $fixture = [IO.Path]::GetFullPath($env:OPENSEEK_WORKTREE_TEST_ROOT); $temp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()); if (!$fixture.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -or !([IO.Path]::GetFileName($fixture)).StartsWith('openseek-worktree-windows-')) { throw 'Unexpected fixture path' }; Remove-Item -LiteralPath $fixture -Recurse -Force",
+        ],
+        extra_env={ "OPENSEEK_WORKTREE_TEST_ROOT": root.to_string() },
+      )
+      assert_eq(code, 0, msg=stderr.text())
+    } else {
+      @fs.rmdir(root.to_string(), recursive=true)
+    }
   })
   let home_variable = if windows { "USERPROFILE" } else { "HOME" }
   let previous = @sys.get_env_var(home_variable)

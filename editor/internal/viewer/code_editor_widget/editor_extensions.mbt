@@ -126,11 +126,12 @@ fn QuickDiffContributionState::QuickDiffContributionState(
 /// makes typed lookup unavailable after teardown. `ContributionDisposing`
 /// remains readable so synchronous feature cleanup can use central accessors
 /// while the complete map is still installed.
+#derive(Eq)
 priv enum EditorContributionLifecycle {
   ContributionLive
   ContributionDisposing
   ContributionDisposed
-} derive(Eq)
+}
 
 ///|
 /// One live row in Monaco `CodeEditorContributions._instances`. `listeners`
@@ -235,11 +236,12 @@ fn EditorContributionEntry::dispose(
 /// Wrapper lifecycle separates ordered contribution behavior disposal from
 /// the later retained browser-resource cleanup. The sole instance map remains
 /// allocated but is not lookuppable while disposal is between those phases.
+#derive(Eq)
 priv enum EditorContributionsLifecycle {
   ContributionsLive
   ContributionsDisposing
   ContributionsDisposed
-} derive(Eq)
+}
 
 ///|
 /// Monaco `CodeEditorContributions._instances`: the sole per-CodeEditorWidget concrete
@@ -354,9 +356,10 @@ fn EditorContributionDescription::EditorContributionDescription(
 
 ///|
 /// The closed editor-context menu id supported by the command registry.
+#derive(Eq)
 priv enum EditorMenuId {
   EditorContext
-} derive(Eq)
+}
 
 ///|
 /// One command placement in a menu group. The live command precondition is

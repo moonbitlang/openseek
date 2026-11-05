@@ -1,14 +1,16 @@
 ///|
+#derive(Eq)
 pub(all) enum GithubDraftTarget {
   Line(path~ : String, side~ : String, line~ : Int32, head~ : String)
   Thread(thread~ : String, comment~ : String)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct GithubDraft {
   target : GithubDraftTarget
   body : String
-} derive(Eq)
+}
 
 ///|
 pub impl ToJson for GithubDraftTarget with fn to_json(self) {
@@ -73,10 +75,11 @@ pub extend GithubDraftTarget with Eq::{equal, not_equal}
 pub extend GithubDraft with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) struct GithubDrafts {
   url : String
   drafts : Array[GithubDraft]
-} derive(Eq)
+}
 
 ///|
 pub impl ToJson for GithubDrafts with fn to_json(self) {

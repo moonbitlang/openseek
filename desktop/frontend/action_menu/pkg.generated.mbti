@@ -22,12 +22,13 @@ pub fn[T : Eq] selection_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[T?],
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) enum ClientPlatform {
   Web
   MacOS
   Windows
   Linux
-} derive(Eq)
+}
 pub fn ClientPlatform::equal(Self, Self) -> Bool
 pub fn ClientPlatform::not_equal(Self, Self) -> Bool
 
@@ -40,6 +41,7 @@ pub(all) struct ContextActions {
   download_file : (String) -> @cmd.Cmd
 }
 
+#derive(Eq)
 pub(all) struct ContextInput {
   platform : ClientPlatform
   open_web_links_in_app : Bool
@@ -47,7 +49,7 @@ pub(all) struct ContextInput {
   share_files : Bool
   download_files : Bool
   downloading : Bool
-} derive(Eq)
+}
 pub fn ContextInput::equal(Self, Self) -> Bool
 pub fn ContextInput::not_equal(Self, Self) -> Bool
 

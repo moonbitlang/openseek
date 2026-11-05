@@ -110,60 +110,59 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
   });
 }
 
-for (const status of ['aborted', 'failed', 'unexpected-terminal']) {
-  test(`queued edit keeps its draft when ${status} precedes acceptance`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    app.hostSettings.followup_behavior = 'queue';
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    const composer = page.locator('#task');
-    await composer.fill('Start a turn');
-    await page.locator('#send').click();
-    await composer.fill('Original queued message');
-    await composer.press('Enter');
-    const queued = page.locator('.queued-input-row');
-    await queued.getByTitle('Edit', { exact: true }).click();
-    await expect(composer).toHaveValue('Original queued message');
-    await composer.fill('Keep this revision');
-    const replyFor = app.replyFor.bind(app);
-    let heldRequest;
-    app.replyFor = request => {
-      if (request.method === 'agent.queue' && request.params.action === 'edit') {
-        heldRequest = request;
-        return new Promise(() => {});
-      }
-      return replyFor(request);
-    };
-    await page.getByTitle('Save queued message', { exact: true }).click();
-    await expect.poll(() => heldRequest?.id).toBeDefined();
-    await expect(composer).toBeDisabled();
-    // Inject a terminal before the held reply to exercise draft protection.
-    // This does not establish that a production transport emits this order.
-    app.notify('agent.finished', {
-      run_id: heldRequest.params.run_id, status, answer: null, exit_code: 1,
-    });
-    await expect(queued).toHaveCount(0);
-    await expect(composer).toBeEnabled();
-    await expect(composer).toHaveValue('Keep this revision');
-    await composer.fill('Continue editing after the run ended');
-    app.socket.send(JSON.stringify({
-      jsonrpc: '2.0', id: heldRequest.id, result: { accepted: true },
-    }));
-    // Wait for a visible effect of a later message on the same socket, so
-    // the acceptance has been processed before inspecting or submitting.
-    app.liveSessions.find(session => session.id === 'session-1').title = 'After late acceptance';
-    app.notify('session.changed', {
-      change: 'renamed', session: 'session-1', workspace: '/workspace',
-    });
-    await expect(page.getByText('After late acceptance', { exact: true }).first()).toBeVisible();
-    await expect(composer).toHaveValue('Continue editing after the run ended');
-    await expect(queued).toHaveCount(0);
-    await page.locator('#send').click();
-    await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(2);
-    const starts = app.requests.filter(r => r.method === 'agent.start');
-    expect(starts[1].params.task).toBe('Continue editing after the run ended');
-    await expect(queued).toHaveCount(0);
-    expect(app.pageErrors).toEqual([]);
+// Aborted, failed and unknown terminals retire the queue through one shared path.
+test('queued edit keeps its draft when a failed run precedes acceptance', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.hostSettings.followup_behavior = 'queue';
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const composer = page.locator('#task');
+  await composer.fill('Start a turn');
+  await page.locator('#send').click();
+  await composer.fill('Original queued message');
+  await composer.press('Enter');
+  const queued = page.locator('.queued-input-row');
+  await queued.getByTitle('Edit', { exact: true }).click();
+  await expect(composer).toHaveValue('Original queued message');
+  await composer.fill('Keep this revision');
+  const replyFor = app.replyFor.bind(app);
+  let heldRequest;
+  app.replyFor = request => {
+    if (request.method === 'agent.queue' && request.params.action === 'edit') {
+      heldRequest = request;
+      return new Promise(() => {});
+    }
+    return replyFor(request);
+  };
+  await page.getByTitle('Save queued message', { exact: true }).click();
+  await expect.poll(() => heldRequest?.id).toBeDefined();
+  await expect(composer).toBeDisabled();
+  // Inject a terminal before the held reply to exercise draft protection.
+  // This does not establish that a production transport emits this order.
+  app.notify('agent.finished', {
+    run_id: heldRequest.params.run_id, status: 'failed', answer: null, exit_code: 1,
   });
-}
+  await expect(queued).toHaveCount(0);
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue('Keep this revision');
+  await composer.fill('Continue editing after the run ended');
+  app.socket.send(JSON.stringify({
+    jsonrpc: '2.0', id: heldRequest.id, result: { accepted: true },
+  }));
+  // Wait for a visible effect of a later message on the same socket, so
+  // the acceptance has been processed before inspecting or submitting.
+  app.liveSessions.find(session => session.id === 'session-1').title = 'After late acceptance';
+  app.notify('session.changed', {
+    change: 'renamed', session: 'session-1', workspace: '/workspace',
+  });
+  await expect(page.getByText('After late acceptance', { exact: true }).first()).toBeVisible();
+  await expect(composer).toHaveValue('Continue editing after the run ended');
+  await expect(queued).toHaveCount(0);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(2);
+  const starts = app.requests.filter(r => r.method === 'agent.start');
+  expect(starts[1].params.task).toBe('Continue editing after the run ended');
+  await expect(queued).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});

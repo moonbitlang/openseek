@@ -8,20 +8,22 @@ pub(all) enum CommandResult {
 }
 
 ///|
+#derive(Eq)
 pub(all) struct ShellCommand {
   id : String
   command : String
-} derive(Eq)
+}
 
 ///|
 pub extend ShellCommand with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 priv struct ResultSubmission {
   id : String
   text : String
   recovered : Bool
-} derive(Eq)
+}
 
 ///|
 fn Entry::hold_result(self : Entry, text : String) -> Entry {

@@ -1,5 +1,6 @@
 ///|
 /// A capture request pins both the document identity and its owning chat.
+#derive(Eq)
 pub struct OfficeRegionRequest {
   id : Int64
   owner : @interop.ConversationIdentity
@@ -7,19 +8,21 @@ pub struct OfficeRegionRequest {
   path : @common.Uri
   sig : String
   pdf_generation : Int32?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct OfficeRegionPreview {
   request : OfficeRegionRequest
   capture : @office_capture.Capture
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct OfficeRegionDraft {
   preview : OfficeRegionPreview
   comment : String
-} derive(Eq)
+}
 
 ///|
 pub fn State::accepts_office_region(

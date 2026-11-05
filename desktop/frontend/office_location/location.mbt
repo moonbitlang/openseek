@@ -1,11 +1,12 @@
 ///|
 /// Explicit, format-specific destinations carried in local Markdown links.
+#derive(Eq, Debug)
 pub(all) enum Target {
   PdfPage(Int32)
   WordHeading(String)
   WordParagraph(String)
   ExcelRange(sheet~ : String, range~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Target with Eq::{equal, not_equal}
@@ -14,10 +15,11 @@ pub extend Target with Eq::{equal, not_equal}
 pub extend Target with Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Reference {
   path : String
   target : Target
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Reference with Eq::{equal, not_equal}

@@ -1,5 +1,6 @@
 ///|
 /// A bounded snapshot, independent of the lifetime of a Chromium DOM node.
+#derive(Debug, Eq)
 pub(all) struct BrowserElement {
   url : String
   title : String
@@ -7,7 +8,7 @@ pub(all) struct BrowserElement {
   selector : String?
   text : String
   html : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl @json.FromJson for BrowserElement with fn from_json(json, path) {
@@ -38,10 +39,11 @@ pub impl ToJson for BrowserElement with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct BrowserPickPayload {
   id : Int32
   request : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl @json.FromJson for BrowserPickPayload with fn from_json(json, path) {
@@ -56,10 +58,11 @@ pub impl ToJson for BrowserPickPayload with fn to_json(self) {
 
 ///|
 /// Cancellation is distinct from capture failure, which rejects the command.
+#derive(Debug, Eq)
 pub(all) enum BrowserPickReply {
   Selected(BrowserElement)
   Cancelled
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl @json.FromJson for BrowserPickReply with fn from_json(json, path) {

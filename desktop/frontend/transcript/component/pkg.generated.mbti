@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/i18n",
@@ -18,7 +19,7 @@ pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 
 pub fn preserve_prepend_scroll() -> @cmd.Cmd
 
-pub fn program_calls_view(locale? : @i18n.Locale, Json?, String, origin? : @transcript.TraceOrigin) -> @html.Html?
+pub fn program_calls_view(locale? : @i18n.Locale, @json.Json?, String, origin? : @transcript.TraceOrigin) -> @html.Html?
 
 pub fn scroll_to_latest() -> @cmd.Cmd
 
@@ -42,37 +43,42 @@ pub(all) struct Actions {
   load_older : @cmd.Cmd
 }
 
-type Input derive(Eq)
+#derive(Eq)
+type Input
 pub fn Input::Input(locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused? : @interop.ChannelId, identity? : String, active_session~ : String, archived? : Bool, can_fork? : Bool, fork_busy? : Bool, edit_busy? : Bool, forking? : Int32, editable_users? : Array[Int32], scroll? : ScrollPosition, older_history? : Bool, loading_older_history? : Bool, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct ProjectChoice {
   root : @common.Uri
   label : String
-} derive(Eq)
+}
 pub fn ProjectChoice::equal(Self, Self) -> Bool
 pub fn ProjectChoice::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum ScrollPosition {
   Pinned
   Unpinned(top~ : Double)
-} derive(Eq)
+}
 pub fn ScrollPosition::equal(Self, Self) -> Bool
 pub fn ScrollPosition::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum Source {
   OpenSeek
   Codex
-} derive(Eq)
+}
 pub fn Source::equal(Self, Self) -> Bool
 pub fn Source::not_equal(Self, Self) -> Bool
 pub fn Source::wire(Self) -> String
 
+#derive(Eq)
 pub(all) struct VisibleRow {
   item : @transcript.TranscriptItem
   identity : String
-} derive(Eq)
+}
 pub fn VisibleRow::equal(Self, Self) -> Bool
 pub fn VisibleRow::history(Array[@transcript.TranscriptItem]) -> Array[Self]
 pub fn VisibleRow::not_equal(Self, Self) -> Bool

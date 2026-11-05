@@ -6,6 +6,7 @@
 /// targeted migration error for `replace_all=true`. `revert_on_parse_errors`
 /// (default true) controls the pre-write syntax gate that rejects an edit
 /// whose result would introduce new lex/parse errors into a `.mbt` file.
+#derive(Debug)
 pub struct EditInput {
   path : String
   old_string : String
@@ -22,7 +23,7 @@ pub struct EditInput {
   revert_if_error_delta_greater_or_equal : Int32?
   /// Revert when the net warning-count change is >= this threshold (absent = off).
   revert_if_warning_delta_greater_or_equal : Int32?
-} derive(Debug)
+}
 
 ///|
 /// Decode `edit` tool-call arguments.

@@ -19,15 +19,17 @@ pub fn component(@rabbita.Val[State], @cmd.Emit[Msg], @rabbita.Val[@i18n.Locale]
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Accepted {
   path : String
   range : @common.Range?
-} derive(Eq, @debug.Debug)
+}
 pub fn Accepted::equal(Self, Self) -> Bool
 pub fn Accepted::not_equal(Self, Self) -> Bool
 pub fn Accepted::to_repr(Self) -> @debug.Repr
 
-type Input derive(Eq)
+#derive(Eq)
+type Input
 pub fn Input::Input(owner~ : @interop.ConversationKey, root~ : @common.Uri?, open_files~ : Array[@pathx.Relative], active_file~ : @pathx.Relative?) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
@@ -48,14 +50,16 @@ pub(all) enum Msg {
   Dismiss
 }
 
+#derive(Eq)
 pub(all) enum Provider {
   Files
   Symbols
-} derive(Eq)
+}
 pub fn Provider::equal(Self, Self) -> Bool
 pub fn Provider::not_equal(Self, Self) -> Bool
 
-type State derive(Eq)
+#derive(Eq)
+type State
 pub fn State::close(Self) -> (@cmd.Cmd, Self)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool

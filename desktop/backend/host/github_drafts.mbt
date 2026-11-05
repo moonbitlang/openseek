@@ -51,7 +51,7 @@ async fn write_github_drafts(
   defer @fs.rmdir(unique)
   let unique_path : @pathx.Path = unique
   let temp = parent.join(unique_path.basename().to_owned())
-  defer @fsx.remove_if_exists(temp)
+  defer @async.protect_from_cancel(() => @fsx.remove_if_exists(temp))
   @fs.write_file(
     temp.to_string(),
     drafts.to_json().stringify(),

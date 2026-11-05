@@ -1,6 +1,7 @@
 ///|
 /// A rendered PDF text run. Bounds are page-relative CSS pixels; index preserves
 /// PDF content order even when visual sorting is needed for untagged documents.
+#derive(Eq, Debug)
 pub(all) struct TextRun {
   bounds : Rect
   index : Int32
@@ -9,20 +10,22 @@ pub(all) struct TextRun {
   marked_id : String?
   has_eol : Bool
   vertical : Bool
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Structure {
   role : String?
   content_id : String?
   children : Array[Structure]
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Target {
   bounds : Rect
   text : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn vertical_text(a : Double, b : Double, rotation : Double) -> Bool {

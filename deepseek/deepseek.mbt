@@ -4,32 +4,36 @@
 /// `V4Flash` is the DeepSeek flash tier under its canonical wire name
 /// `deepseek-flash`. The retired `deepseek-v4-flash` name is still accepted as
 /// an alias and served by the same model.
+#derive(Eq, Debug)
 pub(all) enum DsVariant {
   V4Flash
   V4Pro
-} derive(Eq, Debug)
+}
 
 ///|
 /// Kimi chat model variants.
+#derive(Eq, Debug)
 pub(all) enum KimiVariant {
   K27Code
   K27CodeHighSpeed
-} derive(Eq, Debug)
+}
 
 ///|
 /// Z.AI GLM chat model variants.
+#derive(Eq, Debug)
 pub(all) enum GlmVariant {
   G53
   G53Flash
-} derive(Eq, Debug)
+}
 
 ///|
 /// Supported chat models grouped by provider.
+#derive(Eq, Debug)
 pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
   Glm(GlmVariant)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Returns the wire name for a DeepSeek chat model variant.
@@ -104,11 +108,12 @@ pub fn Model::context_window(self : Model) -> Int32 {
 ///
 /// `No` disables thinking. `High` and `Max` enable thinking and select the
 /// corresponding reasoning effort.
+#derive(Eq, Debug)
 pub(all) enum ThinkingMode {
   No
   High
   Max
-} derive(Eq, Debug)
+}
 
 ///|
 /// Returns the user-facing name for a thinking mode.
@@ -140,9 +145,10 @@ pub fn ThinkingMode::parse(input : String) -> ThinkingMode raise {
 ///
 /// Leave absent for normal assistant text. Use `JsonObject` only when a caller
 /// explicitly wants the model's assistant content constrained to a JSON object.
+#derive(Eq, Debug)
 pub(all) enum ResponseFormat {
   JsonObject
-} derive(Eq, Debug)
+}
 
 ///|
 /// Returns the DeepSeek wire name for a response format.
@@ -157,12 +163,13 @@ impl Show for ResponseFormat with fn to_string(self : ResponseFormat) -> String 
 ///
 /// `Tool(tool_call_id)` represents a tool response message and carries the
 /// `tool_call_id` field required by the API.
+#derive(Eq, Debug)
 pub(all) enum Role {
   System
   User
   Assistant
   Tool(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Returns the DeepSeek wire name for a chat message role.
@@ -185,12 +192,13 @@ impl Show for Role with fn to_string(self : Role) -> String {
 /// content explicitly with `ChatMessage(Assistant, content=[Text(response.content)],
 /// tool_calls=response.tool_calls)`. When the combined assistant text is empty,
 /// a tool-call message encodes JSON `content: null`.
+#derive(Debug)
 pub struct ChatMessage {
   role : Role
   content : Content
   tool_calls : Array[ToolCall]
   reasoning_content : String?
-} derive(Debug)
+}
 
 ///|
 /// Constructs a typed chat message with an ordered array of content parts.
@@ -209,16 +217,18 @@ pub fn ChatMessage::ChatMessage(
 
 ///|
 /// Token usage reported by DeepSeek chat responses.
+#derive(Debug, ToJson)
 pub struct Usage {
   prompt_tokens : Int32
   completion_tokens : Int32
   total_tokens : Int32
   prompt_cache_hit_tokens : Int32
   prompt_cache_miss_tokens : Int32
-} derive(Debug, ToJson)
+}
 
 ///|
 /// Decoded DeepSeek chat response content, tool calls, and token usage.
+#derive(Debug)
 pub struct ChatResponse {
   /// Assistant text content returned by DeepSeek. This is empty when the API
   /// returns JSON `content: null`, such as a tool-call-only assistant message.
@@ -231,7 +241,7 @@ pub struct ChatResponse {
   tool_calls : Array[ToolCall]
   /// Token usage metadata reported for the chat completion.
   usage : Usage
-} derive(Debug)
+}
 
 ///|
 test "chat message constructor" {

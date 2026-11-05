@@ -7,10 +7,11 @@
 ///|
 /// The active root needed by cross-resource navigation: the checkout root
 /// supplied by `Ctx`, accepted only while the shown document lies below it.
+#derive(Eq)
 priv struct NavigationContext {
   owner : @interop.ConversationKey
   root : @common.Uri
-} derive(Eq)
+}
 
 ///|
 /// Bring one Viewer model URI back into this editor root. The root is the

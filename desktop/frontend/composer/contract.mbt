@@ -1,10 +1,11 @@
 ///|
 /// One mention attached to a composer draft. The reference is the durable
 /// envelope form; the optional range preserves an exact editor selection.
+#derive(Eq, @debug.Debug)
 pub(all) struct Mention {
   ref_ : @mention_context.MentionRef
   range : @common.Range?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Convert editor feedback to the shared annotation envelope. Original-revision
@@ -35,53 +36,59 @@ pub fn Mention::editor_annotation(
 
 ///|
 /// The complete editable value owned by one composer entry.
+#derive(Eq, @debug.Debug)
 pub(all) struct Draft {
   task : String
   mentions : Array[Mention]
   images : Array[Image]
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The conversation owner plus the archive-fact cursor at which its local
 /// composer entry was created. Every conversation-scoped action carries this
 /// identity so the root can reject a stale command after archive changes.
+#derive(Eq, @debug.Debug)
 pub(all) struct Identity {
   owner : @interop.ConversationIdentity
   archive_generation : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The root-owned state of the shared workspace-file index. The composer only
 /// needs enough information to decide whether local matches are final, a full
 /// Host query is required, or the index must be started.
+#derive(Eq, @debug.Debug)
 pub(all) enum FileIndex {
   FileIndexEmpty(epoch~ : Int32)
   FileIndexLoading(epoch~ : Int32)
   FileIndexReady(epoch~ : Int32, truncated~ : Bool)
   FileIndexFailed(epoch~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// A standing-goal command that has been sent but not yet proven by a durable
 /// transcript marker.
+#derive(Eq, @debug.Debug)
 pub(all) enum GoalPending {
   GoalSetting(String)
   GoalClearing
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Goal data needed by the composer. `draft` being present means the textarea
 /// is editing the standing goal while preserving the prompt underneath it.
+#derive(Eq)
 pub(all) struct GoalInput {
   draft : String?
   standing : @transcript.GoalStanding?
   pending : GoalPending?
-} derive(Eq)
+}
 
 ///|
 /// One slash-command row supplied by the conversation implementation. The
 /// component owns filtering and selection, while OpenSeek and Codex retain
 /// their distinct command catalogs and execution semantics.
+#derive(Eq, @debug.Debug)
 pub(all) struct SlashCommand {
   label : String
   detail : String
@@ -90,25 +97,28 @@ pub(all) struct SlashCommand {
   // label in the draft, and a draft sent as the label plus optional text
   // sends this prompt followed by that text.
   prompt : String?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// Which primary action the composer should expose for the visible
 /// conversation. Availability is root-owned; button behavior remains a typed
 /// composer action.
+#derive(Eq, @debug.Debug)
 pub(all) enum RunningSubmit {
   Steer
   Queue
   SaveQueue
-} derive(Eq, @debug.Debug)
+}
 
 ///|
+#derive(Eq, @debug.Debug)
 pub(all) enum FollowupChoice {
   SteerNow
   QueueNext
-} derive(Eq, @debug.Debug)
+}
 
 ///|
+#derive(Eq, @debug.Debug)
 pub(all) enum PrimaryAction {
   Send(available~ : Bool)
   SaveQueuedInput(available~ : Bool)
@@ -118,11 +128,12 @@ pub(all) enum PrimaryAction {
     submit~ : RunningSubmit,
     queue_available~ : Bool
   )
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The exact permission question currently blocking an OpenSeek tool. This is
 /// plain state: the composer owns its presentation and emits a typed answer.
+#derive(Eq)
 pub(all) struct ApprovalNotice {
   tool_name : String
   detail : String
@@ -130,31 +141,35 @@ pub(all) struct ApprovalNotice {
   target_label : String?
   body : String?
   answered : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct PendingSteerInput {
   id : String
   content : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum QueuedInputState {
   Queueing
   Queued(editing~ : Bool, interactive~ : Bool, steer_available~ : Bool)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct QueuedInput {
   id : String
   content : String
   state : QueuedInputState
-} derive(Eq)
+}
 
 ///|
 /// One app-server reverse request shown above the Codex draft. The request is
 /// plain state: callers cannot inject DOM or commands, and every answer comes
 /// back through an identity-scoped composer Action.
+#derive(Eq)
 pub(all) struct CodexRequestInput {
   questions : Array[@question_card.Question]
   question_draft : @question_card.Model
@@ -164,12 +179,13 @@ pub(all) struct CodexRequestInput {
   method_ : String
   params : Json
   answers : Map[String, String]
-} derive(Eq)
+}
 
 ///|
 /// One typed component in the context column above the editable composer.
 /// Callers provide only canonical state; this package owns the DOM and maps
 /// every interactive affordance back to an identity-scoped `Action`.
+#derive(Eq)
 pub(all) enum ContextComponent {
   ConnectionBanner(device_name~ : String?)
   SubrunDock(lanes~ : Array[@subrun.Lane])
@@ -184,39 +200,43 @@ pub(all) enum ContextComponent {
   CompactionNotice(queued~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
-} derive(Eq)
+}
 
 ///|
 /// The state of one Git control in the composer's status row.
+#derive(Eq)
 pub(all) struct GitControl {
   presentation : GitPresentation
   open : Bool
-} derive(Eq)
+}
 
 ///|
 /// The state of Codex's approval-mode control. Confirmation remains in the
 /// Codex page because it is a page-level modal, while this compact selector
 /// is rendered and operated by the shared composer.
+#derive(Eq)
 pub(all) struct PermissionControl {
   mode : @protocol.CodexPermissionMode
   open : Bool
   enabled : Bool
-} derive(Eq)
+}
 
 ///|
 /// OpenSeek's approval mode menu: whether the person answers this
 /// conversation's permission questions or a reviewer answers them first.
+#derive(Eq)
 pub(all) struct ApprovalSelect {
   mode : @protocol.OpenSeekApproval
   open : Bool
   // Off while a turn runs: its engine keeps the policy it started with, so a
   // mode chosen then would show a mode that is not in effect.
   enabled : Bool
-} derive(Eq)
+}
 
 ///|
 /// One typed component in the toolbar's status row. No caller-rendered HTML,
 /// command, or emit callback crosses the shared component boundary.
+#derive(Eq)
 pub(all) enum StatusComponent {
   ModelStatus(ModelSelect)
   ReasoningStatus(ReasoningSelect)
@@ -224,11 +244,12 @@ pub(all) enum StatusComponent {
   GitStatus(GitControl)
   WorktreeStatus(WorktreeControl)
   ApprovalStatus(ApprovalSelect)
-} derive(Eq)
+}
 
 ///|
 /// Root-owned presentation surrounding the editable composer. Presentation
 /// state is plain data and is never retained by the component Model.
+#derive(Eq)
 pub(all) struct Presentation {
   context : Array[ContextComponent]
   status : Array[StatusComponent]
@@ -238,11 +259,12 @@ pub(all) struct Presentation {
   disabled : Bool
   primary_action : PrimaryAction
   images_enabled : Bool
-} derive(Eq)
+}
 
 ///|
 /// How far the open turn has gotten. The application owns the run phase; the
 /// composer owns how it reads on screen.
+#derive(Eq, @debug.Debug)
 pub(all) enum RunStage {
   // Accepted, no run id yet.
   Starting
@@ -257,7 +279,7 @@ pub(all) enum RunStage {
   Working
   // A Stop was sent and the engine has not honored it yet.
   Stopping
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The open turn's heartbeat: facts, never a rendered line. The wording, the
@@ -268,15 +290,17 @@ pub(all) enum RunStage {
 /// `started_ms` is `None` whenever that moment is not the page's to know — a
 /// run adopted from a reconnect began before anyone here was watching, and
 /// dating it from the moment it was noticed always reports too short a wait.
+#derive(Eq, @debug.Debug)
 pub(all) struct RunHeartbeat {
   stage : RunStage
   started_ms : Double?
   tokens : Int32
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 /// The complete root-to-composer boundary. It contains canonical external
 /// facts and view-only presentation, never the root application Model or Msg.
+#derive(Eq)
 pub(all) struct Input {
   identity : Identity
   draft : Draft
@@ -308,7 +332,7 @@ pub(all) struct Input {
   active_file : @pathx.Relative?
   file_index : FileIndex
   presentation : Presentation
-} derive(Eq)
+}
 
 ///|
 /// Deliberate operations emitted by the composer. Raw keystrokes, completion
@@ -575,13 +599,14 @@ pub extend FollowupChoice with @debug.Debug::{to_repr}
 
 ///|
 /// Changes to cached editor ownership, applied in order even while hidden.
+#derive(Eq)
 pub(all) enum EntryChange {
   Retire(@interop.ConversationIdentity)
   Move(
     from~ : @interop.ConversationIdentity,
     to~ : @interop.ConversationIdentity
   )
-} derive(Eq)
+}
 
 ///|
 pub fn EntryChange::retires(

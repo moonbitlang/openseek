@@ -6,11 +6,13 @@
 const MaxTreeBytes : Int32 = 32 * 1024 * 1024
 
 ///|
-pub struct AxNodeId(String) derive(Debug, Eq, Hash)
+#derive(Debug, Eq, Hash)
+pub struct AxNodeId(String)
 
 ///|
 /// One node of the tree. An `AXValue`'s own `value` is all that is kept of
 /// it: its type and sources say how the browser arrived at it.
+#derive(Debug, Eq)
 pub struct AxNode {
   id : AxNodeId
   // A node the browser leaves out of what assistive technology sees. Its
@@ -27,7 +29,7 @@ pub struct AxNode {
   // The DOM node this one stands for. Nodes the browser makes up, such as
   // the boxes of a line of text, stand for none.
   dom_node : BackendNodeId?
-} derive(Debug, Eq)
+}
 
 ///|
 /// The `value` of the `AXValue` at `key`, when there is one: either can be

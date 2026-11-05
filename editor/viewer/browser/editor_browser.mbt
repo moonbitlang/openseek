@@ -30,23 +30,25 @@
 ///|
 /// `IMouseTargetMarginData` (editorBrowser.ts:442-449). `offset_x` is
 /// editor-left-relative (`Math.abs(request.relativePos.x)`), not lane-relative.
+#derive(Eq, Debug)
 pub(all) struct MouseTargetMarginData {
   is_after_lines : Bool
   glyph_margin_left : Double
   glyph_margin_width : Double
   line_numbers_width : Double
   offset_x : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// `IMouseTargetViewZoneData` (editorBrowser.ts:456-462).
+#derive(Eq, Debug)
 pub(all) struct MouseTargetViewZoneData {
   view_zone_id : String
   position_before : @base_common.Position?
   position_after : @base_common.Position?
   position : @base_common.Position
   after_line_number : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// `IMouseTargetContentTextData` (editorBrowser.ts:469-475).
@@ -59,19 +61,21 @@ pub(all) struct MouseTargetContentTextData {
 /// `IMouseTargetContentEmptyData` (editorBrowser.ts:482-485).
 /// `horizontal_distance_to_text` is Monaco's optional number: `Some` only when
 /// the hit line is rendered and the pointer sits past its text.
+#derive(Eq, Debug)
 pub(all) struct MouseTargetContentEmptyData {
   is_after_lines : Bool
   horizontal_distance_to_text : Double?
-} derive(Eq, Debug)
+}
 
 ///|
 /// `IMouseTargetOutsideEditor.outsidePosition` (editorBrowser.ts:514).
+#derive(Eq, Debug)
 pub(all) enum OutsidePosition {
   Above
   Below
   Left
   Right
-} derive(Eq, Debug)
+}
 
 ///|
 /// `IMouseTarget` (editorBrowser.ts:520-532): the discriminated union. Margin

@@ -73,11 +73,12 @@ fn gate_scratch_name(path : String) -> String? {
 /// excerpt — populated when moonc can re-read the file relative to its cwd,
 /// which the scratch-dir invocation guarantees; the formatter still falls back
 /// to synthesizing an excerpt from the in-memory content when it is empty.
+#derive(Debug)
 pub(all) struct ParseGateError {
   loc : String
   message : String
   context : String
-} derive(Debug)
+}
 
 ///|
 /// The distinct syncheck input KINDS named by `path` and its resolved symlink
@@ -109,10 +110,11 @@ pub fn gate_paths(path : String, target : String) -> Array[String] {
 /// whether the output capture was truncated — a truncated capture makes
 /// `errors` a LOWER BOUND, not an exact tally, and callers that compare
 /// counts must account for that.
+#derive(Debug)
 pub(all) struct ParseGate {
   errors : Array[ParseGateError]
   truncated : Bool
-} derive(Debug)
+}
 
 ///|
 /// Parse `content` as the standalone `moonc syncheck` input named by `path`'s

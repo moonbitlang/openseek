@@ -24,22 +24,25 @@ pub(all) struct Definition {
 }
 
 ///|
+#derive(Eq)
 priv enum Anchor {
   Button
   Pointer(Int32, Int32)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct Open {
   target : String
   anchor : Anchor
   restore_focus_id : String?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct State {
   menu : Open?
-} derive(Eq)
+}
 
 ///|
 priv enum Msg {

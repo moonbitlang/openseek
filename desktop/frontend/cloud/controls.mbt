@@ -1,6 +1,7 @@
 ///|
 /// A local submission remains recoverable until the server confirms its fate.
 /// Queue contents themselves always come from the control snapshot.
+#derive(Eq)
 pub struct ControlInput {
   task_id : String
   key : String
@@ -11,7 +12,7 @@ pub struct ControlInput {
   acknowledged : Bool
   unknown : Bool
   result_id : String?
-} derive(Eq)
+}
 
 ///|
 fn control_draft(content : @wire.Content) -> @composer.Draft {

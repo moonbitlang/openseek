@@ -35,6 +35,7 @@ priv struct EditorConfigurationSnapshot {
 /// Independent computed `EditorLayoutInfo` identity. Comparing only
 /// `content_left` loses compensated changes where the line-number band shrinks
 /// as the decorations lane grows.
+#derive(Eq)
 priv struct EditorLayoutIdentity {
   width : Double
   line_numbers_width : Double
@@ -43,7 +44,7 @@ priv struct EditorLayoutIdentity {
   content_width : Double
   height : Double
   view_line_count : Int32
-} derive(Eq)
+}
 
 ///|
 /// Equality of the facts exposed by `EditorLayoutInfo`. `view_line_count` is

@@ -105,8 +105,7 @@ fn source_write_regex(real_workspace_root : String) -> String {
 /// Paths under a Moon-managed `_build` or `.mooncakes` directory, where Moon
 /// itself writes generated `.mbt` sources. Emitted as an `allow` rule after the
 /// source deny so the sandbox blocks hand-written source rewrites while leaving
-/// Moon's own build/cache writes untouched. Mirrors the component names in
-/// `is_moon_managed_workspace_path`.
+/// Moon's own build/cache writes untouched.
 fn source_write_build_carveout_regex(real_workspace_root : String) -> String {
   let root = regex_escape(
     @workspace_path.strip_trailing_slash(real_workspace_root),

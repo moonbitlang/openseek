@@ -166,10 +166,11 @@ async fn MoonCliState::run_moon(
 /// A standalone script is checked independently of neighboring package files.
 /// This identity also owns diagnostic clears, so checking one script never
 /// clears a sibling script's or its enclosing module's diagnostics.
+#derive(Eq, Hash)
 priv enum MoonCliScope {
   Module(@pathx.Absolute)
   Script(@pathx.Absolute)
-} derive(Eq, Hash)
+}
 
 ///|
 fn MoonCliScope::cwd(self : MoonCliScope) -> @pathx.Absolute {

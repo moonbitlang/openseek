@@ -122,7 +122,11 @@ pub fn Conversation::items(
     ignore(@transcript.apply_session_item(items, item, ts?))
   }
   ignore(append_native(items, native, cursor, native.length()))
-  if !self.history_required && self.notice is Some(message) {
+  for pending in self.pending_assistants {
+    items.push(pending.item)
+  }
+  if (self.history_cached || !self.history_required) &&
+    self.notice is Some(message) {
     items.push({ kind: Failure(message), ts: None, sequence: None, })
   }
   items

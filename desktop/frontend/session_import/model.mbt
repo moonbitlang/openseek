@@ -2,33 +2,37 @@
 const DialogId = "session-import-dialog"
 
 ///|
+#derive(Eq, Debug)
 struct Model {
   generation : Int32
   content : Content?
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct Target {
   channel : @interop.ChannelId
   connection_generation : Int32
   workspace : String
   worktree_of : String?
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 priv struct Content {
   target : Target
   link : String
   operation : Operation
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 priv enum Operation {
   Ready
   Reading
   Importing
   Failed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub(all) enum Msg {

@@ -148,9 +148,14 @@ from a snippet (`@shell.Cmd("moon", ["test", ...])`).
 
 The wasm run carries a moonrun policy on every platform. Unsupported FFI is
 reported by the wasm compiler through normal build diagnostics. The snippet
-may read anywhere but may write only inside its own
-`@fs.tmpdir()` and any caller-provided scratch lab; changing other workspace
-files belongs to the file tools. Process spawning is checked against the
+may read anywhere. It may write inside its own `@fs.tmpdir()` and any
+caller-provided scratch lab, and — for the main agent only — anywhere in the
+workspace except MoonBit sources, manifests, `.mbtx` scripts and `.git`, in
+any letter case. A scratch lab inside the workspace (the default session
+store is `<workspace>/.openseek`) keeps its own source writes; the exclusions
+skip its subtree. Read-only and worker roles get no workspace grant. Changing
+source belongs to the file tools.
+Process spawning is checked against the
 implementation's allowlist; the
 live tool description summarizes the command surface the model should use.
 Allowed commands such as `moon fmt` or `git checkout` run as child processes
@@ -193,8 +198,7 @@ the next escalating call asks again.
 
 What a grant changes is exactly one thing: the generated policy file is still
 written and simply not passed to `moonrun`. Widening the document instead was
-not available — its `fs.write` roots are canonicalized existing paths with no
-wildcard, and "any program" has no spelling in `process.allow` short of
+not available — "any program" has no spelling in `process.allow` short of
 enumerating one — so *no policy* is both the honest description of what was
 approved and the only thing the runtime can express. Only the wasm backend is
 available, including for escalated runs.

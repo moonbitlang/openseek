@@ -31,18 +31,20 @@ fn ActionButton::render(
 ///|
 /// One option in the composer's model selector. The value remains protocol
 /// data; the label is the text the shared custom menu presents.
+#derive(Eq)
 pub(all) struct ModelOption {
   value : String
   label : String
-} derive(Eq)
+}
 
 ///|
 /// One provider's model options. This typed composer state stays comparable
 /// even though the lower-level menu component intentionally has no Eq API.
+#derive(Eq)
 pub(all) struct ModelGroup {
   label : String
   options : Array[ModelOption]
-} derive(Eq)
+}
 
 ///|
 /// Convert at the package boundary; callers never depend on select-control
@@ -58,6 +60,7 @@ fn ModelGroup::select_group(self : ModelGroup) -> @select_control.Group {
 
 ///|
 /// A compact model pill backed by the composer's custom popup.
+#derive(Eq)
 pub(all) struct ModelSelect {
   id : String
   groups : Array[ModelGroup]
@@ -65,7 +68,7 @@ pub(all) struct ModelSelect {
   disabled : Bool
   open : Bool
   title : String
-} derive(Eq)
+}
 
 ///|
 fn ModelSelect::render(
@@ -95,6 +98,7 @@ fn ModelSelect::render(
 /// The shared reasoning selector used by both OpenSeek and Codex composers.
 /// Each caller owns its supported values; this type owns their identical
 /// placement, accessibility label, and custom-menu presentation.
+#derive(Eq)
 pub(all) struct ReasoningSelect {
   id : String
   options : Array[ModelOption]
@@ -102,7 +106,7 @@ pub(all) struct ReasoningSelect {
   disabled : Bool
   open : Bool
   title : String
-} derive(Eq)
+}
 
 ///|
 fn ReasoningSelect::render(
@@ -138,11 +142,12 @@ fn ReasoningSelect::render(
 /// Placement of a conversation before and after its first workspace-bound
 /// operation. The application keeps this value in its own model; the composer
 /// owns the labels, tooltips, and control shape.
+#derive(Debug, Eq)
 pub(all) enum WorktreeChoice {
   LocalCheckout
   FreshWorktree
   BoundWorktree(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn WorktreeChoice::toggled(self : WorktreeChoice) -> WorktreeChoice {
@@ -159,10 +164,11 @@ pub fn WorktreeChoice::wants_fresh(self : WorktreeChoice) -> Bool {
 }
 
 ///|
+#derive(Eq)
 pub(all) struct WorktreeControl {
   choice : WorktreeChoice
   enabled : Bool
-} derive(Eq)
+}
 
 ///|
 /// Render a Local/Worktree chip. `enabled=false`
@@ -276,10 +282,11 @@ fn ApprovalSelect::render(
 /// A recovery banner for a conversation whose registered worktree
 /// checkout is absent. Each backend supplies its own rebuild and archive
 /// commands; the composer keeps the wording and control geometry identical.
+#derive(Eq)
 pub(all) struct MissingWorktreeNotice {
   name : String
   conversation_noun : String
-} derive(Eq)
+}
 
 ///|
 fn MissingWorktreeNotice::render(

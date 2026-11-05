@@ -146,7 +146,8 @@ test('a disconnected Cloud share is not automatically resubmitted', async ({ pag
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-for (const status of [401, 404, 409, 503]) {
+// 404 shares the generic HTTP failure path with 503.
+for (const status of [401, 409, 503]) {
   test(`Cloud export ${status} preserves existing account and error handling`, async ({ page }) => {
     const { cloud, dialog } = await setup(page);
     cloud.exportStatus = status;

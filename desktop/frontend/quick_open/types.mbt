@@ -7,10 +7,11 @@
 ///|
 /// Which provider owns the palette. Files are the default provider; a leading
 /// `#` in the visible input selects workspace symbols.
+#derive(Eq)
 pub(all) enum Provider {
   Files
   Symbols
-} derive(Eq)
+}
 
 ///|
 fn Provider::prefix(self : Provider) -> String {
@@ -23,21 +24,23 @@ fn Provider::prefix(self : Provider) -> String {
 ///|
 /// One selectable row. File rows open without a range; symbol rows retain the
 /// precise range returned by MoonIDE.
+#derive(Eq)
 priv enum Item {
   FileRow(@files.Match)
   SymbolRow(@symbols.Symbol)
-} derive(Eq)
+}
 
 ///|
 /// File and symbol queries wait briefly while the user types. `Ready`
 /// deliberately includes an empty result; `Failed` is reserved for
 /// bridge/request failure.
+#derive(Eq)
 priv enum Phase {
   Debouncing
   Loading
   Ready
   Failed
-} derive(Eq)
+}
 
 ///|
 /// One open palette run. `value` is the exact text shown in the input,
@@ -45,6 +48,7 @@ priv enum Phase {
 /// `root` are the conversation identity captured when the run started, so
 /// `reconcile` can tell a shell change from a no-op. `generation` separates
 /// successive queries even when their text is identical.
+#derive(Eq)
 priv struct Open {
   owner : @interop.ConversationKey
   root : @common.Uri?
@@ -53,30 +57,32 @@ priv struct Open {
   selected : Int32
   phase : Phase
   generation : Int32
-} derive(Eq)
+}
 
 ///|
 /// Frontend half of VS Code's FileQueryCacheState. `active_key` remains usable
 /// while `loading_key` warms a replacement for the same root, so a failed
 /// replacement cannot evict the last good cache. It outlives one palette run:
 /// reopening reuses a compatible warm cache instead of paying for it again.
+#derive(Eq)
 priv struct FileQueryCache {
   owner : @interop.ConversationKey?
   root : @common.Uri?
   active_key : String?
   loading_key : String?
-} derive(Eq)
+}
 
 ///|
 /// The palette's whole state. The shell holds this value but cannot read into
 /// it; every transition goes through `open`, `handle`, or `reconcile`.
+#derive(Eq)
 struct State {
   open : Open?
   /// Page-level counter, kept across close so an old reply cannot become
   /// current again by reopening the palette.
   generation : Int32
   cache : FileQueryCache
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {
@@ -99,6 +105,7 @@ pub fn State::is_open(self : State) -> Bool {
 /// The shell data one palette run reads. Rebuilt every render, so a change of
 /// conversation, root, or open editor tabs reaches the palette without the
 /// package knowing how the application derives any of it.
+#derive(Eq)
 struct Input {
   owner : @interop.ConversationKey
   root : @common.Uri?
@@ -107,7 +114,7 @@ struct Input {
   /// become Quick Open results, so the shell filters them out.
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
-} derive(Eq)
+}
 
 ///|
 pub fn Input::Input(
@@ -123,10 +130,11 @@ pub fn Input::Input(
 /// A row the user accepted. The palette has already closed itself by the time
 /// this is returned; opening the target is the shell's transition, in the same
 /// root update, so panel reconciliation still sees one message.
+#derive(Eq, @debug.Debug)
 pub(all) struct Accepted {
   path : String
   range : @common.Range?
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub(all) enum Msg {

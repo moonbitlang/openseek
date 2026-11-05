@@ -1,9 +1,10 @@
 ///|
 /// Decoded arguments of the `finish` control tool: the final answer the agent
 /// ends its run with.
+#derive(Debug)
 pub struct FinishInput {
   answer : String
-} derive(Debug)
+}
 
 ///|
 /// Decode `finish` tool-call arguments.

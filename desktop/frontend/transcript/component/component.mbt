@@ -1,10 +1,11 @@
 ///|
 /// Which conversation source supplied the normalized rows. The component uses
 /// this for source-specific transcript labels and renderer identity.
+#derive(Eq)
 pub(all) enum Source {
   OpenSeek
   Codex
-} derive(Eq)
+}
 
 ///|
 pub fn Source::wire(self : Source) -> String {
@@ -18,10 +19,11 @@ pub fn Source::wire(self : Source) -> String {
 /// One visible transcript item paired with the stable identity used by keyed
 /// reconciliation. The identity is opaque to the component's callers and is
 /// never emitted as a DOM id or attribute.
+#derive(Eq)
 pub(all) struct VisibleRow {
   item : @transcript.TranscriptItem
   identity : String
-} derive(Eq)
+}
 
 ///|
 /// Give app-server history stable identities without making its owning
@@ -44,10 +46,11 @@ pub fn VisibleRow::history(
 /// One registered project offered by the empty transcript's project switcher.
 /// The resource keeps its device identity while `label` is the compact final
 /// path component shown in the title and menu.
+#derive(Eq)
 pub(all) struct ProjectChoice {
   root : @common.Uri
   label : String
-} derive(Eq)
+}
 
 ///|
 pub extend ProjectChoice with Eq::{equal, not_equal}
@@ -57,15 +60,17 @@ pub extend ProjectChoice with Eq::{equal, not_equal}
 /// grows; `Unpinned` is a fixed offset the reader scrolled to. The component
 /// reports it when its conversation leaves the screen and receives it back
 /// through `Input::scroll` when the conversation returns.
+#derive(Eq)
 pub(all) enum ScrollPosition {
   Pinned
   Unpinned(top~ : Double)
-} derive(Eq)
+}
 
 ///|
 /// The conversation data rendered by the component. The application computes
 /// durable chronology and active-run ownership; this package owns only the
 /// transcript subtree and its scroll behavior.
+#derive(Eq)
 struct Input {
   locale : @i18n.Locale
   dark_mode : Bool
@@ -113,7 +118,7 @@ struct Input {
   streaming_reasoning : String?
   reasoning_complete : Bool
   streaming_identity : String
-} derive(Eq)
+}
 
 ///|
 pub fn Input::Input(
@@ -209,6 +214,7 @@ pub(all) struct Actions {
 /// component lives exactly as long as its conversation is on screen (the
 /// root keys it by conversation), so `init` alone decides where a fresh
 /// component starts: at the tail, or where the reader left this conversation.
+#derive(Eq)
 priv struct Model {
   pinned : Bool
   overview : @transcript_overview.State
@@ -216,7 +222,7 @@ priv struct Model {
   images : ImageCache
   artifact_owner : ArtifactOwner
   artifact_files : ArtifactFileCache
-} derive(Eq)
+}
 
 ///|
 priv enum Msg {

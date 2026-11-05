@@ -3,11 +3,12 @@
 ///|
 /// A submitted input: a prompt for the agent, or a shell command (entered with a
 /// leading `!`).
+#derive(Eq, Debug)
 pub(all) enum Input {
   Prompt(String)
   Command(String)
   Notice(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The `❯ ` prompt marker shown before normal agent-steering input, shared so

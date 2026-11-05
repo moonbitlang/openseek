@@ -1,36 +1,40 @@
 ///|
 /// Direction metadata for a rendered line.
+#derive(Eq, Debug)
 pub(all) enum TextDirection {
   LTR
   RTL
-} derive(Eq, Debug)
+}
 
 ///|
 /// Inline decoration placement relative to source text.
+#derive(Eq, Debug)
 pub(all) enum InlineDecorationType {
   Regular
   Before
   After
   RegularAffectingLetterSpacing
-} derive(Eq, Debug)
+}
 
 ///|
 /// Whether a rendered line contains pseudo-elements before or after text.
+#derive(Eq, Debug)
 pub(all) enum ForeignElementType {
   None
   Before
   After
   BeforeAndAfter
-} derive(Eq, Debug)
+}
 
 ///|
 /// Tokenized segment ending at `end_index` with CSS and metadata flags.
+#derive(Eq, Debug)
 pub struct LinePart {
   end_index : Int32
   class_name : String
   metadata : Int32
   contains_rtl : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds a line part.

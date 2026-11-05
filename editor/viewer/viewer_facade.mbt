@@ -9,9 +9,10 @@ struct Viewer {
 }
 
 ///|
+#derive(Debug)
 struct ViewerViewState {
   inner : @code_widget.CodeEditorViewState
-} derive(Debug)
+}
 
 ///|
 struct EditorDecorationsCollection {

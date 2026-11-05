@@ -3,6 +3,7 @@
 /// not a terminal: it re-raises out of `run_subrun` (tearing the child down
 /// on the way) so structured concurrency sees it, per the engine-wide rule
 /// that cancellation is never folded into an ordinary failure.
+#derive(Debug, Eq)
 pub enum SubrunTerminal {
   /// The child submitted a valid report before exiting.
   Captured
@@ -19,12 +20,13 @@ pub enum SubrunTerminal {
   /// The child failed: spawn failure, a turn/setup failure it reported, a
   /// garbled report, or an exit with none of the above observed.
   Failed(String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// The outcome of one sub-run: the parsed report when there is one, plus the
 /// cost the child actually spent — read from the child's own result file
 /// (`usage`, `steps`), so it is exact for the requests the child made.
+#derive(Debug)
 struct SubrunResult[T] {
   value : T?
   terminal : SubrunTerminal
@@ -34,7 +36,7 @@ struct SubrunResult[T] {
   cost_usd : Double?
   unaccounted : String?
   subrun_id : String?
-} derive(Debug)
+}
 
 ///|
 /// The parsed report, when the child submitted one.

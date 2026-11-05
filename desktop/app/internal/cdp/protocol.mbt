@@ -2,13 +2,14 @@
 // and unrelated events are ignored; malformed supported fields are errors.
 
 ///|
+#derive(Debug)
 pub suberror CDPError {
   Protocol(String)
   CommandFailed(code~ : Int32, message~ : String, data~ : Json?)
   JavaScriptException(String)
   MissingValue
   ConcurrentRead
-} derive(Debug)
+}
 
 ///|
 fn field(json : Json, key : String) -> Json? raise {
@@ -35,18 +36,21 @@ fn[T : @json.FromJson] optional(json : Json, key : String) -> T? raise {
 ///|
 /// The browser's id for a DOM node. Callers make one from an id the browser
 /// reported earlier, such as a snapshot's `ref`.
-pub(all) struct BackendNodeId(Int32) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub(all) struct BackendNodeId(Int32)
 
 ///|
-pub struct RemoteObjectId(String) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub struct RemoteObjectId(String)
 
 ///|
 /// The value is dynamic because JavaScript can return any JSON value.
 /// Missing value (undefined, by-reference or unserializable) differs from null.
+#derive(Debug, Eq)
 pub struct RemoteObject {
   object_id : RemoteObjectId?
   value : Json?
-} derive(Debug, Eq)
+}
 
 ///|
 fn decode_remote_object(json : Json) -> RemoteObject raise {
@@ -60,10 +64,11 @@ fn decode_remote_object(json : Json) -> RemoteObject raise {
 }
 
 ///|
+#derive(Debug, Eq)
 pub struct Evaluation {
   result : RemoteObject
   exception : String?
-} derive(Debug, Eq)
+}
 
 ///|
 fn decode_evaluation(json : Json) -> Evaluation raise {
@@ -86,6 +91,7 @@ pub fn[T : @json.FromJson] Evaluation::decode_value(
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum Event {
   InspectNodeRequested(BackendNodeId)
   InspectModeCanceled
@@ -94,7 +100,7 @@ pub(all) enum Event {
     payload~ : String,
     execution_context_id~ : Int32
   )
-} derive(Debug, Eq)
+}
 
 ///|
 fn decode_event(json : Json) -> Event? raise {

@@ -19,13 +19,14 @@
 ///|
 /// One recorded edit with structured coordinates and a bounded numbered
 /// preview. Detailed mode retains its argument chips; copying uses the full diff.
+#derive(Eq)
 priv struct EditDiff {
   anchors : Array[String]
   diff : String
   path : String?
   start_line : Int32?
   lines : Array[EditDiffLine]
-} derive(Eq)
+}
 
 ///|
 /// How many edits of a `multi_edit` batch to render. A batch is built by a
@@ -42,10 +43,11 @@ const MAX_RENDERED_EDITS = 50
 /// ones that are, since dropping the whole card would hide the edits that did
 /// decode. Holding derived text rather than raw arguments keeps the minimal
 /// projection structurally comparable.
+#derive(Eq)
 priv struct EditChanges {
   edits : Array[EditDiff]
   omitted : Int32
-} derive(Eq)
+}
 
 ///|
 fn EditChanges::from_arguments(
@@ -201,6 +203,7 @@ fn diff_block(text : String) -> @html.Html {
 ///|
 /// Numbers are computed before display truncation. Omitted rows must still
 /// advance each side, and a unified hunk resets both absolute positions.
+#derive(Eq)
 priv struct EditDiffLine {
   text : String
   old_line : Int32?
@@ -208,15 +211,16 @@ priv struct EditDiffLine {
   class_name : String
   content : EditDiffLineContent
   truncated : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum EditDiffLineContent {
   SourceRow(Int32)
   Boundary
   Metadata
   Unknown
-} derive(Eq)
+}
 
 ///|
 /// Unified ranges omit the count for a single line; zero counts describe

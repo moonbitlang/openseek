@@ -57,7 +57,7 @@ fn State::engine_event(
     | @wire.CompactionFinished(..)
     | @wire.AutoCompactionFinished(..)
     | @wire.CompactionFailed(..)) {
-    conversation.live_progress(event)
+    conversation.live_progress(event, self.sequence + 1)
   } else {
     conversation
   }

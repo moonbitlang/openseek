@@ -3,10 +3,11 @@
 
 ///|
 /// The terminal state of a tool call, selecting how its bullet is styled.
+#derive(Eq, Debug)
 pub(all) enum ToolStatus {
   Completed
   Failed
-} derive(Eq, Debug)
+}
 
 ///|
 fn ToolStatus::style(self : ToolStatus) -> @style.Style {
@@ -20,11 +21,12 @@ fn ToolStatus::style(self : ToolStatus) -> @style.Style {
 /// A tool invocation: a `title`, an optional lifecycle `status`, and zero or more
 /// `details` lines shown beneath the title. Opaque — build one with
 /// `ToolCall::ToolCall`.
+#derive(Debug)
 struct ToolCall {
   title : @doc.Text
   status : ToolStatus?
   details : Array[@doc.Text]
-} derive(Debug)
+}
 
 ///|
 /// Build a `ToolCall` from its `title`, an optional `status`, and optional
@@ -43,6 +45,7 @@ pub fn ToolCall::ToolCall(
 /// detail-bearing block like a tool call but flagged with a `↻` marker), a
 /// `Thought` (the model's completed thinking for a turn, same titled block
 /// under a `✻` marker), or an `Error`.
+#derive(Debug)
 pub(all) enum TranscriptItem {
   Input(Input)
   Response(String)
@@ -50,7 +53,7 @@ pub(all) enum TranscriptItem {
   Notice(ToolCall)
   Thought(ToolCall)
   Error(String)
-} derive(Debug)
+}
 
 ///|
 /// Prefix each split line of `text` with a bullet/continuation marker in

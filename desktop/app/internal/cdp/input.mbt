@@ -2,10 +2,11 @@
 // Coordinates are CSS pixels from the top left of the page's viewport.
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct Point {
   x : Double
   y : Double
-} derive(Debug, Eq)
+}
 
 ///|
 /// Scroll the page, as little as it takes, until `node` is in view.

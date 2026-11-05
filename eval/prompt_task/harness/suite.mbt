@@ -3,12 +3,13 @@ let suite_manifest_file_name : String = "suite_manifest.json"
 
 ///|
 /// One benchmark problem in a prompt-task suite.
+#derive(ToJson)
 priv struct ProblemSpec {
   id : String
   prompt_label : String
   task_file : String
   validation_probes : Array[ValidationProbeSpec]
-} derive(ToJson)
+}
 
 ///|
 /// Build one benchmark problem. Empty `prompt_label` falls back to `id`.
@@ -85,6 +86,7 @@ fn SuiteConfig::SuiteConfig(
 
 ///|
 /// One completed model/problem combo inside a suite manifest.
+#derive(ToJson)
 priv struct ComboRun {
   model : String
   problem_id : String
@@ -92,7 +94,7 @@ priv struct ComboRun {
   task_file : String
   out_dir : String
   manifest_path : String
-} derive(ToJson)
+}
 
 ///|
 /// Build a suite combo manifest entry.
@@ -110,6 +112,7 @@ fn ComboRun::ComboRun(
 ///|
 /// Durable manifest for a completed suite run. It points at normal per-combo
 /// run manifests so analysis can be replayed without rerunning agents.
+#derive(ToJson)
 pub struct SuiteManifest {
   priv name : String
   out_dir : String
@@ -120,7 +123,7 @@ pub struct SuiteManifest {
   priv models : Array[String]
   priv problems : Array[ProblemSpec]
   priv combos : Array[ComboRun]
-} derive(ToJson)
+}
 
 ///|
 pub extend SuiteManifest with ToJson::{to_json}

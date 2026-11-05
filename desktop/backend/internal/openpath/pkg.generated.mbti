@@ -13,18 +13,20 @@ pub const MaxOfficeFileBytes : Int32 = 20971520
 // Errors
 
 // Types and methods
-pub(all) struct Reference(String) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct Reference(String)
 pub fn Reference::equal(Self, Self) -> Bool
 pub fn Reference::not_equal(Self, Self) -> Bool
 pub async fn Reference::resolve(Self) -> Resolution
 pub fn Reference::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Resolution {
   EditorPath(path~ : String, line~ : Int32?, column~ : Int32?)
   BrowserPath(String)
   SystemPath(String)
   MissingPath(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn Resolution::equal(Self, Self) -> Bool
 pub fn Resolution::not_equal(Self, Self) -> Bool
 pub fn Resolution::to_repr(Self) -> @debug.Repr

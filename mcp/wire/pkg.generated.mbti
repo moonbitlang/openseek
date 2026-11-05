@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek/mcp/wire"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
 pub const ModernVersion : String = "2026-07-28"
 
@@ -10,13 +14,13 @@ pub fn encode_header(String) -> String
 
 pub fn modern_error(Int32) -> Bool
 
-pub fn parameter_header_names(Json) -> Array[String] raise
+pub fn parameter_header_names(@json.Json) -> Array[String] raise
 
-pub fn parameter_headers(Json, Json) -> Map[String, String] raise
+pub fn parameter_headers(@json.Json, @json.Json) -> Map[String, String] raise
 
-pub fn request_version(Json) -> String?
+pub fn request_version(@json.Json) -> String?
 
-pub fn valid_header_schema(Json) -> Bool
+pub fn valid_header_schema(@json.Json) -> Bool
 
 // Errors
 pub suberror HeaderError {

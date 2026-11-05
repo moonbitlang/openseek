@@ -1,8 +1,9 @@
 ///|
+#derive(Eq)
 pub(all) enum RouteError {
   OutsideApplication
   InvalidRoute
-} derive(Eq)
+}
 
 ///|
 fn decode_segment(part : StringView) -> String? {

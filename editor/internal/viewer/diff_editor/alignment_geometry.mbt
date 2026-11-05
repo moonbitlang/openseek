@@ -6,19 +6,21 @@
 /// An exact rendered height override for one model line. Wrapped lines use a
 /// height greater than `line_height`; hidden lines are represented separately
 /// and always resolve to zero height.
+#derive(Eq, Debug)
 pub(all) struct PaneModelLineHeight {
   line_number : Int32
   height_in_px : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Extra geometry after a model line. `after_line_number == 0` represents top
 /// padding before line 1. The snapshot producer must omit zones owned by the
 /// current alignment transaction.
+#derive(Eq, Debug)
 pub(all) struct PaneForeignZoneHeight {
   after_line_number : Int32
   height_in_px : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Immutable geometry for one pane and one render generation. The cumulative
@@ -157,10 +159,11 @@ fn PaneGeometrySnapshot::max_column(
 ///|
 /// A zone specification applied by the owning widget. A zero anchor places a
 /// spacer before line 1, matching the editor's managed-zone coordinate system.
+#derive(Eq, Debug)
 pub(all) struct ManagedAlignmentSpacer {
   after_line_number : Int32
   height_in_px : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub struct ManagedAlignmentSpacers {

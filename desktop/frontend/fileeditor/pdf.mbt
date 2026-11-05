@@ -1,10 +1,11 @@
 ///|
+#derive(Eq)
 pub(all) enum PdfStatus {
   PdfLoading
   PdfReady
   PdfPasswordRequired(incorrect~ : Bool)
   PdfFailed(String)
-} derive(Eq)
+}
 
 ///|
 pub extend PdfStatus with Eq::{equal, not_equal}
@@ -12,6 +13,7 @@ pub extend PdfStatus with Eq::{equal, not_equal}
 ///|
 /// A tab owns its bytes and reading position; one generation owns the mounted
 /// PDF.js session. Password input is cleared after submission and every load.
+#derive(Eq)
 pub(all) struct PdfDocument {
   bytes : Bytes
   generation : Int32
@@ -21,7 +23,7 @@ pub(all) struct PdfDocument {
   rotation : Int32
   search : (Int32, Int32)?
   password : String
-} derive(Eq)
+}
 
 ///|
 pub extend PdfDocument with Eq::{equal, not_equal}

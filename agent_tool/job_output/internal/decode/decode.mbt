@@ -1,10 +1,11 @@
 ///|
 /// Arguments of the immediate job_output read. An absent/null offset means
 /// the recent tail; a supplied offset selects a window from the start.
+#derive(Debug)
 pub struct JobOutputInput {
   job_id : String
   offset : Int32?
-} derive(Debug)
+}
 
 ///|
 /// Decode arguments locally because the dispatcher does not enforce schemas.

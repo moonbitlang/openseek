@@ -70,7 +70,7 @@ test "chat response decode rejects present null usage" {
         content=(
           #|JsonDecodeError(
           #|  (
-          #|    Key(Root, key="usage"),
+          #|    <JsonPath: "/usage">,
           #|    "Usage::from_json: expected object with numeric fields",
           #|  ),
           #|)
@@ -129,10 +129,7 @@ test "chat response decode rejects missing content without tool calls" {
         content=(
           #|JsonDecodeError(
           #|  (
-          #|    Key(
-          #|      Key(Index(Key(Root, key="choices"), index=0), key="message"),
-          #|      key="content",
-          #|    ),
+          #|    <JsonPath: "/choices/0/message/content">,
           #|    "ChatResponse::from_json: expected message content",
           #|  ),
           #|)
@@ -158,10 +155,7 @@ test "chat response decode rejects malformed content" {
         content=(
           #|JsonDecodeError(
           #|  (
-          #|    Key(
-          #|      Key(Index(Key(Root, key="choices"), index=0), key="message"),
-          #|      key="content",
-          #|    ),
+          #|    <JsonPath: "/choices/0/message/content">,
           #|    "ChatResponse::from_json: expected message content",
           #|  ),
           #|)
@@ -187,10 +181,7 @@ test "chat response decode rejects malformed reasoning_content" {
         content=(
           #|JsonDecodeError(
           #|  (
-          #|    Key(
-          #|      Key(Index(Key(Root, key="choices"), index=0), key="message"),
-          #|      key="reasoning_content",
-          #|    ),
+          #|    <JsonPath: "/choices/0/message/reasoning_content">,
           #|    "ChatResponse::from_json: expected reasoning_content string",
           #|  ),
           #|)
@@ -229,10 +220,7 @@ test "chat response decode rejects malformed tool_calls" {
         content=(
           #|JsonDecodeError(
           #|  (
-          #|    Key(
-          #|      Key(Index(Key(Root, key="choices"), index=0), key="message"),
-          #|      key="tool_calls",
-          #|    ),
+          #|    <JsonPath: "/choices/0/message/tool_calls">,
           #|    "ChatResponse::from_json: expected tool_calls array",
           #|  ),
           #|)
@@ -258,19 +246,7 @@ test "chat response decode rejects malformed nested tool call" {
         content=(
           #|JsonDecodeError(
           #|  (
-          #|    Key(
-          #|      Key(
-          #|        Index(
-          #|          Key(
-          #|            Key(Index(Key(Root, key="choices"), index=0), key="message"),
-          #|            key="tool_calls",
-          #|          ),
-          #|          index=0,
-          #|        ),
-          #|        key="function",
-          #|      ),
-          #|      key="arguments",
-          #|    ),
+          #|    <JsonPath: "/choices/0/message/tool_calls/0/function/arguments">,
           #|    "ToolCall::from_json: expected function.arguments",
           #|  ),
           #|)
@@ -294,7 +270,7 @@ test "chat response decode rejects malformed choices" {
       debug_inspect(
         e,
         content=(
-          #|JsonDecodeError((Key(Root, key="choices"), "ChatResponse::from_json: empty choices"))
+          #|JsonDecodeError((<JsonPath: "/choices">, "ChatResponse::from_json: empty choices"))
         ),
       )
   } noraise {

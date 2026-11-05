@@ -1716,7 +1716,6 @@ fn update(
     | CloudAction(@cloud.Create)
     | CodexOpenThread(_)
     | OpenCodex
-    | NotificationClicked(..)
     | NewChatRequested
     | ExplorerRequested(_)
     | SidebarModeSelected(_) => true
@@ -4474,6 +4473,8 @@ fn update_msg(
           api_setup_open: false,
         },
       )
+    OpenArchivedChats =>
+      (@cmd.none, { ..model, management_dialog: Some(ArchivedChats), })
     CloseManagementDialog => (@cmd.none, { ..model, management_dialog: None, })
     Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
@@ -4589,7 +4590,17 @@ fn update_msg(
         channel,
         url => open_external_link(dispatch, url),
       )
-      (cmd, model.with_codex(codex))
+      let model = model.with_codex(codex)
+      // The Codex transcript renders a failed restore as its notice; on any
+      // other screen, such as the archived page Restore runs from, it is a
+      // toast.
+      match msg.restore_failure(locale=model.locale) {
+        Some(message) if !(model.screen is Codex) => {
+          let (toast, model) = model.notify_error(dispatch, message)
+          (@cmd.batch([cmd, toast]), model)
+        }
+        _ => (cmd, model)
+      }
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
@@ -5807,6 +5818,7 @@ fn update_msg(
               OpenCloudConversation(account~, session=session.id),
               {
                 ..model,
+                management_dialog: None,
                 chat_navigation_generation: model.chat_navigation_generation + 1,
               },
             )
@@ -5824,6 +5836,7 @@ fn update_msg(
       if conv is Some(conv) {
         update_msg(dispatch, OpenSession(conv.device, conv.session_id), {
           ..model,
+          management_dialog: None,
           chat_navigation_generation: model.chat_navigation_generation + 1,
         })
       } else {
@@ -16270,10 +16283,10 @@ test "Codex threads share the Projects section's project rows" {
     ],
   })
   let sections = model.sidebar_component_sections(model.dev())
-  // Work shows Projects, shared across both agents, above Archived.
-  assert_eq(sections.length(), 2)
-  assert_eq(sections[0].label, "Projects")
-  assert_true(!sections[0].initially_collapsed)
+  // Work shows Projects, shared across both agents; archived conversations
+  // live on Settings' archived page.
+  assert_eq(sections.length(), 1)
+  inspect(sections[0].label, content="Projects")
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")
   }
@@ -23956,11 +23969,12 @@ test "file context inherits the conversation model and its reasoning family" {
 }
 
 ///|
+#derive(Eq)
 priv struct PendingReviewContext {
   owner : @interop.ConversationKey
   navigation : Int32
   selection : @mention_context.ReviewChanges
-} derive(Eq)
+}
 
 ///|
 fn PendingReviewContext::is_current(

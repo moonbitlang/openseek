@@ -44,11 +44,12 @@ pub fn MouseHandler::handle_editor_wheel(Self, @dom.Event, @dom.WheelEvent) -> B
 pub fn MouseHandler::hook_browser_desperate_reveal(Self) -> Unit
 pub fn MouseHandler::hook_scrollable_scrollbar_input(Self, @scrollbar.ScrollableElementDom, @scrollbar.ScrollableElementOwner) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) enum NavigationCommandRevealType {
   Regular
   Minimal
   None
-} derive(Eq, @debug.Debug)
+}
 pub fn NavigationCommandRevealType::equal(Self, Self) -> Bool
 pub fn NavigationCommandRevealType::not_equal(Self, Self) -> Bool
 pub fn NavigationCommandRevealType::to_repr(Self) -> @debug.Repr

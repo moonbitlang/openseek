@@ -1,9 +1,10 @@
 ///|
+#derive(Eq)
 pub enum ControlRunStatus {
   Idle
   Running
   Stopping
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for ControlRunStatus with fn from_json(json, path) {
@@ -16,12 +17,13 @@ pub impl FromJson for ControlRunStatus with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq)
 pub enum SteerStatus {
   Pending
   Applied
   Dropped
   Unknown
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for SteerStatus with fn from_json(json, path) {
@@ -35,10 +37,11 @@ pub impl FromJson for SteerStatus with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq)
 pub struct QueueEntry {
   id : String
   content : @wire.Content
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for QueueEntry with fn from_json(json, path) {
@@ -49,10 +52,11 @@ pub impl FromJson for QueueEntry with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq)
 pub struct SteerReceipt {
   submission_id : String
   status : SteerStatus
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for SteerReceipt with fn from_json(json, path) {
@@ -66,6 +70,7 @@ pub impl FromJson for SteerReceipt with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq)
 pub struct ControlState {
   active_task_id : String?
   status : ControlRunStatus
@@ -74,7 +79,7 @@ pub struct ControlState {
   steers : Array[SteerReceipt]
   compact_queued : Bool
   compacting : Bool
-} derive(Eq)
+}
 
 ///|
 fn control_task_id(
@@ -126,12 +131,13 @@ pub impl FromJson for ControlState with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq)
 pub struct ControlSnapshot {
   session_id : String
   task_id : String?
   seq : Int32
   data : ControlState
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for ControlSnapshot with fn from_json(json, path) {
@@ -156,6 +162,7 @@ pub impl FromJson for ControlSnapshot with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq)
 pub enum ControlOperation {
   Stop
   Steer(submission_id~ : String, content~ : @wire.Content)
@@ -163,7 +170,7 @@ pub enum ControlOperation {
   QueueEdit(id~ : String, content~ : @wire.Content)
   QueueWithdraw(id~ : String)
   QueueSteer(id~ : String)
-} derive(Eq)
+}
 
 ///|
 priv struct CommandRequest {
@@ -206,10 +213,11 @@ impl ToJson for QueueRequest with fn to_json(self) {
 }
 
 ///|
+#derive(Eq)
 pub enum ControlResult {
   Accepted
   Rejected(String)
-} derive(Eq)
+}
 
 ///|
 fn QueueRequest::decode_reply(
@@ -243,22 +251,24 @@ fn QueueRequest::decode_reply(
 }
 
 ///|
+#derive(Eq)
 pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
   NativeEvent(EngineFrame)
   EngineFailed(session~ : String, seq~ : Int32, error~ : String)
-} derive(Eq)
+}
 
 ///|
 /// Native events can arrive between tasks. Their payload is decoded by the
 /// same OpenSeek parser as Local; the envelope owns only Cloud routing.
+#derive(Eq)
 pub struct EngineFrame {
   session_id : String
   task_id : String?
   seq : Int32
   data : Json
-} derive(Eq)
+}
 
 ///|
 impl FromJson for EngineFrame with fn from_json(json, path) {

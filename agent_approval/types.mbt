@@ -1,5 +1,6 @@
 ///|
 /// What an approval reviewer decided about one permission request.
+#derive(Debug, Eq)
 pub(all) enum Decision {
   /// Grant the action once.
   Allow
@@ -8,7 +9,7 @@ pub(all) enum Decision {
   /// The reviewer could not settle it; a person decides instead, or, where
   /// nobody can be asked, the action is refused.
   Escalate
-} derive(Debug, Eq)
+}
 
 ///|
 /// The wire word for a decision.
@@ -34,10 +35,11 @@ fn Decision::parse(word : StringView) -> Decision? {
 /// The reviewer's answer: the `approval` kind's report, and what the parent's
 /// approval channel acts on. The JSON shape is
 /// `{"decision": "allow" | "deny" | "escalate", "reason": String}`.
+#derive(Debug, Eq)
 struct Verdict {
   decision : Decision
   reason : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// What the reviewer decided.
@@ -72,12 +74,13 @@ pub impl ToJson for Verdict with fn to_json(self) {
 /// of what would be granted, the operation it would perform, and the user's
 /// recent messages — the only source of authorization the reviewer accepts.
 /// The `approval` kind's input.
+#derive(Debug, Eq, ToJson, FromJson)
 struct ReviewRequest {
   tool_name : String
   detail : String
   body : String?
   intent : Array[String]
-} derive(Debug, Eq, ToJson, FromJson)
+}
 
 ///|
 /// `intent` is the user's recent messages, oldest first.

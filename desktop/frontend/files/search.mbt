@@ -8,10 +8,11 @@ const DefaultMaxRows : Int32 = 200
 ///|
 /// One display-ready file match. Keeping the basename beside the path avoids
 /// making each consumer reinvent path-label rules.
+#derive(Eq, Debug)
 pub(all) struct Match {
   path : @pathx.Relative
   name : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// A reusable search over one workspace index. The active file leads, then

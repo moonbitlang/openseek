@@ -66,7 +66,7 @@ fn Model::cloud_title(self : Model) -> String {
   }
   if self.selected_conversation is Some(CloudSelection(account~, session~)) &&
     self.cloud.user_id == Some(account) {
-    for item in self.cloud.sessions {
+    for item in self.cloud.sidebar_sessions() {
       if item.id == session {
         return item.title.unwrap_or(shell_text(self.locale, NewChatLabel))
       }
@@ -132,6 +132,7 @@ fn update_cloud(
     dispatch.map(message => CloudAction(message)),
     token?=model.account.map(account => account.token),
     navigation=model.chat_navigation_generation,
+    desktop_history=model.is_desktop,
   )
   let completion = if model.account.map(account => account.user.user_id) ==
     before.user_id {
@@ -592,9 +593,11 @@ fn Model::cloud_chat_rows(
   archived~ : Bool = false,
 ) -> Array[(RowStamp, @conversation.Input)] {
   guard self.cloud.user_id is Some(account) else { return [] }
-  self.cloud.sessions
+  self.cloud
+  .sidebar_sessions()
   .filter(item => item.archived == archived)
   .map(item => {
+    let confirmed = !self.cloud.sessions.is_empty()
     let active = self.screen is Chat &&
       self.cloud_identity() == Some(@interop.Cloud(account~, session=item.id))
     let conversation = self.cloud.conversations.get(item.id)
@@ -629,15 +632,25 @@ fn Model::cloud_chat_rows(
         self.cloud.deletions.contains(item.id) ||
         self.cloud.metadata_saves.contains(item.id),
         openable: true,
-        rename: self.conversation_rename_input(id),
-        trailing: [
-          if archived {
-            @conversation.Restore(title=shell_text(self.locale, RestoreHint))
-          } else {
-            @conversation.Archive(title=shell_text(self.locale, ArchiveHint))
-          },
-          @conversation.Delete(title=shell_text(self.locale, DeletePermanently)),
-        ],
+        rename: if confirmed {
+          self.conversation_rename_input(id)
+        } else {
+          None
+        },
+        trailing: if confirmed {
+          [
+            if archived {
+              @conversation.Restore(title=shell_text(self.locale, RestoreHint))
+            } else {
+              @conversation.Archive(title=shell_text(self.locale, ArchiveHint))
+            },
+            @conversation.Delete(
+              title=shell_text(self.locale, DeletePermanently),
+            ),
+          ]
+        } else {
+          []
+        },
         children: [],
         run_mark: @conversation.RunMark::for_task(
           running=item.generating ||

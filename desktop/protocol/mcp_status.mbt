@@ -6,9 +6,10 @@
 
 ///|
 /// The conversation whose engine is asked.
+#derive(Eq, Debug)
 pub(all) struct McpStatusPayload {
   session : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for McpStatusPayload with fn from_json(json, path) {
@@ -36,6 +37,7 @@ pub extend McpStatusPayload with ToJson::{to_json}
 ///|
 /// The reply of `mcp.status`: whether the conversation has an engine, and
 /// what it last reported.
+#derive(Eq, Debug)
 pub(all) enum McpStatusReply {
   /// The conversation has no engine running — it has not been sent a message
   /// since the host started, or its engine has exited. Servers connect when
@@ -46,7 +48,7 @@ pub(all) enum McpStatusReply {
   Connecting
   /// The running engine's own latest account of its servers.
   Running(@wire.McpStatus)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for McpStatusReply with fn from_json(json, path) {

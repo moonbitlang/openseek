@@ -5,6 +5,7 @@
 /// The stable identity of one server-pushed event. Transport registration
 /// uses this payload-free enum; `Notification` below carries the associated
 /// typed payload once an event is decoded.
+#derive(Debug, Eq, Hash)
 pub(all) enum NotificationKind {
   UserQuestions
   AgentApprovals
@@ -38,7 +39,7 @@ pub(all) enum NotificationKind {
   TerminalOutput
   TerminalExit
   SemanticSearchProgress
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// The stable public name written at a transport boundary.
@@ -122,6 +123,7 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
 /// A server-pushed desktop event. Both the event case and its top-level
 /// payload are compiler checked throughout the host and frontend. JSON is
 /// introduced only by `from_wire`/`params` at the transport boundary.
+#derive(Debug, Eq)
 pub(all) enum Notification {
   UserQuestions(UserQuestionSnapshot)
   AgentApprovals(ApprovalSnapshot)
@@ -158,7 +160,7 @@ pub(all) enum Notification {
   TerminalOutput(TerminalOutputPayload)
   TerminalExit(TerminalExitPayload)
   SemanticSearchProgress(SemanticSearchProgressPayload)
-} derive(Debug, Eq)
+}
 
 ///|
 /// Decode the event name and payload together at the WebSocket/Proton boundary.

@@ -1,11 +1,12 @@
 ///|
 /// Closed row family for the feature-local result tree. Group identity is the
 /// normalized model group index; reference identity is its flat index.
+#derive(Eq)
 priv enum ReferenceResultsTreeRow {
   TestSectionRow
   GroupRow(Int32)
   ReferenceRow(Int32)
-} derive(Eq)
+}
 
 ///|
 /// Browser-only materialization of one normalized result model. Model identity,

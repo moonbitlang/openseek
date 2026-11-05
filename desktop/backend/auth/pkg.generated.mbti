@@ -22,11 +22,12 @@ pub impl Show for AuthError
 type AuthStore
 pub fn AuthStore::account(Self) -> @protocol.AccountSession?
 pub fn AuthStore::cancel_sign_in(Self) -> Bool
+pub async fn AuthStore::cloud_history_cache(Self, @protocol.CloudHistoryCacheRequest) -> @protocol.CloudHistoryCacheReply
 pub fn AuthStore::desired_connector(Self) -> ConnectorConfig?
 pub fn AuthStore::empty() -> Self
 pub async fn AuthStore::expire_account(Self, String) -> Unit
 pub async fn AuthStore::handle_refusal(Self, expected? : ConnectorConfig) -> Unit
-pub async fn AuthStore::load(runtime_dir? : @pathx.Path, env_override? : ConnectorConfig) -> Self
+pub async fn AuthStore::load(runtime_dir? : @pathx.Path, cloud_history_runtime? : @pathx.Path, env_override? : ConnectorConfig) -> Self
 pub fn AuthStore::mark_dropped(Self) -> Bool
 pub fn AuthStore::mark_registered(Self, String) -> Bool
 pub fn AuthStore::session_server(Self) -> String?
@@ -37,11 +38,12 @@ pub fn AuthStore::signed_in(Self) -> Bool
 pub fn AuthStore::status(Self, server_url? : String) -> @protocol.AuthStatusPayload
 pub fn AuthStore::wakeups(Self) -> @aqueue.Queue[Unit]
 
+#derive(Eq)
 pub(all) struct ConnectorConfig {
   relay_url : String
   device_token : String
   device_name : String
-} derive(Eq)
+}
 pub fn ConnectorConfig::equal(Self, Self) -> Bool
 pub fn ConnectorConfig::not_equal(Self, Self) -> Bool
 

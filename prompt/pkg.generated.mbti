@@ -11,10 +11,11 @@ pub fn system_prompt_for_model(@deepseek.Model, prompt? : Prompt) -> String
 // Errors
 
 // Types and methods
+#derive(Eq)
 pub(all) enum Prompt {
   BuiltinMoonBitGuide
   Custom(String)
-} derive(Eq)
+}
 
 // Type aliases
 

@@ -24,6 +24,7 @@ pub(all) enum Msg {
 
 ///|
 /// What the overview has to show for its conversation.
+#derive(Eq)
 pub enum Phase {
   /// Nothing has been asked yet.
   Unchecked
@@ -39,12 +40,13 @@ pub enum Phase {
   /// not answer. Distinct from an engine that is not running and from a
   /// configuration the engine could not load, which are both answers.
   CheckFailed(String)
-} derive(Eq)
+}
 
 ///|
 pub extend Phase with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub struct State {
   /// The conversation the phase describes; `None` before the overview first
   /// shows.
@@ -53,7 +55,7 @@ pub struct State {
   /// Counts questions, so the answer to a superseded one is recognized and
   /// dropped instead of overwriting its successor's.
   serial : Int32
-} derive(Eq)
+}
 
 ///|
 pub extend State with Eq::{equal, not_equal}

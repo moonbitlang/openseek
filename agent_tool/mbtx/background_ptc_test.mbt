@@ -221,7 +221,7 @@ async test "background edits after foreground edits validate stale input and kee
         assert_false(output.is_error, msg=output.content)
         guard jobs.list() is [job] else { fail("missing job") }
         entered.get()
-        defer release.put(())
+        defer @async.protect_from_cancel(() => release.put(()))
         let foreground = @mbtx.definition(
           workspace_root=ws,
           bg_runtime=jobs,

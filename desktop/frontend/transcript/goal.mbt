@@ -8,12 +8,13 @@
 /// requires the exact `[goal]` first line and the tombstone/unblock markers
 /// require exact content, so the other goal-family notices (reminders,
 /// checks, the baseline pairing record) never match.
+#derive(Eq)
 pub(all) enum GoalMarker {
   GoalSet(String)
   GoalCleared
   GoalBlocked(String)
   GoalUnblocked
-} derive(Eq)
+}
 
 ///|
 pub fn goal_marker(content : String) -> GoalMarker? {
@@ -34,10 +35,11 @@ pub fn goal_marker(content : String) -> GoalMarker? {
 /// The standing goal a durable record's markers reduce to: the newest set
 /// marker's text, and the blocked reason when the newest block/unblock
 /// transition since that set left it blocked.
+#derive(Eq)
 pub(all) struct GoalStanding {
   text : String
   blocked : String?
-} derive(Eq)
+}
 
 ///|
 /// One reducer step: the last marker wins. Block/unblock transitions apply

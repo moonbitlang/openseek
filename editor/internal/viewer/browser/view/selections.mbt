@@ -20,11 +20,12 @@ fn SelectionsOverlay::SelectionsOverlay() -> SelectionsOverlay {
 /// The rounded-corner classification of a selection edge, Monaco's
 /// `CornerStyle`: `Extern` rounds outward, `Intern` is a reverse (inverse)
 /// corner cut into an adjacent line, `Flat` leaves a straight edge.
+#derive(Eq)
 priv enum CornerStyle {
   Extern
   Intern
   Flat
-} derive(Eq)
+}
 
 ///|
 /// One measured selection rectangle plus the corner styles of its four corners,

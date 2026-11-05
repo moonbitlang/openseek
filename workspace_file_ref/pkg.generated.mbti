@@ -21,6 +21,7 @@ pub fn parse(String, String, closed~ : Bool) -> WorkspaceFileRef?
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub enum FileKind {
   Spreadsheet
   Document
@@ -31,26 +32,28 @@ pub enum FileKind {
   Code
   Text
   Generic
-} derive(Eq, @debug.Debug)
+}
 pub fn FileKind::equal(Self, Self) -> Bool
 pub fn FileKind::not_equal(Self, Self) -> Bool
 pub fn FileKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub enum MarkdownPart {
   Text(String)
   File(WorkspaceFileRef)
-} derive(Eq, @debug.Debug)
+}
 pub fn MarkdownPart::equal(Self, Self) -> Bool
 pub fn MarkdownPart::not_equal(Self, Self) -> Bool
 pub fn MarkdownPart::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct WorkspaceFileRef {
   path : String
   name : String
   extension : String?
   kind : FileKind
   artifact : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkspaceFileRef::artifact_path(Self) -> String?
 pub fn WorkspaceFileRef::equal(Self, Self) -> Bool
 pub fn WorkspaceFileRef::not_equal(Self, Self) -> Bool

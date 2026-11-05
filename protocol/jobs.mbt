@@ -1,33 +1,37 @@
 ///|
 /// The tracked execution's state. Interrupted means its owner disappeared;
 /// it does not assert that every descendant process was terminated.
+#derive(Eq, Debug)
 pub(all) enum JobState {
   Running
   Stopping
   Exited(Int32)
   Stopped(String)
   Interrupted
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum JobEventKind {
   Started
   Updated
   Finished
   Failed
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum JobStopOutcome {
   Stopped
   AlreadyTerminal
   NotFound
   WrongRuntime
-} derive(Eq, Debug)
+}
 
 ///|
 /// A durable background execution record. output_file is a basename relative
 /// to jobs/<generation>; clients resolve its current host path via the store.
+#derive(Eq, Debug)
 pub(all) struct JobRecord {
   generation : String
   id : String
@@ -53,7 +57,7 @@ pub(all) struct JobRecord {
   data : Json?
   /// Set when the job is a subagent; `None` for every other job.
   subagent : SubagentInfo?
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn JobState::is_terminal(self : JobState) -> Bool {

@@ -32,17 +32,19 @@ pub async fn tree_base(@pathx.Absolute, String) -> String?
 pub async fn tree_dir(@pathx.Absolute, String) -> @pathx.Absolute?
 
 // Errors
+#derive(@debug.Debug)
 pub suberror WorktreeError {
   WorktreeError(String)
-} derive(@debug.Debug)
+}
 pub fn WorktreeError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub struct CodexWorktreeBinding {
   thread_id : String
   workspace : String
   worktree : @protocol.WorktreeInfo
-} derive(Eq, @debug.Debug)
+}
 pub fn CodexWorktreeBinding::equal(Self, Self) -> Bool
 pub fn CodexWorktreeBinding::not_equal(Self, Self) -> Bool
 pub fn CodexWorktreeBinding::to_repr(Self) -> @debug.Repr
@@ -60,7 +62,8 @@ pub(all) struct WorktreeHost {
   drain_sessions : async (Array[String]) -> Unit
 }
 
-type WorktreeOwner derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type WorktreeOwner
 pub async fn WorktreeOwner::archive_check(Self, WorktreeHost) -> @protocol.ArchiveNeedsForceReply?
 pub async fn WorktreeOwner::archive_checkout(Self, WorktreeHost, Bool, workspace? : @pathx.Absolute, family? : Array[String], on_committed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveNeedsForceReply?
 pub async fn WorktreeOwner::checkout_removal(Self, WorktreeHost, workspace? : @pathx.Absolute, family? : Array[String]) -> @protocol.CheckoutRemoval?

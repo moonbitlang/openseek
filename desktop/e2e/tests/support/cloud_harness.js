@@ -4,11 +4,30 @@ import { expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './desktop_browser_harness.js';
 
 export const authOrigin = 'https://openseek-api.moonbitlang.cn';
-export const cloudOrigin = 'https://cloud.moonbitlang.cn';
+export const cloudOrigin = 'https://cloud.moonbitlang.com';
 export const sessionA = '11111111-1111-4111-8111-111111111111';
 export const sessionB = '22222222-2222-4222-8222-222222222222';
 export const sessionC = '33333333-3333-4333-8333-333333333333';
 const bundle = new URL('../../../dist/browser/', import.meta.url);
+
+// Resolves with the first matching response once its request has ended, so the
+// page has read the whole body. Use it instead of `response.finished()`, which
+// never settles when the request ends as failed: the async HTTP client cancels
+// the body stream after reading it, and Chromium can report that cancellation
+// (net::ERR_ABORTED) before it reports the load as finished.
+export function settledResponse(page, predicate) {
+  return new Promise(resolve => {
+    const settle = async request => {
+      const response = await request.response();
+      if (!response || !predicate(response)) return;
+      page.off('requestfinished', settle);
+      page.off('requestfailed', settle);
+      resolve(response);
+    };
+    page.on('requestfinished', settle);
+    page.on('requestfailed', settle);
+  });
+}
 
 export class CloudHarness {
   constructor(page, { desktop = false, cached = true } = {}) {
@@ -240,6 +259,7 @@ export class CloudHarness {
       }
       if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false, server_url: authOrigin }; }
       if (request.method === 'remote.access_set') return { connected: false, server_url: authOrigin };
+      if (request.method === 'cloud.history_cache') return this.historyCache?.(request.params) ?? { kind: 'done' };
       if (request.method === 'cloud.key') throw new Error('Cloud must not read local credentials');
       return this.device.replyFor(request);
     });
@@ -612,6 +632,22 @@ export class CloudHarness {
 
   row(id) {
     return this.page.locator(`[id="conversation:cloud.live:${this.userId}:${id}::open"], [id="conversation:cloud.archived:${this.userId}:${id}::open"]`);
+  }
+
+  // Archived conversations are managed within the Settings dialog.
+  async openArchivedChats() {
+    await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await this.page.getByRole('button', { name: 'Manage', exact: true }).click();
+    await expect(this.page.getByRole('dialog', { name: 'Archived chats', exact: true })).toBeVisible();
+  }
+
+  archivedRow(id) {
+    return this.page.getByRole('dialog', { name: 'Archived chats', exact: true }).locator('.archived-chat-row').filter({ hasText: this.titles.get(id) });
+  }
+
+  async openArchived(id) {
+    await this.openArchivedChats();
+    await this.archivedRow(id).getByRole('button', { name: new RegExp(`^${this.titles.get(id)}`) }).click();
   }
 
   async open(id = sessionA) {

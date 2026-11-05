@@ -3,11 +3,12 @@
 // chip label, CI tone, tooltip, popover rows, and external links.
 
 ///|
+#derive(Eq)
 struct GitChecks {
   passed : Int32
   failed : Int32
   pending : Int32
-} derive(Eq)
+}
 
 ///|
 pub fn GitChecks::GitChecks(
@@ -19,6 +20,7 @@ pub fn GitChecks::GitChecks(
 }
 
 ///|
+#derive(Eq)
 struct GitPullRequest {
   number : Int32
   title : String
@@ -26,7 +28,7 @@ struct GitPullRequest {
   draft : Bool
   url : String
   checks : GitChecks?
-} derive(Eq)
+}
 
 ///|
 pub fn GitPullRequest::GitPullRequest(
@@ -41,13 +43,14 @@ pub fn GitPullRequest::GitPullRequest(
 }
 
 ///|
+#derive(Eq)
 struct GitChanges {
   added : Int32
   removed : Int32
   files : Int32
   partial : Bool
   base : String?
-} derive(Eq)
+}
 
 ///|
 pub fn GitChanges::GitChanges(
@@ -73,13 +76,14 @@ fn GitChanges::file_count(
 }
 
 ///|
+#derive(Eq)
 struct GitPresentation {
   branch : String
   changes : GitChanges?
   pull_request : GitPullRequest?
   compare_url : String?
   missing_pull_request : String?
-} derive(Eq)
+}
 
 ///|
 pub fn GitPresentation::GitPresentation(

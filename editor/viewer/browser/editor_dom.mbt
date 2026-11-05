@@ -25,10 +25,11 @@
 ///|
 /// Coordinates relative to the whole document (e.g. mouse event's pageX and
 /// pageY) — `PageCoordinates` (editorDom.ts:19-30).
+#derive(Eq, Debug)
 pub(all) struct PageCoordinates {
   x : Double
   y : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn PageCoordinates::to_client_coordinates(
@@ -43,10 +44,11 @@ pub fn PageCoordinates::to_client_coordinates(
 ///|
 /// Coordinates within the application's client area — `ClientCoordinates`
 /// (editorDom.ts:39-50).
+#derive(Eq, Debug)
 pub(all) struct ClientCoordinates {
   client_x : Double
   client_y : Double
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ClientCoordinates::to_page_coordinates(
@@ -61,21 +63,23 @@ pub fn ClientCoordinates::to_page_coordinates(
 ///|
 /// The position of the editor in the page — `EditorPagePosition`
 /// (editorDom.ts:55-64).
+#derive(Eq, Debug)
 pub struct EditorPagePosition {
   x : Double
   y : Double
   width : Double
   height : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Coordinates relative to the (top;left) of the editor, scale-corrected —
 /// `CoordinatesRelativeToEditor` (editorDom.ts:72-79). Can be negative when
 /// the mouse is outside the editor.
+#derive(Eq, Debug)
 pub struct CoordinatesRelativeToEditor {
   x : Double
   y : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// `createEditorPagePosition` (editorDom.ts:81-84):

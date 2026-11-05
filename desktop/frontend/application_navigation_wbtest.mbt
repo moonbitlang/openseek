@@ -633,3 +633,29 @@ test "deleting a conversation from this page retires its shown side chat" {
   let parent_gone = announce_deletion(side_chat_gone, parent)
   assert_true(parent_gone.deletes_in_flight.is_empty())
 }
+
+///|
+test "archived chats returns to Settings without changing the work surface" {
+  let dispatch = test_dispatch()
+  let initial = { ..test_model(), is_desktop: true, }
+  let (_, settings) = update(dispatch, OpenSetup, initial)
+  let (_, archived) = update(dispatch, OpenArchivedChats, settings)
+  assert_true(archived.management_dialog is Some(ArchivedChats))
+  assert_true(archived.screen == initial.screen)
+  assert_true(archived.navigation.location == settings.navigation.location)
+  let (_, returned) = update(dispatch, OpenSetup, archived)
+  assert_true(returned.management_dialog is Some(Settings))
+  assert_true(returned.navigation.location == settings.navigation.location)
+}
+
+///|
+test "device-less archived chats is a management dialog" {
+  let model = test_model()
+  let model = { ..model, console: { ..model.console, page_device: None, }, }
+  let (_, opened) = update(test_dispatch(), OpenArchivedChats, model)
+  assert_true(opened.management_dialog is Some(ArchivedChats))
+  assert_true(opened.navigation_location() == model.navigation_location())
+  let (_, closed) = update(test_dispatch(), CloseManagementDialog, opened)
+  assert_true(closed.management_dialog is None)
+  assert_true(closed.screen == model.screen)
+}

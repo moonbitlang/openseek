@@ -15,7 +15,8 @@ pub fn skills_prompt_section(Array[Skill]) -> String?
 // Errors
 
 // Types and methods
-type Skill derive(@debug.Debug)
+#derive(@debug.Debug)
+type Skill
 pub fn Skill::description(Self) -> String
 pub fn Skill::name(Self) -> String
 pub fn Skill::path(Self) -> String

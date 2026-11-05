@@ -3,6 +3,7 @@ package "moonbitlang/openseek/internal/loopback_http"
 
 import {
   "moonbitlang/async/socket",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -15,7 +16,7 @@ pub suberror RequestTooLarge {
 // Types and methods
 type RequestReader
 pub fn RequestReader::RequestReader(@socket.Tcp) -> Self
-pub async fn RequestReader::body(Self, Map[String, String]) -> Json
+pub async fn RequestReader::body(Self, Map[String, String]) -> @json.Json
 pub async fn RequestReader::head(Self) -> Map[String, String]
 
 // Type aliases

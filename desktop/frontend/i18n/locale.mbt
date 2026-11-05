@@ -1,15 +1,17 @@
 ///|
 /// Built-in UI languages. Product content and protocol values are independent.
+#derive(Debug, Eq)
 pub(all) enum Locale {
   English
   SimplifiedChinese
   TraditionalChinese
   Japanese
   Spanish
-} derive(Debug, Eq)
+}
 
 ///|
 /// The saved user choice, distinct from the effective UI language.
+#derive(Debug, Eq)
 pub(all) enum Preference {
   System
   English
@@ -17,7 +19,7 @@ pub(all) enum Preference {
   TraditionalChinese
   Japanese
   Spanish
-} derive(Debug, Eq)
+}
 
 ///|
 /// Parse a stored or selected value without assigning meaning to invalid input.

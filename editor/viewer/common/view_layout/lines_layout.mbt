@@ -16,6 +16,7 @@
 
 ///|
 /// A whitespace (view zone) that displaces the lines after `after_line_number`.
+#derive(Eq, Debug)
 pub struct EditorWhitespace {
   id : String
   mut after_line_number : Int32
@@ -23,7 +24,7 @@ pub struct EditorWhitespace {
   mut height : Int32
   mut min_width : Int32
   mut prefix_sum : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Constructs a whitespace; `prefix_sum` starts at 0 (lazily computed).
@@ -40,6 +41,7 @@ pub fn EditorWhitespace::EditorWhitespace(
 ///|
 /// Lines and relative offsets positioned between two vertical offsets — the
 /// Monaco `IPartialViewLinesViewportData` shape.
+#derive(Eq, Debug)
 pub struct PartialViewLinesViewportData {
   big_numbers_delta : Int32
   start_line_number : Int32
@@ -49,17 +51,18 @@ pub struct PartialViewLinesViewportData {
   completely_visible_start_line_number : Int32
   completely_visible_end_line_number : Int32
   line_height : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// One whitespace positioned relative to a viewport — the Monaco
 /// `IViewWhitespaceViewportData` shape.
+#derive(Eq, Debug)
 pub struct ViewWhitespaceViewportData {
   id : String
   after_line_number : Int32
   vertical_offset : Double
   height : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 priv struct PendingChange {

@@ -38,7 +38,8 @@ pub struct CaptureOutcome {
   defects : Array[String]
 }
 
-type Change derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type Change
 
 pub struct Geometry {
   origin_root : String
@@ -59,6 +60,7 @@ pub struct Provisioned {
   geometry : Geometry
 }
 
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
 pub struct SubtaskEntry {
   name : String
   branch : String
@@ -69,12 +71,13 @@ pub struct SubtaskEntry {
   allowed_paths : Array[String]
   commit_oid : String?
   // private fields
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+}
 pub fn SubtaskEntry::defects(Self) -> Array[String]
 pub fn SubtaskEntry::is_released(Self) -> Bool
 pub fn SubtaskEntry::nonce(Self) -> String
 pub fn SubtaskEntry::parent_session(Self) -> String?
 
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
 pub enum SubtaskState {
   Provisioning
   Running
@@ -84,7 +87,7 @@ pub enum SubtaskState {
   Integrated
   Discarded
   NoChanges
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+}
 pub fn SubtaskState::is_terminal(Self) -> Bool
 
 // Type aliases

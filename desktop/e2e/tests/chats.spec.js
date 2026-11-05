@@ -25,18 +25,14 @@ for (const legacy of [false, true]) {
     await cloud.open();
     await expect(hint).toHaveCount(0);
     await expect(page.locator('#task')).toBeVisible();
-    await expect(page.locator('aside .section-disclosure')).toHaveText(['Chats', 'Archived chats']);
+    await expect(page.locator('aside .section-label')).toHaveText(['Chats']);
     const row = cloud.row(sessionA);
-    const chats = page.locator('aside').getByRole('button', { name: 'Chats', exact: true });
-    await chats.click();
-    await expect(row).not.toBeInViewport();
-    await chats.click();
     await expect(row).toBeInViewport();
     await row.hover();
     await page.getByRole('button', { name: 'Conversation actions' }).click();
     await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
-    await page.locator('aside').getByRole('button', { name: 'Archived chats (1)', exact: true }).click();
-    await cloud.row(sessionA).click();
+    await expect(row).toHaveCount(0);
+    await cloud.openArchived(sessionA);
     await expect(page.locator('.archived-read-only-text')).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('chats-flat-archive.png') });
     if (legacy) {

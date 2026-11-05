@@ -7,12 +7,13 @@
 /// What the desktop can do with one bounded file payload. `Utf8Text` includes
 /// the decoded content so consumers do not validate and decode the same bytes
 /// in separate passes.
+#derive(Debug, Eq)
 pub enum Classification {
   Utf8Text(String)
   Image(media_type~ : String)
   Pdf
   UnknownBinary
-} derive(Debug, Eq)
+}
 
 ///|
 /// Classify bytes according to the desktop viewer's content contract.

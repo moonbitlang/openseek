@@ -1,9 +1,10 @@
 ///|
 /// A completed engine-owned prediction, broadcast to every connected client.
+#derive(Eq, Debug)
 pub(all) struct PredictionReadyPayload {
   session : String
   prediction : @wire.PredictionRecord
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for PredictionReadyPayload with fn from_json(json, path) {

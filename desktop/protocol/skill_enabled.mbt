@@ -1,8 +1,9 @@
 ///|
+#derive(Debug, Eq)
 pub(all) struct SetSkillEnabledPayload {
   id : String
   enabled : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SetSkillEnabledPayload with fn from_json(json, path) {
@@ -19,10 +20,11 @@ pub impl ToJson for SetSkillEnabledPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum SetSkillEnabledReply {
   SkillEnabledSet
   SkillEnabledError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for SetSkillEnabledReply with fn to_json(self) {

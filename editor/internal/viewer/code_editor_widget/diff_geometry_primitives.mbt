@@ -5,21 +5,24 @@
 ///|
 /// Exact rendered height of one model line after projection. A wrapped line is
 /// taller than the base line height; a hidden line is exactly zero.
+#derive(Eq, Debug)
 pub(all) struct CodeEditorModelLineHeight {
   line_number : Int32
   height_in_px : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Actual non-owned zone geometry in model coordinates.
+#derive(Eq, Debug)
 pub(all) struct CodeEditorForeignZoneHeight {
   after_line_number : Int32
   height_in_px : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Scroll and content facts captured in the same geometry read. Content and
 /// scroll height exclude every zone id supplied to `geometry_snapshot`.
+#derive(Eq, Debug)
 pub(all) struct CodeEditorScrollContentFacts {
   scroll_top : Double
   scroll_left : Double
@@ -29,7 +32,7 @@ pub(all) struct CodeEditorScrollContentFacts {
   content_height : Double
   scroll_width : Double
   scroll_height : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// Immutable code-editor geometry for one model version and layout read.
