@@ -20,7 +20,7 @@ pub suberror ConfigError {
 #derive(Eq, @debug.Debug)
 pub(all) enum McpServer {
   Stdio(name~ : String, command~ : String, args~ : Array[String], env~ : Map[String, String])
-  Http(name~ : String, url~ : String, headers~ : Map[String, String])
+  Http(name~ : String, url~ : String, headers~ : Map[String, String], headers_helper~ : Array[String]?)
 }
 pub fn McpServer::name(Self) -> String
 pub fn McpServer::target(Self) -> String
