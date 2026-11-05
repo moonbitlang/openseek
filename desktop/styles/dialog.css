@@ -17,42 +17,51 @@ dialog {
   box-shadow: var(--shadow-overlay);
   overflow: hidden;
   flex-direction: column;
+  opacity: 0;
+  transform: var(--rui-dialog-closed-transform, translateY(-0.5rem) scale(0.95));
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease,
+    display 200ms allow-discrete,
+    overlay 200ms allow-discrete;
 }
 
 dialog[open] {
   display: flex;
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 dialog::backdrop {
-  background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
+  background: var(--color-backdrop);
+  opacity: 0;
+  transition:
+    opacity 200ms ease,
+    display 200ms allow-discrete,
+    overlay 200ms allow-discrete;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  dialog {
-    scale: 0.995;
-    transition:
-      scale 60ms ease-in,
-      display 60ms allow-discrete,
-      overlay 60ms allow-discrete;
-  }
+dialog[open]::backdrop {
+  opacity: 1;
+}
 
+@starting-style {
   dialog[open] {
-    scale: none;
-    transition-duration: 60ms;
-    transition-timing-function: cubic-bezier(0.2, 1.4, 0.4, 1);
+    opacity: 0;
+    transform: var(--rui-dialog-closed-transform, translateY(-0.5rem) scale(0.95));
   }
 
-  /* Keep the backdrop solid until the closing window leaves the top layer. */
+  dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog,
   dialog::backdrop {
-    transition:
-      display 60ms allow-discrete,
-      overlay 60ms allow-discrete;
-  }
-
-  @starting-style {
-    dialog[open] {
-      scale: 0.995;
-    }
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
   }
 }
 
