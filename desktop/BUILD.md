@@ -91,7 +91,7 @@ Package commands perform these steps:
 7. one `proton_cli package` invocation for the requested formats.
 
 `package/dev` builds the frontend, viz, and engine, then calls
-`proton_cli dev --no-frontend --setup`. Proton supplies the CEF environment and
+`proton_cli dev --no-frontend`. Proton supplies the CEF environment and
 runs the Desktop package; there is no second development launcher.
 
 ## Resource tree
