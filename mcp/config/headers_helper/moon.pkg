@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async/fs",
+} for "test"
+
+supported_targets = "+wasm+native"

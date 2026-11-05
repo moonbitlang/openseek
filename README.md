@@ -260,7 +260,7 @@ logs `workspace_created`.
 
 OpenSeek can use tools from [MCP](https://modelcontextprotocol.io) servers.
 Point `--mcp-config` (or `OPENSEEK_MCP_CONFIG`) at a JSON file in the de-facto
-standard shape — an existing Claude/Cursor-style `mcp.json` works as-is:
+standard shape for stdio and static HTTP entries:
 
 ```json
 {
@@ -270,6 +270,21 @@ standard shape — an existing Claude/Cursor-style `mcp.json` works as-is:
   }
 }
 ```
+
+For dynamic authentication, HTTP entries also accept an OpenSeek extension:
+`"headersHelper": ["executable", "argument", "..."]`. This is a nonempty
+argument array, never a shell string. The process runs in the agent workspace,
+inherits its environment, receives EOF on stdin, and must write one flat JSON
+object of string HTTP headers to stdout. These headers override static headers
+case-insensitively; transport-owned framing/protocol headers cannot be replaced.
+
+The helper runs before establishing each MCP client (45-second timeout). Its
+output is merged with static headers and passed to the ordinary HTTP connector.
+The resulting client reuses that header map; creating a new client runs the
+helper again. The helper owns token expiry, refresh and persistence when invoked;
+the transport does not re-run it or refresh and retry on a 401. A failing helper's
+exit status and stderr are included in the error. The helper contract defines no
+login, status or logout commands; credential setup is specific to each helper.
 
 Repeat the option to load multiple files, for example
 `--mcp-config host.json --mcp-config user.json`. Files merge in argument order;

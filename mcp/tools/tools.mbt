@@ -280,11 +280,22 @@ async fn[X] connect_server(
         )
         (connection.client(), connection.init())
       }
-      Http(url~, headers~, ..) => {
+      Http(url~, headers~, headers_helper~, ..) => {
+        // Resolve configuration before connecting. The transport receives only
+        // ordinary headers; helper output overrides static keys regardless of case.
+        let resolved : Map[String, String] = Map([])
+        for name, value in headers {
+          resolved[name.to_lower()] = value
+        }
+        if headers_helper is Some(command) {
+          for name, value in @headers_helper.run(command, cwd?=workspace_root) {
+            resolved[name.to_lower()] = value
+          }
+        }
         let connection = @streamhttp.connect(
           scope.group(),
           url~,
-          headers~,
+          headers=resolved,
           client_name~,
           client_version~,
         )
