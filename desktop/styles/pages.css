@@ -114,11 +114,12 @@ a:where(.setting-link) {
 }
 
 #skill-detail-dialog {
-  --dialog-width: 52rem;
+  --dialog-width: 54rem;
   max-height: min(52rem, 80dvh);
 }
 
 #skill-detail-dialog [data-slot="dialog-body"] {
+  padding-inline: var(--space-7);
   overflow-x: hidden;
 }
 
