@@ -257,7 +257,7 @@ fn dialog_contents(
         ui(locale, WorkspaceSettingsLabel),
       ),
     ]),
-    @html.div([
+    @html.div(class="dialog-scroll-body", [
       @html.div(
         id="workspace-settings-description",
         class="workspace-settings-identity",
@@ -335,7 +335,7 @@ fn dialog_component(
   state.view3(input, locale, (state, input, locale) => {
     @rui.dialog(
       id=DialogId,
-      class="dialog-size-medium",
+      class="dialog-size-medium dialog-scroll-layout",
       close_label=ui(locale, CloseLabel),
       closedby="any",
       on_cancel=@dialog.close(DialogId),

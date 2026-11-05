@@ -13,7 +13,7 @@ fn skills_detail_dialog_view(
 ) -> @html.Html {
   @rui.dialog(
     id="skill-detail-dialog",
-    class="dialog-size-medium",
+    class="dialog-size-medium dialog-scroll-layout",
     close_label=shell_text(model.locale, DismissLabel),
     on_close=_ => dispatch(Skills(@skills.BackToList)),
     attrs=@html.Attrs::build().aria_labelledby("skill-detail-dialog-title"),
@@ -25,7 +25,7 @@ fn skills_detail_dialog_view(
           @skills.detail_title(model.locale),
         ),
       ]),
-      @html.div([content]),
+      @html.div(class="dialog-scroll-body", [content]),
     ],
   )
 }

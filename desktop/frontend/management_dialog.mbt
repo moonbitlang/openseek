@@ -26,7 +26,7 @@ fn management_dialog_view(
   }
   @rui.dialog(
     id="management-dialog",
-    class="dialog-size-large",
+    class="dialog-size-large dialog-scroll-layout",
     close_label=shell_text(model.locale, DismissLabel),
     on_close=_ => dispatch(CloseManagementDialog),
     attrs=@html.Attrs::build().aria_labelledby("management-dialog-title"),
@@ -41,7 +41,7 @@ fn management_dialog_view(
       @rui.dialog_header([
         @rui.dialog_title(id="management-dialog-title", title),
       ]),
-      @html.div([
+      @html.div(class="dialog-scroll-body", [
         // Stable panes retain their DOM while the shared dialog is closed.
         pane(Settings, settings_page(dispatch, model)),
         pane(ArchivedChats, archived_chats_html),

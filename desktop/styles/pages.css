@@ -118,7 +118,7 @@ a:where(.setting-link) {
   --dialog-max-height: min(52rem, 80dvh);
 }
 
-/* Management pages keep their own content spacing; the shell owns scrolling. */
+/* Management pages keep their own content spacing; the dialog body owns scrolling. */
 .management-dialog-pane:not([hidden]) {
   display: contents;
 }
