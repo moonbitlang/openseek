@@ -919,16 +919,24 @@ priv struct View {
 ///|
 fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   ignore(locale)
-  let actions : Array[@html.Html] = [
-    @html.div(
-      class="composer-followup",
-      match self.followup_menu {
-        Some(menu) => [menu]
-        None => []
-      },
+  // Key the actions by id. Rabbita diffs array children by position, so Stop
+  // appearing ahead of Send would otherwise patch the Send button in place:
+  // a press already on that element would then cancel the run.
+  let actions : Map[String, @html.Html] = Map([
+    (
+      "followup",
+      @html.div(
+        class="composer-followup",
+        match self.followup_menu {
+          Some(menu) => [menu]
+          None => []
+        },
+      ),
     ),
-    ..self.actions.map(action => action.render(locale~)),
-  ]
+  ])
+  for action in self.actions {
+    actions[action.id] = action.render(locale~)
+  }
   let inner : Array[@html.Html] = [
     self.attach,
     // Keep the input wrapper and its two children permanently mounted. Rabbita
