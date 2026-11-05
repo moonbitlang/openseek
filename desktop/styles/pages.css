@@ -482,7 +482,7 @@ button.archived-chat-open:hover .archived-chat-title {
   justify-self: start;
 }
 
-#saveApiKey {
+.save-api-key {
   align-self: flex-end;
 }
 

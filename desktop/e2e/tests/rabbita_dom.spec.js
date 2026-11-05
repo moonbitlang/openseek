@@ -1690,7 +1690,7 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   await expect(page.getByText('Set up your DeepSeek API key')).toBeVisible();
   await page.getByRole('button', { name: 'API endpoint' }).click();
   await page.getByRole('option', { name: 'OpenRouter' }).click();
-  await page.getByLabel('API key').fill('sk-openrouter-test');
+  await page.locator('.setup-modal').getByLabel('API key').fill('sk-openrouter-test');
   await page.getByRole('button', { name: 'Save API key' }).click();
 
   await expect.poll(() => app.requests.some(request =>
