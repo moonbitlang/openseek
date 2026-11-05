@@ -2660,14 +2660,21 @@ fn update_confirm_modal(
   dispatch : @cmd.Emit[Msg],
   version : String,
 ) -> @html.Html {
-  @html.div(class="modal-backdrop", on_click=dispatch(CancelUpdateRestart), [
-    @html.div(class="modal", [
-      @html.div(
-        class="modal-title",
-        dynamic_text(locale, DRestartQuestion(version)),
+  @ui.dialog(
+    id="update-restart-dialog",
+    size=Small,
+    show_close=false,
+    on_cancel=dispatch(CancelUpdateRestart),
+    attrs=@html.Attrs::build().aria_labelledby("update-restart-title"),
+    [
+      @ui.dialog_header(
+        @ui.dialog_title(
+          id="update-restart-title",
+          dynamic_text(locale, DRestartQuestion(version)),
+        ),
       ),
-      @html.div(class="modal-body", shell_text(locale, InterruptForUpdate)),
-      @html.div(class="modal-actions", [
+      @ui.dialog_body(shell_text(locale, InterruptForUpdate)),
+      @ui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=dispatch(CancelUpdateRestart),
@@ -2679,8 +2686,8 @@ fn update_confirm_modal(
           shell_text(locale, RestartNow),
         ),
       ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 ///|
@@ -2691,8 +2698,7 @@ fn update_confirm_modal(
 /// over the Settings form (which already shows the same section), and
 /// disappears the moment a usable endpoint arrives. shell_text(model.locale, NotNow) dismisses for
 /// the session; the composer's BYOK notice keeps the reminder — and the way
-/// back here — visible. Clicks inside must not bubble to the backdrop, whose
-/// click dismisses.
+/// back here — visible.
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let title = match model.api_provider {
     Deepseek => shell_text(model.locale, SetupDeepSeek)
@@ -2700,29 +2706,25 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     OpenRouter => shell_text(model.locale, SetupOpenRouter)
     Custom => shell_text(model.locale, SetupEndpoint)
   }
-  @html.div(class="modal-backdrop", on_click=dispatch(DismissApiSetup), [
-    @html.div(
-      class="modal setup-modal",
-      attrs=@html.Attrs::build().on_click(event => {
-        event.stop_propagation()
-        @cmd.none
-      }),
-      [
-        @html.div(class="modal-title", title),
-        @html.div(
-          class="setup-modal-form",
-          api_settings_rows(dispatch, model, id_prefix="setup-api"),
+  @ui.dialog(
+    id="api-setup-dialog",
+    class="setup-modal",
+    size=Medium,
+    show_close=false,
+    on_cancel=dispatch(DismissApiSetup),
+    attrs=@html.Attrs::build().aria_labelledby("api-setup-title"),
+    [
+      @ui.dialog_header(@ui.dialog_title(id="api-setup-title", title)),
+      @ui.dialog_body(api_settings_rows(dispatch, model, id_prefix="setup-api")),
+      @ui.dialog_footer([
+        @html.button(
+          class="button secondary",
+          on_click=dispatch(DismissApiSetup),
+          shell_text(model.locale, NotNow),
         ),
-        @html.div(class="modal-actions", [
-          @html.button(
-            class="button secondary",
-            on_click=dispatch(DismissApiSetup),
-            shell_text(model.locale, NotNow),
-          ),
-        ]),
-      ],
-    ),
-  ])
+      ]),
+    ],
+  )
 }
 
 ///|

@@ -1742,6 +1742,16 @@ pub fn subscriptions(
     } else {
       @sub.none
     },
+    if active_pdf_document(state, ctx) is Some((_, document, _)) &&
+      document.status is PdfPasswordRequired(_) {
+      @dismiss.on_back(
+        "back-pdf-password",
+        level=TopLayer,
+        dispatch.map((_ : Unit) => PdfPasswordCancelled),
+      )
+    } else {
+      @sub.none
+    },
     changes_poll_subscription(state, ctx, dispatch),
     cloud_files_subscription(ctx, dispatch),
     review_diff_navigation_subscription(state, ctx, dispatch),

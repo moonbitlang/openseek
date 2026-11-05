@@ -280,35 +280,29 @@ fn CodexPermissionPicker::confirmation_dialog(
   guard self is CodexPermissionConfirmingFullAccess(_) else { return None }
   let cancel = dispatch(CancelFullAccess)
   Some(
-    @html.div(class="modal-backdrop", on_click=cancel, [
-      @html.div(
-        class="modal",
-        attrs=@html.Attrs::build()
-          .role("dialog")
-          .aria_modal("true")
-          .aria_label(ui(locale, EnableFullCodex))
-          .on_click(event => {
-            event.stop_propagation()
-            @cmd.none
-          }),
-        [
-          @html.div(class="modal-title", ui(locale, EnableFullQuestion)),
-          @html.div(class="modal-body", ui(locale, FullAccessWarning)),
-          @html.div(class="modal-actions", [
-            @html.button(
-              class="button secondary",
-              on_click=cancel,
-              ui(locale, CancelLabel),
-            ),
-            @html.button(
-              class="button danger",
-              on_click=dispatch(ConfirmFullAccess),
-              ui(locale, EnableFullAccess),
-            ),
-          ]),
-        ],
-      ),
-    ]),
+    @ui.dialog(
+      id="codex-permission-dialog",
+      size=Small,
+      show_close=false,
+      on_cancel=cancel,
+      attrs=@html.Attrs::build().aria_label(ui(locale, EnableFullCodex)),
+      [
+        @ui.dialog_header(@ui.dialog_title(ui(locale, EnableFullQuestion))),
+        @ui.dialog_body(ui(locale, FullAccessWarning)),
+        @ui.dialog_footer([
+          @html.button(
+            class="button secondary",
+            on_click=cancel,
+            ui(locale, CancelLabel),
+          ),
+          @html.button(
+            class="button danger",
+            on_click=dispatch(ConfirmFullAccess),
+            ui(locale, EnableFullAccess),
+          ),
+        ]),
+      ],
+    ),
   )
 }
 

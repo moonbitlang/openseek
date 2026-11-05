@@ -481,11 +481,21 @@ fn delete_modal(
     CloudDelete(account~, session~, ..) =>
       cloud.user_id == Some(account) && cloud.can_delete(session)
   }
-  @html.div(class="modal-backdrop", on_click=dispatch(CancelDeleteSession), [
-    @html.div(class="modal", [
-      @html.div(class="modal-title", shell_text(locale, DeleteChatQuestion)),
-      @html.div(class="modal-body", message),
-      @html.div(class="modal-actions", [
+  @ui.dialog(
+    id="delete-chat-dialog",
+    size=Small,
+    show_close=false,
+    on_cancel=dispatch(CancelDeleteSession),
+    attrs=@html.Attrs::build().aria_labelledby("delete-chat-title"),
+    [
+      @ui.dialog_header(
+        @ui.dialog_title(
+          id="delete-chat-title",
+          shell_text(locale, DeleteChatQuestion),
+        ),
+      ),
+      @ui.dialog_body(message),
+      @ui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=dispatch(CancelDeleteSession),
@@ -498,8 +508,8 @@ fn delete_modal(
           shell_text(locale, DeletePermanently),
         ),
       ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 ///|

@@ -140,5 +140,5 @@ fn add_project_picker_capture(
 fn picker_control_target(event : @dom.Event, selector : String) -> Bool {
   event.target().to_element() is Some(target) &&
   target.closest(selector) is Some(control) &&
-  control.closest(".picker-modal") is Some(_)
+  control.closest("#project-picker-dialog") is Some(_)
 }

@@ -189,35 +189,10 @@
 }
 
 /* ---------- notifications ---------- */
-dialog.export-dialog {
-  overflow: auto;
-}
-.export-dialog-header, .export-link-row {
+.export-link-row {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-}
-.export-dialog-header { justify-content: space-between; }
-.export-dialog-header .modal-title { margin-bottom: 0; }
-.export-dialog-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-}
-.export-dialog-close:hover {
-  background: var(--color-hover-subtle);
-  color: var(--color-text-primary);
-}
-.export-dialog-close:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: 1px;
 }
 .export-status { margin-top: var(--space-5); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .export-status:empty { margin-top: 0; }
@@ -343,79 +318,6 @@ dialog.export-dialog {
   color: var(--color-text-secondary);
 }
 
-/* ---------- confirmation modal ---------- */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-  display: grid;
-  place-items: center;
-  background: color-mix(
-    in srgb,
-    var(--color-text-primary) 24%,
-    transparent
-  );
-}
-.modal {
-  padding: var(--space-7);
-}
-.modal:not(dialog) {
-  width: min(420px, calc(100vw - 48px));
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-  box-shadow: var(--shadow-overlay);
-}
-.modal-title {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-.modal-body {
-  margin-top: var(--space-4);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-relaxed);
-  color: var(--color-text-secondary);
-}
-/* The API-setup modal is the API settings section lifted out of the page,
-   so it is wider than the confirmation dialogs and scrolls if needed. */
-.setup-modal {
-  width: min(600px, calc(100vw - 48px));
-  max-height: calc(100vh - 64px);
-  overflow-y: auto;
-}
-.setup-modal-form {
-  margin-top: var(--space-5);
-}
-dialog.workspace-settings-dialog {
-  padding: 1.5em;
-  overflow: auto;
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-relaxed);
-}
-.workspace-settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1em;
-}
-.workspace-settings-close {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 2em;
-  height: 2em;
-  padding: 0;
-  border: 0;
-  color: var(--color-text-secondary);
-}
-.workspace-settings-close:hover {
-  background: var(--color-hover-subtle);
-}
-.workspace-settings-close:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
 .workspace-settings-identity {
   margin: 0.5em 0 1.5em;
   overflow-wrap: anywhere;
@@ -423,17 +325,17 @@ dialog.workspace-settings-dialog {
 .workspace-settings-name {
   font-weight: 500;
 }
-.workspace-settings-dialog .settings {
+#workspace-settings-dialog .settings {
   gap: 1.5em;
 }
-.workspace-settings-dialog .setting-row {
+#workspace-settings-dialog .setting-row {
   flex-wrap: wrap;
   gap: 0.75em;
 }
-.workspace-settings-dialog .setting-text {
+#workspace-settings-dialog .setting-text {
   flex: 1 1 16em;
 }
-.workspace-settings-dialog .setting-control {
+#workspace-settings-dialog .setting-control {
   flex: 1 1 12em;
   width: auto;
   min-width: 0;
@@ -443,12 +345,6 @@ dialog.workspace-settings-dialog {
   color: var(--color-danger);
   font-size: var(--font-size-sm);
   overflow-wrap: anywhere;
-}
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-4);
-  margin-top: var(--space-6);
 }
 /* The standing-goal banner above the composer input (the compaction
    notice's slot) and the composer's goal-editing mode. */
@@ -623,35 +519,6 @@ dialog.workspace-settings-dialog {
 }
 
 /* ---------- unified file / workspace-symbol Quick Open ---------- */
-/* Codex-style command palette geometry with OpenSeek's own surface tokens.
-   It sits above toasts and ordinary modals but below the disconnected screen. */
-.quick-open-backdrop {
-  --quick-open-top: clamp(64px, calc(50vh - 220px), 160px);
-}
-
-.quick-open-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-quick-open);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: var(--quick-open-top) var(--space-6) var(--space-6);
-  /* Quick Open uses the shared backdrop hue at a softer opacity than modal
-     surfaces, without introducing another one-use theme token. */
-  background: color-mix(in srgb, var(--color-backdrop) 40%, transparent);
-}
-
-.quick-open-dialog {
-  width: min(520px, 100%);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-overlay);
-}
-
 .quick-open-input-wrap {
   display: flex;
   align-items: center;
@@ -811,7 +678,6 @@ dialog.workspace-settings-dialog {
 }
 
 /* Import into the current workspace or a new chat. */
-.session-import-dialog { width: min(640px, calc(100vw - 32px)); }
 .session-import-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

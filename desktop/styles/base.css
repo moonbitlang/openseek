@@ -551,7 +551,7 @@ html.native-titlebar-overlay .app
 .ssh-host-title { padding: 0; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ssh-host-address, .ssh-help, .ssh-subtitle, .ssh-settings-footer > span { color: var(--color-text-secondary); font-size: var(--font-size-xs); overflow-wrap: anywhere; }
 .ssh-host-address { margin: var(--space-2) 0 var(--space-4); }
-.ssh-host-actions, .ssh-modal-actions, .ssh-settings-footer { display: flex; align-items: center; gap: var(--space-4); }
+.ssh-host-actions, .ssh-auth-actions, .ssh-settings-footer { display: flex; align-items: center; gap: var(--space-4); }
 .ssh-more { display: flex; padding: var(--space-3); }
 .ssh-settings-footer { justify-content: space-between; padding: var(--space-6) var(--space-7); gap: var(--space-6); }
 .ssh-settings-footer button { display: flex; align-items: center; gap: var(--space-3); }
@@ -590,10 +590,6 @@ html.native-titlebar-overlay .app
   user-select: text;
 }
 .ssh-error { color: var(--color-danger, #c74949); }
-.modal-backdrop.ssh-backdrop { z-index: 140; }
-.modal.ssh-modal { width: min(640px, calc(100vw - 40px)); padding: var(--space-7); box-sizing: border-box; max-height: calc(100vh - 48px); overflow-y: auto; }
-.ssh-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-6); }
-.ssh-modal-header h2 { font-size: var(--font-size-lg); margin: 0; overflow-wrap: anywhere; }
 .ssh-subtitle { margin: var(--space-4) 0 var(--space-7); font-size: var(--font-size-sm); }
 .ssh-field { display: flex; flex-direction: column; gap: var(--space-4); margin: var(--space-6) 0; font-size: var(--font-size-xs); font-weight: 500; }
 .ssh-field input { width: 100%; box-sizing: border-box; font-weight: 400; }
@@ -604,7 +600,7 @@ html.native-titlebar-overlay .app
 .ssh-preview .ssh-host-address { margin: var(--space-1) 0 0; }
 .ssh-preview small { color: var(--color-text-secondary); font-size: var(--font-size-micro); }
 .ssh-help { line-height: 1.6; margin: var(--space-5) 0 var(--space-6); }
-.ssh-modal-actions { justify-content: flex-end; margin-top: var(--space-7); flex-wrap: wrap; }
+.ssh-auth-actions { justify-content: flex-end; margin-top: var(--space-6); flex-wrap: wrap; }
 .ssh-detail-identity { display: flex; gap: var(--space-4); align-items: center; margin: var(--space-6) 0 var(--space-5); overflow-wrap: anywhere; }
 .ssh-command-details { margin-top: var(--space-7); padding-top: var(--space-6); border-top: 1px solid var(--color-border); }
 .ssh-command-details summary { cursor: pointer; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
@@ -626,5 +622,4 @@ html.native-titlebar-overlay .app
 .ssh-secret input { min-width: 0; flex: 1; }
 .ssh-auth-keys { text-align: right; font-size: var(--font-size-caption); color: var(--color-text-secondary); margin: var(--space-4) 0 0; }
 .ssh-auth .ssh-field { margin: var(--space-5) 0 var(--space-4); }
-.ssh-auth .ssh-modal-actions { margin-top: var(--space-6); }
 .ssh-auth .ssh-auth-heading { margin: var(--space-4) 0 var(--space-5); }

@@ -2248,7 +2248,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
           delete_confirm: Some(
@@ -4151,7 +4151,18 @@ fn update_msg(
       // setup modal the form simply re-renders for the new provider; a
       // switch that breaks a usable endpoint away from the Settings page
       // opens the modal — it is the announcement now, not a toast.
-      (push, next.settle_api_setup())
+      let next = next.settle_api_setup()
+      (
+        @cmd.batch([
+          push,
+          if next.api_setup_open && !next.cloud_selected() {
+            @dialog.show("api-setup-dialog")
+          } else {
+            @cmd.none
+          },
+        ]),
+        next,
+      )
     }
     FollowupBehaviorChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
@@ -4382,7 +4393,10 @@ fn update_msg(
           )
         UpdateReady(version~) =>
           if model.any_conversation_busy() {
-            (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~), })
+            (
+              @dialog.show("update-restart-dialog"),
+              { ..model, update_ux: ConfirmingRestart(version~), },
+            )
           } else {
             (
               apply_update(dispatch),
@@ -4488,7 +4502,7 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         (
-          @cmd.none,
+          @dialog.show("api-setup-dialog"),
           { ..model, api_setup_open: true, api_setup_dismissed: false, },
         )
       }
@@ -5726,7 +5740,7 @@ fn update_msg(
         }
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
           delete_confirm: Some(
@@ -7702,7 +7716,15 @@ fn update_device_msg(
         // The settled mirror decides the modal (`settle_api_setup`); the
         // dismissal flag — not the mirror, which a reconnect clears — is
         // what keeps a "Not now" quiet across snapshots.
-        (@cmd.none, model.apply_host_settings(settings).settle_api_setup())
+        let next = model.apply_host_settings(settings).settle_api_setup()
+        (
+          if next.api_setup_open && !next.cloud_selected() {
+            @dialog.show("api-setup-dialog")
+          } else {
+            @cmd.none
+          },
+          next,
+        )
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
@@ -7721,13 +7743,18 @@ fn update_device_msg(
           0
         },
       }.defer_host_settings(settings)
+      let next = if next.settings_saves > 0 {
+        next
+      } else {
+        next.flush_host_settings()
+      }
       (
-        @cmd.none,
-        if next.settings_saves > 0 {
-          next
+        if next.api_setup_open && !next.cloud_selected() {
+          @dialog.show("api-setup-dialog")
         } else {
-          next.flush_host_settings()
+          @cmd.none
         },
+        next,
       )
     }
     HostSettingsSaveFailed(message, connection_generation~) => {
@@ -7753,6 +7780,9 @@ fn update_device_msg(
         notice_text(model.locale, SaveSettings(message.to_string())),
       )
       let commands = [notice]
+      if next.api_setup_open && !next.cloud_selected() {
+        commands.push(@dialog.show("api-setup-dialog"))
+      }
       if next.settings_saves == 0 {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
@@ -8528,7 +8558,7 @@ fn update_device_msg(
       // changes; stage the discard-confirmation dialog, whose confirm
       // retries with force.
       (
-        @cmd.none,
+        @dialog.show("worktree-archive-dialog"),
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
     DeleteStopped(key~, checkout~) =>
@@ -8548,7 +8578,7 @@ fn update_device_msg(
         return (@cmd.none, model)
       }
       (
-        @cmd.none,
+        @dialog.show("delete-chat-dialog"),
         {
           ..model,
           delete_confirm: Some(

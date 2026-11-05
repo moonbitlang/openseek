@@ -72,98 +72,59 @@ pub fn checkout_dialog(
   guard state.checkout is Some({ phase: Confirming, number, updating, .. }) else {
     return @html.nothing
   }
-  @html.div(class="modal-backdrop", on_click=emit(DismissCheckout), [
-    @html.div(
-      id="github-checkout-dialog",
-      class="modal github-checkout-dialog",
-      attrs=@html.Attrs::build()
-        .role("dialog")
-        .aria_modal("true")
-        .aria_label(
-          if updating {
-            ui(locale, UncommittedBeforeUpdate(number))
-          } else {
-            ui(locale, UncommittedBeforeCheckout(number))
-          },
-        )
-        .on_click(event => {
-          event.stop_propagation()
-          @cmd.none
-        })
-        .on_keydown(event => {
-          match event.key() {
-            "Escape" => {
-              event.prevent_default()
-              event.stop_propagation()
-              emit(DismissCheckout)
-            }
-            "Tab" => {
-              event.prevent_default()
-              event.stop_propagation()
-              cycle_checkout_focus(event.shift_key())
-              @cmd.none
-            }
-            _ => @cmd.none
-          }
-        }),
-      [
-        @html.div(class="modal-title", ui(locale, UncommittedChanges)),
-        @html.div(
-          class="modal-body",
-          ui(
-            locale,
-            if updating {
-              BeforeUpdate(number)
-            } else {
-              BeforeCheckout(number)
-            },
-          ),
-        ),
-        @html.div(class="github-checkout-choices", [
-          @html.button(
-            class="button primary",
-            on_click=emit(ConfirmCheckout(Stash)),
-            ui(locale, StashChanges),
-          ),
-          @html.button(
-            class="button secondary github-checkout-discard",
-            on_click=emit(ConfirmCheckout(Discard)),
-            ui(locale, DiscardChanges),
-          ),
-          @html.button(
-            class="button secondary",
-            on_click=emit(ConfirmCheckout(Carry)),
-            if updating {
-              ui(locale, UpdateAnyway)
-            } else {
-              ui(locale, CheckoutAnyway)
-            },
-          ),
-          @html.button(
-            class="button secondary",
-            on_click=emit(DismissCheckout),
-            ui(locale, CancelLabel),
-          ),
-        ]),
-      ],
+  @ui.dialog(
+    id="github-checkout-dialog",
+    size=Small,
+    show_close=false,
+    on_cancel=emit(DismissCheckout),
+    attrs=@html.Attrs::build().aria_label(
+      if updating {
+        ui(locale, UncommittedBeforeUpdate(number))
+      } else {
+        ui(locale, UncommittedBeforeCheckout(number))
+      },
     ),
-  ])
+    [
+      @ui.dialog_header(@ui.dialog_title(ui(locale, UncommittedChanges))),
+      @ui.dialog_body(
+        ui(
+          locale,
+          if updating {
+            BeforeUpdate(number)
+          } else {
+            BeforeCheckout(number)
+          },
+        ),
+      ),
+      @ui.dialog_footer(class="github-checkout-choices", [
+        @html.button(
+          class="button primary",
+          on_click=emit(ConfirmCheckout(Stash)),
+          ui(locale, StashChanges),
+        ),
+        @html.button(
+          class="button secondary github-checkout-discard",
+          on_click=emit(ConfirmCheckout(Discard)),
+          ui(locale, DiscardChanges),
+        ),
+        @html.button(
+          class="button secondary",
+          on_click=emit(ConfirmCheckout(Carry)),
+          if updating {
+            ui(locale, UpdateAnyway)
+          } else {
+            ui(locale, CheckoutAnyway)
+          },
+        ),
+        @html.button(
+          class="button secondary",
+          on_click=emit(DismissCheckout),
+          ui(locale, CancelLabel),
+        ),
+      ]),
+    ],
+  )
 }
-
-///|
-fn focus_checkout_dialog() -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => cycle_checkout_focus(false), kind=@cmd.after_render)
-}
-
-///|
-extern "js" fn cycle_checkout_focus(backwards : Bool) -> Unit =
-  #| backwards => {
-  #|   const dialog = document.getElementById('github-checkout-dialog');
-  #|   if (!dialog) return;
-  #|   const buttons = [...dialog.querySelectorAll('button:not(:disabled)')];
-  #|   const index = buttons.indexOf(document.activeElement);
-  #|   buttons[(index + (backwards ? buttons.length - 1 : 1)) % buttons.length]?.focus();
-  #| }
 
 ///|
 fn focus_checkout_action(number : Int32) -> @cmd.Cmd {

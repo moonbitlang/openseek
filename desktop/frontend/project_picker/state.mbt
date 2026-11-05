@@ -156,7 +156,13 @@ pub fn State::open(
     path_selection: 0,
     generation,
   }
-  (browse(emit, channel, "", generation~), picker)
+  (
+    @cmd.batch([
+      @dialog.show("project-picker-dialog"),
+      browse(emit, channel, "", generation~),
+    ]),
+    picker,
+  )
 }
 
 ///|

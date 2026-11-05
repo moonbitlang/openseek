@@ -811,17 +811,24 @@ pub fn WorktreeArchiveDialog::render(
   self : WorktreeArchiveDialog,
 ) -> @html.Html {
   ignore(locale)
-  @html.div(class="modal-backdrop", on_click=self.cancel, [
-    @html.div(class="modal", [
-      @html.div(
-        class="modal-title",
-        dynamic_text(
-          locale,
-          DArchiveQuestion(self.conversation_noun.to_string()),
+  @ui.dialog(
+    id="worktree-archive-dialog",
+    size=Small,
+    show_close=false,
+    on_cancel=self.cancel,
+    attrs=@html.Attrs::build().aria_labelledby("worktree-archive-title"),
+    [
+      @ui.dialog_header(
+        @ui.dialog_title(
+          id="worktree-archive-title",
+          dynamic_text(
+            locale,
+            DArchiveQuestion(self.conversation_noun.to_string()),
+          ),
         ),
       ),
-      @html.div(class="modal-body", self.message(locale~)),
-      @html.div(class="modal-actions", [
+      @ui.dialog_body(self.message(locale~)),
+      @ui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=self.cancel,
@@ -833,8 +840,8 @@ pub fn WorktreeArchiveDialog::render(
           ui(locale, DiscardAndArchive),
         ),
       ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 ///|

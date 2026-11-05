@@ -1,4 +1,6 @@
 import {
+  "openseek_desktop/frontend/ui",
+  "moonbit-community/rabbita/dialog",
   "openseek_desktop/frontend/i18n",
   "moonbit-community/fuzzy_match",
   "moonbit-community/rabbita",

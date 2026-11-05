@@ -52,7 +52,11 @@ fn back_layers(model : Model, emit : @cmd.Emit[Msg]) -> Array[@sub.Sub] {
     layer("back-git-details", CloseGitDetails)
   }
   if model.screen is Codex && model.codex.confirmation_dismissal() is Some(msg) {
-    layer("back-codex-confirmation", Codex(channel=model.focused, msg))
+    layer_at(
+      TopLayer,
+      "back-codex-confirmation",
+      Codex(channel=model.focused, msg),
+    )
   }
   if model.management_dialog is Some(_) {
     layer_at(
@@ -78,28 +82,28 @@ fn back_layers(model : Model, emit : @cmd.Emit[Msg]) -> Array[@sub.Sub] {
     layer_at(TopLayer, "back-file-share-dialog", FileShareDialog(Close))
   }
   if model.ssh_ui.editor_open || model.ssh_ui.details is Some(_) {
-    layer("back-ssh", Ssh(Close))
+    layer_at(TopLayer, "back-ssh", Ssh(Close))
   }
   if model.github.checkout_busy() && !model.github.checking_out() {
-    layer("back-github-checkout", Github(DismissCheckout))
+    layer_at(TopLayer, "back-github-checkout", Github(DismissCheckout))
   }
   if model.update_ux is ConfirmingRestart(..) {
-    layer("back-update-restart", CancelUpdateRestart)
+    layer_at(TopLayer, "back-update-restart", CancelUpdateRestart)
   }
   if model.api_setup_open && !model.cloud_selected() {
-    layer("back-api-setup", DismissApiSetup)
+    layer_at(TopLayer, "back-api-setup", DismissApiSetup)
   }
   if model.project_picker is Some(_) {
-    layer("back-project-picker", ProjectPicker(Close))
+    layer_at(TopLayer, "back-project-picker", ProjectPicker(Close))
   }
   if model.archive_confirm is Some(_) {
-    layer("back-archive-confirm", CancelArchiveDiscard)
+    layer_at(TopLayer, "back-archive-confirm", CancelArchiveDiscard)
   }
   if model.delete_confirm is Some(_) {
-    layer("back-delete-confirm", CancelDeleteSession)
+    layer_at(TopLayer, "back-delete-confirm", CancelDeleteSession)
   }
   if model.quick_open.is_open() {
-    layer("back-quick-open", QuickOpen(Dismiss))
+    layer_at(TopLayer, "back-quick-open", QuickOpen(Dismiss))
   }
   layers
 }
