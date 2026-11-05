@@ -68,6 +68,21 @@ dialog.desktop-dialog-large {
   height: min(64rem, 84dvh);
 }
 
+.desktop-dialog-content {
+  display: contents;
+}
+
+.desktop-dialog-close-form {
+  position: absolute;
+  top: var(--space-5);
+  inset-inline-end: var(--space-6);
+  margin: 0;
+}
+
+dialog.desktop-dialog:has(> .desktop-dialog-close-form) .desktop-dialog-header {
+  padding-inline-end: calc(var(--space-6) + 2rem + var(--space-4));
+}
+
 .desktop-dialog-header {
   display: flex;
   align-items: center;
@@ -91,6 +106,13 @@ dialog.desktop-dialog-large {
   overflow-wrap: anywhere;
   font-size: var(--font-size-lg);
   font-weight: 600;
+}
+
+.desktop-dialog-description {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
 .desktop-dialog-close {
