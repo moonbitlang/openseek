@@ -170,10 +170,6 @@ let escape_listener : @dom.Listener = event => {
     !keyboard.shift_key() else {
     return
   }
-  if @ui.close_top_floating() {
-    event.prevent_default()
-    return
-  }
   // The browser closes an open auto popover on this Escape unless the event
   // is prevented.
   guard open_auto_popover() is None && native_dialog_for_back() is None else {
@@ -206,7 +202,6 @@ fn request_native_dialog_close() -> Bool {
 ///|
 /// Route host Back through the native cancel event before considering page layers.
 fn back() -> Bool {
-  @ui.close_top_floating() ||
   close_auto_popover() ||
   request_native_dialog_close() ||
   dismiss_top()
@@ -280,9 +275,7 @@ fn watch_close_requests() -> Unit {
       // A custom menu can leave this watcher above a native surface. Forward
       // its request without dismissing another registered layer on Escape.
       if from_escape {
-        (@ui.close_top_floating() ||
-        close_auto_popover() ||
-        request_native_dialog_close())
+        (close_auto_popover() || request_native_dialog_close())
         |> ignore
       } else {
         back() |> ignore

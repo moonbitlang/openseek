@@ -131,7 +131,6 @@ pub fn button_attrs(
 ) -> @html.Attrs {
   @html.Attrs::build()
   .id(trigger_id(target))
-  .style_attr(@ui.popup_anchor_style(trigger_id(target)))
   .data_set("action-menu-owner", target)
   .data_set("action-menu-align", if align_right { "end" } else { "start" })
   .data_set("action-menu-side", if open_upward { "top" } else { "bottom" })
@@ -154,7 +153,7 @@ pub fn context_attrs(target : String) -> @html.Attrs {
   .id(target + ":context-trigger")
   .data_set("action-menu-context", target)
   .aria_haspopup("menu")
-  .aria_controls(target + ":context-content")
+  .aria_controls(target + ":pointer-menu-content")
   .on_mousedown(event => remember_context_focus(event))
   .on_contextmenu(event => {
     event.prevent_default()
@@ -363,28 +362,27 @@ fn[Input : Eq] menu_component(
               element.get_attribute("data-action-menu-side")
             }) ==
             Some("top") {
-            @ui.Top
+            @rui.Top
           } else {
-            @ui.Bottom
+            @rui.Bottom
           }
           let align = if trigger.bind(element => {
               element.get_attribute("data-action-menu-align")
             }) ==
             Some("start") {
-            @ui.Start
+            @rui.Start
           } else {
-            @ui.End
+            @rui.End
           }
-          @ui.dropdown_menu_with_input(
-            input,
+          input.switch_by(input => @rui.dropdown_menu(
             id=open.target + ":actions",
             default_open=true,
             on_open_change=changed,
-            (input, scope) => {
+            scope => {
               guard resolve(input) is Some(definition) else {
                 return @html.nothing
               }
-              @ui.dropdown_menu_content(
+              @rui.dropdown_menu_content(
                 scope,
                 side~,
                 align~,
@@ -393,9 +391,9 @@ fn[Input : Eq] menu_component(
                 attrs=surface_attrs(open),
                 definition.entries.map(entry => {
                   match entry {
-                    Separator => @ui.dropdown_menu_separator()
+                    Separator => @rui.dropdown_menu_separator()
                     Action(item) =>
-                      @ui.dropdown_menu_item(
+                      @rui.dropdown_menu_item(
                         scope,
                         disabled=!item.enabled,
                         destructive=item.destructive,
@@ -408,30 +406,35 @@ fn[Input : Eq] menu_component(
                 }),
               )
             },
-          )
+          ), by=_ => "menu")
         }
         Pointer(x, y) =>
-          @ui.context_menu_with_input(
-            input,
-            id=open.target + ":context",
-            position=(x, y),
-            bind_trigger=false,
+          input.switch_by(input => @rui.dropdown_menu(
+            id=open.target + ":pointer-menu",
             default_open=true,
             on_open_change=changed,
-            (input, scope) => {
+            scope => {
               guard resolve(input) is Some(definition) else {
                 return @html.nothing
               }
-              @ui.context_menu_content(
+              @html.fragment([
+                @rui.popover_anchor(
+                  id=open.target + ":pointer-menu-trigger",
+                  style=["position:fixed;left:\{x}px;top:\{y}px;width:0;height:0"],
+                  @html.nothing,
+                ),
+                @rui.dropdown_menu_content(
                 scope,
+                align=Start,
+                side_offset=0,
                 aria_label=definition.label,
                 class="action-menu",
                 attrs=surface_attrs(open),
                 definition.entries.map(entry => {
                   match entry {
-                    Separator => @ui.context_menu_separator()
+                    Separator => @rui.dropdown_menu_separator()
                     Action(item) =>
-                      @ui.context_menu_item(
+                      @rui.dropdown_menu_item(
                         scope,
                         disabled=!item.enabled,
                         destructive=item.destructive,
@@ -442,9 +445,10 @@ fn[Input : Eq] menu_component(
                       )
                   }
                 }),
-              )
+                ),
+              ])
             },
-          )
+          ), by=_ => "menu")
       }
     },
     by=available => available.to_string(),

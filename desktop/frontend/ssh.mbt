@@ -1424,7 +1424,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       content.push(ssh_auth_region(dispatch, ui, auth))
     } else {
       actions.push(
-        @ui.dialog_footer([
+        @rui.dialog_footer([
           @html.button(
             class="button secondary",
             disabled=ui.busy,
@@ -1498,7 +1498,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
       )
       actions.push(
-        @ui.dialog_footer([
+        @rui.dialog_footer([
           @html.button(
             class="button secondary",
             attrs=@html.Attrs::build().id("ssh-remove-cancel"),
@@ -1522,13 +1522,13 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       content.push(ssh_auth_region(dispatch, ui, auth))
     } else if ui.connecting.contains(id) {
       actions.push(
-        @ui.dialog_footer([
+        @rui.dialog_footer([
           ssh_connection_button(dispatch, model, id, in_modal=true),
         ]),
       )
     } else {
       actions.push(
-        @ui.dialog_footer([
+        @rui.dialog_footer([
           @html.button(
             class="button secondary",
             on_click=dispatch(Ssh(Rename(id))),
@@ -1551,9 +1551,8 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       )
     }
   }
-  @ui.dialog(
+  @rui.dialog(
     id="ssh-modal",
-    size=Medium,
     show_close=false,
     closedby=if ui.busy ||
       (ssh_visible_host(ui) is Some(id) && ui.connecting.contains(id)) {
@@ -1577,8 +1576,8 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         }
       }),
     [
-      @ui.dialog_header([
-        @ui.dialog_title(id="ssh-modal-title", title),
+      @rui.dialog_header([
+        @rui.dialog_title(id="ssh-modal-title", title),
         @html.button(
           class="icon-button",
           disabled=ui.busy,
@@ -1589,7 +1588,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @icons.icon(@icons.icon_close),
         ),
       ]),
-      @ui.dialog_body(content),
+      @html.div(content),
       ..actions,
     ],
   )
@@ -1738,7 +1737,7 @@ fn ssh_auth_region(
               @html.div(class="ssh-secret", [
                 @html.input(
                   input_type=if ui.revealed { Text } else { Password },
-                  auto_complete=Off,
+                  auto_complete="off",
                   attrs=@html.Attrs::build()
                     .id("ssh-auth-input")
                     .aria_label(label)

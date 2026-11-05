@@ -1,5 +1,5 @@
 import {
-  "openseek_desktop/frontend/ui",
+  "moonbit-community/rui",
   "moonbit-community/rabbita/dialog",
   "moonbit-community/rabbita/js",
   "openseek_desktop/frontend/i18n",

@@ -1,5 +1,5 @@
 import {
-  "openseek_desktop/frontend/ui",
+  "moonbit-community/rui",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/icons",

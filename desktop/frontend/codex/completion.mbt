@@ -280,16 +280,16 @@ fn CodexPermissionPicker::confirmation_dialog(
   guard self is CodexPermissionConfirmingFullAccess(_) else { return None }
   let cancel = dispatch(CancelFullAccess)
   Some(
-    @ui.dialog(
+    @rui.dialog(
       id="codex-permission-dialog",
-      size=Small,
+
       show_close=false,
       on_cancel=cancel,
       attrs=@html.Attrs::build().aria_label(ui(locale, EnableFullCodex)),
       [
-        @ui.dialog_header(@ui.dialog_title(ui(locale, EnableFullQuestion))),
-        @ui.dialog_body(ui(locale, FullAccessWarning)),
-        @ui.dialog_footer([
+        @rui.dialog_header(@rui.dialog_title(ui(locale, EnableFullQuestion))),
+        @html.div(ui(locale, FullAccessWarning)),
+        @rui.dialog_footer([
           @html.button(
             class="button secondary",
             on_click=cancel,

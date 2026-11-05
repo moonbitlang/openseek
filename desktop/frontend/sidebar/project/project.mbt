@@ -352,9 +352,10 @@ pub fn component(
     // Keep the action order aligned with the sidebar: menu first, new chat last.
     if input.managed {
       controls.push(
-        @html.button(
+        @rui.popover_trigger(
+          id=input.id.key() + ":actions-trigger",
+          target_id=input.id.key() + ":actions-content",
           class="row-archive workspace-menu-button",
-          type_="button",
           title=@messages.text(locale, MoreActions),
           attrs=@action_menu.button_attrs(input.id.key()).aria_label(
             @messages.text(locale, WorkspaceActions),

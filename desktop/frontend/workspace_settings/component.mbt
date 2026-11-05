@@ -252,8 +252,8 @@ fn dialog_contents(
   ]
   let dismiss = @cmd.batch([emit(CloseMenu), actions.dismiss])
   [
-    @ui.dialog_header([
-      @ui.dialog_title(
+    @rui.dialog_header([
+      @rui.dialog_title(
         id="workspace-settings-title",
         ui(locale, WorkspaceSettingsLabel),
       ),
@@ -266,7 +266,7 @@ fn dialog_contents(
         @icons.icon(@icons.icon_close),
       ),
     ]),
-    @ui.dialog_body([
+    @html.div([
       @html.div(
         id="workspace-settings-description",
         class="workspace-settings-identity",
@@ -342,9 +342,9 @@ fn dialog_component(
     },
   )
   state.view3(input, locale, (state, input, locale) => {
-    @ui.dialog(
+    @rui.dialog(
       id=DialogId,
-      size=Medium,
+
       show_close=false,
       closedby="any",
       on_cancel=@cmd.batch([emit(CloseMenu), actions.dismiss]),

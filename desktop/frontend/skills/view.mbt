@@ -538,9 +538,10 @@ fn installed_actions(
       .map(action => ui(locale, action.label()))
       .unwrap_or(ui(locale, ManageSkill))
     buttons.push(
-      @html.button(
+      @rui.popover_trigger(
+        id=installed_menu_target(channel, item) + ":actions-trigger",
+        target_id=installed_menu_target(channel, item) + ":actions-content",
         class="skill-menu-trigger \{button_class}",
-        type_="button",
         title=label,
         disabled=pending is Some(_),
         attrs=@action_menu.button_attrs(installed_menu_target(channel, item)).aria_label(

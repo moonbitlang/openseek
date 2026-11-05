@@ -26,8 +26,8 @@ pub fn Model::view(
   let children = if self.content is Some(content) {
     let busy = content.operation.busy()
     [
-      @ui.dialog_header([
-        @ui.dialog_title(id="session-import-title", title(locale)),
+      @rui.dialog_header([
+        @rui.dialog_title(id="session-import-title", title(locale)),
         @html.button(
           class="icon-button",
           on_click=emit(Close),
@@ -37,8 +37,8 @@ pub fn Model::view(
           @icons.icon(@icons.icon_close),
         ),
       ]),
-      @ui.dialog_body([
-        @ui.dialog_description(
+      @html.div([
+        @rui.dialog_description(
           label(
             locale, "Import as a conversation you can continue in the current workspace. Original workspace files are not imported.",
             "导入后可在当前工作区继续聊天。原工作区文件不会随对话一起导入。",
@@ -86,9 +86,9 @@ pub fn Model::view(
   } else {
     []
   }
-  @ui.dialog(
+  @rui.dialog(
     id=DialogId,
-    size=Medium,
+
     show_close=false,
     on_cancel=emit(Close),
     attrs=@html.Attrs::build().aria_labelledby("session-import-title"),

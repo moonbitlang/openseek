@@ -695,9 +695,10 @@ pub fn component(
     let buttons : Array[@html.Html] = []
     if menu_kind is Some(LiveMenu) {
       buttons.push(
-        @html.button(
+        @rui.popover_trigger(
+          id=input.id.key() + ":actions-trigger",
+          target_id=input.id.key() + ":actions-content",
           class="row-archive row-menu-button",
-          type_="button",
           // Named for its row kind: a project row's trigger sits right above
           // and opens a different menu.
           title=@messages.text(locale, ConversationActions),

@@ -111,21 +111,21 @@ pub fn view(
   } else {
     list_attrs
   }
-  @ui.dialog(
+  @rui.dialog(
     id="project-picker-dialog",
-    size=Medium,
+
     show_close=false,
     on_cancel=emit(Close),
     attrs=@html.Attrs::build().aria_labelledby("project-picker-title"),
     [
-      @ui.dialog_header([
+      @rui.dialog_header([
         @html.div(class="picker-header-leading", [
           @html.span(
             class="picker-header-icon",
             @icons.icon(@icons.icon_folder_opened),
           ),
           @html.div(class="picker-header-copy", [
-            @ui.dialog_title(
+            @rui.dialog_title(
               id="project-picker-title",
               ui(locale, AddProjectTitle),
             ),
@@ -141,7 +141,7 @@ pub fn view(
           @icons.icon(@icons.icon_close),
         ),
       ]),
-      @ui.dialog_body(
+      @html.div(
         class="picker-content",
         [
           ..match location {
@@ -356,7 +356,7 @@ fn picker_footer(
     picker.location is Some(Directory(_)) &&
     picker.new_folder is None &&
     picker.path_draft is None
-  @ui.dialog_footer(class="picker-footer", [
+  @rui.dialog_footer(class="picker-footer", [
     current_location(locale~, picker),
     @html.div(class="picker-actions", [
       @html.button(

@@ -72,9 +72,9 @@ pub fn checkout_dialog(
   guard state.checkout is Some({ phase: Confirming, number, updating, .. }) else {
     return @html.nothing
   }
-  @ui.dialog(
+  @rui.dialog(
     id="github-checkout-dialog",
-    size=Small,
+
     show_close=false,
     on_cancel=emit(DismissCheckout),
     attrs=@html.Attrs::build().aria_label(
@@ -85,8 +85,8 @@ pub fn checkout_dialog(
       },
     ),
     [
-      @ui.dialog_header(@ui.dialog_title(ui(locale, UncommittedChanges))),
-      @ui.dialog_body(
+      @rui.dialog_header(@rui.dialog_title(ui(locale, UncommittedChanges))),
+      @html.div(
         ui(
           locale,
           if updating {
@@ -96,7 +96,7 @@ pub fn checkout_dialog(
           },
         ),
       ),
-      @ui.dialog_footer(class="github-checkout-choices", [
+      @rui.dialog_footer(class="github-checkout-choices", [
         @html.button(
           class="button primary",
           on_click=emit(ConfirmCheckout(Stash)),

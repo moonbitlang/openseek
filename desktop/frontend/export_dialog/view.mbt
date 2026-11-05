@@ -10,8 +10,8 @@ pub fn Model::view(
   let children = if self.content is Some(content) {
     let file = content.source is File(_)
     let busy = content.operation.busy()
-    let header = @ui.dialog_header([
-      @ui.dialog_title(
+    let header = @rui.dialog_header([
+      @rui.dialog_title(
         id=self.id_prefix + "-title",
         ui(locale, if file { ShareFile } else { ExportConversation }),
       ),
@@ -25,7 +25,7 @@ pub fn Model::view(
         @icons.icon(@icons.icon_close),
       ),
     ])
-    let actions = @ui.dialog_footer([
+    let actions = @rui.dialog_footer([
       if file {
         @html.nothing
       } else {
@@ -186,14 +186,14 @@ pub fn Model::view(
     }
     [
       header,
-      @ui.dialog_body(
+      @html.div(
         [
           ..match content.source {
-            File(HostFile(_, payload)) => [@ui.dialog_description(payload.path)]
-            File(CloudFile(path~, ..)) => [@ui.dialog_description(path)]
+            File(HostFile(_, payload)) => [@rui.dialog_description(payload.path)]
+            File(CloudFile(path~, ..)) => [@rui.dialog_description(path)]
             _ => []
           },
-          @ui.dialog_description(
+          @rui.dialog_description(
             id=self.id_prefix + "-description",
             ui(
               locale,
@@ -217,9 +217,9 @@ pub fn Model::view(
   } else {
     []
   }
-  @ui.dialog(
+  @rui.dialog(
     id=self.id_prefix + "-dialog",
-    size=Medium,
+
     show_close=false,
     on_cancel=emit(Close),
     attrs=@html.Attrs::build()

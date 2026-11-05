@@ -2636,7 +2636,10 @@ fn view(
     model.bridge_state() is BridgeLost(message) {
     children.push(bridge_lost_overlay(locale=model.locale, message))
   }
-  @html.div(class=app_shell_class(model.sidebar_open), children)
+  @rui.theme(
+    style=["display:contents"],
+    @html.div(class=app_shell_class(model.sidebar_open), children),
+  )
 }
 
 ///|
@@ -2667,21 +2670,20 @@ fn update_confirm_modal(
   dispatch : @cmd.Emit[Msg],
   version : String,
 ) -> @html.Html {
-  @ui.dialog(
+  @rui.dialog(
     id="update-restart-dialog",
-    size=Small,
     show_close=false,
     on_cancel=dispatch(CancelUpdateRestart),
     attrs=@html.Attrs::build().aria_labelledby("update-restart-title"),
     [
-      @ui.dialog_header(
-        @ui.dialog_title(
+      @rui.dialog_header(
+        @rui.dialog_title(
           id="update-restart-title",
           dynamic_text(locale, DRestartQuestion(version)),
         ),
       ),
-      @ui.dialog_body(shell_text(locale, InterruptForUpdate)),
-      @ui.dialog_footer([
+      @html.div(shell_text(locale, InterruptForUpdate)),
+      @rui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=dispatch(CancelUpdateRestart),
@@ -2713,17 +2715,16 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     OpenRouter => shell_text(model.locale, SetupOpenRouter)
     Custom => shell_text(model.locale, SetupEndpoint)
   }
-  @ui.dialog(
+  @rui.dialog(
     id="api-setup-dialog",
     class="setup-modal",
-    size=Medium,
     show_close=false,
     on_cancel=dispatch(DismissApiSetup),
     attrs=@html.Attrs::build().aria_labelledby("api-setup-title"),
     [
-      @ui.dialog_header(@ui.dialog_title(id="api-setup-title", title)),
-      @ui.dialog_body(api_settings_rows(dispatch, model, id_prefix="setup-api")),
-      @ui.dialog_footer([
+      @rui.dialog_header(@rui.dialog_title(id="api-setup-title", title)),
+      @html.div(api_settings_rows(dispatch, model, id_prefix="setup-api")),
+      @rui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=dispatch(DismissApiSetup),

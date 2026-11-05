@@ -811,15 +811,15 @@ pub fn WorktreeArchiveDialog::render(
   self : WorktreeArchiveDialog,
 ) -> @html.Html {
   ignore(locale)
-  @ui.dialog(
+  @rui.dialog(
     id="worktree-archive-dialog",
-    size=Small,
+
     show_close=false,
     on_cancel=self.cancel,
     attrs=@html.Attrs::build().aria_labelledby("worktree-archive-title"),
     [
-      @ui.dialog_header(
-        @ui.dialog_title(
+      @rui.dialog_header(
+        @rui.dialog_title(
           id="worktree-archive-title",
           dynamic_text(
             locale,
@@ -827,8 +827,8 @@ pub fn WorktreeArchiveDialog::render(
           ),
         ),
       ),
-      @ui.dialog_body(self.message(locale~)),
-      @ui.dialog_footer([
+      @html.div(self.message(locale~)),
+      @rui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=self.cancel,

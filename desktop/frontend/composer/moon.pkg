@@ -1,5 +1,5 @@
 import {
-  "openseek_desktop/frontend/ui",
+  "moonbit-community/rui",
   "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/question_card",
   "moonbitlang/openseek_protocol" @wire,

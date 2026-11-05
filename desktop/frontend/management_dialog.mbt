@@ -24,9 +24,8 @@ fn management_dialog_view(
       content,
     )
   }
-  @ui.dialog(
+  @rui.dialog(
     id="management-dialog",
-    size=Large,
     show_close=false,
     attrs=@html.Attrs::build().aria_labelledby("management-dialog-title"),
     on_cancel=dispatch(
@@ -37,8 +36,8 @@ fn management_dialog_view(
       },
     ),
     [
-      @ui.dialog_header([
-        @ui.dialog_title(id="management-dialog-title", title),
+      @rui.dialog_header([
+        @rui.dialog_title(id="management-dialog-title", title),
         @html.button(
           type_="button",
           class="icon-button",
@@ -49,7 +48,7 @@ fn management_dialog_view(
           @icons.icon(@icons.icon_close),
         ),
       ]),
-      @ui.dialog_body([
+      @html.div([
         // Stable panes retain their DOM while the shared dialog is closed.
         pane(Settings, settings_page(dispatch, model)),
         pane(ArchivedChats, archived_chats_html),

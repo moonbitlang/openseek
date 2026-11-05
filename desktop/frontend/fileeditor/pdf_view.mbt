@@ -133,15 +133,15 @@ fn pdf_password_dialog(
   let incorrect = document
     .map(document => document.status is PdfPasswordRequired(incorrect=true))
     .unwrap_or(false)
-  @ui.dialog(
+  @rui.dialog(
     id="pdf-password-dialog",
-    size=Small,
+
     show_close=false,
     on_cancel=dispatch(PdfPasswordCancelled),
     attrs=@html.Attrs::build().aria_labelledby("pdf-password-title"),
     [
-      @ui.dialog_header(
-        @ui.dialog_title(id="pdf-password-title", ui(locale, PdfUnlockTitle)),
+      @rui.dialog_header(
+        @rui.dialog_title(id="pdf-password-title", ui(locale, PdfUnlockTitle)),
       ),
       @html.form(
         attrs=@html.Attrs::build().on_submit(event => {
@@ -149,7 +149,7 @@ fn pdf_password_dialog(
           dispatch(PdfPasswordSubmitted)
         }),
         [
-          @ui.dialog_body([
+          @html.div([
             @html.input(
               input_type=Password,
               value=document.map(document => document.password).unwrap_or(""),
@@ -169,7 +169,7 @@ fn pdf_password_dialog(
               ui(locale, PdfIncorrectPassword),
             ),
           ]),
-          @ui.dialog_footer([
+          @rui.dialog_footer([
             @html.button(
               type_="button",
               class="button secondary",

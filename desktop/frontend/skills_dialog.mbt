@@ -11,15 +11,14 @@ fn skills_detail_dialog_view(
   model : Model,
   content : @html.Html,
 ) -> @html.Html {
-  @ui.dialog(
+  @rui.dialog(
     id="skill-detail-dialog",
-    size=Medium,
     show_close=false,
     attrs=@html.Attrs::build().aria_labelledby("skill-detail-dialog-title"),
     on_cancel=dispatch(Skills(@skills.BackToList)),
     [
-      @ui.dialog_header([
-        @ui.dialog_title(
+      @rui.dialog_header([
+        @rui.dialog_title(
           id="skill-detail-dialog-title",
           @skills.detail_title(model.locale),
         ),
@@ -33,7 +32,7 @@ fn skills_detail_dialog_view(
           @icons.icon(@icons.icon_close),
         ),
       ]),
-      @ui.dialog_body([content]),
+      @html.div([content]),
     ],
   )
 }

@@ -387,9 +387,10 @@ pub fn component(
       )
       let choose = @messages.text(input.locale, ChooseDevice)
       footer.push(
-        @html.button(
+        @rui.popover_trigger(
+          id=DeviceSelectorTarget + ":actions-trigger",
+          target_id=DeviceSelectorTarget + ":actions-content",
           class="sidebar-button device-selector",
-          type_="button",
           title=choose,
           // The footer sits at the bottom edge, so the menu opens upward.
           attrs=@action_menu.button_attrs(

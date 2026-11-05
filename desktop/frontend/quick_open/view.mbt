@@ -227,13 +227,13 @@ fn dialog_view(
     Debouncing | Loading => "true"
     _ => "false"
   }
-  @ui.dialog(
+  @rui.dialog(
     id="quick-open-dialog",
-    size=Medium,
+
     show_close=false,
     on_cancel=emit(Dismiss),
     attrs=@html.Attrs::build().aria_label(dialog_label),
-    @ui.dialog_body([
+    @html.div([
       @html.div(class="quick-open-input-wrap", [
         @icons.icon(@icons.icon_search),
         @html.input(
