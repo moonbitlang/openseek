@@ -300,11 +300,17 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   await expect(answer).toBeVisible();
   const result = page.locator('#transcript').getByText('The result is 2.', { exact: true });
   await expect(result).toBeVisible();
-  const finished = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
+  const reads = () => cloud.requests.filter(request => request.method === 'GET' && request.path === path).length;
+  const paused = reads();
   final();
-  const finalRead = await finished;
+  // Notifications during the paused read wait for it instead of starting more.
+  await expect(page.locator('.composer-running-text')).toHaveCount(0);
+  expect(reads()).toBe(paused);
   await expect(answer).toBeVisible();
+  await expect(result).toBeVisible();
+  const followUp = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
   releaseHistory();
+  const finalRead = await followUp;
   const recovered = await finalRead.response();
   expect(recovered.status()).toBe(200);
   const history = await recovered.json();

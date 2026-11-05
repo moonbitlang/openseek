@@ -64,11 +64,19 @@ fn State::load(
 ) -> (State, @cmd.Cmd) {
   guard token is Some(token) else { return (self, @cmd.none) }
   let conversation = self.conversations.get(id).unwrap_or(Conversation::empty())
-  guard !reuse || !conversation.history_reading else {
-    return (self, @cmd.none)
+  if conversation.history_reading {
+    // One latest-page read at a time. A revisit shares it. A durable SSE
+    // boundary needs a snapshot that started after it, so the settled read
+    // is applied and then followed by exactly one more read.
+    return if reuse {
+      (self, @cmd.none)
+    } else {
+      (
+        self.replace(id, { ..conversation, history_refresh_after_read: true, }),
+        @cmd.none,
+      )
+    }
   }
-  // A revisit shares the read. A durable SSE event needs a newer
-  // snapshot and supersedes the earlier response through the request id.
   let request = self.sequence + 1
   let next = self.replace(id, {
     ..conversation,
@@ -270,7 +278,9 @@ pub fn update(
   navigation~ : Int32,
   desktop_history~ : Bool = false,
 ) -> (State, @cmd.Cmd, String?) {
-  match msg {
+  // A boundary observed while this read was in flight may be missing from it.
+  // Settle the read first so its records are not discarded, then read again.
+  let follow_up = match msg {
     Loaded(epoch, id, request, _)
     | HistoryUnchanged(epoch, id, request, _)
     | LoadFailed(epoch, id, request, _) => {
@@ -279,14 +289,13 @@ pub fn update(
         conversation.request == request else {
         return (state, @cmd.none, None)
       }
-      if conversation.history_refresh_after_read && token is Some(_) {
-        // The new observer saw a change the shared read may have missed.
-        // Reuse the connection's read until it settles, then validate again.
-        let (next, command) = state.load(id, token, emit)
-        return (next, command, None)
+      if conversation.history_refresh_after_read {
+        Some(id)
+      } else {
+        None
       }
     }
-    _ => ()
+    _ => None
   }
   if state.update_command(msg, emit, token, navigation) is Some((next, command)) {
     return (next, command, None)
@@ -712,8 +721,6 @@ pub fn update(
             },
             last_seq: Some(snapshot.seq),
             history_resume_baseline: None,
-            history_refresh_after_read: conversation.history_refresh_after_read ||
-            (refresh_history && conversation.history_reading),
             generating: snapshot.data.active_task_id is Some(_),
             observed_task: match snapshot.data.active_task_id {
               Some(task) => Some(task)
@@ -765,7 +772,7 @@ pub fn update(
           }
           if admitted ||
             (baseline && conversation.watch_status == Reconnecting) ||
-            (refresh_history && !conversation.history_reading) {
+            refresh_history {
             let (next, command) = next.load(id, token, emit)
             (next, command, None)
           } else {
@@ -911,7 +918,13 @@ pub fn update(
       }
       let awaiting_disk = conversation.request == request &&
         conversation.history_reading
-      let conversation = { ..conversation, history_disk_request: None, }
+      // A boundary observed during the disk read is covered by the network
+      // read that follows it, which starts after that boundary.
+      let conversation = {
+        ..conversation,
+        history_disk_request: None,
+        history_reading: conversation.history_reading && !awaiting_disk,
+      }
       let next = state.replace(
         id,
         if history is Some(history) && !conversation.history_cached {
@@ -1449,7 +1462,14 @@ pub fn update(
       )
     }
   }
-  (next, command, select)
+  guard follow_up is Some(id) &&
+    next.conversations.get(id) is Some(conversation) &&
+    !conversation.history_reading &&
+    !next.needs_sign_in else {
+    return (next, command, select)
+  }
+  let (next, history) = next.load(id, token, emit)
+  (next, @cmd.batch([command, history]), select)
 }
 
 ///|
