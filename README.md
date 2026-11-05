@@ -278,13 +278,16 @@ inherits its environment, receives EOF on stdin, and must write one flat JSON
 object of string HTTP headers to stdout. These headers override static headers
 case-insensitively; transport-owned framing/protocol headers cannot be replaced.
 
-The helper runs before establishing each MCP client (45-second timeout). Its
+The helper runs before establishing each MCP client. Its
 output is merged with static headers and passed to the ordinary HTTP connector.
 The resulting client reuses that header map; creating a new client runs the
 helper again. The helper owns token expiry, refresh and persistence when invoked;
 the transport does not re-run it or refresh and retry on a 401. A failing helper's
-exit status and stderr are included in the error. The helper contract defines no
-login, status or logout commands; credential setup is specific to each helper.
+exit status and stderr are included in the error. Stderr is also forwarded while
+the helper runs so authorization prompts are visible immediately. The helper
+owns any authorization deadline; cancellation of the caller terminates it.
+The helper contract defines no login, status or logout commands; a helper can
+initiate authorization itself before returning headers.
 
 Repeat the option to load multiple files, for example
 `--mcp-config host.json --mcp-config user.json`. Files merge in argument order;
