@@ -1,8 +1,9 @@
 ///|
+#derive(Eq)
 priv enum ReviewHunkBridgeSurface {
   ReviewLineSurface
   ReviewSemanticSurface
-} derive(Eq)
+}
 
 ///|
 /// The active review identity is shared by the permanent Line editor and the

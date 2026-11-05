@@ -20,6 +20,7 @@ pub(all) struct QuoteReply[T] {
 
 ///|
 /// A quotable selection and where its surface sits.
+#derive(Eq)
 priv struct SelectionAnchor {
   text : String
   // Viewport position of the surface's anchor edge: its bottom centre, or its
@@ -27,9 +28,10 @@ priv struct SelectionAnchor {
   x : Int32
   y : Int32
   below : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum SelectionStage {
   Offered
   Copying
@@ -37,25 +39,27 @@ priv enum SelectionStage {
   CopyFailed
   // `declined` shows that the composer would not take the last attempt.
   Replying(comment~ : String, declined~ : Bool)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct SelectionOpen[T] {
   anchor : SelectionAnchor
   // The composer on screen when the text was selected. The surface shows, and
   // delivers, only while that is still the composer on screen.
   target : T
   stage : SelectionStage
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct SelectionState[T] {
   open : SelectionOpen[T]?
   // Sticky for the page: a reader collecting quotes keeps collecting.
   batched : Bool
   // Fences clipboard completions and expiry against later selections.
   generation : Int32
-} derive(Eq)
+}
 
 ///|
 priv enum SelectionMsg {

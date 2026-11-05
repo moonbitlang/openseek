@@ -2,6 +2,7 @@
 package "moonbitlang/openseek/agent_tool/internal/diagnostic_guard"
 
 import {
+  "moonbitlang/core/json",
   "moonbitlang/openseek/agent_tool/internal/auto_check",
 }
 
@@ -26,7 +27,7 @@ pub(all) struct Comparability {
   graph_available : Bool
   truncated : Bool
 }
-pub fn Comparability::feedback(Self, delta~ : Int32) -> Map[String, Json]
+pub fn Comparability::feedback(Self, delta~ : Int32) -> Map[String, @json.Json]
 
 // Type aliases
 

@@ -8,13 +8,16 @@ package "moonbitlang/openseek-viz-app"
 // Types and methods
 type LoadOutcome
 
-type Model derive(Eq)
+#derive(Eq)
+type Model
 
 type Msg
 
-type SessionRow derive(Eq)
+#derive(Eq)
+type SessionRow
 
-type Theme derive(Eq)
+#derive(Eq)
+type Theme
 
 // Type aliases
 

@@ -3,17 +3,19 @@ package "moonbitlang/openseek/agent_tool/finish/internal/decode"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn decode(Json) -> FinishInput
+pub fn decode(@json.Json) -> FinishInput
 
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct FinishInput {
   answer : String
-} derive(@debug.Debug)
+}
 
 // Type aliases
 

@@ -13,12 +13,13 @@
 /// registered project and worktree name, while a scratch group is keyed by
 /// its conversation. This prevents a worktree chat from ever displaying or
 /// driving a shell whose cwd belongs to the main checkout.
+#derive(Eq)
 priv enum WorkspaceKey {
   Project(@interop.ChannelId, @common.Uri)
   Worktree(@interop.ChannelId, @common.Uri, String)
   Scratch(@interop.ChannelId, String)
   Cloud(account~ : String, session~ : String, epoch~ : Int32)
-} derive(Eq)
+}
 
 ///|
 fn WorkspaceKey::channel(self : WorkspaceKey) -> Connection {
@@ -31,10 +32,11 @@ fn WorkspaceKey::channel(self : WorkspaceKey) -> Connection {
 
 ///|
 /// Transport ownership, independent of the tab and xterm state machine.
+#derive(Eq, Hash)
 pub(all) enum Connection {
   Host(@interop.ChannelId)
   Cloud(account~ : String, session~ : String, epoch~ : Int32)
-} derive(Eq, Hash)
+}
 
 ///|
 pub extend Connection with Eq::{equal, not_equal}
@@ -43,6 +45,7 @@ pub extend Connection with Eq::{equal, not_equal}
 pub extend Connection with Hash::{hash, hash_combine}
 
 ///|
+#derive(Eq)
 priv enum TabStatus {
   /// Waiting for the emulator, or for the one dispatched `terminal.open`.
   TabOpening(requested~ : Bool)
@@ -52,16 +55,17 @@ priv enum TabStatus {
   /// A command tab whose command ended and whose result is being read from
   /// its screen; the tab retires when that report lands.
   TabExited(code~ : Int32)
-} derive(Eq)
+}
 
 ///|
 /// What a command tab runs: one `!` command from the composer, in place of
 /// the interactive shell. `shell` is the root's id for that submission, which
 /// names it again when the tab reports the command's result.
+#derive(Eq)
 priv struct TabCommand {
   shell : String
   text : String
-} derive(Eq)
+}
 
 ///|
 /// One terminal tab. `key` is the panel's own stable handle (the emulator
@@ -69,6 +73,7 @@ priv struct TabCommand {
 /// session); `id` is the host's session id once `terminal_open` replies.
 /// `session`/`workspace_path` are the binding the tab was opened with —
 /// restarts reuse them, so a tab never migrates between workspaces.
+#derive(Eq)
 priv struct Tab {
   key : String
   id : String?
@@ -80,9 +85,10 @@ priv struct Tab {
   /// `None` for an ordinary shell tab.
   command : TabCommand?
   input : InputQueue
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 struct State {
   open : Bool
   /// Remember the panel size preference even while hidden.
@@ -114,7 +120,7 @@ struct State {
   interrupted_channels : Array[Connection]
   // A failed handshake, optionally with the server-provided rejection reason.
   cloud_failures : Array[(Connection, String?)]
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {
@@ -146,6 +152,7 @@ pub fn State::is_maximized(self : State) -> Bool {
 ///|
 /// The terminal package's view of the active conversation, recomputed per
 /// dispatch by the main package (mirrors `@fileeditor.Ctx`).
+#derive(Eq)
 pub struct Ctx {
   host_name : String?
   /// The owning host's offline status, when it manages its own connection
@@ -164,7 +171,7 @@ pub struct Ctx {
   /// again. The old connection's PTYs are already gone, so `sync` must not
   /// create their replacements on the dead transport.
   connected : Bool
-} derive(Eq)
+}
 
 ///|
 /// Construct the terminal's read-only view of the active conversation.

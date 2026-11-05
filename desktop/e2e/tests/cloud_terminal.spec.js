@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 import { CloudTerminalHarness } from './support/cloud_terminal_harness.js';
 

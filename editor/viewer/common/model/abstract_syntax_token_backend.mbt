@@ -8,10 +8,11 @@
 
 ///|
 /// Inclusive visible model-line range supplied by a view.
+#derive(Eq, Debug)
 pub(all) struct VisibleLineRange {
   start_line_number : Int32
   end_line_number : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Immutable normalized visible ranges plus stabilization state.

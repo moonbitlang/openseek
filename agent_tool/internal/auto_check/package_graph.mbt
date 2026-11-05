@@ -4,13 +4,14 @@
 /// check runs needs: each local package's absolute directory, and the
 /// dependency edges between packages. Registry packages keep a place in the
 /// node list (edges index into it) but have no directory.
+#derive(Debug)
 pub(all) struct PackageGraph {
   // Absolute package directory per node; `None` for a registry package.
   dirs : Array[String?]
   // `(from, to)`: package `from` imports package `to`, in any import kind
   // (source, blackbox-test, whitebox-test) — a test import can break too.
   edges : Array[(Int32, Int32)]
-} derive(Debug)
+}
 
 ///|
 /// Output budget for the graph JSON. This repository's workspace graph is

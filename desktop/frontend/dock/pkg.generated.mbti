@@ -59,14 +59,16 @@ pub(all) enum CloseSelection {
   ToRight(DockTab)
 }
 
+#derive(Eq)
 pub(all) struct DockState {
   tabs : Array[DockTab]
   active : DockTab?
-} derive(Eq)
+}
 pub fn DockState::empty() -> Self
 pub fn DockState::equal(Self, Self) -> Bool
 pub fn DockState::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum DockTab {
   File(path~ : @common.Uri)
   GitDiff(diff~ : GitHistoryDiff)
@@ -75,10 +77,11 @@ pub(all) enum DockTab {
   Workflows
   Github
   Jobs
-} derive(Eq)
+}
 pub fn DockTab::equal(Self, Self) -> Bool
 pub fn DockTab::not_equal(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct GitHistoryDiff {
   commit : String
   parent : String?
@@ -86,7 +89,7 @@ pub(all) struct GitHistoryDiff {
   original_path : @pathx.Relative?
   status : String
   kind : String
-} derive(Eq, @debug.Debug)
+}
 pub fn GitHistoryDiff::equal(Self, Self) -> Bool
 pub fn GitHistoryDiff::not_equal(Self, Self) -> Bool
 pub fn GitHistoryDiff::to_repr(Self) -> @debug.Repr

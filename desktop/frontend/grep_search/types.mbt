@@ -13,24 +13,27 @@ const InitialVisibleSearchLines : Int32 = 500
 const VisibleSearchLineStep : Int32 = 500
 
 ///|
+#derive(Eq, Debug)
 enum Phase {
   Idle
   Debouncing
   Loading
   Ready
   Failed(code~ : String, message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One of the two Search engines, modeled on semgrep's search modes: plain
 /// text search runs the Host's bundled ripgrep; semantic search runs
 /// moongrep's structural MoonBit code patterns.
+#derive(Eq, Debug)
 enum Mode {
   Text
   Semantic
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 enum PatternRepairPhase {
   PatternRepairIdle
   PatternRepairRequested
@@ -39,38 +42,43 @@ enum PatternRepairPhase {
   PatternRepairTimedOut
   PatternRepairValidationFailed
   PatternRepairFailed
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq)
 struct TextSearchState {
   query : String
   regex : Bool
   case_sensitive : Bool
   whole_word : Bool
   matches : Array[@protocol.TextSearchMatch]
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 struct SemanticSearchState {
   patterns : Array[String]
   hits : Array[@protocol.SemanticSearchHit]
   partial : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 struct SearchResultSummary {
   match_count : Int32
   file_count : Int32
   limit_hit : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum SemanticResultFilter {
   AllSemanticResults
   SelectedSemanticResults
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq)
 struct Page {
   mode : Mode
   text : TextSearchState
@@ -96,14 +104,15 @@ struct Page {
   pattern_repair_trace : Array[String]
   generation : Int32
   delay_ms : Int32
-} derive(Eq)
+}
 
 ///|
 /// The workspace-search matches that belong on one open editor model. The
 /// ranges are the complete retained result set for the file.
+#derive(Eq, Debug)
 struct EditorHighlights {
   ranges : Array[@common.Range]
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn EditorHighlights::ranges(
@@ -113,10 +122,11 @@ pub fn EditorHighlights::ranges(
 }
 
 ///|
+#derive(Eq)
 struct State {
   page : Page
   generation : Int32
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {
@@ -158,13 +168,14 @@ pub fn State::selected_semantic_reference(
 }
 
 ///|
+#derive(Eq)
 pub(all) struct Input {
   model : String
   thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationIdentity
   root : @common.Uri?
   cloud_access : @cloud_client.Access?
-} derive(Eq)
+}
 
 ///|
 pub fn Input::Input(

@@ -73,11 +73,12 @@ pub let hover_multi_cursor_modifier : MultiCursorModifier = MultiCursorModifier:
 ///|
 /// The modifier-key flags carried by a pointer (or keyboard) event — the subset
 /// `hoverUtils` reads (`event.ctrlKey` / `event.metaKey` / `event.altKey`).
+#derive(Debug)
 struct EventModifiers {
   ctrl : Bool
   meta : Bool
   alt : Bool
-} derive(Debug)
+}
 
 ///|
 /// Creates the modifier snapshot carried across the browser input boundary.

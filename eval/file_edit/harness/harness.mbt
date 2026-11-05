@@ -6,6 +6,7 @@
 /// its work across shell, edit, write, …), and the case's two
 /// gates — the workspace matched the expected files (`validation_passed`)
 /// and the required marker text was produced (`marker_present`).
+#derive(ToJson)
 priv struct TrialResult {
   index : Int32
   case_id : String
@@ -28,7 +29,7 @@ priv struct TrialResult {
   validation_passed : Bool
   marker_present : Bool
   warnings : String
-} derive(ToJson)
+}
 
 ///|
 /// One file-edit eval run's outcome: the configuration that defined it, the

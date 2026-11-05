@@ -10,7 +10,8 @@ import {
 // Errors
 
 // Types and methods
-pub(all) struct Relative(String) derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+pub(all) struct Relative(String)
 pub fn Relative::contains(Self, Self) -> Bool
 pub fn Relative::equal(Self, Self) -> Bool
 pub fn Relative::hash(Self) -> Int32

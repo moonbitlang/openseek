@@ -1,6 +1,7 @@
 ///|
 /// Only unsent client data is retained. Server account, thread activity,
 /// requests and catalogs always remain the current state.
+#derive(Eq)
 priv struct NavigationDraft {
   task : CodexDraftTask
   addressed : Bool
@@ -8,7 +9,7 @@ priv struct NavigationDraft {
   mentions : Array[@composer.Mention]
   images : Array[@composer.Image]
   placement : @composer.WorktreeChoice
-} derive(Eq)
+}
 
 ///|
 fn State::retain_navigation_draft(self : State) -> State {

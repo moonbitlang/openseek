@@ -1,7 +1,8 @@
 ///|
 /// Wraps an ordered array of message parts. Text extraction and structural
 /// inspection are separate: extracting text does not imply text-only content.
-pub(all) struct Content(Array[ContentPart]) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub(all) struct Content(Array[ContentPart])
 
 ///|
 pub extend Content with Debug::{to_repr}
@@ -52,11 +53,12 @@ pub fn Content::iter(self : Content) -> Iter[ContentPart] {
 /// `ChatMessage.content` wraps an array of these parts. The encoder
 /// handles the API's string alternative; callers do not choose a wire shape.
 /// `ImageUrl` accepts an image URL or an inline base64 data URL.
+#derive(Debug, Eq)
 pub(all) enum ContentPart {
   Text(String)
   File(file_id~ : String)
   ImageUrl(url~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend ContentPart with Debug::{to_repr}
@@ -66,12 +68,13 @@ pub extend ContentPart with Eq::{equal, not_equal}
 
 ///|
 /// Invalid request content, rejected by request encoders before network IO.
+#derive(Debug)
 pub(all) suberror ChatMessageError {
   FileContentNotAllowed(Role)
   EmptyFileId
   ImageContentNotAllowed(Role)
   EmptyImageUrl
-} derive(Debug)
+}
 
 ///|
 pub extend ChatMessageError with Debug::{to_repr}

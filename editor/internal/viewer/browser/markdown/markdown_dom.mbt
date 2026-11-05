@@ -329,10 +329,11 @@ fn markdown_can_scroll(
 }
 
 ///|
+#derive(Eq)
 priv enum MarkdownUriKind {
   ImageUri
   LinkUri
-} derive(Eq)
+}
 
 ///|
 fn resolve_allowed_markdown_uri(

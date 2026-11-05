@@ -32,52 +32,59 @@ pub(all) enum Action {
   Send(@openseek_protocol.Command)
 }
 
+#derive(Eq)
 pub(all) enum CompactionPhase {
   NotCompacting
   Requested
   Queued
   Compacting
-} derive(Eq)
+}
 pub fn CompactionPhase::equal(Self, Self) -> Bool
 pub fn CompactionPhase::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum Delivery {
   Accepted
   Rejected
   Unknown
-} derive(Eq)
+}
 pub fn Delivery::equal(Self, Self) -> Bool
 pub fn Delivery::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct GoalCommand {
   id : String
   request : GoalRequest
   since : Int32
-} derive(Eq)
+}
 pub fn GoalCommand::equal(Self, Self) -> Bool
 pub fn GoalCommand::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) struct GoalEdit {
   draft : String
-} derive(Eq)
+}
 pub fn GoalEdit::equal(Self, Self) -> Bool
 pub fn GoalEdit::not_equal(Self, Self) -> Bool
 
+#derive(Eq)
 pub(all) enum GoalRequest {
   Setting(String)
   Clearing
-} derive(Eq)
+}
 pub fn GoalRequest::equal(Self, Self) -> Bool
 pub fn GoalRequest::not_equal(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Reasoning {
   content : String
   complete : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn Reasoning::equal(Self, Self) -> Bool
 pub fn Reasoning::not_equal(Self, Self) -> Bool
 pub fn Reasoning::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub(all) struct State {
   goal : @transcript.GoalStanding?
   edit : GoalEdit?
@@ -85,7 +92,7 @@ pub(all) struct State {
   compaction : CompactionPhase
   compact_request : String?
   automatic_compacting : Bool
-} derive(Eq)
+}
 pub fn State::act(Self, Action, String, Int32, running~ : Bool) -> (Self, @openseek_protocol.Command?)
 pub fn State::awaits(Self, @openseek_protocol.Command, String) -> Bool
 pub fn State::delivered(Self, @openseek_protocol.Command, String, Delivery) -> Self
@@ -101,10 +108,11 @@ pub fn State::observe_compaction(Self, queued~ : Bool, compacting~ : Bool, basel
 pub fn State::restore_goal(Self, @transcript.GoalStanding?, Array[(Int32, @transcript.GoalMarker)]) -> Self
 pub fn State::seed(Self) -> String
 
+#derive(Eq)
 pub(all) struct Stream {
   response : String?
   reasoning : Reasoning?
-} derive(Eq)
+}
 pub fn Stream::empty() -> Self
 pub fn Stream::equal(Self, Self) -> Bool
 pub fn Stream::event(Self, @transcript.EngineEvent) -> Self

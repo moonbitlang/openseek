@@ -40,8 +40,8 @@ async fn main {
         codes[i - 1] = @process.run(
             "openseek",
             ["run", "--dir", "attempt_\{i}", task],
-            stdout=@process.redirect_to_file("answer_\{i}.md"),
-            stderr=@process.redirect_to_file("progress_\{i}.log"),
+            stdout=ToFile("answer_\{i}.md"),
+            stderr=ToFile("progress_\{i}.log"),
           ).exit_code
       })
     }

@@ -1,20 +1,22 @@
 ///|
 /// One rendered code line and its exact relationship to the original Markdown
 /// snapshot. Ranges and mapped offsets are zero-based UTF-16 coordinates.
+#derive(Eq, Debug)
 pub struct MarkdownCodeLine {
   displayed_text : String
   source_line_number : Int32
   source_range : @common.OffsetRange
   priv displayed_boundary_to_source_offset : Array[Int32?]
-} derive(Eq, Debug)
+}
 
 ///|
 /// One line-local displayed range produced by projecting an original source
 /// range into a Markdown code block.
+#derive(Eq, Debug)
 pub struct MarkdownProjectedCodeRange {
   line_index : Int32
   displayed_range : @common.OffsetRange
-} derive(Eq, Debug)
+}
 
 ///|
 /// One source-bearing Markdown block in document order. Container and child
@@ -22,6 +24,7 @@ pub struct MarkdownProjectedCodeRange {
 /// Parse-local IDs are used only while collecting and rendering the blocks.
 /// A container and its only child may share an ID and the same source range.
 /// Root elements are retained separately for section folding.
+#derive(Eq, Debug)
 pub struct MarkdownBlockAnchor {
   index : Int32
   source_range : @common.OffsetRange
@@ -36,14 +39,15 @@ pub struct MarkdownBlockAnchor {
   /// heading keeps all of its words. Reading it back out of the source string
   /// instead would re-derive markup rules the parser already applied.
   priv heading_text : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// DOM-free source projection for one parsed Markdown document.
+#derive(Eq, Debug)
 pub struct MarkdownDocumentProjection {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Returns the original snapshot offset at one displayed UTF-16 boundary.

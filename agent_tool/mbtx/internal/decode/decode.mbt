@@ -1,13 +1,15 @@
 ///|
 /// Inline code, an existing script, or code to save before running.
+#derive(Debug)
 pub enum Program {
   Source(String)
   File(String)
   Save(String, String)
-} derive(Debug)
+}
 
 ///|
 /// Decoded program and execution options. `None` cwd means workspace root.
+#derive(Debug)
 pub struct MbtxInput {
   program : Program
   /// Script arguments, excluding the executable name. Defaults to empty.
@@ -26,7 +28,7 @@ pub struct MbtxInput {
   escalated : Bool
   /// Enable run-scoped programmatic access to explicitly registered leaf tools.
   ptc : Bool?
-} derive(Debug)
+}
 
 ///|
 #deprecated("the derived Debug impl is the API")

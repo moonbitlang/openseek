@@ -2,10 +2,11 @@
 // JSON replies so Proton does not redact their user-facing messages.
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum SkillsCatalogReply {
   SkillsCatalog(Array[MarketSkill])
   SkillsCatalogError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for SkillsCatalogReply with fn to_json(self) {
@@ -31,10 +32,11 @@ pub impl FromJson for SkillsCatalogReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct BuiltinSkillError {
   registry : RegistrySkillIdentity
   message : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend BuiltinSkillError with Debug::{to_repr}
@@ -66,13 +68,14 @@ pub impl ToJson for BuiltinSkillError with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum InstalledSkillsReply {
   InstalledSkills(
     Array[InstalledSkill],
     builtin_errors~ : Array[BuiltinSkillError]
   )
   InstalledSkillsError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for InstalledSkillsReply with fn to_json(self) {
@@ -103,10 +106,11 @@ pub impl FromJson for InstalledSkillsReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum InstallSkillReply {
   SkillInstalled(InstalledSkill)
   SkillInstallError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for InstallSkillReply with fn to_json(self) {
@@ -132,10 +136,11 @@ pub impl FromJson for InstallSkillReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum UninstallSkillReply {
   SkillUninstalled
   SkillUninstallError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for UninstallSkillReply with fn to_json(self) {
@@ -159,10 +164,11 @@ pub impl FromJson for UninstallSkillReply with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum SkillContentReply {
   SkillContent(String)
   SkillContentError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for SkillContentReply with fn to_json(self) {

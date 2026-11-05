@@ -6,18 +6,20 @@
 /// "loading", "loaded empty" and "failed" cannot be conflated. Loading keeps
 /// the source device so opening the page on another device starts its own
 /// request instead of inheriting an in-flight request it cannot settle.
+#derive(Eq)
 priv enum Catalog {
   Idle
   Loading(channel~ : @interop.ChannelId)
   Ready(Array[MarketItem])
   Failed(String)
-} derive(Eq)
+}
 
 ///|
 /// Everything the page alone can see. The catalog is fetched when the page
 /// opens and kept until the user refreshes it; `busy` holds the entries with
 /// an operation in flight, keyed by host and version-independent identity;
 /// notices retain the scope of each failure.
+#derive(Eq)
 struct State {
   catalog : Catalog
   query : String
@@ -27,9 +29,10 @@ struct State {
   preview_cache : Map[(@interop.ChannelId, String), String]
   preview_channel : @interop.ChannelId?
   list_scroll_top : Double
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv enum Notice {
   SkillActionFailed(operation~ : PendingOperation, message~ : String)
   LibraryLoadFailed(String)
@@ -37,22 +40,24 @@ priv enum Notice {
     channel~ : @interop.ChannelId,
     error~ : @protocol.BuiltinSkillError
   )
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct PendingOperation {
   channel : @interop.ChannelId
   identity : PendingTarget
   action : PendingSkillAction
-} derive(Eq)
+}
 
 ///|
 /// Installation and enablement are independent operations. Registry actions
 /// follow the package identity; switches follow the installed library entry.
+#derive(Eq)
 priv enum PendingTarget {
   Registry((String, String))
   LibraryEntry(String)
-} derive(Eq)
+}
 
 ///|
 fn Notice::belongs_to(
@@ -68,12 +73,13 @@ fn Notice::belongs_to(
 }
 
 ///|
+#derive(Eq)
 pub(all) enum PendingSkillAction {
   Installing(source~ : String)
   Uninstalling(source~ : String, id~ : String)
   Updating(source~ : String)
   SettingEnabled(source~ : String, id~ : String, enabled~ : Bool)
-} derive(Eq)
+}
 
 ///|
 pub extend PendingSkillAction with Eq::{equal, not_equal}
@@ -174,12 +180,13 @@ fn State::update_candidate(self : State, item : InstalledItem) -> MarketItem? {
 }
 
 ///|
+#derive(Eq)
 enum Preview {
   Closed
   Loading(target~ : PreviewTarget, request~ : Int32)
   Ready(target~ : PreviewTarget, request~ : Int32, content~ : String)
   Failed(target~ : PreviewTarget, request~ : Int32, message~ : String)
-} derive(Eq)
+}
 
 ///|
 /// The subject a preview was opened for. For `Installed`, this is the snapshot
@@ -187,10 +194,11 @@ enum Preview {
 /// leaves it untouched so the outstanding read can still settle. Its `enabled`
 /// is therefore historical; render live state from `Input.installed`, as
 /// `detail_action_target` does.
+#derive(Eq)
 enum PreviewTarget {
   Market(MarketItem)
   Installed(InstalledItem)
-} derive(Eq)
+}
 
 ///|
 pub fn State::detail_open(self : State) -> Bool {

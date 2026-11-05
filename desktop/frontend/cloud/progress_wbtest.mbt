@@ -64,6 +64,62 @@ fn State::progress_test_event(
 }
 
 ///|
+test "Cloud keeps an assistant preview when the latest page moves past its turn" {
+  let pending = progress_test_state()
+    .progress_test_event(1, "task_started", {})
+    .progress_test_event(2, "assistant_message", { "content": "First answer" })
+    .progress_test_event(3, "task_finished", { "status": "completed" })
+  let request = pending.conversations["session"].request
+  let answer : Record = {
+    task_id: "task",
+    kind: "assistant_message",
+    data: {},
+    created_at: 1,
+    engine_sequence: Some(1),
+  }
+  let first : History = {
+    offset: Some(0),
+    prediction: None,
+    generating: false,
+    session: native_document([
+      { "kind": "assistant", "payload": { "content": "First answer" } },
+    ]),
+    etag: None,
+    messages: [answer],
+  }
+  let next = metadata_update(
+    pending,
+    Loaded(1, "session", request, {
+      ..first,
+      offset: Some(1),
+      session: native_document([]),
+      etag: Some("latest"),
+      messages: [{ ..answer, task_id: "next", }],
+    }),
+  )
+  let rechecking = next.load("session", Some("fixture"), _ => @cmd.none).0
+  let validated = metadata_update(
+    rechecking,
+    HistoryUnchanged(1, "session", rechecking.sequence, "latest"),
+  )
+  assert_true(
+    validated.conversations["session"].items()
+    is [{ kind: Assistant(prose=Some("First answer"), ..), sequence: None, .. }],
+  )
+  let older = metadata_update(validated, LoadOlder("session"))
+  let settled = metadata_update(
+    older,
+    OlderLoaded(1, "session", older.sequence, first),
+  )
+  assert_true(
+    settled.conversations["session"].items()
+    is [
+      { kind: Assistant(prose=Some("First answer"), ..), sequence: Some(_), .. },
+    ],
+  )
+}
+
+///|
 test "Cloud reasoning settles into one canonical assistant and rejects late fragments" {
   let started = progress_test_state().progress_test_event(1, "task_started", {})
   let partial = started
@@ -90,14 +146,27 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
       r.complete
     }),
   )
-  let canonical = settled.progress_test_event(6, "assistant_message", {
+  let pending = settled.progress_test_event(6, "assistant_message", {
     "content": "Answer",
     "reasoning_content": "Complete reasoning",
   })
-  assert_true(canonical.conversations["session"].items().is_empty())
+  assert_true(
+    pending.conversations["session"].items()
+    is [
+      {
+        kind: Assistant(
+          reasoning=Some("Complete reasoning"),
+          prose=Some("Answer"),
+          ..
+        ),
+        sequence: None,
+        ..
+      },
+    ],
+  )
   let canonical = metadata_update(
-    canonical,
-    Loaded(1, "session", canonical.conversations["session"].request, {
+    pending,
+    Loaded(1, "session", pending.conversations["session"].request, {
       prediction: None,
       generating: true,
       session: native_document([
@@ -378,4 +447,83 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
     late.conversations["session"].live.reasoning.map(r => r.content) is None,
   )
   assert_false(late.conversations["session"].generating)
+}
+
+///|
+test "Cloud history consumes each linked native reply only once" {
+  let state = progress_test_state()
+    .progress_test_event(1, "task_started", {})
+    .progress_test_event(2, "assistant_message", { "content": "Repeated" })
+  let first_request = state.conversations["session"].request
+  let state = state.progress_test_event(3, "assistant_message", {
+    "content": "Repeated",
+  })
+  let conversation = state.conversations["session"]
+  let current_request = conversation.request
+  let first : Record = {
+    task_id: "task",
+    kind: "assistant_message",
+    data: {},
+    engine_sequence: Some(1),
+    created_at: 1,
+  }
+  let reply : Json = {
+    "kind": "assistant",
+    "payload": { "content": "Repeated" },
+  }
+  let partial : History = {
+    offset: Some(0),
+    etag: Some("partial"),
+    generating: true,
+    prediction: None,
+    session: native_document([reply]),
+    messages: [first, { ..first, engine_sequence: Some(3), }],
+  }
+  let stale = conversation.with_history_page(
+    partial,
+    request=first_request,
+    latest=true,
+  )
+  assert_eq(stale.pending_assistants.length(), 1)
+  let unchanged = stale.acknowledge_assistants(
+    current_request,
+    partial.session,
+    partial.messages,
+  )
+  assert_eq(unchanged.pending_assistants.length(), 1)
+  assert_true(
+    unchanged.items()
+    is [
+      { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. },
+      { kind: Assistant(prose=Some("Repeated"), ..), sequence: None, .. },
+    ],
+  )
+  let completed = unchanged.with_history_page(
+    {
+      ..partial,
+      session: native_document([
+        reply,
+        {
+          "kind": "tool_result",
+          "payload": {
+            "tool_call_id": "call",
+            "tool_name": "read",
+            "content": "ok",
+            "is_error": false,
+          },
+        },
+        reply,
+      ]),
+    },
+    request=current_request,
+    latest=true,
+  )
+  assert_true(completed.pending_assistants.is_empty())
+  assert_true(
+    completed.items()
+    is [
+      { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. },
+      { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(3), .. },
+    ],
+  )
 }

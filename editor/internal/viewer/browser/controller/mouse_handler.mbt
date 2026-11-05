@@ -36,6 +36,7 @@
 
 ///|
 /// `NavigationCommandRevealType` (`coreCommands.ts:353-367`).
+#derive(Eq, Debug)
 pub(all) enum NavigationCommandRevealType {
   /// Do regular revealing.
   Regular
@@ -43,7 +44,7 @@ pub(all) enum NavigationCommandRevealType {
   Minimal
   /// Do not reveal the position.
   None
-} derive(Eq, Debug)
+}
 
 ///|
 /// `IMouseDispatchData` (`viewController.ts:21-40`): the resolved pointer

@@ -1,10 +1,11 @@
 ///|
 /// Decoded arguments of the `remove` tool: delete the file at `path`, with a
 /// `reason` recorded for auditing this destructive action.
+#derive(Debug)
 pub struct RemoveInput {
   path : String
   reason : String
-} derive(Debug)
+}
 
 ///|
 /// Decode `remove` tool-call arguments.

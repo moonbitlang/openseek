@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const commands = app => app.requests.filter(request => request.method === 'POST' && request.path.endsWith('/commands')).map(request => JSON.parse(request.body));
@@ -158,7 +158,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
   await expect(page.getByRole('main')).toContainText('Model is unavailable');
   const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionC}/messages`));
   releaseHistory();
-  await (await history).finished();
+  expect((await history).status()).toBe(200);
   await expect(page.getByRole('main')).toContainText('Model is unavailable');
   await expect(task).toHaveValue('Retain this goal');
   await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
@@ -275,6 +275,7 @@ test('Cloud preserves a service-only prompt and startup failure across reopen an
   await check();
   // The same saved native items arriving later replace the supplements.
   app.histories.get(sessionA).messages[0].engine_sequence = 1;
+  app.histories.get(sessionA).messages[0].data = {};
   app.histories.get(sessionA).session.events = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Please check the build' } } },
     { sequence: 2, item: { kind: 'terminal', payload: { kind: 'failed', message: 'Fixture engine could not start' } } },

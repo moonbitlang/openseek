@@ -15,6 +15,7 @@ pub const VIEW_LINE_CLASS_NAME : String = "view-line"
 /// treating a changed option id as proof that a retained row changed. Typed
 /// theme identity remains CSS/root-owned (approved N-A); experimental
 /// whitespace rendering and GPU selection remain explicit deferred seams.
+#derive(Eq, Debug)
 priv struct ViewLineOptions {
   line_height : Int32
   space_width : Double
@@ -27,7 +28,7 @@ priv struct ViewLineOptions {
   render_control_characters : Bool
   font_ligatures : Bool
   vertical_scrollbar_size : Double
-} derive(Eq, Debug)
+}
 
 ///|
 fn ViewLineOptions::ViewLineOptions(

@@ -2,13 +2,14 @@
 /// A visible Files view follows each active document or directory link once.
 /// Pending survives lazy directory reads; settled also records missing/failed
 /// targets so unrelated updates cannot retry or undo a manual collapse.
+#derive(Eq)
 enum TreeReveal {
   TreeRevealInactive
   TreeRevealPending(@pathx.Relative)
   TreeRevealSettled(@pathx.Relative)
   TreeRevealDirectoryPending(@pathx.Relative)
   TreeRevealDirectorySettled(@pathx.Relative)
-} derive(Eq)
+}
 
 ///|
 pub extend TreeReveal with Eq::{equal, not_equal}

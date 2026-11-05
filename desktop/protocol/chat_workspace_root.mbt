@@ -1,9 +1,10 @@
 ///|
 /// Optional workspace-list metadata can fail independently of the registry.
+#derive(Debug, Eq)
 pub(all) enum ChatWorkspaceRoot {
   Ready(String)
   Failed(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for ChatWorkspaceRoot with fn to_json(self) {

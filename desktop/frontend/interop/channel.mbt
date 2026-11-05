@@ -9,10 +9,11 @@
 /// stable named target. Today browser remotes are relay devices reached over
 /// WebSocket; the identity deliberately does not encode that transport so
 /// another remote target can use the same channel shape.
+#derive(Debug, Eq, Hash)
 pub(all) enum ChannelId {
   Local
   Remote(String)
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// One conversation on one engine host. Session ids are only meaningful
@@ -20,10 +21,11 @@ pub(all) enum ChannelId {
 /// their state and async replies must remain distinct throughout the client.
 /// This is a frontend identity only; neither the remote wire nor persistence
 /// serializes this struct.
+#derive(Debug, Eq, Hash)
 pub(all) struct ConversationKey {
   channel : ChannelId
   session : String
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// The complete directory placement of one conversation. Files and language
@@ -34,6 +36,7 @@ pub(all) struct ConversationKey {
 /// `MissingWorktree` deliberately has no checkout root. It retains only the
 /// registered project and durable worktree name, so every operating system
 /// blocks path-based work without inventing a sentinel path.
+#derive(Debug, Eq)
 pub(all) enum CheckoutPlacement {
   // OpenSeek scratch conversations expose their lazily-created directory;
   // cwd-less Codex tasks deliberately do not. Both still identify a scratch
@@ -42,7 +45,7 @@ pub(all) enum CheckoutPlacement {
   WorkspaceRoot(root~ : @common.Uri)
   Worktree(project~ : @common.Uri, name~ : String, root~ : @common.Uri)
   MissingWorktree(project~ : @common.Uri, name~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// The concrete directory addressed by files, terminal processes, and

@@ -4,12 +4,13 @@
 // JSON-RPC reader never waits for a browser or Proton command.
 
 ///|
+#derive(Debug)
 pub(all) suberror CodexError {
   JsonRpc(method_~ : String, code~ : Int32, message~ : String, data~ : Json?)
   TransportClosed(method_~ : String)
   RequestFailed(method_~ : String, detail~ : String)
   Unavailable(String)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for CodexError with fn output(self, logger) {

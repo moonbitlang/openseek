@@ -1,38 +1,43 @@
 // Questions are requests for information, independent of permission approvals.
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct UserQuestion {
   id : String
   title : String
   options : Array[String]?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct AskUserPayload {
   questions : Array[UserQuestion]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct PendingUserQuestion {
   id : String
   session : String
   questions : Array[UserQuestion]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct UserQuestionSnapshot {
   generation : Int32
   requests : Array[PendingUserQuestion]
-} derive(Debug, Eq)
+}
 
 ///|
 /// Null answers explicitly skip the whole request. Otherwise each question
 /// has one nonblank answer: either an option's text or the user's own text.
+#derive(Debug, Eq)
 pub(all) struct UserQuestionAnswer {
   id : String
   session : String
   answers : Map[String, String]?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for UserQuestion with fn to_json(self) {

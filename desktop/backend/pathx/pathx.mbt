@@ -8,7 +8,8 @@
 /// A path spelling that has not been classified as absolute or relative.
 /// Every string is representable: validation belongs to conversions such as
 /// `Path::to_absolute`, not to this transport type.
-pub(all) struct Path(String) derive(Debug, Eq)
+#derive(Debug, Eq)
+pub(all) struct Path(String)
 
 ///|
 /// Render the original path spelling at operating-system boundaries.
@@ -68,7 +69,8 @@ pub fn Path::relative(self : Path, base~ : Path) -> Path {
 /// A filesystem path that is absolute on the current host. Other packages may
 /// inspect and pattern-match the original spelling, but only this package can
 /// construct one after validating a `Path`.
-pub struct Absolute(String) derive(Debug, Eq, Hash)
+#derive(Debug, Eq, Hash)
+pub struct Absolute(String)
 
 ///|
 /// Render the validated absolute spelling at operating-system boundaries.
@@ -179,7 +181,8 @@ pub fn Path::normalize(self : Path) -> Path {
 /// asserts provenance rather than validating it: construct it where the path
 /// is known relative (a host reply, a tree join), or through
 /// `Absolute::relative_to`, the one blessed absolute→relative conversion.
-pub(all) struct Relative(String) derive(Debug, Eq, Hash)
+#derive(Debug, Eq, Hash)
+pub(all) struct Relative(String)
 
 ///|
 /// Render the relative spelling at serialization boundaries.

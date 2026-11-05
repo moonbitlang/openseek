@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const market = {
@@ -63,10 +63,18 @@ class SkillsHarness extends DesktopBrowserHarness {
     return release;
   }
 
+  // Skills reads its catalog once, when it opens. Before the host socket is
+  // open that read fails as "connection is down" and is not repeated, so open
+  // Skills only once the page has sent a request over a new socket.
+  async openSkills(previousRequests = 0) {
+    await expect.poll(() => this.requests.length).toBeGreaterThan(previousRequests);
+    await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
+  }
+
   async openDetails(fromCatalog = false) {
     await this.install();
     await this.goto();
-    await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
+    await this.openSkills();
     const installedGroup = this.page.locator('.settings-group').filter({
       has: this.page.getByRole('heading', { name: 'Installed', exact: true }),
     });
@@ -182,8 +190,9 @@ test('skill enablement comes from the host and survives list/detail navigation a
     .toEqual([{ id: installed.id, enabled: false }]);
   await page.getByRole('dialog').getByRole('button', { name: 'Back to skills', exact: true }).click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  const beforeReload = app.requests.length;
   await page.reload();
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await app.openSkills(beforeReload);
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
@@ -257,7 +266,7 @@ test('failed builtin startup stays visible with an empty library and recovers th
   app.catalogError = 'Catalog unavailable while offline';
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await app.openSkills();
   const skillsPage = page.locator('.skills-page');
   const startupNotice = skillsPage.locator('.skills-notice');
   await expect(startupNotice).toContainText('Yoorkin/wayfinder: Startup sync failed');

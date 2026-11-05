@@ -27,13 +27,14 @@ pub(all) struct Background {
   workflows : PanelLink
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct BackgroundTasks {
   jobs : Array[RunningJob]
   subagents : Array[String]
   finished : Int32
   more_finished : Bool
   in_jobs : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn BackgroundTasks::equal(Self, Self) -> Bool
 pub fn BackgroundTasks::from_listing(jobs~ : Array[@protocol.JobView], more_jobs~ : Bool, workflows~ : Array[@workflow.Run]) -> Self?
 pub fn BackgroundTasks::not_equal(Self, Self) -> Bool
@@ -68,30 +69,33 @@ pub(all) struct PanelLink {
   toggle : @cmd.Cmd
 }
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RunningJob {
   command : String
   started_at_ms : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn RunningJob::equal(Self, Self) -> Bool
 pub fn RunningJob::not_equal(Self, Self) -> Bool
 pub fn RunningJob::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Section {
   Environment
   Changes
   Connectors
   BackgroundTasks
-} derive(Eq, @debug.Debug)
+}
 pub fn Section::equal(Self, Self) -> Bool
 pub fn Section::not_equal(Self, Self) -> Bool
 pub fn Section::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub struct State {
   environment_open : Bool
   changes_open : Bool
   connectors_open : Bool
   tasks_open : Bool
-} derive(Eq)
+}
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::initial() -> Self
 pub fn State::is_open(Self, Section) -> Bool

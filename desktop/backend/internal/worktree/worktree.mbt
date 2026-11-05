@@ -12,9 +12,10 @@
 /// Debug is what the host boundary logs: proton renders a failed handler's
 /// error through `Repr`, which prints only an opaque `<...: ...>` placeholder
 /// for types without it — swallowing the one string that says what failed.
+#derive(Debug)
 pub suberror WorktreeError {
   WorktreeError(String)
-} derive(Debug)
+}
 
 ///|
 impl Show for WorktreeError with fn output(self, logger) {
@@ -114,10 +115,11 @@ impl ToJson for WorktreeEntry with fn to_json(self) {
 /// the two namespaces distinct prevents a Codex UUID from entering OpenSeek's
 /// session-store, engine-drain, archive, or history checks merely because both
 /// products happen to call their durable identity a conversation id.
+#derive(Debug, Eq)
 enum WorktreeOwner {
   OpenSeekSession(String)
   CodexThread(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn WorktreeOwner::openseek(session : String) -> WorktreeOwner {
@@ -198,11 +200,12 @@ type CheckoutRemoval = @protocol.CheckoutRemoval
 /// One Codex thread's Desktop-owned placement. The API uses this snapshot to
 /// annotate app-server thread replies; it never infers ownership from a cwd,
 /// so worktrees created by Codex App or another Git client remain external.
+#derive(Debug, Eq)
 pub struct CodexWorktreeBinding {
   thread_id : String
   workspace : String
   worktree : WorktreeInfo
-} derive(Debug, Eq)
+}
 
 ///|
 fn worktrees_file(workspace : @pathx.Absolute) -> @pathx.Absolute {

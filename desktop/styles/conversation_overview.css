@@ -331,3 +331,26 @@ a.conv-changes-link:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* The merged pull requests' fold row reads as a row, not a button: its
+   chevron points right while folded and down once unfolded, like a card's. */
+.conv-changes-fold {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.conv-changes-fold:hover {
+  background: var(--color-hover-subtle);
+}
+.conv-changes-fold > .icon {
+  --icon-size: var(--icon-sm);
+  flex: none;
+  color: var(--color-text-faint);
+  transform: rotate(-90deg);
+  transition: transform var(--drawer-duration) var(--drawer-easing);
+}
+.conv-changes-fold.open > .icon {
+  transform: none;
+}

@@ -1,13 +1,15 @@
 ///|
+#derive(Eq)
 pub(all) struct Session {
   id : String
   title : String?
   updated_at : Double?
   generating : Bool
   archived : Bool
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct Record {
   task_id : String
   kind : String
@@ -15,9 +17,10 @@ pub(all) struct Record {
   created_at : Double
   // Native User sequence; absent for service-only submissions.
   engine_sequence : Int32?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct History {
   etag : String?
   offset : Int32?
@@ -25,47 +28,63 @@ pub(all) struct History {
   session : @protocol.SessionDocument
   messages : Array[Record]
   generating : Bool
-} derive(Eq)
+}
 
 ///|
 pub extend History with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) struct Event {
   session_id : String
   task_id : String
   seq : Int32
   kind : String
   data : Json
-} derive(Eq)
+}
 
 ///|
 /// Only a submitted snapshot is retained here. The shared composer owns all
 /// editable drafts, their revisions, and delivery acknowledgement.
+#derive(Eq)
 pub struct Submission {
   content : @wire.Content
   known_tasks : Array[String]
   result_id : String?
-} derive(Eq)
+}
 
 ///|
 /// Recovery includes the fresh stream's history synchronization. Definitive
 /// errors disconnect until the conversation is explicitly opened again.
+#derive(Eq)
 pub(all) enum WatchStatus {
   Watching
   Reconnecting
   Disconnected
-} derive(Eq)
+}
 
 ///|
 pub extend WatchStatus with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
+pub struct PendingAssistant {
+  task : String
+  history_request : Int32
+  item : @transcript.TranscriptItem
+}
+
+///|
+pub extend PendingAssistant with Eq::{equal, not_equal}
+
+///|
+#derive(Eq)
 pub(all) struct Conversation {
   records : Array[Record]
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
+  history_disk_request : Int32?
   history_pages : Map[Int32, History]
   // Request, requested offset, and the navigation that owns the prepend.
   history_older_request : (Int32, Int32, Int32)?
@@ -110,11 +129,14 @@ pub(all) struct Conversation {
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
   live : @engine_session.Stream
+  // Committed replies waiting for the history read triggered by their SSE.
+  pending_assistants : Array[PendingAssistant]
+  assistant_handoffs : Map[String, Int32]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
   notice : String?
-} derive(Eq)
+}
 
 ///|
 fn Conversation::empty() -> Conversation {
@@ -123,6 +145,7 @@ fn Conversation::empty() -> Conversation {
     history_cached: false,
     history_etag: None,
     history_reading: false,
+    history_disk_request: None,
     history_pages: Map([]),
     history_older_request: None,
     history_resume_baseline: None,
@@ -161,6 +184,8 @@ fn Conversation::empty() -> Conversation {
     task: None,
     last_seq: None,
     live: @engine_session.Stream::empty(),
+    pending_assistants: [],
+    assistant_handoffs: Map([]),
     heartbeat: None,
     retrying: None,
     controls: @engine_session.State::empty(),
@@ -169,21 +194,24 @@ fn Conversation::empty() -> Conversation {
 }
 
 ///|
+#derive(Eq)
 pub struct Creation {
   // A page-local composer entry, never sent as a Cloud session ID.
   id : String
   request : Int32
   navigation : Int32
-} derive(Eq)
+}
 
 ///|
 /// One unsent submission, retained on the conversation until its HTTP handoff.
+#derive(Eq)
 pub struct PendingCommand {
   request : Int32
   input : CommandInput
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub enum CommandInput {
   Native(@wire.Command)
   Terminal(@composer.ShellCommand?)
@@ -192,13 +220,14 @@ pub enum CommandInput {
     draft~ : @composer.Draft,
     attachments~ : Array[@protocol.AttachmentSource]
   )
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
-} derive(Eq)
+}
 
 ///|
 impl ToJson for SessionEdit with fn to_json(self) {
@@ -209,11 +238,12 @@ impl ToJson for SessionEdit with fn to_json(self) {
 }
 
 ///|
+#derive(Eq)
 pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
   navigation : Int32
-} derive(Eq)
+}
 
 ///|
 pub extend SessionEdit with Eq::{equal, not_equal}
@@ -222,21 +252,25 @@ pub extend SessionEdit with Eq::{equal, not_equal}
 pub extend MetadataSave with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) enum SessionListStatus {
   Idle
   Retrying
   Failed
-} derive(Eq)
+}
 
 ///|
 pub extend SessionListStatus with Eq::{equal, not_equal}
 
 ///|
+#derive(Eq)
 pub(all) struct State {
   user_id : String?
   epoch : Int32
   needs_sign_in : Bool
   sessions : Array[Session]
+  cached_sessions : Array[Session]
+  cached_catalog_pending : Bool
   conversations : Map[String, Conversation]
   sequence : Int32
   list_request : Int32
@@ -246,7 +280,7 @@ pub(all) struct State {
   retired : Array[String]
   creation : Creation?
   notice : String?
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {
@@ -255,6 +289,8 @@ pub fn State::empty() -> State {
     epoch: 0,
     needs_sign_in: false,
     sessions: [],
+    cached_sessions: [],
+    cached_catalog_pending: false,
     conversations: Map([]),
     sequence: 0,
     list_request: 0,
@@ -291,10 +327,12 @@ pub(all) enum Msg {
     Array[@protocol.AttachmentSource]
   )
   Listed(Int32, Int32, Array[Session])
+  CachedCatalog(Int32, Array[@protocol.CloudHistoryCacheEntry])
   ListFailed(Int32, Int32, Failure)
   Created(Int32, Int32, String)
   CreateFailed(Int32, Int32, Failure)
   Loaded(Int32, String, Int32, History)
+  DiskHistoryLoaded(Int32, String, Int32, History?)
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, Failure)

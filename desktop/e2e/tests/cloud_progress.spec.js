@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA } from './support/cloud_harness.js';
 
 test('Cloud detail toggle updates the transcript and preserves the preference across narrow layouts and reloads', async ({ page }, testInfo) => {
@@ -122,9 +122,7 @@ test('Cloud title status uses recorded outcomes and marks archived history read-
   await page.screenshot({ path: testInfo.outputPath('cloud-title-context-limit.png'), fullPage: true });
   cloud.archived.add(sessionA);
   await page.reload();
-  const archived = page.getByRole('button', { name: /^Archived chats \(/ });
-  if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
-  await cloud.row(sessionA).click();
+  await cloud.openArchived(sessionA);
   await expect(status).toHaveText('Archived conversation · Read only');
   await expect(status.locator('.run-dot')).not.toHaveClass(/pulse|ok|danger/);
   await expect(page.locator('#task')).toHaveCount(0);

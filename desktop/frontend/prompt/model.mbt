@@ -1,17 +1,19 @@
 ///|
+#derive(Eq)
 priv enum Source {
   Builtin
   Custom
-} derive(Eq)
+}
 
 ///|
 /// The host's committed preference and a client-local, unsaved editor buffer.
 /// New drafts use only committed settings, never text still being edited.
+#derive(Eq)
 pub struct Model {
   priv source : Source
   priv custom_text : String
   priv draft : String?
-} derive(Eq)
+}
 
 ///|
 #doc(hidden)

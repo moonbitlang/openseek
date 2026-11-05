@@ -458,16 +458,18 @@ pub fn close_history_diff(state : State, diff : @dock.GitHistoryDiff) -> State {
 }
 
 ///|
+#derive(Eq)
 struct GraphLane {
   id : String
   color : Int32
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 struct GraphRow {
   input_swimlanes : Array[GraphLane]
   output_swimlanes : Array[GraphLane]
-} derive(Eq)
+}
 
 ///|
 /// VS Code cycles five graph colors for ordinary lanes, while refs with a

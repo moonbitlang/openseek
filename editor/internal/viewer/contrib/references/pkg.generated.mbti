@@ -13,17 +13,19 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ReferenceGroup {
   group_index : Int32
   uri : @common.Uri
   uri_string : String
   references : Array[ReferenceItem]
   is_test : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn ReferenceGroup::equal(Self, Self) -> Bool
 pub fn ReferenceGroup::not_equal(Self, Self) -> Bool
 pub fn ReferenceGroup::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ReferenceItem {
   flat_index : Int32
   group_index : Int32
@@ -32,7 +34,7 @@ pub(all) struct ReferenceItem {
   uri_string : String
   range : @common.Range
   is_test : Bool?
-} derive(Eq, @debug.Debug)
+}
 pub fn ReferenceItem::equal(Self, Self) -> Bool
 pub fn ReferenceItem::fallback_label(Self) -> String
 pub fn ReferenceItem::location(Self) -> @language.Location
@@ -40,28 +42,31 @@ pub fn ReferenceItem::not_equal(Self, Self) -> Bool
 pub fn ReferenceItem::row_preview(Self, @model.TextModel?) -> ReferenceRowPreview
 pub fn ReferenceItem::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ReferenceRowPreview {
   Snippet(ReferenceSnippet)
   LocationFallback(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn ReferenceRowPreview::equal(Self, Self) -> Bool
 pub fn ReferenceRowPreview::not_equal(Self, Self) -> Bool
 pub fn ReferenceRowPreview::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ReferenceSnippet {
   before : String
   matched : String
   after : String
-} derive(Eq, @debug.Debug)
+}
 pub fn ReferenceSnippet::display_text(Self) -> String
 pub fn ReferenceSnippet::equal(Self, Self) -> Bool
 pub fn ReferenceSnippet::not_equal(Self, Self) -> Bool
 pub fn ReferenceSnippet::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ReferencesModel {
   groups : Array[ReferenceGroup]
   references : Array[ReferenceItem]
-} derive(Eq, @debug.Debug)
+}
 pub fn ReferencesModel::ReferencesModel(Array[@language.Location]) -> Self
 pub fn ReferencesModel::equal(Self, Self) -> Bool
 pub fn ReferencesModel::is_empty(Self) -> Bool
@@ -71,14 +76,16 @@ pub fn ReferencesModel::not_equal(Self, Self) -> Bool
 pub fn ReferencesModel::previous_reference(Self, ReferenceItem) -> ReferenceItem?
 pub fn ReferencesModel::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ReferencesPeekMode {
   Definitions
   References
-} derive(Eq, @debug.Debug)
+}
 pub fn ReferencesPeekMode::equal(Self, Self) -> Bool
 pub fn ReferencesPeekMode::not_equal(Self, Self) -> Bool
 pub fn ReferencesPeekMode::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ReferencesPeekPhase {
   PeekClosed
   PeekLoadingDefinitions(Int32)
@@ -86,17 +93,18 @@ pub(all) enum ReferencesPeekPhase {
   PeekLoadingPreview(Int32, Int32)
   PeekShown(Int32, Int32)
   PeekUnavailable(Int32, Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn ReferencesPeekPhase::equal(Self, Self) -> Bool
 pub fn ReferencesPeekPhase::not_equal(Self, Self) -> Bool
 pub fn ReferencesPeekPhase::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct ReferencesSessionKey {
   model_identity : Int32
   model_generation : Int32
   model_version_id : Int32
   anchor : @common.Position
-} derive(Eq, @debug.Debug)
+}
 pub fn ReferencesSessionKey::equal(Self, Self) -> Bool
 pub fn ReferencesSessionKey::from_model(@model.TextModel, Int32, @common.Position) -> Self
 pub fn ReferencesSessionKey::is_current(Self, @model.TextModel, Int32) -> Bool

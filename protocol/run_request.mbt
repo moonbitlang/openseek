@@ -5,6 +5,7 @@ pub const RunRequestVersion : Int32 = 1
 ///|
 /// One structured request for `openseek run --input-format json`: what to run
 /// and on what. See `docs/run-result.md` for how it is framed on stdin.
+#derive(Eq, Debug)
 pub(all) struct RunRequest {
   /// The caller's name for this request, echoed in the result so a parent can
   /// tell which request a result answers.
@@ -18,10 +19,11 @@ pub(all) struct RunRequest {
   /// The step ceiling the caller asks for (`limits.max_steps`). An explicit
   /// `--max-steps` on the command line wins over it.
   max_steps : Int32?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Why a JSON value is not a request this module can run.
+#derive(Eq, Debug)
 pub(all) suberror RunRequestError {
   /// A request from a newer (or unknown) format version.
   UnsupportedVersion(Int32)
@@ -30,7 +32,7 @@ pub(all) suberror RunRequestError {
   /// A field this engine recognizes but does not implement; names it. A
   /// request is refused rather than run without what it asked for.
   Unsupported(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl ToJson for RunRequest with fn to_json(self) {

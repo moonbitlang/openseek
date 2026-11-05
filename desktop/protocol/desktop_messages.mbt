@@ -12,11 +12,12 @@
 /// OpenSeek's closed reasoning setting. Keeping the wire values typed in the
 /// protocol package makes every Desktop command reject schema drift before an
 /// engine's current phase can affect how the request is handled.
+#derive(Debug, Eq)
 pub(all) enum OpenSeekThinking {
   ThinkingOff
   ThinkingHigh
   ThinkingMax
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn OpenSeekThinking::wire(self : OpenSeekThinking) -> String {
@@ -44,13 +45,14 @@ pub fn OpenSeekThinking::parse(value : String) -> OpenSeekThinking? {
 /// deletion, writes outside the allowed scope). The host passes it to the
 /// engine as `--approval`; an absent request field means `ApprovalAsk`, the
 /// behavior every host had before the field existed.
+#derive(Debug, Eq)
 pub(all) enum OpenSeekApproval {
   /// The person at the composer answers each question.
   ApprovalAsk
   /// A reviewer subagent answers against the user's own messages; what it
   /// cannot settle comes to the person as an ordinary question.
   ApprovalReview
-} derive(Debug, Eq)
+}
 
 ///|
 /// The wire spelling, which is also the engine's `--approval` value.
@@ -71,6 +73,7 @@ fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct StartPayload {
   // Complete base system prompt for a new session. None uses the engine
   // default; Some("") supplies an empty base. Saved sessions keep their prompt.
@@ -96,14 +99,16 @@ pub(all) struct StartPayload {
   // binds at creation) runs in that checkout — the start itself never names
   // or mutates worktrees.
   workspace : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CancelPayload {
   run_id : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SteerPayload {
   // Same inline image representation as StartPayload.
   images : Array[String]
@@ -111,49 +116,55 @@ pub(all) struct SteerPayload {
   run_id : String?
   // Optional client-minted lifecycle identity echoed on the steer receipt.
   submission_id : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// One valid mutation of the live follow-up queue. Operation-specific fields
 /// live on their operation, so the host never receives an action/text
 /// combination it still has to interpret. The queue belongs to the Desktop
 /// engine process and is never written to the session record.
+#derive(Debug, Eq)
 pub(all) enum QueueAction {
   QueueAdd(id~ : String, text~ : String, images~ : Array[String])
   QueueEdit(id~ : String, text~ : String, images~ : Array[String])
   QueueWithdraw(id~ : String)
   QueueSteer(id~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct QueuePayload {
   action : QueueAction
   run_id : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// One answer to an engine's `approval_requested`, addressed by the id that
 /// event carried. `run_id` guards the same race a steer's does: a decision
 /// minted against one run must not settle a question in the next.
+#derive(Debug, Eq)
 pub(all) struct ApprovalPayload {
   id : String
   allow : Bool
   run_id : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct KnownRunPayload {
   session : String
   run_id : String?
   submission_id : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct RunsPayload {
   known : Array[KnownRunPayload]?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionCommandSettings {
   // Same creation-only base system prompt as StartPayload.system_prompt.
   system_prompt : String?
@@ -166,25 +177,27 @@ pub(all) struct SessionCommandSettings {
   approval : OpenSeekApproval?
   max_steps : Int32?
   workspace : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct LoadSessionPayload {
   session : String
   // The workspace holding the session, when the client already knows it.
   workspace : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Export one exact conversation from one registered workspace. Download and
 /// Share use the same identity; the native process chooses the save destination
 /// or the login's issuing server. Neither destination crosses this boundary.
+#derive(Debug, Eq)
 pub(all) struct SessionExportPayload {
   session : String
   workspace : String
   title : String
   archived : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// Decode the exact store identity and display metadata needed by an export.
@@ -214,28 +227,31 @@ pub impl ToJson for SessionExportPayload with fn to_json(self) {
 /// durable session id. Archiving takes the conversation's worktree with
 /// it; `force` (archive only) discards that checkout's uncommitted
 /// changes — the client sends it after its confirmation dialog.
+#derive(Debug, Eq)
 pub(all) struct SessionPayload {
   session : String
   force : Bool?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Permanent deletion addresses one archived record in one exact store.
 /// `workspace` is the host-reported project resource path; the host validates
 /// it against its registry instead of trusting the client to choose an
 /// arbitrary directory.
+#derive(Debug, Eq)
 pub(all) struct ArchivedSessionPayload {
   session : String
   workspace : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// `session.delete_check` asks what deleting one live record from one exact
 /// store would remove besides the record. It changes nothing.
+#derive(Debug, Eq)
 pub(all) struct SessionDeleteCheckPayload {
   session : String
   workspace : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// `session.delete` permanently removes one live record from one exact
@@ -243,14 +259,16 @@ pub(all) struct SessionDeleteCheckPayload {
 /// caller's confirmation covered: `worktree` names the checkout that
 /// confirmation said would be removed (absent when it named none), and
 /// `force` agrees to discard that checkout's uncommitted changes.
+#derive(Debug, Eq)
 pub(all) struct SessionDeletePayload {
   session : String
   workspace : String
   worktree : String?
   force : Bool?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SettingsSetPayload {
   provider : String?
   custom_api_url : String?
@@ -260,7 +278,7 @@ pub(all) struct SettingsSetPayload {
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
@@ -308,26 +326,29 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct WorkspacePayload {
   path : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// `worktree.list` names the workspace whose registry to read.
+#derive(Debug, Eq)
 pub(all) struct WorktreeListPayload {
   workspace : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// `worktree.create` names the workspace and exactly one conversation owner.
 /// Existing clients send `session`; Codex sends `codex_thread`. Creation is
 /// the binding, and that owner id doubles as the idempotency key for retries.
 /// The host generates the worktree's name and returns it in the reply.
+#derive(Debug, Eq)
 pub(all) struct WorktreeCreatePayload {
   workspace : String
   session : String?
   codex_thread : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for WorktreeCreatePayload with fn from_json(json, path) {
@@ -364,41 +385,46 @@ pub impl ToJson for WorktreeCreatePayload with fn to_json(self) {
 ///|
 /// `worktree.remove` — `force` discards uncommitted changes in the checkout;
 /// the branch survives either way.
+#derive(Debug, Eq)
 pub struct WorktreeRemovePayload {
   workspace : String
   name : String
   force : Bool?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct InstallSkillPayload {
   module_name : String
   version : String
   package_path : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct UninstallSkillPayload {
   id : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct OpenPathPayload {
   session : String
   cwd : String?
   path : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// `base_hint` is the branch the diffstat should measure from, when the client
 /// already knows it from the branch's pull request. Absent on the first probe,
 /// and whenever there is no pull request to ask — the host then falls back to
 /// the remote's default branch.
+#derive(Debug, Eq)
 pub(all) struct GitBranchPayload {
   session : String
   cwd : String?
   base_hint : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Address the same working directory as `git.branch` — the pull request is
@@ -406,11 +432,12 @@ pub(all) struct GitBranchPayload {
 /// chips can never describe different branches. Codex-managed worktrees are
 /// commonly detached; `branch_hint` is app-server's creation-time branch and
 /// is accepted only when that local branch still points at the current HEAD.
+#derive(Debug, Eq)
 pub(all) struct GitPullRequestPayload {
   session : String
   cwd : String?
   branch_hint : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for GitPullRequestPayload with fn from_json(json, path) {
@@ -441,33 +468,36 @@ pub impl ToJson for GitPullRequestPayload with fn to_json(self) {
 /// workspace hint follows the filesystem operations' trust boundary: the host
 /// accepts it only when it names a registered workspace and still routes a
 /// worktree-bound conversation into its own checkout.
+#derive(Debug, Eq)
 pub(all) struct GitChangesPayload {
   session : String
   workspace : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Read one immutable page of repository history. The first request omits
 /// `snapshot`; the host captures the selected refs as full commit identities
 /// and echoes them back. Later pages resend that snapshot so moving refs cannot
 /// duplicate or skip commits mid-scroll.
+#derive(Debug, Eq)
 pub(all) struct GitHistoryPayload {
   session : String
   workspace : String?
   snapshot : GitHistorySnapshot?
   skip : Int32
   limit : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// List the paths changed by one immutable commit, scoped to the conversation
 /// workspace. Merge commits compare against their first parent; root commits
 /// compare against Git's empty tree.
+#derive(Debug, Eq)
 pub(all) struct GitCommitChangesPayload {
   session : String
   workspace : String?
   commit : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// Read one workspace-relative path from the supplied commit, falling back to
@@ -475,19 +505,22 @@ pub(all) struct GitCommitChangesPayload {
 /// pass the change row's `original_path` (the current `path` does not exist in
 /// that commit); all other rows pass `path`. The host validates the path again
 /// before passing it to Git.
+#derive(Debug, Eq)
 pub(all) struct GitOriginalFilePayload {
   session : String
   workspace : String?
   path : String
   revision : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct ReadDirPayload {
   path : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SearchFilesPayload {
   path : String
   // One Quick Open cache session. The first request populates it; subsequent
@@ -500,18 +533,20 @@ pub(all) struct SearchFilesPayload {
   // Monotonic within the page. It identifies one cancellable query, not a
   // cache generation.
   generation : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct CancelSearchFilesPayload {
   cache_key : String
   generation : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Search workspace text through the Host's bundled ripgrep. `session_key`
 /// names one panel/search lifetime; generations are monotonic inside it, so a
 /// newer request can cancel an older process without affecting another panel.
+#derive(Debug, Eq)
 pub(all) struct SearchTextPayload {
   root : String
   query : String
@@ -523,15 +558,16 @@ pub(all) struct SearchTextPayload {
   session_key : String
   generation : Int32
   max_results : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Cancel one text-search generation. The Host also remembers the cancelled
 /// frontier so cancel-before-search message ordering remains safe.
+#derive(Debug, Eq)
 pub(all) struct CancelSearchTextPayload {
   session_key : String
   generation : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Search workspace MoonBit code with structural patterns through the Host's
@@ -539,6 +575,7 @@ pub(all) struct CancelSearchTextPayload {
 /// contract exactly, so one panel can own both modes without replaying an old
 /// semantic reply as current text results. `patterns` contains one or more
 /// anonymous structural moongrep patterns.
+#derive(Debug, Eq)
 pub(all) struct SearchSemanticPayload {
   root : String
   patterns : Array[String]
@@ -547,21 +584,23 @@ pub(all) struct SearchSemanticPayload {
   session_key : String
   generation : Int32
   max_results : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Cancel one semantic-search generation. The Host also remembers the
 /// cancelled frontier so cancel-before-search message ordering remains safe.
+#derive(Debug, Eq)
 pub(all) struct CancelSearchSemanticPayload {
   session_key : String
   generation : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Request one host-backed structural Pattern Repair. `instruction` remains
 /// separate from the current pattern as the repair constraint; the desktop
 /// one-click UI supplies its fixed syntax-only instruction rather than a
 /// second user prompt.
+#derive(Debug, Eq)
 pub(all) struct PatternRepairPayload {
   model : String
   thinking : OpenSeekThinking?
@@ -569,7 +608,7 @@ pub(all) struct PatternRepairPayload {
   pattern : String
   instruction : String
   generation : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend PatternRepairPayload with Debug::{to_repr}
@@ -584,6 +623,7 @@ pub extend PatternRepairPayload with Eq::{equal, not_equal}
 /// accumulation and the client replaces them when `SearchSemanticReply`
 /// lands. `session_key`/`generation` carry the same fence as the reply so a
 /// stale stream can never overwrite a newer search.
+#derive(Debug, Eq)
 pub(all) struct SemanticSearchProgressPayload {
   root : String
   session_key : String
@@ -591,14 +631,16 @@ pub(all) struct SemanticSearchProgressPayload {
   matches : Array[SemanticSearchHit]
   match_count : Int32
   file_count : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct ClearFileSearchCachePayload {
   cache_key : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct ReadFilePayload {
   // Without `root`, `path` is absolute. With `root`, `root` is absolute and
   // `path` is relative to it; the host validates that pair before opening.
@@ -607,12 +649,13 @@ pub(all) struct ReadFilePayload {
   // fs.read_file callers may request a larger preview; absent uses the
   // editor/Office default for the detected format.
   max_bytes : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
 /// One immutable structural-search match captured for an agent context file.
 /// Keeping the source in the artifact makes the selected snapshot useful even
 /// when the working tree changes before the agent reads it.
+#derive(Debug, Eq)
 pub(all) struct SemanticSelectionMatch {
   rule_id : String
   description : String?
@@ -622,11 +665,12 @@ pub(all) struct SemanticSelectionMatch {
   end_line : Int32
   end_column : Int32
   matched_source : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// Materialize one large semantic-search selection below the supplied checkout.
 /// The host owns the final path; callers can never choose an arbitrary file.
+#derive(Debug, Eq)
 pub(all) struct MaterializeSemanticSelectionPayload {
   root : String
   artifact_id : String
@@ -634,14 +678,16 @@ pub(all) struct MaterializeSemanticSelectionPayload {
   include_glob : String
   exclude_glob : String
   matches : Array[SemanticSelectionMatch]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct StatFilesPayload {
   paths : Array[String]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct WatchWorkspacePayload {
   path : String
   files : Array[String]
@@ -653,21 +699,23 @@ pub(all) struct WatchWorkspacePayload {
   // Concrete watcher/failure identity. Clients change it for every desired
   // configuration so a replaced watcher's delayed failure is stale.
   generation : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct BrowseDirectoryPayload {
   path : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Create one direct child of a directory already reached through the project
 /// picker. Keeping the parent and leaf separate lets the host reject path
 /// traversal before touching the filesystem.
+#derive(Debug, Eq)
 pub(all) struct CreateDirectoryPayload {
   parent : String
   name : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for CreateDirectoryPayload with fn from_json(json, path) {
@@ -706,6 +754,7 @@ pub impl ToJson for CreateDirectoryPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminalOpenPayload {
   session : String
   workspace : String?
@@ -715,7 +764,7 @@ pub(all) struct TerminalOpenPayload {
   // the interactive login shell: a `!` command from the composer. The session
   // ends when the command does, and `terminal.exit` carries its exit code.
   command : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for TerminalOpenPayload with fn from_json(json, path) {
@@ -748,11 +797,12 @@ pub impl ToJson for TerminalOpenPayload with fn to_json(self) {
 ///|
 /// Terminal input is a wire union: text carries `data`, byte-oriented input
 /// carries `data_base64`, and the inactive field is absent rather than null.
+#derive(Debug, Eq)
 pub(all) struct TerminalInputPayload {
   id : String
   data : String?
   data_base64 : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for TerminalInputPayload with fn from_json(json, path) {
@@ -782,11 +832,12 @@ pub impl ToJson for TerminalInputPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminalResizePayload {
   id : String
   cols : Int32
   rows : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for TerminalResizePayload with fn from_json(json, path) {
@@ -804,10 +855,11 @@ pub impl ToJson for TerminalResizePayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminalAckPayload {
   id : String
   sequence : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for TerminalAckPayload with fn from_json(json, path) {
@@ -824,9 +876,10 @@ pub impl ToJson for TerminalAckPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminalClosePayload {
   id : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for TerminalClosePayload with fn from_json(json, path) {
@@ -843,11 +896,12 @@ pub impl ToJson for TerminalClosePayload with fn to_json(self) {
 /// Request the package dependency graph for one concrete `moon.mod` shown by
 /// the file editor. `root` is the owning conversation checkout and `path` is
 /// relative to it; the Host revalidates both before invoking Moon.
+#derive(Debug, Eq)
 pub(all) struct MoonPackageGraphPayload {
   session : String
   root : String
   path : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for MoonPackageGraphPayload with fn from_json(json, path) {
@@ -868,11 +922,12 @@ pub impl ToJson for MoonPackageGraphPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct LspOpenPayload {
   session : String
   root : String
   path : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for LspOpenPayload with fn from_json(json, path) {
@@ -892,13 +947,14 @@ pub impl ToJson for LspOpenPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct LspHoverPayload {
   session : String
   root : String
   path : String
   line : Int32
   character : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for LspHoverPayload with fn from_json(json, path) {
@@ -926,11 +982,12 @@ pub impl ToJson for LspHoverPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct WorkspaceSymbolsPayload {
   session : String
   root : String
   query : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for WorkspaceSymbolsPayload with fn from_json(json, path) {
@@ -950,13 +1007,14 @@ pub impl ToJson for WorkspaceSymbolsPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct MoonIdeNavigationPayload {
   session : String
   root : String
   path : String
   line : Int32
   column : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for MoonIdeNavigationPayload with fn from_json(json, path) {
@@ -987,11 +1045,12 @@ pub impl ToJson for MoonIdeNavigationPayload with fn to_json(self) {
 /// Request the reference CodeLens rows for one current checkout source file.
 /// Unlike navigation, no cursor position is needed: Moon IDE scans the whole
 /// authorized file and returns zero-based LSP ranges for every lens.
+#derive(Debug, Eq)
 pub(all) struct MoonIdeCodeLensPayload {
   session : String
   root : String
   path : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for MoonIdeCodeLensPayload with fn from_json(json, path) {
@@ -1012,11 +1071,13 @@ pub impl ToJson for MoonIdeCodeLensPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct ExternalLinkPayload {
   url : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct BrowserOpenPayload {
   id : Int32
   url : String
@@ -1030,7 +1091,7 @@ pub(all) struct BrowserOpenPayload {
   // because the host asked (`browser.event` kind `open_requested`): echoing
   // it is how the host learns which page id its request was given.
   request : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for BrowserOpenPayload with fn to_json(self) {
@@ -1076,44 +1137,50 @@ pub impl FromJson for BrowserOpenPayload with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct BrowserIdPayload {
   id : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct BrowserThemePayload {
   id : Int32
   dark : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct AppTitlebarThemePayload {
   dark : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct BrowserBoundsPayload {
   id : Int32
   x : Int32
   y : Int32
   width : Int32
   height : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct BrowserVisiblePayload {
   id : Int32
   visible : Bool
-} derive(Debug, Eq)
+}
 // Notification payloads.
 
 ///|
 /// `agent.connected` is the host's handshake and its resync signal: a client
 /// answers it by re-reading its state. `protocol` is the `HostProtocolRevision`
 /// the host was built for; hosts that predate it send none.
+#derive(Debug, Eq)
 pub(all) struct ConnectedPayload {
   protocol : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for ConnectedPayload with fn to_json(self) {
@@ -1141,6 +1208,7 @@ pub impl FromJson for ConnectedPayload with fn from_json(json, _path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct StartedPayload {
   run_id : String
   submission_id : String?
@@ -1149,16 +1217,17 @@ pub(all) struct StartedPayload {
   max_steps : Int32?
   session : String
   session_root : String?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct AgentEventPayload {
   run_id : String?
   // Engine events always belong to the durable session that owns the process;
   // only `run_id` may be absent for between-turn lifecycle events.
   session : String
   event : @wire.Event
-} derive(Debug, Eq)
+}
 
 ///|
 /// Session and event are required. A missing or null run id means a
@@ -1190,12 +1259,13 @@ pub impl ToJson for AgentEventPayload with fn to_json(self) {
 /// is absent or has the wrong JSON type. Errors are the one notification class
 /// that must not disappear because the report describing them is malformed;
 /// the frontend assigns the generic label for a missing or blank `message`.
+#derive(Debug, Eq)
 pub(all) struct AgentErrorPayload {
   run_id : String?
   message : String?
   exit_code : Int32?
   diagnostics : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for AgentErrorPayload with fn from_json(json, path) {
@@ -1218,12 +1288,13 @@ pub impl FromJson for AgentErrorPayload with fn from_json(json, path) {
 /// the process dying has no exit code — so absent, `null` and a value of the
 /// wrong type all mean the same "not reported", the answer an older or newer
 /// host gives for a field it does not write.
+#derive(Debug, Eq)
 pub(all) struct FinishedPayload {
   run_id : String
   status : String
   answer : String?
   exit_code : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for FinishedPayload with fn to_json(self) {
@@ -1257,6 +1328,7 @@ pub impl FromJson for FinishedPayload with fn from_json(json, path) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SessionCommitPayload {
   session : String
   sequence : Int32
@@ -1265,7 +1337,7 @@ pub(all) struct SessionCommitPayload {
   // path. Session ids are not globally unique across stores, so the
   // broadcast names the store half of the identity beside the id.
   session_root : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// One running sub-run's progress, as the host reads it from the child's own
@@ -1274,12 +1346,13 @@ pub(all) struct SessionCommitPayload {
 /// `session` names the child transcript it was read from. `steps` counts the
 /// turns the child has recorded and `activity` is its last tool call — both
 /// newest-fact, never a history: a client shows them and forgets them.
+#derive(Debug, Eq)
 pub(all) struct SubrunProgressPayload {
   id : String
   session : String
   steps : Int32
   activity : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// One resolved call of a workflow a snippet is running, read by the host from
@@ -1289,6 +1362,7 @@ pub(all) struct SubrunProgressPayload {
 /// subagent's own session id (`<parent>-sr-N`), the same string its transcript
 /// is named by — a reader can open it directly. `phase`, `cost_usd` and the
 /// timestamps are absent when the journal did not carry them.
+#derive(Debug, Eq)
 pub(all) struct WorkflowEntryPayload {
   /// The run, as `workflow_started` named it (`wf-N`).
   workflow : String
@@ -1312,12 +1386,13 @@ pub(all) struct WorkflowEntryPayload {
   /// Milliseconds since the epoch, as plain JSON numbers.
   started_at : Double?
   finished_at : Double?
-} derive(Debug, Eq)
+}
 
 ///|
 /// One exact store-qualified session changed placement or display metadata.
 /// Current change values are `archived`, `unarchived`, `deleted`, and
 /// `renamed`; clients still treat unknown values as list invalidations.
+#derive(Debug, Eq)
 pub(all) struct SessionChangedPayload {
   change : String
   session : String
@@ -1325,13 +1400,14 @@ pub(all) struct SessionChangedPayload {
   // unique across stores, so every invalidation carries both halves of the
   // durable identity.
   workspace : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct WorkspacesChangedPayload {
   workspaces : Array[String]
   chat_root : ChatWorkspaceRoot?
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for WorkspacesChangedPayload with fn to_json(self) {
@@ -1363,28 +1439,31 @@ pub impl FromJson for WorkspacesChangedPayload with fn from_json(json, path) {
 /// One workspace's worktree list changed; sidebars re-join their name chips
 /// and pickers refresh — the `workspace.changed` pattern, keyed by the
 /// workspace the list belongs to.
+#derive(Debug, Eq)
 pub(all) struct WorktreeChangedPayload {
   workspace : String
   worktrees : Array[WorktreeInfo]
-} derive(Debug, Eq)
+}
 
 ///|
 /// `workspace.settings_get` names the workspace whose desktop-owned
 /// settings file to read.
+#derive(Debug, Eq)
 pub(all) struct WorkspaceSettingsGetPayload {
   workspace : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// `workspace.settings_set` patches one workspace's settings; absent fields
 /// stay unchanged. The committed state comes back in the reply and in the
 /// `workspace.settings_changed` broadcast.
+#derive(Debug, Eq)
 pub(all) struct WorkspaceSettingsSetPayload {
   workspace : String
   worktree_mode : Bool?
   checkout_submodules : Bool?
   submodule_checkout_timeout_seconds : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
 /// One workspace's desktop-owned settings: the reply to both settings
@@ -1392,14 +1471,16 @@ pub(all) struct WorkspaceSettingsSetPayload {
 /// where a NEW conversation in this workspace starts — the workspace root,
 /// or a fresh git worktree bound to that conversation. The frontend and host
 /// ship together, so reply and broadcast fields evolve in lockstep.
+#derive(Debug, Eq)
 pub(all) struct WorkspaceSettingsPayload {
   workspace : String
   worktree_mode : Bool
   checkout_submodules : Bool
   submodule_checkout_timeout_seconds : Int32
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct SettingsStatusPayload {
   revision : Int32
   provider : String
@@ -1410,7 +1491,7 @@ pub(all) struct SettingsStatusPayload {
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
@@ -1457,12 +1538,13 @@ pub const HostProtocolRevision : Int32 = 5
 ///|
 /// Immutable identity of the installed desktop package. The native host reads
 /// this from `proton-package.json`; it is not an editable engine setting.
+#derive(Debug, Eq)
 pub(all) struct AppInfoReply {
   version : String
   // A development build's console entry URL, the loopback origin the host
   // serves its own frontend on for the system browser. Absent in a release.
   console_url : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// `version` is required; `console_url` reads as absent when missing or
@@ -1486,85 +1568,91 @@ pub impl ToJson for AppInfoReply with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct UpdateDownloadProgressPayload {
   downloaded_bytes : Int32
   total_bytes : Int32?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct UpdateDownloadedPayload {
   version : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct UpdateDownloadFailedPayload {
   message : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct AuthUserPayload {
   login : String
   avatar_url : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct AuthDevicePayload {
   id : String
   name : String
   url : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct AuthStatusPayload {
   connected : Bool
   server_url : String?
   managed_by_env : Bool?
   user : AuthUserPayload?
   device : AuthDevicePayload?
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct DiagnosticsPayload {
   root : String
   path : String
   diagnostics : Array[LspDiagnostic]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq, FromJson(fields(kind_(rename="kind"))), ToJson(fields(kind_(rename="kind"))))
 pub(all) struct FsEventPayload {
   kind_ : String
   path : String
   old_path : String?
-} derive (
-  Debug,
-  Eq,
-  FromJson(fields(kind_(rename="kind"))),
-  ToJson(fields(kind_(rename="kind"))),
-)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
   // Identifies the concrete activated watcher that produced this batch.
   generation : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct FsWatchFailedPayload {
   root : String
   message : String
   // Identifies the concrete watcher that produced this failure.
   generation : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminalOutputPayload {
   id : String
   sequence : Int32
   data : String
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for TerminalOutputPayload with fn from_json(json, path) {
@@ -1582,10 +1670,11 @@ pub impl ToJson for TerminalOutputPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) struct TerminalExitPayload {
   id : String
   code : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl FromJson for TerminalExitPayload with fn from_json(json, path) {

@@ -306,7 +306,7 @@ async test "PTC write and remove preserve existing permissions and deletion appr
             #|  let source = @tools.call("write", { "path": "allowed/source.mbt", "content": "fn f() -> Int { 2 }" })
             #|  if !source.is_error { fail("source replacement permitted") }
             #|  let denied = try {
-            #|    @fs.write_text("forbidden.txt", "no", create_mode=CreateNew)
+            #|    @fs.write_text("forbidden.mbt", "no", create_mode=CreateNew)
             #|    false
             #|  } catch { _ => true }
             #|  if !denied { fail("script policy lifted") }
@@ -321,7 +321,7 @@ async test "PTC write and remove preserve existing permissions and deletion appr
       assert_false(@fs.exists("\{ws}/allowed/new.txt"))
       assert_false(@fs.exists("\{ws}/allowed/existing.txt"))
       assert_false(@fs.exists("\{ws}/outside.txt"))
-      assert_false(@fs.exists("\{ws}/forbidden.txt"))
+      assert_false(@fs.exists("\{ws}/forbidden.mbt"))
       assert_eq(
         @fs.read_file("\{ws}/allowed/source.mbt").text(),
         "fn f() -> Int { 1 }",
@@ -380,7 +380,7 @@ async test "PTC write and remove approve individual scope escapes without liftin
             #|  let removed = @tools.call("remove", { "path": "outside.txt", "reason": "cleanup" })
             #|  if removed.is_error { fail(removed.content) }
             #|  let denied = try {
-            #|    @fs.write_text("forbidden.txt", "no", create_mode=CreateNew)
+            #|    @fs.write_text("forbidden.mbt", "no", create_mode=CreateNew)
             #|    false
             #|  } catch { _ => true }
             #|  if !denied { fail("tool approval lifted the script policy") }
@@ -393,7 +393,7 @@ async test "PTC write and remove approve individual scope escapes without liftin
       assert_true(out.content.contains("approved operations completed"))
       assert_eq(asked, ["write", "remove"])
       assert_false(@fs.exists("\{ws}/outside.txt"))
-      assert_false(@fs.exists("\{ws}/forbidden.txt"))
+      assert_false(@fs.exists("\{ws}/forbidden.mbt"))
       assert_true(
         out.data
         is Some(

@@ -1,9 +1,10 @@
 ///|
 /// Credentials stay in the live context, never in document URIs or caches.
+#derive(Eq)
 pub(all) struct CloudFiles {
   epoch : Int32
   token : String
-} derive(Eq)
+}
 
 ///|
 pub extend CloudFiles with Eq::{equal, not_equal}

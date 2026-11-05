@@ -30,6 +30,7 @@ pub let default_worker_deadline_ms : Int32 = 2_700_000
 /// `worker_admin_dir`, its `base_oid` and `allowed_paths`), or in place, in a
 /// directory of the session's checkout (`"mode": "directory"`: none of them,
 /// and the whole directory is its to change).
+#derive(Debug, Eq)
 pub struct WorkerInput {
   priv task : String
   priv context : String?
@@ -39,7 +40,7 @@ pub struct WorkerInput {
   priv deny_roots : Array[String]
   allowed_paths : Array[String]
   priv base_oid : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Decode and validate the input line. `Err` names the defect — the child

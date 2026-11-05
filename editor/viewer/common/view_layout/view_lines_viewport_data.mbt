@@ -1,6 +1,7 @@
 ///|
 /// Line-renderer viewport data derived from the backend-neutral view model and
 /// layout state.
+#derive(Eq, Debug)
 pub(all) struct ViewportData {
   start_line_number : Int32
   end_line_number : Int32
@@ -11,7 +12,7 @@ pub(all) struct ViewportData {
   lines : Array[ViewLineRenderingData]
   line_decorations : Array[Array[LineDecoration]]
   view_zones : Array[ViewWhitespaceViewportData]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Line-rendering data for a one-based line number inside this viewport.

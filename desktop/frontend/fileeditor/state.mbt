@@ -10,11 +10,12 @@
 /// some listed directory. `path` is relative to the conversation's workspace
 /// ("" being the root), the key the host's `read_directory` / `read_file` ops
 /// take.
+#derive(Eq)
 pub struct FileEntry {
   name : String
   path : @pathx.Relative
   is_dir : Bool
-} derive(Eq)
+}
 
 ///|
 /// A decoded `read_file` reply. Withheld files are their own cases — the
@@ -37,6 +38,7 @@ pub(all) enum FileContent {
 /// Where one open tab's document stands. Content lives on the tab (not in
 /// the viewer) so switching tabs redisplays instantly without a host
 /// round-trip; the withheld and deleted cases keep their own notices.
+#derive(Eq)
 pub(all) enum TabState {
   // A `read_file` is in flight (just opened, restored after a conversation
   // switch, or reloading after a disk change).
@@ -68,13 +70,14 @@ pub(all) enum TabState {
   // user's bookmark — showing a notice until the file reappears or the tab
   // is closed.
   TabDeleted
-} derive(Eq)
+}
 
 ///|
 /// The Git baseline attached to a document opened from Changes. Ordinary file
 /// opens carry `None`; review opens start at `ReviewLoading` and settle to one
 /// of the typed `git.original_file` outcomes. Keeping this on the document
 /// makes a tab switch restore the same review without another host round-trip.
+#derive(Eq)
 pub(all) enum ReviewBaseline {
   ReviewLoading
   ReviewContent(String)
@@ -83,70 +86,77 @@ pub(all) enum ReviewBaseline {
   ReviewBinary
   ReviewOversized
   ReviewFailed(String)
-} derive(Eq)
+}
 
 ///|
 /// The per-tab review presentation. Source mode keeps the selected code or
 /// Markdown surface; full-diff mode shows the context-bounded source comparison
 /// in the separately selected side-by-side or inline layout.
+#derive(Eq)
 pub(all) enum ReviewViewMode {
   ReviewSource
   ReviewDiff
-} derive(Eq)
+}
 
 ///|
 /// The presentation selected for an ordinary generated MoonBit interface.
 /// Source is the default and the UML diagram is shown on request. Diff/review
 /// and positioned navigation ignore this preference and keep the source
 /// surface.
+#derive(Eq)
 pub(all) enum MbtiViewMode {
   MbtiDiagram
   MbtiSource
-} derive(Eq)
+}
 
 ///|
 /// The presentation selected for an ordinary `moon.mod`. The dependency
 /// graph is the default, while positioned navigation, reviews, and history
 /// keep the source surface.
+#derive(Eq)
 pub enum MoonModViewMode {
   MoonModDependencies
   MoonModSource
-} derive(Eq)
+}
 
 ///|
 /// One package-graph request cached for an open `moon.mod` tab. Every state
 /// carries the request generation so closing/reopening or invalidating a graph
 /// cannot accept a late Host reply from its predecessor.
+#derive(Eq)
 pub enum PackageGraphState {
   PackageGraphLoading(Int32)
   PackageGraphReady(Int32, String)
   PackageGraphFailed(Int32, String)
-} derive(Eq)
+}
 
 ///|
 /// The layout shared by Line and sectioned semantic comparison. This
 /// panel-level preference is independent from `ReviewViewMode`: returning to
 /// source keeps it for the next review and the next changed file.
+#derive(Eq)
 pub enum ReviewDiffLayout {
   ReviewSideBySide
   ReviewInline
-} derive(Eq)
+}
 
 ///|
 /// Desktop-owned comparison algorithm preference. Line keeps the complete
 /// file DiffEditor; Token and Tree select the sectioned semantic review.
 /// Non-MoonBit comparisons keep using Line without overwriting this preference.
+#derive(Eq, Debug)
 pub enum ReviewDiffMode {
   ReviewDiffLine
   ReviewDiffToken
   ReviewDiffTree
-} derive(Eq, Debug)
+}
 
 ///|
 /// One changed-file review request parked on its document. Separate request
 /// generations fence its HEAD reply and newest working-tree read; keeping the
 /// tokens outside `ReviewBaseline` avoids repeating them in every settled
 /// variant.
+#derive(Eq)
 pub(all) struct ReviewState {
   // The HEAD-side request token. It remains stable while newer working-tree
   // reads are started for the same review.
@@ -163,13 +173,14 @@ pub(all) struct ReviewState {
   // deletion plus a recreated untracked file), so the document path alone
   // cannot identify which working/HEAD pair is under review.
   selected : ChangedFile
-} derive(Eq)
+}
 
 ///|
 /// One open document, keyed by its device-bound absolute resource URI in
 /// `State.docs`. Workspace membership is derived only for project operations;
 /// opening a file never requires a workspace-relative name. Content and Diff
 /// are presentations of this same document, never separate document identities.
+#derive(Eq)
 pub(all) struct Doc {
   name : String
   state : TabState
@@ -181,7 +192,7 @@ pub(all) struct Doc {
   // The file changed on disk while its tab was in the background; reloaded
   // on activation rather than eagerly, so a build storm costs one read.
   stale : Bool
-} derive(Eq)
+}
 
 ///|
 /// Successful content stays visible during a refresh. Ordinary notices have
@@ -240,29 +251,32 @@ fn State::polled_files(self : State, ctx : Ctx) -> Array[@common.Uri] {
 /// One concrete filesystem event from the host watcher. Paths are relative
 /// to the watcher's explicit root. A rename keeps both names so the file tree
 /// and any open tab at either address can be reconciled.
+#derive(Eq)
 pub(all) enum FileChange {
   Modified(@pathx.Relative)
   Created(@pathx.Relative)
   Removed(@pathx.Relative)
   Renamed(old~ : @pathx.Relative, new~ : @pathx.Relative)
-} derive(Eq)
+}
 
 ///|
 /// The exact watcher configuration most recently sent to one host connection:
 /// every open tab plus the root/expanded directories whose immediate children
 /// the file tree needs to keep current.
+#derive(Eq)
 pub(all) struct WatchedPaths {
   owner : @interop.ConversationKey
   root : @common.Uri
   files : Array[@pathx.Relative]
   directories : Array[@pathx.Relative]
   recursive : Bool
-} derive(Eq)
+}
 
 ///|
 /// A lazily requested snapshot of one concrete workspace root. Host and Cloud
 /// file indexes provide workspace-relative paths;
 /// owner/root transitions reset it with the rest of the file-panel cache.
+#derive(Eq)
 pub enum FileIndex {
   // No consumer has requested this workspace root yet.
   IndexEmpty
@@ -283,22 +297,24 @@ pub enum FileIndex {
     refreshing~ : Bool,
     refresh_again~ : Bool
   )
-} derive(Eq)
+}
 
 ///|
 /// Which inventory the explorer pane shows. This is a panel preference, so it
 /// follows the user across conversation switches while each inventory's data
 /// remains scoped to its owning conversation.
+#derive(Eq)
 pub(all) enum ExplorerMode {
   ExplorerFiles
   ExplorerChanges
   // Workspace text search is the third inventory owned by this file panel.
   ExplorerSearch
-} derive(Eq)
+}
 
 ///|
 /// A changed path's stable presentation category. The host keeps Git's raw
 /// index/worktree columns as well; this category is only for labels and color.
+#derive(Eq)
 pub(all) enum ChangeKind {
   ChangeModified
   ChangeAdded
@@ -311,24 +327,26 @@ pub(all) enum ChangeKind {
   ChangeSubmodule
   ChangeSymlink
   ChangeUnknown
-} derive(Eq)
+}
 
 ///|
 /// One current path from the checkout's active review comparison. Renames and
 /// copies retain their original path for explanatory UI.
+#derive(Eq)
 pub(all) struct ChangedFile {
   path : @pathx.Relative
   original_path : @pathx.Relative?
   index_status : String
   worktree_status : String
   kind : ChangeKind
-} derive(Eq)
+}
 
 ///|
 /// The lazily requested changed-file inventory. A ready snapshot remains
 /// visible during a background refresh. `refreshing` limits the host to one
 /// outstanding request; `refresh_again` coalesces later watcher/run signals
 /// into at most one follow-up.
+#derive(Eq)
 pub(all) enum ChangeList {
   ChangeListIdle
   ChangeListLoading(refresh_again~ : Bool)
@@ -339,12 +357,13 @@ pub(all) enum ChangeList {
     refreshing~ : Bool,
     refresh_again~ : Bool
   )
-} derive(Eq)
+}
 
 ///|
 /// The lazily loaded, snapshot-pinned Git graph. A ready page stays visible
 /// while more rows are requested; `load_error` therefore does not discard the
 /// history the user can still inspect.
+#derive(Eq)
 pub(all) enum GitGraphState {
   GitGraphIdle
   GitGraphLoading
@@ -357,10 +376,11 @@ pub(all) enum GitGraphState {
     loading_more~ : Bool,
     load_error~ : String?
   )
-} derive(Eq)
+}
 
 ///|
 /// The inline file expansion for the currently selected commit.
+#derive(Eq)
 pub enum GitCommitFiles {
   GitCommitFilesIdle
   GitCommitFilesLoading(commit~ : String)
@@ -370,9 +390,10 @@ pub enum GitCommitFiles {
     parent~ : String?,
     files~ : Array[@protocol.GitHistoricalChange]
   )
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub enum HistoryBlob {
   HistoryBlobLoading
   HistoryBlobMissing
@@ -380,27 +401,30 @@ pub enum HistoryBlob {
   HistoryBlobOversized
   HistoryBlobContent(String)
   HistoryBlobError(String)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub enum HistoryDiffSide {
   HistoryOriginal
   HistoryModified
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub struct HistoryDiffDoc {
   diff : @dock.GitHistoryDiff
   generation : Int32
   original : HistoryBlob
   modified : HistoryBlob
-} derive(Eq)
+}
 
 ///|
 /// The checkout placement a sync pass settled on for `State::owner`.
 /// Availability and identity are one value: parking keeps the identity the
 /// panel had before the gap, so recovery can tell the same checkout coming
 /// back from another checkout taking its place.
+#derive(Eq)
 pub(all) enum ReconciledPlacement {
   // No owner has been claimed yet, so nothing has been reconciled.
   PlacementUnknown
@@ -413,7 +437,7 @@ pub(all) enum ReconciledPlacement {
   // review may still be awaiting its authoritative Changes snapshot when
   // placement disappears a second time.
   PlacementParked(last_known~ : @interop.CheckoutPlacement?)
-} derive(Eq)
+}
 
 ///|
 /// The checkout identity this panel is reconciled against, live or retained
@@ -439,6 +463,7 @@ fn ReconciledPlacement::identity(
 /// Strip membership, order, and the active tab live in
 /// the root model's per-conversation dock states — the open file list arrives
 /// through `Ctx`.
+#derive(Eq)
 pub(all) struct State {
   owner : @interop.ConversationIdentity?
   cloud_epoch : Int32?
@@ -659,7 +684,7 @@ pub(all) struct State {
   // The last file operation failure, surfaced in the panel header;
   // `None` while nothing has failed.
   error : String?
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {
@@ -827,10 +852,11 @@ pub fn State::prepare_owner(
 /// choice owned by the main package and passed in through `Ctx`; the two
 /// layouts share one DOM order and differ only in CSS, so switching never
 /// re-keys the viewer host.
+#derive(Eq)
 pub(all) enum TreeLayout {
   BottomPanel
   RightSidebar
-} derive(Eq)
+}
 
 ///|
 /// The stored wire name's inverse; an unknown value falls back to the
@@ -856,6 +882,7 @@ pub fn TreeLayout::wire(self : TreeLayout) -> String {
 /// complete directory placement, whether the app is in dark mode (drives the
 /// embedded viewer's theme attribute), the interface language, and where the
 /// file tree docks.
+#derive(Eq)
 pub(all) struct Ctx {
   locale : @i18n.Locale
   model : String
@@ -893,7 +920,7 @@ pub(all) struct Ctx {
   open_history_diffs : Array[@dock.GitHistoryDiff]
   active_history_diff : @dock.GitHistoryDiff?
   github : @github.State
-} derive(Eq)
+}
 
 ///|
 /// The concrete root used by file and language-service requests.
@@ -1553,10 +1580,11 @@ fn Ctx::resource(self : Ctx, path : @pathx.Relative) -> @common.Uri? {
 ///|
 /// A parent listing invalidated a pending read. Explicit opens coalesce one
 /// retry after its stale reply drains, keeping replies unambiguous per path.
+#derive(Eq)
 enum RemovedDirectoryRead {
   DiscardReply
   RetryAfterReply
-} derive(Eq)
+}
 
 ///|
 pub extend RemovedDirectoryRead with Eq::{equal, not_equal}

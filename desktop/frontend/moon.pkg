@@ -13,6 +13,7 @@ import {
   "openseek_desktop/frontend/navigation/browser" @navigation_browser,
   "moonbit-community/rabbita/nav",
   "openseek_desktop/frontend/page_shell",
+  "openseek_desktop/frontend/archived_chats",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/async/http",
   "moonbitlang/core/encoding/utf8",

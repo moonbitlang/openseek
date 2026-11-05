@@ -13,13 +13,14 @@ let visible_content_width_css_variable : String = "--moonbit-viewer-visible-cont
 /// Live configuration values read by `ViewLines.onConfigurationChanged` in the
 /// same order as Monaco's retained caches. `view_line_options` is the exact
 /// equality-gated subset owned by each retained `ViewLine`.
+#derive(Eq, Debug)
 struct ViewLinesConfiguration {
   line_height : Int32
   typical_halfwidth_character_width : Double
   is_viewport_wrapping : Bool
   can_use_layer_hinting : Bool
   view_line_options : ViewLineOptions
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ViewLinesConfiguration::ViewLinesConfiguration(

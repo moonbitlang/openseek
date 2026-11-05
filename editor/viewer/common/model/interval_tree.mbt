@@ -47,10 +47,11 @@ const CLASS_NAME_EDITOR_ERROR_DECORATION : String = "squiggly-error"
 
 ///|
 /// `NodeColor` (`intervalTree.ts:24-27`).
+#derive(Eq)
 priv enum NodeColor {
   Black
   Red
-} derive(Eq)
+}
 
 ///|
 /// `Constants` bit layout of the packed `metadata` byte

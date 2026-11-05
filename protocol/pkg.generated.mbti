@@ -15,45 +15,49 @@ pub fn job_id_from_storage(String) -> String
 
 pub fn job_storage_name(String) -> String
 
-pub fn parse(Json) -> Event?
+pub fn parse(@json.Json) -> Event?
 
-pub fn parse_run_request(Json) -> RunRequest raise RunRequestError
+pub fn parse_run_request(@json.Json) -> RunRequest raise RunRequestError
 
-pub fn parse_run_result(Json) -> RunResult raise RunResultError
+pub fn parse_run_result(@json.Json) -> RunResult raise RunResultError
 
 pub fn split_child_session_id(String) -> (String, Int32)?
 
 pub fn valid_job_component(String) -> Bool
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror ImageError {
   TooLarge
   InvalidBase64
   UnsupportedFormat
   MediaTypeMismatch(expected~ : String, actual~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn ImageError::equal(Self, Self) -> Bool
 pub fn ImageError::not_equal(Self, Self) -> Bool
 pub fn ImageError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror RunRequestError {
   UnsupportedVersion(Int32)
   Malformed(String)
   Unsupported(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn RunRequestError::equal(Self, Self) -> Bool
 pub fn RunRequestError::not_equal(Self, Self) -> Bool
 pub fn RunRequestError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror RunResultError {
   UnsupportedVersion(Int32)
   Malformed(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn RunResultError::equal(Self, Self) -> Bool
 pub fn RunResultError::not_equal(Self, Self) -> Bool
 pub fn RunResultError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Command {
   Prompt(content~ : Content, submission_id~ : String?)
   Steer(content~ : Content, submission_id~ : String?)
@@ -64,37 +68,40 @@ pub(all) enum Command {
   GoalSet(text~ : String, auto~ : Bool)
   GoalClear
   ApprovalDecision(id~ : String, allow~ : Bool)
-} derive(Eq, @debug.Debug)
+}
 pub fn Command::equal(Self, Self) -> Bool
 pub fn Command::not_equal(Self, Self) -> Bool
-pub fn Command::parse(Json) -> Result[Self, String]
-pub fn Command::to_json(Self) -> Json
+pub fn Command::parse(@json.Json) -> Result[Self, String]
+pub fn Command::to_json(Self) -> @json.Json
 pub fn Command::to_jsonl(Self) -> String
 pub fn Command::to_repr(Self) -> @debug.Repr
 
-pub(all) struct Content(Array[ContentPart]) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct Content(Array[ContentPart])
 pub fn Content::contains(Self, StringView) -> Bool
 pub fn Content::equal(Self, Self) -> Bool
-pub fn Content::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Content::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn Content::is_text_only(Self) -> Bool
 pub fn Content::iter(Self) -> Iter[ContentPart]
 pub fn Content::not_equal(Self, Self) -> Bool
 pub fn Content::text(Self) -> String
-pub fn Content::to_json(Self) -> Json
+pub fn Content::to_json(Self) -> @json.Json
 pub fn Content::to_repr(Self) -> @debug.Repr
-pub impl ToJson for Content
 pub impl @json.FromJson for Content
+pub impl @json.ToJson for Content
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ContentPart {
   Text(String)
   Image(Image)
-} derive(Eq, @debug.Debug)
+}
 pub fn ContentPart::equal(Self, Self) -> Bool
-pub fn ContentPart::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ContentPart::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ContentPart::not_equal(Self, Self) -> Bool
 pub fn ContentPart::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ContentPart
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Event {
   AgentSetupFailed(error~ : String)
   AgentStep(step~ : Int32)
@@ -155,16 +162,17 @@ pub(all) enum Event {
   McpListToolsFailed(server~ : String, error~ : String)
   McpListToolsTimeout(server~ : String)
   McpNoTools(server~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
-pub fn Event::to_json(Self) -> Json
+pub fn Event::to_json(Self) -> @json.Json
 pub fn Event::to_repr(Self) -> @debug.Repr
 
+#derive(Eq)
 pub struct Image {
   media_type : String
   bytes : Bytes
-} derive(Eq)
+}
 pub fn Image::data_url(Self) -> String
 pub fn Image::equal(Self, Self) -> Bool
 pub fn Image::from_base64(media_type~ : StringView, StringView) -> Self raise ImageError
@@ -174,20 +182,22 @@ pub fn Image::not_equal(Self, Self) -> Bool
 pub fn Image::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Image
 
+#derive(Eq, @debug.Debug)
 pub(all) enum JobEventKind {
   Started
   Updated
   Finished
   Failed
-} derive(Eq, @debug.Debug)
+}
 pub fn JobEventKind::equal(Self, Self) -> Bool
-pub fn JobEventKind::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobEventKind::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn JobEventKind::not_equal(Self, Self) -> Bool
-pub fn JobEventKind::to_json(Self) -> Json
+pub fn JobEventKind::to_json(Self) -> @json.Json
 pub fn JobEventKind::to_repr(Self) -> @debug.Repr
-pub impl ToJson for JobEventKind
 pub impl @json.FromJson for JobEventKind
+pub impl @json.ToJson for JobEventKind
 
+#derive(Eq, @debug.Debug)
 pub(all) struct JobRecord {
   generation : String
   id : String
@@ -209,162 +219,175 @@ pub(all) struct JobRecord {
   output_error : String?
   persistence_error : String?
   cleanup_error : String?
-  data : Json?
+  data : @json.Json?
   subagent : SubagentInfo?
-} derive(Eq, @debug.Debug)
+}
 pub fn JobRecord::equal(Self, Self) -> Bool
-pub fn JobRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobRecord::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn JobRecord::not_equal(Self, Self) -> Bool
-pub fn JobRecord::to_json(Self) -> Json
+pub fn JobRecord::to_json(Self) -> @json.Json
 pub fn JobRecord::to_repr(Self) -> @debug.Repr
-pub impl ToJson for JobRecord
 pub impl @json.FromJson for JobRecord
+pub impl @json.ToJson for JobRecord
 
+#derive(Eq, @debug.Debug)
 pub(all) enum JobState {
   Running
   Stopping
   Exited(Int32)
   Stopped(String)
   Interrupted
-} derive(Eq, @debug.Debug)
+}
 pub fn JobState::equal(Self, Self) -> Bool
-pub fn JobState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobState::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn JobState::is_terminal(Self) -> Bool
 pub fn JobState::not_equal(Self, Self) -> Bool
-pub fn JobState::to_json(Self) -> Json
+pub fn JobState::to_json(Self) -> @json.Json
 pub fn JobState::to_repr(Self) -> @debug.Repr
-pub impl ToJson for JobState
 pub impl @json.FromJson for JobState
+pub impl @json.ToJson for JobState
 
+#derive(Eq, @debug.Debug)
 pub(all) enum JobStopOutcome {
   Stopped
   AlreadyTerminal
   NotFound
   WrongRuntime
-} derive(Eq, @debug.Debug)
+}
 pub fn JobStopOutcome::equal(Self, Self) -> Bool
-pub fn JobStopOutcome::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobStopOutcome::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn JobStopOutcome::not_equal(Self, Self) -> Bool
-pub fn JobStopOutcome::to_json(Self) -> Json
+pub fn JobStopOutcome::to_json(Self) -> @json.Json
 pub fn JobStopOutcome::to_repr(Self) -> @debug.Repr
-pub impl ToJson for JobStopOutcome
 pub impl @json.FromJson for JobStopOutcome
+pub impl @json.ToJson for JobStopOutcome
 
+#derive(Eq, @debug.Debug)
 pub(all) enum McpConfigState {
   Loaded
   Failed(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn McpConfigState::equal(Self, Self) -> Bool
 pub fn McpConfigState::not_equal(Self, Self) -> Bool
 pub fn McpConfigState::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct McpConfigStatus {
   path : String
   state : McpConfigState
-} derive(Eq, @debug.Debug)
+}
 pub fn McpConfigStatus::equal(Self, Self) -> Bool
-pub fn McpConfigStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpConfigStatus::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn McpConfigStatus::not_equal(Self, Self) -> Bool
-pub fn McpConfigStatus::to_json(Self) -> Json
+pub fn McpConfigStatus::to_json(Self) -> @json.Json
 pub fn McpConfigStatus::to_repr(Self) -> @debug.Repr
-pub impl ToJson for McpConfigStatus
 pub impl @json.FromJson for McpConfigStatus
+pub impl @json.ToJson for McpConfigStatus
 
+#derive(Eq, @debug.Debug)
 pub(all) enum McpServerState {
   Connected(Array[McpTool])
   Lost(Array[McpTool])
   NoTools
   Failed(String)
   Skipped
-} derive(Eq, @debug.Debug)
+}
 pub fn McpServerState::equal(Self, Self) -> Bool
 pub fn McpServerState::not_equal(Self, Self) -> Bool
 pub fn McpServerState::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct McpServerStatus {
   name : String
   transport : McpTransport
   target : String
   state : McpServerState
-} derive(Eq, @debug.Debug)
+}
 pub fn McpServerStatus::equal(Self, Self) -> Bool
-pub fn McpServerStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpServerStatus::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn McpServerStatus::not_equal(Self, Self) -> Bool
-pub fn McpServerStatus::to_json(Self) -> Json
+pub fn McpServerStatus::to_json(Self) -> @json.Json
 pub fn McpServerStatus::to_repr(Self) -> @debug.Repr
-pub impl ToJson for McpServerStatus
 pub impl @json.FromJson for McpServerStatus
+pub impl @json.ToJson for McpServerStatus
 
+#derive(Eq, @debug.Debug)
 pub(all) struct McpStatus {
   configs : Array[McpConfigStatus]
   servers : Array[McpServerStatus]
-} derive(Eq, @debug.Debug)
+}
 pub fn McpStatus::equal(Self, Self) -> Bool
-pub fn McpStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpStatus::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn McpStatus::not_equal(Self, Self) -> Bool
-pub fn McpStatus::to_json(Self) -> Json
+pub fn McpStatus::to_json(Self) -> @json.Json
 pub fn McpStatus::to_repr(Self) -> @debug.Repr
-pub impl ToJson for McpStatus
 pub impl @json.FromJson for McpStatus
+pub impl @json.ToJson for McpStatus
 
+#derive(Eq, @debug.Debug)
 pub(all) struct McpTool {
   name : String
   description : String
-} derive(Eq, @debug.Debug)
+}
 pub fn McpTool::equal(Self, Self) -> Bool
-pub fn McpTool::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpTool::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn McpTool::not_equal(Self, Self) -> Bool
-pub fn McpTool::to_json(Self) -> Json
+pub fn McpTool::to_json(Self) -> @json.Json
 pub fn McpTool::to_repr(Self) -> @debug.Repr
-pub impl ToJson for McpTool
 pub impl @json.FromJson for McpTool
+pub impl @json.ToJson for McpTool
 
+#derive(Eq, @debug.Debug)
 pub(all) enum McpTransport {
   Stdio
   Http
-} derive(Eq, @debug.Debug)
+}
 pub fn McpTransport::equal(Self, Self) -> Bool
 pub fn McpTransport::not_equal(Self, Self) -> Bool
 pub fn McpTransport::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum PredictionOutcome {
   Completed(text~ : String?, input_tokens~ : Int32, output_tokens~ : Int32)
   Skipped
   Cancelled
   Failed(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn PredictionOutcome::equal(Self, Self) -> Bool
-pub fn PredictionOutcome::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PredictionOutcome::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn PredictionOutcome::not_equal(Self, Self) -> Bool
-pub fn PredictionOutcome::to_json(Self) -> Json
+pub fn PredictionOutcome::to_json(Self) -> @json.Json
 pub fn PredictionOutcome::to_repr(Self) -> @debug.Repr
-pub impl ToJson for PredictionOutcome
 pub impl @json.FromJson for PredictionOutcome
+pub impl @json.ToJson for PredictionOutcome
 
+#derive(Eq, @debug.Debug)
 pub(all) struct PredictionRecord {
   source_sequence : Int32
   outcome : PredictionOutcome
-} derive(Eq, @debug.Debug)
+}
 pub fn PredictionRecord::equal(Self, Self) -> Bool
-pub fn PredictionRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PredictionRecord::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn PredictionRecord::not_equal(Self, Self) -> Bool
-pub fn PredictionRecord::to_json(Self) -> Json
+pub fn PredictionRecord::to_json(Self) -> @json.Json
 pub fn PredictionRecord::to_repr(Self) -> @debug.Repr
-pub impl ToJson for PredictionRecord
 pub impl @json.FromJson for PredictionRecord
+pub impl @json.ToJson for PredictionRecord
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RunRequest {
   request_id : String?
   kind : String?
-  input : Json
+  input : @json.Json
   max_steps : Int32?
-} derive(Eq, @debug.Debug)
+}
 pub fn RunRequest::equal(Self, Self) -> Bool
 pub fn RunRequest::not_equal(Self, Self) -> Bool
-pub fn RunRequest::to_json(Self) -> Json
+pub fn RunRequest::to_json(Self) -> @json.Json
 pub fn RunRequest::to_repr(Self) -> @debug.Repr
-pub impl ToJson for RunRequest
+pub impl @json.ToJson for RunRequest
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RunResult {
   request_id : String?
   kind : String?
@@ -372,26 +395,28 @@ pub(all) struct RunResult {
   session : String?
   usage : Usage?
   steps : Int32?
-} derive(Eq, @debug.Debug)
+}
 pub fn RunResult::equal(Self, Self) -> Bool
 pub fn RunResult::not_equal(Self, Self) -> Bool
-pub fn RunResult::to_json(Self) -> Json
+pub fn RunResult::to_json(Self) -> @json.Json
 pub fn RunResult::to_repr(Self) -> @debug.Repr
-pub impl ToJson for RunResult
+pub impl @json.ToJson for RunResult
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RunStatus {
-  Completed(output~ : Json)
+  Completed(output~ : @json.Json)
   NoReport
   ContextYield(reason~ : String)
   MaxStepsExhausted
   Aborted(reason~ : String)
   Interrupted(reason~ : String)
   Failed(reason~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn RunStatus::equal(Self, Self) -> Bool
 pub fn RunStatus::not_equal(Self, Self) -> Bool
 pub fn RunStatus::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SubagentInfo {
   kind : String
   label : String
@@ -401,27 +426,29 @@ pub(all) struct SubagentInfo {
   usage : SubagentUsage?
   report : SubagentReport?
   workspace : SubagentWorkspace
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentInfo::equal(Self, Self) -> Bool
-pub fn SubagentInfo::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentInfo::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubagentInfo::not_equal(Self, Self) -> Bool
-pub fn SubagentInfo::to_json(Self) -> Json
+pub fn SubagentInfo::to_json(Self) -> @json.Json
 pub fn SubagentInfo::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SubagentInfo
 pub impl @json.FromJson for SubagentInfo
+pub impl @json.ToJson for SubagentInfo
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SubagentLaunch {
   Direct
   Script(program~ : String, call~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentLaunch::equal(Self, Self) -> Bool
-pub fn SubagentLaunch::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentLaunch::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubagentLaunch::not_equal(Self, Self) -> Bool
-pub fn SubagentLaunch::to_json(Self) -> Json
+pub fn SubagentLaunch::to_json(Self) -> @json.Json
 pub fn SubagentLaunch::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SubagentLaunch
 pub impl @json.FromJson for SubagentLaunch
+pub impl @json.ToJson for SubagentLaunch
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SubagentOutcome {
   Captured
   NoReport
@@ -430,72 +457,78 @@ pub(all) enum SubagentOutcome {
   TimedOut
   Stopped
   Failed(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentOutcome::equal(Self, Self) -> Bool
-pub fn SubagentOutcome::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentOutcome::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubagentOutcome::not_equal(Self, Self) -> Bool
-pub fn SubagentOutcome::to_json(Self) -> Json
+pub fn SubagentOutcome::to_json(Self) -> @json.Json
 pub fn SubagentOutcome::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SubagentOutcome
 pub impl @json.FromJson for SubagentOutcome
+pub impl @json.ToJson for SubagentOutcome
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SubagentReport {
   Stored
   StoreFailed(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentReport::equal(Self, Self) -> Bool
-pub fn SubagentReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentReport::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubagentReport::not_equal(Self, Self) -> Bool
-pub fn SubagentReport::to_json(Self) -> Json
+pub fn SubagentReport::to_json(Self) -> @json.Json
 pub fn SubagentReport::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SubagentReport
 pub impl @json.FromJson for SubagentReport
+pub impl @json.ToJson for SubagentReport
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SubagentUsage {
   Known(steps~ : Int32?, prompt_tokens~ : Int32, completion_tokens~ : Int32, cost_usd~ : Double?, source~ : SubagentUsageSource, unaccounted~ : String?)
   Unavailable(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentUsage::equal(Self, Self) -> Bool
-pub fn SubagentUsage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentUsage::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubagentUsage::not_equal(Self, Self) -> Bool
-pub fn SubagentUsage::to_json(Self) -> Json
+pub fn SubagentUsage::to_json(Self) -> @json.Json
 pub fn SubagentUsage::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SubagentUsage
 pub impl @json.FromJson for SubagentUsage
+pub impl @json.ToJson for SubagentUsage
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SubagentUsageSource {
   Result
   Transcript
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentUsageSource::equal(Self, Self) -> Bool
 pub fn SubagentUsageSource::not_equal(Self, Self) -> Bool
 pub fn SubagentUsageSource::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SubagentWorkspace {
   InPlace
   Worktree(Worktree)
   Directory(path~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn SubagentWorkspace::equal(Self, Self) -> Bool
-pub fn SubagentWorkspace::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentWorkspace::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubagentWorkspace::not_equal(Self, Self) -> Bool
-pub fn SubagentWorkspace::to_json(Self) -> Json
+pub fn SubagentWorkspace::to_json(Self) -> @json.Json
 pub fn SubagentWorkspace::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SubagentWorkspace
 pub impl @json.FromJson for SubagentWorkspace
+pub impl @json.ToJson for SubagentWorkspace
 
+#derive(Eq, @debug.Debug, @json.ToJson)
 pub(all) struct Usage {
   prompt_tokens : Int32
   completion_tokens : Int32
   total_tokens : Int32
   prompt_cache_hit_tokens : Int32
   prompt_cache_miss_tokens : Int32
-} derive(Eq, ToJson, @debug.Debug)
+}
 pub fn Usage::equal(Self, Self) -> Bool
 pub fn Usage::not_equal(Self, Self) -> Bool
-pub fn Usage::to_json(Self) -> Json
+pub fn Usage::to_json(Self) -> @json.Json
 pub fn Usage::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Worktree {
   name : String
   path : String
@@ -503,29 +536,30 @@ pub(all) struct Worktree {
   base : String
   allowed_paths : Array[String]
   state : WorktreeState
-} derive(Eq, @debug.Debug)
+}
 pub fn Worktree::equal(Self, Self) -> Bool
-pub fn Worktree::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Worktree::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn Worktree::not_equal(Self, Self) -> Bool
-pub fn Worktree::to_json(Self) -> Json
+pub fn Worktree::to_json(Self) -> @json.Json
 pub fn Worktree::to_repr(Self) -> @debug.Repr
-pub impl ToJson for Worktree
 pub impl @json.FromJson for Worktree
+pub impl @json.ToJson for Worktree
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WorktreeState {
   Working
   CaptureFailed(reasons~ : Array[String])
   Committed(commit~ : String)
   NoChanges
   Unmergeable(defects~ : Array[String])
-} derive(Eq, @debug.Debug)
+}
 pub fn WorktreeState::equal(Self, Self) -> Bool
-pub fn WorktreeState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn WorktreeState::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeState::not_equal(Self, Self) -> Bool
-pub fn WorktreeState::to_json(Self) -> Json
+pub fn WorktreeState::to_json(Self) -> @json.Json
 pub fn WorktreeState::to_repr(Self) -> @debug.Repr
-pub impl ToJson for WorktreeState
 pub impl @json.FromJson for WorktreeState
+pub impl @json.ToJson for WorktreeState
 
 // Type aliases
 

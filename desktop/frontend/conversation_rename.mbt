@@ -3,6 +3,7 @@
 // the application model.
 
 ///|
+#derive(Eq)
 priv struct ConversationRename {
   id : @conversation.Id
   // The title when editing began: a draft that still matches it saves nothing.
@@ -12,7 +13,7 @@ priv struct ConversationRename {
   // The pending save began as focus left the field, so its answer must not
   // pull focus back to the row.
   focus_left : Bool
-} derive(Eq)
+}
 
 ///|
 fn Model::decorate_conversation_input(

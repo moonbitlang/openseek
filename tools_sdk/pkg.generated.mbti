@@ -1,8 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek_tools"
 
+import {
+  "moonbitlang/core/json",
+}
+
 // Values
-pub async fn call(String, Json) -> CallResult
+pub async fn call(String, @json.Json) -> CallResult
 
 // Errors
 pub suberror TransportError {
@@ -13,7 +17,7 @@ pub suberror TransportError {
 pub struct CallResult {
   content : String
   is_error : Bool
-  data : Json?
+  data : @json.Json?
 }
 
 // Type aliases

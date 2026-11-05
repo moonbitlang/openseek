@@ -58,7 +58,9 @@ async test "Codex thread resources roundtrip through host workspace grants" {
   guard CodexWorkspaceBinding::decode_reply(reply) is Some(binding) else {
     fail("expected a thread workspace binding")
   }
-  defer @work_dir.revoke_host_workspace(binding.session)
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace(binding.session)
+  })
   binding.authorize()
   guard @work_dir.resolve_host_workspace_authorization(
       binding.session,

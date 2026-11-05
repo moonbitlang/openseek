@@ -4,9 +4,10 @@
 /// contains only open lexer modes. Stack edits share unchanged tails
 /// while cached states remain isolated from later edits. Derived equality is
 /// what callers use to detect re-tokenization convergence.
+#derive(Eq)
 struct TokenizerState {
   modes : @list.List[Byte]
-} derive(Eq)
+}
 
 ///|
 /// Creates the canonical normal tokenizer state.
@@ -54,6 +55,7 @@ pub impl Debug for TokenizerState with fn to_repr(self) {
 /// Highlight classification, widened toward Monaco's standard token
 /// types. Existing tags and class names are stable for specs; new tags
 /// extend the set for the per-language lexers.
+#derive(Eq, Debug)
 pub(all) enum HighlightTag {
   Keyword
   Identifier
@@ -74,17 +76,18 @@ pub(all) enum HighlightTag {
   Tag
   Attribute
   Invalid
-} derive(Eq, Debug)
+}
 
 ///|
 /// One highlighted span within a single line, in line-local UTF-16
 /// code-unit offsets. Token ranges must never split a surrogate pair: the
 /// viewer slices the document text at these offsets.
+#derive(Eq, Debug)
 pub(all) struct LineToken {
   start : Int32
   end : Int32
   tag : HighlightTag
-} derive(Eq, Debug)
+}
 
 ///|
 /// Line-at-a-time tokenization, Monaco's `ITokenizationSupport`: the

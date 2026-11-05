@@ -84,12 +84,13 @@ pub fn SymbolNavigationAnchor::same_snapshot(
 /// Shared command identity and presentation. Surface adapters render these
 /// descriptors in their native command/menu infrastructure; command ids,
 /// labels, keybinding labels, and provider enablement stay centralized here.
+#derive(Eq, Debug)
 pub(all) enum SymbolNavigationCommand {
   RevealDefinition
   PeekDefinition
   GoToReferences
   PeekReferences
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn SymbolNavigationCommand::id(self : SymbolNavigationCommand) -> String {

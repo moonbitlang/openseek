@@ -14,10 +14,11 @@ const SidecarFile = ".mooncakes.json"
 
 ///|
 /// Registry coordinates identifying a skill independently of its version.
+#derive(Eq)
 pub(all) struct RegistrySkillIdentity {
   module_name : String
   package_path : String
-} derive(Eq)
+}
 
 ///|
 /// One entry of the local skills library.

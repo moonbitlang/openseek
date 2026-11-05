@@ -1,10 +1,11 @@
 ///|
+#derive(Eq)
 pub(all) struct SshProfile {
   id : String
   command : String
   display_name : String?
   projects : Array[String]?
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for SshProfile with fn from_json(json, path) {
@@ -211,12 +212,13 @@ pub impl ToJson for SshConnect with fn to_json(self) {
 }
 
 ///|
+#derive(Eq)
 pub(all) enum SshAuthKind {
   Password
   Passphrase
   Challenge
   Confirm
-} derive(Eq)
+}
 
 ///|
 pub impl ToJson for SshAuthKind with fn to_json(self) {
@@ -242,13 +244,14 @@ pub impl FromJson for SshAuthKind with fn from_json(json, path) {
 }
 
 ///|
+#derive(Eq)
 pub(all) struct SshAuthRequest {
   request_id : Int32
   kind : SshAuthKind
   prompt : String
   target : String?
   retry : Bool
-} derive(Eq)
+}
 
 ///|
 pub impl FromJson for SshAuthRequest with fn from_json(json, path) {

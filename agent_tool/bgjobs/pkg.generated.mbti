@@ -4,6 +4,7 @@ package "moonbitlang/openseek/agent_tool/bgjobs"
 import {
   "moonbitlang/async/process",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool/internal/sandbox",
   "moonbitlang/openseek/agent_tool/shell_exec",
@@ -18,7 +19,7 @@ pub async fn earlier_job_records(String, own~ : String) -> Array[@openseek_proto
 // Types and methods
 type BgJobRuntime
 pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, persistent_logs? : Bool, prepare_output_dir? : async () -> String, hard_output_cap? : Int32, hard_timeout_ms? : Int32, on_job_exit? : (BgJobSnapshot) -> Unit, on_job_event? : (@openseek_protocol.JobEventKind, @openseek_protocol.JobRecord) -> Unit) -> Self
-pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit, data? : () -> Json, image_output? : () -> ImageOutput, pinned? : () -> Bool) -> String
+pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit, data? : () -> @json.Json, image_output? : () -> ImageOutput, pinned? : () -> Bool) -> String
 pub async fn BgJobRuntime::finalize(Self) -> Unit
 pub fn BgJobRuntime::generation(Self) -> String
 pub fn BgJobRuntime::list(Self) -> Array[BgJobSnapshot]
@@ -39,7 +40,7 @@ pub async fn BgJobRuntime::wait_any(Self, Array[String]) -> Unit
 
 pub struct BgJobSnapshot {
   image_output : ImageOutput?
-  data : Json?
+  data : @json.Json?
   subagent : @openseek_protocol.SubagentInfo?
   cleanup_error : String?
   id : String
@@ -60,16 +61,18 @@ pub struct BgJobSnapshot {
   // private fields
 }
 
+#derive(Eq)
 pub enum BgJobStatus {
   Running
   Exited(Int32)
   Stopped
-} derive(Eq)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ImageOutput {
   content : String
   images : Array[@openseek_protocol.Image]
-} derive(Eq, @debug.Debug)
+}
 pub fn ImageOutput::equal(Self, Self) -> Bool
 pub fn ImageOutput::not_equal(Self, Self) -> Bool
 pub fn ImageOutput::to_repr(Self) -> @debug.Repr

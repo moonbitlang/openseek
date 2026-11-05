@@ -52,6 +52,11 @@ product DOM whose presentation contract is itself under test. Mock network
 traffic with Playwright routes and use retrying assertions instead of fixed
 sleeps.
 
+Import `test` and `expect` from `tests/support/test.js`. Its pages run with CSS
+transitions and animations disabled, so clicks do not wait for moving targets.
+Tag a test `{ tag: '@motion' }` when it checks motion itself, such as a running
+spinner, reduced-motion handling, or geometry during or after a transition.
+
 ## Suite scope
 
 Keep E2E cases for browser integration: event wiring, focus, selection, real

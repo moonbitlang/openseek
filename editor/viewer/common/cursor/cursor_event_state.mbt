@@ -1,10 +1,11 @@
 ///|
 /// The paired model/view cursor state. Both sides are committed atomically;
 /// live callers provide one side and the cursor derives the other.
+#derive(Eq, Debug)
 pub struct CursorState {
   model_state : SingleCursorState
   view_state : SingleCursorState
-} derive(Eq, Debug)
+}
 
 ///|
 /// Retains a complete model/view pair.
@@ -17,10 +18,11 @@ fn CursorState::CursorState(
 
 ///|
 /// Model-only `PartialCursorState`: the view property is exactly absent.
+#derive(Eq, Debug)
 priv struct PartialModelCursorState {
   model_state : SingleCursorState
   view_state : SingleCursorState?
-} derive(Eq, Debug)
+}
 
 ///|
 fn PartialModelCursorState::PartialModelCursorState(
@@ -31,10 +33,11 @@ fn PartialModelCursorState::PartialModelCursorState(
 
 ///|
 /// View-only `PartialCursorState`: the model property is exactly absent.
+#derive(Eq, Debug)
 priv struct PartialViewCursorState {
   model_state : SingleCursorState?
   view_state : SingleCursorState
-} derive(Eq, Debug)
+}
 
 ///|
 fn PartialViewCursorState::PartialViewCursorState(
@@ -47,12 +50,13 @@ fn PartialViewCursorState::PartialViewCursorState(
 /// Source-shaped partial cursor-state union. Live callers normally provide
 /// exactly one side; `FullCursorState` represents the retained complete-state
 /// member used by snapshots/reprojection tests.
+#derive(Eq, Debug)
 #warnings("-unused_constructor")
 enum PartialCursorState {
   FullCursorState(CursorState)
   ModelCursorState(PartialModelCursorState)
   ViewCursorState(PartialViewCursorState)
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn CursorState::from_model_state(
@@ -117,6 +121,7 @@ fn PartialCursorState::view_state(
 /// cursor listeners must remain silent. A content flush deliberately carries
 /// `old_selections=None` and old version `0` even when both visible states are
 /// the origin.
+#derive(Debug)
 pub struct CursorStateChange {
   old_selections : Array[@core.Selection]?
   selections : Array[@core.Selection]
@@ -126,15 +131,16 @@ pub struct CursorStateChange {
   reason : @editor_api.CursorChangeReason
   reached_max_cursor_count : Bool
   has_outgoing_event : Bool
-} derive(Debug)
+}
 
 ///|
 /// Internal equality snapshot used by `CursorsController` to distinguish a
 /// full no-op, a view-only change, and a public model-state change.
+#derive(Eq)
 struct CursorModelState {
   model_version_id : Int32
   cursor_state : CursorState
-} derive(Eq)
+}
 
 ///|
 pub extend CursorModelState with Eq::{equal, not_equal}

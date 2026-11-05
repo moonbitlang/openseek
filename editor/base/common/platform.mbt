@@ -6,12 +6,13 @@
 // (`platform_fallback.mbt`) — they exist only for the no-DOM boundary check.
 
 ///|
+#derive(Eq)
 priv enum HostPlatform {
   Mac
   Windows
   Linux
   UnknownPlatform
-} derive(Eq)
+}
 
 ///|
 let host_platform : HostPlatform = match detect_platform_code() {

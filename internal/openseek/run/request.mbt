@@ -1,5 +1,6 @@
 ///|
 /// How `run` learns what to do.
+#derive(Eq)
 priv enum InputMode {
   /// The task is the command line's words.
   Text
@@ -8,7 +9,7 @@ priv enum InputMode {
   /// One JSON request is read as a line, for a parent that launched this run.
   /// The parent keeps stdin open; closing it later cancels the run.
   Managed
-} derive(Eq)
+}
 
 ///|
 fn input_mode(matches : @argparse.Matches) -> InputMode raise {

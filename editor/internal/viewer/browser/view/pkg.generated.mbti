@@ -36,11 +36,12 @@ pub(all) struct ContentWidgetPosition {
   position_affinity : @model.PositionAffinity?
 }
 
+#derive(Eq)
 pub(all) enum ContentWidgetPositionPreference {
   Above
   Below
   Exact
-} derive(Eq)
+}
 pub fn ContentWidgetPositionPreference::equal(Self, Self) -> Bool
 pub fn ContentWidgetPositionPreference::not_equal(Self, Self) -> Bool
 
@@ -54,9 +55,10 @@ type EditorScrollbar
 pub fn EditorScrollbar::content(Self) -> @dom.Element
 pub fn EditorScrollbar::scrollable(Self) -> @scrollbar.ScrollableElementDom
 
+#derive(Eq, @debug.Debug)
 pub struct HorizontalPosition {
   left : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn HorizontalPosition::equal(Self, Self) -> Bool
 pub fn HorizontalPosition::not_equal(Self, Self) -> Bool
 pub fn HorizontalPosition::to_repr(Self) -> @debug.Repr
@@ -65,6 +67,7 @@ type OverlayWidgets
 pub fn OverlayWidgets::add_widget(Self, @browser.OverlayWidget) -> Unit
 pub fn OverlayWidgets::remove_widget(Self, String) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) enum PartFingerprint {
   None
   ContentWidgets
@@ -77,7 +80,7 @@ pub(all) enum PartFingerprint {
   ViewLines
   Minimap
   ViewLinesGpu
-} derive(Eq, @debug.Debug)
+}
 pub fn PartFingerprint::collect(@dom.Element?, @dom.Element) -> Bytes
 pub fn PartFingerprint::equal(Self, Self) -> Bool
 pub fn PartFingerprint::not_equal(Self, Self) -> Bool
@@ -118,6 +121,7 @@ pub fn View::visible_range_for_position(Self, Int32, Int32) -> HorizontalPositio
 type ViewConfigurationChangedEvent
 pub fn ViewConfigurationChangedEvent::from_changed_options(Array[ViewConfigurationOption]) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ViewConfigurationOption {
   LayoutInfo
   FontInfo
@@ -138,7 +142,7 @@ pub(all) enum ViewConfigurationOption {
   EffectiveCursorStyle
   CursorSmoothCaretAnimation
   EffectiveEditContext
-} derive(Eq, @debug.Debug)
+}
 pub fn ViewConfigurationOption::equal(Self, Self) -> Bool
 pub fn ViewConfigurationOption::not_equal(Self, Self) -> Bool
 pub fn ViewConfigurationOption::to_repr(Self) -> @debug.Repr
@@ -187,7 +191,8 @@ pub fn ViewLines::get_position_from_dom_info(Self, @view_model.ViewModel, @dom.E
 pub fn ViewLines::install_geometry_readers(Self, (Int32) -> Int32, (Int32) -> @view_layout.TextDirection) -> Unit
 pub fn ViewLines::install_live_configuration_reader(Self, () -> ViewLinesConfiguration) -> Unit
 
-type ViewLinesConfiguration derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type ViewLinesConfiguration
 pub fn ViewLinesConfiguration::ViewLinesConfiguration(line_height? : Int32, typical_halfwidth_character_width? : Double, is_viewport_wrapping? : Bool, can_use_layer_hinting? : Bool, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, stop_rendering_line_after? : Int32, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, vertical_scrollbar_size? : Double) -> Self
 pub fn ViewLinesConfiguration::equal(Self, Self) -> Bool
 pub fn ViewLinesConfiguration::not_equal(Self, Self) -> Bool

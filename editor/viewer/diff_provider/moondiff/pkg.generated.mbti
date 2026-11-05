@@ -14,41 +14,46 @@ pub fn compute_sectioned_semantic_review_plan(String, String, MoonDiffMode, old_
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum MoonDiffMode {
   Line
   Token
   Tree
-} derive(Eq, @debug.Debug)
+}
 pub fn MoonDiffMode::equal(Self, Self) -> Bool
 pub fn MoonDiffMode::not_equal(Self, Self) -> Bool
 pub fn MoonDiffMode::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct MoonFragmentDiffProvider {
   document : @diff.DocumentDiff
-} derive(Eq, @debug.Debug)
+}
 pub fn MoonFragmentDiffProvider::MoonFragmentDiffProvider(@diff.DocumentDiff) -> Self
 pub fn MoonFragmentDiffProvider::as_document_diff_provider(Self) -> &@diff.DocumentDiffProvider
 pub impl @diff.DocumentDiffProvider for MoonFragmentDiffProvider
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SectionedSemanticReviewPlan {
   requested : MoonDiffMode
   status : SemanticReviewStatus
   reordered : Bool
   main_sections : Array[SemanticReviewSection]
   deleted_sections : Array[SemanticReviewSection]
-} derive(Eq, @debug.Debug)
+}
 pub fn SectionedSemanticReviewPlan::equal(Self, Self) -> Bool
 pub fn SectionedSemanticReviewPlan::not_equal(Self, Self) -> Bool
 pub fn SectionedSemanticReviewPlan::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SemanticReviewDiff {
   Line
   Fragment(@diff.DocumentDiff)
-} derive(Eq, @debug.Debug)
+}
 pub fn SemanticReviewDiff::equal(Self, Self) -> Bool
 pub fn SemanticReviewDiff::not_equal(Self, Self) -> Bool
 pub fn SemanticReviewDiff::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SemanticReviewSection {
   key : String
   identity : Int32?
@@ -61,36 +66,39 @@ pub(all) struct SemanticReviewSection {
   original_source : String
   modified_source : String
   diff : SemanticReviewDiff
-} derive(Eq, @debug.Debug)
+}
 pub fn SemanticReviewSection::equal(Self, Self) -> Bool
 pub fn SemanticReviewSection::not_equal(Self, Self) -> Bool
 pub fn SemanticReviewSection::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SemanticReviewSectionKind {
   Whole
   Matched
   Deleted
   Inserted
-} derive(Eq, @debug.Debug)
+}
 pub fn SemanticReviewSectionKind::equal(Self, Self) -> Bool
 pub fn SemanticReviewSectionKind::not_equal(Self, Self) -> Bool
 pub fn SemanticReviewSectionKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SemanticReviewSourceRange {
   start_line_number : Int32
   line_count : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn SemanticReviewSourceRange::equal(Self, Self) -> Bool
 pub fn SemanticReviewSourceRange::not_equal(Self, Self) -> Bool
 pub fn SemanticReviewSourceRange::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SemanticReviewStatus {
   Identical
   Changed
   Reordered
   NoStructuralChanges
   IgnoredOnly
-} derive(Eq, @debug.Debug)
+}
 pub fn SemanticReviewStatus::equal(Self, Self) -> Bool
 pub fn SemanticReviewStatus::not_equal(Self, Self) -> Bool
 pub fn SemanticReviewStatus::to_repr(Self) -> @debug.Repr

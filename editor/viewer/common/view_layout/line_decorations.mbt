@@ -1,11 +1,12 @@
 ///|
 /// One-based line decoration range plus CSS class.
+#derive(Eq, Debug)
 pub struct LineDecoration {
   start_column : Int32
   end_column : Int32
   class_name : String
   decoration_type : InlineDecorationType
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds a line decoration.
@@ -56,12 +57,13 @@ fn inline_decoration_type_order(
 
 ///|
 /// Normalized decoration segment in zero-based offsets.
+#derive(Eq, Debug)
 pub(all) struct DecorationSegment {
   start_offset : Int32
   end_offset : Int32
   class_name : String
   metadata : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Normalizes overlapping line decorations into contiguous CSS segments.

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('Chinese covers feature pages, composer and dock after live switching', async ({ page }) => {
@@ -44,7 +44,7 @@ test('language selection updates Settings and sidebar and persists across reload
   await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '技能', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '对话', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '项目', exact: true })).toBeVisible();
+  await expect(page.locator('aside .section-label', { hasText: /^项目$/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '主题', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'API 端点', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '保存 API 密钥', exact: true })).toBeVisible();

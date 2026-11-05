@@ -9,9 +9,10 @@
 /// Monaco compares participant objects by identity; the multi-target MoonBit
 /// port mints an explicit identity so copying or rebuilding a participant
 /// handle cannot change anchor equality or adoption.
+#derive(Eq, Debug)
 struct HoverParticipantOwner {
   id : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 let next_hover_participant_owner_id : Ref[Int32] = Ref(0)

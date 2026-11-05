@@ -24,9 +24,10 @@ fn default_api_url_for_model(model : @deepseek.Model) -> String {
 
 ///|
 /// Image content is unsupported by the selected model family or endpoint.
+#derive(Debug)
 pub(all) suberror ImageRequestError {
   UnsupportedProvider
-} derive(Debug)
+}
 
 ///|
 pub extend ImageRequestError with Debug::{to_repr}
@@ -91,6 +92,7 @@ type API_KEY = String
 
 ///|
 /// HTTP client for the DeepSeek chat completions API.
+#derive(Debug(ignore=API_KEY))
 pub struct Client {
   priv api_key : API_KEY
   model : @deepseek.Model
@@ -99,7 +101,7 @@ pub struct Client {
   retry_attempts : Int32
   retry_backoff_ms : Int32
   idle_timeout_ms : Int32
-} derive(Debug(ignore=API_KEY))
+}
 
 ///|
 /// Constructs a DeepSeek HTTP client.

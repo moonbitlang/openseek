@@ -20,19 +20,23 @@ pub async fn run_review(base~ : String, api_key~ : String, model~ : @deepseek.Mo
 // Errors
 
 // Types and methods
-type Finding derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type Finding
 
-type ReviewReport derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type ReviewReport
 pub fn ReviewReport::digest(Self) -> String
 pub fn ReviewReport::finding_count(Self) -> Int32
 pub fn ReviewReport::has_blockers(Self) -> Bool
-pub fn ReviewReport::parse(Json) -> Result[Self, String]
+pub fn ReviewReport::parse(@json.Json) -> Result[Self, String]
 pub fn ReviewReport::to_json_string(Self) -> String
 pub fn ReviewReport::validate(Self) -> Array[String]
 
-type ReviewScope derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type ReviewScope
 
-type ReviewStats derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
+type ReviewStats
 
 // Type aliases
 

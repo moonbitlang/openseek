@@ -1,5 +1,6 @@
 ///|
 /// View-model line data before it is expanded into full render input.
+#derive(Eq, Debug)
 pub(all) struct ViewLineRenderingData {
   min_column : Int32
   max_column : Int32
@@ -13,7 +14,7 @@ pub(all) struct ViewLineRenderingData {
   start_visible_column : Int32
   text_direction : TextDirection
   has_variable_fonts : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend ViewLineRenderingData with Debug::{to_repr}

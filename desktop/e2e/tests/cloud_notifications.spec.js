@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
 
 const shown = app => app.notifications.filter(call => call.method === 'show');
@@ -56,7 +56,7 @@ for (const focused of [true, false]) {
     }
     const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/${sessionA}/messages`));
     await app.emitSessionEvent(sessionA, 'task_finished', { status: 'completed', result: { status: 'completed' } });
-    await (await refreshed).finished();
+    expect([200, 304]).toContain((await refreshed).status());
     expect(shown(app)).toHaveLength(1);
     await app.open(sessionB);
     await app.open(sessionA);
@@ -104,6 +104,8 @@ test('Cloud cancellation stays silent and sign-out retires its unread badge and 
   await expect(app.row(sessionA)).toBeHidden();
   await expect.poll(() => badge(app)).toBe(0);
   await page.evaluate(payload => window.desktopEvent('notification.click', { payload }), payload);
+  // Let the click render before asserting, so a stale frame cannot pass.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
   expect(app.device.pageErrors).toEqual([]);
 });

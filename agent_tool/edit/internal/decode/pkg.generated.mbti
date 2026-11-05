@@ -3,14 +3,16 @@ package "moonbitlang/openseek/agent_tool/edit/internal/decode"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
-pub fn decode(Json) -> EditInput raise
+pub fn decode(@json.Json) -> EditInput raise
 
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct EditInput {
   path : String
   old_string : String
@@ -22,7 +24,7 @@ pub struct EditInput {
   revert_on_parse_errors : Bool
   revert_if_error_delta_greater_or_equal : Int32?
   revert_if_warning_delta_greater_or_equal : Int32?
-} derive(@debug.Debug)
+}
 
 // Type aliases
 

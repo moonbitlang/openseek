@@ -141,6 +141,11 @@ pub fn definition(
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
   let generations : Map[String, Int32] = Map([])
+  let workspace_writes = if read_only || worker_sandbox is Some(_) {
+    Denied
+  } else {
+    ExceptSource
+  }
   // Deliberately NOT `concurrent_safe`: wasm builds for one session share
   // build directories (see `build_cache_root`), and a call copies its program
   // out of the shared directory only after its own build returns. Two calls
@@ -155,6 +160,7 @@ pub fn definition(
         auto_background_after_ms~,
         foreground_timeout_ms~,
         build_timeout_ms~,
+        workspace_writes~,
       ) +
       (if scratch_dir is Some(_) {
         "\nFile artifacts: write completed files under <session scratch>/artifact and reference scratch/artifact/FILENAME in an openseek-file fence. Add artifact to the fence info for an interactive HTML/SVG preview. See <bundled-resources>/artifact/README.md."
@@ -192,6 +198,7 @@ pub fn definition(
           job_dir?,
           scratch_dir?,
           worker_sandbox?,
+          workspace_writes~,
           auto_background_after_ms~,
           foreground_timeout_ms~,
           build_timeout_ms~,
@@ -213,7 +220,9 @@ pub fn definition(
             on_trace?=on_program_trace,
             on_image_output?=on_program_output,
           )
-          errdefer program.close(discard_images=!program.is_in_background())
+          errdefer @async.protect_from_cancel(() => {
+            program.close(discard_images=!program.is_in_background())
+          })
           let action = run(Some(program)) catch {
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
@@ -344,6 +353,7 @@ async fn execute(
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
+  workspace_writes~ : WorkspaceWrites,
   // Independent injectable bounds: a runtime-backed run hands off at the
   // first; a runtime-less run is cancelled at the second; the snippet's
   // synchronous build phase is cancelled at the third.
@@ -567,7 +577,7 @@ async fn execute(
     })
   }
 
-  defer cleanup()
+  defer @async.protect_from_cancel(() => cleanup())
   // Keep disposable compiler inputs and artifacts apart from `tmp`, whose
   // result files may need to remain readable after a background job exits.
   // `dir` is one uniquely named call directory under `job_dir` or `scratch_dir`,
@@ -646,7 +656,23 @@ async fn execute(
   }
   // `cwd` is deliberately NOT a write root: naming where a program runs should
   // not also grant writing there, and reads are open, so a snippet can still
-  // work in a directory it may not modify.
+  // work in a directory it may not modify. The workspace root is
+  // canonicalized because the policy's globs must be (see
+  // `wasm_policy_document`).
+  let workspace_grant = match workspace_writes {
+    Denied => None
+    ExceptSource =>
+      Some(
+        @fs.realpath(workspace_root) catch {
+          error =>
+            return @agent_tool.respond(
+              "mbtx: could not resolve the workspace root \{workspace_root} (\{error}).",
+              is_error=true,
+              brief="mbtx",
+            )
+        },
+      )
+  }
   let injected : Map[String, String] = Map([])
   if mcp_service is Some(service) {
     for key, value in service.env() {
@@ -658,9 +684,17 @@ async fn execute(
       injected[key] = value
     }
   }
+  // Canonical like the workspace root, so a scratch inside the workspace is
+  // recognized as such and stays writable for source (see
+  // `source_exclusions`).
+  let extra_roots = match scratch_dir {
+    Some(lab) => [@fs.realpath(lab) catch { _ => lab }]
+    None => []
+  }
   let policy = wasm_policy_document(
     tmp_dir=snippet_tmp,
-    extra_roots=scratch_dir.map(l => [l]).unwrap_or([]),
+    extra_roots~,
+    workspace?=workspace_grant,
     inject=injected,
   )
   @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
@@ -788,11 +822,10 @@ async fn execute(
   }
   // An approved escalation is exactly this: the policy file is still
   // written, and simply not passed. Widening the document instead was
-  // not available — its `fs.write` roots are canonicalized existing
-  // paths with no wildcard, and "any program" has no spelling in
-  // `process.allow` short of enumerating one — so "no policy" is both
-  // the honest description of what was approved and the only one the
-  // runtime can express.
+  // not available — "any program" has no spelling in `process.allow`
+  // short of enumerating one — so "no policy" is both the honest
+  // description of what was approved and the only one the runtime can
+  // express.
   let run_argv : Array[String] = [
     ..if policy_active {
       ["--policy", policy_path]
@@ -1045,6 +1078,16 @@ async fn execute(
       )
     }
   }
+}
+
+///|
+/// What a snippet may write in the workspace, decided once per role.
+priv enum WorkspaceWrites {
+  /// Read-only roles, and workers (a whole-tree grant would ignore their write
+  /// scope's allowed paths).
+  Denied
+  /// The main agent: everything but sources, manifests, `.mbtx` and `.git`.
+  ExceptSource
 }
 
 ///|
@@ -1664,6 +1707,7 @@ fn description(
   auto_background_after_ms~ : Int32,
   foreground_timeout_ms~ : Int32,
   build_timeout_ms~ : Int32,
+  workspace_writes~ : WorkspaceWrites,
 ) -> String {
   // The one sentence here that depends on what this build can actually do.
   //
@@ -1695,68 +1739,45 @@ fn description(
   }
   let base_head =
     #|Compile and run a self-contained MoonBit program and return its merged
-    #|stdout/stderr and exit status. This is BOTH your command runner and your
-    #|scripting surface: there is no shell tool, so commands, IO, and computation
-    #|happen inside the submitted MoonBit program.
+    #|stdout/stderr and exit status.
     #|
-    #|Every call requires a short description and at least one of source or
-    #|filename. There are three valid ways to supply the program:
+    #|There are three ways to call the tool:
     #|- source + filename: save the source to that writable filename and run it.
     #|  Use both together when creating a script you want to inspect or run again.
     #|- source without filename: run a one-off inline program without saving it.
     #|- filename without source: run a script that already exists.
-    #|Omit unused fields entirely; do not send null.
     #|
     #|For example, create and run a reusable script with
     #|`{"description":"Save and run a greeting","source":"---\nimport {\n  \"moonbitlang/core/env\",\n}\n---\n\nfn main {\n  println(@env.args()[1:])\n}\n","filename":"scripts/greet.mbtx"}`.
     #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
-    #|A filename-only call cannot create a script. Missing parent directories are
-    #|created. Identical existing content is reused; different content is never
-    #|overwritten. Use the edit tool to change a saved script. Saving is limited
-    #|to the writable workspace or configured scratch directory and is unavailable in read-only mode.
-    #|Pass `args` (an array of strings, default `[]`) to parameterize any script:
-    #|`{"description":"Run saved checks","filename":"scripts/check.mbtx","args":["--deny-warn"]}`.
-    #|The script runs on wasm. Import "moonbitlang/core/env" and read
-    #|`@env.args()[1:]` to skip the executable name.
-    #|Arguments are passed verbatim, without shell expansion or splitting.
-    #|When bundled resources are available, these scripts are already bundled:
-    #|Read text files with {"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}.
-    #|Selectors: path, path:start, path:start:end (inclusive, 1-based); batch in args.
-    #|Use ["--literal","name:123"] for numeric-colon filenames, and "--" before
-    #|option-like filenames. Headings, numbered lines and footers report each file,
-    #|including empty files; errors fail the call but remaining files still return.
-    #|Follow truncated/skipped_files with focused reads. args=["--help"] gives budgets.
-    #|@builtin/rg.mbtx searches text: args go to ripgrep unchanged (rg flags and
-    #|regex, not POSIX grep: -E is --encoding, alternation is a|b), e.g.
-    #|args=["fn parse", "-g", "*.mbt"]; output is path:line:text, bounded
-    #|like read, and no match exits 0 with a note.
-    #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
-    #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
-    #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
-    #|@builtin/ci-watch.mbtx monitors GitHub PR checks with gh;
-    #|@builtin/fix-deprecations.mbtx (with ptc=true, cwd at the module) fixes every
-    #|deprecation warning whose message names a bare replacement, one guarded edit
-    #|per site, and lists the rest for you; --dry-run plans only.
-    #|use args=["PR", "--repo", "OWNER/REPO", "--once"] for one snapshot.
-    #|Agent workflows (they start subagents): @builtin/review.mbtx (independent
-    #|worktree audit against the criteria in args), @builtin/change-review.mbtx
-    #|(working-tree review from three perspectives), @builtin/repo-map.mbtx
-    #|(architecture, validation, extension points), @builtin/simplify.mbtx
-    #|(sweeps MoonBit packages for safe simplifications and opens one pull
-    #|request per package; --no-pr keeps them on local branches) or
-    #|@builtin/shrink.mbtx (shrinks the public API in rounds until
-    #|`moon ide analyze` finds nothing left; one stacked pull request per round).
-    #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
-    #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
-    #|not implemented. Paths within the namespace cannot escape its root.
-    #|Ordinary names such as check.mbtx select workspace files. Use
-    #|./@builtin/check.mbtx for a literal workspace path. Relative paths resolve
-    #|from the workspace root; absolute paths stay absolute. No lookup fallback
-    #|occurs. `cwd` controls execution only, not filename resolution.
-    #|Existing scripts are read once; each run executes its selected snapshot
-    #|with the same sandbox and isolated imports as inline source.
-    #|Diagnostics cite `source:LINE:COL` or the supplied filename and line/column.
-    #|The tool always compiles to wasm and runs with moonrun.
+    #|Missing parent directories are created. A saved script is never overwritten
+    #|with different content; change it with the edit tool. Scripts compile to
+    #|wasm and run under moonrun.
+    #|
+    #|## Bundled scripts
+    #|
+    #|Filenames under `@builtin/` run read-only scripts built into OpenSeek: pass
+    #|`filename` and `args`, never `source`. Every other filename is a workspace
+    #|path, so `./@builtin/check.mbtx` is a workspace file. Args `["--help"]`
+    #|print a script's usage.
+    #|
+    #|- `@builtin/read.mbtx` reads text files with numbered lines, e.g. args
+    #|  `["src/main.mbt:120:200", "moon.mod"]`. Selectors are `path`,
+    #|  `path:start` or `path:start:end` (inclusive, 1-based). Output is bounded:
+    #|  follow truncated or skipped files with narrower reads. A failing file fails the call; the others still return.
+    #|- `@builtin/rg.mbtx` searches text. `args` go to ripgrep unchanged, so they
+    #|  are rg flags and regex, not POSIX grep (`-E` is `--encoding`; alternation
+    #|  is `a|b`), e.g. args `["fn parse", "-g", "*.mbt"]`. Output is
+    #|  `path:line:text`; no match exits 0 with a note.
+    #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
+    #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
+    #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and
+    #|  `@builtin/check-json.mbtx` (moon check --output-json).
+    #|- `@builtin/ci-watch.mbtx` monitors a GitHub PR's checks with gh;
+    #|  args `["PR", "--repo", "OWNER/REPO", "--once"]` take one snapshot.
+    #|- `@builtin/fix-deprecations.mbtx`, run with `cwd` at the module, fixes each
+    #|  deprecation warning whose message names a bare replacement, one guarded
+    #|  edit per site, and lists the rest; `--dry-run` only plans.
   // Rendered from `spawnable_commands`, the table that also builds the
   // moonrun policy: the list the model reads and the list moonrun enforces
   // cannot disagree, because there is only one.
@@ -1775,13 +1796,36 @@ fn description(
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
-    #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`
-    #|  and the configured session scratch directory shown in Environment. Use the
-    #|  actual scratch path for cross-call files, binary data, and command output.
-    #|  Temporary files must be consumed before the execution ends. Changing a
-    #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
-    #|  checkout` and friends are child processes and run normally. A write refusal
-    #|  is that rule firing, not a filesystem fault to debug or route around.
+  let write_rule = match workspace_writes {
+    ExceptSource =>
+      (
+        #|- Direct filesystem IO READS anywhere. It WRITES anything in its own
+        #|  `@fs.tmpdir()` and the configured session scratch directory shown in
+        #|  Environment, MoonBit sources and manifests included, even when that
+        #|  directory sits inside the workspace. Elsewhere in the workspace it WRITES
+        #|  files — data, fixtures, logs, generated output — EXCEPT MoonBit sources and
+        #|  manifests (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`
+        #|  and their `.json` forms, in any letter case), `*.mbtx` scripts (save one
+        #|  with `filename`) and `.git`. Use the actual scratch path for
+        #|  cross-call files, binary data, and command output. Temporary files must be
+        #|  consumed before the execution ends. Changing source is the file tools' job,
+        #|  or a command's — `moon fmt`, `git checkout` and friends are child processes
+        #|  and run normally. Deleting a workspace file is `remove`'s job. A write
+        #|  refusal is that rule firing, not a filesystem fault to debug or route
+        #|  around.
+      )
+    Denied =>
+      (
+        #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`
+        #|  and the configured session scratch directory shown in Environment. Use the
+        #|  actual scratch path for cross-call files, binary data, and command output.
+        #|  Temporary files must be consumed before the execution ends. Changing a
+        #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
+        #|  checkout` and friends are child processes and run normally. A write refusal
+        #|  is that rule firing, not a filesystem fault to debug or route around.
+      )
+  }
+  let base_rest =
     #|- DNS and outbound connections are allowed. A snippet may bind/listen only on
     #|  IPv4 or IPv6 localhost; wildcard and external-interface binds are refused.
     #|  These network rules do not constrain an allowed child process.
@@ -1801,6 +1845,8 @@ fn description(
     $|\{refusal_advice}
     $|
     $|\{base_tail}
+    $|\{write_rule}
+    $|\{base_rest}
   // The escalation paragraph goes BEFORE the background one so it sits next to
   // the refusal rules it qualifies.
   let base = if !escalation {
@@ -1862,8 +1908,17 @@ fn description(
       #|script stops them. Each child gets its own transcript and appears in the
       #|desktop.
       #|
-      #|For an independent worktree review, run the bundled script:
-      #|`{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"]}`.
+      #|Bundled workflows that start subagents: `@builtin/review.mbtx` (below),
+      #|`@builtin/change-review.mbtx` (reviews the working tree from three
+      #|perspectives), `@builtin/repo-map.mbtx` (maps architecture, validation and
+      #|extension points), `@builtin/simplify.mbtx` (sweeps MoonBit packages for
+      #|safe simplifications and opens one pull request per package; `--no-pr`
+      #|keeps them on local branches) and `@builtin/shrink.mbtx` (shrinks the
+      #|public API in rounds until `moon ide analyze` finds nothing left; one
+      #|stacked pull request per round).
+      #|
+      #|For an independent worktree review, run `@builtin/review.mbtx`, e.g. with args
+      #|`["Check the CSV parser's CRLF and escaped-quote handling"]`.
       #|With empty args it audits the standing goal and its recorded baseline, which
       #|the engine supplies; args narrow that goal as an audit focus, or are the whole
       #|criteria when no goal stands. It prints the reviewer's full report (`findings`,

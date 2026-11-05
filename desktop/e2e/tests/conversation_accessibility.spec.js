@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('conversation titles support keyboard activation and independent row actions', async ({ page }) => {
@@ -50,13 +50,8 @@ test('conversation titles support keyboard activation and independent row action
   await page.keyboard.press('ArrowUp');
   await expect(menu.getByRole('menuitem', { name: 'Archive' })).toBeFocused();
   await page.keyboard.press('Enter');
-  // The archived row stays mounted, but the folded section clips it and
-  // excludes its controls from keyboard focus.
-  await expect(first).not.toBeInViewport();
-  expect(await first.locator('.conversation-open').evaluate(button => {
-    button.focus();
-    return document.activeElement === button;
-  })).toBe(false);
+  // Archived conversations leave the sidebar for Settings' archived page.
+  await expect(first).toHaveCount(0);
   await expect(second).toHaveClass(/active/);
   expect(app.requests.filter(r => r.method === 'session.archive')).toHaveLength(1);
   expect(app.requests.filter(r => r.method === 'session.load' && r.params?.session === 'session-1')).toHaveLength(1);
@@ -218,7 +213,7 @@ async function expectRetainedFold(disclosure) {
   expect(result).toMatchObject({ foldedHeight: 0, retained: true, hidden: 'true', inert: true, focusable: false });
 }
 
-test('folding a project retains its expanded preview and reopens with five chats', async ({ page }) => {
+test('folding a project retains its expanded preview and reopens with five chats', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions = Array.from({ length: 12 }, (_, i) => ({
     id: `session-${i + 1}`, title: `Conversation ${i + 1}`, updated_at_ms: 12 - i,
@@ -240,7 +235,7 @@ test('folding a project retains its expanded preview and reopens with five chats
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sub-runs retain their DOM across their own and project folds', async ({ page }) => {
+test('sub-runs retain their DOM across their own and project folds', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions.push({ id: 'session-1-sr-1', title: 'Inspect animation', updated_at_ms: 2 });
   await app.install();

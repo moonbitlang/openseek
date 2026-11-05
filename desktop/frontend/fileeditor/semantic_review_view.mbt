@@ -5,15 +5,17 @@ using @cmd {trait Scheduler}
 /// The working-tree document behind Token/Tree's synthetic Modified models.
 /// Historical comparisons and a deleted working file deliberately carry no
 /// live document because current-checkout IDE requests would be misleading.
+#derive(Eq, Debug)
 pub struct SemanticReviewLiveDocument {
   resource : @common.Uri
   path : @pathx.Relative
-} derive(Eq, Debug)
+}
 
 ///|
 /// The smallest input that can change a Token/Tree section plan. Layout is
 /// deliberately absent: switching split/inline updates existing DiffEditors
 /// and never reruns MoonDiff.
+#derive(Eq, Debug)
 pub struct SemanticReviewInput {
   old_name : String
   new_name : String
@@ -27,7 +29,7 @@ pub struct SemanticReviewInput {
   /// Modified document for language requests.
   feedback_file : @pathx.Relative?
   live_modified : SemanticReviewLiveDocument?
-} derive(Eq, Debug)
+}
 
 ///|
 fn ReviewDiffMode::semantic_mode(
@@ -1592,12 +1594,13 @@ let pending_semantic_review_sync : Ref[(@cmd.Emit[Msg], State, Ctx)?] = Ref(
 )
 
 ///|
+#derive(Eq)
 priv struct SemanticReviewProjection {
   input : SemanticReviewInput
   plan : @moon_diff_provider.SectionedSemanticReviewPlan?
   collapsed : Array[String]
   layout : ReviewDiffLayout
-} derive(Eq)
+}
 
 ///|
 let semantic_review_projection : Ref[(SemanticReviewProjection, @dom.Element)?] = Ref(

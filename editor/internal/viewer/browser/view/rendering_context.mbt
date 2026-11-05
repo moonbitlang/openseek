@@ -239,9 +239,10 @@ fn RenderingContext::content_widgets_render_context(
 /// measured caret x on a rendered line. The readonly consumers only use the
 /// rounded `left`; Monaco's additional source carrier fields are intentionally
 /// omitted because no current producer/consumer boundary observes them.
+#derive(Eq, Debug)
 pub struct HorizontalPosition {
   left : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 fn HorizontalPosition::HorizontalPosition(left : Double) -> HorizontalPosition {

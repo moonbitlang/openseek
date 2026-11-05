@@ -4,14 +4,16 @@
 // focus behavior, positioning, and theme.
 
 ///|
+#derive(Eq)
 pub(all) enum ClientPlatform {
   Web
   MacOS
   Windows
   Linux
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct ContextInput {
   platform : ClientPlatform
   // Whether ordinary web links have a visible in-app Browser destination on
@@ -23,7 +25,7 @@ pub(all) struct ContextInput {
   share_files : Bool
   download_files : Bool
   downloading : Bool
-} derive(Eq)
+}
 
 ///|
 pub(all) struct ContextActions {
@@ -36,31 +38,35 @@ pub(all) struct ContextActions {
 }
 
 ///|
+#derive(Eq)
 priv enum ContextTarget {
   NoTarget
   WebLink(String)
   EmailLink(url~ : String, address~ : String)
   FileLink(String, workspace_file~ : String?)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct ContextRequest {
   target : ContextTarget
   selected_text : String?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct ContextOpen {
   request : ContextRequest
   x : Int32
   y : Int32
   restore_focus_id : String?
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 priv struct ContextState {
   open_context : ContextOpen?
-} derive(Eq)
+}
 
 ///|
 priv enum ContextMsg {

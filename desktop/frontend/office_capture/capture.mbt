@@ -1,10 +1,11 @@
 ///|
+#derive(Eq)
 pub(all) enum Format {
   Word
   PowerPoint
   Excel
   Pdf
-} derive(Eq)
+}
 
 ///|
 pub fn Format::name(self : Format) -> String {
@@ -19,6 +20,7 @@ pub fn Format::name(self : Format) -> String {
 ///|
 /// Each rectangle belongs to a rendered page or worksheet, rather than the
 /// viewport, so feedback can be measured again after scrolling and zooming.
+#derive(Eq)
 pub(all) struct Region {
   index : Int32
   page : Int32?
@@ -26,9 +28,10 @@ pub(all) struct Region {
   y : Double
   width : Double
   height : Double
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct Capture {
   format : Format
   url : String
@@ -38,7 +41,7 @@ pub(all) struct Capture {
   text : String?
   sheet : String?
   range : String?
-} derive(Eq)
+}
 
 ///|
 fn from_pdf(capture : @pdf_capture.Capture) -> Capture {

@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
+import { test, expect } from './support/test.js';
+import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 for (const desktop of [false, true]) {
   test(`${desktop ? 'desktop' : 'browser'} restores Cloud in the ordinary chat UI without an online device`, async ({ page }) => {
@@ -261,20 +261,24 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
   });
 }
 
-test('Cloud renders each text fragment before completion and replaces the preview once', async ({ page }) => {
+test('Cloud renders each text fragment and hands off two tool-loop replies to delayed compact history', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
+  cloud.trimHistory = true;
   cloud.streamEvents = [
     ['task_started', {}],
     ['assistant_delta', { content: '你' }],
     ['assistant_delta', { content: '好 🌙' }],
-    ['assistant_message', { content: '你好 🌙' }],
-    ['task_finished', { status: 'completed', result: { output: { answer: '你好 🌙' } } }],
+    ['assistant_message', { content: '你好 🌙', tool_calls: [{ id: 'calc', name: 'mbtx', arguments: '{}' }] }],
+    ['tool_result', { tool_call_id: 'calc', tool_name: 'mbtx', content: '2', is_error: false }],
+    ['assistant_delta', { content: 'The result is 2.' }],
+    ['assistant_message', { content: 'The result is 2.' }],
+    ['task_finished', { status: 'completed', result: { output: { answer: 'The result is 2.' } } }],
   ];
   let first, second, final;
   cloud.eventPauses = new Map([
     [1, new Promise(resolve => first = resolve)],
     [2, new Promise(resolve => second = resolve)],
-    [3, new Promise(resolve => final = resolve)],
+    [6, new Promise(resolve => final = resolve)],
   ]);
   await cloud.install();
   await cloud.goto();
@@ -285,13 +289,37 @@ test('Cloud renders each text fragment before completion and replaces the previe
   await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(0);
   first();
   await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(1);
+  let releaseHistory;
+  cloud.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
+  const path = `/v1/sessions/${sessionA}/messages`;
+  const handoff = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
   second();
+  await handoff;
   await expect(page.locator('#transcript .streaming')).toHaveCount(0);
-  await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(1);
-  const recovered = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
-  final(); await (await recovered).finished();
+  const answer = page.locator('#transcript').getByText('你好 🌙', { exact: true });
+  await expect(answer).toBeVisible();
+  const result = page.locator('#transcript').getByText('The result is 2.', { exact: true });
+  await expect(result).toBeVisible();
+  const finished = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
+  final();
+  const finalRead = await finished;
+  await expect(answer).toBeVisible();
+  releaseHistory();
+  const recovered = await finalRead.response();
+  expect(recovered.status()).toBe(200);
+  const history = await recovered.json();
+  expect(history.messages.filter(record => record.kind === 'assistant_message').map(record => record.data)).toEqual([{}, {}]);
+  expect(history.messages.find(record => record.kind === 'user').data).toEqual({});
+  await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
-  await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(1);
+  await expect(result).toHaveCount(1);
+  await page.getByRole('button', { name: 'Detailed mode', exact: true }).click();
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toBeVisible();
+  await expect(result).toBeVisible();
+  const screenshot = testInfo.outputPath('cloud-compact-history-handoff.png');
+  await page.locator('#transcript').screenshot({ path: screenshot });
+  await testInfo.attach('Tool loop after compact history handoff', { path: screenshot, contentType: 'image/png' });
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
@@ -305,8 +333,8 @@ test('Cloud disconnect replaces provisional text with authoritative history and 
   await page.locator('#task').fill('Question'); await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toBeVisible();
   await page.locator('#task').fill('Draft after admission');
-  const recovered = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
-  disconnect(); await (await recovered).finished();
+  const recovered = settledResponse(page, response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
+  disconnect(); await recovered;
   await expect(page.locator('#transcript').getByText('Authoritative answer', { exact: true })).toHaveCount(1);
   await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Draft after admission');

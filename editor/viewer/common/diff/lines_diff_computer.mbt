@@ -5,24 +5,27 @@
 
 ///|
 /// Options shared by all synchronous document diff providers.
+#derive(Eq, Debug)
 pub(all) struct DocumentDiffOptions {
   ignore_trim_whitespace : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Whether a change participates in visible diff features. Ignored changes
 /// still participate in line alignment; providers recompute when filters change.
+#derive(Eq, Debug)
 pub(all) enum DocumentDiffChangeKind {
   Visible
   Ignored
-} derive(Eq, Debug)
+}
 
 ///|
 /// One source change and its visibility in this computation.
+#derive(Eq, Debug)
 pub(all) struct DocumentDiffChange {
   kind : DocumentDiffChangeKind
   mapping : DetailedLineRangeMapping
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn DocumentDiffChange::DocumentDiffChange(
@@ -37,9 +40,10 @@ pub fn DocumentDiffChange::DocumentDiffChange(
 /// drive decorations, overview markers, and navigation. Mappings are ordered
 /// on both sides, with equal unchanged gaps. Touching changes of the same kind
 /// are grouped; different kinds may touch but never overlap.
+#derive(Eq, Debug)
 pub(all) struct DocumentDiff {
   changes : Array[DocumentDiffChange]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Synchronous, renderer-neutral document diff provider. Providers may raise

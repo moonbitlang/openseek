@@ -22,7 +22,11 @@ async test "language paths accept frontend resource roots and reject escapes" {
   let outside = @fs.tmpdir(prefix="openseek-language-outside-")
   defer (@fs.rmdir(outside, recursive=true) catch { _ => () })
   defer (@fs.rmdir(root, recursive=true) catch { _ => () })
-  defer (@work_dir.revoke_host_workspace("language-test") catch { _ => () })
+  defer @async.protect_from_cancel(() => {
+    @work_dir.revoke_host_workspace("language-test") catch {
+      _ => ()
+    }
+  })
   @fs.mkdir("\{root}/src", recursive=true)
   @fs.write_file(
     "\{root}/src/main.mbt",

@@ -35,11 +35,12 @@ pub const MaxTextChars : Int32 = 8_000
 /// messages; the receiver records it on the transcript item the message
 /// becomes, which is how anyone tells a delivered message from a waiting one.
 /// `from` is the sender's session id.
+#derive(Eq, Debug)
 pub(all) struct Message {
   id : String
   from : String
   text : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Ids are unique within one process by the counter and across a sender's
@@ -64,6 +65,7 @@ pub fn Message::receipt(self : Message) -> String {
 
 ///|
 /// What an inbox holds.
+#derive(Eq, Debug)
 pub(all) struct Inbox {
   /// The messages this build can read, oldest first.
   messages : Array[Message]
@@ -72,7 +74,7 @@ pub(all) struct Inbox {
   /// not hidden — a reader that guessed at them could present someone's note
   /// as an instruction.
   unreadable : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Declare that the session whose inbox is `path` takes messages, by

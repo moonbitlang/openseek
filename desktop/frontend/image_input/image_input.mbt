@@ -15,11 +15,12 @@ pub(all) enum Event {
 ///|
 /// A browser-selected document is plain data. Only a local host may use its
 /// native path; a remote host always receives the selected bytes.
+#derive(Debug, Eq)
 pub(all) struct Document {
   name : String
   data_base64 : String
   native_path : String?
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend Document with Eq::{equal, not_equal}

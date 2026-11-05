@@ -7,6 +7,7 @@
 /// next move differs for each — a person who said no is not a session with
 /// nobody to ask, and collapsing them tells the model to retry exactly where
 /// retrying cannot work.
+#derive(Eq, Debug)
 pub(all) enum ApprovalOutcome {
   /// A person allowed this one action. It grants nothing beyond the action
   /// that was asked about: no rule, no session-wide permission, and nothing
@@ -21,7 +22,7 @@ pub(all) enum ApprovalOutcome {
   /// There was nobody to ask: no approval channel is wired to this runtime.
   /// The fail-closed default, and what an unconfigured runtime always answers.
   Unavailable
-} derive(Eq, Debug)
+}
 
 ///|
 /// One permission question: who is asking, what they would be granted, and
@@ -31,6 +32,7 @@ pub(all) enum ApprovalOutcome {
 /// The transport assigns each question its own approval id. Direct tools and
 /// programmatic file operations use the same channel; grants are consumed only
 /// by the operation that asked, never by another call.
+#derive(Eq, Debug)
 pub(all) struct ApprovalAsk {
   /// The tool asking, for the prompt's title.
   tool_name : String
@@ -40,7 +42,7 @@ pub(all) struct ApprovalAsk {
   detail : String
   /// The requested operation: snippet source or the target path and rationale.
   body : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where one tool's permission questions go. A caller holding one of these

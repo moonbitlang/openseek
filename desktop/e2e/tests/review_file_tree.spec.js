@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('Review tree supports keyboard folding and independent tri-state review checkboxes', async ({ page }) => {
@@ -46,6 +46,9 @@ test('Review tree supports keyboard folding and independent tri-state review che
   await expect(main).toBeVisible();
   await expect(lib).toBeHidden();
   await srcCheck.click();
+  // The checkbox returns focus to its row after rendering. Let that land
+  // before focusing the filter, or it takes focus from the filter mid-press.
+  await expect(src).toBeFocused();
   await input.press('Escape');
   await expect(lib).toBeVisible();
   await expect(srcCheck).toHaveAttribute('aria-checked', 'mixed');

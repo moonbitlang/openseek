@@ -1,11 +1,12 @@
 ///|
 /// Display data from the bounded selection payload; the original JSON remains
 /// the agent context so its source anchors and document identity stay intact.
+#derive(Eq)
 pub(all) struct OfficeSelectionSummary {
   file : String
   text : String?
   location : String?
-} derive(Eq)
+}
 
 ///|
 pub extend OfficeSelectionSummary with Eq::{equal, not_equal}

@@ -28,7 +28,8 @@ pub fn to_selected_lines(Array[@core.Selection]) -> SelectedLines
 // Errors
 
 // Types and methods
-type FoldRange derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type FoldRange
 pub fn FoldRange::FoldRange(Int32, Int32, type_? : String) -> Self
 pub fn FoldRange::end_line_number(Self) -> Int32
 pub fn FoldRange::equal(Self, Self) -> Bool
@@ -90,7 +91,8 @@ pub fn FoldingRegions::get_type(Self, Int32) -> String?
 pub fn FoldingRegions::length(Self) -> Int32
 pub fn FoldingRegions::to_fold_range(Self, Int32) -> FoldRange
 
-type FoldingStateMemento derive(@debug.Debug)
+#derive(@debug.Debug)
+type FoldingStateMemento
 
 type HiddenRangeModel
 pub fn HiddenRangeModel::HiddenRangeModel(FoldingModel) -> Self
@@ -103,10 +105,11 @@ type IndentRangeProvider
 pub fn IndentRangeProvider::IndentRangeProvider(@model.TextModel, @languages.LanguageHandle, FoldingLimitReporter, tab_size? : Int32) -> Self
 pub fn IndentRangeProvider::compute(Self) -> FoldingRegions
 
+#derive(Eq, @debug.Debug)
 pub(all) struct LineRange {
   start_line_number : Int32
   end_line_number : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn LineRange::equal(Self, Self) -> Bool
 pub fn LineRange::not_equal(Self, Self) -> Bool
 pub fn LineRange::to_repr(Self) -> @debug.Repr

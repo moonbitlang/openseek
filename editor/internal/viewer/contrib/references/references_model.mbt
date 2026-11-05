@@ -10,6 +10,7 @@
 
 ///|
 /// One immutable reference in deterministic display order.
+#derive(Eq, Debug)
 pub(all) struct ReferenceItem {
   flat_index : Int32
   group_index : Int32
@@ -18,7 +19,7 @@ pub(all) struct ReferenceItem {
   uri_string : String
   range : @base_common.Range
   is_test : Bool?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Reconstructs the host-neutral location used by open callbacks.
@@ -34,21 +35,23 @@ pub fn ReferenceItem::fallback_label(self : ReferenceItem) -> String {
 
 ///|
 /// One canonical-URI group within the ordinary or test partition.
+#derive(Eq, Debug)
 pub(all) struct ReferenceGroup {
   group_index : Int32
   uri : @base_common.Uri
   uri_string : String
   references : Array[ReferenceItem]
   is_test : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// Normalized reference results. `references` is the flat navigation order;
 /// `groups` partitions that exact sequence without changing item identity.
+#derive(Eq, Debug)
 pub(all) struct ReferencesModel {
   groups : Array[ReferenceGroup]
   references : Array[ReferenceItem]
-} derive(Eq, Debug)
+}
 
 ///|
 priv struct IndexedReferenceLocation {
@@ -258,11 +261,12 @@ pub fn ReferencesModel::previous_reference(
 
 ///|
 /// One single-row source preview with the exact match kept as a distinct part.
+#derive(Eq, Debug)
 pub(all) struct ReferenceSnippet {
   before : String
   matched : String
   after : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ReferenceSnippet::display_text(self : ReferenceSnippet) -> String {
@@ -272,10 +276,11 @@ pub fn ReferenceSnippet::display_text(self : ReferenceSnippet) -> String {
 ///|
 /// A row is always renderable: failed or unavailable snippets retain their
 /// stable location fallback and remain selectable.
+#derive(Eq, Debug)
 pub(all) enum ReferenceRowPreview {
   Snippet(ReferenceSnippet)
   LocationFallback(String)
-} derive(Eq, Debug)
+}
 
 ///|
 fn normalize_snippet_line_breaks(value : String) -> String {

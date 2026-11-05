@@ -51,12 +51,13 @@ pub const GoalContinuePrompt : String =
 
 ///|
 /// A standing goal derived from the durable event log.
+#derive(Debug)
 struct StandingGoal {
   text : String
   answered_since_set : Bool
   set_sequence : Int32
   blocked : Bool
-} derive(Debug)
+}
 
 ///|
 /// The goal text as it was set (may span lines when set over the wire).
@@ -90,12 +91,13 @@ pub fn StandingGoal::blocked(self : StandingGoal) -> Bool {
 
 ///|
 /// A goal marker recognized in a runtime notice.
+#derive(Debug)
 pub enum GoalMarker {
   GoalSet(String)
   GoalCleared
   GoalBlocked(String)
   GoalUnblocked
-} derive(Debug)
+}
 
 ///|
 /// Parse a runtime-notice content as a goal marker, if it is one. The set
@@ -194,10 +196,11 @@ const GoalBaselinePrefix : String = "[goal baseline]"
 /// The workspace snapshot recorded when a goal was set: the commit the
 /// worktree sat on, and whether the worktree was already dirty — the
 /// review gate's audit anchor and its attribution caveat.
+#derive(Debug, Eq)
 pub(all) struct GoalBaseline {
   sha : String
   dirty : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// Render the baseline notice content for `sha`/`dirty`.

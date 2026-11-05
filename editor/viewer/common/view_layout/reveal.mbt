@@ -1,6 +1,7 @@
 ///|
 /// Monaco's `VerticalRevealType` (`vs/editor/common/viewEvents.ts`): how a
 /// reveal aligns the target range inside the viewport.
+#derive(Eq, Debug)
 pub(all) enum VerticalRevealType {
   Simple
   Center
@@ -9,7 +10,7 @@ pub(all) enum VerticalRevealType {
   NearTopIfOutsideViewport
   Top
   Bottom
-} derive(Eq, Debug)
+}
 
 ///|
 /// The minimal `scroll_top` that brings the 1-based **view**-line range

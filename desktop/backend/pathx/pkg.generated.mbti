@@ -10,7 +10,8 @@ import {
 // Errors
 
 // Types and methods
-pub struct Absolute(String) derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+pub struct Absolute(String)
 pub fn Absolute::contains(Self, Self) -> Bool
 pub fn Absolute::equal(Self, Self) -> Bool
 pub fn Absolute::from_uri_path(String) -> Self?
@@ -27,7 +28,8 @@ pub fn Absolute::to_string(Self) -> String
 pub fn Absolute::to_uri_path(Self) -> String?
 pub impl Show for Absolute
 
-pub(all) struct Path(String) derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+pub(all) struct Path(String)
 pub fn Path::basename(Self) -> StringView
 pub fn Path::dirname(Self) -> Self
 pub fn Path::equal(Self, Self) -> Bool
@@ -45,7 +47,8 @@ pub fn Path::to_repr(Self) -> @debug.Repr
 pub fn Path::to_string(Self) -> String
 pub impl Show for Path
 
-pub(all) struct Relative(String) derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+pub(all) struct Relative(String)
 pub fn Relative::contains(Self, Self) -> Bool
 pub fn Relative::equal(Self, Self) -> Bool
 pub fn Relative::hash(Self) -> Int32

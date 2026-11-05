@@ -3,11 +3,12 @@ package "moonbitlang/openseek/agent_subrun"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/openseek_protocol",
 }
 
 // Values
-pub async fn[T] run_subrun(command~ : String, args~ : Array[String], input~ : Json, parse_report~ : (Json) -> Result[T, String], wall_deadline_ms~ : Int32, kind~ : String, label~ : String, cwd? : String, child_session? : ChildSession, extra_env? : Map[String, String], emit_event? : (@openseek_protocol.Event) -> Unit) -> SubrunResult[T]
+pub async fn[T] run_subrun(command~ : String, args~ : Array[String], input~ : @json.Json, parse_report~ : (@json.Json) -> Result[T, String], wall_deadline_ms~ : Int32, kind~ : String, label~ : String, cwd? : String, child_session? : ChildSession, extra_env? : Map[String, String], emit_event? : (@openseek_protocol.Event) -> Unit) -> SubrunResult[T]
 
 // Errors
 
@@ -24,7 +25,8 @@ pub struct ClaimedChild {
   token : String
 }
 
-type SubrunResult[T] derive(@debug.Debug)
+#derive(@debug.Debug)
+type SubrunResult[T]
 pub fn[T] SubrunResult::completion_tokens(Self[T]) -> Int32
 pub fn[T] SubrunResult::cost_usd(Self[T]) -> Double?
 pub fn[T] SubrunResult::prompt_tokens(Self[T]) -> Int32
@@ -34,6 +36,7 @@ pub fn[T] SubrunResult::terminal(Self[T]) -> SubrunTerminal
 pub fn[T] SubrunResult::unaccounted(Self[T]) -> String?
 pub fn[T] SubrunResult::value(Self[T]) -> T?
 
+#derive(Eq, @debug.Debug)
 pub enum SubrunTerminal {
   Captured
   NoReport
@@ -41,7 +44,7 @@ pub enum SubrunTerminal {
   ContextYield
   TimedOut
   Failed(String)
-} derive(Eq, @debug.Debug)
+}
 
 // Type aliases
 

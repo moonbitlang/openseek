@@ -12,13 +12,14 @@ pub fn text(Language, Message) -> String
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Language {
   English
   SimplifiedChinese
   TraditionalChinese
   Japanese
   Spanish
-} derive(Eq, @debug.Debug)
+}
 pub fn Language::equal(Self, Self) -> Bool
 pub fn Language::not_equal(Self, Self) -> Bool
 pub fn Language::to_repr(Self) -> @debug.Repr

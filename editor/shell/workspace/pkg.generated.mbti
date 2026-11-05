@@ -3,6 +3,7 @@ package "moonbitlang/editor/shell/workspace"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
 }
 
@@ -18,38 +19,43 @@ pub fn watch_file(&FileSystemProvider, @common.Uri, (Array[FileChange]) -> Unit)
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) enum DocumentChange {
   DocumentInvalidated(uri~ : @common.Uri, known_revision~ : String?)
   DocumentUpdated(DocumentSnapshot)
   DocumentDeleted(@common.Uri)
   DocumentChangeFailed(uri~ : @common.Uri, error~ : DocumentError)
-} derive(@debug.Debug)
+}
 pub fn DocumentChange::to_repr(Self) -> @debug.Repr
 
-type DocumentContent derive(@debug.Debug)
+#derive(@debug.Debug)
+type DocumentContent
 pub fn DocumentContent::DocumentContent(String, display_name? : String, language_id? : String, revision? : String) -> Self
 pub fn DocumentContent::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct DocumentError {
   code : FileSystemProviderErrorCode
   message : String
   uri : @common.Uri?
-} derive(@debug.Debug)
+}
 pub fn DocumentError::DocumentError(FileSystemProviderErrorCode, String, uri? : @common.Uri) -> Self
 pub fn DocumentError::to_file_system_error(Self) -> FileSystemProviderError
-pub fn DocumentError::to_json(Self) -> Json
+pub fn DocumentError::to_json(Self) -> @json.Json
 pub fn DocumentError::to_repr(Self) -> @debug.Repr
-pub impl ToJson for DocumentError
+pub impl @json.ToJson for DocumentError
 
+#derive(@debug.Debug)
 pub(all) enum DocumentReadResult {
   DocumentLoaded(DocumentSnapshot)
   DocumentNotFound(@common.Uri)
   DocumentReadFailed(DocumentError)
-} derive(@debug.Debug)
-pub fn DocumentReadResult::to_json(Self) -> Json
+}
+pub fn DocumentReadResult::to_json(Self) -> @json.Json
 pub fn DocumentReadResult::to_repr(Self) -> @debug.Repr
-pub impl ToJson for DocumentReadResult
+pub impl @json.ToJson for DocumentReadResult
 
+#derive(@debug.Debug)
 pub struct DocumentSnapshot {
   uri : @common.Uri
   display_name : String
@@ -57,7 +63,7 @@ pub struct DocumentSnapshot {
   revision : String
   text : String
   // private fields
-} derive(@debug.Debug)
+}
 pub fn DocumentSnapshot::DocumentSnapshot(@common.Uri, String, String, String, String) -> Self
 pub fn DocumentSnapshot::from_content(@common.Uri, DocumentContent) -> Self
 pub fn DocumentSnapshot::length(Self) -> Int32
@@ -69,43 +75,48 @@ pub fn DocumentSnapshot::line_text(Self, Int32) -> String
 pub fn DocumentSnapshot::offset_at_position(Self, @common.Position) -> Int32
 pub fn DocumentSnapshot::position_at_offset(Self, Int32) -> @common.Position
 pub fn DocumentSnapshot::slice(Self, @common.OffsetRange) -> String
-pub fn DocumentSnapshot::to_json(Self) -> Json
+pub fn DocumentSnapshot::to_json(Self) -> @json.Json
 pub fn DocumentSnapshot::to_repr(Self) -> @debug.Repr
-pub impl ToJson for DocumentSnapshot
+pub impl @json.ToJson for DocumentSnapshot
 
+#derive(@debug.Debug)
 pub(all) struct FileChange {
   uri : @common.Uri
   change_type : FileChangeType
-} derive(@debug.Debug)
-pub fn FileChange::to_json(Self) -> Json
+}
+pub fn FileChange::to_json(Self) -> @json.Json
 pub fn FileChange::to_repr(Self) -> @debug.Repr
-pub impl ToJson for FileChange
+pub impl @json.ToJson for FileChange
 
+#derive(Eq, @debug.Debug)
 pub(all) enum FileChangeType {
   Created
   Changed
   Deleted
-} derive(Eq, @debug.Debug)
+}
 pub fn FileChangeType::equal(Self, Self) -> Bool
 pub fn FileChangeType::not_equal(Self, Self) -> Bool
 pub fn FileChangeType::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum FileReadResult {
   FileReadOk(DocumentContent)
   FileReadError(FileSystemProviderError)
-} derive(@debug.Debug)
+}
 pub fn FileReadResult::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct FileSystemProviderError {
   code : FileSystemProviderErrorCode
   message : String
   uri : @common.Uri?
-} derive(@debug.Debug)
+}
 pub fn FileSystemProviderError::FileSystemProviderError(FileSystemProviderErrorCode, String, uri? : @common.Uri) -> Self
-pub fn FileSystemProviderError::to_json(Self) -> Json
+pub fn FileSystemProviderError::to_json(Self) -> @json.Json
 pub fn FileSystemProviderError::to_repr(Self) -> @debug.Repr
-pub impl ToJson for FileSystemProviderError
+pub impl @json.ToJson for FileSystemProviderError
 
+#derive(Eq, @debug.Debug)
 pub(all) enum FileSystemProviderErrorCode {
   FileNotFound
   FileExists
@@ -115,7 +126,7 @@ pub(all) enum FileSystemProviderErrorCode {
   Unavailable
   InvalidUri
   InvalidData
-} derive(Eq, @debug.Debug)
+}
 pub fn FileSystemProviderErrorCode::equal(Self, Self) -> Bool
 pub fn FileSystemProviderErrorCode::from_string(String) -> Self
 pub fn FileSystemProviderErrorCode::not_equal(Self, Self) -> Bool
@@ -127,16 +138,18 @@ pub(all) struct FileWatch {
 }
 pub fn FileWatch::dispose(Self) -> Unit
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SourceError {
   MissingPath
   InvalidPath
-} derive(Eq, @debug.Debug)
+}
 pub fn SourceError::equal(Self, Self) -> Bool
 pub fn SourceError::not_equal(Self, Self) -> Bool
 pub fn SourceError::to_repr(Self) -> @debug.Repr
 pub fn SourceError::to_string(Self) -> String
 
-type SourcePath derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type SourcePath
 pub fn SourcePath::display_name(Self) -> String
 pub fn SourcePath::equal(Self, Self) -> Bool
 pub fn SourcePath::normalize_root_relative_path(String) -> SourcePathResult
@@ -144,43 +157,48 @@ pub fn SourcePath::not_equal(Self, Self) -> Bool
 pub fn SourcePath::to_repr(Self) -> @debug.Repr
 pub fn SourcePath::to_string(Self) -> String
 
+#derive(Eq, @debug.Debug)
 pub enum SourcePathResult {
   ParsedSourcePath(SourcePath)
   SourcePathError(SourceError)
-} derive(Eq, @debug.Debug)
+}
 pub fn SourcePathResult::equal(Self, Self) -> Bool
 pub fn SourcePathResult::not_equal(Self, Self) -> Bool
 pub fn SourcePathResult::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct WatchOptions {
   recursive : Bool
   excludes : Array[String]
-} derive(@debug.Debug)
+}
 pub fn WatchOptions::default() -> Self
 pub fn WatchOptions::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum WorkspaceEntryKind {
   File
   Directory
-} derive(Eq, @debug.Debug)
+}
 pub fn WorkspaceEntryKind::equal(Self, Self) -> Bool
 pub fn WorkspaceEntryKind::from_string(String) -> Self?
 pub fn WorkspaceEntryKind::not_equal(Self, Self) -> Bool
 pub fn WorkspaceEntryKind::to_repr(Self) -> @debug.Repr
 pub fn WorkspaceEntryKind::to_string(Self) -> String
 
+#derive(@debug.Debug)
 pub(all) enum WorkspaceResolveResult {
   WorkspaceResolved(WorkspaceStat)
   WorkspaceResolveError(FileSystemProviderError)
-} derive(@debug.Debug)
+}
 pub fn WorkspaceResolveResult::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) struct WorkspaceStat {
   uri : @common.Uri
   name : String
   kind : WorkspaceEntryKind
   children : Array[WorkspaceStat]?
-} derive(@debug.Debug)
+}
 pub fn WorkspaceStat::to_repr(Self) -> @debug.Repr
 
 // Type aliases

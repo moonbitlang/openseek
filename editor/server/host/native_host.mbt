@@ -132,11 +132,12 @@ async fn native_file_signature(path : String) -> String {
 /// One coherent native-file observation used by semantic providers. Text is
 /// normalized exactly as a TextModel snapshot, while the signature remains the
 /// provider revision exposed on the wire.
+#derive(Eq)
 priv struct NativeDiskSnapshot {
   signature : String
   text : String
   normalized_text : String
-} derive(Eq)
+}
 
 ///|
 /// Reads a validated file only when its signature stays stable across the

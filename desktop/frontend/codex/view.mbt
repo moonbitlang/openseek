@@ -193,7 +193,8 @@ fn SidebarContext::draft_input(
 /// The native Codex boundary resolves every linked worktree to its main local
 /// checkout. That project root, never the exact thread cwd, is the grouping
 /// identity used by the sidebar.
-priv struct CodexProject(String) derive(Debug, Eq)
+#derive(Debug, Eq)
+priv struct CodexProject(String)
 
 ///|
 fn CodexDraftTask::grouping_root(self : CodexDraftTask) -> String {

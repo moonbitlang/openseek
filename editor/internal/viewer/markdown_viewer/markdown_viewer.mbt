@@ -3,18 +3,20 @@
 /// semantic `mbt check`/`moonbit check` fence projection; ordinary Markdown
 /// keeps every fence presentation-only. Selection is explicit and never
 /// inferred from the model URI or language id.
+#derive(Eq, Debug)
 pub(all) enum MarkdownResourceKind {
   OrdinaryMarkdown
   MoonBitMarkdown
-} derive(Eq, Debug)
+}
 
 ///|
 /// One caller-owned source model together with its explicit Markdown resource
 /// semantics. MarkdownViewerWidget owns neither value and never disposes the model.
+#derive(Debug)
 pub(all) struct MarkdownViewerWidgetModel {
   model : @model.TextModel
   resource_kind : MarkdownResourceKind
-} derive(Debug)
+}
 
 ///|
 pub fn MarkdownViewerWidgetModel::MarkdownViewerWidgetModel(
@@ -45,11 +47,12 @@ fn MarkdownResourceKind::to_internal(
 ///|
 /// Runtime options owned by the Markdown surface. Code-editor layout and input
 /// options deliberately do not cross this API.
+#derive(Eq, Debug)
 struct MarkdownViewerWidgetOptions {
   theme : String
   placeholder : String
   show_unused : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn MarkdownViewerWidgetOptions::MarkdownViewerWidgetOptions(
@@ -112,10 +115,11 @@ pub fn MarkdownViewerWidgetOptions::with_show_unused(
 
 ///|
 /// Host-restorable native Markdown viewport state.
+#derive(Eq, Debug)
 struct MarkdownViewerWidgetViewState {
   scroll_top : Double
   scroll_left : Double
-} derive(Eq, Debug)
+}
 
 ///|
 priv struct MarkdownViewerWidgetIdCounter {

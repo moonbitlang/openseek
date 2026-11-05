@@ -403,11 +403,12 @@ fn resolved_endpoint(
 /// Safe outcomes for the short-lived Pattern Repair configuration path.
 /// `Configuration` is emitted only by `resolved_endpoint`, whose messages are
 /// user-facing setup instructions; storage and system failures stay opaque.
+#derive(Debug)
 pub enum PatternRepairEnvironment {
   Ready(Map[String, String])
   Configuration(String)
   Unavailable
-} derive(Debug)
+}
 
 ///|
 pub extend PatternRepairEnvironment with Debug::{to_repr}

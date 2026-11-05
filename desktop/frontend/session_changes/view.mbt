@@ -1,12 +1,13 @@
 ///|
 /// Where a pull request stands. A draft is an open pull request that is not
 /// ready to merge; the card colors it apart from one that is.
+#derive(Eq, Debug)
 pub(all) enum PullRequestState {
   Open
   Draft
   Merged
   Closed
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PullRequestState with Eq::{equal, not_equal}
@@ -16,12 +17,13 @@ pub extend PullRequestState with Debug::{to_repr}
 
 ///|
 /// The checked-out branch's pull request, as GitHub reported it.
+#derive(Eq, Debug)
 pub(all) struct PullRequest {
   number : Int32
   title : String
   state : PullRequestState
   url : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend PullRequest with Eq::{equal, not_equal}
@@ -32,12 +34,13 @@ pub extend PullRequest with Debug::{to_repr}
 ///|
 /// The branch's line delta, measured locally. `partial` marks a count that
 /// stopped short of every untracked file, so it is a floor, not a total.
+#derive(Eq, Debug)
 pub(all) struct Diff {
   added : Int32
   removed : Int32
   files : Int32
   partial : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Diff with Eq::{equal, not_equal}
@@ -49,13 +52,14 @@ pub extend Diff with Debug::{to_repr}
 /// The checkout the conversation works in, as the root knows it: always its
 /// first row, and never removable — it follows the checkout rather than a
 /// saved list.
+#derive(Eq, Debug)
 pub(all) struct Checkout {
   branch : String
   /// The branch's pull request; while there is none, the row is the branch
   /// and its local diff.
   pull_request : PullRequest?
   diff : Diff?
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Checkout with Eq::{equal, not_equal}
@@ -123,7 +127,8 @@ pub fn summary(
 ///|
 /// The rows the overview shows for the changes card when it is unfolded: the
 /// checkout first, then what the agent attached, in the order it attached
-/// them. Each pull request or branch with a page opens it.
+/// them. Attached pull requests GitHub reports as merged follow as one row
+/// that unfolds into theirs. Each pull request or branch with a page opens it.
 pub fn rows(
   locale~ : @i18n.Locale = English,
   conversation : @interop.ConversationKey,
@@ -135,6 +140,8 @@ pub fn rows(
   if checkout is Some(checkout) {
     rows.push(checkout_row(locale, checkout))
   }
+  let merged : Array[@html.Html] = []
+  let merged_artifacts : Array[@protocol.SessionArtifact] = []
   for artifact in attached(conversation, checkout, state) {
     let remove = if state.removing.contains(artifact) {
       None
@@ -146,7 +153,37 @@ pub fn rows(
     } else {
       None
     }
-    rows.push(attached_row(locale, artifact, pull_request, remove))
+    let row = attached_row(locale, artifact, pull_request, remove)
+    if pull_request is Some({ state: Merged, .. }) {
+      merged.push(row)
+      merged_artifacts.push(artifact)
+    } else {
+      rows.push(row)
+    }
+  }
+  if !merged.is_empty() {
+    let open = state.merged_open
+    // Removing what is already being removed would do nothing, so the button
+    // waits until those removals answer.
+    let remove = if merged_artifacts
+      .iter()
+      .all(artifact => state.removing.contains(artifact)) {
+      None
+    } else {
+      Some(emit(RemoveAll(conversation, merged_artifacts)))
+    }
+    rows.push(
+      merged_fold(
+        locale,
+        merged.length(),
+        open,
+        emit(MergedToggled(conversation)),
+        remove,
+      ),
+    )
+    if open {
+      rows.push_iter(merged.iter())
+    }
   }
   if state.phase_for(conversation) is CheckFailed(error) {
     rows.push(failure(text(locale, CheckFailed), error))
@@ -352,6 +389,53 @@ fn item(
     )
   }
   @html.div(class="conv-changes-row", children)
+}
+
+///|
+/// The row that stands for the attached pull requests that merged: how many,
+/// a chevron that unfolds their rows beneath it, and a button that takes them
+/// all off the list; `remove` is `None` while their removals are out.
+fn merged_fold(
+  locale : @i18n.Locale,
+  count : Int32,
+  open : Bool,
+  toggle : @cmd.Cmd,
+  remove : @cmd.Cmd?,
+) -> @html.Html {
+  let label = text(locale, MergedCount(count))
+  let remove_label = text(locale, RemoveMerged)
+  @html.div(class="conv-changes-row", [
+    @html.button(
+      class=if open {
+        "conv-changes-link conv-changes-fold open"
+      } else {
+        "conv-changes-link conv-changes-fold"
+      },
+      type_="button",
+      title=label,
+      attrs=@html.Attrs::build().aria_expanded(open.to_string()),
+      on_click=toggle,
+      [
+        @html.span(
+          class="conv-changes-icon merged",
+          @icons.icon(@icons.icon_git_merge),
+        ),
+        @html.span(class="conv-changes-text", [
+          @html.span(class="conv-overview-row-sub", label),
+        ]),
+        @icons.icon(@icons.icon_chevron_down),
+      ],
+    ),
+    @html.button(
+      class="conv-overview-mini conv-changes-remove",
+      type_="button",
+      title=remove_label,
+      disabled=remove is None,
+      attrs=@html.Attrs::build().aria_label(remove_label),
+      on_click=remove.unwrap_or(@cmd.none),
+      @icons.icon(@icons.icon_close),
+    ),
+  ])
 }
 
 ///|

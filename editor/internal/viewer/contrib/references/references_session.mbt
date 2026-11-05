@@ -1,14 +1,16 @@
 ///|
 /// Display mode for the one shared Peek owner. Definition requests and the
 /// precomputed-references entry use the same shell and lifetime.
+#derive(Eq, Debug)
 pub(all) enum ReferencesPeekMode {
   Definitions
   References
-} derive(Eq, Debug)
+}
 
 ///|
 /// Logical lifecycle of the shared Peek session. Browser and model-reference
 /// resources stay with the root Viewer and are keyed by these generations.
+#derive(Eq, Debug)
 pub(all) enum ReferencesPeekPhase {
   PeekClosed
   PeekLoadingDefinitions(Int32)
@@ -16,18 +18,19 @@ pub(all) enum ReferencesPeekPhase {
   PeekLoadingPreview(Int32, Int32)
   PeekShown(Int32, Int32)
   PeekUnavailable(Int32, Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Exact source identity for toggling and freshness checks. The attachment
 /// generation distinguishes repeated attachment of the same physical model;
 /// the content version distinguishes edits within one attachment.
+#derive(Eq, Debug)
 pub struct ReferencesSessionKey {
   model_identity : Int32
   model_generation : Int32
   model_version_id : Int32
   anchor : @base_common.Position
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn ReferencesSessionKey::from_model(

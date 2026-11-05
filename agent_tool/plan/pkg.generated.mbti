@@ -2,13 +2,14 @@
 package "moonbitlang/openseek/agent_tool/plan"
 
 import {
+  "moonbitlang/core/json",
   "moonbitlang/openseek/agent_tool",
 }
 
 // Values
 pub fn definition() -> @agent_tool.AgentToolDefinition
 
-pub fn reminder_checklist(Json) -> String?
+pub fn reminder_checklist(@json.Json) -> String?
 
 // Errors
 

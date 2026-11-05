@@ -164,7 +164,7 @@ async fn ensure_moonx_alias(moon_home : @pathx.Path) -> Unit {
     let unique : @pathx.Path = @fs.tmpdir(prefix="openseek-moonx-")
     defer @fs.rmdir(unique.to_string())
     let temporary = bin.join(unique.basename().to_owned())
-    defer @fsx.remove_if_exists(temporary)
+    defer @async.protect_from_cancel(() => @fsx.remove_if_exists(temporary))
     @fsx.copy_file(moonbit_command(moon_home), temporary)
     @fs.rename(temporary.to_string(), moonx.to_string(), replace=true)
   }

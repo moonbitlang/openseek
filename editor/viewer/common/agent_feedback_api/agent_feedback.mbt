@@ -6,19 +6,21 @@
 ///|
 /// The origin of a feedback item. The upstream `PRReview` case is absent
 /// because the viewer has no pull-request machinery.
+#derive(Eq, Debug)
 pub(all) enum AgentFeedbackKind {
   UserReview
   AgentReview
-} derive(Eq, Debug)
+}
 
 ///|
 /// Lifecycle state for one feedback item.
+#derive(Eq, Debug)
 pub(all) enum AgentFeedbackState {
   Created
   Accepted
   Submitted
   Resolved
-} derive(Eq, Debug)
+}
 
 ///|
 /// One file-scoped feedback item. `range` is expressed in model coordinates;
@@ -27,6 +29,7 @@ pub(all) enum AgentFeedbackState {
 /// from that source range. Markdown image-only selections capture their mapped
 /// source instead. `None` means no snapshot was supplied; hosts may use source
 /// context when a supplied snapshot has no visible text.
+#derive(Debug)
 pub(all) struct AgentFeedback {
   id : String
   text : String
@@ -36,7 +39,7 @@ pub(all) struct AgentFeedback {
   kind : AgentFeedbackKind
   replies : Array[String]
   state : AgentFeedbackState
-} derive(Debug)
+}
 
 ///|
 pub extend AgentFeedback with Debug::{to_repr}

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionC } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id = sessionA) {
@@ -16,11 +16,6 @@ async function rename(page, cloud, title) {
 
 const patches = cloud => cloud.requests.filter(request => request.method === 'PATCH');
 const creations = cloud => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions');
-
-async function archivedGroup(page) {
-  const group = page.getByRole('button', { name: /^Archived chats \(/ });
-  if (await group.getAttribute('aria-expanded') === 'false') await group.click();
-}
 
 {
   const desktop = false;
@@ -111,19 +106,15 @@ for (const status of [401, 404]) {
     await expect(page.locator('#task')).toHaveValue('');
     expect(creations(cloud)).toHaveLength(0);
     expect(patches(cloud).map(request => JSON.parse(request.body))).toEqual([{ archived: true }]);
-    await archivedGroup(page);
-    await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.archived:/);
+    await expect(cloud.row(sessionA)).toHaveCount(0);
     const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/v1/sessions/${sessionA}/messages`));
-    await cloud.row(sessionA).click();
+    await cloud.openArchived(sessionA);
     expect((await history).status()).toBe(304);
     await expect(page.locator('main h1')).toHaveText('Cloud fixture A');
     await expect(page.locator('#transcript')).toContainText('Earlier Cloud answer.');
     await expect(page.locator('.archived-read-only')).toHaveText('Archived conversation · Read onlyRestore');
     await expect(page.locator('#task')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
-    await cloud.row(sessionA).click({ button: 'right' });
-    await expect(page.getByRole('menuitem')).toHaveText(['Restore', 'Delete…']);
-    await page.keyboard.press('Escape');
     await page.screenshot({ path: testInfo.outputPath(`cloud-archived-${desktop ? 'desktop' : 'browser'}.png`), fullPage: true, animations: 'disabled' });
     await page.locator('main').getByRole('button', { name: 'Restore', exact: true }).click();
     await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.live:/);
@@ -159,18 +150,17 @@ for (const status of [401, 404]) {
   });
 }
 
-test('Cloud restore keeps its read-only view after failure and exposes a disabled-only menu while retrying', async ({ page }, testInfo) => {
+test('Cloud restore keeps its read-only view after failure and disables its archived-page actions while retrying', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
   cloud.archived.add(sessionA);
   cloud.patchStatus = 503;
   await cloud.install();
   await cloud.goto();
-  await archivedGroup(page);
-  await cloud.row(sessionA).click();
+  await cloud.openArchived(sessionA);
   const restore = page.locator('main').getByRole('button', { name: 'Restore', exact: true });
   await restore.click();
   await expect(page.locator('aside')).toContainText('HTTP 503');
-  await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.archived:/);
+  await expect(cloud.row(sessionA)).toHaveCount(0);
   await expect(page.locator('#task')).toHaveCount(0);
   cloud.patchStatus = 204;
   let finish;
@@ -178,22 +168,18 @@ test('Cloud restore keeps its read-only view after failure and exposes a disable
   await restore.click();
   try {
     await expect(restore).toBeDisabled();
-    await cloud.row(sessionA).click({ button: 'right' });
-    const popup = page.getByRole('menu', { name: 'Conversation actions', exact: true });
-    await expect(popup).toBeFocused();
-    await expect(popup.getByRole('menuitem', { name: 'Restore', exact: true })).toBeDisabled();
-    await expect(popup.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeDisabled();
-    for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', 'Space']) {
-      await page.keyboard.press(key);
-      await expect(popup).toBeFocused();
-    }
-    await page.screenshot({ path: testInfo.outputPath('cloud-restore-pending-menu.png'), fullPage: true });
+    await cloud.openArchivedChats();
+    const row = cloud.archivedRow(sessionA);
+    await expect(row.getByRole('button', { name: 'Restore', exact: true })).toBeDisabled();
+    await expect(row.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+    await page.screenshot({ path: testInfo.outputPath('cloud-restore-pending-page.png'), fullPage: true });
     expect(cloud.requests.filter(request => request.method === 'DELETE')).toHaveLength(0);
-    await page.keyboard.press('Escape');
   } finally {
     finish();
   }
   await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.live:/);
-  await expect(page.locator('#task')).toBeVisible();
+  await expect(cloud.archivedRow(sessionA)).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await cloud.open();
   expect(creations(cloud)).toHaveLength(0);
 });

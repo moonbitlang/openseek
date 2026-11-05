@@ -142,17 +142,19 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
 
 ///|
 /// The composer sitting under the transcript on screen.
+#derive(Eq)
 priv enum QuoteScreen {
   ChatQuote
   CodexQuote
-} derive(Eq)
+}
 
 ///|
 /// The composer a reply quoting the transcript on screen is addressed to.
+#derive(Eq)
 priv enum QuoteTarget {
   ChatComposer(@composer.Identity)
   CodexComposer(@composer.Identity)
-} derive(Eq)
+}
 
 ///|
 /// Which composer, if any, is shown with a transcript right now. A read-only
@@ -1068,10 +1070,27 @@ fn main {
     )
     // `Val::view9` is rabbita's widest composition. Stable overlay pairs share
     // one slot each without moving their state into the root model.
-    let skills_and_workspace_settings = @rabbita.Val::map2(
+    // Reset the filter between visits, but render the closed page too so its
+    // DOM is already mounted before the next opening.
+    let archived_chats_html = state
+      .map(model => model.management_dialog is Some(ArchivedChats))
+      .switch_by(
+        _ => {
+          @archived_chats.component(
+            state.map(model => model.locale),
+            state.map(model => model.archived_chat_groups()),
+            archived_chats_actions(emit),
+          )
+        },
+        by=open => if open { "open" } else { "closed" },
+      )
+    let management_pages = @rabbita.Val::map3(
       skills_html,
       workspace_settings_html,
-      (skills, workspace_settings) => (skills, workspace_settings),
+      archived_chats_html,
+      (skills, workspace_settings, archived_chats) => {
+        (skills, workspace_settings, archived_chats)
+      },
     )
     let quick_open_and_context_menu = @rabbita.Val::map3(
       quick_open_html,
@@ -1089,7 +1108,7 @@ fn main {
       codex_composer_html,
       sidebar_html,
       quick_open_and_context_menu,
-      skills_and_workspace_settings,
+      management_pages,
       (
         model,
         terminal_html,
@@ -1099,7 +1118,7 @@ fn main {
         codex_composer_html,
         sidebar_html,
         quick_open_and_context_menu,
-        skills_and_workspace_settings,
+        management_pages,
       ) => {
         view(
           emit,
@@ -1113,7 +1132,7 @@ fn main {
           codex_composer_html,
           sidebar_html,
           quick_open_and_context_menu,
-          skills_and_workspace_settings,
+          management_pages,
         )
       },
     )

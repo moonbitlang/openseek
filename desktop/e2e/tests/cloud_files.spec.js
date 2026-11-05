@@ -1,8 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, authOrigin, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, settledResponse, authOrigin, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 class CloudFilesHarness extends CloudHarness {
   constructor(page, options) {
@@ -446,9 +446,9 @@ test('a delayed Cloud read cannot replace a restored session after A to B to A n
   cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: '// Current A text', sig: 'current', absolute: '/src/hello #.mbt' });
   await cloud.open(sessionA);
   await expect(source(page)).toContainText('Current A text');
-  const oldResponse = page.waitForResponse(response => response.url().includes(`/v1/sessions/${sessionA}/files/content`));
+  const oldResponse = settledResponse(page, response => response.url().includes(`/v1/sessions/${sessionA}/files/content`));
   release();
-  await (await oldResponse).finished();
+  await oldResponse;
   await expect(source(page)).not.toContainText('Cloud text');
   await expect(source(page)).toContainText('Current A text');
   expect(fileHostRequests(cloud)).toEqual([]);
@@ -475,9 +475,7 @@ test('blank Cloud drafts do not create sessions or expose files, while archived 
   await expect(page.getByRole('button', { name: 'Show panel', exact: true })).toHaveCount(0);
   expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toEqual([]);
   expect(cloud.fileRequests).toEqual([]);
-  const archived = page.getByRole('button', { name: /^Archived chats \(/ });
-  if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
-  await cloud.row(sessionB).click();
+  await cloud.openArchived(sessionB);
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
   await openText(page);
@@ -1137,8 +1135,8 @@ test('a retired Cloud account cannot hand its delayed download to the browser', 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const account = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
   await account.getByRole('button', { name: 'Sign out', exact: true }).click();
-  const response = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/files/download'));
-  release(); await (await response).finished();
+  const response = settledResponse(page, r => new URL(r.url()).pathname.endsWith('/files/download'));
+  release(); await response;
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(account.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   expect(downloads).toEqual([]);
@@ -1331,9 +1329,7 @@ for (const batch of [true, false]) {
       expect(request.command.content).toContain('Keep this in my draft');
     }
     expect(cloud.postCount).toBe(0);
-    const archived = page.getByRole('button', { name: /^Archived chats \(/ });
-    if (await archived.getAttribute('aria-expanded') === 'false') await archived.click();
-    await cloud.row(sessionB).click();
+    await cloud.openArchived(sessionB);
     await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
     await openText(page);
     const line = source(page).locator('.view-lines .view-line').nth(1);

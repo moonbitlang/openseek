@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const creations = cloud => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions');
@@ -89,7 +89,7 @@ test('a first-send rejection preserves the input and retries the existing Cloud 
   await expect(page.getByRole('main')).toContainText('Cloud model credentials are not configured');
   const history = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionC}/messages`);
   releaseHistory();
-  await (await history).finished();
+  expect((await history).status()).toBe(200);
   await expect(page.getByRole('main')).toContainText('Cloud model credentials are not configured');
   await expect(page.locator('#task')).toHaveValue('Keep this initial input');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();

@@ -15,10 +15,10 @@ the main transcript and composer without creating a second nested application
 shell. Codex remains the owner of its account and thread data, separate from
 OpenSeek's existing engine and conversation store.
 
-The sidebar presents Workspaces, Codex, Chats, and Archived chats as peer
-collapsible sections in one scroll lane. Folding a section is page-local view
-state; it never archives, reloads, or otherwise mutates either conversation
-store.
+The sidebar presents Workspaces, Codex, and Chats as peer collapsible sections
+in one scroll lane. Folding a section is page-local view state; it never
+archives, reloads, or otherwise mutates either conversation store. Archived
+conversations from both stores are listed on Settings' archived chats page.
 
 The browser code mirrors that ownership. `desktop/frontend/codex` is a
 standalone MoonBit package containing the Codex state, update function,

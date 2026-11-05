@@ -12,7 +12,7 @@ async fn with_toolchain_test_tree(
   body : async (@pathx.Absolute) -> Unit,
 ) -> Unit {
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-external-")).resolve()
-  defer remove_toolchain_test_tree(root)
+  defer @async.protect_from_cancel(() => remove_toolchain_test_tree(root))
   body(root)
 }
 

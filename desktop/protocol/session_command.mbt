@@ -1,11 +1,12 @@
 ///|
 /// A native session command plus the existing settings needed to restore its
 /// host. Turn commands retain the existing host admission and ownership checks.
+#derive(Eq, Debug)
 pub(all) struct SessionCommandPayload {
   command : @wire.Command
   settings : SessionCommandSettings
   run_id : String?
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for SessionCommandPayload with fn from_json(json, path) {
@@ -35,9 +36,10 @@ pub impl ToJson for SessionCommandPayload with fn to_json(self) {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) struct SessionCommandReply {
   accepted : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl FromJson for SessionCommandReply with fn from_json(json, path) {

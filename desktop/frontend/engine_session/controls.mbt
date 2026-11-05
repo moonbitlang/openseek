@@ -1,4 +1,5 @@
 ///|
+#derive(Eq)
 pub(all) enum CompactionPhase {
   // Nothing pending; the only phase that accepts a `/compact`.
   NotCompacting
@@ -14,9 +15,10 @@ pub(all) enum CompactionPhase {
   // The engine reported `compaction_started` and has not yet reported the
   // summary or a failure.
   Compacting
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct GoalCommand {
   id : String
   request : GoalRequest
@@ -26,14 +28,15 @@ pub(all) struct GoalCommand {
   // by state when a set re-asserts an unchanged goal, or a clear lands on an
   // already-goalless session.
   since : Int32
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum GoalRequest {
   // The text this set asks to be standing.
   Setting(String)
   Clearing
-} derive(Eq)
+}
 
 ///|
 fn GoalRequest::settled_by(
@@ -51,6 +54,7 @@ fn GoalRequest::settled_by(
 
 ///|
 /// Command UI state is independent of the host transport and chatting task.
+#derive(Eq)
 pub(all) struct State {
   goal : @transcript.GoalStanding?
   edit : GoalEdit?
@@ -58,7 +62,7 @@ pub(all) struct State {
   compaction : CompactionPhase
   compact_request : String?
   automatic_compacting : Bool
-} derive(Eq)
+}
 
 ///|
 pub(all) enum Action {
@@ -325,16 +329,18 @@ pub fn refreshes_history(event : @wire.Event) -> Bool {
 }
 
 ///|
+#derive(Eq)
 pub(all) struct GoalEdit {
   draft : String
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum Delivery {
   Accepted
   Rejected
   Unknown
-} derive(Eq)
+}
 
 ///|
 pub fn State::empty() -> State {

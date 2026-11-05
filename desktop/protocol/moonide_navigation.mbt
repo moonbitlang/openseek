@@ -1,10 +1,11 @@
 // Operational failures travel as replies so Proton preserves their details.
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum MoonIdeNavigationReply {
   NavigationLocations(MoonIdeLocationsReply)
   NavigationError(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl ToJson for MoonIdeNavigationReply with fn to_json(self) {

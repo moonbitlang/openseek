@@ -1,24 +1,27 @@
 ///|
 /// Parsed remote workspace path or protocol-shaped URI validation error.
+#derive(Debug)
 pub(all) enum RemotePathResult {
   ParsedRemotePath(@workspace.SourcePath)
   RemotePathError(@remote_protocol.ProtocolError)
-} derive(Debug)
+}
 
 ///|
 /// Native host file-read result returned to the remote server policy layer.
+#derive(Debug)
 pub(all) enum ServerHostReadResult {
   ServerHostReadOk(@workspace.DocumentContent)
   ServerHostReadError(@workspace.FileSystemProviderErrorCode, String)
-} derive(Debug)
+}
 
 ///|
 /// One resolved directory level: child stats with provider-minted URIs and
 /// `children: None` (unresolved), the `IFileService.resolve` contract.
+#derive(Debug)
 pub(all) enum ServerHostResolveResult {
   ServerHostResolveOk(Array[@workspace.WorkspaceStat])
   ServerHostResolveError(@workspace.FileSystemProviderErrorCode, String)
-} derive(Debug)
+}
 
 ///|
 /// Disposable watch handle owned by the remote server.
