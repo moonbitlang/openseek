@@ -51,20 +51,6 @@ fn decode_helper_headers(text : String) -> Map[String, String] raise {
     guard value is String(value) else {
       fail("MCP headersHelper values must be strings")
     }
-    guard !name.is_empty() &&
-      name
-      .iter()
-      .all(c => {
-        (c >= 'a' && c <= 'z') ||
-        (c >= 'A' && c <= 'Z') ||
-        (c >= '0' && c <= '9') ||
-        "!#$%&'*+-.^_`|~".contains(c.to_string())
-      }) &&
-      !value.contains("\r") &&
-      !value.contains("\n") &&
-      !value.contains("\u0000") else {
-      fail("MCP headersHelper returned an invalid HTTP header")
-    }
     headers[name] = value
   }
   headers
