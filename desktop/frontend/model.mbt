@@ -1935,6 +1935,9 @@ priv enum Msg {
     session~ : String,
     id~ : String
   )
+  // The person started (`allow`) or dismissed a conversation the active one
+  // proposed, from its card in the transcript.
+  ProposalAnswered(id~ : String, allow~ : Bool)
   NewChat
   NewChatRequested
   TranscriptLinkOpened(slot~ : String, path~ : String)

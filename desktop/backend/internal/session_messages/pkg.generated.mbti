@@ -3,6 +3,7 @@ package "openseek_desktop/backend/internal/session_messages"
 
 import {
   "moonbitlang/core/json",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -20,7 +21,7 @@ pub struct Message {
   id : String
   sender : String
   target : String
-  text : String
+  subject : Subject
   request_id : String
   // private fields
 }
@@ -33,8 +34,27 @@ pub fn Service::decide(Self, String, Bool) -> Bool
 pub fn Service::detach(Self, String) -> Unit
 pub fn Service::get(Self, String, String) -> Message raise MessageError
 pub fn Service::request(Self, String, String, String, String) -> (Message, Bool) raise
-pub async fn Service::run(Self, async (String, String, String) -> Unit, (String, String) -> Unit) -> Unit
+pub fn Service::request_start(Self, String, workspace~ : String, title~ : String, brief~ : String, request_id~ : String, settings~ : StartSettings) -> (Message, Bool) raise
+pub async fn Service::run(Self, async (String, String, String) -> Unit, (String, String) -> Unit, start~ : async (Message) -> Unit) -> Unit
 pub async fn Service::wait(Self, Message, wait_ms? : Int32, delivery_wait_ms? : Int32) -> @json.Json
+
+#derive(Eq)
+pub(all) struct StartSettings {
+  system_prompt : String?
+  model : String?
+  thinking : @protocol.OpenSeekThinking?
+  approval : @protocol.OpenSeekApproval?
+}
+pub fn StartSettings::equal(Self, Self) -> Bool
+pub fn StartSettings::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
+pub enum Subject {
+  Send(target~ : String, text~ : String)
+  Start(workspace~ : String, title~ : String, brief~ : String, settings~ : StartSettings)
+}
+pub fn Subject::equal(Self, Self) -> Bool
+pub fn Subject::not_equal(Self, Self) -> Bool
 
 // Type aliases
 
