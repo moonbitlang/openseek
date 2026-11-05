@@ -1,0 +1,24 @@
+/* rui sets dimensions inline; these classes override only the size contract. */
+dialog:is(.dialog-size-small, .dialog-size-medium, .dialog-size-large) {
+  width: min(var(--dialog-width), calc(100vw - 2rem)) !important;
+  max-height: var(--dialog-max-height, calc(100dvh - 2rem)) !important;
+}
+
+dialog.dialog-size-small {
+  --dialog-width: 28rem;
+}
+
+dialog.dialog-size-medium {
+  --dialog-width: 40rem;
+}
+
+dialog.dialog-size-large {
+  --dialog-width: min(84rem, 86vw);
+  height: min(64rem, 84dvh);
+}
+
+@media (max-width: 600px) {
+  dialog.dialog-size-large {
+    --dialog-width: calc(100vw - 2rem);
+  }
+}

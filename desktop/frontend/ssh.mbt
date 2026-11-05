@@ -1553,6 +1553,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   @rui.dialog(
     id="ssh-modal",
+    class="dialog-size-medium",
     show_close=false,
     closedby=if ui.busy ||
       (ssh_visible_host(ui) is Some(id) && ui.connecting.contains(id)) {

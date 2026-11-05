@@ -13,6 +13,7 @@ fn skills_detail_dialog_view(
 ) -> @html.Html {
   @rui.dialog(
     id="skill-detail-dialog",
+    class="dialog-size-medium",
     show_close=false,
     attrs=@html.Attrs::build().aria_labelledby("skill-detail-dialog-title"),
     on_cancel=dispatch(Skills(@skills.BackToList)),

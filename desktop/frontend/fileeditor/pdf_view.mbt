@@ -135,6 +135,7 @@ fn pdf_password_dialog(
     .unwrap_or(false)
   @rui.dialog(
     id="pdf-password-dialog",
+    class="dialog-size-small",
 
     show_close=false,
     on_cancel=dispatch(PdfPasswordCancelled),

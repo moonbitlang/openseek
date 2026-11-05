@@ -2672,6 +2672,7 @@ fn update_confirm_modal(
 ) -> @html.Html {
   @rui.dialog(
     id="update-restart-dialog",
+    class="dialog-size-small",
     show_close=false,
     on_cancel=dispatch(CancelUpdateRestart),
     attrs=@html.Attrs::build().aria_labelledby("update-restart-title"),
@@ -2717,7 +2718,7 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   @rui.dialog(
     id="api-setup-dialog",
-    class="setup-modal",
+    class="setup-modal dialog-size-medium",
     show_close=false,
     on_cancel=dispatch(DismissApiSetup),
     attrs=@html.Attrs::build().aria_labelledby("api-setup-title"),

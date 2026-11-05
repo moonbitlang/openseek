@@ -88,6 +88,7 @@ pub fn Model::view(
   }
   @rui.dialog(
     id=DialogId,
+    class="dialog-size-medium",
 
     show_close=false,
     on_cancel=emit(Close),

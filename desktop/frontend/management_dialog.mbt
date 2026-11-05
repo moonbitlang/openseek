@@ -26,6 +26,7 @@ fn management_dialog_view(
   }
   @rui.dialog(
     id="management-dialog",
+    class="dialog-size-large",
     show_close=false,
     attrs=@html.Attrs::build().aria_labelledby("management-dialog-title"),
     on_cancel=dispatch(

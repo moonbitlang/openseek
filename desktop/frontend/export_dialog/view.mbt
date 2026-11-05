@@ -219,6 +219,7 @@ pub fn Model::view(
   }
   @rui.dialog(
     id=self.id_prefix + "-dialog",
+    class="dialog-size-medium",
 
     show_close=false,
     on_cancel=emit(Close),

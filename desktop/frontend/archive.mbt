@@ -483,6 +483,7 @@ fn delete_modal(
   }
   @rui.dialog(
     id="delete-chat-dialog",
+    class="dialog-size-small",
     show_close=false,
     on_cancel=dispatch(CancelDeleteSession),
     attrs=@html.Attrs::build().aria_labelledby("delete-chat-title"),

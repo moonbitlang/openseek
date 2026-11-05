@@ -282,6 +282,7 @@ fn CodexPermissionPicker::confirmation_dialog(
   Some(
     @rui.dialog(
       id="codex-permission-dialog",
+      class="dialog-size-small",
 
       show_close=false,
       on_cancel=cancel,

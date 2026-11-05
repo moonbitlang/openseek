@@ -813,6 +813,7 @@ pub fn WorktreeArchiveDialog::render(
   ignore(locale)
   @rui.dialog(
     id="worktree-archive-dialog",
+    class="dialog-size-small",
 
     show_close=false,
     on_cancel=self.cancel,

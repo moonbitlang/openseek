@@ -344,6 +344,7 @@ fn dialog_component(
   state.view3(input, locale, (state, input, locale) => {
     @rui.dialog(
       id=DialogId,
+      class="dialog-size-medium",
 
       show_close=false,
       closedby="any",

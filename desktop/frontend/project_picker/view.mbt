@@ -113,6 +113,7 @@ pub fn view(
   }
   @rui.dialog(
     id="project-picker-dialog",
+    class="dialog-size-medium",
 
     show_close=false,
     on_cancel=emit(Close),
