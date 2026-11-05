@@ -73,9 +73,9 @@ test "Cloud keeps an assistant preview when the latest page moves past its turn"
   let answer : Record = {
     task_id: "task",
     kind: "assistant_message",
-    data: { "content": "First answer" },
+    data: {},
     created_at: 1,
-    engine_sequence: None,
+    engine_sequence: Some(1),
   }
   let first : History = {
     offset: Some(0),
@@ -447,4 +447,83 @@ test "Cloud stream boundaries clear provisional reasoning and fence terminal cal
     late.conversations["session"].live.reasoning.map(r => r.content) is None,
   )
   assert_false(late.conversations["session"].generating)
+}
+
+///|
+test "Cloud history consumes each linked native reply only once" {
+  let state = progress_test_state()
+    .progress_test_event(1, "task_started", {})
+    .progress_test_event(2, "assistant_message", { "content": "Repeated" })
+  let first_request = state.conversations["session"].request
+  let state = state.progress_test_event(3, "assistant_message", {
+    "content": "Repeated",
+  })
+  let conversation = state.conversations["session"]
+  let current_request = conversation.request
+  let first : Record = {
+    task_id: "task",
+    kind: "assistant_message",
+    data: {},
+    engine_sequence: Some(1),
+    created_at: 1,
+  }
+  let reply : Json = {
+    "kind": "assistant",
+    "payload": { "content": "Repeated" },
+  }
+  let partial : History = {
+    offset: Some(0),
+    etag: Some("partial"),
+    generating: true,
+    prediction: None,
+    session: native_document([reply]),
+    messages: [first, { ..first, engine_sequence: Some(3), }],
+  }
+  let stale = conversation.with_history_page(
+    partial,
+    request=first_request,
+    latest=true,
+  )
+  assert_eq(stale.pending_assistants.length(), 1)
+  let unchanged = stale.acknowledge_assistants(
+    current_request,
+    partial.session,
+    partial.messages,
+  )
+  assert_eq(unchanged.pending_assistants.length(), 1)
+  assert_true(
+    unchanged.items()
+    is [
+      { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. },
+      { kind: Assistant(prose=Some("Repeated"), ..), sequence: None, .. },
+    ],
+  )
+  let completed = unchanged.with_history_page(
+    {
+      ..partial,
+      session: native_document([
+        reply,
+        {
+          "kind": "tool_result",
+          "payload": {
+            "tool_call_id": "call",
+            "tool_name": "read",
+            "content": "ok",
+            "is_error": false,
+          },
+        },
+        reply,
+      ]),
+    },
+    request=current_request,
+    latest=true,
+  )
+  assert_true(completed.pending_assistants.is_empty())
+  assert_true(
+    completed.items()
+    is [
+      { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(1), .. },
+      { kind: Assistant(prose=Some("Repeated"), ..), sequence: Some(3), .. },
+    ],
+  )
 }

@@ -445,10 +445,19 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     self.cloud.creating_session()
   let history : Array[String] = []
   for record in conversation.records {
-    if record.kind == "user" && record.data is { "content": content, .. } {
-      let text = match content {
-        String(text) => text
-        Array(parts) =>
+    if record.kind == "user" {
+      let native = record.engine_sequence.bind(sequence => {
+        conversation.document.events
+        .unwrap_or([])
+        .iter()
+        .find_first(event => {
+          event.sequence == sequence && event.item is @protocol.User(_)
+        })
+      })
+      let text = match (native, record.data) {
+        (Some({ item: @protocol.User(user), .. }), _) => user.content.text()
+        (_, { "content": String(text), .. }) => text
+        (_, { "content": Array(parts), .. }) =>
           parts
           .iter()
           .filter_map(part => {

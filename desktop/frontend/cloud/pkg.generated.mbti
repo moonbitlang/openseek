@@ -172,6 +172,7 @@ pub(all) struct Conversation {
   last_seq : Int32?
   live : @engine_session.Stream
   pending_assistants : Array[PendingAssistant]
+  assistant_handoffs : Map[String, Int32]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State

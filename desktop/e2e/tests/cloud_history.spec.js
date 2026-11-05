@@ -9,6 +9,7 @@ const user = (task, content, created_at) => ({ task_id: task, kind: 'user', data
 
 test('Cloud history recalls text from image messages in order and skips image-only or empty prompts', async ({ page }) => {
   const cloud = new CloudHarness(page);
+  cloud.trimHistory = true;
   cloud.histories.set(sessionA, {
     messages: [
       user('plain', 'An older plain question', 1000),
@@ -81,7 +82,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
     const sequence = index * 3 + 1;
     const task = `turn-${index}`;
     return {
-      messages: [{ ...user(task, label, sequence), id: sequence, engine_sequence: sequence }],
+      messages: [{ ...user(task, label, sequence), data: {}, id: sequence, engine_sequence: sequence }],
       events: [
         { sequence, item: { kind: 'user', payload: { content: label } } },
         { sequence: sequence + 1, item: { kind: 'assistant', payload: {

@@ -244,9 +244,19 @@ fn cloud_finished_notification(
   }
   let mut answer = None
   for item in after.records {
-    if item.task_id == event.task_id &&
-      item.kind == "assistant_message" &&
-      item.data is { "content": String(text), .. } {
+    guard item.task_id == event.task_id && item.kind == "assistant_message" else {
+      continue
+    }
+    if item.engine_sequence is Some(sequence) {
+      if after.document.events
+        .unwrap_or([])
+        .iter()
+        .find_first(record => record.sequence == sequence)
+        is Some({ item: @protocol.Assistant(reply), .. }) &&
+        !reply.content.is_blank() {
+        answer = Some(reply.content)
+      }
+    } else if item.data is { "content": String(text), .. } {
       answer = Some(text)
     }
   }
