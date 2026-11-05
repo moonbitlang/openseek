@@ -31,6 +31,7 @@ import org.json.JSONObject
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var fileResult: ValueCallback<Array<Uri>>? = null
+    private val updater = AppUpdater(this)
     private val signIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val account = result.data?.getStringExtra("account")
         if (result.resultCode == Activity.RESULT_OK && account != null && ConsoleOrigin.contains(webView.url)) {
@@ -172,6 +173,12 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(ConsoleOrigin.ENTRY_URL)
         }
+        if (savedInstanceState == null) updater.start() else updater.restoreState(savedInstanceState)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updater.onResume()
     }
 
     private fun showLoadError(view: WebView, message: String) {
@@ -189,6 +196,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         webView.saveState(outState)
+        updater.saveState(outState)
         super.onSaveInstanceState(outState)
     }
 
