@@ -24,56 +24,72 @@ fn management_dialog_view(
       content,
     )
   }
-  @dialog_shell.view(
+  @ui.dialog(
     id="management-dialog",
-    title~,
-    close_label=shell_text(model.locale, DismissLabel),
     size=Large,
-    closedby="any",
-    on_dismiss=dispatch(
+    show_close=false,
+    attrs=@html.Attrs::build().aria_labelledby("management-dialog-title"),
+    on_cancel=dispatch(
       if model.delete_confirm is Some(_) {
         CancelDeleteSession
       } else {
         CloseManagementDialog
       },
     ),
-    leading?=if model.management_dialog is Some(Skills) &&
-      model.skills.detail_open() {
-      Some(
-        @html.button(
-          class="icon-button",
-          attrs=@html.Attrs::build().aria_label(
-            shell_text(model.locale, BackToSkills),
-          ),
-          on_click=dispatch(Skills(@skills.BackToList)),
-          @icons.icon(@icons.icon_arrow_left),
+    [
+      @ui.dialog_header([
+        @html.div(
+          class="desktop-dialog-heading",
+          [
+            ..if model.management_dialog is Some(Skills) &&
+              model.skills.detail_open() {
+              [
+                @html.button(
+                  class="icon-button",
+                  attrs=@html.Attrs::build().aria_label(
+                    shell_text(model.locale, BackToSkills),
+                  ),
+                  on_click=dispatch(Skills(@skills.BackToList)),
+                  @icons.icon(@icons.icon_arrow_left),
+                ),
+              ]
+            },
+            @ui.dialog_title(id="management-dialog-title", title),
+          ],
         ),
-      )
-    } else {
-      None
-    },
-    body=@html.fragment([
-      // Stable panes retain their DOM while the shared dialog is closed.
-      pane(Settings, settings_page(dispatch, model)),
-      pane(ArchivedChats, archived_chats_html),
-      pane(Skills, skills_html),
-      pane(Schedules, schedules_page(dispatch, model)),
-      if model.management_dialog is Some(_) && model.host_incompatible() {
-        console_gate_view(
-          locale=model.locale,
-          dispatch,
-          model.console,
-          host_incompatible=true,
-        )
-      } else {
-        @html.nothing
-      },
-      if model.management_dialog is Some(ArchivedChats) &&
-        model.delete_confirm is Some(confirm) {
-        delete_modal(locale=model.locale, dispatch, confirm, model.cloud)
-      } else {
-        @html.nothing
-      },
-    ]),
+        @html.button(
+          type_="button",
+          class="icon-button",
+          attrs=@html.Attrs::build()
+            .data_set("slot", "dialog-close")
+            .aria_label(shell_text(model.locale, DismissLabel)),
+          on_click=@dialog.request_close("management-dialog"),
+          @icons.icon(@icons.icon_close),
+        ),
+      ]),
+      @ui.dialog_body([
+        // Stable panes retain their DOM while the shared dialog is closed.
+        pane(Settings, settings_page(dispatch, model)),
+        pane(ArchivedChats, archived_chats_html),
+        pane(Skills, skills_html),
+        pane(Schedules, schedules_page(dispatch, model)),
+        if model.management_dialog is Some(_) && model.host_incompatible() {
+          console_gate_view(
+            locale=model.locale,
+            dispatch,
+            model.console,
+            host_incompatible=true,
+          )
+        } else {
+          @html.nothing
+        },
+        if model.management_dialog is Some(ArchivedChats) &&
+          model.delete_confirm is Some(confirm) {
+          delete_modal(locale=model.locale, dispatch, confirm, model.cloud)
+        } else {
+          @html.nothing
+        },
+      ]),
+    ],
   )
 }

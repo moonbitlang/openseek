@@ -114,7 +114,7 @@ a:where(.setting-link) {
 }
 
 /* Management pages keep their own content spacing; the shell owns scrolling. */
-#management-dialog > .desktop-dialog-body {
+#management-dialog > [data-slot="dialog-content"] > [data-slot="dialog-body"] {
   padding: 0;
 }
 .management-dialog-pane:not([hidden]) {

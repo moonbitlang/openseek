@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/ui"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+}
+
+// Values
+pub fn[C : @html.IsChildren] dialog(id? : String, class? : String, title? : String, hidden? : Bool, open? : Bool, size? : DialogSize, closedby? : String, show_close? : Bool, close_label? : String, on_close? : @cmd.Emit[String], on_cancel? : @cmd.Cmd, attrs? : @html.Attrs, C) -> @html.Html
+
+pub fn[C : @html.IsChildren] dialog_body(id? : String, class? : String, title? : String, attrs? : @html.Attrs, C) -> @html.Html
+
+pub fn[C : @html.IsChildren] dialog_description(id? : String, class? : String, title? : String, attrs? : @html.Attrs, C) -> @html.Html
+
+pub fn[C : @html.IsChildren] dialog_footer(id? : String, class? : String, title? : String, attrs? : @html.Attrs, C) -> @html.Html
+
+pub fn[C : @html.IsChildren] dialog_header(id? : String, class? : String, title? : String, attrs? : @html.Attrs, C) -> @html.Html
+
+pub fn[C : @html.IsChildren] dialog_title(id? : String, class? : String, title? : String, attrs? : @html.Attrs, C) -> @html.Html
+
+// Errors
+
+// Types and methods
+pub(all) enum DialogSize {
+  Small
+  Medium
+  Large
+}
+
+// Type aliases
+
+// Traits

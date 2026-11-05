@@ -1,5 +1,6 @@
 /* Visibility belongs to the native dialog API, not the layout classes. */
-dialog.desktop-dialog {
+dialog {
+  --dialog-width: 40rem;
   box-sizing: border-box;
   position: fixed;
   inset: 0;
@@ -18,16 +19,16 @@ dialog.desktop-dialog {
   flex-direction: column;
 }
 
-dialog.desktop-dialog[open] {
+dialog[open] {
   display: flex;
 }
 
-dialog.desktop-dialog::backdrop {
+dialog::backdrop {
   background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  dialog.desktop-dialog {
+  dialog {
     scale: 0.995;
     transition:
       scale 60ms ease-in,
@@ -35,55 +36,55 @@ dialog.desktop-dialog::backdrop {
       overlay 60ms allow-discrete;
   }
 
-  dialog.desktop-dialog[open] {
+  dialog[open] {
     scale: none;
     transition-duration: 60ms;
     transition-timing-function: cubic-bezier(0.2, 1.4, 0.4, 1);
   }
 
   /* Keep the backdrop solid until the closing window leaves the top layer. */
-  dialog.desktop-dialog::backdrop {
+  dialog::backdrop {
     transition:
       display 60ms allow-discrete,
       overlay 60ms allow-discrete;
   }
 
   @starting-style {
-    dialog.desktop-dialog[open] {
+    dialog[open] {
       scale: 0.995;
     }
   }
 }
 
-dialog.desktop-dialog-small {
+dialog[data-size="small"] {
   --dialog-width: 28rem;
 }
 
-dialog.desktop-dialog-medium {
+dialog[data-size="medium"] {
   --dialog-width: 40rem;
 }
 
-dialog.desktop-dialog-large {
+dialog[data-size="large"] {
   --dialog-width: min(84rem, 86vw);
   height: min(64rem, 84dvh);
 }
 
-.desktop-dialog-content {
+[data-slot="dialog-content"] {
   display: contents;
 }
 
-.desktop-dialog-close-form {
+[data-slot="dialog-close-form"] {
   position: absolute;
   top: var(--space-5);
   inset-inline-end: var(--space-6);
   margin: 0;
 }
 
-dialog.desktop-dialog:has(> .desktop-dialog-close-form) .desktop-dialog-header {
+dialog:has(> [data-slot="dialog-close-form"]) [data-slot="dialog-header"] {
   padding-inline-end: calc(var(--space-6) + 2rem + var(--space-4));
 }
 
-.desktop-dialog-header {
+[data-slot="dialog-header"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -100,7 +101,7 @@ dialog.desktop-dialog:has(> .desktop-dialog-close-form) .desktop-dialog-header {
   min-width: 0;
 }
 
-.desktop-dialog-title {
+[data-slot="dialog-title"] {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
@@ -108,18 +109,18 @@ dialog.desktop-dialog:has(> .desktop-dialog-close-form) .desktop-dialog-header {
   font-weight: 600;
 }
 
-.desktop-dialog-description {
+[data-slot="dialog-description"] {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
 }
 
-.desktop-dialog-close {
+[data-slot="dialog-close"] {
   flex: none;
 }
 
-.desktop-dialog-body {
+[data-slot="dialog-body"] {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
@@ -128,7 +129,7 @@ dialog.desktop-dialog:has(> .desktop-dialog-close-form) .desktop-dialog-header {
   overscroll-behavior: contain;
 }
 
-.desktop-dialog-actions {
+[data-slot="dialog-footer"] {
   display: flex;
   justify-content: flex-end;
   flex: none;
@@ -139,7 +140,7 @@ dialog.desktop-dialog:has(> .desktop-dialog-close-form) .desktop-dialog-header {
 }
 
 @media (max-width: 600px) {
-  dialog.desktop-dialog-large {
+  dialog[data-size="large"] {
     --dialog-width: calc(100vw - 2rem);
   }
 }

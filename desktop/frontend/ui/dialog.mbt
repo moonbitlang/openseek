@@ -6,17 +6,12 @@ pub(all) enum DialogSize {
 }
 
 ///|
-fn DialogSize::class_name(self : DialogSize) -> String {
+fn DialogSize::value(self : DialogSize) -> String {
   match self {
-    Small => "desktop-dialog-small"
-    Medium => "desktop-dialog-medium"
-    Large => "desktop-dialog-large"
+    Small => "small"
+    Medium => "medium"
+    Large => "large"
   }
-}
-
-///|
-fn component_class(base : String, extra : String?) -> String {
-  extra.map_or(base, extra => base + " " + extra)
 }
 
 ///|
@@ -44,24 +39,30 @@ pub fn[C : @html.IsChildren] dialog(
 ) -> @html.Html {
   @html.dialog(
     id?,
-    class=component_class("desktop-dialog " + size.class_name(), class),
+    class?,
     title?,
     hidden?,
     open?,
     closedby~,
     on_close?,
     on_cancel?,
-    attrs?,
+    attrs=ui_attrs(attrs)
+      .data_set("slot", "dialog")
+      .data_set("size", size.value()),
     [
-      @html.div(class="desktop-dialog-content", children),
+      @html.div(
+        attrs=@html.Attrs::build().data_set("slot", "dialog-content"),
+        children,
+      ),
       if show_close {
         @html.form(
           method_="dialog",
-          class="desktop-dialog-close-form",
+          attrs=@html.Attrs::build().data_set("slot", "dialog-close-form"),
           @html.button(
             type_="submit",
-            class="icon-button desktop-dialog-close",
+            class="icon-button",
             attrs=@html.Attrs::build()
+              .data_set("slot", "dialog-close")
               .aria_label(close_label)
               .formnovalidate(true),
             @icons.icon(@icons.icon_close),
@@ -84,9 +85,9 @@ pub fn[C : @html.IsChildren] dialog_header(
 ) -> @html.Html {
   @html.div(
     id?,
-    class=component_class("desktop-dialog-header", class),
+    class?,
     title?,
-    attrs?,
+    attrs=ui_attrs(attrs).data_set("slot", "dialog-header"),
     children,
   )
 }
@@ -101,9 +102,9 @@ pub fn[C : @html.IsChildren] dialog_title(
 ) -> @html.Html {
   @html.h2(
     id?,
-    class=component_class("desktop-dialog-title", class),
+    class?,
     title?,
-    attrs?,
+    attrs=ui_attrs(attrs).data_set("slot", "dialog-title"),
     children,
   )
 }
@@ -118,9 +119,9 @@ pub fn[C : @html.IsChildren] dialog_description(
 ) -> @html.Html {
   @html.p(
     id?,
-    class=component_class("desktop-dialog-description", class),
+    class?,
     title?,
-    attrs?,
+    attrs=ui_attrs(attrs).data_set("slot", "dialog-description"),
     children,
   )
 }
@@ -135,9 +136,9 @@ pub fn[C : @html.IsChildren] dialog_body(
 ) -> @html.Html {
   @html.div(
     id?,
-    class=component_class("desktop-dialog-body", class),
+    class?,
     title?,
-    attrs?,
+    attrs=ui_attrs(attrs).data_set("slot", "dialog-body"),
     children,
   )
 }
@@ -152,9 +153,9 @@ pub fn[C : @html.IsChildren] dialog_footer(
 ) -> @html.Html {
   @html.div(
     id?,
-    class=component_class("desktop-dialog-actions", class),
+    class?,
     title?,
-    attrs?,
+    attrs=ui_attrs(attrs).data_set("slot", "dialog-footer"),
     children,
   )
 }
