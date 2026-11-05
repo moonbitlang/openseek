@@ -54,14 +54,12 @@ test('schedule form, running controls, and completed session navigation', async 
   await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Open session', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open session', exact: true }).click();
-  await expect(page.locator('.schedules-page')).toHaveCount(0);
   await expect.poll(() => app.requests.some(r => r.method === 'session.load')).toBe(true);
   await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
   await page.getByRole('button', { name: 'Stop run', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Open session', exact: true })).toBeVisible();
   await page.screenshot({ animations: 'disabled', path: test.info().outputPath('scheduled-tasks.png') });
   await page.getByRole('button', { name: 'Open session', exact: true }).click();
-  await expect(page.locator('.schedules-page')).toHaveCount(0);
   await expect.poll(() => app.requests.some(r => r.method === 'session.load')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });

@@ -43,7 +43,7 @@ test('network failure reaches the retry UI', async ({ page }) => {
   await app.install();
   await page.route('**/v2/auth/me', route => route.abort('failed'));
   await page.goto('/index.html?device=device-a');
-  await expect(page.getByText(/the relay is unreachable:/)).toBeVisible();
+  await expect(page.getByRole('main').getByText(/the relay is unreachable:/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
