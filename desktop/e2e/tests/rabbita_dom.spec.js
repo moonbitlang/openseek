@@ -1831,7 +1831,7 @@ test('a browser close request closes a workspace settings menu before its dialog
     if (event.key === 'Escape') event.stopImmediatePropagation();
   }, true));
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Workspace settings' });
   await expect(dialog).toBeVisible();
@@ -1855,7 +1855,7 @@ test('workspace settings dialog opens and persists per-workspace choices', async
 
   // The project row's "⋮" menu opens its workspace settings dialog.
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   const workspaceSettings = page.getByRole('dialog', { name: 'Workspace settings' });
   await expect(workspaceSettings).toBeVisible();
@@ -1914,7 +1914,7 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   // Close and re-enter: the dialog keeps the committed values.
   await page.getByRole('button', { name: 'Close workspace settings' }).click();
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   await expect(page.getByRole('button', { name: 'New chats' })).toHaveText('Worktree');
   await expect(page.getByRole('button', { name: 'Submodules in worktrees' })).toHaveText('Initialize');
@@ -1932,7 +1932,7 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   await expect(page.getByRole('button', { name: 'New chats' })).toHaveCount(0);
   app.notify('workspace.changed', { workspaces: ['/workspace'] });
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   const reopened = page.getByRole('button', { name: 'New chats' });
   await expect(reopened).toHaveAttribute('aria-expanded', 'false');

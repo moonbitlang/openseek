@@ -336,10 +336,9 @@ fn dialog_component(
     @rui.dialog(
       id=DialogId,
       class="dialog-size-medium",
-
       close_label=ui(locale, CloseLabel),
       closedby="any",
-      on_cancel=@cmd.batch([emit(CloseMenu), actions.dismiss]),
+      on_cancel=@dialog.close(DialogId),
       on_close=_ => @cmd.batch([emit(CloseMenu), actions.dismiss]),
       attrs=@html.Attrs::build()
         .aria_labelledby("workspace-settings-title")
