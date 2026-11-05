@@ -898,6 +898,7 @@ button.row-twisty:hover {
   flex: 1 1 23rem;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: none;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
