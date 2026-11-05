@@ -80,7 +80,9 @@ fn Model::chat_column(self : Model) -> ChatColumn {
       conversation.document.events.map_or(true, events => events.is_empty()) {
       return Loading
     }
-    if conversation.history_required && conversation.notice is Some(message) {
+    if !conversation.history_cached &&
+      conversation.history_required &&
+      conversation.notice is Some(message) {
       return LoadFailed(message~, retry=true)
     }
     return CloudTranscript(slot=CloudTranscriptSlot(owner))
