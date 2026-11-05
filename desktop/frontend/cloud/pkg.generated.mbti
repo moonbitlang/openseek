@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
+pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
 pub fn discard_legacy_credential() -> Unit
 
