@@ -15,15 +15,6 @@ pub fn Model::view(
         id=self.id_prefix + "-title",
         ui(locale, if file { ShareFile } else { ExportConversation }),
       ),
-      @html.button(
-        class="icon-button",
-        title=ui(locale, CloseLabel),
-        on_click=emit(Close),
-        attrs=@html.Attrs::build().aria_label(
-          ui(locale, if file { CloseLabel } else { CloseDialog }),
-        ),
-        @icons.icon(@icons.icon_close),
-      ),
     ])
     let actions = @rui.dialog_footer([
       if file {
@@ -221,7 +212,11 @@ pub fn Model::view(
     id=self.id_prefix + "-dialog",
     class="dialog-size-medium",
 
-    show_close=false,
+    close_label=ui(
+      locale,
+      if self.content is Some({ source: File(_), .. }) { CloseLabel } else { CloseDialog },
+    ),
+    on_close=_ => emit(Close),
     on_cancel=emit(Close),
     attrs=@html.Attrs::build()
       .aria_labelledby(self.id_prefix + "-title")

@@ -115,7 +115,8 @@ pub fn view(
     id="project-picker-dialog",
     class="dialog-size-medium",
 
-    show_close=false,
+    close_label=ui(locale, ClosePicker),
+    on_close=_ => emit(Close),
     on_cancel=emit(Close),
     attrs=@html.Attrs::build().aria_labelledby("project-picker-title"),
     [
@@ -133,14 +134,6 @@ pub fn view(
             @html.div(class="picker-subtitle", ui(locale, ChooseFolder)),
           ]),
         ]),
-        @html.button(
-          class="icon-button",
-          type_="button",
-          title=ui(locale, CloseLabel),
-          on_click=emit(Close),
-          attrs=@html.Attrs::build().aria_label(ui(locale, ClosePicker)),
-          @icons.icon(@icons.icon_close),
-        ),
       ]),
       @html.div(
         class="picker-content",

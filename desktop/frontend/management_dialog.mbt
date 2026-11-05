@@ -27,10 +27,11 @@ fn management_dialog_view(
   @rui.dialog(
     id="management-dialog",
     class="dialog-size-large",
-    show_close=false,
+    close_label=shell_text(model.locale, DismissLabel),
+    on_close=_ => dispatch(CloseManagementDialog),
     attrs=@html.Attrs::build().aria_labelledby("management-dialog-title"),
     on_cancel=dispatch(
-      if model.delete_confirm is Some(_) {
+      if model.delete_confirm is Open(_) {
         CancelDeleteSession
       } else {
         CloseManagementDialog
@@ -39,15 +40,6 @@ fn management_dialog_view(
     [
       @rui.dialog_header([
         @rui.dialog_title(id="management-dialog-title", title),
-        @html.button(
-          type_="button",
-          class="icon-button",
-          attrs=@html.Attrs::build()
-            .data_set("slot", "dialog-close")
-            .aria_label(shell_text(model.locale, DismissLabel)),
-          on_click=@dialog.request_close("management-dialog"),
-          @icons.icon(@icons.icon_close),
-        ),
       ]),
       @html.div([
         // Stable panes retain their DOM while the shared dialog is closed.
@@ -62,12 +54,6 @@ fn management_dialog_view(
             model.console,
             host_incompatible=true,
           )
-        } else {
-          @html.nothing
-        },
-        if model.management_dialog is Some(ArchivedChats) &&
-          model.delete_confirm is Some(confirm) {
-          delete_modal(locale=model.locale, dispatch, confirm, model.cloud)
         } else {
           @html.nothing
         },

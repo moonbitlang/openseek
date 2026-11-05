@@ -2530,6 +2530,12 @@ fn view(
     management_dialog_view(
       dispatch, model, skills_list_html, archived_chats_html,
     ),
+    delete_modal(
+      locale=model.locale,
+      dispatch,
+      model.delete_confirm,
+      model.cloud,
+    ),
     skills_detail_dialog_view(dispatch, model, skills_detail_html),
     workspace_settings_html,
     model.session_import_dialog.view(
@@ -2613,12 +2619,6 @@ fn view(
         cancel: dispatch(CancelArchiveDiscard),
         confirm: dispatch(ConfirmArchiveDiscard),
       }.render(locale=model.locale),
-    )
-  }
-  if !(model.management_dialog is Some(ArchivedChats)) &&
-    model.delete_confirm is Some(confirm) {
-    children.push(
-      delete_modal(locale=model.locale, dispatch, confirm, model.cloud),
     )
   }
   // Rendered whether or not the palette is open — closed it is an empty

@@ -1524,7 +1524,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.session_import_dialog.is_open() ||
   model.workspace_settings_dialog is Some(_) ||
   model.archive_confirm is Some(_) ||
-  model.delete_confirm is Some(_) ||
+  model.delete_confirm is Open(_) ||
   model.quick_open.is_open() ||
   model.api_setup_open ||
   model.update_ux is ConfirmingRestart(_) ||
@@ -1757,6 +1757,11 @@ fn update(
       @cmd.none
     },
     dialog_cmd,
+    if previous.delete_confirm is Open(_) && !(model.delete_confirm is Open(_)) {
+      @dialog.close("delete-chat-dialog")
+    } else {
+      @cmd.none
+    },
     if !detail_was_open && detail_open {
       @dialog.show("skill-detail-dialog")
     } else {
@@ -2266,7 +2271,7 @@ fn update_msg(
         @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             CloudDelete(
               account~,
               session~,
@@ -5332,18 +5337,24 @@ fn update_msg(
     CancelArchiveDiscard => (@cmd.none, { ..model, archive_confirm: None, })
     ConfirmDeleteSession =>
       match model.delete_confirm {
-        Some(CloudDelete(account~, session~, ..)) => {
+        Open(CloudDelete(account~, session~, ..)) => {
           guard model.cloud.user_id == Some(account) else {
-            return (@cmd.none, { ..model, delete_confirm: None, })
+            return (
+              @cmd.none,
+              { ..model, delete_confirm: model.delete_confirm.close(), },
+            )
           }
           update_cloud(dispatch, @cloud.Delete(session), {
             ..model,
-            delete_confirm: None,
+            delete_confirm: model.delete_confirm.close(),
           })
         }
-        Some(HostDelete(confirm)) => {
+        Open(HostDelete(confirm)) => {
           guard model.device_state(confirm.channel) is Some(dev) else {
-            return (@cmd.none, { ..model, delete_confirm: None, })
+            return (
+              @cmd.none,
+              { ..model, delete_confirm: model.delete_confirm.close(), },
+            )
           }
           let sessions = match confirm.target {
             LiveChat(checkout~) =>
@@ -5352,7 +5363,7 @@ fn update_msg(
                 delete_session(dispatch, confirm.channel, confirm.key, checkout),
                 {
                   ..model,
-                  delete_confirm: None,
+                  delete_confirm: model.delete_confirm.close(),
                   // The delete can still come back to be confirmed again.
                   delete_pending: Some((confirm.channel, confirm.key)),
                   deletes_in_flight: model.confirm_delete(
@@ -5377,7 +5388,7 @@ fn update_msg(
             ),
             {
               ..model.replace_device({ ..dev, archived_request_generation, }),
-              delete_confirm: None,
+              delete_confirm: model.delete_confirm.close(),
               // The host can announce the deletion before this reply, which
               // the announcement then makes stale.
               deletes_in_flight: model.confirm_delete(
@@ -5389,12 +5400,13 @@ fn update_msg(
             },
           )
         }
-        None => (@cmd.none, model)
+        Empty | Closed(_) => (@cmd.none, model)
       }
     // Closing the dialog leaves `delete_pending` alone. No question is out
     // while a dialog is open, and the confirm button's click also reaches the
     // backdrop: that second message must not drop the delete's own answer.
-    CancelDeleteSession => (@cmd.none, { ..model, delete_confirm: None, })
+    CancelDeleteSession =>
+      (@cmd.none, { ..model, delete_confirm: model.delete_confirm.close(), })
     SessionRotated(owner) => {
       guard model.cloud_identity() is None &&
         (
@@ -5758,7 +5770,7 @@ fn update_msg(
         @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             HostDelete({
               channel,
               key,
@@ -8596,7 +8608,7 @@ fn update_device_msg(
         @dialog.show("delete-chat-dialog"),
         {
           ..model,
-          delete_confirm: Some(
+          delete_confirm: Open(
             HostDelete({
               channel,
               key,
@@ -8756,7 +8768,11 @@ fn update_device_msg(
           request_generation~,
           fresh_session~,
         ),
-        { ..tombstoned, conversations, delete_confirm: None, },
+        {
+          ..tombstoned,
+          conversations,
+          delete_confirm: tombstoned.delete_confirm.close(),
+        },
       )
     }
     ArchiveFailed(message) => {
@@ -8860,8 +8876,8 @@ fn update_device_msg(
           conv.project() != key.workspace
         })
         let confirm = match changed.delete_confirm {
-          Some(HostDelete(confirm)) if confirm.channel == channel &&
-            confirm.key == key => None
+          Open(HostDelete(confirm)) if confirm.channel == channel &&
+            confirm.key == key => changed.delete_confirm.close()
           other => other
         }
         let next = changed
@@ -18207,7 +18223,7 @@ test "archived deletion confirmation owns one visible conversation family" {
     ),
     model,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("delete confirmation was not staged")
   }
   assert_true(
@@ -18226,11 +18242,11 @@ test "archived deletion confirmation owns one visible conversation family" {
   assert_true(sessions.contains("desktop-parent"))
   assert_true(sessions.contains("desktop-parent-sr-1"))
   let (_, cancelled) = update(dispatch, CancelDeleteSession, staged)
-  assert_true(cancelled.delete_confirm is None)
+  assert_true(cancelled.delete_confirm is Closed(_))
   let (_, cancelled_twice) = update(dispatch, CancelDeleteSession, cancelled)
-  assert_true(cancelled_twice.delete_confirm is None)
+  assert_true(cancelled_twice.delete_confirm is Closed(_))
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
-  assert_true(confirmed.delete_confirm is None)
+  assert_true(confirmed.delete_confirm is Closed(_))
   assert_eq(confirmed.dev().archived_request_generation, 1)
   let (_, confirmed_twice) = update(dispatch, ConfirmDeleteSession, confirmed)
   assert_eq(confirmed_twice.dev().archived_request_generation, 1)
@@ -18258,7 +18274,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
     model,
   )
-  assert_true(asked.delete_confirm is None)
+  assert_true(asked.delete_confirm is Empty)
   let clean : @protocol.CheckoutRemoval = {
     worktree: "wt-1",
     dirty_paths: [],
@@ -18279,13 +18295,13 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     ),
     asked,
   )
-  assert_true(unlisted.delete_confirm is None)
+  assert_true(unlisted.delete_confirm is Empty)
   let (_, staged) = update_dev(
     dispatch,
     DeleteChecked(key~, checkout=Some(clean)),
     asked,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("the host's answer staged no confirmation")
   }
   assert_true(confirm.key == key)
@@ -18294,7 +18310,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
   // The row stays listed until the host announces the deletion, and the
   // archived list is not this request's to refresh.
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
-  assert_true(confirmed.delete_confirm is None)
+  assert_true(confirmed.delete_confirm is Closed(_))
   assert_eq(confirmed.dev().sessions.length(), 2)
   assert_eq(confirmed.dev().archived_request_generation, 0)
   // A checkout that turned dirty after the check comes back from the delete
@@ -18307,7 +18323,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key~, checkout=Some(dirty)),
     bubbled,
   )
-  guard refused.delete_confirm is Some(HostDelete(again)) else {
+  guard refused.delete_confirm is Open(HostDelete(again)) else {
     fail("a refused delete staged no second confirmation")
   }
   assert_true(again.target == LiveChat(checkout=Some(dirty)))
@@ -18326,13 +18342,13 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key~, checkout=None),
     overtaken,
   )
-  assert_true(late.delete_confirm is None)
+  assert_true(!(late.delete_confirm is Open(_)))
   let (_, current) = update_dev(
     dispatch,
     DeleteChecked(key=other, checkout=None),
     late,
   )
-  guard current.delete_confirm is Some(HostDelete(latest)) else {
+  guard current.delete_confirm is Open(HostDelete(latest)) else {
     fail("the latest question staged no confirmation")
   }
   assert_true(latest.key == other)
@@ -18349,7 +18365,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key=other, checkout=None),
     cancelled,
   )
-  assert_true(reopened.delete_confirm is None)
+  assert_true(reopened.delete_confirm is Closed(_))
 }
 
 ///|
@@ -18465,7 +18481,7 @@ test "archived deletion keeps same-id rows in other stores" {
     DeleteSession(@interop.ChannelId::Local, key, ArchivedRecord),
     model,
   )
-  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
+  guard staged.delete_confirm is Open(HostDelete(confirm)) else {
     fail("delete confirmation was not staged")
   }
   assert_true(confirm.key == key)

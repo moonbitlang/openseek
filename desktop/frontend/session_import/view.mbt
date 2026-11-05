@@ -28,14 +28,6 @@ pub fn Model::view(
     [
       @rui.dialog_header([
         @rui.dialog_title(id="session-import-title", title(locale)),
-        @html.button(
-          class="icon-button",
-          on_click=emit(Close),
-          attrs=@html.Attrs::build().aria_label(
-            label(locale, "Close imported history", "关闭导入历史"),
-          ),
-          @icons.icon(@icons.icon_close),
-        ),
       ]),
       @html.div([
         @rui.dialog_description(
@@ -90,7 +82,8 @@ pub fn Model::view(
     id=DialogId,
     class="dialog-size-medium",
 
-    show_close=false,
+    close_label=label(locale, "Close imported history", "关闭导入历史"),
+    on_close=_ => emit(Close),
     on_cancel=emit(Close),
     attrs=@html.Attrs::build().aria_labelledby("session-import-title"),
     children,

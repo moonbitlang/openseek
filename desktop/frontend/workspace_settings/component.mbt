@@ -250,20 +250,11 @@ fn dialog_contents(
       desc=ui(locale, TimeoutDescription),
     ),
   ]
-  let dismiss = @cmd.batch([emit(CloseMenu), actions.dismiss])
   [
     @rui.dialog_header([
       @rui.dialog_title(
         id="workspace-settings-title",
         ui(locale, WorkspaceSettingsLabel),
-      ),
-      @html.button(
-        class="icon-button",
-        type_="button",
-        title=ui(locale, CloseLabel),
-        attrs=@html.Attrs::build().aria_label(ui(locale, CloseLabel)),
-        on_click=dismiss,
-        @icons.icon(@icons.icon_close),
       ),
     ]),
     @html.div([
@@ -346,10 +337,10 @@ fn dialog_component(
       id=DialogId,
       class="dialog-size-medium",
 
-      show_close=false,
+      close_label=ui(locale, CloseLabel),
       closedby="any",
       on_cancel=@cmd.batch([emit(CloseMenu), actions.dismiss]),
-      on_close=_ => emit(CloseMenu),
+      on_close=_ => @cmd.batch([emit(CloseMenu), actions.dismiss]),
       attrs=@html.Attrs::build()
         .aria_labelledby("workspace-settings-title")
         .aria_describedby("workspace-settings-description"),

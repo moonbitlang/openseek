@@ -488,7 +488,7 @@ fn update_ssh(
         ui.connecting.contains(id) &&
         ui.intents.get(id) == Some(DetailsConnect) {
         let (cmd, model) = update_ssh(dispatch, Disconnect(id), model)
-        return (@cmd.batch([cmd, ssh_focus("ssh-modal-close")]), model)
+        return (@cmd.batch([cmd, ssh_focus("ssh-modal")]), model)
       }
       let next = {
         ..model,
@@ -528,7 +528,7 @@ fn update_ssh(
           if ui.authentication.contains(id) {
             ssh_reset_auth()
           } else {
-            ssh_focus("ssh-modal-close")
+            ssh_focus("ssh-modal")
           },
         ]),
         {
@@ -648,7 +648,7 @@ fn update_ssh(
       let model = model.register_ssh(profile)
       if ui.editing is Some(_) {
         return (
-          ssh_focus("ssh-modal-close"),
+          ssh_focus("ssh-modal"),
           {
             ..model,
             ssh_ui: {
@@ -1554,7 +1554,8 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @rui.dialog(
     id="ssh-modal",
     class="dialog-size-medium",
-    show_close=false,
+    show_close=!ui.busy,
+    close_label="Close SSH dialog",
     closedby=if ui.busy ||
       (ssh_visible_host(ui) is Some(id) && ui.connecting.contains(id)) {
       "closerequest"
@@ -1564,6 +1565,10 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     on_cancel=dispatch(Ssh(Close)),
     attrs=@html.Attrs::build()
       .aria_labelledby("ssh-modal-title")
+      .on_submit(event => {
+        event.prevent_default()
+        dispatch(Ssh(Close))
+      })
       .on_keydown(event => {
         if event.key() == "Enter" &&
           ssh_auth_enter_target() &&
@@ -1577,18 +1582,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         }
       }),
     [
-      @rui.dialog_header([
-        @rui.dialog_title(id="ssh-modal-title", title),
-        @html.button(
-          class="icon-button",
-          disabled=ui.busy,
-          attrs=@html.Attrs::build()
-            .id("ssh-modal-close")
-            .aria_label("Close SSH dialog"),
-          on_click=dispatch(Ssh(Close)),
-          @icons.icon(@icons.icon_close),
-        ),
-      ]),
+      @rui.dialog_header([@rui.dialog_title(id="ssh-modal-title", title)]),
       @html.div(content),
       ..actions,
     ],

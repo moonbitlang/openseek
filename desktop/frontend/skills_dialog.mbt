@@ -14,7 +14,8 @@ fn skills_detail_dialog_view(
   @rui.dialog(
     id="skill-detail-dialog",
     class="dialog-size-medium",
-    show_close=false,
+    close_label=shell_text(model.locale, DismissLabel),
+    on_close=_ => dispatch(Skills(@skills.BackToList)),
     attrs=@html.Attrs::build().aria_labelledby("skill-detail-dialog-title"),
     on_cancel=dispatch(Skills(@skills.BackToList)),
     [
@@ -22,15 +23,6 @@ fn skills_detail_dialog_view(
         @rui.dialog_title(
           id="skill-detail-dialog-title",
           @skills.detail_title(model.locale),
-        ),
-        @html.button(
-          type_="button",
-          class="icon-button",
-          attrs=@html.Attrs::build()
-            .data_set("slot", "dialog-close")
-            .aria_label(shell_text(model.locale, DismissLabel)),
-          on_click=@dialog.request_close("skill-detail-dialog"),
-          @icons.icon(@icons.icon_close),
         ),
       ]),
       @html.div([content]),
