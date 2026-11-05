@@ -261,10 +261,7 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
 
 ///|
 fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
-  (
-    true,
-    self.trailing.any(action => action is Delete(..)) && !self.running,
-  )
+  (true, self.trailing.any(action => action is Delete(..)) && !self.running)
 }
 
 ///|
@@ -785,13 +782,30 @@ pub fn component(
     )
     let context : @action_menu.RowContext = {
       target: input.id.key(),
-      revision: Repr::Repr((input.id, input.label, input.title, input.rename,
-        input.openable, input.children.length(), children_open, input.running,
-        input.trailing, locale, search.query)).to_string(),
+      revision: Repr::Repr(
+        (
+          input.id,
+          input.label,
+          input.title,
+          input.rename,
+          input.openable,
+          input.children.length(),
+          children_open,
+          input.running,
+          input.trailing,
+          locale,
+          search.query,
+        ),
+      ).to_string(),
       content,
-      definition: if renaming { None } else {
-        input.menu_entries(locale~, actions).map(entries => {
-          { label: @messages.text(locale, ConversationActions), entries, }
+      definition: if renaming {
+        None
+      } else {
+        input
+        .menu_entries(locale~, actions)
+        .map(entries => {
+          label: @messages.text(locale, ConversationActions),
+          entries,
         })
       },
     }
@@ -802,7 +816,12 @@ pub fn component(
       }
     }
     let collapsed = !children_open || input.children.is_empty()
-    (input.id.key(), class, input.title, context, trailing_slot,
+    (
+      input.id.key(),
+      class,
+      input.title,
+      context,
+      trailing_slot,
       @html.div(
         id=input.id.key() + ":children",
         class="conversation-children sidebar-branch-content",
@@ -810,19 +829,26 @@ pub fn component(
           .aria_hidden(collapsed.to_string())
           .inert(collapsed),
         rows,
-      ), collapsed)
+      ),
+      collapsed,
+    )
   })
   let context = @action_menu.row_context(rendered.map(row => row.3))
   rendered.map2(context, (row, context) => {
     let (id, class, title, _, trailing, children, collapsed) = row
-    [(id, @html.div(
-      class=if collapsed {
-        "sidebar-conversation sidebar-branch collapsed"
-      } else {
-        "sidebar-conversation sidebar-branch"
-      },
-      [@html.div(class~, title~, [context, ..trailing]), children],
-    ))]
+    [
+      (
+        id,
+        @html.div(
+          class=if collapsed {
+            "sidebar-conversation sidebar-branch collapsed"
+          } else {
+            "sidebar-conversation sidebar-branch"
+          },
+          [@html.div(class~, title~, [context, ..trailing]), children],
+        ),
+      ),
+    ]
   })
 }
 

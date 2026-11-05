@@ -75,7 +75,6 @@ pub fn checkout_dialog(
   @rui.dialog(
     id="github-checkout-dialog",
     class="dialog-size-small",
-
     show_close=false,
     on_cancel=emit(DismissCheckout),
     attrs=@html.Attrs::build().aria_label(

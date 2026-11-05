@@ -283,7 +283,6 @@ fn CodexPermissionPicker::confirmation_dialog(
     @rui.dialog(
       id="codex-permission-dialog",
       class="dialog-size-small",
-
       show_close=false,
       on_cancel=cancel,
       attrs=@html.Attrs::build().aria_label(ui(locale, EnableFullCodex)),

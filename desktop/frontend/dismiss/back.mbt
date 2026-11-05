@@ -202,9 +202,7 @@ fn request_native_dialog_close() -> Bool {
 ///|
 /// Route host Back through the native cancel event before considering page layers.
 fn back() -> Bool {
-  close_auto_popover() ||
-  request_native_dialog_close() ||
-  dismiss_top()
+  close_auto_popover() || request_native_dialog_close() || dismiss_top()
 }
 
 ///|
@@ -275,8 +273,7 @@ fn watch_close_requests() -> Unit {
       // A custom menu can leave this watcher above a native surface. Forward
       // its request without dismissing another registered layer on Escape.
       if from_escape {
-        (close_auto_popover() || request_native_dialog_close())
-        |> ignore
+        (close_auto_popover() || request_native_dialog_close()) |> ignore
       } else {
         back() |> ignore
       }

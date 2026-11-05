@@ -114,7 +114,6 @@ pub fn view(
   @rui.dialog(
     id="project-picker-dialog",
     class="dialog-size-medium",
-
     close_label=ui(locale, ClosePicker),
     on_close=_ => emit(Close),
     on_cancel=emit(Close),

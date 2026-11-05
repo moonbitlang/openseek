@@ -395,15 +395,26 @@ pub fn component(
     trailing.push(@html.div(class="workspace-actions", controls))
     let context : @action_menu.RowContext = {
       target: input.id.key(),
-      revision: Repr::Repr((input.id, input.label, input.title, collapsed,
-        input.managed, input.host, locale)).to_string(),
+      revision: Repr::Repr(
+        (
+          input.id,
+          input.label,
+          input.title,
+          collapsed,
+          input.managed,
+          input.host,
+          locale,
+        ),
+      ).to_string(),
       content: @html.fragment(row_children),
       definition: if input.managed {
         Some({
           label: @messages.text(locale, WorkspaceActions),
           entries: input.menu_entries(actions, locale~),
         })
-      } else { None },
+      } else {
+        None
+      },
     }
     let rows : Map[String, @html.Html] = Map([])
     for index = 0; index < conversation_rows.length(); index = index + 1 {
@@ -428,7 +439,11 @@ pub fn component(
         @messages.text(locale, ShowMore),
       )
     }
-    (input.id.key(), class, input.title, context,
+    (
+      input.id.key(),
+      class,
+      input.title,
+      context,
       @html.div(class="workspace-trailing", trailing),
       @html.div(
         id=input.id.key() + ":content",
@@ -437,19 +452,26 @@ pub fn component(
           .aria_hidden(collapsed.to_string())
           .inert(collapsed),
         rows,
-      ), collapsed)
+      ),
+      collapsed,
+    )
   })
   let context = @action_menu.row_context(rendered.map(row => row.3))
   rendered.map2(context, (row, context) => {
     let (id, class, title, _, trailing, children, collapsed) = row
-    [(id, @html.div(
-      class=if collapsed {
-        "sidebar-project sidebar-branch collapsed"
-      } else {
-        "sidebar-project sidebar-branch"
-      },
-      [@html.div(class~, title~, [context, trailing]), children],
-    ))]
+    [
+      (
+        id,
+        @html.div(
+          class=if collapsed {
+            "sidebar-project sidebar-branch collapsed"
+          } else {
+            "sidebar-project sidebar-branch"
+          },
+          [@html.div(class~, title~, [context, trailing]), children],
+        ),
+      ),
+    ]
   })
 }
 

@@ -230,7 +230,6 @@ fn dialog_view(
   @rui.dialog(
     id="quick-open-dialog",
     class="dialog-size-medium",
-
     show_close=false,
     on_cancel=emit(Dismiss),
     attrs=@html.Attrs::build().aria_label(dialog_label),

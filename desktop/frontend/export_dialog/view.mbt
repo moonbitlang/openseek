@@ -180,7 +180,8 @@ pub fn Model::view(
       @html.div(
         [
           ..match content.source {
-            File(HostFile(_, payload)) => [@rui.dialog_description(payload.path)]
+            File(HostFile(_, payload)) =>
+              [@rui.dialog_description(payload.path)]
             File(CloudFile(path~, ..)) => [@rui.dialog_description(path)]
             _ => []
           },
@@ -211,10 +212,13 @@ pub fn Model::view(
   @rui.dialog(
     id=self.id_prefix + "-dialog",
     class="dialog-size-medium",
-
     close_label=ui(
       locale,
-      if self.content is Some({ source: File(_), .. }) { CloseLabel } else { CloseDialog },
+      if self.content is Some({ source: File(_), .. }) {
+        CloseLabel
+      } else {
+        CloseDialog
+      },
     ),
     on_close=_ => emit(Close),
     on_cancel=emit(Close),

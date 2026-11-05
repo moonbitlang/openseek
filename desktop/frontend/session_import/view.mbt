@@ -81,7 +81,6 @@ pub fn Model::view(
   @rui.dialog(
     id=DialogId,
     class="dialog-size-medium",
-
     close_label=label(locale, "Close imported history", "关闭导入历史"),
     on_close=_ => emit(Close),
     on_cancel=emit(Close),

@@ -136,7 +136,6 @@ fn pdf_password_dialog(
   @rui.dialog(
     id="pdf-password-dialog",
     class="dialog-size-small",
-
     show_close=false,
     on_cancel=dispatch(PdfPasswordCancelled),
     attrs=@html.Attrs::build().aria_labelledby("pdf-password-title"),
