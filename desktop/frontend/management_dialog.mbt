@@ -4,16 +4,6 @@ fn Model::codex_work_selected(self : Model) -> Bool {
 }
 
 ///|
-fn Model::management_dialog_id(self : Model) -> String? {
-  match self.management_dialog {
-    Some(Skills) if self.skills.detail_open(self.focused) &&
-      !self.host_incompatible() => Some("skill-detail-dialog")
-    Some(_) => Some("management-dialog")
-    None => None
-  }
-}
-
-///|
 fn management_dialog_view(
   dispatch : @cmd.Emit[Msg],
   model : Model,

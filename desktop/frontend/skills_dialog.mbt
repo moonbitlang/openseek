@@ -1,4 +1,11 @@
 ///|
+fn Model::skills_detail_dialog_open(self : Model) -> Bool {
+  self.management_dialog is Some(Skills) &&
+  self.skills.detail_open(self.focused) &&
+  !self.host_incompatible()
+}
+
+///|
 fn skills_detail_dialog_view(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -9,7 +16,7 @@ fn skills_detail_dialog_view(
     size=Medium,
     show_close=false,
     attrs=@html.Attrs::build().aria_labelledby("skill-detail-dialog-title"),
-    on_cancel=dispatch(CloseManagementDialog),
+    on_cancel=dispatch(Skills(@skills.BackToList)),
     [
       @ui.dialog_header([
         @html.div(class="desktop-dialog-heading", [

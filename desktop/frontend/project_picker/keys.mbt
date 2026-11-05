@@ -1,11 +1,6 @@
-// The project picker's keyboard and clipboard surface. The modal has no
-// focused input of its own, so a document-level capture pair serves it for
-// exactly as long as it is open: Enter registers the browsed directory,
-// Escape cancels path editing or closes, and a pasted path navigates straight
-// to that location.
-// Capture-phase registration beats the composer and embedded editors, which
-// may still hold focus behind the modal backdrop; the handled events are
-// swallowed so those surfaces never also act on them.
+// The picker's shortcuts register the browsed directory, edit its path,
+// and navigate pasted paths. Inputs handle their editing keys locally;
+// the native dialog owns Escape dismissal.
 
 ///|
 using @cmd {trait Scheduler}
@@ -33,7 +28,6 @@ fn project_picker_capture_loader(
       let mut emit = emit
       let listeners = add_project_picker_capture(
         () => scheduler.add(emit(Confirm)),
-        () => scheduler.add(emit(Escape)),
         () => scheduler.add(emit(EditPath)),
         text => {
           // `getData` answers "" when the clipboard holds no text; an empty
@@ -79,7 +73,6 @@ fn capture_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
 /// submit, cancel, and edit normally; every other paste is a direct path jump.
 fn add_project_picker_capture(
   on_confirm : () -> Unit,
-  on_escape : () -> Unit,
   on_edit_path : () -> Unit,
   on_paste : (String) -> Unit,
 ) -> () -> Unit {
@@ -103,12 +96,6 @@ fn add_project_picker_capture(
             return
           }
           on_confirm
-        }
-        "Escape" => {
-          if picker_control_target(event, "input, textarea") {
-            return
-          }
-          on_escape
         }
         _ => return
       }

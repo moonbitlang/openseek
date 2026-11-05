@@ -108,10 +108,6 @@ fn key_attrs(emit : @cmd.Emit[Msg], selected : Int32?) -> @html.Attrs {
           None => @cmd.none
         }
       }
-      "Escape" => {
-        event.prevent_default()
-        emit(Dismiss)
-      }
       _ => @cmd.none
     }
   })

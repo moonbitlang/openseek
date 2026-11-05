@@ -1739,19 +1739,30 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
-  let previous_dialog = previous.management_dialog_id()
-  let current_dialog = model.management_dialog_id()
-  let dialog_cmd = if previous_dialog == current_dialog {
+  let detail_was_open = previous.skills_detail_dialog_open()
+  let detail_open = model.skills_detail_dialog_open()
+  let dialog_cmd = if (previous.management_dialog is Some(_)) ==
+    (model.management_dialog is Some(_)) {
     @cmd.none
+  } else if model.management_dialog is Some(_) {
+    @dialog.show("management-dialog")
   } else {
-    @cmd.batch(
-      [
-        ..previous_dialog.map_or([], id => [@dialog.close(id)]),
-        ..current_dialog.map_or([], id => [@dialog.show(id)]),
-      ],
-    )
+    @dialog.close("management-dialog")
   }
-  let cmd = @cmd.batch([cmd, dialog_cmd])
+  let cmd = @cmd.batch([
+    cmd,
+    if detail_was_open && !detail_open {
+      @dialog.close("skill-detail-dialog")
+    } else {
+      @cmd.none
+    },
+    dialog_cmd,
+    if !detail_was_open && detail_open {
+      @dialog.show("skill-detail-dialog")
+    } else {
+      @cmd.none
+    },
+  ])
   let (preferences_cmd, model) = sync_account_preferences(
     dispatch, previous, model,
   )
