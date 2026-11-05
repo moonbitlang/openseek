@@ -35,7 +35,8 @@ A native command without extra interaction uses `Send(command)`.
   is not native completion. Observation recovery never resubmits commands.
 
 Local receives durable commits; Cloud refreshes the native session document at
-semantic boundaries. These synchronization paths remain host-specific, as do
+Local's durable barriers (`agent_step`, `agent_finished`, `context_yield`) and
+other semantic boundaries, one read at a time with one follow-up. These synchronization paths remain host-specific, as do
 connection ownership and the existing product queues. Neither adapter should
 implement a second command-specific editor or event reducer.
 

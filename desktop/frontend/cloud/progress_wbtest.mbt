@@ -110,6 +110,7 @@ test "Cloud rereads a turn cached while running once the next turn is latest" {
     .progress_test_event(1, "task_started", {})
     .latest_read(running)
     .progress_test_event(2, "assistant_message", { "content": "First answer" })
+    .progress_test_event(3, "agent_finished", { "answer": "First answer" })
   // A queued prompt starts the next turn before a read covers the reply.
   let next_user : Record = {
     ..user,
@@ -233,13 +234,7 @@ test "Cloud hides a sealed reasoning preview only after this step committed it" 
   let streaming = progress_test_state()
     .progress_test_event(1, "task_started", {})
     .latest_read(page)
-    // The tool result's read is still in flight when the next step starts.
-    .progress_test_event(2, "tool_result", {
-      "tool_call_id": "call",
-      "tool_name": "read",
-      "content": "ok",
-      "is_error": false,
-    })
+    // The step's read is still in flight when this step's reply is saved.
     .progress_test_event(3, "step", { "step": 2 })
     .progress_test_event(4, "reasoning_delta", { "content": "Plan" })
     .progress_test_event(5, "assistant_delta", { "content": "Answer" })
@@ -399,12 +394,18 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
       },
     ],
   }
-  // The read in flight began before the reply was saved. Even when it covers
-  // the record, only the follow-up read it schedules may retire the preview.
+  // The task start's read began before the reply's notification. Even when it
+  // covers the record, it cannot retire the preview, and a reply event starts
+  // no read of its own: its record may not be saved yet.
   let earlier = pending.latest_read(committed)
-  assert_true(earlier.conversations["session"].history_reading)
+  assert_false(earlier.conversations["session"].history_reading)
   assert_eq(earlier.conversations["session"].pending_assistants.length(), 1)
-  let canonical = earlier.latest_read(committed)
+  // The terminal barrier is sent only after the reply's record is saved.
+  let finishing = earlier.progress_test_event(7, "agent_finished", {
+    "answer": "Answer",
+  })
+  assert_true(finishing.conversations["session"].history_reading)
+  let canonical = finishing.latest_read(committed)
   let conversation = canonical.conversations["session"]
   assert_true(conversation.live.reasoning.map(r => r.content) is None)
   assert_eq(conversation.items().length(), 2)
@@ -413,10 +414,10 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
     is Assistant(reasoning=Some("Complete reasoning"), prose=Some("Answer"), ..),
   )
   let next = canonical
-    .progress_test_event(7, "step", { "step": 2 })
-    .progress_test_event(8, "reasoning_delta", { "content": "Next step" })
-    .progress_test_event(9, "assistant_delta", { "content": "Next answer" })
-    .progress_test_event(10, "reasoning_delta", { "content": "late" })
+    .progress_test_event(8, "step", { "step": 2 })
+    .progress_test_event(9, "reasoning_delta", { "content": "Next step" })
+    .progress_test_event(10, "assistant_delta", { "content": "Next answer" })
+    .progress_test_event(11, "reasoning_delta", { "content": "late" })
   assert_eq(
     next.conversations["session"].live.reasoning.map(r => r.content),
     Some("Next step"),
@@ -424,7 +425,7 @@ test "Cloud reasoning settles into one canonical assistant and rejects late frag
   assert_true(
     next.conversations["session"].live.reasoning.map_or(false, r => r.complete),
   )
-  let blank = next.progress_test_event(11, "reasoning_message", {
+  let blank = next.progress_test_event(12, "reasoning_message", {
     "content": "",
   })
   assert_true(
@@ -682,26 +683,30 @@ test "Cloud tool loop hands identical replies to their own native records" {
     session: native_document([]),
     messages: [],
   }
-  // The task start began a read. The first reply's notification arrives
-  // while it is in flight and waits for the read that follows it.
-  let first = progress_test_state()
-    .progress_test_event(1, "task_started", {})
+  // The task start began a read. Reply and tool events are previews, but the
+  // next step's barrier arrives while that read is in flight and waits for it.
+  let started = progress_test_state().progress_test_event(1, "task_started", {})
+  let reading = started.conversations["session"].request
+  let first = started
     .progress_test_event(2, "assistant_message", { "content": "Repeated" })
-  let reading = first.conversations["session"].request
-  let first = first.latest_read(page)
-  assert_true(first.conversations["session"].request > reading)
-  assert_eq(first.conversations["session"].pending_assistants.length(), 1)
-  // The tool loop continues while that follow-up read is in flight. The
-  // service saves the second reply before its notification, so the read
-  // already covers it, yet it started too early to own that reply.
-  let looped = first
     .progress_test_event(3, "tool_result", {
       "tool_call_id": "call",
       "tool_name": "read",
       "content": "ok",
       "is_error": false,
     })
-    .progress_test_event(4, "assistant_message", { "content": "Repeated" })
+  assert_eq(first.sequence, started.sequence)
+  let first = first.progress_test_event(4, "step", { "step": 2 })
+  assert_eq(first.conversations["session"].request, reading)
+  let first = first.latest_read(page)
+  assert_true(first.conversations["session"].request > reading)
+  assert_eq(first.conversations["session"].pending_assistants.length(), 1)
+  // The second reply's notification arrives while the follow-up read is in
+  // flight. The record is saved soon after, so the read already covers it,
+  // yet it started too early to own that reply.
+  let looped = first.progress_test_event(5, "assistant_message", {
+    "content": "Repeated",
+  })
   let following = looped.conversations["session"].request
   assert_eq(following, first.conversations["session"].request)
   let covered = looped.latest_read({
@@ -710,8 +715,7 @@ test "Cloud tool loop hands identical replies to their own native records" {
     messages: [marker, { ..marker, engine_sequence: Some(3), }],
   })
   let conversation = covered.conversations["session"]
-  assert_true(conversation.history_reading)
-  assert_true(conversation.request > following)
+  assert_false(conversation.history_reading)
   assert_true(
     conversation.items()
     is [
@@ -720,8 +724,15 @@ test "Cloud tool loop hands identical replies to their own native records" {
       { kind: Assistant(prose=Some("Repeated"), ..), sequence: None, .. },
     ],
   )
-  // A 304 for the follow-up read validates the cached page, which holds the
-  // second record, so that preview hands off in the same update.
+  // The terminal barrier starts a read after the second reply was saved.
+  let covered = covered.progress_test_event(6, "agent_finished", {
+    "answer": "Repeated",
+  })
+  let conversation = covered.conversations["session"]
+  assert_true(conversation.history_reading)
+  assert_true(conversation.request > following)
+  // A 304 for that read validates the cached page, which holds the second
+  // record, so that preview hands off in the same update.
   let validated = metadata_update(
     covered,
     HistoryUnchanged(1, "session", conversation.request, "page"),

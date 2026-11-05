@@ -314,11 +314,15 @@ pub fn is_idle_event(event : @wire.Event) -> Bool {
 
 ///|
 /// Semantic events never become a second durable transcript. A host without
-/// commit pushes reloads its native document at these boundaries.
+/// commit pushes reloads its native document at these boundaries. Model-step
+/// and terminal events are Local's durable barriers: every record committed
+/// before them is saved first. Reply and tool events are live previews and
+/// can precede their records, so they do not start a read.
 pub fn refreshes_history(event : @wire.Event) -> Bool {
   event
-  is (@wire.AssistantMessage(..)
-  | @wire.ToolResult(..)
+  is (@wire.AgentStep(..)
+  | @wire.AgentFinished(..)
+  | @wire.ContextYield(..)
   | @wire.BackgroundNotice(..)
   | @wire.SteerApplied(..)
   | @wire.CompactionFinished(..)
