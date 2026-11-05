@@ -5,10 +5,10 @@
 /// forwarded while it runs and included in nonzero-exit errors. The helper owns
 /// authorization deadlines, token expiry, refresh and persistence; cancellation
 /// of the caller still terminates the subprocess.
-pub async fn run(command : Array[String], cwd? : String) -> Map[String, String] {
-  guard command is [cmd, .. args] else {
-    fail("MCP headersHelper needs an executable")
-  }
+pub async fn run(
+  helper : @config.HeadersHelperCommand,
+  cwd? : String,
+) -> Map[String, String] {
   let (stdin, writer) = @process.write_to_process()
   writer.close()
   let (stderr, stderr_pipe) = @process.read_from_process()
@@ -22,8 +22,8 @@ pub async fn run(command : Array[String], cwd? : String) -> Map[String, String] 
       }
     })
     @process.collect_stdout(
-      cmd,
-      args,
+      helper.command,
+      helper.arguments,
       stdin~,
       stderr=stderr_pipe,
       cwd?=cwd.map(value => value),
