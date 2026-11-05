@@ -138,7 +138,7 @@ pub(all) struct Conversation {
   history_etag : String?
   history_reading : Bool
   history_disk_request : Int32?
-  history_pages : Map[Int32, History]
+  history_window : HistoryWindow
   history_older_request : (Int32, Int32, Int32)?
   history_resume_baseline : (String?, Int32?)?
   history_refresh_after_read : Bool
@@ -182,6 +182,7 @@ pub fn Conversation::can_load_older_history(Self) -> Bool
 pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
 pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @composer.PrimaryAction
 pub fn Conversation::equal(Self, Self) -> Bool
+pub fn Conversation::extends_history_backward(Self, Self) -> Bool
 pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
 pub fn Conversation::not_equal(Self, Self) -> Bool
 pub fn Conversation::prediction_source(Self, ready~ : Bool) -> Int32?
@@ -229,6 +230,15 @@ pub(all) struct History {
 }
 pub fn History::equal(Self, Self) -> Bool
 pub fn History::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
+pub struct HistoryWindow {
+  lo : Int32
+  pages : Array[History]
+  detached : Map[Int32, History]
+}
+pub fn HistoryWindow::equal(Self, Self) -> Bool
+pub fn HistoryWindow::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub struct MetadataSave {

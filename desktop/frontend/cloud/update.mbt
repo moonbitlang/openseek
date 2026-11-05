@@ -915,7 +915,7 @@ pub fn update(
       let next = state.replace(
         id,
         if history is Some(history) && !conversation.history_cached {
-          let cached = conversation.with_history_page(history, latest=true)
+          let cached = conversation.with_latest_page(history)
           {
             ..cached.restore_goal(cached.document),
             history_cached: true,
@@ -934,13 +934,16 @@ pub fn update(
       (next, command, None)
     }
     LoadOlder(id) => {
-      guard token is Some(token) &&
-        state.conversations.get(id) is Some(conversation) &&
-        conversation.older_history_start() is Some(start) else {
+      guard state.conversations.get(id) is Some(conversation) &&
+        conversation.older_history_offset() is Some(offset) else {
         return (state, @cmd.none, None)
       }
-      let limit = start.min(HistoryPageSize)
-      let offset = start - limit
+      let window = conversation.history_window.reattach()
+      if window != conversation.history_window {
+        let next = conversation.with_history_window(window)
+        return (state.replace(id, next), @cmd.none, None)
+      }
+      guard token is Some(token) else { return (state, @cmd.none, None) }
       let request = state.sequence + 1
       let next = state.replace(id, {
         ..conversation,
@@ -949,7 +952,7 @@ pub fn update(
       (
         { ..next, sequence: request, },
         run(emit, () => {
-          load_history(token, id, None, state.epoch, request, offset~, limit~) catch {
+          load_history(token, id, None, state.epoch, request, offset~) catch {
             @cloud_client.RequestError(error) =>
               OlderFailed(state.epoch, id, request, error)
             _ => OlderFailed(state.epoch, id, request, Unreachable)
@@ -967,11 +970,7 @@ pub fn update(
       }
       let conversation = { ..conversation, history_older_request: None, }
       let next = if owner == navigation && history.offset == Some(offset) {
-        conversation.with_history_page(
-          { ..history, generating: false, },
-          request~,
-          latest=false,
-        )
+        conversation.with_older_page({ ..history, generating: false, }, request)
       } else {
         conversation
       }
@@ -996,10 +995,9 @@ pub fn update(
       (next, command, None)
     }
     Loaded(epoch, id, request, history) => {
-      let conversation = state.conversations[id].with_history_page(
+      let conversation = state.conversations[id].with_latest_page(
         history,
         request~,
-        latest=true,
       )
       let accepted = conversation.pending is Some(submission) &&
         history.messages.any(record => {
@@ -1134,10 +1132,7 @@ pub fn update(
     HistoryUnchanged(epoch, id, request, etag) => {
       let conversation = state.conversations[id]
       let observing = conversation.stream is Some({ active: true, .. })
-      let offset = conversation.history_pages
-        .keys()
-        .fold(init=0, (max, key) => max.max(key))
-      let conversation = match conversation.history_pages.get(offset) {
+      let conversation = match conversation.history_window.latest() {
         Some(page) =>
           conversation.acknowledge_assistants(
             request,

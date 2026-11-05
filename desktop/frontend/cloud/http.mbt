@@ -26,6 +26,7 @@ async fn delete_session(token : String, session : String) -> Unit {
 }
 
 ///|
+/// A page is one turn; `HistoryWindow` indexes pages by turn offset.
 const HistoryPageSize = 1
 
 ///|

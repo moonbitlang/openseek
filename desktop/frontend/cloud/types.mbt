@@ -85,7 +85,7 @@ pub(all) struct Conversation {
   history_etag : String?
   history_reading : Bool
   history_disk_request : Int32?
-  history_pages : Map[Int32, History]
+  history_window : HistoryWindow
   // Request, requested offset, and the navigation that owns the prepend.
   history_older_request : (Int32, Int32, Int32)?
   // Compare the first snapshot after a revisit that shares an earlier read.
@@ -146,7 +146,7 @@ fn Conversation::empty() -> Conversation {
     history_etag: None,
     history_reading: false,
     history_disk_request: None,
-    history_pages: Map([]),
+    history_window: HistoryWindow::empty(),
     history_older_request: None,
     history_resume_baseline: None,
     history_refresh_after_read: false,
