@@ -12,7 +12,7 @@ import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/moonback@0.8.9",
   "tonyfettes/xlog@0.4.2",
-  "moonbitlang/openseek@0.7.4",
+  "moonbitlang/openseek@0.7.5",
   "openseek_desktop@0.1.5",
   "Yoorkin/multipart@0.1.3",
 }
@@ -25,4 +25,4 @@ warnings = "+implicit_impl_as_method+test_unqualified_package"
 
 preferred_target = "native"
 
-supported_targets = "native"
+supported_targets = "native+wasm"

@@ -110,6 +110,8 @@ test('Cloud cancellation stays silent and sign-out retires its unread badge and 
   await expect(app.row(sessionA)).toBeHidden();
   await expect.poll(() => badge(app)).toBe(0);
   await page.evaluate(payload => window.desktopEvent('notification.click', { payload }), payload);
+  // Let the click render before asserting, so a stale frame cannot pass.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
   expect(app.device.pageErrors).toEqual([]);
 });

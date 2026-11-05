@@ -557,7 +557,7 @@ export class DesktopBrowserHarness {
     });
 
 
-    await this.page.route('https://cloud.moonbitlang.cn/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) }));
+    await this.page.route('https://cloud.moonbitlang.com/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) }));
     await this.page.route('**/v2/devices/*/connect-ticket', async route => {
       const request = { url: route.request().url(), headers: await route.request().allHeaders() };
       this.ticketRequests.push(request);
@@ -1106,6 +1106,14 @@ export class DesktopBrowserHarness {
   async goto() {
     await this.page.goto('/index.html?device=device-a');
     await this.page.getByRole('main').waitFor();
+  }
+
+  // On the narrow layout every navigation closes the sidebar drawer, including
+  // the new-chat home settling its project once `workspace.list` answers. Open
+  // the drawer after that startup selection so it stays open.
+  async showSidebar() {
+    await this.page.getByRole('button', { name: /^Choose project/ }).first().waitFor();
+    await this.page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
   }
 
   projectRow(root, channel = 'remote.device-a') {

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CloudHarness, cloudOrigin } from './support/cloud_harness.js';
+import { CloudHarness, settledResponse, cloudOrigin } from './support/cloud_harness.js';
 
 const label = 'Help improve SeekMoon';
 const endpoint = `${cloudOrigin}/v1/me/preferences`;
@@ -127,9 +127,9 @@ for (const delayed of ['GET', 'PATCH']) {
       await expect(toggle(page)).toBeEnabled();
       await expect(toggle(page)).not.toBeChecked();
     }
-    const finished = page.waitForResponse(response => response.url() === endpoint && response.request().method() === delayed);
+    const finished = settledResponse(page, response => response.url() === endpoint && response.request().method() === delayed);
     release();
-    await (await finished).finished();
+    await finished;
     await page.evaluate(() => new Promise(requestAnimationFrame));
     await expect(toggle(page)).not.toBeChecked();
     await expect(toggle(page)).toBeEnabled();

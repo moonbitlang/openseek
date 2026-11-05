@@ -275,6 +275,7 @@ test('Cloud preserves a service-only prompt and startup failure across reopen an
   await check();
   // The same saved native items arriving later replace the supplements.
   app.histories.get(sessionA).messages[0].engine_sequence = 1;
+  app.histories.get(sessionA).messages[0].data = {};
   app.histories.get(sessionA).session.events = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Please check the build' } } },
     { sequence: 2, item: { kind: 'terminal', payload: { kind: 'failed', message: 'Fixture engine could not start' } } },

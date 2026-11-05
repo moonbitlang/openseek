@@ -86,6 +86,31 @@ pub fn Conversation::items(
   let mut task : String? = None
   let mut native_failure = false
   for (task_id, kind, data, ts, engine_sequence) in service {
+    guard kind is ("user" | "task_finished") else { continue }
+    if task != Some(task_id) {
+      native_failure = false
+      task = Some(task_id)
+    }
+    if kind == "user" &&
+      native.search_by(event => {
+        event.item is @protocol.User(native_user) &&
+        (
+          engine_sequence == Some(event.sequence) ||
+          (
+            data is { "submission_id": String(submission_id), .. } &&
+            native_user.submission_id == Some(submission_id)
+          )
+        )
+      })
+      is Some(index) {
+      // Use durable identity to reconcile the service and native copies.
+      if index >= cursor {
+        ignore(append_native(items, native, cursor, index + 1))
+        cursor = index + 1
+        native_failure = false
+      }
+      continue
+    }
     guard service_item(kind, data) is Some(item) else { continue }
     if kind == "task_finished" &&
       self.terminal_record is Some((native_task, sequence)) &&
@@ -99,30 +124,6 @@ pub fn Conversation::items(
       cursor = index + 1
       if !failed {
         ignore(@transcript.apply_session_item(items, item, ts?))
-      }
-      continue
-    }
-    if task != Some(task_id) {
-      native_failure = false
-      task = Some(task_id)
-    }
-    if item is @protocol.User(user) &&
-      native.search_by(event => {
-        event.item is @protocol.User(native_user) &&
-        (
-          engine_sequence == Some(event.sequence) ||
-          (
-            user.submission_id is Some(_) &&
-            user.submission_id == native_user.submission_id
-          )
-        )
-      })
-      is Some(index) {
-      // Use durable identity to reconcile the service and native copies.
-      if index >= cursor {
-        ignore(append_native(items, native, cursor, index + 1))
-        cursor = index + 1
-        native_failure = false
       }
       continue
     }
@@ -165,7 +166,8 @@ pub fn Conversation::items(
       ),
     )
   }
-  if !self.history_required && self.notice is Some(message) {
+  if (self.history_cached || !self.history_required) &&
+    self.notice is Some(message) {
     items.push({ kind: Failure(message), ts: None, sequence: None, })
   }
   items

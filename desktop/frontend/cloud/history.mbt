@@ -9,8 +9,14 @@ fn Conversation::older_history_start(self : Conversation) -> Int32? {
   }
   // A fresh tail can jump ahead if another device sent several turns.
   // Close any gap before walking beyond the cached prefix.
+  // The response's generating flag belongs to the whole conversation.
+  // A terminal service record proves this page's turn is complete.
   while start > 0 &&
-        self.history_pages.get(start - 1) is Some({ generating: false, .. }) {
+        self.history_pages.get(start - 1) is Some(page) &&
+        (
+          !page.generating ||
+          page.messages.any(record => record.kind == "task_finished")
+        ) {
     start -= 1
   }
   if start > 0 {

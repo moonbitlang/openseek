@@ -546,7 +546,7 @@ just desktop-dev
 ```
 
 The shared program builds the frontend, viz application, and engine, then runs
-`proton_cli dev --no-frontend --setup`. Proton prepares the CEF environment,
+`proton_cli dev --no-frontend`. Proton prepares the CEF environment,
 builds and launches the bare host. The CLI runs through `moonx`,
 which fetches the published CLI into the registry cache rather than installing
 anything, and installs the matching CEF runtime and subprocess helper into

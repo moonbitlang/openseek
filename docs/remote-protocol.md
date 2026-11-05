@@ -802,7 +802,7 @@ Notification:
 
 Chat and Work keep their existing shared list, transcript, and composer.
 Cloud requests use the current client's account Bearer directly against
-`https://cloud.moonbitlang.cn`; there is no Cloud login, exchange, credential
+`https://cloud.moonbitlang.com`; there is no Cloud login, exchange, credential
 store, or `cloud.authorize` bridge command. Normal messages send only `content`,
 using the server's default model credential. Client reader disposal closes SSE
 without cancelling an already-running server task.

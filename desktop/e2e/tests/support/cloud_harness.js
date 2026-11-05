@@ -4,11 +4,30 @@ import { expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './desktop_browser_harness.js';
 
 export const authOrigin = 'https://openseek-api.moonbitlang.cn';
-export const cloudOrigin = 'https://cloud.moonbitlang.cn';
+export const cloudOrigin = 'https://cloud.moonbitlang.com';
 export const sessionA = '11111111-1111-4111-8111-111111111111';
 export const sessionB = '22222222-2222-4222-8222-222222222222';
 export const sessionC = '33333333-3333-4333-8333-333333333333';
 const bundle = new URL('../../../dist/browser/', import.meta.url);
+
+// Resolves with the first matching response once its request has ended, so the
+// page has read the whole body. Use it instead of `response.finished()`, which
+// never settles when the request ends as failed: the async HTTP client cancels
+// the body stream after reading it, and Chromium can report that cancellation
+// (net::ERR_ABORTED) before it reports the load as finished.
+export function settledResponse(page, predicate) {
+  return new Promise(resolve => {
+    const settle = async request => {
+      const response = await request.response();
+      if (!response || !predicate(response)) return;
+      page.off('requestfinished', settle);
+      page.off('requestfailed', settle);
+      resolve(response);
+    };
+    page.on('requestfinished', settle);
+    page.on('requestfailed', settle);
+  });
+}
 
 export class CloudHarness {
   constructor(page, { desktop = false, cached = true } = {}) {
@@ -65,6 +84,7 @@ export class CloudHarness {
     this.archived = new Set();
     this.histories = new Map();
     this.historyTurns = new Map();
+    this.trimHistory = false;
     this.nativeNotices = new Map();
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
@@ -458,11 +478,15 @@ export class CloudHarness {
       if (record.kind === 'user') {
         const mapped = { ...record, engine_sequence: items.length + 1 };
         items.push({ kind: record.kind, payload: record.data });
+        if (this.trimHistory) mapped.data = record.data.submission_id ? { submission_id: record.data.submission_id } : {};
         return mapped;
       }
       const payload = record.data;
       if (['tool_result', 'runtime_notice', 'summary'].includes(record.kind)) items.push({ kind: record.kind, payload });
-      if (record.kind === 'assistant_message') items.push({ kind: 'assistant', payload });
+      if (record.kind === 'assistant_message') {
+        items.push({ kind: 'assistant', payload });
+        if (this.trimHistory) return { ...record, data: {}, engine_sequence: items.length };
+      }
       if (record.kind === 'tool_call') {
         const call = payload.function ? { id: payload.id, name: payload.function.name, arguments: payload.function.arguments } : payload;
         items.push({ kind: 'assistant', payload: { content: '', tool_calls: [call] } });
@@ -476,7 +500,10 @@ export class CloudHarness {
       return record;
     });
     items.push(...(this.nativeNotices.get(session) || []));
-    return { messages: messages.filter(record => record.kind !== 'assistant_message'), session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
+    const projected = this.trimHistory
+      ? messages.filter(record => ['user', 'assistant_message', 'task_finished'].includes(record.kind))
+      : messages;
+    return { messages: projected, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
   }
 
   controlState(session) {

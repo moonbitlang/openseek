@@ -81,6 +81,3 @@ async fn Connection::serve_auth(
     emit({ "authentication_submitted": request_id })
   }
 }
-
-///|
-extern "C" fn askpass_exit(code : Int32) = "exit"
