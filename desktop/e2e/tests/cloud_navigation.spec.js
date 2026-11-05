@@ -353,7 +353,7 @@ test('Cloud direct link keeps history readable but editing disabled after catalo
   expect(creations(cloud)).toEqual([]);
 });
 
-test('Cloud keeps displayed history when a background read fails during a send', async ({ page }, testInfo) => {
+test('Cloud keeps displayed history when a revisit read fails during generation', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
   cloud.manualTasks = true;
   cloud.histories.set(sessionA, {
@@ -368,9 +368,12 @@ test('Cloud keeps displayed history when a background read fails during a send',
   const transcript = page.locator('#transcript');
   await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
 
-  cloud.historyStatus = 503;
   await page.locator('#task').fill('Start a new turn');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(transcript.getByText('Start a new turn', { exact: true })).toBeVisible();
+  await cloud.open(sessionB);
+  cloud.historyStatus = 503;
+  await cloud.open(sessionA);
   await expect(page.getByText(/HTTP 503/).first()).toBeVisible();
   await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
   const path = testInfo.outputPath('cloud-history-refresh-error.png');
