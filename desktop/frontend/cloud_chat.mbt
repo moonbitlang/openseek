@@ -443,19 +443,20 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   }
   let pending = self.cloud.draft_identity() == Some(owner) &&
     self.cloud.creating_session()
+  let native_users = Map([])
+  for event in conversation.document.events.unwrap_or([]) {
+    if event.item is @protocol.User(user) {
+      native_users[event.sequence] = user.content
+    }
+  }
   let history : Array[String] = []
   for record in conversation.records {
     if record.kind == "user" {
       let native = record.engine_sequence.bind(sequence => {
-        conversation.document.events
-        .unwrap_or([])
-        .iter()
-        .find_first(event => {
-          event.sequence == sequence && event.item is @protocol.User(_)
-        })
+        native_users.get(sequence)
       })
       let text = match (native, record.data) {
-        (Some({ item: @protocol.User(user), .. }), _) => user.content.text()
+        (Some(content), _) => content.text()
         (_, { "content": String(text), .. }) => text
         (_, { "content": Array(parts), .. }) =>
           parts

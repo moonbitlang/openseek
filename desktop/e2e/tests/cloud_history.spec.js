@@ -146,7 +146,13 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   expect((await unchanged).status()).toBe(304);
   expect(await requests.at(-1).headerValue('if-none-match')).toBe(firstTag);
   await expect(bubbles).toHaveCount(3);
-  await page.locator('#task').fill('Keep the local draft');
+  const task = page.locator('#task');
+  for (const prompt of ['Third question', 'Second question', 'First question']) {
+    await task.press('Home');
+    await task.press('ArrowUp');
+    await expect(task).toHaveValue(prompt);
+  }
+  await task.fill('Keep the local draft');
   await expect(page.locator('#send')).toBeEnabled();
 
   // Keep the live answer visible until the terminal event makes the new
