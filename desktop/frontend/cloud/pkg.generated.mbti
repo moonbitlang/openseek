@@ -126,7 +126,6 @@ pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
   NativeEvent(EngineFrame)
-  SessionRecord(session~ : String, task~ : String?, seq~ : Int32, record~ : @protocol.SessionEvent)
   EngineFailed(session~ : String, seq~ : Int32, error~ : String)
 }
 pub fn ControlStreamEvent::equal(Self, Self) -> Bool
@@ -173,6 +172,7 @@ pub(all) struct Conversation {
   task : String?
   last_seq : Int32?
   live : @engine_session.Stream
+  response_started : Bool
   pushed_records : Array[@protocol.SessionEvent]
   turn_start_sequence : Int32?
   terminal_record : (String, Int32)?

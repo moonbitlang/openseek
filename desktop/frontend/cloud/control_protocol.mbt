@@ -256,12 +256,6 @@ pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
   NativeEvent(EngineFrame)
-  SessionRecord(
-    session~ : String,
-    task~ : String?,
-    seq~ : Int32,
-    record~ : @protocol.SessionEvent
-  )
   EngineFailed(session~ : String, seq~ : Int32, error~ : String)
 }
 
@@ -324,36 +318,6 @@ fn decode_control_event(
       raise @cloud_client.RequestError(Malformed)
     }
     EngineFailed(session~, seq=seq.to_int(), error~)
-  } else if json is { "kind": "session_record", .. } {
-    guard json
-      is {
-        "session_id": String(session),
-        "task_id": task,
-        "seq": Number(seq, ..),
-        "data": {
-          "engine_session_id": String(engine_session),
-          "record": record,
-          ..
-        },
-        ..
-      } &&
-      session == engine_session &&
-      seq > 0 &&
-      seq == seq.to_int().to_double() else {
-      raise @cloud_client.RequestError(Malformed)
-    }
-    let task = match task {
-      Null => None
-      String(task) if !task.is_empty() => Some(task)
-      _ => raise @cloud_client.RequestError(Malformed)
-    }
-    let record : @protocol.SessionEvent = @json.from_json(record) catch {
-      _ => raise @cloud_client.RequestError(Malformed)
-    }
-    guard record.sequence > 0 else {
-      raise @cloud_client.RequestError(Malformed)
-    }
-    SessionRecord(session~, task~, seq=seq.to_int(), record~)
   } else if json is { "kind": "engine_event", .. } {
     NativeEvent(
       @json.from_json(json) catch {

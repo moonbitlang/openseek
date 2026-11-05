@@ -94,13 +94,12 @@ test('Cloud drops late predictions after the native log advances, independent of
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await cloud.emitSessionEvent(sessionA, 'task_started', {}, { task: 'next-task' });
   await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
-  const push = (sequence, kind, payload) => cloud.emitSessionEvent(sessionA, 'session_record', {
-    engine_session_id: sessionA, record: { sequence, item: { kind, payload } },
-  });
+  const push = (sequence, kind, payload) => cloud.emitSessionEvent(sessionA, kind, {
+    ...payload, engine_sequence: sequence,
+  }, { publishNative: false });
   await push(13, 'user', { content: 'Check the fix' });
-  await push(14, 'assistant', { content: 'The fix is ready.' });
-  await push(15, 'terminal', { kind: 'finished', message: 'The fix is ready.' });
-  await cloud.emitSessionEvent(sessionA, 'task_finished', { status: 'completed' }, { publishNative: false });
+  await push(14, 'assistant_message', { content: 'The fix is ready.' });
+  await push(15, 'task_finished', { status: 'completed' });
   await expect(page.getByText('The fix is ready.', { exact: true })).toBeVisible();
   await cloud.publish(prediction(12, 'Stale suggestion'), { task: 'fixture-task', persist: false });
   await expect(input).not.toHaveAttribute('placeholder', 'Stale suggestion');

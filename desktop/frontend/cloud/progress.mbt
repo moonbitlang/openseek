@@ -1,6 +1,6 @@
 ///|
 fn Conversation::clear_streams(self : Conversation) -> Conversation {
-  { ..self, live: @engine_session.Stream::empty(), }
+  { ..self, live: @engine_session.Stream::empty(), response_started: false, }
 }
 
 ///|
@@ -46,6 +46,7 @@ fn Conversation::live_progress(
     AgentStep(step) =>
       {
         ..self.clear_streams(),
+        response_started: true,
         heartbeat: self.heartbeat.map(heartbeat => {
           ..heartbeat,
           stage: match step {
@@ -57,6 +58,7 @@ fn Conversation::live_progress(
     StreamRetry(attempt~, max_attempts~, reason~) =>
       {
         ..self.clear_streams(),
+        response_started: true,
         retrying: Some(@composer.Retrying(attempt~, max_attempts~, reason~)),
       }
     Usage(prompt_tokens~, completion_tokens~) =>

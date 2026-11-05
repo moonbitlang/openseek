@@ -143,7 +143,7 @@ test "first Cloud file-only submission creates once and admits the prepared file
     navigation=0,
   )
   let submitted = started.conversations["new-session"].pending.unwrap()
-  let admitted = started.session_record(
+  let admitted = started.commit_event(
       "new-session",
       Some("task"),
       2,

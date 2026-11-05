@@ -326,8 +326,13 @@ test('Cloud commits each streamed reply in a tool loop without rereading history
     await expect(final).toHaveCount(1);
     releases.get(6)();
     await expect(page.locator('#stop')).toHaveCount(0);
-    await expect(first).toBeVisible();
     await expect(final).toBeVisible();
+    // A completed turn folds its tool steps in minimal mode. The first
+    // reply must still be present exactly once in the detailed transcript.
+    await page.getByRole('button', { name: 'Detailed mode', exact: true }).click();
+    await expect(first).toHaveCount(1);
+    await expect(first).toBeVisible();
+    await expect(final).toHaveCount(1);
     expect(cloud.historyReads).toHaveLength(before);
     const path = testInfo.outputPath('cloud-tool-loop.png');
     await transcript.screenshot({ path });

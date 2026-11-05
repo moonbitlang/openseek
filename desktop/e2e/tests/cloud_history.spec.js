@@ -149,17 +149,18 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   await expect(page.locator('#send')).toBeEnabled();
 
   const fourth = makeTurn(3, 'Fourth question');
-  const publishRecord = record => cloud.emitSessionEvent(sessionA, 'session_record', { engine_session_id: sessionA, record }, { task: 'turn-3' });
+  const publishRecord = (kind, record) => cloud.emitSessionEvent(sessionA, kind, {
+    ...record.item.payload, engine_sequence: record.sequence,
+  }, { task: 'turn-3', publishNative: false });
   const beforeTurn = requests.length;
   await cloud.emitSessionEvent(sessionA, 'task_started', {}, { task: 'turn-3' });
-  await publishRecord(fourth.events[0]);
+  await publishRecord('user', fourth.events[0]);
   const answer = transcript.getByText('Fourth question detail 1', { exact: true });
   await cloud.emitSessionEvent(sessionA, 'assistant_delta', { content: 'Fourth question detail 1' }, { task: 'turn-3' });
   await expect(answer).toHaveCount(1);
   turns.push(fourth);
-  await publishRecord(fourth.events[1]);
-  await publishRecord(fourth.events[2]);
-  await cloud.emitSessionEvent(sessionA, 'task_finished', { status: 'completed' }, { task: 'turn-3', publishNative: false });
+  await publishRecord('assistant_message', fourth.events[1]);
+  await cloud.emitSessionEvent(sessionA, 'task_finished', { status: 'completed', engine_sequence: fourth.events[2].sequence }, { task: 'turn-3', publishNative: false });
   await expect(page.locator('#stop')).toHaveCount(0);
   expect(requests).toHaveLength(beforeTurn);
   await expect(bubbles).toHaveText(['First question', 'Second question', 'Third question', 'Fourth question']);

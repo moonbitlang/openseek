@@ -665,6 +665,7 @@ pub fn update(
           ..conversation,
           stream: Some(stream),
           last_seq: None,
+          response_started: false,
         }),
         @cmd.none,
         None,
@@ -774,14 +775,6 @@ pub fn update(
             @cmd.none,
             None,
           )
-        }
-        SessionRecord(session~, task~, seq~, record~) => {
-          guard session == id &&
-            conversation.last_seq is Some(last) &&
-            seq > last else {
-            return (state, @cmd.none, None)
-          }
-          state.session_record(id, task, seq, record, token, emit)
         }
         NativeEvent(frame) => {
           guard conversation.last_seq is Some(seq) && frame.seq > seq else {
@@ -1251,10 +1244,38 @@ pub fn update(
           None,
         )
       }
+      if event.kind == "user" &&
+        conversation.task == Some(event.task_id) &&
+        committed_event(event.data, "user") is Some(record) {
+        return state.commit_event(
+          id,
+          Some(event.task_id),
+          event.seq,
+          record,
+          token,
+          emit,
+        )
+      }
+      let (state, terminal) = if event.kind == "task_finished" &&
+        conversation.finished_event(event.data) is Some(record) {
+        let (next, command, _) = state.commit_event(
+          id,
+          Some(event.task_id),
+          event.seq,
+          record,
+          token,
+          emit,
+        )
+        (next, command)
+      } else {
+        (state, @cmd.none)
+      }
+      let conversation = state.conversations[id]
       let conversation = if event.kind == "task_started" {
         {
           ..conversation.clear_streams(),
           notification_answer: None,
+          response_started: true,
           turn_start_sequence: Some(
             conversation.document.events
             .unwrap_or([])
@@ -1327,7 +1348,7 @@ pub fn update(
           (next, @cmd.none)
         }
         let (next, list) = next.list(token, emit)
-        (next, @cmd.batch([history, list]), None)
+        (next, @cmd.batch([terminal, history, list]), None)
       } else {
         (next, @cmd.none, None)
       }

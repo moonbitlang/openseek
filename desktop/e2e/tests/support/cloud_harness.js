@@ -69,6 +69,7 @@ export class CloudHarness {
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
     this.historyReads = [];
+    this.streamedText = new Map();
     this.exchangeCount = 0;
     this.taskCount = 0;
   }
@@ -550,7 +551,9 @@ export class CloudHarness {
       this.controlSnapshots.set(session, { ...snapshot, data: { ...snapshot.data, compacting: false } });
     }
     const history = this.histories.get(session) || { messages: [], generating: false };
-    const transient = ['session_record', 'prediction_result', 'task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error', 'engine_failed'];
+    if (kind === 'assistant_delta') this.streamedText.set(session, (this.streamedText.get(session) || '') + data.content);
+    if (['task_started', 'step', 'stream_retry'].includes(kind)) this.streamedText.delete(session);
+    const transient = ['prediction_result', 'task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error', 'engine_failed'];
     if (!transient.includes(kind)) {
       this.histories.set(session, { ...history,
         messages: [...history.messages, { task_id: task, kind, data, created_at: 1000 + event.seq }],
@@ -560,8 +563,8 @@ export class CloudHarness {
       this.controlSnapshots.set(session, { ...this.controlState(session), seq: event.seq });
     }
     if (!silent) {
-      const lifecycle = ['task_started', 'task_finished', 'engine_failed', 'session_record'].includes(kind);
-      const committedKind = ['assistant_message', 'tool_call', 'tool_result', 'runtime_notice', 'summary', 'user', 'task_finished'].includes(kind);
+      const lifecycle = ['task_started', 'task_finished', 'engine_failed', 'user'].includes(kind);
+      const committedKind = ['assistant_message', 'tool_call', 'tool_result', 'user', 'task_finished'].includes(kind);
       let record;
       if (publishNative && !this.startupFailures.has(task) && (committedKind || kind === 'task_started')) {
         const native = this.nativeHistory(session, this.histories.get(session) || { messages: [] });
@@ -573,30 +576,32 @@ export class CloudHarness {
           record = native.session.events.at(-1 - notices);
         }
       }
-      if (record && kind === 'task_finished') {
-        await this.publishRecord(session, event, record);
-        event.seq++;
-      }
-      if (lifecycle || !committedKind) {
-        const frame = lifecycle ? event : { ...event, kind: 'engine_event', data: { ...data, event: kind === 'step' ? 'agent_step' : kind } };
-        await this.sendFrame(session, frame);
-      }
-      if (record && kind !== 'task_finished') {
-        if (kind === 'task_started') event.seq++;
-        await this.publishRecord(session, event, record);
+      if (kind === 'task_started') {
+        await this.sendFrame(session, event);
+        if (record) {
+          event.seq++;
+          await this.sendFrame(session, { ...event, kind: 'user', data: { ...record.item.payload, engine_sequence: record.sequence, ts: record.ts } });
+        }
+      } else if (lifecycle) {
+        const payload = record ? { ...data, engine_sequence: record.sequence, ts: record.ts } : data;
+        await this.sendFrame(session, { ...event, data: payload });
+      } else {
+        const payload = record
+          ? { ...record.item.payload, engine_sequence: record.sequence, ts: record.ts }
+          : { ...data };
+        if (kind === 'assistant_message' && this.streamedText.get(session) === payload.content) payload.content = '';
+        const name = kind === 'step' ? 'agent_step' : kind === 'tool_call' ? 'assistant_message' : kind;
+        await this.sendFrame(session, { ...event, kind: 'engine_event', data: { ...payload, event: name } });
       }
       if (event.seq > this.controlState(session).seq) this.controlSnapshots.set(session, { ...this.controlState(session), seq: event.seq });
       if (queueAdvanced) await this.publishControl(session);
     }
+    if (['assistant_message', 'tool_call', 'task_finished'].includes(kind)) this.streamedText.delete(session);
     return event;
   }
 
   async sendFrame(session, frame) {
     await this.page.evaluate(({ session, frame }) => window.cloudSessionEvent(session, frame), { session, frame: this.sseFrame(frame.kind, frame) });
-  }
-
-  async publishRecord(session, event, record) {
-    await this.sendFrame(session, { ...event, kind: 'session_record', data: { engine_session_id: session, record } });
   }
 
   async publishTaskStream(session, task, events) {

@@ -119,6 +119,7 @@ pub(all) struct Conversation {
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
   live : @engine_session.Stream
+  response_started : Bool
   // Committed records that the history pages do not contain yet.
   pushed_records : Array[@protocol.SessionEvent]
   turn_start_sequence : Int32?
@@ -177,6 +178,7 @@ fn Conversation::empty() -> Conversation {
     task: None,
     last_seq: None,
     live: @engine_session.Stream::empty(),
+    response_started: false,
     pushed_records: [],
     turn_start_sequence: None,
     terminal_record: None,

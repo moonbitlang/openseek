@@ -70,7 +70,7 @@ fn State::progress_record(
   sequence : Int32,
   item : Json,
 ) -> State raise {
-  self.session_record(
+  self.commit_event(
     "session",
     Some("task"),
     seq,

@@ -15,6 +15,35 @@ fn State::engine_event(
     frame.seq > seq else {
     return (self, @cmd.none, None)
   }
+  if frame.task_id == conversation.task &&
+    frame.task_id is Some(_) &&
+    conversation.generating {
+    let commit = match frame.data {
+      { "event": "assistant_message", .. } =>
+        conversation.assistant_event(frame.data)
+      { "event": "tool_result", .. } =>
+        committed_event(frame.data, "tool_result")
+      _ => None
+    }
+    if commit is Some(record) {
+      return self.commit_event(
+        session,
+        frame.task_id,
+        frame.seq,
+        record,
+        token,
+        emit,
+      )
+    }
+    if frame.data is { "event": "assistant_message", .. } {
+      let next = self.replace(session, {
+        ..conversation,
+        last_seq: Some(frame.seq),
+      })
+      let (next, command) = next.load(session, token, emit)
+      return (next, command, None)
+    }
+  }
   let conversation = { ..conversation, last_seq: Some(frame.seq), }
   let next = self.replace(session, conversation)
   guard @wire.parse(frame.data) is Some(event) else {
@@ -72,7 +101,7 @@ fn State::engine_event(
 }
 
 ///|
-fn State::session_record(
+fn State::commit_event(
   self : State,
   session : String,
   task : String?,
@@ -139,6 +168,7 @@ fn State::session_record(
       reply.is_replay != Some(true) =>
       {
         ..conversation.clear_streams(),
+        response_started: true,
         retrying: None,
         notification_answer: if reply.content.is_blank() {
           conversation.notification_answer

@@ -280,54 +280,70 @@ test "Cloud retains native notification text until completion and fences it by t
     1,
     state.conversations["session"].control.unwrap(),
   )
-  let reply : @protocol.SessionEvent = {
-    sequence: 1,
-    ts: None,
-    item: @protocol.Assistant({
-      content: "Native answer",
-      reasoning_content: None,
-      tool_calls: None,
-      is_replay: None,
-    }),
-  }
-  let replied = metadata_update(
-    state,
-    WatchEvent(
-      1,
-      "session",
-      stream,
-      decode_control_event("session_record", {
-        "kind": "session_record",
-        "session_id": "session",
-        "task_id": "task",
-        "seq": 2,
-        "data": { "engine_session_id": "session", "record": reply.to_json() },
-      }),
-    ),
+  let started = watch_event(state, stream, "task", 2, "task_started", {})
+  let streamed = native_event(
+    started,
+    stream,
+    Some("task"),
+    3,
+    @wire.AssistantDelta(content="Built from "),
   )
+  let streamed = native_event(
+    streamed,
+    stream,
+    Some("task"),
+    4,
+    @wire.AssistantDelta(content="deltas"),
+  )
+  let replied = watch_event(streamed, stream, "task", 5, "assistant_message", {
+    "content": "",
+    "engine_sequence": 1,
+  })
   assert_eq(
     replied.conversations["session"].notification_answer,
-    Some("Native answer"),
+    Some("Built from deltas"),
   )
   assert_true(replied.conversations["session"].records.is_empty())
-  let finished = watch_event(replied, stream, "task", 3, "task_finished", {
+  let finished = watch_event(replied, stream, "task", 6, "task_finished", {
     "status": "completed",
   })
   assert_eq(
     finished.conversations["session"].notification_answer,
-    Some("Native answer"),
+    Some("Built from deltas"),
   )
-  let next = watch_event(finished, stream, "next", 4, "task_started", {
+  let next = watch_event(finished, stream, "next", 7, "task_started", {
     "previous_task_id": "task",
   })
-  let late = metadata_update(
-    next,
-    WatchEvent(
-      1,
-      "session",
-      stream,
-      SessionRecord(session="session", task=Some("task"), seq=5, record=reply),
-    ),
-  )
+  let late = watch_event(next, stream, "task", 8, "assistant_message", {
+    "content": "Old answer",
+    "engine_sequence": 2,
+  })
   assert_true(late.conversations["session"].notification_answer is None)
+}
+
+///|
+test "Cloud does not commit a partial stream received after reconnect" {
+  let (state, stream) = watch_fixture(controls_fixture())
+  let state = watch_snapshot(
+    state,
+    stream,
+    Some("task"),
+    1,
+    state.conversations["session"].control.unwrap(),
+  )
+  let suffix = native_event(
+    state,
+    stream,
+    Some("task"),
+    2,
+    @wire.AssistantDelta(content="suffix"),
+  )
+  let marker = watch_event(suffix, stream, "task", 3, "assistant_message", {
+    "content": "",
+    "engine_sequence": 2,
+  })
+  assert_true(marker.conversations["session"].history_reading)
+  assert_true(
+    marker.conversations["session"].document.events.unwrap_or([]).is_empty(),
+  )
 }
