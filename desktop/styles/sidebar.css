@@ -723,9 +723,13 @@ button.row-twisty:hover {
   color: var(--color-accent-strong);
 }
 
-.picker-content {
+#project-picker-dialog {
+  max-height: min(40rem, calc(100dvh - 2rem));
+}
+.picker-content[data-slot="dialog-body"] {
   display: flex;
   flex-direction: column;
+  padding: 0;
 }
 .picker-header-leading {
   display: flex;
