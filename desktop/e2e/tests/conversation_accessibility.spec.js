@@ -25,6 +25,8 @@ test('conversation titles support keyboard activation and independent row action
   await page.keyboard.press('Tab');
   // A live row's actions sit behind one overflow trigger.
   const actions = first.getByRole('button', { name: 'Conversation actions' });
+  await expect(first.locator('[data-slot="context-menu-trigger"] .conversation-open')).toBeVisible();
+  expect(await actions.evaluate(node => node.closest('[data-slot="context-menu-trigger"]'))).toBeNull();
   await expect(actions).toBeFocused();
   // The load spinner leaving the row must not take the focused trigger with it.
   await expect(first).toHaveClass(/loading/);
@@ -97,8 +99,9 @@ test('opening another conversation saves a title being edited', async ({ page })
   await app.goto();
   const first = page.locator('.conversation-row[title="session-1"]');
   const second = page.locator('.conversation-row[title="session-2"]');
-  await first.hover();
-  await first.locator('.row-menu-button').click();
+  await first.locator('.conversation-open').click({ button: 'right' });
+  await expect(page.getByRole('menu', { name: 'Conversation actions' }))
+    .toHaveAttribute('data-slot', 'context-menu-content');
   await page.getByRole('menuitem', { name: 'Rename…' }).click();
   const input = first.getByRole('textbox', { name: 'Rename conversation' });
   await expect(input).toBeFocused();

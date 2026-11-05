@@ -294,7 +294,7 @@ pub fn component(
       by=pair => pair.0.id.key(),
     )
   let input = input.map2(menu, (input, menu) => (input, menu))
-  state.map5(input, conversation_rows, locale, search, (
+  let rendered = state.map5(input, conversation_rows, locale, search, (
     state,
     pair,
     conversation_rows,
@@ -313,43 +313,46 @@ pub fn component(
       class += " active"
     }
     let row_children : Array[@html.Html] = [
-      @html.button(
-        class="workspace-disclosure",
-        type_="button",
-        title=input.title,
-        on_click=emit(ToggleDisclosure),
-        attrs=@html.Attrs::build()
-          .aria_expanded((!collapsed).to_string())
-          .aria_controls(input.id.key() + ":content")
-          // Pointer disclosure should not pin the hover controls open.
-          // Keyboard focus still reveals them for Tab navigation.
-          .on_mousedown(event => {
-            if event.get_button() == 0 {
-              event.prevent_default()
-              // Preserve click-away saving before folding makes the row inert.
-              if @dom.document()
-                .get_element_by_id(@conversation.RenameFieldId)
-                .to_option()
-                is Some(field) &&
-                field.to_html_element() is Some(field) {
-                field.blur()
+      @html.div(
+        class="workspace-content",
+        @html.button(
+          class="workspace-disclosure",
+          type_="button",
+          title=input.title,
+          on_click=emit(ToggleDisclosure),
+          attrs=@html.Attrs::build()
+            .aria_expanded((!collapsed).to_string())
+            .aria_controls(input.id.key() + ":content")
+            // Pointer disclosure should not pin the hover controls open.
+            // Keyboard focus still reveals them for Tab navigation.
+            .on_mousedown(event => {
+              if event.get_button() == 0 {
+                event.prevent_default()
+                // Preserve click-away saving before folding makes the row inert.
+                if @dom.document()
+                  .get_element_by_id(@conversation.RenameFieldId)
+                  .to_option()
+                  is Some(field) &&
+                  field.to_html_element() is Some(field) {
+                  field.blur()
+                }
               }
-            }
-            @cmd.none
-          }),
-        [
-          @html.span(
-            class="sidebar-icon",
-            @icons.icon(
-              if collapsed {
-                @icons.icon_folder
-              } else {
-                @icons.icon_folder_opened
-              },
+              @cmd.none
+            }),
+          [
+            @html.span(
+              class="sidebar-icon",
+              @icons.icon(
+                if collapsed {
+                  @icons.icon_folder
+                } else {
+                  @icons.icon_folder_opened
+                },
+              ),
             ),
-          ),
-          @html.span(class="sidebar-label", input.label),
-        ],
+            @html.span(class="sidebar-label", input.label),
+          ],
+        ),
       ),
     ]
     let trailing : Array[@html.Html] = []
@@ -381,22 +384,26 @@ pub fn component(
           class="row-archive",
           type_="button",
           title=@messages.text(locale, NewProjectConversation),
-          attrs=@html.Attrs::build()
-            .on_click(event => {
-              event.stop_propagation()
-              (actions.new_conversation)(input.id)
-            })
-            .aria_label(@messages.text(locale, NewProjectConversation)),
+          on_click=(actions.new_conversation)(input.id),
+          attrs=@html.Attrs::build().aria_label(
+            @messages.text(locale, NewProjectConversation),
+          ),
           @icons.icon(@icons.icon_new_chat),
         ),
       )
     }
     trailing.push(@html.div(class="workspace-actions", controls))
-    row_children.push(@html.div(class="workspace-trailing", trailing))
-    let row_attrs = if input.managed {
-      @action_menu.context_attrs(input.id.key())
-    } else {
-      @html.Attrs::build()
+    let context : @action_menu.RowContext = {
+      target: input.id.key(),
+      revision: Repr::Repr((input.id, input.label, input.title, collapsed,
+        input.managed, input.host, locale)).to_string(),
+      content: @html.fragment(row_children),
+      definition: if input.managed {
+        Some({
+          label: @messages.text(locale, WorkspaceActions),
+          entries: input.menu_entries(actions, locale~),
+        })
+      } else { None },
     }
     let rows : Map[String, @html.Html] = Map([])
     for index = 0; index < conversation_rows.length(); index = index + 1 {
@@ -421,29 +428,28 @@ pub fn component(
         @messages.text(locale, ShowMore),
       )
     }
-    [
-      (
-        input.id.key(),
-        @html.div(
-          class=if collapsed {
-            "sidebar-project sidebar-branch collapsed"
-          } else {
-            "sidebar-project sidebar-branch"
-          },
-          [
-            @html.div(class~, title=input.title, attrs=row_attrs, row_children),
-            @html.div(
-              id=input.id.key() + ":content",
-              class="project-conversations sidebar-branch-content",
-              attrs=@html.Attrs::build()
-                .aria_hidden(collapsed.to_string())
-                .inert(collapsed),
-              rows,
-            ),
-          ],
-        ),
-      ),
-    ]
+    (input.id.key(), class, input.title, context,
+      @html.div(class="workspace-trailing", trailing),
+      @html.div(
+        id=input.id.key() + ":content",
+        class="project-conversations sidebar-branch-content",
+        attrs=@html.Attrs::build()
+          .aria_hidden(collapsed.to_string())
+          .inert(collapsed),
+        rows,
+      ), collapsed)
+  })
+  let context = @action_menu.row_context(rendered.map(row => row.3))
+  rendered.map2(context, (row, context) => {
+    let (id, class, title, _, trailing, children, collapsed) = row
+    [(id, @html.div(
+      class=if collapsed {
+        "sidebar-project sidebar-branch collapsed"
+      } else {
+        "sidebar-project sidebar-branch"
+      },
+      [@html.div(class~, title~, [context, trailing]), children],
+    ))]
   })
 }
 

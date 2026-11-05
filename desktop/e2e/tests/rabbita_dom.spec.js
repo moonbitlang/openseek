@@ -1511,15 +1511,19 @@ test('sidebar menu dismissal and pending selection follow the clicked row', { ta
 
   const first = page.locator('.conversation-row[title="session-1"]');
   // The menu opens at the pointer and can cover the rows below it, so click
-  // the row's leading padding, left of where the menu starts. Not its right
+  // the content area's leading edge, left of where the menu starts. Not its right
   // end: that is the hover-revealed actions trigger, and the row's width is
   // platform-dependent.
-  await first.click({ position: { x: 4, y: 10 } });
+  await first.locator('.conversation-content').click({ position: { x: 4, y: 10 } });
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(first).toHaveClass(/active/);
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
 
   app.rpcDelays.set('session.load', 10000);
+  await first.locator('.conversation-open').click({ button: 'right', delay: 200 });
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeHidden();
   await first.locator('.conversation-open').click({ button: 'right', delay: 200 });
   await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
   const second = page.locator('.conversation-row[title="session-2"]');

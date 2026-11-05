@@ -333,48 +333,41 @@ pub fn dropdown(
   class~ : String,
   icon : @html.Html,
 ) -> @rabbita.Val[@html.Html] {
-  @rui.dropdown_menu(
-    id=target + ":actions",
-    attrs=@html.Attrs::build().on_click(event => {
-      event.stop_propagation()
-      @cmd.none
-    }),
-    scope => {
-      @html.fragment([
-        @rui.dropdown_menu_trigger(
-          scope,
-          variant=Ghost,
-          size=IconXs,
-          class~,
-          title=definition.label,
-          aria_label=definition.label,
-          icon,
-        ),
-        @rui.dropdown_menu_content(
-          scope,
-          align=End,
-          aria_label=definition.label,
-          class="action-menu",
-          attrs=@html.Attrs::build().data_set("action-menu-surface", target),
-          definition.entries.map(entry => {
-            match entry {
-              Separator => @rui.dropdown_menu_separator()
-              Action(item) =>
-                @rui.dropdown_menu_item(
-                  scope,
-                  disabled=!item.enabled,
-                  destructive=item.destructive,
-                  on_select=item.command,
-                  class="action-menu-item",
-                  title=item.title,
-                  item_children(item),
-                )
-            }
-          }),
-        ),
-      ])
-    },
-  )
+  @rui.dropdown_menu(id=target + ":actions", scope => {
+    @html.fragment([
+      @rui.dropdown_menu_trigger(
+        scope,
+        variant=Ghost,
+        size=IconXs,
+        class~,
+        title=definition.label,
+        aria_label=definition.label,
+        icon,
+      ),
+      @rui.dropdown_menu_content(
+        scope,
+        align=End,
+        aria_label=definition.label,
+        class="action-menu",
+        attrs=@html.Attrs::build().data_set("action-menu-surface", target),
+        definition.entries.map(entry => {
+          match entry {
+            Separator => @rui.dropdown_menu_separator()
+            Action(item) =>
+              @rui.dropdown_menu_item(
+                scope,
+                disabled=!item.enabled,
+                destructive=item.destructive,
+                on_select=item.command,
+                class="action-menu-item",
+                title=item.title,
+                item_children(item),
+              )
+          }
+        }),
+      ),
+    ])
+  })
 }
 
 ///|

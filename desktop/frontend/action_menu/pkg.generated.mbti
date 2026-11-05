@@ -19,6 +19,8 @@ pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput],
 
 pub fn dropdown(String, Definition, class~ : String, @html.Html) -> @rabbita.Val[@html.Html]
 
+pub fn row_context(@rabbita.Val[RowContext]) -> @rabbita.Val[@html.Html]
+
 pub fn[T : Eq] selection_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[T?], (QuoteReply[T]) -> @cmd.Cmd) -> @rabbita.Val[@html.Html]
 
 // Errors
@@ -82,6 +84,16 @@ pub(all) struct QuoteReply[T] {
   accepted : @cmd.Cmd
   declined : @cmd.Cmd
 }
+
+pub(all) struct RowContext {
+  target : String
+  revision : String
+  content : @html.Html
+  definition : Definition?
+}
+pub fn RowContext::equal(Self, Self) -> Bool
+pub fn RowContext::not_equal(Self, Self) -> Bool
+pub impl Eq for RowContext
 
 // Type aliases
 

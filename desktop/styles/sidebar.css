@@ -213,6 +213,21 @@ html.is-resizing .sidebar-resize-handle {
   content-visibility: auto;
   contain-intrinsic-block-size: auto 2em;
 }
+.sidebar-context-trigger {
+  display: flex;
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.conversation-content {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 1 1 auto;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.conversation-content > .sidebar-label,
 .conversation-row > .sidebar-label {
   flex: 1 1 auto;
   overflow: hidden;
@@ -499,6 +514,12 @@ html.is-resizing .sidebar-resize-handle {
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
+}
+.workspace-content {
+  display: flex;
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .workspace-disclosure {
   flex: 1 1 auto;

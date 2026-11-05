@@ -10,7 +10,6 @@ import {
   "openseek_desktop/frontend/action_menu",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/sidebar/conversation",
-  "openseek_desktop/frontend/sidebar/project",
   "openseek_desktop/frontend/sidebar/section",
 }
 
