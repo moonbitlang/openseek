@@ -13,7 +13,7 @@ pub fn component(
   state : @rabbita.Val[State],
   locale : @rabbita.Val[@i18n.Locale],
   emit : @cmd.Emit[Msg],
-) -> @rabbita.Val[@html.Html] {
+) -> @rabbita.Val[(@html.Html, @html.Html)] {
   let localized = state.map3(input, locale, (state, input, locale) => {
     (state, input, locale)
   })
@@ -21,8 +21,23 @@ pub fn component(
     let (state, input, locale) = localized
     installed_menu(locale, state, input, target, emit)
   })
-  localized.view2(menu, (localized, menu) => {
+  localized.map2(menu, (localized, menu) => {
     let (state, input, locale) = localized
-    @html.fragment([page(locale~, state, input, emit), menu])
+    let detail_open = state.detail_open(input.channel)
+    (
+      @html.fragment([
+        list_page(locale~, state, input, emit),
+        if detail_open {
+          @html.nothing
+        } else {
+          menu
+        },
+      ]),
+      if detail_open {
+        @html.fragment([detail_page(locale~, state, input, emit), menu])
+      } else {
+        @html.nothing
+      },
+    )
   })
 }

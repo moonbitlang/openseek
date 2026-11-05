@@ -506,22 +506,6 @@ fn list_page(
 }
 
 ///|
-fn page(
-  locale~ : @i18n.Locale = English,
-  state : State,
-  input : Input,
-  emit : @cmd.Emit[Msg],
-) -> @html.Html {
-  guard state.preview_channel == Some(input.channel) else {
-    return list_page(locale~, state, input, emit)
-  }
-  match state.preview {
-    Closed => list_page(locale~, state, input, emit)
-    _ => detail_page(locale~, state, input, emit)
-  }
-}
-
-///|
 fn installed_actions(
   locale : @i18n.Locale,
   state : State,

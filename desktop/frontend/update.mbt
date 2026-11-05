@@ -1739,13 +1739,17 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
-  let dialog_cmd = if (previous.management_dialog is Some(_)) ==
-    (model.management_dialog is Some(_)) {
+  let previous_dialog = previous.management_dialog_id()
+  let current_dialog = model.management_dialog_id()
+  let dialog_cmd = if previous_dialog == current_dialog {
     @cmd.none
-  } else if model.management_dialog is Some(_) {
-    @dialog.show("management-dialog")
   } else {
-    @dialog.close("management-dialog")
+    @cmd.batch(
+      [
+        ..previous_dialog.map_or([], id => [@dialog.close(id)]),
+        ..current_dialog.map_or([], id => [@dialog.show(id)]),
+      ],
+    )
   }
   let cmd = @cmd.batch([cmd, dialog_cmd])
   let (preferences_cmd, model) = sync_account_preferences(

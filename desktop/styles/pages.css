@@ -114,13 +114,14 @@ a:where(.setting-link) {
 }
 
 /* Management pages keep their own content spacing; the shell owns scrolling. */
-#management-dialog > [data-slot="dialog-content"] > [data-slot="dialog-body"] {
+:is(#management-dialog, #skill-detail-dialog) > [data-slot="dialog-content"] > [data-slot="dialog-body"] {
   padding: 0;
 }
 .management-dialog-pane:not([hidden]) {
   display: contents;
 }
-#management-dialog .management-dialog-pane > .management-page {
+#management-dialog .management-dialog-pane > .management-page,
+#skill-detail-dialog .management-page {
   overflow: visible;
   width: 100%;
   box-sizing: border-box;
@@ -134,7 +135,7 @@ a:where(.setting-link) {
     calc((100% - 72rem) / 2)
   );
 }
-#management-dialog .management-page > .management-page-content {
+:is(#management-dialog, #skill-detail-dialog) .management-page > .management-page-content {
   width: 100%;
   max-width: none;
   margin-inline: 0;

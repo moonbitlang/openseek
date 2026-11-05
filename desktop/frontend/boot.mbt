@@ -1043,7 +1043,7 @@ fn main {
         @html.fragment([context_menu, selection_actions])
       },
     )
-    let skills_html = @skills.component(
+    let skills_views = @skills.component(
       state.map(model => model.skills_input()),
       state.map(model => model.skills),
       state.map(model => model.locale),
@@ -1085,7 +1085,7 @@ fn main {
         by=open => if open { "open" } else { "closed" },
       )
     let management_pages = @rabbita.Val::map3(
-      skills_html,
+      skills_views,
       workspace_settings_html,
       archived_chats_html,
       (skills, workspace_settings, archived_chats) => {

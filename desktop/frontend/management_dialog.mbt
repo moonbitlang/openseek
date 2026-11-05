@@ -4,6 +4,16 @@ fn Model::codex_work_selected(self : Model) -> Bool {
 }
 
 ///|
+fn Model::management_dialog_id(self : Model) -> String? {
+  match self.management_dialog {
+    Some(Skills) if self.skills.detail_open(self.focused) &&
+      !self.host_incompatible() => Some("skill-detail-dialog")
+    Some(_) => Some("management-dialog")
+    None => None
+  }
+}
+
+///|
 fn management_dialog_view(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -38,25 +48,7 @@ fn management_dialog_view(
     ),
     [
       @ui.dialog_header([
-        @html.div(
-          class="desktop-dialog-heading",
-          [
-            ..if model.management_dialog is Some(Skills) &&
-              model.skills.detail_open() {
-              [
-                @html.button(
-                  class="icon-button",
-                  attrs=@html.Attrs::build().aria_label(
-                    shell_text(model.locale, BackToSkills),
-                  ),
-                  on_click=dispatch(Skills(@skills.BackToList)),
-                  @icons.icon(@icons.icon_arrow_left),
-                ),
-              ]
-            },
-            @ui.dialog_title(id="management-dialog-title", title),
-          ],
-        ),
+        @ui.dialog_title(id="management-dialog-title", title),
         @html.button(
           type_="button",
           class="icon-button",

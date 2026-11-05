@@ -2204,10 +2204,14 @@ fn view(
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
   quick_open_and_context_menu : (@html.Html, @html.Html, @html.Html),
-  management_pages : (@html.Html, @html.Html, @html.Html),
+  management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
   let (quick_open_html, context_menu_html, transfer_menu_html) = quick_open_and_context_menu
-  let (skills_html, workspace_settings_html, archived_chats_html) = management_pages
+  let (
+    (skills_list_html, skills_detail_html),
+    workspace_settings_html,
+    archived_chats_html,
+  ) = management_pages
   // Until the relay session and its device exist, the console frame —
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
   // receive UI work.
@@ -2523,7 +2527,10 @@ fn view(
       right_panel_html,
       terminal_html,
     ]),
-    management_dialog_view(dispatch, model, skills_html, archived_chats_html),
+    management_dialog_view(
+      dispatch, model, skills_list_html, archived_chats_html,
+    ),
+    skills_detail_dialog_view(dispatch, model, skills_detail_html),
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,
