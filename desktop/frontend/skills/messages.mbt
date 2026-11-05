@@ -21,7 +21,6 @@ priv enum UiMessage {
   CopyDocument
   Copy
   Loading
-  InstallSkill
   Library
   Description
   Search
@@ -139,11 +138,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Loading) => "正在加载…"
     (TraditionalChinese, Loading) => "正在載入…"
     (Japanese, Loading) => "読み込み中…"
-    (English, InstallSkill) => "Install skill"
-    (Spanish, InstallSkill) => "Instalar habilidad"
-    (SimplifiedChinese, InstallSkill) => "安装技能"
-    (TraditionalChinese, InstallSkill) => "安裝技能"
-    (Japanese, InstallSkill) => "スキルをインストール"
     (English, Library) => "Library"
     (Spanish, Library) => "Biblioteca"
     (SimplifiedChinese, Library) => "技能库"

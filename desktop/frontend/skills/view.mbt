@@ -128,7 +128,7 @@ fn market_row(
   }
   let action = @html.div(class="skill-actions", [
     @html.button(
-      class="button secondary skill-action",
+      class="button primary skill-action",
       disabled=pending is Some(_),
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
@@ -241,7 +241,7 @@ fn detail_shell(
   state : State,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  @page_shell.body(class="skills-page skill-detail-page", [
+  @html.div(class="skill-detail-page", [
     @html.div(class="skill-detail-header", [
       @html.div(class="skill-header", [
         @html.div(class="skill-title", [
@@ -315,13 +315,13 @@ fn detail_action(
     Market(item) => {
       let pending = state.pending_action(input.channel, item.identity())
       @html.button(
-        class="button primary skill-detail-action",
+        class="button primary skill-action",
         disabled=pending is Some(_),
         on_click=emit(Install(item)),
         if pending is Some(action) {
           ui(locale, action.label())
         } else {
-          ui(locale, InstallSkill)
+          ui(locale, Install)
         },
       )
     }

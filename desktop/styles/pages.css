@@ -118,15 +118,18 @@ a:where(.setting-link) {
   max-height: min(52rem, 80dvh);
 }
 
+#skill-detail-dialog [data-slot="dialog-body"] {
+  overflow-x: hidden;
+}
+
 /* Management pages keep their own content spacing; the shell owns scrolling. */
-:is(#management-dialog, #skill-detail-dialog) > [data-slot="dialog-content"] > [data-slot="dialog-body"] {
+#management-dialog > [data-slot="dialog-content"] > [data-slot="dialog-body"] {
   padding: 0;
 }
 .management-dialog-pane:not([hidden]) {
   display: contents;
 }
-#management-dialog .management-dialog-pane > .management-page,
-#skill-detail-dialog .management-page {
+#management-dialog .management-dialog-pane > .management-page {
   overflow: visible;
   width: 100%;
   box-sizing: border-box;
@@ -140,7 +143,7 @@ a:where(.setting-link) {
     calc((100% - 72rem) / 2)
   );
 }
-:is(#management-dialog, #skill-detail-dialog) .management-page > .management-page-content {
+#management-dialog .management-page > .management-page-content {
   width: 100%;
   max-width: none;
   margin-inline: 0;
@@ -901,13 +904,12 @@ button.archived-chat-open:hover .archived-chat-title {
   white-space: pre-wrap;
 }
 
-.skill-detail-page > .management-page-content {
-  max-width: 840px;
+.skill-detail-page > * + * {
+  margin-top: var(--space-7);
 }
 
-.skill-detail-header {
-  display: grid;
-  gap: var(--space-4);
+.skill-detail-header > * + * {
+  margin-top: var(--space-4);
 }
 
 .skill-detail-header h2 {
