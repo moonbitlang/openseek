@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
 
 const prediction = (source_sequence = 12, text = 'Commit the fix') => ({

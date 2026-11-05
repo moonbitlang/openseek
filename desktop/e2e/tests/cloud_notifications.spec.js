@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
 
 const shown = app => app.notifications.filter(call => call.method === 'show');

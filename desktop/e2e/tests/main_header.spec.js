@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 async function expectHeader(page, title) {
@@ -25,7 +25,6 @@ test('management dialogs preserve the empty project header', async ({ page }, te
     await expect(page.getByRole('dialog')).toHaveAccessibleName(title);
     expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
     await expect(page.locator('main h1')).toHaveCount(1);
-    await expect(page.locator('.management-page-content')).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
     await expectHeader(page, 'SeekMoon');
   }

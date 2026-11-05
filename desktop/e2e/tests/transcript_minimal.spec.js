@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
@@ -178,7 +178,7 @@ for (const retired of [false, true]) test(`minimal image collapse survives prece
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal transcript groups live tools and folds completed work around user messages', async ({ page }, testInfo) => {
+test('minimal transcript groups live tools and folds completed work around user messages', { tag: '@motion' }, async ({ page }, testInfo) => {
   const app = new MinimalTranscriptHarness(page);
   const nextProse = app.sessionEvents.pop().item.payload;
   await app.install();

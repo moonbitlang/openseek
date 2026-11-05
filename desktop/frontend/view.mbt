@@ -1246,6 +1246,7 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 fn api_settings_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  id_prefix~ : String,
 ) -> Array[@html.Html] {
   if @interop.is_native_ssh(model.focused) {
     return [
@@ -1274,7 +1275,7 @@ fn api_settings_rows(
         ApiProviderMenu.setting_control(
           dispatch,
           model,
-          id="api-provider-select",
+          id=id_prefix + "-provider-select",
           options=[
             @select_control.ViewOption(
               value="deepseek",
@@ -1350,10 +1351,7 @@ fn api_settings_rows(
               .disabled(!settings_loaded),
           ),
           @html.button(
-            // The id is layout only (grid placement); the fill is the
-            // shared primary style.
-            id="saveApiKey",
-            class="button primary",
+            class="button primary save-api-key",
             disabled=!settings_loaded || model.setup_api_key.is_blank(),
             on_click=dispatch(SaveApiKey),
             @settings.text(model.locale, SaveApiKey),
@@ -1421,7 +1419,11 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       desc=@settings.text(locale, MaxStepsDescription),
     ),
   ]
-  let api_rows : Array[@html.Html] = api_settings_rows(dispatch, model)
+  let api_rows : Array[@html.Html] = api_settings_rows(
+    dispatch,
+    model,
+    id_prefix="settings-api",
+  )
   let groups : Array[@html.Html] = [
     ..if model.is_desktop {
       [ssh_settings(dispatch, model)]
@@ -2707,7 +2709,10 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       }),
       [
         @html.div(class="modal-title", title),
-        @html.div(class="setup-modal-form", api_settings_rows(dispatch, model)),
+        @html.div(
+          class="setup-modal-form",
+          api_settings_rows(dispatch, model, id_prefix="setup-api"),
+        ),
         @html.div(class="modal-actions", [
           @html.button(
             class="button secondary",

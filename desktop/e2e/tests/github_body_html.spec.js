@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { fixture, openHTMLPR, prURL } from './support/github_body_html.js';
 

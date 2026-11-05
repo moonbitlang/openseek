@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { CloudHarness, authOrigin, sessionA, sessionC } from './support/cloud_harness.js';
 

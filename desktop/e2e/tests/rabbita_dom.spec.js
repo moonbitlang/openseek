@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 async function diagramViewportFillsHost(host) {
@@ -1497,7 +1497,7 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sidebar menu dismissal and pending selection follow the clicked row', async ({ page }) => {
+test('sidebar menu dismissal and pending selection follow the clicked row', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions.push({
     id: 'session-2',
@@ -1690,7 +1690,7 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   await expect(page.getByText('Set up your DeepSeek API key')).toBeVisible();
   await page.getByRole('button', { name: 'API endpoint' }).click();
   await page.getByRole('option', { name: 'OpenRouter' }).click();
-  await page.getByLabel('API key').fill('sk-openrouter-test');
+  await page.locator('.setup-modal').getByLabel('API key').fill('sk-openrouter-test');
   await page.getByRole('button', { name: 'Save API key' }).click();
 
   await expect.poll(() => app.requests.some(request =>
@@ -1860,8 +1860,9 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace settings' })).toBeVisible();
-  await expect(page.locator('.settings-subtitle')).toHaveText('/workspace');
+  const workspaceSettings = page.getByRole('dialog', { name: 'Workspace settings' });
+  await expect(workspaceSettings).toBeVisible();
+  await expect(workspaceSettings.locator('.settings-subtitle')).toHaveText('/workspace');
 
   // The dialog reads the host's authoritative snapshot before enabling the
   // selects.

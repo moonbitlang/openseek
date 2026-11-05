@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { SshBrowserHarness } from './support/ssh_browser_harness.js';
 
 const warning = [
@@ -77,7 +77,7 @@ test('SSH terminal stops claiming recovery after failure or cancellation in a na
   await page.addInitScript(() => localStorage.setItem('openseek.theme', 'dark'));
   const app = await start(page);
   await app.sshEvent({ method: 'agent.connected', params: { protocol: app.hostProtocol } });
-  await expect(page.locator('.ssh-status')).toContainText('Connected');
+  await expect(page.getByRole('status', { name: 'Connected', exact: true })).toBeVisible();
   await page.getByTitle('Show terminal (Ctrl+`)').click();
   await expect(page.locator('.terminal-panel')).toBeVisible();
   // Open the editor to narrow main without crossing the mobile breakpoint.

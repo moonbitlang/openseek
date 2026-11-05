@@ -1070,21 +1070,17 @@ fn main {
     )
     // `Val::view9` is rabbita's widest composition. Stable overlay pairs share
     // one slot each without moving their state into the root model.
-    // One archived page per visit: leaving it disposes the component with
-    // its filter, so every visit starts unfiltered.
+    // Reset the filter between visits, but render the closed page too so its
+    // DOM is already mounted before the next opening.
     let archived_chats_html = state
       .map(model => model.management_dialog is Some(ArchivedChats))
       .switch_by(
-        open => {
-          if open {
-            @archived_chats.component(
-              state.map(model => model.locale),
-              state.map(model => model.archived_chat_groups()),
-              archived_chats_actions(emit),
-            )
-          } else {
-            @rabbita.Val::constant(@html.nothing)
-          }
+        _ => {
+          @archived_chats.component(
+            state.map(model => model.locale),
+            state.map(model => model.archived_chat_groups()),
+            archived_chats_actions(emit),
+          )
         },
         by=open => if open { "open" } else { "closed" },
       )

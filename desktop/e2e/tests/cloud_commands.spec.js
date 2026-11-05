@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const commands = app => app.requests.filter(request => request.method === 'POST' && request.path.endsWith('/commands')).map(request => JSON.parse(request.body));

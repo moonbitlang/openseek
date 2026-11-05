@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, settledResponse, sessionA, sessionB } from './support/cloud_harness.js';
 
 function deferred() {
