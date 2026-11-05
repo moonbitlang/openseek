@@ -4,7 +4,7 @@ import { expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './desktop_browser_harness.js';
 
 export const authOrigin = 'https://openseek-api.moonbitlang.cn';
-export const cloudOrigin = 'https://cloud.moonbitlang.cn';
+export const cloudOrigin = 'https://cloud.moonbitlang.com';
 export const sessionA = '11111111-1111-4111-8111-111111111111';
 export const sessionB = '22222222-2222-4222-8222-222222222222';
 export const sessionC = '33333333-3333-4333-8333-333333333333';
