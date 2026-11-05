@@ -352,3 +352,33 @@ test('Cloud direct link keeps history readable but editing disabled after catalo
   await expect(page.locator('aside').getByText('Couldn’t load chats', { exact: true })).toBeVisible();
   expect(creations(cloud)).toEqual([]);
 });
+
+test('Cloud keeps displayed history when a background read fails during a send', async ({ page }, testInfo) => {
+  const cloud = new CloudHarness(page);
+  cloud.manualTasks = true;
+  cloud.histories.set(sessionA, {
+    messages: [{
+      task_id: 'old-task', kind: 'user', data: { content: 'Earlier Cloud message' }, created_at: 1000,
+    }],
+    generating: false,
+  });
+  await cloud.install();
+  await cloud.goto();
+  await cloud.open();
+  const transcript = page.locator('#transcript');
+  await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
+
+  cloud.historyStatus = 503;
+  await page.locator('#task').fill('Start a new turn');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.getByText(/HTTP 503/).first()).toBeVisible();
+  await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
+  const path = testInfo.outputPath('cloud-history-refresh-error.png');
+  await transcript.screenshot({ path });
+  await testInfo.attach('History remains visible after a failed background read', { path, contentType: 'image/png' });
+
+  cloud.historyStatus = 200;
+  await cloud.finishTask();
+  await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
+  await expect(transcript.getByText('Start a new turn', { exact: true })).toBeVisible();
+});
