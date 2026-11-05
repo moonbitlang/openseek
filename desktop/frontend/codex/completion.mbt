@@ -634,6 +634,7 @@ fn State::apply_composer_action(
     | @composer.ReasoningMenuToggled(..)
     | @composer.SelectMenuDismissed(..)
     | @composer.ApprovalAnswered(..)
+    | @composer.ProposalAnswered(..)
     | @composer.PermissionMenuToggled(..)
     | @composer.PermissionMenuDismissed(..)
     | @composer.ApprovalMenuToggled(..)

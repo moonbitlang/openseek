@@ -1454,6 +1454,7 @@ fn approve_openseek(
   id : String,
   run_id : String?,
   allow~ : Bool,
+  settled_when_refused~ : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -1482,7 +1483,9 @@ fn approve_openseek(
           return
         }
       }
-      if !reply.delivered {
+      // A refusal of a question the host settles on its first answer means
+      // it was already settled: its next snapshot shows how.
+      if !reply.delivered && !settled_when_refused {
         // The host had no live engine to hand it to. Restore it anyway: being
         // refused a second time is a better end than a card that cannot be
         // pressed at all.
