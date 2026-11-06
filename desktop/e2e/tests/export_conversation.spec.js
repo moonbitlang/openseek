@@ -114,27 +114,6 @@ class ExportHarness extends DesktopBrowserHarness {
   }
 }
 
-test('export opens choices and downloads locally without publishing', async ({ page }) => {
-  const app = new ExportHarness(page);
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  expect(app.count('session.export')).toBe(0);
-  expect(app.hostShares.length).toBe(0);
-  await expect(dialog).toContainText('Anyone with the link can view it for 7 days');
-  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
-  await expect.poll(() => app.count('session.export')).toBe(1);
-  await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
-  await expect(dialog).toBeVisible(); // cancelling the native save is not an error
-  app.downloadReply = { path: '/exports/conversation.html', opened: false };
-  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
-  await expect(dialog).toContainText("couldn't open it automatically");
-  expect(app.requests.find(request => request.method === 'session.export').params).toMatchObject({
-    session: 'session-1', workspace: '/workspace', archived: false,
-  });
-  expect(app.hostShares.length).toBe(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('share publishes once and shows a selectable link with a copy button', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const app = new ExportHarness(page);

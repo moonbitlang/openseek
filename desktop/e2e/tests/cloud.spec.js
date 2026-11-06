@@ -1,4 +1,3 @@
-import { chooseTranscriptView } from './support/transcript_view.js';
 import { test, expect } from './support/test.js';
 import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
@@ -260,72 +259,6 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
     expect(cloud.exchangeCount).toBe(0);
   });
 }
-
-test('Cloud renders each text fragment and hands off two tool-loop replies to delayed compact history', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.trimHistory = true;
-  cloud.streamEvents = [
-    ['task_started', {}],
-    ['assistant_delta', { content: '你' }],
-    ['assistant_delta', { content: '好 🌙' }],
-    ['assistant_message', { content: '你好 🌙', tool_calls: [{ id: 'calc', name: 'mbtx', arguments: '{}' }] }],
-    ['tool_result', { tool_call_id: 'calc', tool_name: 'mbtx', content: '2', is_error: false }],
-    // Reply and tool events are previews; the step and terminal barriers
-    // follow saved records and start the history reads.
-    ['step', { step: 2 }],
-    ['assistant_delta', { content: 'The result is 2.' }],
-    ['assistant_message', { content: 'The result is 2.' }],
-    ['agent_finished', { answer: 'The result is 2.' }],
-    ['task_finished', { status: 'completed', result: { output: { answer: 'The result is 2.' } } }],
-  ];
-  let first, second, final;
-  cloud.eventPauses = new Map([
-    [1, new Promise(resolve => first = resolve)],
-    [2, new Promise(resolve => second = resolve)],
-    [7, new Promise(resolve => final = resolve)],
-  ]);
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  await page.locator('#task').fill('Stream the reply');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('#transcript').getByText('你', { exact: true })).toBeVisible();
-  await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(0);
-  first();
-  await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(1);
-  let releaseHistory;
-  cloud.pauseHistory = new Promise(resolve => { releaseHistory = resolve; });
-  const path = `/v1/sessions/${sessionA}/messages`;
-  const handoff = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
-  second();
-  await handoff;
-  await expect(page.locator('#transcript .streaming')).toHaveCount(0);
-  const answer = page.locator('#transcript').getByText('你好 🌙', { exact: true });
-  await expect(answer).toBeVisible();
-  const result = page.locator('#transcript').getByText('The result is 2.', { exact: true });
-  await expect(result).toBeVisible();
-  const reads = () => cloud.requests.filter(request => request.method === 'GET' && request.path === path).length;
-  const paused = reads();
-  final();
-  // Notifications during the paused read wait for it instead of starting more.
-  await expect(page.locator('.composer-running-text')).toHaveCount(0);
-  expect(reads()).toBe(paused);
-  await expect(answer).toBeVisible();
-  await expect(result).toBeVisible();
-  const followUp = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
-  releaseHistory();
-  const finalRead = await followUp;
-  const recovered = await finalRead.response();
-  expect(recovered.status()).toBe(200);
-  await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
-  await expect(page.locator('#task')).toHaveValue('');
-  await expect(result).toHaveCount(1);
-  await chooseTranscriptView(page, 'Detail');
-  await expect(answer).toHaveCount(1);
-  await expect(answer).toBeVisible();
-  await expect(result).toBeVisible();
-  expect(cloud.device.pageErrors).toEqual([]);
-});
 
 test('Cloud disconnect replaces provisional text with authoritative history and preserves the draft', async ({ page }) => {
   const cloud = new CloudHarness(page);

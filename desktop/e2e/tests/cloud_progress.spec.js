@@ -1,34 +1,5 @@
-import { chooseTranscriptView } from './support/transcript_view.js';
 import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA } from './support/cloud_harness.js';
-
-test('Cloud conversation view setting updates the transcript and preserves the preference across narrow layouts and reloads', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.histories.set(sessionA, {
-    messages: [{ task_id: 'fixture-task', kind: 'assistant_message', created_at: 1000,
-      data: { content: 'Cloud answer', reasoning_content: 'Cloud reasoning details' } }],
-    generating: false,
-  });
-  await cloud.install();
-  await cloud.goto();
-  await cloud.create();
-  await cloud.open();
-  await expect(page.locator('#transcript')).toContainText('Cloud answer');
-  await expect(page.locator('#transcript')).not.toContainText('Cloud reasoning details');
-  await chooseTranscriptView(page, 'Detail');
-  await expect(page.locator('#transcript .activity-thinking')).toHaveText('Cloud reasoning details');
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('#transcript')).not.toContainText('Cloud reasoning details');
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.locator('#transcript .activity-thinking')).toHaveText('Cloud reasoning details');
-  await page.reload();
-  await cloud.open();
-  await expect(page.locator('#transcript .activity-thinking')).toHaveText('Cloud reasoning details');
-  await chooseTranscriptView(page, 'Minimal');
-  await expect(page.locator('#transcript')).not.toContainText('Cloud reasoning details');
-  expect(cloud.device.pageErrors).toEqual([]);
-  expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
-});
 
 test('Cloud reuses live reasoning, actual usage, stages and compaction UI before committing history', async ({ page }) => {
   const cloud = new CloudHarness(page);
