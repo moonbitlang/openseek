@@ -28,7 +28,7 @@ async fn resolve_host_reference(
     }
     None => @work_dir.session_cwd(payload.session)
   }
-  let path = @pathx.Path(payload.path).expand_home()
+  let path = @home.expand(Path(payload.path))
   // Absolute system targets do not need a conversation checkout. Relative
   // paths still need one so they never fall back to the host process's cwd.
   if base is None && !path.is_host_absolute() {
@@ -369,21 +369,6 @@ async test "open_path rejects missing files and opens outside text files" {
 }
 
 ///|
-/// Expand a leading `~` (the agent often writes paths home-relative) to the
-/// user's home directory; other paths pass through for `open_target` to take
-/// against the working directory. Keeping this on `Path` preserves the
-/// unclassified input until `open_target` decides whether it is absolute.
-fn @pathx.Path::expand_home(self : @pathx.Path) -> @pathx.Path {
-  if self.0 == "~" && @home.dir() is Some(home) {
-    home
-  } else if self.0.strip_prefix("~/") is Some(rest) && @home.dir() is Some(home) {
-    home.join(Relative(rest.to_owned()))
-  } else {
-    self
-  }
-}
-
-///|
 /// Seed content for a `config.toml` this desktop creates. Codex treats an
 /// empty file as default configuration, so the header only orients whoever
 /// opens it.
@@ -400,7 +385,7 @@ async fn ensure_codex_config(home : @pathx.Path?) -> String {
     None =>
       match @sys.get_env_var("CODEX_HOME") {
         Some(value) if !value.is_blank() => Path(value)
-        _ => @pathx.Path("~/.codex").expand_home()
+        _ => @home.expand(Path("~/.codex"))
       }
   }
   let config = "\{home_path.0}/config.toml"

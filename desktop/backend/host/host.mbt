@@ -54,7 +54,7 @@ struct HostState {
 /// WebSocket create separate values, so filesystem watches and PTY sessions
 /// cannot leak into another client.
 struct HostConnection {
-  fs_watch : FsWatchActor
+  fs_watch : @files.Watcher
   file_search : @search.FileSearchService
   text_search : @search.TextSearchService
   semantic_search : @search.SemanticSearchService
@@ -64,7 +64,7 @@ struct HostConnection {
 ///|
 pub fn HostConnection::HostConnection() -> HostConnection {
   {
-    fs_watch: FsWatchActor(),
+    fs_watch: Watcher(),
     file_search: FileSearchService(),
     text_search: TextSearchService(),
     semantic_search: SemanticSearchService(),
@@ -148,31 +148,7 @@ pub async fn HostConnection::run(
     group.spawn_bg(() => self.file_search.run())
     group.spawn_bg(() => self.text_search.run())
     group.spawn_bg(() => self.semantic_search.run(emit_progress))
-    self.fs_watch.run(
-      push => {
-        emit(
-          FsChanged({
-            root: push.root,
-            baseline: push.baseline,
-            events: push.events.map(event => {
-              kind_: event.kind_,
-              path: event.path,
-              old_path: event.old_path,
-            }),
-            generation: push.generation,
-          }),
-        )
-      },
-      failure => {
-        emit(
-          FsWatchFailed({
-            root: failure.root,
-            message: failure.message,
-            generation: failure.generation,
-          }),
-        )
-      },
-    )
+    self.fs_watch.run(emit)
   })
 }
 
@@ -206,7 +182,7 @@ pub fn endpoints(
     Endpoint(@commands.app_language_set, payload => {
       write_ui_language(state.runtime_dir.map(dir => dir.to_string()), payload)
     }),
-    Endpoint(@commands.fs_read_file, payload => read_file_op(payload)),
+    Endpoint(@commands.fs_read_file, payload => @files.read_file(payload)),
     Endpoint(@commands.fs_prepare_attachment, payload => {
       prepare_attachment_op(payload)
     }),
@@ -217,9 +193,11 @@ pub fn endpoints(
       stage_attachments_op(payload)
     }),
     Endpoint(@commands.fs_materialize_semantic_selection, payload => {
-      materialize_semantic_selection_op(payload)
+      @files.materialize_semantic_selection(payload)
     }),
-    Endpoint(@commands.fs_read_directory, payload => read_directory_op(payload)),
+    Endpoint(@commands.fs_read_directory, payload => {
+      @files.read_directory(payload)
+    }),
     Endpoint(@commands.fs_search_files, payload => {
       @search.search_files(
         connection.file_search,
@@ -270,7 +248,7 @@ pub fn endpoints(
     Endpoint(@commands.fs_clear_file_search_cache, payload => {
       @search.clear_file_search_cache(connection.file_search, payload)
     }),
-    Endpoint(@commands.fs_stat_files, payload => stat_files_op(payload)),
+    Endpoint(@commands.fs_stat_files, payload => @files.stat_files(payload)),
     Endpoint(@commands.fs_watch, payload => {
       connection.fs_watch.watch(payload)
       Acknowledged
@@ -279,9 +257,9 @@ pub fn endpoints(
       connection.fs_watch.unwatch()
       Acknowledged
     }),
-    Endpoint(@commands.fs_browse, payload => browse_directory_op(payload)),
+    Endpoint(@commands.fs_browse, payload => @files.browse(payload)),
     Endpoint(@commands.fs_create_directory, payload => {
-      create_directory_op(payload)
+      @files.create_directory(payload)
     }),
     Endpoint(@commands.terminal_open, payload => {
       connection.terminal.open(

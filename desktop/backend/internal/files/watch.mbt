@@ -6,24 +6,24 @@
 // native watcher and its baseline are ready. It then pushes concrete
 // `fs.changed` events back to that connection on every change, or an
 // `fs.watch_failed` notification when an active watcher later stops.
-// `FsWatchActor` owns both the desired-root mailbox and the active watcher
+// `Watcher` owns both the desired-root mailbox and the active watcher
 // resource.
 
 ///|
 /// One ordered actor request. Resolution happens inside the actor, after the
 /// request reaches this mailbox, so a slow `watch(A)` can never land after a
 /// later `unwatch` or `watch(B)`. The one-slot reply reports a workspace
-/// path error to the exact request task that asked.
+/// path or activation error to the exact request task that asked.
 priv enum FsWatchRequest {
-  Watch(@protocol.WatchWorkspacePayload, reply~ : @async.Queue[String?])
-  Unwatch(reply~ : @async.Queue[String?])
+  Watch(@protocol.WatchWorkspacePayload, reply~ : @async.Queue[Error?])
+  Unwatch(reply~ : @async.Queue[Error?])
 }
 
 ///|
 /// The actor handle and its bounded mailbox. Every request has a reply, so
 /// requests cannot be discarded: backpressure at 64 pending focus changes is
 /// preferable to silently applying them out of order.
-priv struct FsWatchActor {
+struct Watcher {
   requests : @async.Queue[FsWatchRequest]
 }
 
@@ -156,15 +156,15 @@ async fn FsWatchRequest::keeps_active_watcher(
   match self {
     Unwatch(..) => false
     Watch(payload, reply~) => {
-      let root = WirePath::parse(payload.path) catch {
+      let root = wire_path(payload.path) catch {
         error => {
-          reply.put(Some("\{error}"))
+          reply.put(Some(error))
           return true
         }
       }
       let interest = WatchInterest(payload)
       if target.alive.val &&
-        root.absolute == target.root &&
+        root == target.root &&
         interest == target.interest &&
         payload.generation == target.generation {
         reply.put(None)
@@ -177,7 +177,7 @@ async fn FsWatchRequest::keeps_active_watcher(
 }
 
 ///|
-fn FsWatchActor::FsWatchActor() -> FsWatchActor {
+pub fn Watcher::Watcher() -> Watcher {
   { requests: Queue(kind=Blocking(64)), }
 }
 
@@ -185,21 +185,21 @@ fn FsWatchActor::FsWatchActor() -> FsWatchActor {
 /// Point the watcher at `payload.path`. The actor owns both path parsing and
 /// watcher replacement; awaiting its reply gives requests
 /// one observable order even though WebSocket request tasks run concurrently.
-async fn FsWatchActor::watch(
-  self : FsWatchActor,
+pub async fn Watcher::watch(
+  self : Watcher,
   payload : @protocol.WatchWorkspacePayload,
 ) -> Unit {
-  let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
+  let reply : @async.Queue[Error?] = Queue(kind=Blocking(1))
   self.requests.put(Watch(payload, reply~))
-  if reply.get() is Some(message) {
-    raise HostError(message)
+  if reply.get() is Some(error) {
+    raise error
   }
 }
 
 ///|
 /// Park the watcher — the editor panel closed with no tabs open.
-async fn FsWatchActor::unwatch(self : FsWatchActor) -> Unit {
-  let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
+pub async fn Watcher::unwatch(self : Watcher) -> Unit {
+  let reply : @async.Queue[Error?] = Queue(kind=Blocking(1))
   self.requests.put(Unwatch(reply~))
   ignore(reply.get())
 }
@@ -211,7 +211,7 @@ async fn FsWatchActor::unwatch(self : FsWatchActor) -> Unit {
 /// active watcher later stopped.
 async fn FsWatchRequest::activate(
   self : FsWatchRequest,
-  emit : async (FsChangedPayload) -> Unit,
+  emit : async (@protocol.Notification) -> Unit,
 ) -> FsWatchActive? {
   match self {
     Unwatch(reply~) => {
@@ -219,14 +219,14 @@ async fn FsWatchRequest::activate(
       None
     }
     Watch(payload, reply~) => {
-      let root = WirePath::parse(payload.path) catch {
+      let root = wire_path(payload.path) catch {
         error => {
-          reply.put(Some("\{error}"))
+          reply.put(Some(error))
           return None
         }
       }
       let target : FsWatchTarget = {
-        root: root.absolute,
+        root,
         interest: WatchInterest(payload),
         generation: payload.generation,
         alive: Ref(true),
@@ -240,7 +240,7 @@ async fn FsWatchRequest::activate(
               "root": target.root.to_string(),
               "error": "\{error}",
             }
-          reply.put(Some("\{error}"))
+          reply.put(Some(error))
           return None
         }
       }
@@ -256,18 +256,20 @@ async fn FsWatchRequest::activate(
 /// request failure; callers can never observe a half-active target.
 async fn FsWatchTarget::activate(
   self : FsWatchTarget,
-  emit : async (FsChangedPayload) -> Unit,
+  emit : async (@protocol.Notification) -> Unit,
 ) -> FsWatchActive {
   let watcher = @fs.Watcher(self.root.to_string(), ignored_paths=path => {
     self.interest.ignores(@pathx.Relative(path).normalize())
   })
   errdefer watcher.close()
-  emit({
-    root: self.root.resource_path(),
-    baseline: true,
-    events: [],
-    generation: self.generation,
-  })
+  emit(
+    FsChanged({
+      root: self.root.resource_path(),
+      baseline: true,
+      events: [],
+      generation: self.generation,
+    }),
+  )
   { target: self, watcher, }
 }
 
@@ -276,7 +278,7 @@ async fn FsWatchTarget::activate(
 /// or the actor cancels it for an ordered replacement.
 async fn FsWatchActive::watch(
   self : FsWatchActive,
-  emit : async (FsChangedPayload) -> Unit,
+  emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
   defer self.watcher.close()
   for ;; {
@@ -290,12 +292,14 @@ async fn FsWatchActive::watch(
       @os_error.OSError(_) as error if error.is_EINTR() => continue
       error => raise error
     }
-    emit({
-      root: self.target.root.resource_path(),
-      baseline: false,
-      events: events.map(FsEventPayload::from_event),
-      generation: self.target.generation,
-    })
+    emit(
+      FsChanged({
+        root: self.target.root.resource_path(),
+        baseline: false,
+        events: events.map(fs_event),
+        generation: self.target.generation,
+      }),
+    )
   }
 }
 
@@ -309,22 +313,21 @@ async fn FsWatchActive::watch(
 /// Runtime failures are logged and pushed to the file editor. Cancellation is
 /// different: replacing or parking a watcher deliberately cancels the old
 /// child, so that error must propagate and must not reach the UI.
-async fn FsWatchActor::run(
-  self : FsWatchActor,
-  emit_changed : async (FsChangedPayload) -> Unit,
-  emit_failed : async (FsWatchFailedPayload) -> Unit,
+pub async fn Watcher::run(
+  self : Watcher,
+  emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
   let mut active : FsWatchActive? = None
   for ;; {
     if active is None {
-      active = self.requests.get().activate(emit_changed)
+      active = self.requests.get().activate(emit)
       continue
     }
     guard active is Some(watcher) else { continue }
     let target = watcher.target
     let request = @async.with_task_group(group => {
       group.spawn_bg(() => {
-        watcher.watch(emit_changed) catch {
+        watcher.watch(emit) catch {
           error => {
             target.alive.val = false
             let message = "File watching stopped: \{error}"
@@ -334,11 +337,13 @@ async fn FsWatchActor::run(
                 "root": target.root.to_string(),
                 "error": "\{error}",
               }
-            emit_failed({
-              root: target.root.resource_path(),
-              message,
-              generation: target.generation,
-            })
+            emit(
+              FsWatchFailed({
+                root: target.root.resource_path(),
+                message,
+                generation: target.generation,
+              }),
+            )
           }
         }
         target.alive.val = false
@@ -355,8 +360,32 @@ async fn FsWatchActor::run(
     })
     // Activate the replacement now. The native constructor and baseline must
     // both finish before this exact request task receives success.
-    active = request.activate(emit_changed)
+    active = request.activate(emit)
   }
+}
+
+///|
+fn fs_event(event : @fs.FsEvent) -> @protocol.FsEventPayload {
+  match event {
+    Modify(path) => { kind_: "modify", path, old_path: None, }
+    Create(path) => { kind_: "create", path, old_path: None, }
+    Remove(path) => { kind_: "remove", path, old_path: None, }
+    Rename(old~, new~) => { kind_: "rename", path: new, old_path: Some(old), }
+  }
+}
+
+///|
+test "filesystem events keep their concrete kind and paths on the wire" {
+  assert_eq(fs_event(Rename(old="src/old.mbt", new="src/new.mbt")), {
+    kind_: "rename",
+    path: "src/new.mbt",
+    old_path: Some("src/old.mbt"),
+  })
+  assert_eq(fs_event(Modify("README.md")), {
+    kind_: "modify",
+    path: "README.md",
+    old_path: None,
+  })
 }
 
 // The watcher's pruning rules and the stat op's wire shapes.
@@ -430,16 +459,6 @@ test "recursive watch interest ignores shallow non-pruned selections" {
 }
 
 ///|
-test "host connections keep filesystem watch request mailboxes isolated" {
-  let first = HostConnection::HostConnection()
-  let second = HostConnection::HostConnection()
-  let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
-  assert_true(first.fs_watch.requests.try_put(Unwatch(reply~)))
-  assert_true(first.fs_watch.requests.try_get() is Some(Unwatch(..)))
-  assert_true(second.fs_watch.requests.try_get() is None)
-}
-
-///|
 async test "watch activation fails through its request and can be retried" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-fs-watch-restart-")
@@ -448,28 +467,25 @@ async test "watch activation fails through its request and can be retried" {
     })
     let file = "\{dir}/not-a-directory"
     @fs.write_file(file, "", create_mode=CreateOrTruncate)
-    let actor = FsWatchActor::FsWatchActor()
-    let changes : @async.Queue[FsChangedPayload] = Queue(kind=Blocking(2))
-    let failures : @async.Queue[FsWatchFailedPayload] = Queue(kind=Blocking(2))
-    group.spawn_bg(() => {
-      actor.run(change => changes.put(change), failure => failures.put(failure))
-    })
-    let mut rejected = false
-    actor.watch({
-      path: file,
-      files: [],
-      directories: [],
-      recursive: Some(true),
-      generation: "page-a:failed-1",
-    }) catch {
-      HostError(_) => rejected = true
-      error => raise error
+    let actor = Watcher()
+    let pushes : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(2))
+    group.spawn_bg(() => actor.run(push => pushes.put(push)))
+    let rejected = try {
+      actor.watch({
+        path: file,
+        files: [],
+        directories: [],
+        recursive: Some(true),
+        generation: "page-a:failed-1",
+      })
+      false
+    } catch {
+      _ => true
     }
     assert_true(rejected)
-    assert_true(changes.try_get() is None)
-    // Setup failure is synchronous request failure, not an asynchronous
-    // failure from a watcher that never became active.
-    assert_true(failures.try_get() is None)
+    // Setup failure is synchronous request failure, not a baseline or an
+    // asynchronous failure from a watcher that never became active.
+    assert_true(pushes.try_get() is None)
     @fs.remove(file)
     @fs.mkdir(file)
     actor.watch({
@@ -479,7 +495,7 @@ async test "watch activation fails through its request and can be retried" {
       recursive: Some(true),
       generation: "page-a:ready-2",
     })
-    guard changes.try_get() is Some(baseline) else {
+    guard pushes.try_get() is Some(FsChanged(baseline)) else {
       fail("successful watch returned before its baseline")
     }
     assert_true(baseline.baseline)
@@ -495,9 +511,9 @@ async test "only an identical generation retains its active watcher" {
     group.add_defer(() => {
       @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
     })
-    let actor = FsWatchActor::FsWatchActor()
-    let changes : @async.Queue[FsChangedPayload] = Queue(kind=Blocking(2))
-    group.spawn_bg(() => actor.run(change => changes.put(change), _ => ()))
+    let actor = Watcher()
+    let pushes : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(2))
+    group.spawn_bg(() => actor.run(push => pushes.put(push)))
     let payload : @protocol.WatchWorkspacePayload = {
       path: dir,
       files: ["src/main.mbt"],
@@ -506,11 +522,11 @@ async test "only an identical generation retains its active watcher" {
       generation: "page-a:9",
     }
     actor.watch(payload)
-    assert_true(changes.try_get() is Some({ baseline: true, .. }))
+    assert_true(pushes.try_get() is Some(FsChanged({ baseline: true, .. })))
     actor.watch(payload)
     // Repeating the exact accepted request does not replace the native
     // watcher or emit another baseline.
-    assert_true(changes.try_get() is None)
+    assert_true(pushes.try_get() is None)
     actor.watch({
       ..payload,
       files: ["docs/guide.mbt"],
@@ -519,7 +535,7 @@ async test "only an identical generation retains its active watcher" {
     })
     // The recursive filter is equivalent, but a new concrete identity still
     // activates a replacement and closes its event gap with a baseline.
-    guard changes.try_get() is Some(replacement) else {
+    guard pushes.try_get() is Some(FsChanged(replacement)) else {
       fail("new generation returned without a replacement baseline")
     }
     assert_true(replacement.baseline)

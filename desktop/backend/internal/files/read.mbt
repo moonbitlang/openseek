@@ -19,11 +19,11 @@ fn semantic_selection_artifact_id_is_safe(id : String) -> Bool {
 }
 
 ///|
-async fn materialize_semantic_selection_op(
+pub async fn materialize_semantic_selection(
   payload : @protocol.MaterializeSemanticSelectionPayload,
 ) -> @protocol.MaterializeSemanticSelectionReply {
   guard semantic_selection_artifact_id_is_safe(payload.artifact_id) else {
-    raise HostError("invalid semantic selection artifact id")
+    raise InvalidRequest("invalid semantic selection artifact id")
   }
   let mut source_units = 0
   let files : Set[String] = Set([])
@@ -32,9 +32,9 @@ async fn materialize_semantic_selection_op(
     files.add(match_.file)
   }
   guard source_units <= MaxSemanticSelectionArtifactUnits else {
-    raise HostError("semantic selection is too large to materialize")
+    raise InvalidRequest("semantic selection is too large to materialize")
   }
-  let root = WirePath::parse(payload.root).absolute
+  let root = wire_path(payload.root)
   let relative_dir = ".openseek/agent-context/semantic-search"
   let dir = root.join(relative_dir)
   @fs.mkdir(dir.to_string(), recursive=true) catch {
@@ -42,8 +42,7 @@ async fn materialize_semantic_selection_op(
     // directory is the normal steady state. A file squatting on this path
     // surfaces as the write below failing.
     @os_error.OSError(_) as error if error.is_EEXIST() => ()
-    error =>
-      raise HostError("could not create semantic selection directory: \{error}")
+    error => raise error
   }
   let header : Json = {
     "version": Json(1),
@@ -87,12 +86,11 @@ async fn materialize_semantic_selection_op(
     let target = root.join(relative_path)
     @fs.write_file(target.to_string(), content, create_mode=CreateNew) catch {
       @os_error.OSError(_) as error if error.is_EEXIST() => continue
-      error =>
-        // Do not remove the path on an unknown write error: another process
-        // may own it, and preserving an old snapshot is more important than
-        // cleaning an unreferenced partial file. A later retry will choose a
-        // suffix if this path remains present.
-        raise HostError("could not write semantic selection: \{error}")
+      // Do not remove the path on an unknown write error: another process
+      // may own it, and preserving an old snapshot is more important than
+      // cleaning an unreferenced partial file. A later retry will choose a
+      // suffix if this path remains present.
+      error => raise error
     }
     return {
       path: relative_path,
@@ -111,7 +109,7 @@ async test "semantic selections materialize as bounded JSONL below the checkout"
     .unwrap()
     .to_uri_path()
     .unwrap()
-  let reply = materialize_semantic_selection_op({
+  let reply = materialize_semantic_selection({
     root,
     artifact_id: "semantic-search-8-3",
     patterns: ["inspect($(x:arg))"],
@@ -159,7 +157,7 @@ async test "semantic selection accepts an existing artifact directory" {
     "old snapshot\n",
     create_mode=CreateNew,
   )
-  let reply = materialize_semantic_selection_op({
+  let reply = materialize_semantic_selection({
     root,
     artifact_id: "semantic-search-existing",
     patterns: ["inspect($(x:arg))"],
@@ -186,7 +184,7 @@ async test "semantic selection materialization rejects path-shaped ids" {
     .unwrap()
   let mut rejected = false
   ignore(
-    materialize_semantic_selection_op({
+    materialize_semantic_selection({
       root,
       artifact_id: "../escape",
       patterns: [],
@@ -195,7 +193,7 @@ async test "semantic selection materialization rejects path-shaped ids" {
       matches: [],
     }),
   ) catch {
-    HostError(_) => rejected = true
+    InvalidRequest(_) => rejected = true
     error => raise error
   }
   assert_true(rejected)
@@ -229,10 +227,10 @@ async test "semantic selection materialization never replaces an old snapshot" {
       },
     ],
   }
-  let first = materialize_semantic_selection_op(payload)
+  let first = materialize_semantic_selection(payload)
   let first_path = @pathx.Path(dir).join(first.path).to_string()
   let first_content = @fs.read_file(first_path).text()
-  let second = materialize_semantic_selection_op({
+  let second = materialize_semantic_selection({
     ..payload,
     matches: [
       {
@@ -249,18 +247,16 @@ async test "semantic selection materialization never replaces an old snapshot" {
 }
 
 ///|
-async fn read_directory_op(
+pub async fn read_directory(
   payload : @protocol.ReadDirPayload,
 ) -> @protocol.ReadDirReply {
-  let dir = WirePath::parse(payload.path).absolute
+  let dir = wire_path(payload.path)
   // A requested root can be created lazily by the engine. Treat a missing
   // directory as empty so the panel can keep its ordinary loading behavior.
   if !@fs.exists(dir.to_string()) {
     return { entries: [], }
   }
-  let names = @fs.readdir(dir.to_string()) catch {
-    error => raise HostError("failed to list directory: \{error}")
-  }
+  let names = @fs.readdir(dir.to_string())
   // Plain lexicographic order, not `readdir(sort=true)`: that sorts with
   // String's `Compare`, which is shortlex — length before content — and
   // reads wrong in a file listing ("z.mbt" before "main.mbt").
@@ -279,18 +275,15 @@ async fn read_directory_op(
 }
 
 ///|
-async fn read_file_op(
+pub async fn read_file(
   payload : @protocol.ReadFilePayload,
 ) -> @protocol.ReadFileReply {
   let file = if payload.root is Some(root) {
-    WirePath::parse(root).resolve(payload.path)
+    resolve_wire_path(wire_path(root), payload.path)
   } else {
-    WirePath::parse(payload.path).absolute
+    wire_path(payload.path)
   }
-  let native = file.to_string()
-  let source = @fs.open(native, mode=ReadOnly) catch {
-    error => raise HostError("failed to read file: \{error}")
-  }
+  let source = @fs.open(file.to_string(), mode=ReadOnly)
   defer source.close()
   let office_media_type = match office_media_type(file.to_string()) {
     Some(media_type) => Some(media_type)
@@ -320,18 +313,16 @@ async fn read_file_op(
     None => @openpath.MaxEditorFileBytes
   }
   let size_limit = payload.max_bytes.unwrap_or(default_limit)
-  guard size_limit > 0 else { raise HostError("max_bytes must be positive") }
+  guard size_limit > 0 else {
+    raise InvalidRequest("max_bytes must be positive")
+  }
   if source.size() > size_limit.to_int64() {
     return Oversized
   }
-  let data = source.read_all() catch {
-    error => raise HostError("failed to read file: \{error}")
-  }
+  let data = source.read_all()
   // The change-detection baseline, from the same open handle as the content
   // so the two cannot disagree about which version of the file was read.
-  let sig = file_stamp(source.mtime(), source.ctime(), source.size()) catch {
-    error => raise HostError("failed to read file: \{error}")
-  }
+  let sig = file_stamp(source.mtime(), source.ctime(), source.size())
   // Classify the bytes already read from this handle. The shared policy trusts
   // raster signatures rather than extensions and returns decoded text without
   // making callers perform a second UTF-8 pass.
@@ -391,7 +382,7 @@ async test "PDF reads preserve bytes and use the document limit with or without 
       .unwrap()
       .to_uri_path()
       .unwrap()
-    match read_file_op({ max_bytes: None, path: absolute, root: None, }) {
+    match read_file({ max_bytes: None, path: absolute, root: None, }) {
       BinaryContent(data_base64~, media_type~, sig~) => {
         assert_eq(media_type, "application/pdf")
         assert_eq(@base64.decode(data_base64), bytes)
@@ -405,7 +396,7 @@ async test "PDF reads preserve bytes and use the document limit with or without 
       create_mode=TruncateExisting,
     )
     assert_eq(
-      read_file_op({ max_bytes: None, path: absolute, root: None, }),
+      read_file({ max_bytes: None, path: absolute, root: None, }),
       Oversized,
     )
   }
@@ -426,7 +417,7 @@ async test "binary file reads expose only recognized raster signatures" {
     .to_uri_path()
     .unwrap()
   assert_true(
-    read_file_op({ max_bytes: None, path: absolute, root: None, })
+    read_file({ max_bytes: None, path: absolute, root: None, })
     is BinaryContent(
       data_base64="iVBORw0KGgpzbWFsbA==",
       media_type="image/png",
@@ -439,7 +430,7 @@ async test "binary file reads expose only recognized raster signatures" {
     .to_uri_path()
     .unwrap()
   assert_true(
-    read_file_op({ max_bytes: None, path: "image.png", root: Some(root), })
+    read_file({ max_bytes: None, path: "image.png", root: Some(root), })
     is BinaryContent(
       data_base64="iVBORw0KGgpzbWFsbA==",
       media_type="image/png",
@@ -454,7 +445,7 @@ async test "binary file reads expose only recognized raster signatures" {
     .to_uri_path()
     .unwrap()
   assert_eq(
-    read_file_op({ max_bytes: None, path: disguised_absolute, root: None, }),
+    read_file({ max_bytes: None, path: disguised_absolute, root: None, }),
     Binary,
   )
   @fs.rmdir(dir, recursive=true)
@@ -475,7 +466,7 @@ async test "Office file reads return original package bytes and media type" {
     .unwrap()
     .to_uri_path()
     .unwrap()
-  match read_file_op({ max_bytes: None, path: absolute, root: None, }) {
+  match read_file({ max_bytes: None, path: absolute, root: None, }) {
     BinaryContent(data_base64~, media_type~, sig~) => {
       assert_eq(
         media_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -493,12 +484,12 @@ async test "Office file reads return original package bytes and media type" {
 /// Each path answers for itself: one file the host cannot inspect neither
 /// fails the whole reply nor reads as deleted — it is reported as exactly
 /// that.
-async fn stat_files_op(
+pub async fn stat_files(
   payload : @protocol.StatFilesPayload,
 ) -> @protocol.StatFilesReply {
   let stats : Array[@protocol.FileStat] = []
   for path in payload.paths {
-    let file = WirePath::parse(path).absolute
+    let file = wire_path(path)
     stats.push({ path, signature: file_signature(file.to_string()), })
   }
   { stats, }
@@ -541,21 +532,19 @@ fn file_stamp(
 
 ///|
 /// Capture source bytes without the editor's format conversion or preview limits.
-pub async fn capture_file(
-  payload : @protocol.ReadFilePayload,
-) -> (String, Bytes) {
+pub async fn capture(payload : @protocol.ReadFilePayload) -> (String, Bytes) {
   guard payload.root is Some(root) else {
-    raise HostError("Sharing requires a workspace root.")
+    raise InvalidRequest("Sharing requires a workspace root.")
   }
-  let root = WirePath::parse(root)
-  let file = root.resolve(payload.path)
-  guard root.absolute.contains(file) else {
-    raise HostError("The file is outside the workspace.")
+  let root = wire_path(root)
+  let file = resolve_wire_path(root, payload.path)
+  guard root.contains(file) else {
+    raise InvalidRequest("The file is outside the workspace.")
   }
   let source = @fs.open(file.to_string(), mode=ReadOnly)
   defer source.close()
   guard source.kind() is Regular else {
-    raise HostError("Only files can be shared.")
+    raise InvalidRequest("Only files can be shared.")
   }
   (file.to_path().basename().to_owned(), source.read_all().binary())
 }

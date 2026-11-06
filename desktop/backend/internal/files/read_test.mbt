@@ -10,7 +10,7 @@ async test "ordinary rooted file reads keep session files separate and follow ar
     @fs.mkdir(file.dirname().to_string(), recursive=true)
     @fs.write_file(file.to_string(), content)
     assert_true(
-      read_file_op({ max_bytes: None, root: Some(root), path, })
+      @files.read_file({ max_bytes: None, root: Some(root), path, })
       is Content(content=read, ..) &&
       read == content,
     )
@@ -21,7 +21,7 @@ async test "ordinary rooted file reads keep session files separate and follow ar
     dir + "/.openseek/archived/sessions/one",
   )
   assert_true(
-    read_file_op({
+    @files.read_file({
       max_bytes: None,
       root: Some(root),
       path: ".openseek/archived/sessions/one/scratch/artifact/page.html",
@@ -29,7 +29,7 @@ async test "ordinary rooted file reads keep session files separate and follow ar
     is Content(content="first", ..),
   )
   assert_true(
-    read_file_op({ max_bytes: None, root: Some(root), path: second, })
+    @files.read_file({ max_bytes: None, root: Some(root), path: second, })
     is Content(content="second", ..),
   )
 }
@@ -47,19 +47,19 @@ async test "interactive reads can exceed the editor default with an explicit byt
     @pathx.Absolute::from_uri_path(path).unwrap().to_string(),
     content,
   )
-  assert_eq(read_file_op({ path, root: None, max_bytes: None, }), Oversized)
+  assert_eq(@files.read_file({ path, root: None, max_bytes: None, }), Oversized)
   assert_true(
-    read_file_op({ path, root: None, max_bytes: Some(8 * 1024 * 1024), })
+    @files.read_file({ path, root: None, max_bytes: Some(8 * 1024 * 1024), })
     is Content(content=actual, ..) &&
     actual == content,
   )
   assert_eq(
-    read_file_op({ path, root: None, max_bytes: Some(100), }),
+    @files.read_file({ path, root: None, max_bytes: Some(100), }),
     Oversized,
   )
   for limit in [0, -1] {
     let refused = try {
-      ignore(read_file_op({ path, root: None, max_bytes: Some(limit), }))
+      ignore(@files.read_file({ path, root: None, max_bytes: Some(limit), }))
       false
     } catch {
       _ => true
