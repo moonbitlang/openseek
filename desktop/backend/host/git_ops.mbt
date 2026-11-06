@@ -1003,7 +1003,10 @@ async fn git_changes_op(
   if !@gitx.is_work_tree(root) {
     return { repository: false, head: None, baseline: None, changes: [], }
   }
-  let workspace_prefix = @gitx.run(root, ["rev-parse", "--show-prefix"])
+  // Strip only the line ending: a workspace directory may begin with a space.
+  let workspace_prefix = git_single_line(
+    @gitx.output(root, ["rev-parse", "--show-prefix"]),
+  )
   let pr_base = github_local_checkout_association(root).map(pr => pr.base)
   let worktree_base = if pr_base is Some(_) {
     None
@@ -1416,7 +1419,10 @@ async fn git_commit_changes_op(
   if !@gitx.is_work_tree(root) {
     raise HostError("workspace is not a Git repository")
   }
-  let workspace_prefix = @gitx.run(root, ["rev-parse", "--show-prefix"])
+  // Strip only the line ending: a workspace directory may begin with a space.
+  let workspace_prefix = git_single_line(
+    @gitx.output(root, ["rev-parse", "--show-prefix"]),
+  )
   git_commit_changes_at(root, workspace_prefix, payload.commit)
 }
 
