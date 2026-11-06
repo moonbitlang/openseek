@@ -3,8 +3,8 @@
 :root {
   --dark-bg-canvas: #191919;
   --dark-bg-surface: #1f1f1f;
-  --dark-bg-subtle: color-mix(in srgb, var(--dark-bg-canvas) 86%, white);
-  --dark-conversation-selected: color-mix(in srgb, var(--dark-bg-subtle) 92%, white);
+  --dark-bg-subtle: color-mix(in srgb, var(--dark-bg-surface) 94.8%, white);
+  --dark-conversation-selected: color-mix(in srgb, var(--dark-bg-subtle) 94.5%, white);
   --dark-text-primary: #f1f1f1;
   --dark-text-secondary: #a3a3a3;
   --dark-text-muted: #969daa;

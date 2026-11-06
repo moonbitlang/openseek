@@ -275,7 +275,6 @@ html.is-resizing .sidebar-resize-handle {
 
 .conversation-row.active {
   background: var(--color-conversation-selected);
-  color: var(--color-accent);
 }
 
 .conversation-row.load-failed {
@@ -734,9 +733,6 @@ button.row-twisty:hover {
 }
 .conversation-row.subrun.nested {
   padding-left: 2.5rem;
-}
-.conversation-row.subrun.active {
-  color: var(--color-accent);
 }
 
 #project-picker-dialog {

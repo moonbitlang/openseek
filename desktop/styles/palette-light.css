@@ -4,8 +4,8 @@
   --light-bg-canvas: #ffffff;
   --light-bg-surface: #fafafa;
   /* button hover background, user-bubble background, etc.  */
-  --light-bg-subtle: color-mix(in srgb, var(--light-bg-canvas) 90%, black);
-  --light-conversation-selected: color-mix(in srgb, var(--light-bg-subtle) 92%, black);
+  --light-bg-subtle: color-mix(in srgb, var(--light-bg-surface) 94.8%, black);
+  --light-conversation-selected: color-mix(in srgb, var(--light-bg-subtle) 94.5%, black);
   --light-text-primary: #191919;
   /* Secondary labels and metadata remain readable on the light surfaces. */
   --light-text-secondary: #3f444d;
