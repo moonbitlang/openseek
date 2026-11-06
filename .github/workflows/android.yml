@@ -5,10 +5,8 @@ name: Android
 # unit-tests only the Kotlin side, so frontend regressions are caught by the
 # Linux desktop e2e job instead. Pull requests run this workflow only when they
 # change the Android project, the packager that shapes the bundle, the release
-# scripts it tests, or the toolchain; every push to main still runs it.
+# scripts it tests, or the toolchain.
 on:
-  push:
-    branches: [main]
   pull_request:
     paths:
       - "android/**"
@@ -19,7 +17,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   android:

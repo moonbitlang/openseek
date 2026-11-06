@@ -3,11 +3,8 @@ name: Sandbox
 # macOS minutes cost ten times Linux minutes, and this job only tests the
 # root module's sandbox and mbtx packages. Pull requests that change only the
 # other applications in this repository cannot affect them and skip it. Any
-# other path, including a new directory, still runs it; so does every push to
-# main.
+# other path, including a new directory, still runs it.
 on:
-  push:
-    branches: [main]
   pull_request:
     paths:
       - "**"
@@ -23,7 +20,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   sandbox-macos:
