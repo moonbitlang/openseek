@@ -917,9 +917,18 @@ fn remote_access_rows(
   } else if model.remote_connecting {
     [
       @html.span(
+        class="conversation-load-spinner",
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        "",
+      ),
+      @html.span(
         class="setting-desc",
         attrs=@html.Attrs::build().role("status"),
-        @settings.text(model.locale, WaitingBrowser),
+        if model.account_login is Some(Cancelling(..)) {
+          shell_text(model.locale, StatusCancelling)
+        } else {
+          @settings.text(model.locale, WaitingBrowser)
+        },
       ),
     ]
   } else {
@@ -931,10 +940,11 @@ fn remote_access_rows(
       ),
     ]
   }
-  if model.remote_connecting && model.is_desktop {
+  if model.is_desktop && model.account_login is Some(_) {
     controls.push(
       @html.button(
         class="button secondary",
+        disabled=model.account_login is Some(Cancelling(..)),
         on_click=dispatch(RemoteCancelClicked),
         @settings.text(model.locale, Cancel),
       ),
@@ -2906,14 +2916,33 @@ fn Model::chat_sidebar_sections(
   if self.account is None {
     entries.push(
       @section.Placeholder({
-        id: "cloud-sign-in",
-        label: @sidebar_messages.text(self.locale, CloudSignInHint),
+        id: if self.is_desktop && self.account_login is Some(_) {
+          "cloud-sign-in-cancel"
+        } else {
+          "cloud-sign-in"
+        },
+        label: match self.account_login {
+          Some(Cancelling(..)) => shell_text(self.locale, StatusCancelling)
+          Some(Waiting) => @settings.text(self.locale, WaitingBrowser)
+          None => @sidebar_messages.text(self.locale, CloudSignInHint)
+        },
         class_name: "cloud-sign-in",
         nested: false,
         openable: false,
         action: Some({
-          title: @settings.text(self.locale, SignIn),
-          disabled: self.remote_connecting,
+          title: @settings.text(
+            self.locale,
+            if self.is_desktop && self.account_login is Some(_) {
+              Cancel
+            } else {
+              SignIn
+            },
+          ),
+          disabled: if self.is_desktop && self.account_login is Some(_) {
+            self.account_login is Some(Cancelling(..))
+          } else {
+            self.remote_connecting
+          },
         }),
       }),
     )

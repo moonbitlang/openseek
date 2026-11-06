@@ -88,6 +88,8 @@ export class CloudHarness {
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
     this.exchangeCount = 0;
+    this.authorization = null;
+    this.pauseAuthorizationCancel = null;
     this.taskCount = 0;
   }
 
@@ -254,9 +256,17 @@ export class CloudHarness {
       if (request.method === 'auth.status') return { connected: false, server_url: authOrigin };
       if (request.method === 'account.session') return this.accountSignedIn ? { session: this.account() } : {};
       if (request.method === 'auth.connect') {
+        const authorization = this.authorization;
+        if (authorization) await authorization.promise;
         if (this.authorizationError) throw new Error(this.authorizationError);
         this.accountSignedIn = true;
         return { connected: false, server_url: authOrigin, user: { login: 'octocat', avatar_url: '' } };
+      }
+      if (request.method === 'auth.cancel') {
+        const authorization = this.authorization;
+        if (this.pauseAuthorizationCancel) await this.pauseAuthorizationCancel;
+        authorization?.reject(new Error('the sign-in was cancelled'));
+        return { connected: false, server_url: authOrigin };
       }
       if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false, server_url: authOrigin }; }
       if (request.method === 'remote.access_set') return { connected: false, server_url: authOrigin };

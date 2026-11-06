@@ -4303,7 +4303,73 @@ fn update_msg(
     RemoteAccessSet(enabled) =>
       (set_remote_access(dispatch, enabled), { ..model, remote_error: None, })
     RemoteConnectClicked => begin_account_login(dispatch, model, create=false)
-    RemoteCancelClicked => (cancel_remote(dispatch), model)
+    RemoteCancelClicked => {
+      guard model.is_desktop && model.account_login is Some(Waiting) else {
+        return (@cmd.none, model)
+      }
+      (
+        cancel_remote(dispatch, model.account_epoch),
+        {
+          ..model,
+          account_login: Some(
+            Cancelling(connect_pending=true, cancel_pending=true),
+          ),
+          remote_error: None,
+        },
+      )
+    }
+    AccountLoginCancelled(epoch) => {
+      guard model.account_login is Some(_) else { return (@cmd.none, model) }
+      account_loaded(dispatch, model, epoch, Ok(None))
+    }
+    AccountLoginTimedOut(epoch) => {
+      guard model.account_login is Some(_) else { return (@cmd.none, model) }
+      account_loaded(
+        dispatch,
+        model,
+        epoch,
+        Err(@settings.text(model.locale, SignInTimedOut)),
+      )
+    }
+    AccountCancelFailed(epoch, message) => {
+      guard epoch == model.account_epoch &&
+        model.account_login is Some(Cancelling(connect_pending~, ..)) else {
+        return (@cmd.none, model)
+      }
+      if !connect_pending {
+        return account_loaded(
+          dispatch,
+          { ..model, account_login: None, },
+          epoch,
+          Err(message),
+        )
+      }
+      (
+        @cmd.none,
+        { ..model, account_login: Some(Waiting), remote_error: Some(message), },
+      )
+    }
+    AccountCancelFinished(epoch) => {
+      guard epoch == model.account_epoch &&
+        model.account_login is Some(Cancelling(connect_pending~, ..)) else {
+        return (@cmd.none, model)
+      }
+      if !connect_pending {
+        return (
+          fetch_account(dispatch, true, epoch),
+          { ..model, account_login: None, account_login_create: None, },
+        )
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          account_login: Some(
+            Cancelling(connect_pending=true, cancel_pending=false),
+          ),
+        },
+      )
+    }
     RemoteDisconnectClicked => sign_out_account(dispatch, model)
     RemoteDisconnectFailed(message) =>
       (@cmd.none, { ..model, remote_error: Some(message), })

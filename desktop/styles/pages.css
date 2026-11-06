@@ -260,6 +260,13 @@ h2 {
   gap: var(--space-4);
 }
 
+.account-sign-in {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
 .setting-row.stack .setting-control {
   width: auto;
   flex-direction: column;

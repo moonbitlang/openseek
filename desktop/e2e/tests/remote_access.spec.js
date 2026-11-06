@@ -91,7 +91,7 @@ test('account sign-in remains independent of the remote access toggle and signs 
   await connect.click();
 
   const waiting = section.getByRole('status');
-  await expect(waiting).toHaveText('Waiting for the browser…');
+  await expect(waiting).toHaveText('Finish signing in in your browser…');
   const accountRow = section.locator('.setting-row', { has: page.getByRole('status') });
   await expect(accountRow.locator('.setting-name')).toHaveText('Account');
   await expect(accountRow.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
