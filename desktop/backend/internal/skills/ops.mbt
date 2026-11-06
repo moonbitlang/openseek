@@ -1,23 +1,12 @@
-// The skill-market ops: browsing the mooncakes.io skill registry and
-// managing the engine's global skills library. Pure request/response — none
-// of this touches the engine pump. A skill installed here is advertised to
-// conversations whose engine sessions are created afterwards; running
-// conversations keep the prompt they started with.
+// The skill ops: browsing the mooncakes.io skill registry and managing the
+// engine's global skills library. Pure request/response — none of this touches
+// the engine pump. A skill installed here is advertised to conversations whose
+// engine sessions are created afterwards; running conversations keep the
+// prompt they started with. Every failure returns inside the reply.
 
 ///|
-pub async fn HostState::sync_builtin_skills(
-  self : HostState,
-  on_changed : () -> Unit,
-  registry? : String,
-  library_dir? : @pathx.Path,
-) -> Unit {
-  self.skills.sync(registry?, library_dir?, on_changed)
-}
-
-///|
-async fn skills_catalog_op() -> @protocol.SkillsCatalogReply {
-  let skills = @skillmarket.fetch_catalog() catch {
-    @skillmarket.SkillMarketError(message) => return SkillsCatalogError(message)
+pub async fn catalog() -> @protocol.SkillsCatalogReply {
+  let skills = fetch_catalog() catch {
     error => return SkillsCatalogError("\{error}")
   }
   SkillsCatalog(
@@ -38,60 +27,61 @@ async fn skills_catalog_op() -> @protocol.SkillsCatalogReply {
 }
 
 ///|
-async fn skills_content_op(
+/// The SKILL.md of a registry skill, before it is installed.
+pub async fn content(
   payload : @protocol.InstallSkillPayload,
 ) -> @protocol.SkillContentReply {
-  let content = @skillmarket.fetch_skill_content(
+  let content = fetch_skill_content(
     module_name=payload.module_name,
     version=payload.version,
     package_path=payload.package_path.unwrap_or(""),
   ) catch {
-    @skillmarket.SkillMarketError(message) => return SkillContentError(message)
     error => return SkillContentError("\{error}")
   }
   SkillContent(content)
 }
 
 ///|
-async fn installed_skill_content_op(
+/// The SKILL.md of a skill already in the library.
+pub async fn installed_content(
   payload : @protocol.UninstallSkillPayload,
 ) -> @protocol.SkillContentReply {
-  let content = @skillmarket.read_skill_content(payload.id) catch {
-    @skillmarket.SkillMarketError(message) => return SkillContentError(message)
+  let content = read_skill_content(payload.id) catch {
     error => return SkillContentError("\{error}")
   }
   SkillContent(content)
 }
 
 ///|
-async fn install_skill_op(
-  state : HostState,
+/// Install a registry skill. A successful manual install also clears that
+/// skill's built-in sync failure before `on_committed` notifies clients.
+pub async fn BuiltinSkills::install(
+  self : BuiltinSkills,
   payload : @protocol.InstallSkillPayload,
   on_committed : () -> Unit,
   registry? : String,
 ) -> @protocol.InstallSkillReply {
-  let installed = @skillmarket.install_skill(
+  let installed = install_skill(
     module_name=payload.module_name,
     version=payload.version,
     package_path=payload.package_path.unwrap_or(""),
     registry?,
     on_committed=() => {
-      state.skills.clear_error(
+      self.clear_error(
         module_name=payload.module_name,
         package_path=payload.package_path.unwrap_or(""),
       )
       on_committed()
     },
   ) catch {
-    @skillmarket.SkillMarketError(message) => return SkillInstallError(message)
     error => return SkillInstallError("\{error}")
   }
   SkillInstalled(installed.to_protocol())
 }
 
 ///|
-fn @skillmarket.InstalledSkill::to_protocol(
-  self : @skillmarket.InstalledSkill,
+fn InstalledSkill::to_protocol(
+  self : InstalledSkill,
 ) -> @protocol.InstalledSkill {
   {
     id: self.id,
@@ -99,8 +89,7 @@ fn @skillmarket.InstalledSkill::to_protocol(
     description: self.description,
     source: self.source,
     enabled: self.enabled,
-    builtin: self.registry is Some(identity) &&
-    @skillmarket.is_builtin(identity),
+    builtin: self.registry is Some(identity) && is_builtin(identity),
     registry: self.registry.map(registry => {
       module_name: registry.module_name,
       package_path: registry.package_path,
@@ -109,19 +98,18 @@ fn @skillmarket.InstalledSkill::to_protocol(
 }
 
 ///|
-async fn installed_skills_op(
-  state : HostState,
+/// The library's skills, with every built-in skill that failed to sync.
+pub async fn BuiltinSkills::installed(
+  self : BuiltinSkills,
 ) -> @protocol.InstalledSkillsReply {
-  let skills = @skillmarket.installed_skills() catch {
-    @skillmarket.SkillMarketError(message) =>
-      return InstalledSkillsError(message)
+  let skills = installed_skills() catch {
     error => return InstalledSkillsError("\{error}")
   }
   InstalledSkills(
     [
       for skill in skills => skill.to_protocol()
     ],
-    builtin_errors=state.skills
+    builtin_errors=self
       .errors()
       .map(error => {
         registry: {
@@ -134,29 +122,22 @@ async fn installed_skills_op(
 }
 
 ///|
-async fn uninstall_skill_op(
+pub async fn uninstall(
   payload : @protocol.UninstallSkillPayload,
   on_committed : () -> Unit,
 ) -> @protocol.UninstallSkillReply {
-  @skillmarket.uninstall_skill(payload.id, on_committed~) catch {
-    @skillmarket.SkillMarketError(message) =>
-      return SkillUninstallError(message)
+  uninstall_skill(payload.id, on_committed~) catch {
     error => return SkillUninstallError("\{error}")
   }
   SkillUninstalled
 }
 
 ///|
-async fn set_skill_enabled_op(
+pub async fn set_enabled(
   payload : @protocol.SetSkillEnabledPayload,
   on_committed : () -> Unit,
 ) -> @protocol.SetSkillEnabledReply {
-  @skillmarket.set_skill_enabled(
-    payload.id,
-    enabled=payload.enabled,
-    on_committed~,
-  ) catch {
-    @skillmarket.SkillMarketError(message) => return SkillEnabledError(message)
+  set_skill_enabled(payload.id, enabled=payload.enabled, on_committed~) catch {
     error => return SkillEnabledError("\{error}")
   }
   SkillEnabledSet

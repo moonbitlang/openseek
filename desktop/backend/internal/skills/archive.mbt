@@ -27,7 +27,7 @@ priv struct SkillArchive {
 fn skill_files(
   archive : @zip.Archive,
   entry : String,
-) -> SkillArchive raise SkillMarketError {
+) -> SkillArchive raise SkillsError {
   let files : Map[String, Bytes] = Map([])
   let mut skill_md : Bytes? = None
   for item in archive.entries() {
@@ -38,12 +38,12 @@ fn skill_files(
       continue
     }
     guard @checksum.crc32(item.data()) == item.crc32() else {
-      raise SkillMarketError(
+      raise SkillsError(
         "the archive for \{entry} is corrupt: \{name} fails its checksum",
       )
     }
     guard safe_archive_path(name) else {
-      raise SkillMarketError(
+      raise SkillsError(
         "the archive for \{entry} contains an unsafe path: \{name}",
       )
     }
@@ -55,9 +55,7 @@ fn skill_files(
     // Duplicate names are a classic parser-differential vector; refuse them
     // rather than letting the last occurrence win silently.
     guard !files.contains(name) else {
-      raise SkillMarketError(
-        "the archive for \{entry} names \{name} more than once",
-      )
+      raise SkillsError("the archive for \{entry} names \{name} more than once")
     }
     let content = item.data().to_owned()
     if name == SkillFile {
@@ -66,7 +64,7 @@ fn skill_files(
     files[name] = content
   }
   guard skill_md is Some(skill_md) else {
-    raise SkillMarketError(
+    raise SkillsError(
       "the archive for \{entry} does not contain a SKILL.md at its root",
     )
   }
@@ -113,7 +111,7 @@ test "an archive naming one path twice is refused" {
     let _ = skill_files(archive, "acme/widget@1.0.0")
     fail("duplicate archive entries must be refused")
   } catch {
-    SkillMarketError(message) => assert_true(message.contains("more than once"))
+    SkillsError(message) => assert_true(message.contains("more than once"))
     error => raise error
   }
 }
@@ -127,7 +125,7 @@ test "an archive without a root SKILL.md is refused" {
     let _ = skill_files(archive, "acme/widget@1.0.0")
     fail("an archive without a SKILL.md must be refused")
   } catch {
-    SkillMarketError(message) =>
+    SkillsError(message) =>
       assert_true(message.contains("does not contain a SKILL.md"))
     error => raise error
   }
@@ -139,7 +137,7 @@ test "an archive without a root SKILL.md is refused" {
     let _ = skill_files(archive, "acme/widget@1.0.0")
     fail("a wrapped archive must be refused")
   } catch {
-    SkillMarketError(message) =>
+    SkillsError(message) =>
       assert_true(message.contains("does not contain a SKILL.md"))
     error => raise error
   }
@@ -154,7 +152,7 @@ test "an archive with an unsafe entry path is refused" {
     let _ = skill_files(archive, "acme/widget@1.0.0")
     fail("a path-escaping archive must be refused")
   } catch {
-    SkillMarketError(message) => assert_true(message.contains("unsafe path"))
+    SkillsError(message) => assert_true(message.contains("unsafe path"))
     error => raise error
   }
 }

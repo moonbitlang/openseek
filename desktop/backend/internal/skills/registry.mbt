@@ -40,15 +40,21 @@ fn archive_limits(package_bytes : Int32) -> @zip.ReadLimits {
 }
 
 ///|
-/// A registry or library failure with a user-facing message; the host's op
-/// boundary unwraps it into the error the webview displays.
-pub(all) suberror SkillMarketError {
-  SkillMarketError(String)
+/// A registry or library failure with a user-facing message, which the ops
+/// return as the error the webview displays.
+priv suberror SkillsError {
+  SkillsError(String)
+}
+
+///|
+impl Show for SkillsError with fn output(self, logger) {
+  let SkillsError(message) = self
+  logger.write_string(message)
 }
 
 ///|
 /// One standalone skill from the registry, projected into the host protocol.
-pub struct MarketSkill {
+priv struct MarketSkill {
   // The standalone skill name, matching SKILL.md frontmatter.
   name : String
   // The host protocol retains this field for the owner/name skill identity.
@@ -62,26 +68,13 @@ pub struct MarketSkill {
 }
 
 ///|
-impl ToJson for MarketSkill with fn to_json(self) {
-  {
-    "name": self.name,
-    "module_name": self.module_name,
-    "package_path": self.package_path,
-    "version": self.version,
-    "description": self.description,
-    "author": self.author,
-    "repository": self.repository,
-  }
-}
-
-///|
 /// List independently published skills. Keep the existing host payload shape:
 /// module_name carries owner/name, and package_path is empty.
-pub async fn fetch_catalog(
+async fn fetch_catalog(
   registry~ : String = DefaultRegistry,
 ) -> Array[MarketSkill] {
-  let skills = @skills.Client(registry~).list() catch {
-    error => raise SkillMarketError("skill catalog from \{registry}: \{error}")
+  let skills = @registry.Client(registry~).list() catch {
+    error => raise SkillsError("skill catalog from \{registry}: \{error}")
   }
   skills.map(skill => {
     name: skill.name,
@@ -115,9 +108,9 @@ fn skill_reference(
   module_name : String,
   version : String,
   package_path : String,
-) -> String raise SkillMarketError {
+) -> String raise SkillsError {
   guard package_path.is_empty() else {
-    raise SkillMarketError("standalone skills do not have a package path")
+    raise SkillsError("standalone skills do not have a package path")
   }
   "\{module_name}@\{version}"
 }
@@ -133,7 +126,7 @@ async fn fetch_archive(
   try {
     let temporary = @fs.tmpdir(prefix="openseek-skill-download-")
     defer @fs.rmdir(temporary, recursive=true)
-    let download = @skills.Client(registry~).download(
+    let download = @registry.Client(registry~).download(
       entry,
       output="\{temporary}/skill.zip",
     )
@@ -145,25 +138,25 @@ async fn fetch_archive(
     )
     (archive, "sha256:\{download.skill.archive_sha256}")
   } catch {
-    error => raise SkillMarketError("skill download for \{entry}: \{error}")
+    error => raise SkillsError("skill download for \{entry}: \{error}")
   }
 }
 
 ///|
 /// Preview the readme from the versioned skill detail response. This does not
 /// download an archive or change the local library.
-pub async fn fetch_skill_content(
+async fn fetch_skill_content(
   module_name~ : String,
   version~ : String,
   package_path~ : String,
   registry~ : String = DefaultRegistry,
 ) -> String {
   let entry = skill_reference(module_name, version, package_path)
-  let detail = @skills.Client(registry~).get(entry) catch {
-    error => raise SkillMarketError("skill preview for \{entry}: \{error}")
+  let detail = @registry.Client(registry~).get(entry) catch {
+    error => raise SkillsError("skill preview for \{entry}: \{error}")
   }
   guard @utf8.encode(detail.readme).length() <= MaxPreviewBytes else {
-    raise SkillMarketError("SKILL.md is too large to preview")
+    raise SkillsError("SKILL.md is too large to preview")
   }
   detail.readme
 }
@@ -275,6 +268,3 @@ test "sidecar decoding renders the install source" {
   assert_true(decode_sidecar("not json") is None)
   assert_true(decode_sidecar("{\"version\":\"0.2.0\"}") is None)
 }
-
-///|
-pub extend MarketSkill with ToJson::{to_json}

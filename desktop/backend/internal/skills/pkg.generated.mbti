@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/skills"
+
+import {
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn catalog() -> @protocol.SkillsCatalogReply
+
+pub async fn content(@protocol.InstallSkillPayload) -> @protocol.SkillContentReply
+
+pub async fn installed_content(@protocol.UninstallSkillPayload) -> @protocol.SkillContentReply
+
+pub async fn set_enabled(@protocol.SetSkillEnabledPayload, () -> Unit) -> @protocol.SetSkillEnabledReply
+
+pub async fn uninstall(@protocol.UninstallSkillPayload, () -> Unit) -> @protocol.UninstallSkillReply
+
+// Errors
+
+// Types and methods
+type BuiltinSkills
+pub fn BuiltinSkills::BuiltinSkills() -> Self
+pub async fn BuiltinSkills::install(Self, @protocol.InstallSkillPayload, () -> Unit, registry? : String) -> @protocol.InstallSkillReply
+pub async fn BuiltinSkills::installed(Self) -> @protocol.InstalledSkillsReply
+pub async fn BuiltinSkills::sync(Self, registry? : String, library_dir? : @pathx.Path, () -> Unit) -> Unit
+
+// Type aliases
+
+// Traits

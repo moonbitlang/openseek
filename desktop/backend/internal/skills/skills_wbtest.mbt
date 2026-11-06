@@ -302,7 +302,7 @@ async fn install_failure(
   module_name : String,
 ) -> String {
   try {
-    let _ = @skillmarket.install_skill(
+    let _ = install_skill(
       module_name~,
       version="1.0.0",
       package_path="",
@@ -311,7 +311,7 @@ async fn install_failure(
     )
     fail("install of \{module_name} should have failed")
   } catch {
-    @skillmarket.SkillMarketError(message) => message
+    SkillsError(message) => message
     error => raise error
   }
 }
@@ -320,10 +320,10 @@ async fn install_failure(
 /// Run an uninstall that must fail and return its user-facing message.
 async fn uninstall_failure(lib : @pathx.Path, id : String) -> String {
   try {
-    @skillmarket.uninstall_skill(id, library_dir=lib)
+    uninstall_skill(id, library_dir=lib)
     fail("uninstall of \{id} should have failed")
   } catch {
-    @skillmarket.SkillMarketError(message) => message
+    SkillsError(message) => message
     error => raise error
   }
 }
@@ -332,7 +332,7 @@ async fn uninstall_failure(lib : @pathx.Path, id : String) -> String {
 async test "the catalog projects standalone skill records into the host payload" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
-    let skills = @skillmarket.fetch_catalog(registry=base)
+    let skills = fetch_catalog(registry=base)
     guard skills is [skill] else { fail("expected one installable skill") }
     assert_eq(skill.module_name, "acme/widget")
     assert_eq(skill.package_path, "")
@@ -349,7 +349,7 @@ async test "install verifies the archive and writes every file it holds" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
-    let installed = @skillmarket.install_skill(
+    let installed = install_skill(
       module_name="acme/widget",
       version="1.0.0",
       package_path="",
@@ -367,13 +367,13 @@ async test "install verifies the archive and writes every file it holds" {
       @fs.read_file("\{lib}/acme-widget/reference/usage.md").binary(),
       reference_body,
     )
-    guard @skillmarket.installed_skills(library_dir=lib) is [listed] else {
+    guard installed_skills(library_dir=lib) is [listed] else {
       fail("expected one installed skill")
     }
     assert_eq(listed.id, "acme-widget")
     assert_eq(listed.source, "acme/widget@1.0.0")
     // Reinstalling over our own entry is an upgrade, not a conflict.
-    let again = @skillmarket.install_skill(
+    let again = install_skill(
       module_name="acme/widget",
       version="1.0.0",
       package_path="",
@@ -411,7 +411,7 @@ async test "preview reads the versioned detail API without downloading archives"
   @async.with_task_group() <| group => {
     let requests : Array[String] = []
     guard fake_registry(group, requests~) is Some(base) else { return }
-    let content = @skillmarket.fetch_skill_content(
+    let content = fetch_skill_content(
       module_name="acme/widget",
       version="2.0.0",
       package_path="",
@@ -426,8 +426,8 @@ async test "preview reads the versioned detail API without downloading archives"
 async test "catalog errors preserve registry context and the client diagnosis" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
-    try @skillmarket.fetch_catalog(registry="\{base}/missing") catch {
-      @skillmarket.SkillMarketError(message) => {
+    try fetch_catalog(registry="\{base}/missing") catch {
+      SkillsError(message) => {
         assert_true(message.contains(base))
         assert_true(message.contains("HTTP 404: Skill not found"))
       }
@@ -439,8 +439,8 @@ async test "catalog errors preserve registry context and the client diagnosis" {
       guard fake_registry(group, catalog_response=response) is Some(malformed) else {
         fail("expected local registry")
       }
-      try @skillmarket.fetch_catalog(registry=malformed) catch {
-        @skillmarket.SkillMarketError(message) =>
+      try fetch_catalog(registry=malformed) catch {
+        SkillsError(message) =>
           assert_true(message.contains("skill catalog from"))
         error => raise error
       } noraise {
@@ -450,7 +450,7 @@ async test "catalog errors preserve registry context and the client diagnosis" {
     guard fake_registry(group, catalog_response=[]) is Some(empty) else {
       fail("expected local registry")
     }
-    assert_eq(@skillmarket.fetch_catalog(registry=empty).length(), 0)
+    assert_eq(fetch_catalog(registry=empty).length(), 0)
   }
 }
 
@@ -459,15 +459,14 @@ async test "preview reports missing skills and bounds readme bytes" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     try
-      @skillmarket.fetch_skill_content(
+      fetch_skill_content(
         module_name="acme/missing",
         version="1.0.0",
         package_path="",
         registry=base,
       )
     catch {
-      @skillmarket.SkillMarketError(message) =>
-        assert_true(message.contains("HTTP 404"))
+      SkillsError(message) => assert_true(message.contains("HTTP 404"))
       error => raise error
     } noraise {
       _ => fail("missing skill must fail")
@@ -476,14 +475,14 @@ async test "preview reports missing skills and bounds readme bytes" {
       fail("expected local registry")
     }
     try
-      @skillmarket.fetch_skill_content(
+      fetch_skill_content(
         module_name="acme/widget",
         version="1.0.0",
         package_path="",
         registry=large,
       )
     catch {
-      @skillmarket.SkillMarketError(message) =>
+      SkillsError(message) =>
         assert_eq(message, "SKILL.md is too large to preview")
       error => raise error
     } noraise {
@@ -500,7 +499,7 @@ async test "legacy subpackages cannot accidentally install a standalone skill" {
     let lib = @fs.tmpdir(prefix="skillmarket-")
     defer @fs.rmdir(lib, recursive=true)
     try
-      @skillmarket.install_skill(
+      install_skill(
         module_name="acme/widget",
         version="1.0.0",
         package_path="cmd/run",
@@ -508,14 +507,13 @@ async test "legacy subpackages cannot accidentally install a standalone skill" {
         library_dir=lib,
       )
     catch {
-      @skillmarket.SkillMarketError(message) =>
-        assert_true(message.contains("package path"))
+      SkillsError(message) => assert_true(message.contains("package path"))
       error => raise error
     } noraise {
       _ => fail("subpackage install must fail")
     }
     assert_eq(requests, [])
-    assert_eq(@skillmarket.installed_skills(library_dir=lib).length(), 0)
+    assert_eq(installed_skills(library_dir=lib).length(), 0)
   }
 }
 
@@ -529,7 +527,7 @@ async test "concurrent upgrades of one slug are serialized" {
     for version in ["1.0.0", "2.0.0"] {
       group.spawn_bg() <| () => {
         ignore(
-          @skillmarket.install_skill(
+          install_skill(
             module_name="acme/widget",
             version~,
             package_path="",
@@ -600,7 +598,7 @@ async test "uninstall removes registry installs and nothing else" {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
     let mut changes = 0
-    let _ = @skillmarket.install_skill(
+    let _ = install_skill(
       module_name="acme/widget",
       version="1.0.0",
       package_path="",
@@ -608,7 +606,7 @@ async test "uninstall removes registry installs and nothing else" {
       library_dir=lib,
       on_committed=() => changes += 1,
     )
-    @skillmarket.uninstall_skill("acme-widget", library_dir=lib, on_committed=() => {
+    uninstall_skill("acme-widget", library_dir=lib, on_committed=() => {
       changes += 1
     })
     assert_eq(changes, 2)
@@ -663,7 +661,7 @@ async test "listing recovers interrupted local skill changes" {
     "already uninstalled",
     create_mode=CreateOrTruncate,
   )
-  guard @skillmarket.installed_skills(library_dir=lib) is [recovered] else {
+  guard installed_skills(library_dir=lib) is [recovered] else {
     fail("the parked skill was not restored")
   }
   assert_eq(recovered.id, "acme-widget")
@@ -682,7 +680,7 @@ async test "listing recovers interrupted local skill changes" {
     "obsolete backup",
     create_mode=CreateOrTruncate,
   )
-  ignore(@skillmarket.installed_skills(library_dir=lib))
+  ignore(installed_skills(library_dir=lib))
   assert_true(@fs.exists("\{lib}/acme-widget/SKILL.md"))
   assert_false(@fs.exists("\{lib}/.backup/acme-widget"))
 }
@@ -772,7 +770,7 @@ async test "listing is name-sorted regardless of creation order" {
     "---\nname: bbb\ndescription: d\n---\nbody",
     create_mode=CreateOrTruncate,
   )
-  let ids = @skillmarket.installed_skills(library_dir=lib).map(skill => skill.id)
+  let ids = installed_skills(library_dir=lib).map(skill => skill.id)
   assert_eq(ids, ["aaa", "bbb", "ccc", "ddd", "eee"])
 }
 
@@ -790,7 +788,7 @@ async test "listing mirrors the engine's discovery for hand-written skills" {
     "no frontmatter",
     create_mode=CreateOrTruncate,
   )
-  let skills = @skillmarket.installed_skills(library_dir=lib)
+  let skills = installed_skills(library_dir=lib)
   guard skills is [dir_skill, flat_skill] else {
     fail("expected two library entries, got \{skills.length()}")
   }
@@ -802,10 +800,7 @@ async test "listing mirrors the engine's discovery for hand-written skills" {
   assert_eq(dir_skill.name, "local")
   assert_eq(dir_skill.source, "")
   // A missing library is an empty one.
-  assert_eq(
-    @skillmarket.installed_skills(library_dir="\{lib}/does-not-exist").length(),
-    0,
-  )
+  assert_eq(installed_skills(library_dir="\{lib}/does-not-exist").length(), 0)
 }
 
 ///|
@@ -813,7 +808,7 @@ async test "disabled registry skills retain their content, update state and unin
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-disabled-")
-    let first = @skillmarket.install_skill(
+    let first = install_skill(
       module_name="acme/widget",
       version="1.0.0",
       package_path="",
@@ -822,35 +817,29 @@ async test "disabled registry skills retain their content, update state and unin
     )
     assert_true(first.enabled)
     let mut changes = 0
-    @skillmarket.set_skill_enabled(
-      "acme-widget",
-      enabled=false,
-      library_dir=lib,
-      on_committed=() => changes += 1,
-    )
+    set_skill_enabled("acme-widget", enabled=false, library_dir=lib, on_committed=() => {
+      changes += 1
+    })
     // Repeating the desired state is harmless and makes no second move.
-    @skillmarket.set_skill_enabled(
-      "acme-widget",
-      enabled=false,
-      library_dir=lib,
-      on_committed=() => changes += 1,
-    )
+    set_skill_enabled("acme-widget", enabled=false, library_dir=lib, on_committed=() => {
+      changes += 1
+    })
     assert_eq(changes, 1)
     assert_false(@fs.exists("\{lib}/acme-widget"))
     assert_eq(
       @fs.read_file("\{lib}/.disabled/acme-widget/reference/usage.md").binary(),
       reference_body,
     )
-    guard @skillmarket.installed_skills(library_dir=lib) is [disabled] else {
+    guard installed_skills(library_dir=lib) is [disabled] else {
       fail("disabled skill must remain in the installed library")
     }
     assert_false(disabled.enabled)
     assert_eq(disabled.source, first.source)
     assert_eq(
-      @skillmarket.read_skill_content("acme-widget", library_dir=lib),
+      read_skill_content("acme-widget", library_dir=lib),
       @utf8.decode(skill_body),
     )
-    let updated = @skillmarket.install_skill(
+    let updated = install_skill(
       module_name="acme/widget",
       version="2.0.0",
       package_path="",
@@ -864,19 +853,15 @@ async test "disabled registry skills retain their content, update state and unin
       skill_body_v2,
     )
     assert_false(@fs.exists("\{lib}/.disabled/acme-widget/reference/usage.md"))
-    @skillmarket.set_skill_enabled("acme-widget", enabled=true, library_dir=lib)
+    set_skill_enabled("acme-widget", enabled=true, library_dir=lib)
     assert_eq(
       @fs.read_file("\{lib}/acme-widget/SKILL.md").binary(),
       skill_body_v2,
     )
     assert_false(@fs.exists("\{lib}/.disabled/acme-widget"))
-    @skillmarket.set_skill_enabled(
-      "acme-widget",
-      enabled=false,
-      library_dir=lib,
-    )
-    @skillmarket.uninstall_skill("acme-widget", library_dir=lib)
-    assert_true(@skillmarket.installed_skills(library_dir=lib).is_empty())
+    set_skill_enabled("acme-widget", enabled=false, library_dir=lib)
+    uninstall_skill("acme-widget", library_dir=lib)
+    assert_true(installed_skills(library_dir=lib).is_empty())
     assert_false(@fs.exists("\{lib}/.disabled/acme-widget"))
   }
 }
@@ -901,10 +886,10 @@ async test "hand-written directory and flat skills can move without rewriting th
     create_mode=CreateOrTruncate,
   )
   for (id, text) in [("node.js", "Directory skill"), ("My notes", "Flat skill")] {
-    @skillmarket.set_skill_enabled(id, enabled=false, library_dir=lib)
-    assert_eq(@skillmarket.read_skill_content(id, library_dir=lib), text)
+    set_skill_enabled(id, enabled=false, library_dir=lib)
+    assert_eq(read_skill_content(id, library_dir=lib), text)
   }
-  let disabled = @skillmarket.installed_skills(library_dir=lib)
+  let disabled = installed_skills(library_dir=lib)
   assert_eq(disabled.length(), 2)
   assert_true(
     disabled.iter().all(skill => !skill.enabled && skill.registry is None),
@@ -914,7 +899,7 @@ async test "hand-written directory and flat skills can move without rewriting th
     "Companion",
   )
   for id in ["node.js", "My notes"] {
-    @skillmarket.set_skill_enabled(id, enabled=true, library_dir=lib)
+    set_skill_enabled(id, enabled=true, library_dir=lib)
   }
   assert_eq(@fs.read_file("\{lib}/My notes.md").text(), "Flat skill")
   assert_eq(@fs.read_file("\{lib}/node.js/SKILL.md").text(), "Directory skill")
@@ -935,7 +920,7 @@ async test "an interrupted disabled update recovers inside the disabled library"
     "Incomplete",
     create_mode=CreateOrTruncate,
   )
-  guard @skillmarket.installed_skills(library_dir=lib) is [skill] else {
+  guard installed_skills(library_dir=lib) is [skill] else {
     fail("the disabled backup must be restored")
   }
   assert_false(skill.enabled)
@@ -961,7 +946,7 @@ async test "an update commits to the current location after an in-flight enablem
       }
       let lib = @fs.tmpdir(prefix="skillmarket-update-switch-")
       ignore(
-        @skillmarket.install_skill(
+        install_skill(
           module_name="acme/widget",
           version="1.0.0",
           package_path="",
@@ -969,17 +954,15 @@ async test "an update commits to the current location after an in-flight enablem
           library_dir=lib,
         ),
       )
-      @skillmarket.set_skill_enabled(
+      set_skill_enabled(
         "acme-widget",
         enabled=initially_enabled,
         library_dir=lib,
       )
-      let finished : @async.Queue[@skillmarket.InstalledSkill] = Queue(
-        kind=Blocking(1),
-      )
+      let finished : @async.Queue[InstalledSkill] = Queue(kind=Blocking(1))
       group.spawn_bg() <| () => {
         finished.put(
-          @skillmarket.install_skill(
+          install_skill(
             module_name="acme/widget",
             version="2.0.0",
             package_path="",
@@ -990,7 +973,7 @@ async test "an update commits to the current location after an in-flight enablem
       }
       gate.arrived.get()
       let expected_enabled = !initially_enabled
-      @skillmarket.set_skill_enabled(
+      set_skill_enabled(
         "acme-widget",
         enabled=expected_enabled,
         library_dir=lib,
@@ -1006,7 +989,7 @@ async test "an update commits to the current location after an in-flight enablem
       }
       assert_eq(@fs.read_file("\{current}/SKILL.md").binary(), skill_body_v2)
       assert_false(@fs.exists(other))
-      assert_eq(@skillmarket.installed_skills(library_dir=lib).length(), 1)
+      assert_eq(installed_skills(library_dir=lib).length(), 1)
     }
   }
 }
