@@ -526,8 +526,9 @@ async fn sandbox_enforcement_available() -> Bool {
   // A host where even tmpdir fails must skip (as the old probe did), not raise.
   let dir = @fs.tmpdir(prefix="openseek-mbtx-gate-") catch { _ => return false }
   let available = @sandbox.SandboxedCommand::create_if_available(
-      dir,
-      Shell(":"),
+      workspace_root=dir,
+      "true",
+      [],
       profile_path="\{dir}/profile.sb",
     )
     is Some(_)

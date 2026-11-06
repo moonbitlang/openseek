@@ -45,7 +45,8 @@ async test "the worker profile confines writes to the worker tree" {
     let deny_roots = [common, origin, sibling]
     async fn probe(cmd : String) -> @sandbox.SandboxedCommand? {
       @sandbox.SandboxedCommand::create_worker_if_available(
-        Shell(cmd),
+        "sh",
+        ["-c", cmd],
         deny_roots~,
         worker_root~,
         worker_admin_dir~,
@@ -121,7 +122,8 @@ async test "worker profile validation rejects impossible geometries" {
     let root = @fs.realpath(dir)
     // Worker root not nested below any denied root.
     let outside = @sandbox.SandboxedCommand::create_worker_if_available(
-      Shell(":"),
+      "sh",
+      ["-c", ":"],
       deny_roots=["\{root}/repo"],
       worker_root="\{root}/elsewhere",
       worker_admin_dir="\{root}/repo/.git/worktrees/x",
@@ -131,7 +133,8 @@ async test "worker profile validation rejects impossible geometries" {
     assert_true(outside is None)
     // A denied root below the worker root would be re-opened wholesale.
     let reopened = @sandbox.SandboxedCommand::create_worker_if_available(
-      Shell(":"),
+      "sh",
+      ["-c", ":"],
       deny_roots=["\{root}/repo", "\{root}/repo/.worktrees/w1/nested"],
       worker_root="\{root}/repo/.worktrees/w1",
       worker_admin_dir="\{root}/repo/.git/worktrees/w1",
@@ -141,7 +144,8 @@ async test "worker profile validation rejects impossible geometries" {
     assert_true(reopened is None)
     // A miscomputed admin dir that IS a denied root would re-open it.
     let admin_reopens = @sandbox.SandboxedCommand::create_worker_if_available(
-      Shell(":"),
+      "sh",
+      ["-c", ":"],
       deny_roots=["\{root}/repo", "\{root}/repo/.git"],
       worker_root="\{root}/repo/.worktrees/w1",
       worker_admin_dir="\{root}/repo/.git",
@@ -174,7 +178,8 @@ async test "the worker profile confines a directory worker to its directory" {
     }
     async fn probe(cmd : String) -> @sandbox.SandboxedCommand? {
       @sandbox.SandboxedCommand::create_worker_if_available(
-        Shell(cmd),
+        "sh",
+        ["-c", cmd],
         deny_roots=[workspace],
         worker_root=mine,
         git_index="\{mine}/.git/index",
