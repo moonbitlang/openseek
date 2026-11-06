@@ -220,7 +220,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
     )
     @fs.write_file(
       "\{dir}/oversized.txt",
-      "x".repeat(@openpath.MaxEditorFileBytes + 1),
+      "x".repeat(@files.MaxEditorFileBytes + 1),
       create_mode=CreateOrTruncate,
     )
     git_test_run(dir, ["add", "binary.dat", "oversized.txt"])

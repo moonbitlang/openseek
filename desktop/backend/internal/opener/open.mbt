@@ -6,7 +6,7 @@
 ///|
 priv struct ResolvedHostReference {
   base : @pathx.Absolute?
-  resolution : @openpath.Resolution
+  resolution : Resolution
 }
 
 ///|
@@ -36,7 +36,7 @@ async fn resolve_host_reference(
   }
   let target = @work_dir.open_target(base, path)
   guard !target.0.is_empty() else { return Err("Empty path") }
-  let resolution = @openpath.Reference(target.0).resolve()
+  let resolution = Reference(target.0).resolve()
   if resolution is MissingPath(path) {
     return Err("File does not exist: \{path}")
   }
@@ -47,13 +47,13 @@ async fn resolve_host_reference(
 /// Refusals travel inside the reply as `Refused(message)` rather than as a
 /// raised error: the local bridge flattens a raise to the generic
 /// "op ext:openseek/host.open_path failed" and hides the reason.
-async fn open_path_op(
+pub async fn open_path(
   payload : @protocol.OpenPathPayload,
   preview_browser~ : Bool = false,
 ) -> @protocol.OpenPathReply {
   let reference = match resolve_host_reference(payload) {
     Ok(reference) => reference
-    Err(message) => return refusal(message)
+    Err(message) => return Refused(message)
   }
   let base = reference.base
   let resolution = reference.resolution
@@ -62,7 +62,7 @@ async fn open_path_op(
     // Keep the protocol path in URI form, including for an external symlink.
     guard @pathx.Path(path).to_absolute() is Some(absolute) &&
       absolute.to_uri_path() is Some(resource) else {
-      return refusal("Invalid absolute file path: \{path}")
+      return Refused("Invalid absolute file path: \{path}")
     }
     return Editor({ path: resource, line, column, })
   }
@@ -70,12 +70,12 @@ async fn open_path_op(
     BrowserPath(path) if preview_browser => {
       guard @pathx.Path(path).to_absolute() is Some(absolute) &&
         absolute.to_uri_path() is Some(resource) else {
-        return refusal("Invalid absolute file path: \{path}")
+        return Refused("Invalid absolute file path: \{path}")
       }
       return Browser(resource)
     }
     BrowserPath(path) | SystemPath(path) => path
-    _ => return refusal("Could not resolve path")
+    _ => return Refused("Could not resolve path")
   }
   // A literal directory inside this conversation belongs to the built-in Files
   // tree, except for macOS application bundles, which belong to LaunchServices.
@@ -105,9 +105,9 @@ async fn open_path_op(
     }
   }
   let code = @platform.open_path(system_path) catch {
-    error => return refusal("Could not open \{system_path}: \{error}")
+    error => return Refused("Could not open \{system_path}: \{error}")
   }
-  guard code == 0 else { return refusal("Could not open \{system_path}") }
+  guard code == 0 else { return Refused("Could not open \{system_path}") }
   Opened
 }
 
@@ -115,7 +115,7 @@ async fn open_path_op(
 /// Resolve and reveal the same path that `open_path` would route, but never
 /// substitute the built-in editor or a default application for the file
 /// manager. Position suffixes identify the underlying file.
-async fn reveal_path_op(
+pub async fn reveal_path(
   payload : @protocol.OpenPathPayload,
 ) -> @protocol.RevealPathReply {
   let reference = match resolve_host_reference(payload) {
@@ -141,7 +141,7 @@ async fn reveal_path_op(
 async test "reveal_path shares open_path reference refusals" {
   let root = @fs.tmpdir(prefix="openseek-host-reveal-missing-")
   let missing = "\{root}/missing.mbt:12"
-  let reply = reveal_path_op({
+  let reply = reveal_path({
     session: "unused-for-absolute-path",
     cwd: None,
     path: missing,
@@ -161,26 +161,18 @@ async fn should_reveal_checkout_directory(
 }
 
 ///|
-/// A refusal travels inside the reply instead of raising: the local bridge
-/// flattens a raised host error to the generic
-/// "op ext:openseek/host.open_path failed" and hides this message.
-fn refusal(message : String) -> @protocol.OpenPathReply {
-  Refused(message)
-}
-
-///|
 async test "open_path only requires a working directory for relative paths" {
   let root = @fs.tmpdir(prefix="openseek-host-open-without-cwd-")
   let missing_path = "\{root}/missing.bin"
   // The absolute target reached the existence check (not the working-
   // directory gate), proving it was treated as an absolute system path.
-  let absolute_missing = open_path_op({
+  let absolute_missing = open_path({
     session: "",
     cwd: None,
     path: missing_path,
   })
   assert_eq(absolute_missing, Refused("File does not exist: \{missing_path}"))
-  let relative_missing = open_path_op({
+  let relative_missing = open_path({
     session: "",
     cwd: None,
     path: "missing.bin",
@@ -191,7 +183,7 @@ async test "open_path only requires a working directory for relative paths" {
   )
   let text_path = "\{root}/source.mbt"
   @fs.write_file(text_path, "fn main {}", create_mode=CreateOrTruncate)
-  let editor_without_cwd = open_path_op({
+  let editor_without_cwd = open_path({
     session: "",
     cwd: None,
     path: text_path,
@@ -218,7 +210,7 @@ async test "open_path returns workspace editor positions without a system open" 
     .unwrap()
     .to_uri_path()
     .unwrap()
-  let reply = open_path_op({
+  let reply = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: "source.mbt:2738:17",
@@ -227,7 +219,7 @@ async test "open_path returns workspace editor positions without a system open" 
     reply,
     Editor({ path: "\{cwd}/source.mbt", line: Some(2738), column: Some(17), }),
   )
-  let fragment_reply = open_path_op({
+  let fragment_reply = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: "source.mbt#L5",
@@ -236,7 +228,7 @@ async test "open_path returns workspace editor positions without a system open" 
     fragment_reply,
     Editor({ path: "\{cwd}/source.mbt", line: Some(5), column: None, }),
   )
-  let ordinary_reply = open_path_op({
+  let ordinary_reply = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: "source.mbt",
@@ -247,7 +239,7 @@ async test "open_path returns workspace editor positions without a system open" 
   )
   let literal = "\{file}:12"
   @fs.write_file(literal, "literal", create_mode=CreateOrTruncate)
-  let literal_reply = open_path_op({
+  let literal_reply = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: "source.mbt:12",
@@ -257,7 +249,7 @@ async test "open_path returns workspace editor positions without a system open" 
     Editor({ path: "\{cwd}/source.mbt:12", line: None, column: None, }),
   )
   @fs.mkdir("\{dir}/src")
-  let directory_reply = open_path_op({
+  let directory_reply = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: "src",
@@ -267,7 +259,7 @@ async test "open_path returns workspace editor positions without a system open" 
   let pdf = "\{dir}/report"
   @fs.write_file(pdf, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
   assert_eq(
-    open_path_op(
+    open_path(
       { session: "unused", cwd: Some(cwd), path: "report", },
       preview_browser=true,
     ),
@@ -279,7 +271,7 @@ async test "open_path returns workspace editor positions without a system open" 
     create_mode=CreateOrTruncate,
   )
   assert_eq(
-    open_path_op(
+    open_path(
       { session: "unused", cwd: Some(cwd), path: "notes.pdf", },
       preview_browser=true,
     ),
@@ -291,7 +283,7 @@ async test "open_path returns workspace editor positions without a system open" 
     create_mode=CreateOrTruncate,
   )
   assert_eq(
-    open_path_op(
+    open_path(
       { session: "unused", cwd: Some(cwd), path: "picture", },
       preview_browser=true,
     ),
@@ -326,7 +318,7 @@ async test "open_path rejects missing files and opens outside text files" {
     .unwrap()
     .to_uri_path()
     .unwrap()
-  let missing = open_path_op({
+  let missing = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: "missing.mbt:12",
@@ -337,7 +329,7 @@ async test "open_path rejects missing files and opens outside text files" {
   let outside = "\{root}/outside.txt"
   @fs.write_file(outside, "outside", create_mode=CreateOrTruncate)
   let outside = @fs.realpath(outside)
-  let escaped = open_path_op({
+  let escaped = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: outside,
@@ -348,7 +340,7 @@ async test "open_path rejects missing files and opens outside text files" {
   )
   let linked = "\{dir}/linked.txt"
   @fs.symlink(target=outside, linked)
-  let linked_reply = open_path_op({
+  let linked_reply = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: "linked.txt:12:3",
@@ -357,7 +349,7 @@ async test "open_path rejects missing files and opens outside text files" {
     linked_reply,
     Editor({ path: "\{cwd}/linked.txt", line: Some(12), column: Some(3), }),
   )
-  let parent_reply = open_path_op({
+  let parent_reply = open_path({
     session: "unused-for-explicit-cwd",
     cwd: Some(cwd),
     path: "../outside.txt#L7",
@@ -366,53 +358,4 @@ async test "open_path rejects missing files and opens outside text files" {
     parent_reply is Editor({ path, line: Some(7), column: None, }) &&
     path == @pathx.Path(outside).to_absolute().unwrap().to_uri_path().unwrap(),
   )
-}
-
-///|
-/// Seed content for a `config.toml` this desktop creates. Codex treats an
-/// empty file as default configuration, so the header only orients whoever
-/// opens it.
-const CodexConfigHeader : String = "# Codex configuration for this desktop's CODEX_HOME.\n# Reference: https://github.com/openai/codex/blob/main/docs/config.md\n# The Codex app-server reads this file at startup; restart the desktop to\n# apply edits.\n"
-
-///|
-/// The Codex home's `config.toml`, created (with its home directory) when
-/// missing so the Settings button works on a fresh home before Codex writes
-/// anything. Without an isolated home the CLI's own resolution applies: the
-/// inherited `CODEX_HOME`, or `~/.codex`.
-async fn ensure_codex_config(home : @pathx.Path?) -> String {
-  let home_path : @pathx.Path = match home {
-    Some(home) => home
-    None =>
-      match @sys.get_env_var("CODEX_HOME") {
-        Some(value) if !value.is_blank() => Path(value)
-        _ => @home.expand(Path("~/.codex"))
-      }
-  }
-  let config = "\{home_path.0}/config.toml"
-  let existing = Some(@fs.kind(config)) catch { _ => None }
-  match existing {
-    Some(Directory) => raise HostError("\{config} is a directory")
-    Some(_) => config
-    None => {
-      // Recursive mkdir on an existing directory raises EEXIST; the steady
-      // state is not an error here any more than in the home preparation.
-      @fs.mkdir(home_path.0, recursive=true) catch {
-        _ => ()
-      }
-      @fs.write_file(config, CodexConfigHeader, create_mode=CreateNew) catch {
-        error => raise HostError("Could not create \{config}: \{error}")
-      }
-      config
-    }
-  }
-}
-
-///|
-/// Ensure and open the Codex home's `config.toml` with the platform opener.
-pub async fn open_codex_config(home : @pathx.Path?) -> Unit {
-  let config = ensure_codex_config(home)
-  let code = @platform.open_path(config) catch {
-    error => raise HostError("Could not open \{config}: \{error}")
-  }
-  guard code == 0 else { raise HostError("Could not open \{config}") }
 }

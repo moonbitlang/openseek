@@ -359,8 +359,8 @@ pub fn endpoints(
       @git.commit_changes(payload)
     }),
     Endpoint(@commands.git_original_file, payload => @git.original_file(payload)),
-    Endpoint(@commands.host_open_path, payload => open_path_op(payload)),
-    Endpoint(@commands.host_reveal_path, payload => reveal_path_op(payload)),
+    Endpoint(@commands.host_open_path, payload => @opener.open_path(payload)),
+    Endpoint(@commands.host_reveal_path, payload => @opener.reveal_path(payload)),
   ]
 }
 

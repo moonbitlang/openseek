@@ -309,8 +309,8 @@ pub async fn read_file(
   // Check the size before reading the body so a large build artifact produces
   // the notice without a host-sized allocation.
   let default_limit = match office_media_type {
-    Some(_) => @openpath.MaxOfficeFileBytes
-    None => @openpath.MaxEditorFileBytes
+    Some(_) => MaxOfficeFileBytes
+    None => MaxEditorFileBytes
   }
   let size_limit = payload.max_bytes.unwrap_or(default_limit)
   guard size_limit > 0 else {
@@ -371,9 +371,7 @@ fn office_media_type(path : String) -> String? {
 async test "PDF reads preserve bytes and use the document limit with or without an extension" {
   let dir = @fs.tmpdir(prefix="openseek-read-pdf-")
   defer @fs.rmdir(dir, recursive=true)
-  let bytes = @utf8.encode(
-    "%PDF-1.7\n" + "x".repeat(@openpath.MaxEditorFileBytes + 1),
-  )
+  let bytes = @utf8.encode("%PDF-1.7\n" + "x".repeat(MaxEditorFileBytes + 1))
   for name in ["report.PDF", "report-without-extension"] {
     let file = "\{dir}/\{name}"
     @fs.write_file(file, bytes, create_mode=CreateOrTruncate)
@@ -392,7 +390,7 @@ async test "PDF reads preserve bytes and use the document limit with or without 
     }
     @fs.write_file(
       file,
-      "%PDF-1.7\n" + "x".repeat(@openpath.MaxOfficeFileBytes),
+      "%PDF-1.7\n" + "x".repeat(MaxOfficeFileBytes),
       create_mode=TruncateExisting,
     )
     assert_eq(

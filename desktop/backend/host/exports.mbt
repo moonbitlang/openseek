@@ -133,5 +133,5 @@ pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
 pub async fn open_path_preview(
   payload : @protocol.OpenPathPayload,
 ) -> @protocol.OpenPathReply {
-  open_path_op(payload, preview_browser=true)
+  @opener.open_path(payload, preview_browser=true)
 }

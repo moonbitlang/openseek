@@ -42,7 +42,7 @@ async test "interactive reads can exceed the editor default with an explicit byt
     .join("page.html")
     .resolve()
     .resource_path()
-  let content = "x".repeat(@openpath.MaxEditorFileBytes + 1)
+  let content = "x".repeat(@files.MaxEditorFileBytes + 1)
   @fs.write_file(
     @pathx.Absolute::from_uri_path(path).unwrap().to_string(),
     content,

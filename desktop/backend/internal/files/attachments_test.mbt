@@ -166,7 +166,7 @@ async test "attachment preparation rejects unavailable workspace empty and overs
     _ => true
   }
   assert_true(unknown)
-  for bytes in [b"", Bytes::make(@openpath.MaxOfficeFileBytes + 1, b'0')] {
+  for bytes in [b"", Bytes::make(@files.MaxOfficeFileBytes + 1, b'0')] {
     let rejected = try {
       ignore(
         @files.prepare_attachment({
