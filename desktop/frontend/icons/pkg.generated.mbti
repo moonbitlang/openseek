@@ -60,6 +60,8 @@ pub fn icon_error() -> @html.Html
 
 pub fn icon_extensions() -> @html.Html
 
+pub fn icon_eye() -> @html.Html
+
 pub fn icon_file() -> @html.Html
 
 pub fn icon_file_media() -> @html.Html

@@ -290,7 +290,7 @@ fn context_definition(
           context_item(
             ui(locale, PreviewFile),
             ui(locale, PreviewFile),
-            @icons.icon_link_external(),
+            @icons.icon_eye(),
             (actions.preview_file)(file),
           ),
         )
