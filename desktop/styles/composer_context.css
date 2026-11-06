@@ -168,7 +168,7 @@
   display: grid;
   gap: var(--space-5);
   min-width: 0;
-  padding: 0 1rem 1rem;
+  padding: 0 2rem 2rem;
   max-height: 360px;
   overflow: auto;
   overscroll-behavior: contain;

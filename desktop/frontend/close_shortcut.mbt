@@ -8,7 +8,9 @@ fn focused_close_message() -> Msg? {
     return None
   }
   // Transient controls keep Close from reaching the content beneath them.
-  if element.closest("[role=menu], [role=dialog], [role=listbox], .dock-menu")
+  if element.closest(
+      "dialog, [role=menu], [role=dialog], [role=listbox], .dock-menu",
+    )
     is Some(_) {
     None
   } else if element.closest(".terminal-panel") is Some(_) {

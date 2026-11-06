@@ -113,95 +113,28 @@ a:where(.setting-link) {
   font-size: var(--font-size-md);
 }
 
-/* ---------- management dialogs ---------- */
-dialog.management-dialog {
-  box-sizing: border-box;
-  width: min(84rem, 86vw);
-  height: min(64rem, 84dvh);
-  max-height: 84dvh;
-  padding: 0;
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px -4px light-dark(
-    rgba(20, 23, 26, 0.12),
-    rgba(0, 0, 0, 0.3)
-  );
-  color: var(--color-text-primary);
-  overflow: hidden;
-  flex-direction: column;
+#skill-detail-dialog {
+  --dialog-width: 54rem;
+  --dialog-max-height: min(52rem, 80dvh);
 }
-dialog.management-dialog[open] {
-  display: flex;
-}
-dialog.management-dialog::backdrop {
-  background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
-}
-@media (prefers-reduced-motion: no-preference) {
-  dialog.management-dialog {
-    scale: 0.995;
-    transition:
-      scale 20ms linear,
-      display 20ms allow-discrete,
-      overlay 20ms allow-discrete;
-  }
-  dialog.management-dialog[open] {
-    scale: 1;
-  }
-  @starting-style {
-    dialog.management-dialog[open] {
-      scale: 0.995;
-    }
-  }
-}
-/* The header is the main topbar: same height, padding, divider and title
-   size, so a dialog does not read as a differently scaled surface. */
-.management-dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--titlebar-control-gap);
-  height: var(--topbar-height);
-  padding-inline: var(--topbar-inline-padding);
-  border-bottom: 1px solid var(--color-separator);
-  flex-shrink: 0;
-}
-.management-dialog-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-.management-dialog-heading .topbar-title {
-  max-width: none;
-  margin-inline-end: 0;
-}
+
 .management-dialog-pane:not([hidden]) {
   display: contents;
 }
-.management-dialog-pane > .management-page {
-  flex: 1;
+#management-dialog .management-dialog-pane > .management-page {
+  overflow: visible;
   width: 100%;
   box-sizing: border-box;
-  --management-content-padding: clamp(
-    var(--space-6),
-    3vw,
-    calc(var(--space-7) * 1.5)
-  );
-  padding: max(
-    var(--management-content-padding),
-    calc((100% - 72rem) / 2)
-  );
 }
-.management-dialog-pane > .management-page > .management-page-content {
+#management-dialog .management-page > .management-page-content {
   width: 100%;
   max-width: none;
   margin-inline: 0;
 }
-/* ---------- shared management content ---------- */
 .management-page {
   grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-7) 2rem 2rem;
 }
 
 .management-page-content {
@@ -892,8 +825,6 @@ button.archived-chat-open:hover .archived-chat-title {
 
 .skill-preview-markdown {
   min-width: 0;
-  max-height: min(62vh, 720px);
-  overflow: auto;
   white-space: normal;
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
@@ -954,17 +885,12 @@ button.archived-chat-open:hover .archived-chat-title {
   white-space: pre-wrap;
 }
 
-.skill-detail-page > .management-page-content {
-  max-width: 840px;
+.skill-detail-page > * + * {
+  margin-top: var(--space-7);
 }
 
-.skill-back {
-  justify-self: start;
-}
-
-.skill-detail-header {
-  display: grid;
-  gap: var(--space-4);
+.skill-detail-header > * + * {
+  margin-top: var(--space-4);
 }
 
 .skill-detail-header h2 {
@@ -980,24 +906,14 @@ button.archived-chat-open:hover .archived-chat-title {
   justify-self: start;
 }
 
-.skill-detail-card {
-  min-width: 0;
-  padding: var(--space-7) var(--space-7);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-}
-
 .skill-file-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
   min-height: 40px;
-  margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-7)) var(--space-6);
-  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-6);
+  padding-block: var(--space-3);
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
 }
 
 .skill-file-name {

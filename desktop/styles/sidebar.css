@@ -213,6 +213,21 @@ html.is-resizing .sidebar-resize-handle {
   content-visibility: auto;
   contain-intrinsic-block-size: auto 2em;
 }
+.sidebar-context-trigger {
+  display: flex;
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.conversation-content {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 1 1 auto;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.conversation-content > .sidebar-label,
 .conversation-row > .sidebar-label {
   flex: 1 1 auto;
   overflow: hidden;
@@ -313,6 +328,9 @@ html.is-resizing .sidebar-resize-handle {
    (visibility, not display) so the label doesn't shift as it appears. */
 .row-archive {
   --icon-size: var(--icon-md);
+  --rui-button-bg: transparent;
+  --rui-button-fg: var(--color-text-muted);
+  --rui-control-radius: var(--radius-sm);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -333,6 +351,8 @@ html.is-resizing .sidebar-resize-handle {
   visibility: visible;
 }
 .row-archive:hover {
+  --rui-button-bg: var(--color-hover-subtle);
+  --rui-button-fg: var(--color-text-primary);
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
@@ -377,6 +397,8 @@ html.is-resizing .sidebar-resize-handle {
 /* An open conversation menu keeps its hover-revealed trigger in place of the
    status glyphs while the pointer moves into the floating surface. */
 .row-menu-button[aria-expanded="true"] {
+  --rui-button-bg: var(--color-hover-subtle);
+  --rui-button-fg: var(--color-text-primary);
   visibility: visible;
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
@@ -492,6 +514,12 @@ html.is-resizing .sidebar-resize-handle {
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
+}
+.workspace-content {
+  display: flex;
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .workspace-disclosure {
   flex: 1 1 auto;
@@ -723,40 +751,8 @@ button.row-twisty:hover {
   color: var(--color-accent-strong);
 }
 
-/* The host-backed project picker: a compact native-dialog treatment around
-   the location bar, directory browser, and inline folder creation. */
-.picker-backdrop {
-  /* Use a tint alone to separate the picker from the page on every platform. */
-  background: color-mix(
-    in srgb,
-    var(--color-text-primary) 20%,
-    transparent
-  );
-}
-.modal.picker-modal {
-  display: flex;
-  flex-direction: column;
-  width: min(680px, calc(100vw - 48px));
-  height: min(560px, calc(100vh - 48px));
-  padding: 0;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  box-shadow: 0 24px 80px -24px rgba(20, 23, 26, 0.42),
-    0 8px 28px -12px rgba(20, 23, 26, 0.28);
-}
-.picker-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
-  min-height: 4.5rem;
-  padding: var(--space-5) 1rem var(--space-5) var(--space-6);
-  border-bottom: 1px solid var(--color-border-subtle);
-  background: color-mix(
-    in srgb,
-    var(--color-bg-surface) 94%,
-    var(--color-bg-subtle)
-  );
+#project-picker-dialog {
+  max-height: min(40rem, calc(100dvh - 2rem));
 }
 .picker-header-leading {
   display: flex;
@@ -779,37 +775,11 @@ button.row-twisty:hover {
 .picker-header-copy {
   min-width: 0;
 }
-.picker-header .modal-title {
-  font-size: var(--font-size-md);
-  font-weight: 600;
-  line-height: 1.3;
-}
 .picker-subtitle {
   margin-top: var(--space-1);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   line-height: 1.35;
-}
-.picker-close {
-  --icon-size: var(--icon-md);
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.picker-close:hover {
-  background: var(--color-hover-subtle);
-  color: var(--color-text-primary);
-}
-.picker-close:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: 1px;
 }
 .picker-location-bar {
   display: flex;
@@ -951,6 +921,7 @@ button.row-twisty:hover {
   flex: 1 1 23rem;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: none;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
@@ -1117,17 +1088,11 @@ button.row-twisty:hover {
   line-height: var(--line-height-normal);
 }
 .picker-footer {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  min-height: 4.75rem;
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
 }
 .picker-current-location {
   --icon-size: var(--icon-md);
+  margin-inline-end: auto;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -1162,26 +1127,17 @@ button.row-twisty:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.picker-footer .modal-actions {
+.picker-actions {
+  display: flex;
   flex: none;
-  margin-top: 0;
+  gap: var(--space-4);
 }
-.picker-footer .modal-actions .button:where(.primary) {
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-accent) 30%, transparent);
-}
-.picker-modal input:disabled {
+#project-picker-dialog input:disabled {
   cursor: default;
   opacity: 0.5;
 }
 
 @media (max-width: 600px) {
-  .modal.picker-modal {
-    width: calc(100vw - 1.75rem);
-    height: calc(100vh - 1.75rem);
-  }
-  .picker-header {
-    padding: var(--space-4) var(--space-5);
-  }
   .picker-location-bar {
     flex-wrap: wrap;
   }
@@ -1214,8 +1170,8 @@ button.row-twisty:hover {
   .picker-create-submit {
     grid-column: 3;
   }
-  .picker-footer .modal-actions,
-  .picker-footer .modal-actions button {
+  .picker-actions,
+  .picker-actions button {
     flex: 1 1 0;
   }
   .picker-current-location {

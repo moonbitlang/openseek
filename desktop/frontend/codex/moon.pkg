@@ -1,4 +1,6 @@
 import {
+  "moonbit-community/rui",
+  "moonbit-community/rabbita/dialog",
   "openseek_desktop/routes",
   "openseek_desktop/frontend/question_card",
   "moonbitlang/openseek/deepseek",

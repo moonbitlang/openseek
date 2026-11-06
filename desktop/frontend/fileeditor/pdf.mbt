@@ -271,14 +271,18 @@ fn apply_pdf_event(
       }
       { ..document, search: Some((current, total)), }
     }
-    { "status": String("password"), "incorrect": True, .. } =>
+    { "status": String("password"), "incorrect": True, .. } => {
+      command = @dialog.show("pdf-password-dialog")
       { ..document, status: PdfPasswordRequired(incorrect=true), password: "", }
-    { "status": String("password"), "incorrect": False, .. } =>
+    }
+    { "status": String("password"), "incorrect": False, .. } => {
+      command = @dialog.show("pdf-password-dialog")
       {
         ..document,
         status: PdfPasswordRequired(incorrect=false),
         password: "",
       }
+    }
     { "status": String("error"), "message": String(_), .. } => {
       command = clear_office_surface()
       {
@@ -342,7 +346,13 @@ fn update_pdf(state : State, ctx : Ctx, msg : Msg) -> (@cmd.Cmd, State) {
     PdfPasswordSubmitted if document.status is PdfPasswordRequired(_) &&
       !document.password.is_empty() =>
       (
-        @office_viewer.pdf_password_command(OfficeSurfaceId, document.password),
+        @cmd.batch([
+          @dialog.close("pdf-password-dialog"),
+          @office_viewer.pdf_password_command(
+            OfficeSurfaceId,
+            document.password,
+          ),
+        ]),
         state.with_pdf_document(path, {
           ..document,
           status: PdfLoading,
@@ -351,7 +361,7 @@ fn update_pdf(state : State, ctx : Ctx, msg : Msg) -> (@cmd.Cmd, State) {
       )
     PdfPasswordCancelled if document.status is PdfPasswordRequired(_) =>
       (
-        clear_document(),
+        @cmd.batch([@dialog.close("pdf-password-dialog"), clear_document()]),
         state.with_pdf_document(path, {
           ..document,
           status: PdfFailed(ui(ctx.locale, PdfPreviewCancelled)),

@@ -7,7 +7,6 @@ priv enum UiMessage {
   FoldersLabel
   AddProjectTitle
   ChooseFolder
-  CloseLabel
   ClosePicker
   NewFolder
   NameLabel
@@ -67,11 +66,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "選擇一個資料夾作為專案工作區。"
     (Japanese, ChooseFolder) =>
       "プロジェクトのワークスペースにするフォルダーを選択してください。"
-    (English, CloseLabel) => "Close"
-    (Spanish, CloseLabel) => "Cerrar"
-    (SimplifiedChinese, CloseLabel) => "关闭"
-    (TraditionalChinese, CloseLabel) => "關閉"
-    (Japanese, CloseLabel) => "閉じる"
     (English, ClosePicker) => "Close project picker"
     (Spanish, ClosePicker) => "Cerrar selector de proyectos"
     (SimplifiedChinese, ClosePicker) => "关闭项目选择器"

@@ -26,7 +26,7 @@ test('Cloud background completion uses the shared notification, badge and click 
   await expect.poll(() => shown(app).length).toBe(1);
   expect(shown(app)[0].params).toMatchObject({ title: 'Task finished', body: 'The Cloud task is done.' });
   await expect.poll(() => badge(app)).toBe(1);
-  await expect(app.row(sessionA).locator('..').getByRole('status')).toBeVisible();
+  await expect(app.rowContainer(sessionA).getByRole('status')).toBeVisible();
   await expect.poll(() => page.evaluate(session => window.cloudSessionStreams.get(session)?.size || 0, sessionA)).toBe(0);
   app.pauseHistory = null;
   releaseHistory();
@@ -35,7 +35,7 @@ test('Cloud background completion uses the shared notification, badge and click 
   await expect(page.locator('main .topbar-title')).toHaveText('Cloud fixture A');
   await expect(app.row(sessionA)).toHaveAttribute('aria-current', 'true');
   await expect.poll(() => badge(app)).toBe(0);
-  await expect(app.row(sessionA).locator('..').getByRole('status')).toHaveCount(0);
+  await expect(app.rowContainer(sessionA).getByRole('status')).toHaveCount(0);
   await expect(page.locator('#transcript')).toContainText('The Cloud task is done.');
   expect(shown(app)).toHaveLength(1);
   expect(app.device.pageErrors).toEqual([]);
@@ -85,7 +85,7 @@ test('Cloud cancellation stays silent and sign-out retires its unread badge and 
   const app = await running(page);
   await app.open(sessionB);
   await app.finishTask(sessionA, 'failed');
-  await expect(app.row(sessionA).locator('..').getByRole('status')).toBeVisible();
+  await expect(app.rowContainer(sessionA).getByRole('status')).toBeVisible();
   await expect.poll(() => badge(app)).toBe(1);
   expect(shown(app)).toHaveLength(0);
   // Obtain a real completion target before signing out.
@@ -113,10 +113,10 @@ test('Cloud browser completion uses the same unread row without requesting nativ
   const app = await running(page, { desktop: false });
   await app.open(sessionB);
   await app.finishTask();
-  await expect(app.row(sessionA).locator('..').getByRole('status')).toBeVisible();
+  await expect(app.rowContainer(sessionA).getByRole('status')).toBeVisible();
   expect(app.notifications).toEqual([]);
   await app.open(sessionA);
-  await expect(app.row(sessionA).locator('..').getByRole('status')).toHaveCount(0);
+  await expect(app.rowContainer(sessionA).getByRole('status')).toHaveCount(0);
   expect(app.device.pageErrors).toEqual([]);
   expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
 });

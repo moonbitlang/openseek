@@ -7,15 +7,11 @@ priv enum UiMessage {
   RenameConversation
   ArchiveLabel
   ArchiveConversation
-  StopBeforeArchive
-  FinishBeforeArchive
   RestoreLabel
   RestoreConversation
   DeleteLabel
   DeletePermanently
   DeleteUnavailable
-  StopBeforeDelete
-  FinishBeforeDelete
   LoadingConversation
   ConversationLoadFailed
   RunningLabel
@@ -58,23 +54,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ArchiveConversation) => "归档对话"
     (TraditionalChinese, ArchiveConversation) => "歸檔對話"
     (Japanese, ArchiveConversation) => "チャットをアーカイブ"
-    (English, StopBeforeArchive) => "Stop this conversation before archiving it"
-    (Spanish, StopBeforeArchive) =>
-      "Detén esta conversación antes de archivarla"
-    (SimplifiedChinese, StopBeforeArchive) => "停止此对话后才能归档"
-    (TraditionalChinese, StopBeforeArchive) => "停止此對話後才能歸檔"
-    (Japanese, StopBeforeArchive) =>
-      "アーカイブするにはこのチャットを停止してください"
-    (English, FinishBeforeArchive) =>
-      "Wait for this conversation to finish before archiving"
-    (Spanish, FinishBeforeArchive) =>
-      "Espera a que termine esta conversación para archivarla"
-    (SimplifiedChinese, FinishBeforeArchive) =>
-      "等待此对话完成后再归档"
-    (TraditionalChinese, FinishBeforeArchive) =>
-      "等待此對話完成後再歸檔"
-    (Japanese, FinishBeforeArchive) =>
-      "このチャットが完了してからアーカイブしてください"
     (English, RestoreLabel) => "Restore"
     (Spanish, RestoreLabel) => "Restaurar"
     (SimplifiedChinese, RestoreLabel) => "恢复"
@@ -105,23 +84,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "此對話來源不支援永久刪除"
     (Japanese, DeleteUnavailable) =>
       "このチャットのソースは完全削除に対応していません"
-    (English, FinishBeforeDelete) =>
-      "Wait for this conversation to finish before deleting it"
-    (Spanish, FinishBeforeDelete) =>
-      "Espera a que termine esta conversación antes de eliminarla"
-    (SimplifiedChinese, FinishBeforeDelete) =>
-      "等待此对话结束后才能删除"
-    (TraditionalChinese, FinishBeforeDelete) =>
-      "等待此對話結束後才能刪除"
-    (Japanese, FinishBeforeDelete) =>
-      "この会話が終了してから削除してください"
-    (English, StopBeforeDelete) => "Stop this conversation before deleting it"
-    (Spanish, StopBeforeDelete) =>
-      "Detén esta conversación antes de eliminarla"
-    (SimplifiedChinese, StopBeforeDelete) => "停止此对话后才能删除"
-    (TraditionalChinese, StopBeforeDelete) => "停止此對話後才能刪除"
-    (Japanese, StopBeforeDelete) =>
-      "削除するにはこのチャットを停止してください"
     (English, LoadingConversation) => "Loading conversation"
     (Spanish, LoadingConversation) => "Cargando conversación"
     (SimplifiedChinese, LoadingConversation) => "正在加载对话"

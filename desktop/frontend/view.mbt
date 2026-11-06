@@ -1844,6 +1844,7 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
     } else {
       "panel-toggle active"
     },
+    disabled=false,
     title=if self.minimal_transcript {
       shell_text(self.locale, ShowDetailed)
     } else {
@@ -1865,6 +1866,7 @@ fn Model::terminal_toggle(self : Model, toggle : @cmd.Cmd) -> @html.Html {
     } else {
       "panel-toggle terminal-toggle"
     },
+    disabled=false,
     title=shell_text(
       self.locale,
       if self.terminal.is_open() {
@@ -2203,11 +2205,15 @@ fn view(
   composer_html : @html.Html,
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
-  quick_open_and_context_menu : (@html.Html, @html.Html, @html.Html),
-  management_pages : (@html.Html, @html.Html, @html.Html),
+  shell_overlays : (@html.Html, @html.Html, @html.Html),
+  management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, context_menu_html, transfer_menu_html) = quick_open_and_context_menu
-  let (skills_html, workspace_settings_html, archived_chats_html) = management_pages
+  let (quick_open_html, selection_actions_html, transfer_menu_html) = shell_overlays
+  let (
+    (skills_list_html, skills_detail_html),
+    workspace_settings_html,
+    archived_chats_html,
+  ) = management_pages
   // Until the relay session and its device exist, the console frame —
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
   // receive UI work.
@@ -2523,7 +2529,16 @@ fn view(
       right_panel_html,
       terminal_html,
     ]),
-    management_dialog_view(dispatch, model, skills_html, archived_chats_html),
+    management_dialog_view(
+      dispatch, model, skills_list_html, archived_chats_html,
+    ),
+    delete_modal(
+      locale=model.locale,
+      dispatch,
+      model.delete_confirm,
+      model.cloud,
+    ),
+    skills_detail_dialog_view(dispatch, model, skills_detail_html),
     workspace_settings_html,
     model.session_import_dialog.view(
       model.locale,
@@ -2608,16 +2623,10 @@ fn view(
       }.render(locale=model.locale),
     )
   }
-  if !(model.management_dialog is Some(ArchivedChats)) &&
-    model.delete_confirm is Some(confirm) {
-    children.push(
-      delete_modal(locale=model.locale, dispatch, confirm, model.cloud),
-    )
-  }
   // Rendered whether or not the palette is open — closed it is an empty
   // placeholder — so opening it never shifts the overlay children around it.
   children.push(quick_open_html)
-  children.push(context_menu_html)
+  children.push(selection_actions_html)
   children.push(transfer_menu_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
@@ -2660,14 +2669,21 @@ fn update_confirm_modal(
   dispatch : @cmd.Emit[Msg],
   version : String,
 ) -> @html.Html {
-  @html.div(class="modal-backdrop", on_click=dispatch(CancelUpdateRestart), [
-    @html.div(class="modal", [
-      @html.div(
-        class="modal-title",
-        dynamic_text(locale, DRestartQuestion(version)),
+  @rui.dialog(
+    id="update-restart-dialog",
+    class="dialog-size-small",
+    show_close=false,
+    on_cancel=dispatch(CancelUpdateRestart),
+    attrs=@html.Attrs::build().aria_labelledby("update-restart-title"),
+    [
+      @rui.dialog_header(
+        @rui.dialog_title(
+          id="update-restart-title",
+          dynamic_text(locale, DRestartQuestion(version)),
+        ),
       ),
-      @html.div(class="modal-body", shell_text(locale, InterruptForUpdate)),
-      @html.div(class="modal-actions", [
+      @html.div(shell_text(locale, InterruptForUpdate)),
+      @rui.dialog_footer([
         @html.button(
           class="button secondary",
           on_click=dispatch(CancelUpdateRestart),
@@ -2679,8 +2695,8 @@ fn update_confirm_modal(
           shell_text(locale, RestartNow),
         ),
       ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 ///|
@@ -2691,8 +2707,7 @@ fn update_confirm_modal(
 /// over the Settings form (which already shows the same section), and
 /// disappears the moment a usable endpoint arrives. shell_text(model.locale, NotNow) dismisses for
 /// the session; the composer's BYOK notice keeps the reminder — and the way
-/// back here — visible. Clicks inside must not bubble to the backdrop, whose
-/// click dismisses.
+/// back here — visible.
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let title = match model.api_provider {
     Deepseek => shell_text(model.locale, SetupDeepSeek)
@@ -2700,29 +2715,24 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     OpenRouter => shell_text(model.locale, SetupOpenRouter)
     Custom => shell_text(model.locale, SetupEndpoint)
   }
-  @html.div(class="modal-backdrop", on_click=dispatch(DismissApiSetup), [
-    @html.div(
-      class="modal setup-modal",
-      attrs=@html.Attrs::build().on_click(event => {
-        event.stop_propagation()
-        @cmd.none
-      }),
-      [
-        @html.div(class="modal-title", title),
-        @html.div(
-          class="setup-modal-form",
-          api_settings_rows(dispatch, model, id_prefix="setup-api"),
+  @rui.dialog(
+    id="api-setup-dialog",
+    class="setup-modal dialog-size-medium",
+    show_close=false,
+    on_cancel=dispatch(DismissApiSetup),
+    attrs=@html.Attrs::build().aria_labelledby("api-setup-title"),
+    [
+      @rui.dialog_header(@rui.dialog_title(id="api-setup-title", title)),
+      @html.div(api_settings_rows(dispatch, model, id_prefix="setup-api")),
+      @rui.dialog_footer([
+        @html.button(
+          class="button secondary",
+          on_click=dispatch(DismissApiSetup),
+          shell_text(model.locale, NotNow),
         ),
-        @html.div(class="modal-actions", [
-          @html.button(
-            class="button secondary",
-            on_click=dispatch(DismissApiSetup),
-            shell_text(model.locale, NotNow),
-          ),
-        ]),
-      ],
-    ),
-  ])
+      ]),
+    ],
+  )
 }
 
 ///|

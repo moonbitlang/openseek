@@ -201,8 +201,8 @@ enum PreviewTarget {
 }
 
 ///|
-pub fn State::detail_open(self : State) -> Bool {
-  !(self.preview is Closed)
+pub fn State::detail_open(self : State, channel : @interop.ChannelId) -> Bool {
+  self.preview_channel == Some(channel) && !(self.preview is Closed)
 }
 
 ///|

@@ -73,54 +73,6 @@ pub(all) struct Actions {
 }
 
 ///|
-fn Input::find_project(self : Input, key : String) -> @project.Input? {
-  for section in self.sections {
-    for entry in section.entries {
-      if entry is @section.Project(project) && project.id().key() == key {
-        return Some(project)
-      }
-    }
-  }
-  None
-}
-
-///|
-fn find_conversation_in(
-  rows : Array[@conversation.Input],
-  key : String,
-) -> @conversation.Input? {
-  for row in rows {
-    if row.id().key() == key {
-      return Some(row)
-    }
-    if find_conversation_in(row.children, key) is Some(found) {
-      return Some(found)
-    }
-  }
-  None
-}
-
-///|
-fn Input::find_conversation(self : Input, key : String) -> @conversation.Input? {
-  for section in self.sections {
-    for entry in section.entries {
-      match entry {
-        @section.Project(project) =>
-          if find_conversation_in(project.conversations, key) is Some(found) {
-            return Some(found)
-          }
-        @section.Conversation(row) =>
-          if find_conversation_in([row], key) is Some(found) {
-            return Some(found)
-          }
-        @section.Placeholder(_) => ()
-      }
-    }
-  }
-  None
-}
-
-///|
 fn Input::menu_definition(
   self : Input,
   target : String,
@@ -129,18 +81,7 @@ fn Input::menu_definition(
   if target == DeviceSelectorTarget && self.account is Some(account) {
     return Some(account.device_menu(actions.select_device, locale=self.locale))
   }
-  if self.find_project(target) is Some(project) {
-    return Some({
-      label: @messages.text(self.locale, WorkspaceActions),
-      entries: project.menu_entries(actions.section.project, locale=self.locale),
-    })
-  }
-  guard self.find_conversation(target) is Some(row) &&
-    row.menu_entries(locale=self.locale, actions.section.conversation)
-    is Some(entries) else {
-    return None
-  }
-  Some({ label: @messages.text(self.locale, ConversationActions), entries, })
+  None
 }
 
 ///|
@@ -387,9 +328,10 @@ pub fn component(
       )
       let choose = @messages.text(input.locale, ChooseDevice)
       footer.push(
-        @html.button(
+        @rui.popover_trigger(
+          id=DeviceSelectorTarget + ":actions-trigger",
+          target_id=DeviceSelectorTarget + ":actions-content",
           class="sidebar-button device-selector",
-          type_="button",
           title=choose,
           // The footer sits at the bottom edge, so the menu opens upward.
           attrs=@action_menu.button_attrs(

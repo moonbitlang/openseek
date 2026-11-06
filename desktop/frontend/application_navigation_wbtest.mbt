@@ -542,7 +542,7 @@ test "each confirmed delete settles only itself" {
   )
   assert_true(stopped.deletes_in_flight.is_empty())
   assert_true(
-    stopped.delete_confirm is Some(HostDelete({ key: k, .. })) && k == key,
+    stopped.delete_confirm is Open(HostDelete({ key: k, .. })) && k == key,
   )
   // A refused check ends no delete and leaves the latest click's question
   // out, so its dialog still opens.
@@ -565,7 +565,7 @@ test "each confirmed delete settles only itself" {
     late,
   )
   assert_true(
-    staged.delete_confirm is Some(HostDelete({ key: k, .. })) && k == key,
+    staged.delete_confirm is Open(HostDelete({ key: k, .. })) && k == key,
   )
 }
 

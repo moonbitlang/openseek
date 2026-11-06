@@ -137,14 +137,14 @@ test('drafts and task admission stay owned by the existing composer during gener
   // editor and recovered history belong to B; A is still generating.
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   await expect(page.locator('#task')).toHaveValue('Second conversation draft');
-  await expect(cloud.row(sessionA).locator('..').locator('.sidebar-run-status.running')).toHaveCount(1);
+  await expect(cloud.rowContainer(sessionA).locator('.sidebar-run-status.running')).toHaveCount(1);
   complete();
   await expect.poll(() => cloud.generating.has(sessionA)).toBe(false);
   await expect(page.locator('#task')).toHaveValue('Second conversation draft');
   // Leaving closes only that session's observer. Re-entering reads its
   // durable history and fresh control snapshot instead of keeping a hidden stream.
   await cloud.open(sessionA);
-  await expect(cloud.row(sessionA).locator('..').locator('.sidebar-run-status.running')).toHaveCount(0);
+  await expect(cloud.rowContainer(sessionA).locator('.sidebar-run-status.running')).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Draft after admission');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   await cloud.open(sessionB);

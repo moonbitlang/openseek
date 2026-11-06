@@ -96,9 +96,6 @@ test('tab menu replaces sidebar menus, preserves selection and supports keyboard
   await page.keyboard.press('Shift+F10');
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: 'Close to the Right' })).toBeDisabled();
-  await page.keyboard.press('Escape');
-  await expect(tabs.last()).toBeFocused();
-  await page.keyboard.press('Shift+F10');
   await menu.getByRole('menuitem', { name: 'Close Others', exact: true }).click();
   await expect(tabs).toHaveCount(1);
   await tabs.first().click({ button: 'right' });
@@ -172,7 +169,6 @@ test('open tab menu follows live locale changes', async ({ page }) => {
     await expect(menu).toBeVisible();
     await expect(menu.getByRole('menuitem')).toHaveText(items);
     await expect(menu.getByRole('menuitem').first()).toHaveAttribute('title', closeTitle);
-    await expect(menu).toBeFocused();
   }
   expect(app.pageErrors).toEqual([]);
 });

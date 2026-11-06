@@ -842,18 +842,6 @@ fn main {
       emit.map(msg => QuickOpen(msg)),
       state.map(model => model.locale),
     )
-    let context_menu_html = @action_menu.context_component(
-      state.map(model => model.locale),
-      state.map(model => model.context_menu_input()),
-      {
-        open_link: url => emit(ExternalLinkClicked(url)),
-        open_external_link: url => open_external_link(emit, url),
-        open_file: path => emit(OpenFile(path)),
-        reveal_file: path => emit(RevealFile(path)),
-        share_file: path => emit(ShareFile(path)),
-        download_file: path => emit(DownloadFile(path)),
-      },
-    )
     let transfer_menu_html = @action_menu.component(
       state.map(model => model.conversation_transfer_input()),
       (input, target) => conversation_transfer_menu(emit, input, target),
@@ -1015,9 +1003,7 @@ fn main {
     let file_feedback = pdf_feedback.map2(cloud_office_feedback, (_, _) => {
       @html.nothing
     })
-    let context_menu_html = @rabbita.Val::map3(
-      context_menu_html,
-      file_feedback,
+    let selection_actions_html = file_feedback.map2(
       @action_menu.selection_component(
         state.map(model => model.locale),
         quote_target,
@@ -1039,11 +1025,9 @@ fn main {
           })
         },
       ),
-      (context_menu, _, selection_actions) => {
-        @html.fragment([context_menu, selection_actions])
-      },
+      (_, selection_actions) => selection_actions,
     )
-    let skills_html = @skills.component(
+    let skills_views = @skills.component(
       state.map(model => model.skills_input()),
       state.map(model => model.skills),
       state.map(model => model.locale),
@@ -1085,29 +1069,29 @@ fn main {
         by=open => if open { "open" } else { "closed" },
       )
     let management_pages = @rabbita.Val::map3(
-      skills_html,
+      skills_views,
       workspace_settings_html,
       archived_chats_html,
       (skills, workspace_settings, archived_chats) => {
         (skills, workspace_settings, archived_chats)
       },
     )
-    let quick_open_and_context_menu = @rabbita.Val::map3(
+    let shell_overlays = @rabbita.Val::map3(
       quick_open_html,
-      context_menu_html,
+      selection_actions_html,
       transfer_menu_html,
-      (quick_open, context_menu, transfer_menu) => {
-        (quick_open, context_menu, transfer_menu)
+      (quick_open, selection_actions, transfer_menu) => {
+        (quick_open, selection_actions, transfer_menu)
       },
     )
-    state.view9(
+    let shell = state.view9(
       terminal_html,
       transcript_html,
       right_panel_html,
       composer_html,
       codex_composer_html,
       sidebar_html,
-      quick_open_and_context_menu,
+      shell_overlays,
       management_pages,
       (
         model,
@@ -1117,7 +1101,7 @@ fn main {
         composer_html,
         codex_composer_html,
         sidebar_html,
-        quick_open_and_context_menu,
+        shell_overlays,
         management_pages,
       ) => {
         view(
@@ -1131,10 +1115,23 @@ fn main {
           composer_html,
           codex_composer_html,
           sidebar_html,
-          quick_open_and_context_menu,
+          shell_overlays,
           management_pages,
         )
       },
+    )
+    @action_menu.context_component(
+      state.map(model => model.locale),
+      state.map(model => model.context_menu_input()),
+      {
+        open_link: url => emit(ExternalLinkClicked(url)),
+        open_external_link: url => open_external_link(emit, url),
+        open_file: path => emit(OpenFile(path)),
+        reveal_file: path => emit(RevealFile(path)),
+        share_file: path => emit(ShareFile(path)),
+        download_file: path => emit(DownloadFile(path)),
+      },
+      shell,
     )
   })
   app.mount("app")

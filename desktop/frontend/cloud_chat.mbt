@@ -293,9 +293,9 @@ fn update_cloud(
       model.sidebar_mode
     },
     delete_confirm: match model.delete_confirm {
-      Some(CloudDelete(account~, session~, ..)) if cloud.user_id !=
+      Open(CloudDelete(account~, session~, ..)) if cloud.user_id !=
         Some(account) ||
-        cloud.retired.contains(session) => None
+        cloud.retired.contains(session) => model.delete_confirm.close()
       other => other
     },
     api_setup_open: model.api_setup_open && !(message is @cloud.Create),

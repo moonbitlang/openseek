@@ -142,7 +142,6 @@ priv enum SshMsg {
   Failed(String, Int32, String)
   SubmitAuth
   RevealAuth
-  Backdrop
   AuthFailed(String, Int32, Int32, String)
   Event(Json)
 }
@@ -411,27 +410,6 @@ fn update_ssh(
         Ok(_) => forget_ssh(dispatch, model, id)
       }
     }
-    Backdrop => {
-      if ssh_visible_host(ui) is Some(id) && ui.connecting.contains(id) {
-        return (
-          ssh_focus(
-            if ui.authentication.get(id) is Some(auth) {
-              if auth.submitting {
-                "ssh-modal-close"
-              } else if auth.request.kind == Confirm {
-                "ssh-auth-continue"
-              } else {
-                "ssh-auth-input"
-              }
-            } else {
-              "ssh-modal-close"
-            },
-          ),
-          model,
-        )
-      }
-      update_ssh(dispatch, Close, model)
-    }
     RevealAuth =>
       (@cmd.none, { ..model, ssh_ui: { ..ui, revealed: !ui.revealed, }, })
     SubmitAuth => {
@@ -478,7 +456,11 @@ fn update_ssh(
     }
     Open =>
       (
-        @cmd.batch([ssh_remember_focus(), ssh_focus("ssh-command")]),
+        @cmd.batch([
+          ssh_remember_focus(),
+          @dialog.show("ssh-modal"),
+          ssh_focus("ssh-command"),
+        ]),
         {
           ..model,
           project_picker: None,
@@ -506,7 +488,7 @@ fn update_ssh(
         ui.connecting.contains(id) &&
         ui.intents.get(id) == Some(DetailsConnect) {
         let (cmd, model) = update_ssh(dispatch, Disconnect(id), model)
-        return (@cmd.batch([cmd, ssh_focus("ssh-modal-close")]), model)
+        return (@cmd.batch([cmd, ssh_focus("ssh-modal")]), model)
       }
       let next = {
         ..model,
@@ -522,22 +504,31 @@ fn update_ssh(
           error: None,
         },
       }
+      let restore = @cmd.batch([
+        if ui.return_picker is Some(_) {
+          @dialog.show("project-picker-dialog")
+        } else {
+          @cmd.none
+        },
+        ssh_restore_focus(),
+      ])
       match pending {
         Some(id) if ui.connecting.contains(id) => {
           let (cmd, model) = update_ssh(dispatch, Disconnect(id), next)
-          (@cmd.batch([cmd, ssh_restore_focus()]), model)
+          (@cmd.batch([cmd, restore]), model)
         }
-        _ => (ssh_restore_focus(), next)
+        _ => (restore, next)
       }
     }
     Details(id) =>
       (
         @cmd.batch([
           ssh_remember_focus(),
+          @dialog.show("ssh-modal"),
           if ui.authentication.contains(id) {
             ssh_reset_auth()
           } else {
-            ssh_focus("ssh-modal-close")
+            ssh_focus("ssh-modal")
           },
         ]),
         {
@@ -555,7 +546,7 @@ fn update_ssh(
         return (@cmd.none, model)
       }
       (
-        ssh_focus("ssh-display-name"),
+        @cmd.batch([@dialog.show("ssh-modal"), ssh_focus("ssh-display-name")]),
         {
           ..model,
           ssh_ui: {
@@ -657,7 +648,7 @@ fn update_ssh(
       let model = model.register_ssh(profile)
       if ui.editing is Some(_) {
         return (
-          ssh_focus("ssh-modal-close"),
+          ssh_focus("ssh-modal"),
           {
             ..model,
             ssh_ui: {
@@ -773,7 +764,7 @@ fn update_ssh(
     }
     Select(channel) => {
       if channel is Remote(id) && !model.ssh_online(id) {
-        return update_ssh(dispatch, Connect(id), {
+        let (connect, model) = update_ssh(dispatch, Connect(id), {
           ..model,
           project_picker: None,
           ssh_ui: {
@@ -785,6 +776,7 @@ fn update_ssh(
             details: Some(id),
           },
         })
+        return (@cmd.batch([@dialog.show("ssh-modal"), connect]), model)
       }
       let model = {
         ..model,
@@ -828,11 +820,18 @@ fn update_ssh(
           ui.details is None &&
           ui.intents.get(id) == Some(WorkspaceConnect)
         return (
-          if visible || open {
-            ssh_reset_auth()
-          } else {
-            @cmd.none
-          },
+          @cmd.batch([
+            if open {
+              @dialog.show("ssh-modal")
+            } else {
+              @cmd.none
+            },
+            if visible || open {
+              ssh_reset_auth()
+            } else {
+              @cmd.none
+            },
+          ]),
           {
             ..model,
             ssh_ui: {
@@ -1004,6 +1003,11 @@ fn update_ssh(
         let (cmd, model) = (
           @cmd.batch([
             cmd,
+            if return_to_entry && ui.return_picker is Some(_) {
+              @dialog.show("project-picker-dialog")
+            } else {
+              @cmd.none
+            },
             if ui.intents.get(id) == Some(WorkspaceConnect) {
               ssh_restore_focus()
             } else {
@@ -1318,6 +1322,7 @@ fn ssh_locations(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let ui = model.ssh_ui
   let content : Array[@html.Html] = []
+  let actions : Array[@html.Html] = []
   let mut title = "Add SSH host"
   if ui.editor_open {
     let draft = ssh_draft(ui)
@@ -1345,6 +1350,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           [
             @html.span("SSH command"),
             @html.input(
+              autofocus=true,
               value=ui.command,
               placeholder="ssh -p 22 user@host",
               on_input=dispatch.map(value => Ssh(Command(value))),
@@ -1371,6 +1377,7 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             },
           ),
           @html.input(
+            autofocus=editing,
             value=ui.display_name,
             placeholder=draft.display_label(),
             on_input=dispatch.map(value => Ssh(Name(value))),
@@ -1416,8 +1423,8 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     if pending is Some(id) && ui.authentication.get(id) is Some(auth) {
       content.push(ssh_auth_region(dispatch, ui, auth))
     } else {
-      content.push(
-        @html.div(class="ssh-modal-actions", [
+      actions.push(
+        @rui.dialog_footer([
           @html.button(
             class="button secondary",
             disabled=ui.busy,
@@ -1490,8 +1497,8 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           "Remove this host from this computer. Its connection and running tasks will stop. Remote files, projects and conversation history will remain on the host.",
         ),
       )
-      content.push(
-        @html.div(class="ssh-modal-actions", [
+      actions.push(
+        @rui.dialog_footer([
           @html.button(
             class="button secondary",
             attrs=@html.Attrs::build().id("ssh-remove-cancel"),
@@ -1514,14 +1521,14 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else if ui.authentication.get(id) is Some(auth) {
       content.push(ssh_auth_region(dispatch, ui, auth))
     } else if ui.connecting.contains(id) {
-      content.push(
-        @html.div(class="ssh-modal-actions", [
+      actions.push(
+        @rui.dialog_footer([
           ssh_connection_button(dispatch, model, id, in_modal=true),
         ]),
       )
     } else {
-      content.push(
-        @html.div(class="ssh-modal-actions", [
+      actions.push(
+        @rui.dialog_footer([
           @html.button(
             class="button secondary",
             on_click=dispatch(Ssh(Rename(id))),
@@ -1544,54 +1551,40 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       )
     }
   }
-  @html.div(
-    class="modal-backdrop ssh-backdrop",
-    on_click=dispatch(Ssh(Backdrop)),
+  @rui.dialog(
+    id="ssh-modal",
+    class="dialog-size-medium",
+    show_close=!ui.busy,
+    close_label="Close SSH dialog",
+    closedby=if ui.busy ||
+      (ssh_visible_host(ui) is Some(id) && ui.connecting.contains(id)) {
+      "closerequest"
+    } else {
+      "any"
+    },
+    on_cancel=dispatch(Ssh(Close)),
+    attrs=@html.Attrs::build()
+      .aria_labelledby("ssh-modal-title")
+      .on_submit(event => {
+        event.prevent_default()
+        dispatch(Ssh(Close))
+      })
+      .on_keydown(event => {
+        if event.key() == "Enter" &&
+          ssh_auth_enter_target() &&
+          ssh_visible_host(ui) is Some(id) &&
+          ui.authentication.contains(id) {
+          event.prevent_default()
+          event.stop_propagation()
+          dispatch(Ssh(SubmitAuth))
+        } else {
+          @cmd.none
+        }
+      }),
     [
-      @html.div(
-        class="modal ssh-modal",
-        attrs=@html.Attrs::build()
-          .role("dialog")
-          .aria_modal("true")
-          .id("ssh-modal")
-          .aria_labelledby("ssh-modal-title")
-          .on_click(event => {
-            event.stop_propagation()
-            @cmd.none
-          })
-          .on_keydown(event => {
-            if event.key() == "Escape" {
-              event.prevent_default()
-              event.stop_propagation()
-              dispatch(Ssh(Close))
-            } else if event.key() == "Enter" &&
-              ssh_auth_enter_target() &&
-              ssh_visible_host(ui) is Some(id) &&
-              ui.authentication.contains(id) {
-              event.prevent_default()
-              event.stop_propagation()
-              dispatch(Ssh(SubmitAuth))
-            } else {
-              ssh_modal_tab(event)
-              @cmd.none
-            }
-          }),
-        [
-          @html.div(class="ssh-modal-header", [
-            @html.h2(id="ssh-modal-title", title),
-            @html.button(
-              class="picker-close",
-              disabled=ui.busy,
-              attrs=@html.Attrs::build()
-                .id("ssh-modal-close")
-                .aria_label("Close SSH dialog"),
-              on_click=dispatch(Ssh(Close)),
-              @icons.icon(@icons.icon_close),
-            ),
-          ]),
-          ..content,
-        ],
-      ),
+      @rui.dialog_header([@rui.dialog_title(id="ssh-modal-title", title)]),
+      @html.div(content),
+      ..actions,
     ],
   )
 }
@@ -1620,40 +1613,6 @@ fn ssh_context(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       },
     ],
   )
-}
-
-///|
-/// Keep keyboard navigation within the active modal, including its native
-/// disclosure control. All enabled inputs and buttons are in DOM order.
-fn ssh_modal_tab(event : @dom.KeyboardEvent) -> Unit {
-  guard event.key() == "Tab" else { return }
-  guard @dom.document().get_element_by_id("ssh-modal").to_option()
-    is Some(modal) else {
-    return
-  }
-  let controls = modal
-    .query_selector_all("button:not(:disabled), input:not(:disabled), summary")
-    .iter()
-    .to_array()
-  guard controls.length() > 0 else { return }
-  let active = match @dom.document().get_active_element() {
-    Some(el) => el.to_node()
-    None => None
-  }
-  let index = controls.search_by(el => {
-    active is Some(node) && el.is_same_node(node)
-  })
-  let target = match index {
-    Some(0) if event.shift_key() => Some(controls[controls.length() - 1])
-    Some(i) if !event.shift_key() && i == controls.length() - 1 =>
-      Some(controls[0])
-    None => Some(controls[0])
-    _ => None
-  }
-  if target is Some(el) && el.to_html_element() is Some(el) {
-    event.prevent_default()
-    el.focus()
-  }
 }
 
 ///|
@@ -1773,7 +1732,7 @@ fn ssh_auth_region(
               @html.div(class="ssh-secret", [
                 @html.input(
                   input_type=if ui.revealed { Text } else { Password },
-                  auto_complete=Off,
+                  auto_complete="off",
                   attrs=@html.Attrs::build()
                     .id("ssh-auth-input")
                     .aria_label(label)
@@ -1805,7 +1764,7 @@ fn ssh_auth_region(
           @html.p(class="ssh-help", "Used for this connection only. Not saved."),
         ]
       },
-      @html.div(class="ssh-modal-actions", [
+      @html.div(class="ssh-auth-actions", [
         @html.button(
           class="button secondary",
           on_click=dispatch(Ssh(Close)),
@@ -1839,7 +1798,7 @@ let ssh_focus_origin : Ref[@dom.HTMLElement?] = Ref(None)
 fn ssh_remember_focus() -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     if @dom.document().get_active_element() is Some(element) &&
-      element.closest(".ssh-modal") is None {
+      element.closest("#ssh-modal") is None {
       ssh_focus_origin.val = element.to_html_element()
     }
   })
@@ -1857,7 +1816,9 @@ fn ssh_restore_focus() -> @cmd.Cmd {
         element.to_html_element() is Some(element) {
         element.focus()
       } else if @dom.document()
-        .query_selector(".ssh-context button, .picker-close, .sidebar button")
+        .query_selector(
+          ".ssh-context button, #project-picker-dialog .icon-button, .sidebar button",
+        )
         .to_option()
         is Some(element) &&
         element.to_html_element() is Some(element) {

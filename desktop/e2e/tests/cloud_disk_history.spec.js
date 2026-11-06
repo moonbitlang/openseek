@@ -71,7 +71,7 @@ test('desktop reopens cached Cloud turns offline and revalidates them after rest
   await expect.poll(() => files.get(sessionA).etag).not.toBe(etag);
   expect(files.get(sessionA).messages.at(-1).data.content).toBe('Updated reply A');
 
-  const row = cloud.row(sessionA).locator('..');
+  const row = cloud.rowContainer(sessionA);
   await row.hover();
   await row.getByRole('button', { name: 'Conversation actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Delete…', exact: true }).click();

@@ -66,7 +66,9 @@ fn Model::conversation_transfer_input(
 
 ///|
 fn conversation_transfer_button(locale : @i18n.Locale) -> @html.Html {
-  @html.button(
+  @rui.popover_trigger(
+    id=ConversationTransferTarget + ":actions-trigger",
+    target_id=ConversationTransferTarget + ":actions-content",
     class="panel-toggle",
     title=shell_text(locale, ConversationTransfer),
     attrs=@action_menu.button_attrs(

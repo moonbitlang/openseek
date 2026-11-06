@@ -3295,7 +3295,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-checkout-notification.failed .github-checkout-message > .icon { color: var(--color-danger); }
 .github-checkout-notification.pending .github-checkout-message > .icon { animation: jobs-spin 1s linear infinite; }
 .github-checkout-details { margin: var(--space-4) 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.github-checkout-dialog .github-checkout-choices { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-7); }
+.github-checkout-choices { flex-direction: column; }
 .github-checkout-discard { color: var(--color-danger); }
 @media (prefers-reduced-motion: reduce) { .github-checkout.pending .icon, .github-checkout-notification.pending .icon { animation: none; } }
 @media (hover: none) { .github-checkout { opacity: 1; } }

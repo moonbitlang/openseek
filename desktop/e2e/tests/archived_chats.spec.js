@@ -31,8 +31,8 @@ test('archived chats live in Settings with filter, read-only open, restore and d
   await page.getByRole('button', { name: 'Manage', exact: true }).click();
   await expect(page).toHaveURL(workUrl);
   const main = page.locator('#management-dialog');
-  await expect(main.locator('.topbar-title')).toHaveText('Archived chats');
-  await expect(main.getByRole('heading', { level: 2 })).toHaveText(['workspace', 'notes']);
+  await expect(main).toHaveAccessibleName('Archived chats');
+  await expect(main.locator('.management-page').getByRole('heading', { level: 2 })).toHaveText(['workspace', 'notes']);
 
   const filter = main.getByRole('searchbox', { name: 'Filter archived chats', exact: true });
   await filter.fill('TRIP');
@@ -49,7 +49,7 @@ test('archived chats live in Settings with filter, read-only open, restore and d
   await expect(main).not.toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Manage', exact: true }).click();
-  await expect(main.locator('.topbar-title')).toHaveText('Archived chats');
+  await expect(main).toHaveAccessibleName('Archived chats');
   // Each visit starts unfiltered.
   await expect(filter).toHaveValue('');
   await expect(main.getByRole('button', { name: 'Trip plan', exact: true })).toBeVisible();
@@ -59,13 +59,18 @@ test('archived chats live in Settings with filter, read-only open, restore and d
   await expect.poll(() => app.requests.filter(r => r.method === 'session.unarchive').map(r => r.params.session)).toEqual(['work-archive']);
 
   await archivedRow(page, 'Trip plan').getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Delete permanently', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Delete permanently', exact: true })).toHaveCount(0);
+  await expect(main).toBeVisible();
+  await archivedRow(page, 'Trip plan').getByRole('button', { name: 'Delete', exact: true }).click();
   await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
   await expect(main.getByText('No archived chats.', { exact: true })).toBeVisible();
   expect(app.requests.filter(r => r.method === 'session.delete_archived').map(r => r.params.session)).toEqual(['notes-archive']);
-  await expect(main.locator('.topbar-title')).toHaveText('Archived chats');
+  await expect(main).toHaveAccessibleName('Archived chats');
 
   await main.getByRole('button', { name: 'Back to settings', exact: true }).click();
-  await expect(main.locator('.topbar-title')).toHaveText('Settings');
+  await expect(main).toHaveAccessibleName('Settings');
   await expect(page.getByText('0 archived conversations', { exact: true })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });

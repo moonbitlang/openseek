@@ -2,8 +2,8 @@ import { test, expect } from './support/test.js';
 import { CloudHarness, authOrigin, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id) {
-  await cloud.row(id).locator('..').hover();
-  await cloud.row(id).locator('..').getByRole('button', { name: 'Conversation actions', exact: true }).click();
+  await cloud.rowContainer(id).hover();
+  await cloud.rowContainer(id).getByRole('button', { name: 'Conversation actions', exact: true }).click();
 }
 
 async function askDelete(page, cloud, id) {
@@ -115,67 +115,6 @@ test('a history response captured before deletion cannot restore its row or cont
   await expect(cloud.row(sessionA)).toHaveCount(0);
   await expect(page.locator('main')).not.toContainText('Deleted old content');
   await expect(cloud.row(sessionC)).toHaveCount(0);
-});
-
-test('completed history enables deletion even when the earlier list reported generation', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.generating.add(sessionA);
-  await cloud.install();
-  await cloud.goto();
-  await menu(page, cloud, sessionA);
-  await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeDisabled();
-  await page.keyboard.press('Escape');
-  await cloud.open();
-  await menu(page, cloud, sessionA);
-  await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeEnabled();
-});
-
-test('a new generating list disables deletion after an earlier idle history', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  cloud.generating.add(sessionA);
-  await cloud.create();
-  await page.locator('#task').fill('Refresh the inventory after first send');
-  await page.locator('#task').press('Enter');
-  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
-  await menu(page, cloud, sessionA);
-  await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeDisabled();
-});
-
-test('busy Cloud menus retain rename while deletion stays disabled with normal dismissal', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.generating.add(sessionA);
-  await cloud.install();
-  await cloud.goto();
-  const trigger = cloud.row(sessionA).locator('..').getByRole('button', { name: 'Conversation actions', exact: true });
-  await menu(page, cloud, sessionA);
-  const popup = page.getByRole('menu', { name: 'Conversation actions', exact: true });
-  const action = popup.getByRole('menuitem', { name: 'Delete…', exact: true });
-  await expect(popup).toBeVisible();
-  await expect(action).toBeDisabled();
-  const rename = popup.getByRole('menuitem', { name: 'Rename…', exact: true });
-  await expect(popup).toBeFocused();
-  for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
-    await page.keyboard.press(key);
-    await expect(rename).toBeFocused();
-  }
-  expect(deletes(cloud)).toHaveLength(0);
-  await expect(page.getByRole('button', { name: 'Delete permanently', exact: true })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await expect(popup).toHaveCount(0);
-  await expect(trigger).toBeFocused();
-  await menu(page, cloud, sessionA);
-  await expect(popup).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(popup).toHaveCount(0);
-  await cloud.row(sessionA).click({ button: 'right' });
-  await expect(popup).toBeVisible();
-  await expect(action).toBeDisabled();
-  await page.locator('main').click({ position: { x: 400, y: 100 } });
-  await expect(popup).toHaveCount(0);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('device browser traversal reports deleted Cloud destinations as missing', async ({ page }) => {

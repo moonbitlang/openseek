@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -13,7 +14,9 @@ import {
 // Values
 pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketItem] raise SkillReplyError
 
-pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @cmd.Emit[Msg]) -> @rabbita.Val[(@html.Html, @html.Html)]
+
+pub fn detail_title(@i18n.Locale) -> String
 
 pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Array[InstalledItem] raise SkillReplyError
 
@@ -33,7 +36,7 @@ pub(all) struct Input {
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
-#derive(Eq)
+#derive(Eq, @debug.Debug)
 pub(all) struct InstalledItem {
   id : String
   name : String
@@ -45,8 +48,9 @@ pub(all) struct InstalledItem {
 }
 pub fn InstalledItem::equal(Self, Self) -> Bool
 pub fn InstalledItem::not_equal(Self, Self) -> Bool
+pub fn InstalledItem::to_repr(Self) -> @debug.Repr
 
-#derive(Eq)
+#derive(Eq, @debug.Debug)
 pub(all) struct MarketItem {
   name : String
   module_name : String
@@ -58,6 +62,7 @@ pub(all) struct MarketItem {
 }
 pub fn MarketItem::equal(Self, Self) -> Bool
 pub fn MarketItem::not_equal(Self, Self) -> Bool
+pub fn MarketItem::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Msg {
   QueryChanged(String)
@@ -107,7 +112,7 @@ pub fn PreviewTarget::not_equal(Self, Self) -> Bool
 #derive(Eq)
 type State
 pub fn State::back(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)?
-pub fn State::detail_open(Self) -> Bool
+pub fn State::detail_open(Self, @interop.ChannelId) -> Bool
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self, Outcome?)
