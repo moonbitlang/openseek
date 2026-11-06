@@ -54,7 +54,7 @@ export class SshBrowserHarness extends DesktopBrowserHarness {
   async openRemoteProject() {
     const row = this.projectRow('/workspace', 'remote.ssh-demo');
     await row.hover();
-    await row.getByRole('button', { name: 'New conversation in this project' }).click();
+    await row.locator('[id$=":new-conversation"]').click();
   }
 
   async sshEvent(event) {

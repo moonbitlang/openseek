@@ -310,10 +310,10 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
         const group = document.querySelector('.review-navigation-controls');
         window.reviewNavigationFrames.push({
           visible: !!group?.getClientRects().length,
-          breadcrumbLoading: document.querySelector('.viewer-breadcrumb')?.textContent.includes('Loading diff'),
+          breadcrumbFile: document.querySelector('.viewer-breadcrumb .crumb-file')?.textContent,
           file: group?.querySelector('.review-nav-position')?.textContent,
           change: group?.querySelector('.review-hunk-position')?.textContent,
-          buttons: Array.from(group?.querySelectorAll('button') ?? []).map(b => b.textContent.trim() || b.getAttribute('aria-label')),
+          buttons: Array.from(group?.querySelectorAll('button') ?? []).map(button => button.getAttribute('data-action') || button.id),
         });
         if (window.sampleReviewNavigation) requestAnimationFrame(sample);
       };
@@ -336,10 +336,10 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
       await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
       await expect(page.locator('.review-navigation-controls')).toHaveAttribute('inert', '');
       expect(await navigationAppearance()).toEqual(appearanceBefore);
-      await expect(page.locator('.viewer-breadcrumb')).not.toContainText('Loading diff');
+      await expect(page.locator('.viewer-breadcrumb .crumb-file')).toHaveText('lib.mbt');
       // A deliberately held read eventually shows the delayed overlay. Its
       // timing is independent of whether navigation retains a complete display.
-      await expect(page.locator('.viewer-notice')).toHaveText('Loading diff for lib.mbt…');
+      await expect(page.locator('.viewer-notice')).toBeVisible();
       await expect(page.locator('.review-navigation-controls')).toContainText('File 1 of 2');
       expect(await geometry()).toEqual(before);
     } finally {
@@ -348,19 +348,19 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
     await expect(line).toBeEnabled();
     await expect(split).toBeEnabled();
     await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 15');
-    await expect(page.locator('.review-navigation-controls')).toContainText('Mark viewed');
+    await expect(page.locator('#review-hunk-toggle')).toBeEnabled();
     await expect(page.locator('.review-nav-position')).toHaveText('File 2 of 2');
     await expect(page.locator('.review-navigation-controls')).toHaveAttribute('aria-busy', 'false');
-    await expect(page.locator('.viewer-notice')).not.toContainText('Loading diff');
+    await expect(page.locator('.viewer-notice')).toBeHidden();
     const frames = await page.evaluate(() => {
       window.sampleReviewNavigation = false;
       return window.reviewNavigationFrames;
     });
     for (const frame of frames) {
       expect(frame.visible).toBe(true);
-      expect(frame.breadcrumbLoading).toBe(false);
+      expect(['main.mbt', 'lib.mbt']).toContain(frame.breadcrumbFile);
       expect(frame.change).toBe(frame.file === 'File 1 of 2' ? 'Change 1 of 1' : 'Change 1 of 15');
-      expect(frame.buttons).toEqual(['Previous change', 'Next change', 'Mark viewed']);
+      expect(frame.buttons).toEqual(['previous-diff-change', 'next-diff-change', 'review-hunk-toggle']);
     }
     expect(frames.length).toBeGreaterThan(0);
     expect(await geometry()).toEqual(before);

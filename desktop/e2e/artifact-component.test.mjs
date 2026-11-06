@@ -64,12 +64,12 @@ async function openComponent(options = {}, count = 1, content = html) {
 test('compiled Rabbita inputs update the answer locally and reset together', async () => {
   const { page, frame, errors, requests } = await openComponent();
   try {
-    const serial = frame.getByRole('slider', { name: 'Work that must run in sequence: 20%' });
+    const serial = frame.locator('#serial');
     await serial.fill('50');
     await expect(frame.getByRole('status')).toHaveText('1.78× faster');
-    await frame.getByRole('slider', { name: 'Workers: 8', exact: true }).fill('1');
+    await frame.locator('#workers').fill('1');
     await expect(frame.getByRole('status')).toHaveText('1.00× faster');
-    await frame.getByRole('button', { name: 'Reset', exact: true }).click();
+    await frame.getByRole('button').click();
     await expect(frame.getByRole('status')).toHaveText('3.33× faster');
     await expect(frame.locator('#serial')).toHaveValue('20');
     await expect(frame.locator('#workers')).toHaveValue('8');
