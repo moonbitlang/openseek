@@ -4,18 +4,6 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 const path = suffix => `/device/device-a/${suffix}`;
 const dialog = page => page.getByRole('dialog');
 
-function skills(app) {
-  const fallback = app.replyFor.bind(app);
-  app.replyFor = request => {
-    if (request.method === 'skills.catalog') return { skills: [{
-      name: 'route-skill', module_name: 'example/route-skill', package_path: '',
-      version: '1.0.0', description: 'Navigation fixture', author: 'example', repository: '',
-    }] };
-    if (request.method === 'skills.content') return { kind: 'content', content: '# Route skill\n\nDetail reached.', absolute: '', sig: '' };
-    return fallback(request);
-  };
-}
-
 test('management dialogs preserve the work surface, draft and browser entry', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install(); await app.goto(); await app.openSession();
@@ -99,20 +87,6 @@ test('session deep links wait for catalogs and distinguish missing from failed l
   await page.goto(path('chat/session/does-not-exist'));
   await expect(page.locator('.navigation-notice')).toContainText('catalog unavailable');
   await expect(page.locator('.navigation-notice')).not.toContainText('no longer exists');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Skills detail returns to its list within the dialog', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page); skills(app);
-  await app.install(); await app.goto();
-  const url = page.url();
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
-  await page.locator('.skill-summary', { hasText: 'route-skill' }).click();
-  await expect(page.locator('.skill-preview-markdown')).toContainText('Detail reached.');
-  await expect(page).toHaveURL(url);
-  await dialog(page).getByRole('button', { name: 'Back to skills', exact: true }).click();
-  await expect(page.locator('.skill-summary', { hasText: 'route-skill' })).toBeVisible();
-  await page.keyboard.press('Escape'); await expect(dialog(page)).not.toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 

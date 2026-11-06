@@ -7527,6 +7527,21 @@ fn update_device_msg(
       } else {
         { ..model, conversations, }
       }
+      // A Skills page opened before this connection asked for its catalog
+      // over a channel that could not carry it, and nothing else retries
+      // while the page stays open. Readiness is the same moment as opening:
+      // the page decides whether its catalog still needs fetching.
+      let model = if channel == model.focused &&
+        model.management_dialog is Some(Skills) {
+        let (page_cmd, skills) = model.skills.opening(
+          dispatch.map(msg => Skills(msg)),
+          model.skills_input(),
+        )
+        commands.push(page_cmd)
+        { ..model, skills, }
+      } else {
+        model
+      }
       // The resync's other half: whatever landed while this client was away
       // (another client's prompts, items a still-running turn completed, a
       // finished run's verdict) exists only in the store. Reads happen
@@ -19373,6 +19388,21 @@ test "theme settings switch fixed palettes and are idempotent" {
   assert_true(light.theme is Light)
   let (_, unchanged) = update(dispatch, ThemeChanged("unknown"), system)
   assert_true(unchanged.theme is System)
+}
+
+///|
+test "an open skills page fetches its catalog again once the bridge is ready" {
+  let dispatch = test_dispatch()
+  let (_, opened) = update(dispatch, OpenSkills, test_model())
+  // Opened before the connection: the catalog request never left.
+  let (_, failed) = update(
+    dispatch,
+    Skills(CatalogFailed(channel=Local, message="SeekMoon connection is down")),
+    opened,
+  )
+  assert_true(failed.skills != opened.skills)
+  let (_, ready) = update_dev(dispatch, BridgeReady, failed)
+  assert_true(ready.skills == opened.skills)
 }
 
 ///|
