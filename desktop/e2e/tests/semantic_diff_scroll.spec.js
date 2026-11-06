@@ -13,9 +13,9 @@ for (const mode of ['Token', 'Tree']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
-    await page.getByRole('button', { name: 'Split diff layout', exact: true }).click();
+    await page.locator('[role="treeitem"][data-path="src/main.mbt"]').click();
+    await page.locator(`[data-diff-mode="${mode.toLowerCase()}"]`).click();
+    await page.locator('[data-layout="side-by-side"]').click();
 
     const host = page.locator('#semantic-review-host');
     const entry = host.locator('.semantic-diff-editor-host').first();
@@ -40,8 +40,7 @@ for (const mode of ['Token', 'Tree']) {
     });
     for (const offset of drift) expect(Math.abs(offset)).toBeLessThanOrEqual(1);
     await host.evaluate(node => { node.scrollLeft = 0; });
-    const line = entry.locator('.moonbit-diff-editor-modified .view-line')
-      .filter({ hasText: 'modified long content' }).first();
+    const line = entry.locator('.moonbit-diff-editor-modified .view-line[data-line="2"]');
     await expect(line).toBeVisible();
     // The panes follow the host's scroll position from a listener, one frame
     // behind it. Measure only once the reset above has reached them.

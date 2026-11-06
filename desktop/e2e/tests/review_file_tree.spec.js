@@ -7,10 +7,10 @@ test('Review tree supports keyboard folding and independent tri-state review che
   await app.goto();
   await app.openSession();
   await app.openReview();
-  const tree = page.getByRole('tree', { name: 'Changed files', exact: true });
-  const src = tree.getByRole('treeitem', { name: 'src', exact: true });
-  const main = tree.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
-  const lib = tree.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
+  const tree = page.locator('#review-file-tree');
+  const src = tree.locator('[role="treeitem"][data-path="src"]');
+  const main = tree.locator('[role="treeitem"][data-path="src/main.mbt"]');
+  const lib = tree.locator('[role="treeitem"][data-path="src/lib.mbt"]');
   const srcCheck = src.getByRole('checkbox');
   await expect(src).toHaveAttribute('aria-expanded', 'true');
   await src.focus();
@@ -28,9 +28,9 @@ test('Review tree supports keyboard folding and independent tri-state review che
   await expect(main).toHaveAttribute('aria-selected', 'false');
   await expect(main).toBeFocused();
   await main.press('Enter');
-  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
+  await page.locator('#file-tree-toggle').click();
   await expect(page.locator('.editor-tab.active')).toContainText('main.mbt');
-  await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toBeVisible();
+  await expect(page.locator('#review-file-toggle')).toBeVisible();
   await lib.getByRole('checkbox').click();
   await expect(srcCheck).toBeChecked();
   await expect(page.locator('.editor-tab.active')).toContainText('main.mbt');
@@ -41,7 +41,7 @@ test('Review tree supports keyboard folding and independent tri-state review che
   await expect(lib.getByRole('checkbox')).not.toBeChecked();
   await expect(src).toHaveAttribute('aria-expanded', 'true');
   await src.press('ArrowLeft');
-  const input = page.getByRole('textbox', { name: 'Filter changed files by path' });
+  const input = page.locator('#review-path-filter-input');
   await input.fill('main');
   await expect(main).toBeVisible();
   await expect(lib).toBeHidden();
@@ -57,7 +57,7 @@ test('Review tree supports keyboard folding and independent tri-state review che
   // must continue to identify the same Git row after positional DOM patching.
   await main.focus();
   app.gitChanges.unshift({ path: 'new/file.mbt', kind: 'added', index_status: 'A', worktree_status: ' ' });
-  await expect(tree.getByRole('treeitem', { name: 'new', exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(tree.locator('[role="treeitem"][data-path="new"]')).toBeVisible({ timeout: 10_000 });
   await expect(main).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });

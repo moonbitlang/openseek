@@ -1634,6 +1634,7 @@ fn git_commit_files(
                 ),
                 on_click=dispatch(HistoricalFileSelected(diff)),
                 attrs=@html.Attrs::build()
+                  .data_set("path", file.path)
                   .role("treeitem")
                   .aria_current(if selected { "page" } else { "false" }),
                 contents,

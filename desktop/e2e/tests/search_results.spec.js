@@ -45,10 +45,10 @@ for (const mode of ['Text', 'Code']) {
       navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
     await page.keyboard.press(shortcut);
     if (mode === 'Code') {
-      await page.getByRole('button', { name: 'Code search', exact: true }).click();
-      await page.getByRole('textbox', { name: 'pattern', exact: true }).fill('inspect($(x:arg))');
+      await page.locator('#search-mode-code').click();
+      await page.locator('#search-pattern-0').fill('inspect($(x:arg))');
     } else {
-      await page.getByRole('textbox', { name: 'Search', exact: true }).fill('moon');
+      await page.locator('#workspace-search-input').fill('moon');
     }
     const results = page.locator('.search-results');
     const row = results.locator('.search-result-row');
@@ -59,14 +59,12 @@ for (const mode of ['Text', 'Code']) {
         await expect(row.nth(index)).toBeVisible();
       }
     };
-    const destination = row
-      .getByRole('button', { name: mode === 'Text' ? /moon moon/ : /inspect\($/ })
-      .first();
+    const destination = row.first().locator(`.search-preview-line[data-line="${mode === 'Text' ? 3 : 2}"]`);
     await expectVisibleRows();
     if (mode === 'Code') {
       await expect(row.nth(0).locator('.search-result-line')).toHaveText(['1', '2', '3', '4', '5']);
       await expect(row.nth(1).locator('.search-result-line')).toHaveText(['3', '4', '5', '6']);
-      await expect(row.nth(1).getByRole('button', { name: /second/ })).toHaveAttribute('title', 'Open src/main.mbt:5');
+      await expect(row.nth(1).locator('.search-preview-line[data-line="5"]')).toHaveAttribute('title', 'Open src/main.mbt:5');
     }
     await expect(results.locator('.search-summary')).toHaveText(
       '2 matches in 1 file',
@@ -99,14 +97,14 @@ for (const mode of ['Text', 'Code']) {
     await page.keyboard.press('Enter');
     await expect(page.locator('#viewer-host .view-lines')).toContainText('moon moon');
     await expect(results).toBeHidden();
-    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-    const header = results.getByRole('button', { name: /main.mbt.*src/ });
+    await page.locator('#file-tree-toggle').click();
+    const header = results.locator('.search-file-header[data-path="src/main.mbt"]');
     await header.click();
     await expect(row).toHaveCount(0);
     await header.click();
     await expectVisibleRows();
     scanFailed = true;
-    await page.locator('.workspace-search').getByRole('button', { name: 'Refresh', exact: true }).click();
+    await page.locator('#search-refresh').click();
     await expect(results.getByRole('alert')).toContainText('One file could not be read.');
     await expectVisibleRows();
     expect(app.pageErrors).toEqual([]);
@@ -135,10 +133,10 @@ test('code search repairs a pattern in one click', async ({ page }) => {
   const shortcut = await page.evaluate(() =>
     navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
   await page.keyboard.press(shortcut);
-  await page.getByRole('button', { name: 'Code search', exact: true }).click();
-  const pattern = page.getByRole('textbox', { name: 'pattern', exact: true }).first();
+  await page.locator('#search-mode-code').click();
+  const pattern = page.locator('#search-pattern-0').first();
   await pattern.fill('inspect($(x:arg');
-  await expect(page.getByRole('button', { name: 'Fix Pattern', exact: true })).toBeVisible();
+  await expect(page.locator('#search-fix-pattern')).toBeVisible();
   const repair = page.locator('.pattern-repair-button');
   const repairStatus = page.locator('.search-pattern-repair-status');
   try {
@@ -171,7 +169,7 @@ test('code search repairs a pattern in one click', async ({ page }) => {
   await expect.poll(() => app.requests
     .filter(request => request.method === 'fs.search_semantic')
     .at(-1)?.params?.patterns?.[0]).toBe('inspect($_)');
-  await expect(page.getByRole('textbox', { name: 'Pattern repair instruction' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Use pattern' })).toHaveCount(0);
+  await expect(page.locator('.search-pattern-repair textarea')).toHaveCount(0);
+  await expect(page.locator('.search-pattern-repair button')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

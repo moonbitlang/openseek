@@ -16,8 +16,8 @@ for (const mode of ['Token', 'Tree']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    const modeButton = page.getByRole('button', { name: `${mode} diff`, exact: true });
+    await page.locator('[role="treeitem"][data-path="src/main.mbt"]').click();
+    const modeButton = page.locator(`[data-diff-mode="${mode.toLowerCase()}"]`);
     if (await modeButton.getAttribute('aria-pressed') !== 'true') await modeButton.click();
     await expect(page.locator('#review-navigation-controls')).toHaveAttribute('aria-busy', 'false');
     const host = page.locator('#semantic-review-host');

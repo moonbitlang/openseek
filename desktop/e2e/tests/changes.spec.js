@@ -4,13 +4,11 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 const repo = 'https://github.com/moonbitlang/openseek';
 
 function overview(page) {
-  return page.getByRole('complementary', { name: 'Overview' });
+  return page.locator('.conv-overview');
 }
 
 function changesCard(panel) {
-  return panel.locator('.conv-overview-card', {
-    has: panel.page().getByRole('button', { name: 'Changes', exact: true }),
-  });
+  return panel.locator('[data-section="changes"]');
 }
 
 function requests(app, method) {
@@ -18,7 +16,7 @@ function requests(app, method) {
 }
 
 async function showOverview(page) {
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  await page.locator('.conv-overview-toggle').click();
   const panel = overview(page);
   await expect(panel).toBeVisible();
   return panel;
@@ -75,17 +73,23 @@ test('the changes card lists the checkout and what the agent attached, and remov
   // the order the agent attached them. Each opens its page.
   await expect(rows).toHaveCount(3);
   const current = rows.nth(0);
-  await expect(current.getByText('#2130', { exact: true })).toBeVisible();
-  await expect(current.getByText('Add a changes card to the conversation overview')).toBeVisible();
-  await expect(current.getByText('Current', { exact: true })).toBeVisible();
+  await expect(current.locator('.conv-changes-number')).toBeVisible();
+  await expect(current.locator('.conv-changes-number')).toHaveText("#2130");
+  await expect(current.locator('.conv-changes-name')).toBeVisible();
+  await expect(current.locator('.conv-changes-name')).toHaveText("Add a changes card to the conversation overview");
+  await expect(current.locator('.conv-overview-tag')).toBeVisible();
+  await expect(current.locator('.conv-overview-tag')).toHaveText("Current");
   await expect(current.getByRole('link')).toHaveAttribute('href', `${repo}/pull/2130`);
-  await expect(current.getByRole('button', { name: 'Remove from this conversation' })).toHaveCount(0);
-  await expect(rows.nth(1).getByText('#2119', { exact: true })).toBeVisible();
-  await expect(rows.nth(1).getByText('Show session artifacts with the current checkout', { exact: true })).toBeVisible();
+  await expect(current.locator('.conv-changes-remove')).toHaveCount(0);
+  await expect(rows.nth(1).locator('.conv-changes-number')).toBeVisible();
+  await expect(rows.nth(1).locator('.conv-changes-number')).toHaveText("#2119");
+  await expect(rows.nth(1).locator('.conv-changes-name')).toBeVisible();
+  await expect(rows.nth(1).locator('.conv-changes-name')).toHaveText("Show session artifacts with the current checkout");
   await expect(rows.nth(1).getByRole('link')).toHaveAttribute('href', `${repo}/pull/2119`);
   await expect(rows.nth(1).locator('.conv-changes-icon')).toHaveClass(/\bclosed\b/);
   await expect(current.locator('.conv-changes-icon')).toHaveClass(/\bopen\b/);
-  await expect(rows.nth(2).getByText('codex/session-artifacts-ui', { exact: true })).toBeVisible();
+  await expect(rows.nth(2).locator('.conv-changes-name')).toBeVisible();
+  await expect(rows.nth(2).locator('.conv-changes-name')).toHaveText("codex/session-artifacts-ui");
   await expect(rows.nth(2).getByRole('link')).toHaveAttribute('href', `${repo}/tree/codex/session-artifacts-ui`);
   expect(requests(app, 'session.artifacts_list').map(request => request.params)).toEqual([{ session: 'session-1' }]);
   // Every attached pull request is looked up, the checkout's own included;
@@ -96,15 +100,16 @@ test('the changes card lists the checkout and what the agent attached, and remov
   ]);
 
   // Folded, the card is its summary.
-  await card.getByRole('button', { name: 'Changes', exact: true }).click();
-  await expect(card.getByText('2 PRs · 1 branch', { exact: true })).toBeVisible();
-  await card.getByRole('button', { name: 'Changes', exact: true }).click();
+  await card.locator('.conv-overview-card-title').click();
+  await expect(card.locator('.conv-overview-summary')).toBeVisible();
+  await expect(card.locator('.conv-overview-summary')).toHaveText("2 PRs \u00b7 1 branch");
+  await card.locator('.conv-overview-card-title').click();
 
   // Removing an attachment takes it off the conversation's list only.
   await rows.nth(1).hover();
-  await rows.nth(1).getByRole('button', { name: 'Remove from this conversation' }).click();
+  await rows.nth(1).locator('.conv-changes-remove').click();
   await expect(rows).toHaveCount(2);
-  await expect(card.getByText('#2119', { exact: true })).toBeHidden();
+  await expect(card.locator(`a[href="${repo}/pull/2119"]`)).toBeHidden();
   expect(requests(app, 'session.artifacts_remove').map(request => request.params)).toEqual([
     { session: 'session-1', artifact: { type: 'pull_request', url: `${repo}/pull/2119` } },
   ]);
@@ -119,15 +124,17 @@ test('the changes card appears when the agent attaches something to a conversati
   const panel = await showOverview(page);
   // No checkout to describe and nothing attached: no card.
   await expect.poll(() => requests(app, 'session.artifacts_list').length).toBe(1);
-  await expect(panel.getByRole('button', { name: 'Changes', exact: true })).toHaveCount(0);
+  await expect(panel.locator('[data-section="changes"] .conv-overview-card-title')).toHaveCount(0);
 
   // The host announces a saved change; the page reads the list again.
   app.sessionArtifacts['session-1'] = [{ type: 'pull_request', url: `${repo}/pull/2030` }];
   app.notify('session.artifacts_changed', { session: 'session-1' });
   const card = changesCard(panel);
   // GitHub has nothing to say about it, so it reads as its address.
-  await expect(card.getByText('#2030', { exact: true })).toBeVisible();
-  await expect(card.getByText('moonbitlang/openseek', { exact: true })).toBeVisible();
+  await expect(card.locator('.conv-changes-number')).toBeVisible();
+  await expect(card.locator('.conv-changes-number')).toHaveText("#2030");
+  await expect(card.locator('.conv-changes-name')).toBeVisible();
+  await expect(card.locator('.conv-changes-name')).toHaveText("moonbitlang/openseek");
   expect(requests(app, 'session.artifacts_list')).toHaveLength(2);
 
   // Another session's change is not this card's business.
@@ -149,9 +156,12 @@ test('a checkout without a pull request reads as its branch and local diff, mark
   await app.openSession();
   const panel = await showOverview(page);
   const current = changesCard(panel).locator('.conv-changes-row').first();
-  await expect(current.getByText('haoxiang/unpublished', { exact: true })).toBeVisible();
-  await expect(current.getByText('+42', { exact: true })).toBeVisible();
-  await expect(current.getByText('−3', { exact: true })).toBeVisible();
+  await expect(current.locator('.conv-changes-name')).toBeVisible();
+  await expect(current.locator('.conv-changes-name')).toHaveText("haoxiang/unpublished");
+  await expect(current.locator('.conv-changes-diff .added')).toBeVisible();
+  await expect(current.locator('.conv-changes-diff .added')).toHaveText("+42");
+  await expect(current.locator('.conv-changes-diff .removed')).toBeVisible();
+  await expect(current.locator('.conv-changes-diff .removed')).toHaveText("\u22123");
   // Untracked files past the host's limits were not counted: the totals are a
   // floor, and the row says so instead of presenting them as the whole size.
   await expect(current.locator('.conv-changes-diff')).toHaveAttribute('title', 'Some untracked files were not counted');
@@ -187,31 +197,35 @@ test('merged attached pull requests fold into one row that unfolds them', async 
   const panel = await showOverview(page);
   const card = changesCard(panel);
   const rows = card.locator('.conv-changes-row');
-  const fold = card.getByRole('button', { name: '2 merged', exact: true });
+  const fold = card.locator('.conv-changes-fold');
 
   // The open pull request keeps its row; the merged ones are one row.
   await expect(fold).toBeVisible();
   await expect(fold).toHaveAttribute('aria-expanded', 'false');
   await expect(rows).toHaveCount(2);
-  await expect(card.getByText('Pull request 2201', { exact: true })).toBeVisible();
-  await expect(card.getByText('Pull request 2202', { exact: true })).toHaveCount(0);
+  await expect(card.locator(`a[href="${repo}/pull/2201"] .conv-changes-name`)).toBeVisible();
+  await expect(card.locator(`a[href="${repo}/pull/2201"] .conv-changes-name`)).toHaveText('Pull request 2201');
+  await expect(card.locator(`a[href="${repo}/pull/2202"] .conv-changes-name`)).toHaveCount(0);
 
   await fold.click();
   await expect(fold).toHaveAttribute('aria-expanded', 'true');
   await expect(rows).toHaveCount(4);
-  await expect(card.getByText('Pull request 2202', { exact: true })).toBeVisible();
-  await expect(card.getByText('Pull request 2203', { exact: true })).toBeVisible();
+  await expect(card.locator(`a[href="${repo}/pull/2202"] .conv-changes-name`)).toBeVisible();
+  await expect(card.locator(`a[href="${repo}/pull/2202"] .conv-changes-name`)).toHaveText('Pull request 2202');
+  await expect(card.locator(`a[href="${repo}/pull/2203"] .conv-changes-name`)).toBeVisible();
+  await expect(card.locator(`a[href="${repo}/pull/2203"] .conv-changes-name`)).toHaveText('Pull request 2203');
 
   await fold.click();
   await expect(rows).toHaveCount(2);
 
   // One button takes every merged pull request off the conversation's list.
-  const foldRow = rows.filter({ has: page.getByRole('button', { name: '2 merged', exact: true }) });
+  const foldRow = rows.filter({ has: page.locator('.conv-changes-fold') });
   await foldRow.hover();
-  await foldRow.getByRole('button', { name: 'Remove merged pull requests from this conversation' }).click();
+  await foldRow.locator('.conv-changes-remove').click();
   await expect(fold).toHaveCount(0);
   await expect(rows).toHaveCount(1);
-  await expect(card.getByText('Pull request 2201', { exact: true })).toBeVisible();
+  await expect(card.locator(`a[href="${repo}/pull/2201"] .conv-changes-name`)).toBeVisible();
+  await expect(card.locator(`a[href="${repo}/pull/2201"] .conv-changes-name`)).toHaveText('Pull request 2201');
   expect(requests(app, 'session.artifacts_remove').map(request => request.params.artifact.url).sort()).toEqual([
     `${repo}/pull/2202`,
     `${repo}/pull/2203`,
