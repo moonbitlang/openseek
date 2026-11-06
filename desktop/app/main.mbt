@@ -251,6 +251,7 @@ async fn main {
     // Before the bridge: it prepares the workspace registry first, and
     // no page may attach to a host that has not.
     state.start_services(group)
+    group.spawn_bg(allow_failure=true, () => views.run_previews())
     group.spawn_bg(allow_failure=true, () => bridge.run())
     // The relay actor registers this host only when remote access (or the
     // environment override) is enabled, and idles otherwise.
