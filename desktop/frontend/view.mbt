@@ -2258,7 +2258,6 @@ fn view(
             @html.button(
               class="panel-toggle",
               title=shell_text(model.locale, ExportConversation),
-              id="cloud-conversation-export",
               on_click=dispatch(OpenCloudExport),
               icon(icon_chat_export),
             )
