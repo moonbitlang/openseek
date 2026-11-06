@@ -2,44 +2,28 @@
 const ConversationTransferTarget = "conversation-transfer"
 
 ///|
-fn Model::session_import_target(self : Model) -> @session_import.Target? {
-  let selected = if self.screen is Chat {
-    self.conversation_selection()
-  } else {
-    None
-  }
-  let workspace = match selected {
-    Some(selection) => Some(selection.workspace)
-    None =>
-      if self.sidebar_mode is WorkMode {
-        self.focused_device().bind(dev => dev.active_project)
-      } else {
-        None
-      }
-  }
-  guard workspace is Some(workspace) &&
-    self.focused_device() is Some(dev) &&
+fn Model::session_import_target(
+  self : Model,
+  channel : @interop.ChannelId,
+  workspace : @common.Uri,
+) -> @session_import.Target? {
+  guard self.device_state(channel) is Some(dev) &&
     dev.projects.contains(workspace) &&
     !dev.is_chat_workspace(workspace) else {
     return None
   }
   Some({
-    channel: self.focused,
-    connection_generation: self.focused_connection_generation(),
+    channel,
+    connection_generation: dev.connection_generation,
     workspace: workspace.path,
-    worktree_of: selected.map(selection => selection.session),
+    worktree_of: None,
   })
 }
 
 ///|
 fn Model::conversation_transfer_input(
   self : Model,
-) -> (
-  @i18n.Locale,
-  Bool,
-  Bool,
-  (@interop.ChannelId, @protocol.SessionExportPayload)?,
-) {
+) -> (@i18n.Locale, Bool, (@interop.ChannelId, @protocol.SessionExportPayload)?) {
   let source = match self.chat_column() {
     Transcript(conversation=conv, ..) if self.screen is Chat &&
       !conv.messages.is_empty() =>
@@ -56,12 +40,7 @@ fn Model::conversation_transfer_input(
       )
     _ => None
   }
-  (
-    self.locale,
-    self.screen is Chat,
-    self.session_import_target() is Some(_),
-    source,
-  )
+  (self.locale, self.screen is Chat, source)
 }
 
 ///|
@@ -103,12 +82,11 @@ fn conversation_transfer_menu(
   input : (
     @i18n.Locale,
     Bool,
-    Bool,
     (@interop.ChannelId, @protocol.SessionExportPayload)?,
   ),
   target : String,
 ) -> @action_menu.Definition? {
-  let (locale, visible, can_import, source) = input
+  let (locale, visible, source) = input
   guard visible && target == ConversationTransferTarget else { return None }
   let entries : Array[@action_menu.Entry] = []
   entries.push(
@@ -123,16 +101,6 @@ fn conversation_transfer_menu(
           open_conversation_transfer(emit(OpenExport(channel, source)))
         None => @cmd.none
       },
-    }),
-  )
-  entries.push(
-    Action({
-      label: shell_text(locale, ImportConversation),
-      title: "",
-      icon: Some(@icons.icon(@icons.icon_chat_import)),
-      enabled: can_import,
-      destructive: false,
-      command: open_conversation_transfer(emit(OpenSessionImport)),
     }),
   )
   Some({ label: shell_text(locale, ConversationTransfer), entries, })

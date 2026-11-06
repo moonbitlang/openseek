@@ -7103,8 +7103,8 @@ fn update_msg(
       )
       (command, { ..model, export_dialog, })
     }
-    OpenSessionImport => {
-      guard model.session_import_target() is Some(target) else {
+    OpenSessionImport(channel, workspace) => {
+      guard model.session_import_target(channel, workspace) is Some(target) else {
         return (@cmd.none, model)
       }
       let (cmd, session_import_dialog) = model.session_import_dialog.open(

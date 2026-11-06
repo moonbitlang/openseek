@@ -67,6 +67,7 @@ pub fn Input::id(self : Input) -> Id {
 ///|
 pub(all) struct Actions {
   new_conversation : (Id) -> @cmd.Cmd
+  import_conversation : (Id) -> @cmd.Cmd
   open_settings : (Id) -> @cmd.Cmd
   detach : (Id) -> @cmd.Cmd
   host_details : (Id) -> @cmd.Cmd
@@ -197,6 +198,14 @@ pub fn Input::menu_entries(
   locale~ : @i18n.Locale = English,
 ) -> Array[@action_menu.Entry] {
   [
+    Action({
+      label: @messages.text(locale, ImportConversation),
+      title: "",
+      icon: Some(@icons.icon(@icons.icon_chat_import)),
+      enabled: self.host is None || self.host is Some({ online: true, .. }),
+      destructive: false,
+      command: (actions.import_conversation)(self.id),
+    }),
     Action({
       label: @messages.text(locale, WorkspaceSettings),
       title: @messages.text(locale, WorkspaceDefaults),

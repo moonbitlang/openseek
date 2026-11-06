@@ -397,6 +397,20 @@ fn SidebarDispatcher::project_new(
 }
 
 ///|
+fn SidebarDispatcher::project_import(
+  self : SidebarDispatcher,
+  id : @project.Id,
+) -> @cmd.Cmd {
+  guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) else {
+    return self.unroutable("import", "channel \{id.channel()}")
+  }
+  guard @resource.of_path(channel, id.root()) is Some(project) else {
+    return @cmd.none
+  }
+  self.emit(OpenSessionImport(channel, project))
+}
+
+///|
 fn SidebarDispatcher::project_settings(
   self : SidebarDispatcher,
   id : @project.Id,
@@ -465,6 +479,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
   }
   let project : @project.Actions = {
     new_conversation: id => self.project_new(id),
+    import_conversation: id => self.project_import(id),
     open_settings: id => self.project_settings(id),
     detach: id => self.project_detach(id),
     host_details: id => {

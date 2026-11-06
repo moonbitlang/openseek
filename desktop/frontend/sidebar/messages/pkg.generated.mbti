@@ -23,6 +23,7 @@ pub(all) enum Message {
   ShowMoreChats
   MoreActions
   NewProjectConversation
+  ImportConversation
   WorkspaceSettings
   WorkspaceDefaults
   DetachProject

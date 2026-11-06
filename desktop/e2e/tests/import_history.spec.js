@@ -15,19 +15,20 @@ const json = JSON.stringify({
 const success = session_id => ({ status: 'success', session_id });
 const failed = message => ({ status: 'failed', message });
 
-async function setup(page, worktree = false) {
+async function setup(page, destination = '/workspace') {
   const app = new DesktopBrowserHarness(page);
   const original = app.replyFor.bind(app);
   app.importFailure = null;
   app.imports = new Map();
-  const trees = worktree ? [{ name: 'feature', sessions: ['session-1'], path: '/workspace/.worktrees/feature', present: true, branch: 'feature', base: 'main', codex_thread: null }] : [];
+  app.workspaces = ['/workspace', '/other'];
+  app.activeWorkspace = '/workspace';
+  const trees = [];
+  app.sessionGroups = sessions => ({ groups: [...new Set(['/workspace', ...app.imports.values()])].map(workspace => ({
+    workspace, name: workspace === '/workspace' ? 'Fixture' : 'Imported project',
+    session_root: `${workspace}/.openseek`, error: '',
+    sessions: sessions.filter(row => (app.imports.get(row.id) || '/workspace') === workspace),
+  })) });
   app.replyFor = request => {
-    if (request.method === 'workspace.add') {
-      if (app.workspaceFailure) return { error: app.workspaceFailure };
-      const reply = original(request);
-      app.notify('workspace.changed', { ...reply, chat_root: app.chatRoot });
-      return reply;
-    }
     if (request.method === 'worktree.list') return { worktrees: trees };
     if (request.method === 'session.import') {
       if (app.importFailure) return failed(app.importFailure);
@@ -35,7 +36,6 @@ async function setup(page, worktree = false) {
       const row = { id: session_id, title: 'Imported fixture', updated_at_ms: null };
       app.imports.set(session_id, request.params.workspace);
       app.liveSessions.push(row);
-      if (request.params.worktree_of && trees.length) trees[0].sessions.push(session_id);
       app.notify('worktree.changed', { workspace: request.params.workspace, worktrees: trees });
       app.notify('session.changed', { change: 'created', session: session_id, workspace: request.params.workspace });
       return success(session_id);
@@ -48,16 +48,21 @@ async function setup(page, worktree = false) {
   await app.install();
   await app.goto();
   await app.openSession();
-  await openImport(page);
+  await openImport(page, destination);
   const dialog = page.getByRole('dialog', { name: 'Import conversation' });
   await expect(dialog).toBeVisible();
   return { app, dialog };
 }
 
-async function openImport(page) {
-  await expect(page.locator('.sidebar').getByRole('button', { name: 'Import conversation', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Export and import', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Import', exact: true }).click();
+async function openImport(page, destination = '/workspace') {
+  const sidebarToggle = page.getByRole('button', { name: 'Show sidebar', exact: true });
+  if (await sidebarToggle.isVisible()) await sidebarToggle.click();
+  const row = page.locator('.workspace-row').filter({
+    has: page.getByRole('button', { name: destination.slice(1), exact: true }),
+  });
+  await row.hover();
+  await row.getByRole('button', { name: 'Workspace actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Import conversation', exact: true }).click();
 }
 
 async function chooseJson(page, dialog) {
@@ -74,13 +79,9 @@ async function expectWritable(page, app) {
   expect(app.pageErrors).toEqual([]);
 }
 
-for (const worktree of [false, true]) {
-  test(`JSON opens a normal writable session in the ${worktree ? 'current worktree' : 'project'} and survives reload`, async ({ page }) => {
-    const { app, dialog } = await setup(page, worktree);
-    if (worktree) {
-      const notify = app.notify.bind(app);
-      app.notify = (...args) => setTimeout(() => notify(...args), 200);
-    }
+for (const destination of ['/workspace', '/other']) {
+  test(`JSON imports into the selected ${destination} project and survives reload`, async ({ page }) => {
+    const { app, dialog } = await setup(page, destination);
     await chooseJson(page, dialog);
     await expect(dialog).not.toBeVisible();
     const row = page.locator('.conversation-row').filter({ has: page.getByRole('button', { name: 'Imported fixture', exact: true }) });
@@ -88,8 +89,9 @@ for (const worktree of [false, true]) {
     await expectWritable(page, app);
     const imported = app.requests.find(request => request.method === 'session.import');
     expect(imported.params.source).toEqual({ kind: 'json', text: json });
-    expect(imported.params.workspace).toBe('/workspace');
-    expect(imported.params.worktree_of).toBe('session-1');
+    expect(imported.params.workspace).toBe(destination);
+    expect(imported.params.worktree_of).toBeNull();
+    expect(app.requests.some(r => r.method === 'workspace.add')).toBe(false);
     await page.reload();
     await page.getByRole('button', { name: 'Imported fixture', exact: true }).click();
     await expectWritable(page, app);
@@ -115,7 +117,7 @@ test('closing a pending import does not navigate away and narrow dialog fits', a
 
 
 test('imported session accepts a new prompt using the selected workspace', async ({ page }) => {
-  const { app, dialog } = await setup(page, true);
+  const { app, dialog } = await setup(page);
   await chooseJson(page, dialog);
   await expectWritable(page, app);
   await page.locator('#task').fill('Continue from this history');

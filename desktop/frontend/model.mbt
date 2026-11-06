@@ -1942,7 +1942,7 @@ priv enum Msg {
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
-  OpenSessionImport
+  OpenSessionImport(@interop.ChannelId, @common.Uri)
   SessionImport(@session_import.Msg)
   ExportDialog(@export_dialog.Msg)
   FileShareDialog(@export_dialog.Msg)
