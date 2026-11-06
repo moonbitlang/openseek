@@ -4,17 +4,8 @@
 // earlier request that did not reach the host.
 
 ///|
-type TerminalOpenPayload = @protocol.TerminalOpenPayload
-
-///|
-type TerminalOpenReply = @protocol.TerminalOpenReply
-
-///|
-type TerminalInputPayload = @protocol.TerminalInputPayload
-
-///|
-fn TerminalInputPayload::bytes(
-  self : TerminalInputPayload,
+fn @protocol.TerminalInputPayload::bytes(
+  self : @protocol.TerminalInputPayload,
 ) -> Bytes raise HostError {
   match (self.data, self.data_base64) {
     (Some(data), None) => @utf8.encode(data)
@@ -25,15 +16,6 @@ fn TerminalInputPayload::bytes(
     _ => raise HostError("terminal input must contain exactly one data field")
   }
 }
-
-///|
-type TerminalResizePayload = @protocol.TerminalResizePayload
-
-///|
-type TerminalAckPayload = @protocol.TerminalAckPayload
-
-///|
-type TerminalClosePayload = @protocol.TerminalClosePayload
 
 ///|
 priv struct TerminalOutputPayload {
@@ -52,8 +34,8 @@ priv struct TerminalExitPayload {
 async fn terminal_open_op(
   state : HostState,
   terminals : @terminal.TerminalState,
-  payload : TerminalOpenPayload,
-) -> TerminalOpenReply {
+  payload : @protocol.TerminalOpenPayload,
+) -> @protocol.TerminalOpenReply {
   guard @work_dir.resolve_in_workspace(
       payload.session,
       "",
@@ -225,7 +207,7 @@ test "a ! command runs under the user's shell with the toolchain first on PATH" 
 ///|
 async fn terminal_input_op(
   terminals : @terminal.TerminalState,
-  payload : TerminalInputPayload,
+  payload : @protocol.TerminalInputPayload,
 ) -> Unit {
   @terminal.write_terminal(terminals, id=payload.id, payload.bytes()) catch {
     @terminal.TerminalError(message) => raise HostError(message)
@@ -236,7 +218,7 @@ async fn terminal_input_op(
 ///|
 fn terminal_resize_op(
   terminals : @terminal.TerminalState,
-  payload : TerminalResizePayload,
+  payload : @protocol.TerminalResizePayload,
 ) -> Unit raise {
   @terminal.resize_terminal(
     terminals,
@@ -252,7 +234,7 @@ fn terminal_resize_op(
 ///|
 fn terminal_ack_op(
   terminals : @terminal.TerminalState,
-  payload : TerminalAckPayload,
+  payload : @protocol.TerminalAckPayload,
 ) -> Unit {
   @terminal.ack_terminal(terminals, id=payload.id, sequence=payload.sequence)
 }
@@ -260,7 +242,7 @@ fn terminal_ack_op(
 ///|
 fn terminal_close_op(
   terminals : @terminal.TerminalState,
-  payload : TerminalClosePayload,
+  payload : @protocol.TerminalClosePayload,
 ) -> Unit {
   @terminal.close_terminal(terminals, id=payload.id)
 }

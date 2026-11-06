@@ -36,9 +36,9 @@ const GhExecutable : String = "gh"
 
 ///|
 async fn git_pull_request_op(
-  payload : GitPullRequestPayload,
-) -> GitPullRequestReply {
-  let nothing : GitPullRequestReply = {
+  payload : @protocol.GitPullRequestPayload,
+) -> @protocol.GitPullRequestReply {
+  let nothing : @protocol.GitPullRequestReply = {
     pull_request: None,
     compare_url: None,
     branch: None,
@@ -83,7 +83,10 @@ async fn git_pull_request_op(
     }
   }
   let branch = head.unwrap_or(checkout)
-  let unanswered : GitPullRequestReply = { ..nothing, branch: Some(branch), }
+  let unanswered : @protocol.GitPullRequestReply = {
+    ..nothing,
+    branch: Some(branch),
+  }
   // A hash remains useful display text but must never become a gh branch
   // filter when no exact local ref was recovered.
   guard head is Some(head) else { return unanswered }
@@ -109,7 +112,7 @@ async fn branch_pull_request(
   gh : @pathx.Absolute,
   dir : @pathx.Absolute,
   branch : String,
-) -> GitPullRequestReply {
+) -> @protocol.GitPullRequestReply {
   let listing = gh_json(gh, dir, [
     "pr",
     "list",
@@ -122,7 +125,7 @@ async fn branch_pull_request(
     "--json",
     PullRequestFields,
   ])
-  let nothing : GitPullRequestReply = {
+  let nothing : @protocol.GitPullRequestReply = {
     pull_request: None,
     compare_url: None,
     branch: Some(branch),
@@ -181,7 +184,7 @@ async fn branch_pull_request(
 /// someone else's work; those are dropped unless dropping them leaves nothing,
 /// which is exactly what a fork checkout looks like, every pull request in it
 /// being cross-repository.
-fn pick_pull_request(candidates : Array[Json]) -> GitPullRequest? {
+fn pick_pull_request(candidates : Array[Json]) -> @protocol.GitPullRequest? {
   let own = candidates.filter(candidate => {
     candidate is Object(fields) &&
     fields.get("isCrossRepository") is Some(False)
@@ -200,7 +203,7 @@ fn pick_pull_request(candidates : Array[Json]) -> GitPullRequest? {
 /// Decode one `gh pr list` element. Every field the chip renders is required:
 /// a record missing one is a gh version whose output this does not understand,
 /// which is worth showing nothing for rather than a half-filled chip.
-fn parse_pull_request(json : Json) -> GitPullRequest? {
+fn parse_pull_request(json : Json) -> @protocol.GitPullRequest? {
   guard json is Object(fields) else { return None }
   guard fields.get("title") is Some(String(title)) else { return None }
   guard fields.get("url") is Some(String(url)) else { return None }
@@ -243,7 +246,7 @@ fn json_count(fields : Map[String, Json], key : String) -> Int32? {
 ///|
 /// Summarize the head commit's checks. None when the commit reports none at
 /// all — no checks configured is not the same as checks that have not run.
-fn parse_checks(rollup : Json?) -> GitChecks? {
+fn parse_checks(rollup : Json?) -> @protocol.GitChecks? {
   guard rollup is Some(Array(entries)) && !entries.is_empty() else {
     return None
   }

@@ -53,7 +53,7 @@ priv struct ParsedSemanticMatch {
 
 ///|
 priv enum SemanticSearchOutcome {
-  SemanticSearchFinished(SearchSemanticReply)
+  SemanticSearchFinished(@protocol.SearchSemanticReply)
   SemanticSearchFailed(String)
 }
 
@@ -61,7 +61,7 @@ priv enum SemanticSearchOutcome {
 priv struct RunningSemanticSearch {
   generation : Int32
   root : String
-  reply : @async.Queue[SearchSemanticReply]
+  reply : @async.Queue[@protocol.SearchSemanticReply]
   task : @async.Task[Unit]
 }
 
@@ -104,8 +104,8 @@ priv enum SemanticSearchRequest {
   Search(
     command~ : SemanticProvider?,
     root~ : @pathx.Absolute,
-    payload~ : SearchSemanticPayload,
-    reply~ : @async.Queue[SearchSemanticReply]
+    payload~ : @protocol.SearchSemanticPayload,
+    reply~ : @async.Queue[@protocol.SearchSemanticReply]
   )
   Cancel(
     session_key~ : String,
@@ -135,8 +135,8 @@ fn empty_semantic_search_reply(
   generation : Int32,
   cancelled~ : Bool = false,
   partial~ : Bool = false,
-  error? : SemanticSearchError,
-) -> SearchSemanticReply {
+  error? : @protocol.SemanticSearchError,
+) -> @protocol.SearchSemanticReply {
   {
     root,
     generation,
@@ -155,9 +155,11 @@ async fn SemanticSearchService::search(
   self : SemanticSearchService,
   command : SemanticProvider?,
   root : @pathx.Absolute,
-  payload : SearchSemanticPayload,
-) -> SearchSemanticReply {
-  let reply : @async.Queue[SearchSemanticReply] = Queue(kind=Blocking(1))
+  payload : @protocol.SearchSemanticPayload,
+) -> @protocol.SearchSemanticReply {
+  let reply : @async.Queue[@protocol.SearchSemanticReply] = Queue(
+    kind=Blocking(1),
+  )
   self.requests.put(Search(command~, root~, payload~, reply~))
   reply.get()
 }
@@ -306,7 +308,7 @@ fn normalize_semantic_source(text : String) -> String {
 ///|
 fn semantic_search_args(
   command : String,
-  payload : SearchSemanticPayload,
+  payload : @protocol.SearchSemanticPayload,
 ) -> Array[String] {
   let args = semantic_provider_prefix_args(command)
   args.push("scan")
@@ -372,7 +374,7 @@ fn semantic_path_matches_globs(path : String, value : String) -> Bool {
 ///|
 fn semantic_path_is_included(
   path : String,
-  payload : SearchSemanticPayload,
+  payload : @protocol.SearchSemanticPayload,
 ) -> Bool {
   (
     payload.include_glob.is_empty() ||
@@ -493,7 +495,9 @@ fn project_moongrep_error_code(message : String) -> String {
 }
 
 ///|
-fn project_semantic_match(parsed : ParsedSemanticMatch) -> SemanticSearchHit {
+fn project_semantic_match(
+  parsed : ParsedSemanticMatch,
+) -> @protocol.SemanticSearchHit {
   {
     path: parsed.path,
     rule_id: parsed.rule_id,
@@ -586,7 +590,7 @@ async fn publish_semantic_progress(
   root : String,
   session_key : String,
   generation : Int32,
-  matches : Array[SemanticSearchHit],
+  matches : Array[@protocol.SemanticSearchHit],
   match_count : Int32,
   file_count : Int32,
 ) -> Unit {
@@ -612,9 +616,9 @@ async fn publish_semantic_progress(
 async fn run_semantic_search(
   command : SemanticProvider?,
   root : @pathx.Absolute,
-  payload : SearchSemanticPayload,
+  payload : @protocol.SearchSemanticPayload,
   emit : async (@protocol.Notification) -> Unit,
-) -> SearchSemanticReply {
+) -> @protocol.SearchSemanticReply {
   let reply_root = root.resource_path()
   let native_root = root.to_string()
   if payload.patterns.is_empty() {
@@ -693,7 +697,7 @@ async fn run_semantic_search(
       }
       @utf8.decode_lossy(retained.contents())
     })
-    let hits : Array[SemanticSearchHit] = []
+    let hits : Array[@protocol.SemanticSearchHit] = []
     let files : Map[String, Bool] = Map([])
     let mut match_count = 0
     let mut limit_hit = false
@@ -770,7 +774,7 @@ async fn run_semantic_search(
         message,
       })
     }
-    let error : SemanticSearchError? = if exit_code != 0 {
+    let error : @protocol.SemanticSearchError? = if exit_code != 0 {
       Some({ code, message, })
     } else {
       None
@@ -792,9 +796,9 @@ async fn run_semantic_search(
 ///|
 async fn search_semantic_op(
   service : SemanticSearchService,
-  payload : SearchSemanticPayload,
+  payload : @protocol.SearchSemanticPayload,
   command : SemanticProvider?,
-) -> SearchSemanticReply {
+) -> @protocol.SearchSemanticReply {
   let root = WirePath::parse(payload.root).absolute
   service.search(command, root, payload)
 }
@@ -802,7 +806,7 @@ async fn search_semantic_op(
 ///|
 async fn cancel_search_semantic_op(
   service : SemanticSearchService,
-  payload : CancelSearchSemanticPayload,
+  payload : @protocol.CancelSearchSemanticPayload,
 ) -> @protocol.EmptyReply {
   service.cancel(payload.session_key, payload.generation)
   Acknowledged
@@ -810,7 +814,7 @@ async fn cancel_search_semantic_op(
 
 ///|
 test "semantic search builds moonx and bundled moongrep invocations" {
-  let pattern : SearchSemanticPayload = {
+  let pattern : @protocol.SearchSemanticPayload = {
     root: "/work",
     patterns: ["inspect($(x:arg))"],
     include_glob: "",
@@ -831,7 +835,7 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     semantic_search_args("C:\\tools\\moonx.exe", pattern),
     semantic_search_args("moonx", pattern),
   )
-  let second_pattern : SearchSemanticPayload = {
+  let second_pattern : @protocol.SearchSemanticPayload = {
     ..pattern,
     patterns: ["match($x)"],
   }
@@ -842,7 +846,7 @@ test "semantic search builds moonx and bundled moongrep invocations" {
 
 ///|
 test "semantic path globs filter include and exclude results" {
-  let payload : SearchSemanticPayload = {
+  let payload : @protocol.SearchSemanticPayload = {
     root: "/work",
     patterns: ["foo()"],
     include_glob: "src/**",
@@ -893,7 +897,7 @@ test "tail crashes keep previously streamed semantic results" {
 async test "semantic search argument validation requires a rule source" {
   let root = @pathx.Path(".").resolve()
   let resource_root = root.resource_path()
-  let payload : SearchSemanticPayload = {
+  let payload : @protocol.SearchSemanticPayload = {
     root: resource_root,
     patterns: [],
     include_glob: "",
@@ -917,7 +921,7 @@ async test "cancel-before-semantic-search frontier rejects the stale generation"
     service.cancel("sem:stale", 7)
     let root = @pathx.Path(".").resolve()
     let resource_root = root.resource_path()
-    let payload : SearchSemanticPayload = {
+    let payload : @protocol.SearchSemanticPayload = {
       root: resource_root,
       patterns: ["foo()"],
       include_glob: "",

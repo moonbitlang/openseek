@@ -15,7 +15,7 @@ pub async fn start_run(
   sink : EventSink,
   manager : EngineManager,
   payload : @protocol.StartPayload,
-) -> StartReply {
+) -> @protocol.StartReply {
   // Read the user's MCP configuration before the lifecycle lock, never under
   // it: the lock serializes every conversation's placement, and a slow home
   // directory must not hold all of them up.
@@ -151,7 +151,7 @@ fn mint_run_id() -> String raise EngineError {
 pub fn cancel_run(
   manager : EngineManager,
   payload : @protocol.CancelPayload,
-) -> CancelReply raise EngineError {
+) -> @protocol.CancelReply raise EngineError {
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
     live.phase is Running(run_id~, ..) else {
     return { run_id: None, }
@@ -495,7 +495,7 @@ async fn submit_session_command(
 pub fn steer_run(
   manager : EngineManager,
   payload : @protocol.SteerPayload,
-) -> SteerReply {
+) -> @protocol.SteerReply {
   guard !payload.text.is_blank() || !payload.images.is_empty() else {
     return { steered: false, run_id: None, }
   }
@@ -629,7 +629,7 @@ pub fn queue_run(
 pub fn approve_run(
   manager : EngineManager,
   payload : @protocol.ApprovalPayload,
-) -> ApprovalReply {
+) -> @protocol.ApprovalReply {
   guard !payload.id.is_blank() else { return { delivered: false, } }
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
     live.phase is Running(run_id~, ..) else {
@@ -676,7 +676,7 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
 /// in-project store, in registration order. A group whose listing fails
 /// reports the failure in its `error` field rather than failing the whole
 /// reply.
-pub async fn list_sessions() -> SessionsReply {
+pub async fn list_sessions() -> @protocol.SessionsReply {
   session_listing_groups(archived=false)
 }
 
@@ -716,7 +716,7 @@ pub async fn rename_session(
 pub async fn load_session(
   manager : EngineManager,
   payload : @protocol.LoadSessionPayload,
-) -> LoadSessionReply {
+) -> @protocol.LoadSessionReply {
   let session = payload.session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
@@ -780,7 +780,7 @@ pub async fn load_session(
 ///|
 /// The transcript of a conversation with no durable content: what a store
 /// holds for a session whose first turn has not committed anything.
-fn empty_session_reply(session : String) -> LoadSessionReply {
+fn empty_session_reply(session : String) -> @protocol.LoadSessionReply {
   {
     session: {
       version: None,
@@ -800,7 +800,7 @@ fn empty_session_reply(session : String) -> LoadSessionReply {
 pub async fn load_archived_session(
   manager : EngineManager,
   payload : @protocol.LoadSessionPayload,
-) -> LoadSessionReply {
+) -> @protocol.LoadSessionReply {
   let session = payload.session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
@@ -890,7 +890,7 @@ fn @pathx.Absolute::resource_path(
 }
 
 ///|
-pub async fn list_workspaces() -> WorkspacesReply {
+pub async fn list_workspaces() -> @protocol.WorkspacesReply {
   Workspaces(
     @workspaces.registered().map(path => path.resource_path()),
     chat_root=None,
@@ -901,7 +901,7 @@ pub async fn list_workspaces() -> WorkspacesReply {
 pub async fn attach_workspace(
   path : String,
   on_committed : (Array[String]) -> Unit,
-) -> WorkspacesReply {
+) -> @protocol.WorkspacesReply {
   guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
     raise EngineError("workspace is not a supported absolute resource path")
   }
@@ -916,7 +916,7 @@ pub async fn detach_workspace(
   manager : EngineManager,
   path : String,
   on_committed : (Array[String]) -> Unit,
-) -> WorkspacesReply {
+) -> @protocol.WorkspacesReply {
   guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
     raise EngineError("workspace is not a supported absolute resource path")
   }

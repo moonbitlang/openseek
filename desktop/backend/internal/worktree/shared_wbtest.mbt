@@ -45,7 +45,7 @@ async test "a shared checkout goes only with the last conversation holding it" {
     @fsx.write_text(checkout.join("draft.txt").to_path(), "uncommitted")
     // The other conversation still works here, so nothing is at risk: no
     // dirty refusal, no deletion, and no broadcast of an unchanged registry.
-    let published : Array[WorktreeInfo] = []
+    let published : Array[@protocol.WorktreeInfo] = []
     assert_eq(
       first.archive_checkout(host, false, on_committed=(_, infos) => {
         published.append(infos)
@@ -272,7 +272,7 @@ async test "a fork is bound to its original's worktree around its record's creat
       WorktreeOwner::openseek("first"),
       _ => (),
     )
-    let published : Array[Array[WorktreeInfo]] = []
+    let published : Array[Array[@protocol.WorktreeInfo]] = []
     // The binding is already committed when the record is created, so an
     // archive of the original never sees a fork that is bound nowhere.
     let bound_at_creation : Array[String] = []

@@ -4,7 +4,9 @@
 // branch", never an error.
 
 ///|
-async fn git_branch_op(payload : GitBranchPayload) -> GitBranchReply {
+async fn git_branch_op(
+  payload : @protocol.GitBranchPayload,
+) -> @protocol.GitBranchReply {
   // A live run hands us its cwd; a resumed conversation has none, so fall
   // back to the directory the session's engine runs in (mirrors
   // `host.open_path`).
@@ -158,7 +160,10 @@ const DiffstatTimeoutMs : Int32 = 5000
 /// same and the number keeps moving as the agent works. Which base is
 /// `git_branch_base`'s problem — `hint` carries what the branch's pull request
 /// says, when the client has heard from one.
-async fn git_diffstat(dir : @pathx.Absolute, hint? : String) -> GitDiffStat? {
+async fn git_diffstat(
+  dir : @pathx.Absolute,
+  hint? : String,
+) -> @protocol.GitDiffStat? {
   let native = dir.0
   // An unborn HEAD has no commit to diff against, but its index can already
   // hold staged additions, so the empty tree stands in for the missing commit.
@@ -273,7 +278,7 @@ async fn git_diffstat_from(
   dir : @pathx.Absolute,
   baseline : String,
   base : String?,
-) -> GitDiffStat? {
+) -> @protocol.GitDiffStat? {
   let native = dir.0
   // `-- .` scopes the diff to the conversation workspace, which may be a
   // subdirectory of the repository, exactly as `git.changes` does. With no
@@ -394,7 +399,7 @@ async fn untracked_is_countable(
 async fn git_untracked_numstat(
   dir : @pathx.Absolute,
   path : @pathx.Relative,
-) -> GitDiffStat? {
+) -> @protocol.GitDiffStat? {
   let (code, stdout, _) = @processx.collect_output_no_stdin(
     "git",
     ["diff", "--numstat", "--no-index", "--", "/dev/null", path.0],
@@ -421,7 +426,7 @@ async fn git_untracked_numstat(
 /// needs it. A binary file reports `-` for both counts, contributing a changed
 /// file with no lines rather than a parse failure. The caller supplies the
 /// baseline this was measured from; the numbers alone do not know it.
-fn parse_numstat(output : String) -> GitDiffStat {
+fn parse_numstat(output : String) -> @protocol.GitDiffStat {
   let mut added = 0
   let mut removed = 0
   let mut files = 0
@@ -507,7 +512,10 @@ fn git_change_kind(index_status : String, worktree_status : String) -> String {
 ///|
 /// Stable display order for duplicate current paths. A baseline deletion must
 /// precede its untracked recreation even though `Array::sort_by` is unstable.
-fn compare_git_change_path(left : GitChange, right : GitChange) -> Int32 {
+fn compare_git_change_path(
+  left : @protocol.GitChange,
+  right : @protocol.GitChange,
+) -> Int32 {
   let path_order = left.path.lexical_compare(right.path)
   if path_order != 0 {
     return path_order
@@ -521,9 +529,9 @@ fn compare_git_change_path(left : GitChange, right : GitChange) -> Int32 {
 /// Parse `git status --porcelain=v1 -z`. In `-z` mode rename/copy rows spell
 /// the destination in the status record and consume the following NUL field
 /// as their source, without the human-facing ` -> ` separator.
-fn parse_git_status_z(output : String) -> Array[GitChange] {
+fn parse_git_status_z(output : String) -> Array[@protocol.GitChange] {
   let fields = output.split("\u{0}").map(field => field.to_owned()).collect()
-  let changes : Array[GitChange] = []
+  let changes : Array[@protocol.GitChange] = []
   let mut index = 0
   while index < fields.length() {
     let record = fields[index]
@@ -565,12 +573,12 @@ fn parse_git_status_z(output : String) -> Array[GitChange] {
 /// for renames and copies. Task comparisons are one logical working-tree
 /// column; unlike porcelain status, they intentionally do not claim anything
 /// about what is currently staged.
-fn parse_git_diff_name_status_z(output : String) -> Array[GitChange] {
+fn parse_git_diff_name_status_z(output : String) -> Array[@protocol.GitChange] {
   if !output.is_empty() && !output.has_suffix("\u{0}") {
     return []
   }
   let fields = output.split("\u{0}").map(field => field.to_owned()).collect()
-  let changes : Array[GitChange] = []
+  let changes : Array[@protocol.GitChange] = []
   let mut index = 0
   while index < fields.length() {
     let status = fields[index]
@@ -607,11 +615,11 @@ fn parse_git_diff_name_status_z(output : String) -> Array[GitChange] {
 /// `git ls-files --others -z` emits bare NUL-delimited paths. Task review uses
 /// this cheaper index query instead of running full porcelain status only to
 /// discard every tracked row.
-fn parse_git_untracked_z(output : String) -> Array[GitChange] {
+fn parse_git_untracked_z(output : String) -> Array[@protocol.GitChange] {
   if !output.is_empty() && !output.has_suffix("\u{0}") {
     return []
   }
-  let changes : Array[GitChange] = []
+  let changes : Array[@protocol.GitChange] = []
   for path in output.split("\u{0}") {
     if !path.is_empty() {
       changes.push({
@@ -633,9 +641,9 @@ fn parse_git_untracked_z(output : String) -> Array[GitChange] {
 /// ordinary task row. A deleted baseline path recreated as untracked keeps
 /// both rows, matching porcelain's existing delete + recreate representation.
 fn git_task_changes_with_untracked(
-  changes : Array[GitChange],
-  status_changes : Array[GitChange],
-) -> Array[GitChange] {
+  changes : Array[@protocol.GitChange],
+  status_changes : Array[@protocol.GitChange],
+) -> Array[@protocol.GitChange] {
   let seen : Set[String] = Set([])
   let deleted : Set[String] = Set([])
   for change in changes {
@@ -662,9 +670,9 @@ fn git_task_changes_with_untracked(
 /// A rename source outside the attached subdirectory is not addressable by
 /// the workspace-scoped baseline endpoint, so omit only that source metadata.
 fn git_change_relative_to_workspace(
-  change : GitChange,
+  change : @protocol.GitChange,
   workspace_prefix : String,
-) -> GitChange? {
+) -> @protocol.GitChange? {
   guard git_path_relative_to_workspace(change.path, workspace_prefix)
     is Some(path) else {
     return None
@@ -767,7 +775,7 @@ fn git_tree_path_batches(paths : Array[String]) -> Array[Array[String]] {
 ///|
 /// Collect each deleted status path once without repeatedly scanning the
 /// growing result during a bulk deletion.
-fn deleted_change_paths(changes : Array[GitChange]) -> Array[String] {
+fn deleted_change_paths(changes : Array[@protocol.GitChange]) -> Array[String] {
   let paths : Array[String] = []
   let seen : Set[String] = Set([])
   for change in changes {
@@ -784,11 +792,11 @@ fn deleted_change_paths(changes : Array[GitChange]) -> Array[String] {
 /// a changed regular file or expose the working tree's symlink kind. Preserve
 /// the raw columns while keeping both non-file kinds out of ordinary readers.
 fn git_change_with_path_kind(
-  change : GitChange,
+  change : @protocol.GitChange,
   path_kind : @fs.FileKind,
   known_gitlink : Bool,
   known_symlink : Bool,
-) -> GitChange {
+) -> @protocol.GitChange {
   match path_kind {
     SymLink => { ..change, kind: "symlink", }
     Directory if change.kind != "untracked" => { ..change, kind: "submodule", }
@@ -935,7 +943,7 @@ async fn git_change_snapshot(
   Set[String],
   Set[String],
   Set[String],
-  Array[GitChange],
+  Array[@protocol.GitChange],
 ) {
   let head = git_revision_commit(dir, "HEAD")
   let review_base = if pr_base is Some(_) {
@@ -1119,7 +1127,9 @@ async fn git_change_snapshot(
 }
 
 ///|
-async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
+async fn git_changes_op(
+  payload : @protocol.GitChangesPayload,
+) -> @protocol.GitChangesReply {
   guard @work_dir.resolve_in_workspace(
       payload.session,
       "",
@@ -1223,7 +1233,7 @@ async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
 
 ///|
 fn push_history_ref(
-  refs : Array[GitHistoryRef],
+  refs : Array[@protocol.GitHistoryRef],
   tips : Array[String],
   name : String,
   revision : String,
@@ -1272,7 +1282,7 @@ async fn git_history_default_ref(dir : String, upstream : String?) -> String? {
 async fn capture_git_history_snapshot(
   dir : String,
   review_base : String?,
-) -> GitHistorySnapshot {
+) -> @protocol.GitHistorySnapshot {
   let head = git_revision_commit(dir, "HEAD")
   let branch = match
     git_output_opt(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]) {
@@ -1286,7 +1296,7 @@ async fn capture_git_history_snapshot(
     }
     None => None
   }
-  let refs : Array[GitHistoryRef] = []
+  let refs : Array[@protocol.GitHistoryRef] = []
   let tips : Array[String] = []
   if head is Some(head) {
     push_history_ref(
@@ -1322,8 +1332,8 @@ async fn capture_git_history_snapshot(
 /// every object identity again before it can become a Git argv entry.
 async fn validate_git_history_snapshot(
   dir : String,
-  snapshot : GitHistorySnapshot,
-) -> GitHistorySnapshot {
+  snapshot : @protocol.GitHistorySnapshot,
+) -> @protocol.GitHistorySnapshot {
   if snapshot.refs.length() > 16 || snapshot.tips.length() > 16 {
     raise HostError("Git history snapshot contains too many refs")
   }
@@ -1355,9 +1365,9 @@ async fn validate_git_history_snapshot(
 }
 
 ///|
-fn parse_git_history_z(output : String) -> Array[GitHistoryCommit] {
+fn parse_git_history_z(output : String) -> Array[@protocol.GitHistoryCommit] {
   let fields = output.split("\u{0}").map(field => field.to_owned()).collect()
-  let commits : Array[GitHistoryCommit] = []
+  let commits : Array[@protocol.GitHistoryCommit] = []
   let mut index = 0
   while index + 5 < fields.length() {
     let id = fields[index]
@@ -1388,10 +1398,10 @@ fn parse_git_history_z(output : String) -> Array[GitHistoryCommit] {
 ///|
 async fn git_history_page(
   dir : String,
-  snapshot : GitHistorySnapshot,
+  snapshot : @protocol.GitHistorySnapshot,
   skip : Int32,
   limit : Int32,
-) -> (Array[GitHistoryCommit], Bool) {
+) -> (Array[@protocol.GitHistoryCommit], Bool) {
   if snapshot.tips.is_empty() {
     return ([], false)
   }
@@ -1431,7 +1441,9 @@ async fn git_history_page(
 }
 
 ///|
-async fn git_history_op(payload : GitHistoryPayload) -> GitHistoryReply {
+async fn git_history_op(
+  payload : @protocol.GitHistoryPayload,
+) -> @protocol.GitHistoryReply {
   guard payload.skip >= 0 &&
     @work_dir.resolve_in_workspace(
       payload.session,
@@ -1442,7 +1454,7 @@ async fn git_history_op(payload : GitHistoryPayload) -> GitHistoryReply {
     raise HostError("could not resolve the conversation workspace")
   }
   let dir = root.to_string()
-  let empty : GitHistorySnapshot = {
+  let empty : @protocol.GitHistorySnapshot = {
     head: None,
     branch: None,
     refs: [],
@@ -1513,7 +1525,7 @@ async fn git_commit_changes_at(
   dir : String,
   workspace_prefix : String,
   commit : String,
-) -> GitCommitChangesReply {
+) -> @protocol.GitCommitChangesReply {
   guard git_revision_commit(dir, commit) is Some(commit) else {
     raise HostError("Git commit is unavailable")
   }
@@ -1561,7 +1573,7 @@ async fn git_commit_changes_at(
   let (old_gitlinks, old_symlinks) = git_tree_object_modes(
     dir, workspace_prefix, base,
   )
-  let changes : Array[GitHistoricalChange] = []
+  let changes : Array[@protocol.GitHistoricalChange] = []
   for change in parsed {
     let old_path = change.original_path.unwrap_or(change.path)
     let kind = if old_gitlinks.contains(old_path) ||
@@ -1585,8 +1597,8 @@ async fn git_commit_changes_at(
 
 ///|
 async fn git_commit_changes_op(
-  payload : GitCommitChangesPayload,
-) -> GitCommitChangesReply {
+  payload : @protocol.GitCommitChangesPayload,
+) -> @protocol.GitCommitChangesReply {
   guard valid_commit_identity(payload.commit) &&
     @work_dir.resolve_in_workspace(
       payload.session,
@@ -1626,7 +1638,7 @@ async fn git_original_file_at(
   dir : String,
   relative : @pathx.Relative,
   revision : String,
-) -> GitOriginalFileReply {
+) -> @protocol.GitOriginalFileReply {
   // Resolve the requested revision to an immutable commit before addressing
   // its path. The caller has already validated the workspace and tree path.
   guard git_revision_commit(dir, revision) is Some(commit) else {
@@ -1705,8 +1717,8 @@ async fn git_original_file_at(
 
 ///|
 async fn git_original_file_op(
-  payload : GitOriginalFilePayload,
-) -> GitOriginalFileReply {
+  payload : @protocol.GitOriginalFilePayload,
+) -> @protocol.GitOriginalFileReply {
   guard @work_dir.resolve_in_workspace(
       payload.session,
       "",
@@ -1891,7 +1903,7 @@ test "Git single-line output preserves significant path whitespace" {
 
 ///|
 test "Git non-file changes are classified without following symlinks" {
-  let change : GitChange = {
+  let change : @protocol.GitChange = {
     path: "vendor/library",
     original_path: None,
     index_status: " ",
@@ -1938,14 +1950,14 @@ test "Git non-file changes are classified without following symlinks" {
 
 ///|
 test "duplicate deletion and recreation rows keep their own path kinds" {
-  let deleted : GitChange = {
+  let deleted : @protocol.GitChange = {
     path: "same",
     original_path: None,
     index_status: "D",
     worktree_status: " ",
     kind: "deleted",
   }
-  let untracked : GitChange = {
+  let untracked : @protocol.GitChange = {
     path: "same",
     original_path: None,
     index_status: "?",
@@ -2018,7 +2030,7 @@ test "Git HEAD path queries stay in bounded argument batches" {
 
 ///|
 test "bulk deleted-path collection deduplicates in first-seen order" {
-  let deleted : GitChange = {
+  let deleted : @protocol.GitChange = {
     path: "first.mbt",
     original_path: None,
     index_status: "D",
@@ -2038,7 +2050,7 @@ test "bulk deleted-path collection deduplicates in first-seen order" {
 
 ///|
 test "Git changes are relative to an attached repository subdirectory" {
-  let renamed : GitChange = {
+  let renamed : @protocol.GitChange = {
     path: "desktop/src/new.mbt",
     original_path: Some("desktop/src/old.mbt"),
     index_status: "R",

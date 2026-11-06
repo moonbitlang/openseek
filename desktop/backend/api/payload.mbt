@@ -2,19 +2,8 @@
 // typed protocol payload directly with the engine.
 
 ///|
-/// One lifecycle identity the caller still needs the host to settle. Before
-/// `Started`, the submission id may be all the client knows; afterward, the
-/// run id is authoritative.
-type KnownRunPayload = @protocol.KnownRunPayload
-
-///|
-/// `settings.set`: every field optional (absent = unchanged); a present
-/// string field is trimmed, and empty clears the stored value.
-type SettingsSetPayload = @protocol.SettingsSetPayload
-
-///|
-fn SettingsSetPayload::to_patch(
-  self : SettingsSetPayload,
+fn @protocol.SettingsSetPayload::to_patch(
+  self : @protocol.SettingsSetPayload,
 ) -> @engine.SettingsPatch {
   {
     provider: self.provider,
@@ -26,21 +15,15 @@ fn SettingsSetPayload::to_patch(
 }
 
 ///|
-/// `session.archive` / `session.unarchive` address a conversation by its
-/// durable session id, normalized before it reaches the engine.
-type SessionPayload = @protocol.SessionPayload
-
-///|
-fn SessionPayload::canonical_session(self : SessionPayload) -> String {
+fn @protocol.SessionPayload::canonical_session(
+  self : @protocol.SessionPayload,
+) -> String {
   self.session.trim().to_owned()
 }
 
 ///|
-type ArchivedSessionPayload = @protocol.ArchivedSessionPayload
-
-///|
-fn ArchivedSessionPayload::canonical_session(
-  self : ArchivedSessionPayload,
+fn @protocol.ArchivedSessionPayload::canonical_session(
+  self : @protocol.ArchivedSessionPayload,
 ) -> String {
   self.session.trim().to_owned()
 }
@@ -191,7 +174,7 @@ test "Codex resume and turn map full access without a reviewer" {
 
 ///|
 test "session move payload has one canonical id" {
-  let payload : SessionPayload = @json.from_json({
+  let payload : @protocol.SessionPayload = @json.from_json({
     "session": "  s-canonical  ",
   })
   assert_eq(payload.canonical_session(), "s-canonical")

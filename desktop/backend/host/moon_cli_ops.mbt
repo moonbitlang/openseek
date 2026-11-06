@@ -281,8 +281,8 @@ async fn manifest_mtime(dir : @pathx.Absolute) -> Int64? {
 /// then answer it with one `moon ide hover` run at the requested position.
 async fn lsp_hover_op(
   state : MoonCliState,
-  payload : LspHoverPayload,
-) -> LspHoverReply {
+  payload : @protocol.LspHoverPayload,
+) -> @protocol.LspHoverReply {
   ignore(LanguagePath::authorized_root(payload.session, payload.root))
   let request_root = WirePath::parse(payload.root)
   let file = request_root.resolve(payload.path)
@@ -310,8 +310,8 @@ async fn lsp_hover_op(
 /// so the client keeps its markers and earlier push state stays untouched.
 async fn lsp_open_op(
   state : MoonCliState,
-  payload : LspOpenPayload,
-) -> LspDiagnosticsReply {
+  payload : @protocol.LspOpenPayload,
+) -> @protocol.LspDiagnosticsReply {
   ignore(LanguagePath::authorized_root(payload.session, payload.root))
   let request_root = WirePath::parse(payload.root)
   let file = request_root.resolve(payload.path)
@@ -472,7 +472,7 @@ fn check_tags(message : String) -> Array[Int32]? {
 /// front-end consumes: the markdown sections joined under rules, and the
 /// 1-based `range` shifted to the 0-based positions the wire speaks. Anything
 /// unrecognized collapses to `no_hover`.
-fn parse_ide_hover(output : String) -> LspHoverReply {
+fn parse_ide_hover(output : String) -> @protocol.LspHoverReply {
   let json = @json.parse(output.trim()) catch { _ => return no_hover() }
   guard json is { "contents": Array(parts), .. } else { return no_hover() }
   let sections : Array[String] = []
@@ -527,7 +527,7 @@ fn parse_position(position : StringView) -> (Int32, Int32)? {
 
 ///|
 /// An empty hover reply — "nothing to show here".
-fn no_hover() -> LspHoverReply {
+fn no_hover() -> @protocol.LspHoverReply {
   {
     value: "",
     markdown: false,
@@ -699,10 +699,10 @@ test "diagnostics_pushes uses root-relative paths and clears dropped files" {
 /// every symbol, which backs the bare `#` menu (capped like any other result).
 async fn workspace_symbols_op(
   state : MoonCliState,
-  payload : WorkspaceSymbolsPayload,
-) -> WorkspaceSymbolsReply {
+  payload : @protocol.WorkspaceSymbolsPayload,
+) -> @protocol.WorkspaceSymbolsReply {
   let workspace = LanguagePath::authorized_root(payload.session, payload.root)
-  let symbols : Array[SymbolItem] = []
+  let symbols : Array[@protocol.SymbolItem] = []
   for root in workspace_module_roots(workspace) {
     if symbols.length() >= MaxSymbolResults {
       break
@@ -734,10 +734,10 @@ async fn workspace_symbols_op(
 fn parse_symbol_rows(
   output : String,
   workspace : @pathx.Absolute,
-) -> Array[SymbolItem] {
+) -> Array[@protocol.SymbolItem] {
   let json = @json.parse(output.trim()) catch { _ => return [] }
   guard json is Array(items) else { return [] }
-  let symbols : Array[SymbolItem] = []
+  let symbols : Array[@protocol.SymbolItem] = []
   for item in items {
     if symbols.length() >= MaxSymbolResults {
       break
@@ -787,7 +787,7 @@ fn bare_symbol_name(head : String) -> String? {
 ///|
 /// A symbol row's zero-based range from its 1-based `"line:col-line:col"`
 /// span, or the wire's all-zeros stand-in when the row carries none.
-fn symbol_row_range(location : Map[String, Json]) -> SymbolRange {
+fn symbol_row_range(location : Map[String, Json]) -> @protocol.SymbolRange {
   guard location.get("range") is Some(String(span)) &&
     parse_span(span) is Some((start_line, start_col, end_line, end_col)) else {
     return { start: { line: 0, col: 0, }, end: { line: 0, col: 0, }, }
