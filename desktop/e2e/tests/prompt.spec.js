@@ -48,7 +48,7 @@ async function send(page, app, text) {
   return requests().at(-1).params;
 }
 
-test('custom prompt persists and both sources send complete system prompts', async ({ page }, testInfo) => {
+test('custom prompt persists and both sources send complete system prompts', async ({ page }) => {
   const app = new PromptHarness(page);
   await app.install();
   await app.goto();
@@ -63,7 +63,6 @@ test('custom prompt persists and both sources send complete system prompts', asy
   await page.reload();
   await settings(page);
   await expect(editor).toHaveValue(custom);
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('custom-prompt-light.png') });
   await newChat(page);
   const complete = (await send(page, app, 'Use custom text')).system_prompt;
   expect(complete).not.toBe(custom);
@@ -106,7 +105,7 @@ test('changing the default preserves an existing unsent draft', async ({ page })
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the host custom prompt can be cleared in narrow dark Settings', async ({ page }, testInfo) => {
+test('the host custom prompt can be cleared in narrow dark Settings', async ({ page }) => {
   const app = new PromptHarness(page);
   app.hostSettings.prompt_source = 'custom';
   app.hostSettings.custom_prompt = 'Text to clear';
@@ -123,7 +122,6 @@ test('the host custom prompt can be cleared in narrow dark Settings', async ({ p
   const bounds = await editor.boundingBox();
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('custom-prompt-narrow-dark.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
   await newChat(page);
   const complete = (await send(page, app, 'Create without additional instructions')).system_prompt;

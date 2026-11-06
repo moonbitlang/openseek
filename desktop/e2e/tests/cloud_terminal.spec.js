@@ -17,7 +17,7 @@ async function setup(page, options) {
   return { cloud, terminal };
 }
 
-test('Cloud terminal authenticates before RPC and reuses xterm input, resize and output acknowledgements', async ({ page }, testInfo) => {
+test('Cloud terminal authenticates before RPC and reuses xterm input, resize and output acknowledgements', async ({ page }) => {
   const { cloud, terminal } = await setup(page);
   terminal.authenticate = false;
   await cloud.open();
@@ -43,7 +43,6 @@ test('Cloud terminal authenticates before RPC and reuses xterm input, resize and
   expect(terminal.requests('terminal.ack')[0].params).toEqual({ id: 'terminal-1', sequence: 1 });
   await page.setViewportSize({ width: 1100, height: 800 });
   await expect.poll(() => terminal.requests('terminal.resize').length).toBeGreaterThan(0);
-  await page.screenshot({ path: testInfo.outputPath('cloud-terminal.png') });
   await page.getByTitle('Close terminal', { exact: true }).click();
   await expect.poll(() => terminal.requests('terminal.close').length).toBe(1);
   expect(cloud.hostRequests.filter(request => request.method.startsWith('terminal.'))).toEqual([]);
@@ -152,7 +151,7 @@ test('failed session creation leaves the Cloud draft intact and never starts a t
   expect(cloud.postCount).toBe(0);
 });
 
-test('terminal authentication refusal ends the connection without sending RPC or retrying', async ({ page }, testInfo) => {
+test('terminal authentication refusal ends the connection without sending RPC or retrying', async ({ page }) => {
   const { cloud, terminal } = await setup(page);
   terminal.authenticate = false;
   await cloud.open();
@@ -161,7 +160,6 @@ test('terminal authentication refusal ends the connection without sending RPC or
   terminal.connections[0].socket.send(JSON.stringify({ type: 'error', message: 'Shell access is not enabled for this account' }));
   await expect(page.locator('.terminal-status')).toHaveText('Terminal connection failed: Shell access is not enabled for this account');
   await expect.poll(() => terminal.connections[0].closed).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('cloud-terminal-refused.png') });
   await hide(page).click();
   await show(page).click();
   await expect(page.locator('.terminal-status')).toHaveText('Terminal connection failed: Shell access is not enabled for this account');

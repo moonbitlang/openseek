@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { openThemeLab } from '../../dev/theme-lab.mjs';
 
-test('Theme Lab applies palettes to the real app without remounting its draft or editor', async ({ page }, testInfo) => {
+test('Theme Lab applies palettes to the real app without remounting its draft or editor', async ({ page }) => {
   const app = await openThemeLab(page);
   const preview = page.frameLocator('#preview');
   const composer = preview.locator('#task');
@@ -31,7 +31,6 @@ test('Theme Lab applies palettes to the real app without remounting its draft or
   await expect(preview.locator('body')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(composer).toHaveValue('Keep this unsent draft');
   expect(await editor.evaluate(el => el.isConnected)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('theme-lab-light.png') });
 
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.getByRole('button', { name: 'Copy CSS', exact: true }).click();
@@ -41,7 +40,6 @@ test('Theme Lab applies palettes to the real app without remounting its draft or
   await expect(composer).toHaveValue('Keep this unsent draft');
   await preview.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(preview.getByRole('button', { name: 'Theme', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('theme-lab-settings.png') });
   expect(app.pageErrors).toEqual([]);
 });
 

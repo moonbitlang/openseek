@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('terminal maximizes into the conversation and restores the saved split', async ({ page }, testInfo) => {
+test('terminal maximizes into the conversation and restores the saved split', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -34,14 +34,12 @@ test('terminal maximizes into the conversation and restores the saved split', as
     return Math.abs(panel.top - header.bottom) < 1 && Math.abs(panel.bottom - content.bottom) < 1;
   })).toBe(true);
   await expect.poll(() => app.requests.some(r => r.method === 'terminal.resize')).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('terminal-maximized.png') });
   await page.getByRole('button', { name: 'Restore terminal size' }).click();
   await expect(composer).toBeVisible();
   await expect(composer).toHaveValue('Keep this draft');
   await expect.poll(async () => Math.abs(await panel.evaluate(el => el.getBoundingClientRect().height) - height)).toBeLessThan(1);
   expect(await emulator.evaluate(el => el.isConnected)).toBe(true);
   await expect(page.locator('.terminal-instance:visible .xterm-rows')).toContainText('PRESERVED_TERMINAL');
-  await page.screenshot({ path: testInfo.outputPath('terminal-restored.png') });
   await page.getByRole('button', { name: 'Maximize terminal', exact: true }).click();
   await page.locator('.terminal-close').click();
   await expect(composer).toBeVisible();

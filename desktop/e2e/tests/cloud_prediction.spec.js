@@ -58,14 +58,13 @@ async function open(page) {
   return cloud;
 }
 
-test('Cloud shows native predictions and Tab fills the shared composer without sending', async ({ page }, testInfo) => {
+test('Cloud shows native predictions and Tab fills the shared composer without sending', async ({ page }) => {
   const cloud = await open(page);
   await cloud.publish();
   const input = page.locator('#task');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(input).toHaveValue('');
   await input.focus();
-  await page.screenshot({ path: testInfo.outputPath('cloud-composer-prediction.png') });
   await input.press('Shift+Tab');
   await expect(input).toHaveValue('');
   await input.focus(); await input.press('Tab');

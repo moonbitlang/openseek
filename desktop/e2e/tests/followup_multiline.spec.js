@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // The disclosure content is shared; cover both delivery modes and both widths without their full product.
 for (const [behavior, width] of [['queue', 1440], ['steer', 700]]) {
-    test(`${behavior} expands multiline follow-ups at ${width}px`, async ({ page }, testInfo) => {
+    test(`${behavior} expands multiline follow-ups at ${width}px`, async ({ page }) => {
       const app = new DesktopBrowserHarness(page);
       app.hostSettings.followup_behavior = behavior;
       await app.install();
@@ -51,9 +51,6 @@ for (const [behavior, width] of [['queue', 1440], ['steer', 700]]) {
       expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width + 1);
       const rowBounds = await row.boundingBox();
       expect(rowBounds.x + rowBounds.width).toBeLessThanOrEqual(width);
-      const path = testInfo.outputPath('multiline-followup.png');
-      await row.screenshot({ path });
-      await testInfo.attach('Multiline follow-up', { path, contentType: 'image/png' });
       await composer.fill('An unrelated draft');
       await expect(row).toHaveAttribute('open', '');
       await expect(text).toBeVisible();

@@ -226,7 +226,7 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
   expect(queries).toEqual(['?limit=1', '?limit=1&offset=0', '?limit=1', '?limit=1&offset=0']);
 });
 
-test('Cloud skips older reads when the cached turn is complete even during generation', async ({ page }, testInfo) => {
+test('Cloud skips older reads when the cached turn is complete even during generation', async ({ page }) => {
   const cloud = new CloudHarness(page);
   const task = 'first-task';
   const turns = [{
@@ -258,9 +258,6 @@ test('Cloud skips older reads when the cached turn is complete even during gener
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   expect(cloud.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`)).toHaveLength(olderReads);
   await expect(transcript.locator('.transcript-loading-older')).toHaveCount(0);
-  const path = testInfo.outputPath('cloud-history-already-complete.png');
-  await transcript.screenshot({ path });
-  await testInfo.attach('Complete history at the top boundary', { path, contentType: 'image/png' });
 });
 
 test('Cloud renders only turns contiguous with the latest when another device adds turns', async ({ page }) => {
