@@ -153,11 +153,15 @@ nothing of the frontend's layers or DOM (`desktop/frontend/dismiss/back.mbt`).
 Shared mobile layout, Chat/Connect entry and offline behavior are browser
 features. Their tests live under `desktop/e2e/tests` and require no Android
 build; see [Desktop end-to-end tests](../desktop/e2e/README.md). Android adds
-only native authentication, insets/lifecycle, Back, file picking and packaging.
-`conversation.css` hides the terminal and side-panel buttons for this first
-conversation-only client.
-Its link uses the absolute APK asset path, so a history change cannot relocate
-it. The shared frontend's `/assets/` resources are answered from the APK too. Responsive styling comes from the shared bundle.
+only native authentication, insets/lifecycle, Back, file picking, downloads and
+packaging. The shared frontend's `/assets/` resources are answered from the
+APK. The APK adds no styling: which controls a phone or tablet shows is the
+shared bundle's responsive layout, as in a mobile browser.
+
+WebView cannot fetch a `blob:` download and drops the anchor's `download`
+name. A document-start script on the application origin remembers each blob
+anchor the page activates and reads it before the page revokes its URL; the
+shell then offers Android's save dialog (`BlobDownloads.kt`).
 
 After building the APK:
 
@@ -177,9 +181,8 @@ ANDROID_SERIAL=emulator-5580 node android/smoke.mjs
 ```
 
 The Android smoke uses demo account/host responses, chooses the demo device
-from the sidebar's device selector, checks that the device page is still the
-APK's bundled document, verifies real keyboard insets, Back and
-sending/stopping, then
-reloads the real entry page. It preserves application data and credentials.
+from the sidebar's device selector, verifies real keyboard insets, Back,
+sending/stopping and that an export's Download opens Android's save dialog,
+then reloads the real entry page. It preserves application data and credentials.
 These fixture checks do not establish an end-to-end run on your real computer;
 that requires signing into GitHub and choosing your online device.
