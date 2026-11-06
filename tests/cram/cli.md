@@ -1,8 +1,9 @@
 # Verified OpenSeek CLI Documentation
 
-These examples are executed by `moon cram test tests/cram`. The Moon wrapper
-builds the native executable packages first, then exposes their executables
-on `PATH` as `openseek.exe`.
+Run `moon testcli test --target native tests/cram/cli.md` from the repository root.
+Simple cases name the local package directly. [Shell fixtures](fixtures/cli.sh)
+use [the fixture runner](../cli-fixture.mbtx), which builds the engine and runs
+each scenario in a fresh temporary directory.
 
 `openseek` is the headless automation CLI: a subcommand tree under `run`,
 `serve`, `mcp`, and `sessions` (the interactive terminal UI
@@ -18,8 +19,8 @@ network calls. The live, API-backed examples live in
 so the top level lists the subcommands and the engine-shared options. It exits
 successfully.
 
-```mooncram
-$ openseek.exe --help
+```mooncram moonbitlang/openseek
+$ moonx moonbitlang/openseek --help
 Usage: openseek [options] <command>
 
 DeepSeek-backed MoonBit coding agent (headless automation CLI).
@@ -58,12 +59,7 @@ options — tracked upstream in moonbitlang/core — so the message is a plain
 rejection for now.)
 
 ```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if env -u DEEPSEEK openseek.exe serv 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh a-misspelled-subcommand-is-an-error-not-a-prompt
 exit-non-zero
 error: unexpected value 'serv' found; no more were expected
 ```
@@ -77,12 +73,7 @@ an engine subcommand. So `openseek --prompt x run …` is an error; use
 task.
 
 ```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if env DEEPSEEK=test-key openseek.exe --prompt x run TASK 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh ui-options-are-not-top-level-flags
 exit-non-zero
 error: unexpected argument '--prompt' found
 ```
@@ -91,12 +82,7 @@ With no free-form positional, `--` cannot smuggle a prompt: a value after it is
 rejected by the parser.
 
 ```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if env DEEPSEEK=test-key openseek.exe -- something 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh ui-options-are-not-top-level-flags-2
 exit-non-zero
 error: unexpected value 'something' found; no more were expected
 ```
@@ -107,12 +93,7 @@ error: unexpected value 'something' found; no more were expected
 invocation is an error (launch the interactive UI with `openseek_tui`).
 
 ```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if openseek.exe 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh bare-openseek-is-rejected
 exit-non-zero
 error: the following required argument was not provided: 'subcommand'
 ```
@@ -122,8 +103,8 @@ error: the following required argument was not provided: 'subcommand'
 `openseek run --help` prints the options, environment variables, and defaults
 behind a headless run.
 
-```mooncram
-$ openseek.exe run --help
+```mooncram moonbitlang/openseek
+$ moonx moonbitlang/openseek run --help
 Usage: openseek run [options] [task...]
 
 Run one task headlessly; print its answer on stdout and its progress on stderr.
@@ -165,8 +146,10 @@ a headless `run` reads no commands, so there is nobody the engine could ask,
 and the alternative is a turn that stops for five minutes to wait out a
 deadline no one was ever going to beat.
 
-```mooncram
-$ env DEEPSEEK=test-key openseek.exe run --approval ask "probe" 2>&1
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key moonx moonbitlang/openseek run --approval ask "probe"
+@STDOUT (empty)
+@STDERR
 error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation), always (grant it unasked), or review (a reviewer decides; what it cannot settle is refused)
 [1]
 ```
@@ -177,8 +160,10 @@ one piece of `main` that argparse cannot pick up on its own: `parse` reads the
 process arguments itself but defaults the environment to empty, so the binary
 must hand it `@env.get_env_vars()` — and this case fails if it ever stops.
 
-```mooncram
-$ env DEEPSEEK=test-key OPENSEEK_APPROVAL=ask openseek.exe run "probe" 2>&1
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key OPENSEEK_APPROVAL=ask moonx moonbitlang/openseek run "probe"
+@STDOUT (empty)
+@STDERR
 error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation), always (grant it unasked), or review (a reviewer decides; what it cannot settle is refused)
 [1]
 ```
@@ -192,14 +177,7 @@ Kimi model. Those options are hidden from `--help`, so this is where they are
 written down.
 
 ```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run "summarize this project" > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> cat "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh api-key-is-required-for-agent-runs
 exit-non-zero
 error: an API key is required for deepseek-flash: pass --api-key
 stdout-empty
@@ -214,18 +192,7 @@ succeeded or not; `docs/run-result.md` is the full contract. A stale file at
 parent reads the file, not the streams.
 
 ```mooncram
-$ sh <<'EOF'
-> dir=$(mktemp -d)
-> echo stale > "$dir/result.json"
-> env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --no-session --dir "$dir/ws" --result-file "$dir/result.json" task > /dev/null 2>&1
-> echo "exit $?"
-> cat "$dir/result.json"
-> rm "$dir/result.json"
-> env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --no-session --dir "$dir/ws2" --result-file "$dir/result.json" task > /dev/null 2< /dev/null
-> echo "exit $?"
-> cat "$dir/result.json"
-> rm -rf "$dir"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh a-result-file-says-how-the-run-ended
 exit 1
 {"version":1,"status":"failed","reason":"an API key is required for deepseek-flash: pass --api-key"}
 exit 1
@@ -239,14 +206,7 @@ option-looking token is still an option. This catches stale or misspelled flags
 instead of silently turning them into prompt text.
 
 ```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env -u DEEPSEEK openseek.exe run --xxy he > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh unknown-options-are-rejected-before-task-text
 exit-non-zero
 error: unexpected argument '--xxy' found
 stdout-empty
@@ -256,14 +216,7 @@ When the task itself must start with `-`, use the normal option delimiter.
 Here parsing succeeds and the run reaches the later API-key validation.
 
 ```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run -- '--xxy he' > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> cat "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh unknown-options-are-rejected-before-task-text-2
 exit-non-zero
 error: an API key is required for deepseek-flash: pass --api-key
 stdout-empty
@@ -277,21 +230,7 @@ the summary event the compaction *appends* is stamped with the wall clock, so
 both `sessions show` calls strip `ts` to stay deterministic.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/sessions/demo"
-> cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
-> {"version":1,"id":"demo","system_prompt":"system"}
-> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
-> {"sequence":2,"ts":0,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
-> JSONL
-> printf 'hello and answer' > "$tmp/summary.txt"
-> env -u DEEPSEEK openseek.exe sessions list --session-root "$tmp" | cut -f1
-> env -u DEEPSEEK openseek.exe sessions show demo --session-root "$tmp" | sed -E 's/"ts":[0-9]+,//g'
-> env -u DEEPSEEK openseek.exe sessions compact demo --session-root "$tmp" --file "$tmp/summary.txt" --from 1 --to 2
-> env -u DEEPSEEK openseek.exe sessions show demo --session-root "$tmp" | sed -E 's/"ts":[0-9]+,//g'
-> rm -rf "$tmp"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-sessions-is-offline
 demo
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
 compacted session demo events 1..2; last_sequence=3
@@ -311,23 +250,7 @@ model that the files were not copied with it.
 terminal event; an id that already exists is never replaced.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/sessions/demo"
-> cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
-> {"version":1,"id":"demo","system_prompt":"system"}
-> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
-> {"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
-> {"sequence":3,"ts":0,"item":{"kind":"user","payload":{"content":"go on"}}}
-> JSONL
-> env -u DEEPSEEK openseek.exe sessions fork demo --as retry --session-root "$tmp"
-> env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -o '"item":{"kind":"[a-z_]*"' | cut -d'"' -f6
-> env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -o 'sessions/[a-z]*/scratch'
-> env -u DEEPSEEK openseek.exe sessions fork demo --as retry --session-root "$tmp" 2>&1 || echo exit-non-zero
-> env -u DEEPSEEK openseek.exe sessions fork demo --as early --through 1 --session-root "$tmp" 2>&1 || echo exit-non-zero
-> env -u DEEPSEEK openseek.exe sessions list --session-root "$tmp" | cut -f1 | sort
-> rm -rf "$tmp"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-sessions-fork-continues-a-conversation-another-way
 retry
 user
 terminal
@@ -347,21 +270,7 @@ of. Only the names are read: a server whose URL needs a variable this process
 does not have is still named.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/sessions/demo"
-> cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
-> {"version":1,"id":"demo","system_prompt":"system"}
-> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
-> {"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
-> JSONL
-> cat > "$tmp/mcp.json" <<'JSON'
-> {"mcpServers": {"tracker": {"command": "tracker-mcp"}, "host": {"url": "${OPENSEEK_CRAM_UNSET_URL}"}}}
-> JSON
-> env -u DEEPSEEK openseek.exe sessions fork demo --as with-mcp --session-root "$tmp" --mcp-config "$tmp/mcp.json" >/dev/null
-> env -u DEEPSEEK openseek.exe sessions show with-mcp --session-root "$tmp" | grep -o 'Configured MCP servers: [^.]*'
-> rm -rf "$tmp"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-sessions-fork-continues-a-conversation-another-way-2
 Configured MCP servers: `tracker`, `host`
 ```
 
@@ -385,15 +294,7 @@ closed port pins `OPENSEEK_RETRY_ATTEMPTS=1`: none of them is testing the retry
 budget, and the suite's runtime should not track its default.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> cd "$tmp"
-> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" "say hi" > out.txt 2> err.txt; then echo exit-zero; else echo exit-non-zero; fi
-> grep -c '^session cli-' err.txt
-> wc -c < out.txt | tr -d ' '
-> env -u DEEPSEEK openseek.exe sessions list | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'
-> rm -rf "$tmp"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-run-records-a-session-by-default
 exit-non-zero
 1
 0
@@ -409,15 +310,7 @@ ever being routed back through one: once, events went through `@xlog`, and
 rendered nothing with no error to explain it.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> cd "$tmp"
-> for level in warn error; do
->   env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 MOON_XLOG=$level openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" --dir "$tmp/$level" "say hi" > /dev/null 2> "err-$level.txt"
->   echo "$level: $(grep -c '^session cli-' "err-$level.txt")"
-> done
-> rm -rf "$tmp"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-run-records-a-session-by-default-2
 warn: 1
 error: 1
 ```
@@ -426,13 +319,7 @@ error: 1
 behind.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> cd "$tmp"
-> env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --no-session --api-url "http://127.0.0.1:9/chat/completions" "say hi" >/dev/null 2>&1
-> if test -d .openseek; then echo recorded; else echo ephemeral; fi
-> rm -rf "$tmp"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-run-records-a-session-by-default-3
 ephemeral
 ```
 
@@ -444,18 +331,7 @@ directory, reports it on stderr, and resolves the default session root under
 it.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/parent"
-> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --dir "$tmp/parent/new" --api-url "http://127.0.0.1:9/chat/completions" "say hi" > /dev/null 2> "$tmp/err.txt"; then echo exit-zero; else echo exit-non-zero; fi
-> if test -d "$tmp/parent/new"; then echo dir-created; else echo dir-missing; fi
-> grep -c '^created ' "$tmp/err.txt"
-> env -u DEEPSEEK openseek.exe sessions list --dir "$tmp/parent/new" | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'
-> env -u DEEPSEEK openseek.exe sessions list --dir "$tmp/parent/fresh" > "$tmp/session-list.out"
-> if test -d "$tmp/parent/fresh"; then echo session-dir-created; else echo session-dir-missing; fi
-> wc -l < "$tmp/session-list.out" | tr -d ' '
-> rm -rf "$tmp"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh dir-selects-the-workspace-root
 exit-non-zero
 dir-created
 1
@@ -466,8 +342,10 @@ session-dir-created
 
 Asking for both recording behaviors at once is rejected before any work happens.
 
-```mooncram
-$ env DEEPSEEK=test-key openseek.exe run --session demo --no-session "say hi" 2>&1
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key moonx moonbitlang/openseek run --session demo --no-session "say hi"
+@STDOUT (empty)
+@STDERR
 error: --no-session contradicts --session; pick one behavior
 [1]
 ```
@@ -483,7 +361,7 @@ without ever touching the network. The `grep -o` keeps only the stable event
 tag, since a line also carries the event's payload fields.
 
 ```mooncram
-$ printf '{"command":"reboot"}\n{"command":"cancel"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep -o '"event":"command_error"'
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin
 "event":"command_error"
 ```
 
@@ -494,14 +372,14 @@ carries a `steer_dropped` event so the controller can ask the user to resubmit �
 and, usefully for this offline test, no turn means no network.
 
 ```mooncram
-$ printf '{"command":"steer","text":"too late"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep -o '"event":"steer_dropped"'
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-2
 "event":"steer_dropped"
 ```
 
 Tagged steering keeps its submission id in the rejection receipt:
 
 ```mooncram
-$ printf '{"command":"steer","text":"too late","submission_id":"late-steer"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep '"event":"steer_dropped"'
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-3
 {"event":"steer_dropped","content":"too late","submission_id":"late-steer"}
 ```
 
@@ -511,7 +389,7 @@ changes. Every one carries the whole state, so a controller keeps the latest.
 With nothing configured there are no configs and no servers:
 
 ```mooncram
-$ env DEEPSEEK=test-key openseek.exe serve </dev/null 2>/dev/null | grep '"event":"mcp_status"'
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-4
 {"event":"mcp_status","status":{"configs":[],"servers":[]}}
 ```
 
@@ -519,11 +397,7 @@ A server that cannot start is listed with its failure rather than left out (the 
 is the operating system's):
 
 ```mooncram
-$ sh <<'EOF'
-> printf '{"mcpServers":{"notes":{"command":"openseek-no-such-mcp-server"}}}' > mcp.json
-> env DEEPSEEK=test-key openseek.exe serve --mcp-config mcp.json </dev/null 2>/dev/null | grep -o '"event":"mcp_status".*"state":"failed"'
-> rm -f mcp.json
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-5
 "event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
 ```
 
@@ -531,12 +405,7 @@ $ sh <<'EOF'
 anything runs.
 
 ```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if env DEEPSEEK=test-key openseek.exe serve "do something" 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-6
 exit-non-zero
 error: unexpected value 'do something' found; no more were expected
 ```
@@ -549,49 +418,7 @@ with `@env.args()`. This tiny package verifies the current `FlagArg`,
 `PositionArg`, and `Matches` shape.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/cmd/echoargs"
-> cat > "$tmp/moon.mod" <<'MOD'
-> name = "example/cli"
-> version = "0.1.0"
-> MOD
-> cat > "$tmp/cmd/echoargs/moon.pkg" <<'PKG'
-> import {
->   "moonbitlang/core/argparse"
-> }
-> warnings = "+unnecessary_annotation"
-> supported_targets = "+native"
-> options(
->   "is-main": true,
-> )
-> PKG
-> cat > "$tmp/cmd/echoargs/main.mbt" <<'MBT'
-> ///|
-> fn main raise {
->   let matches = @argparse.parse(
->     Command(
->       "echoargs",
->       about="Tiny argparse example.",
->       flags=[FlagArg("stdin", long="stdin", about="Read stdin.")],
->       positionals=[PositionArg("input", default_values=["-"])],
->     ),
->   )
->   let input = match matches.values.get("input") {
->     Some([value, ..]) => value
->     _ => fail("missing input")
->   }
->   let stdin = match matches.flags.get("stdin") {
->     Some(value) => value
->     None => false
->   }
->   println("input=\{input}")
->   println("stdin=\{stdin}")
-> }
-> MBT
-> (cd "$tmp" && moon run --target native cmd/echoargs -- --stdin sample.toml)
-> rm -rf "$tmp"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh moonbit-cli-argument-parsing-pattern
 input=sample.toml
 stdin=true
 ```
@@ -602,14 +429,6 @@ The validation command accepts repeated paths. Explicit arguments replace the
 environment fallback, and empty arguments do not name a file.
 
 ```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> cd "$d"
-> printf '{"mcpServers":{}}' > first.json
-> printf '{"mcpServers":{}}' > second.json
-> OPENSEEK_MCP_CONFIG=missing.json openseek.exe mcp --mcp-config first.json --mcp-config= --mcp-config=second.json
-> cd /
-> rm -rf "$d"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh multiple-mcp-configuration-files
 first.json, second.json: no servers configured
 ```

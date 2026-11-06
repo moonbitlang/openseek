@@ -7,28 +7,28 @@ The PTC examples need a host and are run by `agent_tool/mbtx/examples_test.mbt`
 instead. Run this page from the repository root:
 
 ```sh
-moon cram test tests/cram/examples.md --shell bash
+moon testcli test tests/cram/examples.md
 ```
 
 ```mooncram
-$ moonx "$TESTDIR/../../share/examples/checked_errors.mbtx"
+$ moonx ../../share/examples/checked_errors.mbtx
 checked errors: ok
 ```
 
 ```mooncram
-$ moonx "$TESTDIR/../../share/examples/syntax_basics.mbtx"
+$ moonx ../../share/examples/syntax_basics.mbtx
 syntax: ok
 ```
 
 ```mooncram
-$ moonx "$TESTDIR/../../share/examples/strings_and_views.mbtx"
+$ moonx ../../share/examples/strings_and_views.mbtx
 strings and views: ok
 ```
 
 The CLI example counts what it reads; here stdin is six bytes:
 
 ```mooncram
-$ printf 'hello\n' | moonx "$TESTDIR/../../share/examples/cli_count_input.mbtx" --stdin
+$ moonx fixtures/stdin.mbtx | moonx ../../share/examples/cli_count_input.mbtx --stdin
 6
 ```
 
@@ -38,11 +38,11 @@ inlines it; `agent_tool/mbtx/mbtx_test.mbt` drives the same file through the
 real tool, and these two cases pin what it prints.
 
 ```mooncram
-$ moonx "$TESTDIR/../../share/examples/cli_greet.mbtx"
+$ moonx ../../share/examples/cli_greet.mbtx
 Hello, world!
 ```
 
 ```mooncram
-$ moonx "$TESTDIR/../../share/examples/cli_greet.mbtx" --name "Ada Lovelace"
+$ moonx ../../share/examples/cli_greet.mbtx --name "Ada Lovelace"
 Hello, Ada Lovelace!
 ```

@@ -1,402 +1,73 @@
 # Creating session file artifacts
 
-These executable cases package an ordinary MoonBit JavaScript application without a chart or component library.
+These executable cases package an ordinary MoonBit JavaScript application without
+a chart or component library. Run them from the repository root:
 
-```mooncram
-$ PACKAGE="$TESTDIR/../../share/artifact/build.mbtx"
+```sh
+moon testcli test tests/cram/file-artifacts.md --timeout-ms 300000
 ```
 
-```mooncram
-$ mkdir -p session/scratch/app
-```
+The [artifact fixture](fixtures/file-artifacts.sh) runs the complete lifecycle in
+one temporary directory. It checks the exit status of every command, including
+expected failures, and checks generated files with `test`, `grep`, and `cmp`.
+`moon testcli` asserts the output below. The fixture directory is removed after
+success or failure, and each invocation starts with fresh files.
 
-```mooncram
-$ PROJECT="$PWD/session/scratch/app"
-```
+## Build and retain editable sources
 
-```mooncram
-$ OUTPUT="$PWD/session/scratch/artifact"
-```
+The fixture creates an ordinary executable MoonBit project and calls
+[`build.mbtx`](../../share/artifact/build.mbtx) with an explicit project directory,
+output directory, and new HTML filename. The generated page contains the compiled
+JavaScript and the printed `openseek-file` reference names its session path.
 
-```mooncram
-$ cat > "$PROJECT/moon.mod" <<'EOF'
-> name = "example/artifact"
-> version = "0.0.0"
-> EOF
-```
+A new version uses a new filename. Reusing a filename fails without changing the
+previous page. Empty output directories and filenames containing parent-directory
+paths are rejected before publishing. Successful builds retain editable source
+beside the page, excluding `_build` and `.mooncakes` caches.
 
-```mooncram
-$ cat > "$PROJECT/moon.pkg" <<'EOF'
-> pkgtype(kind: "executable")
-> options(link: { "js": { "format": "iife" } })
-> EOF
-```
+## Templates and restored projects
 
-```mooncram
-$ cat > "$PROJECT/main.mbt" <<'EOF'
-> fn main { println("The application has loaded") }
-> EOF
-```
+A custom `index.html` supplies its own mount element and styles. The build replaces
+exactly one `<!-- openseek:script -->` marker. Mixed-case closing script tags in
+JavaScript strings remain data. The fixture restores a project solely from the
+retained source, deletes the original project, builds another version, and checks
+that the first page is byte-for-byte unchanged.
 
-Packaging builds the ordinary application and prints the exact reference to
-place in the answer. Its JavaScript is included in the generated HTML file.
+Missing or repeated script markers, compiler errors, a reserved source directory,
+and an unused-variable warning all fail without publishing an HTML/source pair.
+The size-limit fixture writes three million `界` characters: it is below eight
+million characters but exceeds the eight MiB UTF-8 preview limit.
+
+## Initialize and edit working projects
+
+[`init.mbtx`](../../share/artifact/init.mbtx) copies the Rabbita template into an
+explicit session scratch directory. [`write.mbtx`](../../share/artifact/write.mbtx)
+applies staged source files by location. The fixture verifies that initialization
+excludes caches, refuses to overwrite an existing project, and preserves its
+files. Writing outside a working project in session scratch is refused.
+
+## Expected lifecycle output
+
+All successful file assertions are silent. Expected failure statuses are checked
+inside the fixture; a failed assertion makes this case fail.
 
 ````mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" chart-v1.html
+$ moonx ../cli-fixture.mbtx fixtures/file-artifacts.sh
 ```openseek-file artifact
 scratch/artifact/chart-v1.html
 ```
-````
-
-```mooncram
-$ test -f "$OUTPUT/chart-v1.html"
-```
-
-```mooncram
-$ grep -q '<script>' "$OUTPUT/chart-v1.html"
-```
-
-```mooncram
-$ grep -q 'The application has loaded' "$OUTPUT/chart-v1.html"
-```
-
-A new version uses a new filename. Reusing a name fails before building or
-changing the earlier file.
-
-```mooncram
-$ cp "$OUTPUT/chart-v1.html" previous.html
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" chart-v1.html 2> duplicate.err
-[1]
-```
-
-```mooncram
-$ grep -o 'artifact already exists; choose a new filename' duplicate.err
 artifact already exists; choose a new filename
-```
-
-```mooncram
-$ cmp previous.html "$OUTPUT/chart-v1.html"
-```
-
-The recipe requires an explicit output directory argument. Use the session
-scratch path from Environment; no additional environment variable is needed.
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "" chart-v2.html 2> directory.err
-[1]
-```
-
-```mooncram
-$ grep -o 'output directory must not be empty' directory.err
 output directory must not be empty
-```
-
-```mooncram
-$ test ! -e "$OUTPUT/chart-v2.html"
-```
-
-The recipe accepts one filename inside that directory. Parent-directory paths
-are rejected before an output file is created.
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" ../outside.html 2> filename.err
-[1]
-```
-
-```mooncram
-$ grep -o 'choose one new .html filename, without a directory' filename.err
 choose one new .html filename, without a directory
-```
-
-```mooncram
-$ test ! -e session/scratch/outside.html
-```
-
-Successful builds retain editable inputs beside each page without retaining
-compiler caches. These files follow the artifact tree into a fork.
-
-```mooncram
-$ cmp "$PROJECT/main.mbt" "$OUTPUT/chart-v1.html.source/main.mbt"
-```
-
-```mooncram
-$ test ! -e "$OUTPUT/chart-v1.html.source/_build" && test ! -e "$OUTPUT/chart-v1.html.source/.mooncakes"
-```
-
-A component can choose its own mount element and inline styles. The compiled
-executable replaces exactly one marker; strings containing closing script tags
-must remain JavaScript data.
-
-```mooncram
-$ cat > "$PROJECT/index.html" <<'EOF'
-> <!doctype html><html><head><style>.answer{padding:1rem}</style></head><body><div id="app"></div><!-- openseek:script --></body></html>
-> EOF
-```
-
-```mooncram
-$ cat > "$PROJECT/main.mbt" <<'EOF'
-> fn main { println("</ScRiPt><p>Still application data</p>") }
-> EOF
-```
-
-````mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" answer-v2.html
 ```openseek-file artifact
 scratch/artifact/answer-v2.html
 ```
-````
-
-```mooncram
-$ grep -Fq '<div id="app"></div><script>' "$OUTPUT/answer-v2.html"
-```
-
-```mooncram
-$ grep -Fq '.answer{padding:1rem}' "$OUTPUT/answer-v2.html"
-```
-
-```mooncram
-$ grep -Fq '<\/ScRiPt>' "$OUTPUT/answer-v2.html"
-```
-
-```mooncram
-$ ! grep -Fq '<!-- openseek:script -->' "$OUTPUT/answer-v2.html"
-```
-
-Restore a working copy using only a retained source revision. Deleting the
-original project must not prevent a new build or change an earlier answer.
-
-```mooncram
-$ cp -R "$OUTPUT/answer-v2.html.source" restored-app && rm -r "$PROJECT"
-```
-
-```mooncram
-$ PROJECT="$PWD/restored-app"
-```
-
-````mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" answer-v3.html
 ```openseek-file artifact
 scratch/artifact/answer-v3.html
 ```
-````
-
-```mooncram
-$ cmp previous.html "$OUTPUT/chart-v1.html"
-```
-
-A missing or repeated marker fails without publishing either part of a revision.
-
-```mooncram
-$ cp "$PROJECT/index.html" valid.html && printf '<div id="app"></div>' > "$PROJECT/index.html"
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" missing-marker.html 2> marker.err
-[1]
-```
-
-```mooncram
-$ grep -Fo 'index.html must contain exactly one <!-- openseek:script --> marker' marker.err
 index.html must contain exactly one <!-- openseek:script --> marker
-```
-
-```mooncram
-$ test ! -e "$OUTPUT/missing-marker.html" && test ! -e "$OUTPUT/missing-marker.html.source"
-```
-
-```mooncram
-$ printf '<!-- openseek:script --><!-- openseek:script -->' > "$PROJECT/index.html"
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" repeated-marker.html 2> repeated.err
-[1]
-```
-
-```mooncram
-$ grep -Fo 'index.html must contain exactly one <!-- openseek:script --> marker' repeated.err
 index.html must contain exactly one <!-- openseek:script --> marker
-```
-
-```mooncram
-$ test ! -e "$OUTPUT/repeated-marker.html" && test ! -e "$OUTPUT/repeated-marker.html.source"
-```
-
-Compiler errors also leave no published revision, and reserving a source name
-must protect it from being overwritten even if no HTML exists yet.
-
-```mooncram
-$ cp valid.html "$PROJECT/index.html" && printf 'fn main { missing_function() }' > "$PROJECT/main.mbt"
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" broken.html 2> compile.err
-[1]
-```
-
-```mooncram
-$ grep -q 'missing_function' compile.err
-```
-
-```mooncram
-$ grep -Fq "$PROJECT/main.mbt" compile.err
-```
-
-```mooncram
-$ test ! -e "$OUTPUT/broken.html" && test ! -e "$OUTPUT/broken.html.source"
-```
-
-```mooncram
-$ mkdir "$OUTPUT/reserved.html.source"
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" reserved.html 2> reserved.err
-[1]
-```
-
-```mooncram
-$ grep -o 'artifact already exists; choose a new filename' reserved.err
 artifact already exists; choose a new filename
-```
-
-```mooncram
-$ test ! -e "$OUTPUT/reserved.html" && test -d "$OUTPUT/reserved.html.source"
-```
-
-The preview limit counts UTF-8 bytes, including a custom HTML template. This
-template is below eight million characters but above eight MiB in UTF-8.
-
-```mooncram
-$ cp "$OUTPUT/answer-v2.html.source/main.mbt" "$PROJECT/main.mbt"
-```
-
-```mooncram
-$ cat > make-large.mbtx <<'EOF'
-> ---
-> import { "moonbitlang/core/async", "moonbitlang/core/async/fs", "moonbitlang/core/env" }
-> ---
-> async fn main {
->   let page = StringBuilder()
->   page.write_string("<!doctype html><p>")
->   for _ in 0..<3_000_000 { page.write_string("界") }
->   page.write_string("</p><!-- openseek:script -->")
->   @fs.write_text(@env.args()[1], page.to_string(), create_mode=CreateOrTruncate)
-> }
-> EOF
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/large-script-build" make-large.mbtx "$PROJECT/index.html"
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" oversized.html 2> size.err
-[1]
-```
-
-```mooncram
-$ grep -o 'component HTML exceeds the 8 MiB inline preview limit' size.err
 component HTML exceeds the 8 MiB inline preview limit
-```
-
-```mooncram
-$ test ! -e "$OUTPUT/oversized.html" && test ! -e "$OUTPUT/oversized.html.source"
-```
-
-The recipe also requires a clean check before building. An otherwise buildable
-program with an unused variable fails that check and publishes no revision.
-
-```mooncram
-$ cp valid.html "$PROJECT/index.html"
-```
-
-```mooncram
-$ cat > "$PROJECT/main.mbt" <<'EOF'
-> fn main {
->   let unused = 42
->   println("Would otherwise build")
-> }
-> EOF
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/script-build" "$PACKAGE" "$PROJECT" "$OUTPUT" warning.html 2> warning.err
-[1]
-```
-
-```mooncram
-$ grep -q 'unused_value' warning.err
-```
-
-```mooncram
-$ test ! -e "$OUTPUT/warning.html" && test ! -e "$OUTPUT/warning.html.source"
-```
-
-
-The authoring helpers prepare a clean working project and apply a batch of
-source files by location. Pass the scratch path explicitly, and write generated
-text to staging files first.
-
-```mooncram
-$ SCRATCH="$PWD/session/scratch"
-```
-
-```mooncram
-$ INIT="$TESTDIR/../../share/artifact/init.mbtx"
-```
-
-```mooncram
-$ AUTHOR="$TESTDIR/../../share/artifact/write.mbtx"
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/init-build" "$INIT" "$SCRATCH" "$TESTDIR/../../share/artifact/rabbita" authored > init.out
-```
-
-```mooncram
-$ WORK="$SCRATCH/component-work/authored"
-```
-
-```mooncram
-$ test -f "$WORK/bridge.mbt" && test ! -e "$WORK/.mooncakes" && test ! -e "$WORK/_build"
-```
-
-```mooncram
-$ mkdir -p "$SCRATCH/staged-sources" && printf '{"value": 2}' > "$SCRATCH/staged-sources/data.json"
-```
-
-```mooncram
-$ moon run --target-dir "$PWD/author-build" "$AUTHOR" "$SCRATCH" "$WORK" data/input.json "$SCRATCH/staged-sources/data.json" > author.out
-```
-
-```mooncram
-$ grep -Fq '"value": 2' "$WORK/data/input.json"
-```
-
-Existing working projects are protected from reinitialization.
-
-```mooncram
-$ moon run --target-dir "$PWD/init-build" "$INIT" "$SCRATCH" "$TESTDIR/../../share/artifact/rabbita" authored > duplicate-init.out 2> duplicate-init.err
-[1]
-```
-
-```mooncram
-$ grep -Fq '"value": 2' "$WORK/data/input.json"
-```
-
-The write helper accepts source file paths, and refuses to apply them to a
-workspace project or a retained published revision.
-
-```mooncram
-$ moon run --target-dir "$PWD/author-build" "$AUTHOR" "$SCRATCH" "$PROJECT" main.mbt "$SCRATCH/staged-sources/data.json" 2> author-scope.err
-[1]
-```
-
-```mooncram
-$ grep -Fo 'project must be a working directory inside session scratch' author-scope.err
 project must be a working directory inside session scratch
-```
+````

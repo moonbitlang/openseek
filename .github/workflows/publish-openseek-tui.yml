@@ -50,7 +50,7 @@ jobs:
           moon test --target wasm
           moon build --target wasm --release cmd/openseek_tui
           moon run --target wasm --release cmd/openseek_tui -- --help
-          moon cram test tests/cram
+          moon testcli test --target native --timeout-ms 300000 tests/cram
 
       - name: publish
         env:

@@ -1,6 +1,6 @@
 # Verified OpenSeek TUI CLI Documentation
 
-These examples are executed by `moon cram test tests/cram`. The Moon wrapper
+These examples are executed by `moon testcli test tests/cram`. The Moon wrapper
 builds the native package at `cmd/openseek_tui` and exposes its executable on
 `PATH` as `openseek_tui.exe`. `openseek_tui` is the dedicated interactive
 terminal UI binary; an initial prompt is passed with `--prompt` (there is no
@@ -18,8 +18,8 @@ network calls.
 
 `openseek_tui --help` prints the UI's options and exits successfully.
 
-```mooncram
-$ openseek_tui.exe --help
+```mooncram moonbitlang/openseek_tui
+$ moonx moonbitlang/openseek_tui/cmd/openseek_tui --help
 Usage: openseek_tui [options]
 
 OpenSeek terminal UI.
@@ -50,17 +50,10 @@ missing key on stderr and exits non-zero — before the terminal UI ever starts.
 (The key is validated in the UI path rather than via argparse `required`, so the
 engine can stay key-optional for offline subcommands like `sessions list`.) The
 message names the model that wanted a key, not the variable that would have
-supplied one; see [`cli.md`](cli.md) for which variable that is.
+supplied one; see the root CLI guide for which variable that is.
 
 ```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek_tui.exe > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../../cmd/openseek_tui fixtures/tui.sh api-key-is-required
 exit-non-zero
 error: an API key is required for deepseek-flash: pass --api-key
 stdout-empty
@@ -71,14 +64,7 @@ stdout-empty
 Option-looking tokens are validated by the parser before the UI starts.
 
 ```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env DEEPSEEK=test-key openseek_tui.exe --xxy he > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../../cmd/openseek_tui fixtures/tui.sh unknown-options-are-rejected
 exit-non-zero
 error: unexpected argument '--xxy' found
 stdout-empty
@@ -89,8 +75,8 @@ stdout-empty
 The UI spawns its engine in `serve` mode and probes it with `--help` first. A
 missing engine fails fast, before the UI takes over the terminal.
 
-```mooncram
-$ env DEEPSEEK=test-key openseek_tui.exe --engine openseek-not-a-real-binary
+```mooncram moonbitlang/openseek_tui
+$ DEEPSEEK=test-key moonx moonbitlang/openseek_tui/cmd/openseek_tui --engine openseek-not-a-real-binary
 error: engine 'openseek-not-a-real-binary' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
 Pass --engine <path> to a working openseek binary, or omit --engine to run the pinned release through moonx.
 [1]
@@ -108,20 +94,7 @@ Its reply is a sidecar error frame: tag `0x83`, a 23-byte payload length, and
 the message `no controlling terminal`.
 
 ```mooncram
-$ sh <<'EOF'
-> bin=$(mktemp -d)
-> printf '#!/bin/sh\necho "$@" >> "%s/args"\nexit 0\n' "$bin" > "$bin/moonx"
-> cat > "$bin/tty-sidecar" <<'SIDECAR'
-> #!/bin/sh
-> printf '\203\027\000\000\000no controlling terminal'
-> SIDECAR
-> chmod +x "$bin/moonx" "$bin/tty-sidecar"
-> if PATH="$bin:$PATH" env DEEPSEEK=test-key TTY_SIDECAR="$bin/tty-sidecar" openseek_tui.exe > "$bin/stdout" 2> "$bin/stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> cat "$bin/stderr"
-> if test -s "$bin/stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> cat "$bin/args"
-> rm -rf "$bin"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../../cmd/openseek_tui fixtures/tui.sh the-default-engine-is-the-pinned-release-under-moonx
 exit-non-zero
 error: moonbit-community/tty/internal/sidecar.SidecarError.SidecarError
 stdout-empty
@@ -131,10 +104,7 @@ moonbitlang/openseek@0.7.5 --help
 Without `moonx` on `PATH` (no MoonBit toolchain), the preflight says so.
 
 ```mooncram
-$ sh <<'EOF'
-> ui=$(command -v openseek_tui.exe)
-> env -i PATH=/usr/bin:/bin DEEPSEEK=test-key "$ui"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../../cmd/openseek_tui fixtures/tui.sh the-default-engine-is-the-pinned-release-under-moonx-2
 error: engine 'moonx moonbitlang/openseek@0.7.5' is not usable: `moonx` was not found on PATH.
 The default engine runs through moonx, part of the MoonBit toolchain; its first launch downloads the pinned openseek release, so it needs network access to mooncakes.io.
 Install MoonBit, or pass --engine <path> to an openseek binary.
@@ -145,15 +115,7 @@ When `moonx` runs but cannot produce the engine (say, the first launch is
 offline), the tail of its output is quoted so the cause is visible.
 
 ```mooncram
-$ sh <<'EOF'
-> bin=$(mktemp -d)
-> printf '#!/bin/sh\necho "fetching moonbitlang/openseek@0.7.5"\necho "error: failed to download from mooncakes.io" >&2\nexit 1\n' > "$bin/moonx"
-> chmod +x "$bin/moonx"
-> PATH="$bin:$PATH" env DEEPSEEK=test-key openseek_tui.exe
-> status=$?
-> rm -rf "$bin"
-> exit $status
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../../cmd/openseek_tui fixtures/tui.sh the-default-engine-is-the-pinned-release-under-moonx-3
 error: engine 'moonx moonbitlang/openseek@0.7.5' is not usable: `--help` exited with code 1.
 Its output ended with:
   fetching moonbitlang/openseek@0.7.5
@@ -169,8 +131,8 @@ Install MoonBit, or pass --engine <path> to an openseek binary.
 (shown here failing deterministically on a missing engine), which proves the
 prompt path is wired — there is no free-form positional.
 
-```mooncram
-$ env DEEPSEEK=test-key openseek_tui.exe --engine does-not-exist --prompt "inspect project"
+```mooncram moonbitlang/openseek_tui
+$ DEEPSEEK=test-key moonx moonbitlang/openseek_tui/cmd/openseek_tui --engine does-not-exist --prompt "inspect project"
 error: engine 'does-not-exist' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
 Pass --engine <path> to a working openseek binary, or omit --engine to run the pinned release through moonx.
 [1]
@@ -183,8 +145,8 @@ Pass --engine <path> to a working openseek binary, or omit --engine to run the p
 creates. Both parse and reach the engine preflight here, which fails
 deterministically on a missing engine.
 
-```mooncram
-$ env DEEPSEEK=test-key openseek_tui.exe --engine does-not-exist --system-prompt-file prompt.md --system-prompt-addendum-file addendum.md
+```mooncram moonbitlang/openseek_tui
+$ DEEPSEEK=test-key moonx moonbitlang/openseek_tui/cmd/openseek_tui --engine does-not-exist --system-prompt-file prompt.md --system-prompt-addendum-file addendum.md
 error: engine 'does-not-exist' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
 Pass --engine <path> to a working openseek binary, or omit --engine to run the pinned release through moonx.
 [1]
@@ -196,17 +158,7 @@ refused before the engine runs, pointing at the fork that changes it. The
 paths inside that hint are this machine's, so they are normalized here.
 
 ```mooncram
-$ sh <<'EOF'
-> root=$(mktemp -d)
-> mkdir -p "$root/sessions/demo"
-> printf '{"version":1,"id":"demo","system_prompt":"system"}\n' > "$root/sessions/demo/openseek_session-demo.jsonl"
-> stderr=$(mktemp)
-> env DEEPSEEK=test-key openseek_tui.exe --session demo --session-root "$root" --system-prompt-file prompt.md > /dev/null 2> "$stderr"
-> status=$?
-> sed -E 's#--dir [^ ]+ --session-root [^ ]+#--dir <workspace> --session-root <root>#' "$stderr"
-> echo "status=$status"
-> rm -rf "$root" "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../../cmd/openseek_tui fixtures/tui.sh a-custom-system-prompt-comes-from-the-prompt-file-flags
 error: --system-prompt-file applies only when this launch creates the session, and session demo already exists with the system prompt it stored. Fork it to change the prompt:
   openseek sessions fork demo --as <new-id> --dir <workspace> --session-root <root> --system-prompt-file <file>
 status=1
@@ -216,17 +168,7 @@ status=1
 the hint repeats the addendum flag when that is what was given.
 
 ```mooncram
-$ sh <<'EOF'
-> root=$(mktemp -d)
-> mkdir -p "$root/sessions/demo"
-> printf '{"version":1,"id":"demo","system_prompt":"system"}\n' > "$root/sessions/demo/openseek_session-demo.jsonl"
-> stderr=$(mktemp)
-> env DEEPSEEK=test-key openseek_tui.exe --continue --session-root "$root" --system-prompt-addendum-file addendum.md > /dev/null 2> "$stderr"
-> status=$?
-> sed -E 's#--dir [^ ]+ --session-root [^ ]+#--dir <workspace> --session-root <root>#' "$stderr"
-> echo "status=$status"
-> rm -rf "$root" "$stderr"
-> EOF
+$ moonx ../cli-fixture.mbtx --package ../../cmd/openseek_tui fixtures/tui.sh a-custom-system-prompt-comes-from-the-prompt-file-flags-2
 error: --system-prompt-addendum-file applies only when this launch creates the session, and session demo already exists with the system prompt it stored. Fork it to change the prompt:
   openseek sessions fork demo --as <new-id> --dir <workspace> --session-root <root> --system-prompt-addendum-file <file>
 status=1

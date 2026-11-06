@@ -35,7 +35,7 @@ inspect *args:
 
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
 test: test-moon
-    moon cram test tests/cram
+    moon testcli test --target native tests/cram
     just test-turn-finish
     just test-workflows
 

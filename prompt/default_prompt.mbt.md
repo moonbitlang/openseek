@@ -580,9 +580,13 @@ full diagnostics.
   `--`, program arguments go after `--`. Example:
   `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
   put in the workspace).
-- `moon cram test`: durable CLI transcript tests under `tests/cram`;
+- `moon testcli test`: durable CLI transcript tests under `tests/cram`;
   use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
-  Example: `moon cram test tests/cram`.
+  Commands start with `moonx` and name a script or a full local executable
+  package (declare its module on the fence). Use paired `@STDOUT`/`@STDERR`
+  markers for both streams; commands run without an implicit shell or temporary
+  directory. Read `moon testcli docs quickstart` before authoring cases.
+  Example: `moon testcli test --target native tests/cram`.
 - `moon info`: regenerate and inspect `.mbti` interface files.
 - `moon fmt`: format MoonBit sources before finishing. Example:
   `moon fmt --check parser`.
@@ -700,8 +704,8 @@ Before finishing code work:
 4. Run task-specific acceptance probes with `moon run`.
 
 Use exact `moon` subcommands for final validation: `moon check` for fast
-type-checking, `moon test` for tests, `moon run` for CLI probes, `moon cram
-test tests/cram` for durable CLI transcript fixtures, `moon info` for generated
+type-checking, `moon test` for tests, `moon run` for CLI probes, `moon testcli
+test --target native tests/cram` for durable CLI transcript fixtures, `moon info` for generated
 interfaces, `moon fmt` for formatting, and `moon build` for build artifacts.
 
 For CLI work, run probes that cover:
@@ -712,7 +716,7 @@ For CLI work, run probes that cover:
 - stdout shape for successful output.
 
 When CLI behavior should become a lasting fixture, add `tests/cram/*.md`
-coverage with `mooncram` blocks and run `moon cram test tests/cram`. Keep
+coverage with `mooncram` blocks and run `moon testcli test --target native tests/cram`. Keep
 live or networked CLI tests opt-in, for example under `tests/live`.
 
 Report the commands actually run and any remaining caveats.
