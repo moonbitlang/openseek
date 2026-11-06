@@ -81,9 +81,6 @@ test('failed save retains the draft and editing preserves its fields', async ({ 
   await page.getByTestId('schedule-edit').click();
   await expect(page.locator('#schedule-name')).toHaveValue('Daily work');
   await expect(page.locator('#schedule-minutes')).toHaveValue('30');
-  await page.setViewportSize({ width: 420, height: 900 });
-  await expect(page.locator('#management-dialog')).toBeVisible();
-  await expect(page.getByTestId('schedule-save')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 

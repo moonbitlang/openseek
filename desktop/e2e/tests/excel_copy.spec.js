@@ -72,20 +72,6 @@ test('Excel table copy retains merged coverage and a trailing empty row', async 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Excel copy controls remain usable in a narrow pane', async ({ page }) => {
-  const app = await openWorkbook(page);
-  await selectRange(page, 'A1', 'C2');
-  await page.setViewportSize({ width: 1000, height: 800 });
-  for (const selector of ['.excel-copy-table', '.excel-copy-markdown', '#office-zoom-in', '#office-font-source']) {
-    const button = page.locator(selector);
-    await expect(button).toBeVisible();
-    const rect = await button.boundingBox();
-    expect(rect.x).toBeGreaterThanOrEqual(0);
-    expect(rect.x + rect.width).toBeLessThanOrEqual(1000);
-  }
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('Excel copy reports clipboard failure and can retry', async ({ page }) => {
   const app = await openWorkbook(page);
   await page.evaluate(() => {

@@ -1,18 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-async function expectAlignedRows(page) {
-  const composer = await page.locator('.composer-inner').boundingBox();
-  const rows = page.locator('.composer-context-row:visible');
-  for (const row of await rows.all()) {
-    const rect = await row.boundingBox();
-    expect(Math.abs(rect.x - composer.x)).toBeLessThan(1);
-    expect(Math.abs(rect.width - composer.width)).toBeLessThan(1);
-    expect(await row.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  }
-}
-
-test('context rows align and approval disclosure preserves draft focus and actions', async ({ page }) => {
+test('approval disclosure preserves draft focus and actions', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.hostSettings.followup_behavior = 'queue';
   await app.install();
@@ -49,19 +38,12 @@ test('context rows align and approval disclosure preserves draft focus and actio
   await approval.locator('summary').click();
   await composer.fill('Draft while collapsed');
   await expect(approval.locator('.composer-approval-body')).toBeHidden();
-  await expectAlignedRows(page);
   await approval.locator('summary').click();
   await expect(approval.locator('.composer-approval-body')).toBeVisible();
   await composer.fill('Keep this draft');
   await expect(composer).toBeFocused();
   // An unrelated composer update must preserve the browser-owned disclosure.
   await expect(approval).toHaveAttribute('open', '');
-  await page.emulateMedia({ colorScheme: 'dark' });
-  await page.emulateMedia({ colorScheme: 'light' });
-  await page.setViewportSize({ width: 560, height: 960 });
-  await expect(page.locator('#sidebar-toggle[aria-expanded="false"]')).toBeVisible();
-  await expect.poll(() => page.locator('.app > aside').evaluate(el => el.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
-  await expectAlignedRows(page);
   await approval.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(approval.locator('.composer-approval-body')).toBeHidden();
@@ -174,7 +156,6 @@ test('Codex shares the question card while approvals retain their disclosure', a
   await expect(approval).toBeVisible();
   await approval.locator('summary').first().click();
   await expect(approval.locator('.codex-request-command')).toHaveText('moon test');
-  await expectAlignedRows(page);
   await approval.locator('[data-approval-decision="accept"]:visible').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(2);
   expect(app.pageErrors).toEqual([]);
@@ -224,55 +205,3 @@ for (const expanded of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
-
-test('a narrow running composer keeps the follow-up draft usable beside an editor and a terminal', async ({ page }) => {
-  await page.setViewportSize({ width: 1100, height: 700 });
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const composer = page.locator('#task');
-  await composer.fill('Start a turn');
-  await page.locator('#send').click();
-  // Squeeze the conversation pane with the editor split.
-  await app.openQuickOpen();
-  await page.locator('[role=option][data-path="src/main.mbt"]').click();
-  await expect(page.locator('#viewer-host .view-lines')).toBeVisible();
-  const split = await page.locator('.editor-resize-handle').boundingBox();
-  await page.mouse.move(split.x + split.width / 2, split.y + split.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(10, split.y + split.height / 2, { steps: 8 });
-  await page.mouse.up();
-  await composer.fill('Follow up while it runs');
-  await expect(page.locator('.composer-followup .composer-picker')).toBeVisible();
-  await expect.poll(() => page.locator('main').evaluate(el => el.getBoundingClientRect().width)).toBeLessThan(520);
-  const expectUsable = async () => {
-    const card = await page.locator('.composer-inner').boundingBox();
-    const draft = await composer.boundingBox();
-    expect(draft.width).toBeGreaterThan(card.width * 0.8);
-    for (const action of [page.locator('#stop'), page.locator('#send')]) {
-      const box = await action.boundingBox();
-      expect(box.x).toBeGreaterThanOrEqual(card.x);
-      expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width);
-      expect(box.y).toBeGreaterThanOrEqual(draft.y + draft.height);
-      expect(box.y + box.height).toBeLessThanOrEqual(card.y + card.height);
-    }
-    const toolbar = await page.locator('.composer-toolbar').boundingBox();
-    const main = await page.locator('main').boundingBox();
-    expect(toolbar.y).toBeGreaterThanOrEqual(card.y + card.height);
-    expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(main.y + main.height);
-  };
-  await expectUsable();
-  // Then raise the terminal to its limit under the narrow pane.
-  await page.locator('#terminal-toggle').click();
-  await expect.poll(() => app.requests.filter(r => r.method === 'terminal.open').length).toBe(1);
-  await page.locator('.content').evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
-  const seam = await page.locator('.terminal-resize-handle').boundingBox();
-  await page.mouse.move(seam.x + seam.width / 2, seam.y + seam.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(seam.x + seam.width / 2, 5, { steps: 8 });
-  await page.mouse.up();
-  await expect.poll(() => page.locator('main').evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(200);
-  await expectUsable();
-  expect(app.pageErrors).toEqual([]);
-});

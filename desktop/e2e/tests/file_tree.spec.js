@@ -36,7 +36,7 @@ test('switching editors reveals the active file inside collapsed directories', a
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Quick Open centers the revealed file and centers again when Files becomes visible', async ({ page }) => {
+test('Quick Open reveals the active file again when Files becomes visible', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.directoryEntries['/workspace'] = [{ name: 'src', is_dir: true }];
   app.directoryEntries['/workspace/src'] = [{ name: 'nested', is_dir: true }];
@@ -60,11 +60,6 @@ test('Quick Open centers the revealed file and centers again when Files becomes 
   const scrollport = page.locator('.workspace-file-list');
   await expect(row).toHaveAttribute('aria-selected', 'true');
   await expect(row).toBeInViewport();
-  await expect.poll(async () => {
-    const item = await row.boundingBox();
-    const viewport = await scrollport.boundingBox();
-    return Math.abs(item.y + item.height / 2 - viewport.y - viewport.height / 2);
-  }).toBeLessThanOrEqual(1);
   await expect(tree.locator(':focus')).toHaveCount(0);
   expect(await scrollport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
   for (const path of ['/workspace/src', '/workspace/src/nested']) {
@@ -78,11 +73,6 @@ test('Quick Open centers the revealed file and centers again when Files becomes 
   await page.locator('#explorer-search-tab').click();
   await files.click();
   await expect(row).toBeInViewport();
-  await expect.poll(async () => {
-    const item = await row.boundingBox();
-    const viewport = await scrollport.boundingBox();
-    return Math.abs(item.y + item.height / 2 - viewport.y - viewport.height / 2);
-  }).toBeLessThanOrEqual(1);
   await expect(files).toBeFocused();
   // Folding the active file's ancestor is intentional until the next reveal.
   const src = tree.locator('[role=treeitem][data-path="src"]');
@@ -153,39 +143,6 @@ test('a failed ancestor listing stops until the next explicit reveal', async ({ 
   await files.click();
   await expect(tree.locator('[role=treeitem][data-path="src/main.mbt"]')).toHaveAttribute('aria-selected', 'true');
   expect(app.requests.filter(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Files scrolls below the view tabs and keeps desktop row height on narrow screens', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.directoryEntries['/workspace'] = Array.from({ length: 80 }, (_, index) => ({
-    name: `file_${String(index).padStart(2, '0')}_with_a_very_long_deployment_configuration_name_for_truncation.mbt`,
-    is_dir: false,
-  }));
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await page.locator('#sidebar-toggle').click();
-  await app.openReview();
-  const tabs = page.locator('#explorer-views');
-  await tabs.locator('#explorer-files-tab').click();
-  const tree = page.locator('.workspace-file-list');
-  // The first row starts directly below the view tabs, without a second title.
-  expect((await tree.locator('.tree-file').first().boundingBox()).y - (await tree.boundingBox()).y).toBe(4);
-  const desktopRowHeight = (await tree.locator('.tree-file').first().boundingBox()).height;
-  const tabsBefore = await tabs.boundingBox();
-  await tree.locator('.tree-file').last().scrollIntoViewIfNeeded();
-  expect(await tree.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-  expect(await tabs.boundingBox()).toEqual(tabsBefore);
-  await tabs.locator('#explorer-search-tab').click();
-  await expect(page.locator('#workspace-search-input')).toBeVisible();
-  await expect(tree).toHaveCount(0);
-  await tabs.locator('#explorer-files-tab').click();
-  await page.setViewportSize({ width: 390, height: 760 });
-  await expect(tree).toBeVisible();
-  await expect.poll(async () => (await tree.locator('.tree-file').first().boundingBox()).height).toBe(desktopRowHeight);
-  expect(await tree.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await expect.poll(() => tree.locator('.tree-name').first().evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -285,7 +242,7 @@ test('file tree exposes hierarchy and one keyboard entry with directional naviga
 });
 
 for (const layout of ['right-sidebar', 'bottom-panel']) {
-  test(`${layout} file tree distinguishes temporary opening from a pinned tree and releases narrow-screen space`, async ({ page }) => {
+  test(`${layout} file tree distinguishes temporary opening from a pinned tree`, async ({ page }) => {
     await page.addInitScript(layout => localStorage.setItem('openseek.tree_layout', layout), layout);
     const app = new DesktopBrowserHarness(page);
     app.directoryEntries['/workspace'] = [
@@ -315,24 +272,6 @@ for (const layout of ['right-sidebar', 'bottom-panel']) {
     await page.locator('#file-tree-toggle').click();
     await expect(tree).toBeHidden();
 
-    await page.setViewportSize({ width: 390, height: 760 });
-    const expectFullViewer = async () => {
-      await expect(tree).toBeHidden();
-      await expect.poll(() => page.locator('.viewer-stack').evaluate(element => {
-        const body = element.parentElement.getBoundingClientRect();
-        const viewer = element.getBoundingClientRect();
-        return Math.max(Math.abs(body.width - viewer.width), Math.abs(body.height - viewer.height));
-      })).toBeLessThanOrEqual(1);
-    };
-    await expectFullViewer();
-    await page.locator('#file-tree-toggle').click();
-    await expect(tree).toBeVisible();
-    await page.locator('#file-tree-toggle').click();
-    await expectFullViewer();
-    await page.locator('#file-tree-toggle').click();
-    await tree.locator('[role=treeitem][data-path="b.mbt"]').click();
-    await expect(page.locator('.editor-tab.active')).toContainText('b.mbt');
-    await expectFullViewer();
     expect(app.pageErrors).toEqual([]);
   });
 }

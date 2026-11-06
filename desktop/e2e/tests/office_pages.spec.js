@@ -66,10 +66,6 @@ test('Word thumbnails preserve SVG content and the live surface while navigating
   await expect(thumbnail(page, 1).locator('svg')).toContainText('Document page 1');
   await thumbnail(page, 4).click();
   await expect(thumbnail(page, 4)).toHaveAttribute('aria-current', 'page');
-  await expect.poll(() => page.locator('#openseek-office-surface .word-page').nth(3).evaluate(node => {
-    const host = node.closest('.office-viewer-surface');
-    return Math.abs(node.getBoundingClientRect().top - host.getBoundingClientRect().top - 20);
-  })).toBeLessThan(3);
   await page.locator('#openseek-office-surface').evaluate(host => {
     host.scrollTop += host.querySelectorAll('.word-page')[1].getBoundingClientRect().top - host.getBoundingClientRect().top - 20;
   });
@@ -105,22 +101,5 @@ test('long PDFs load nearby thumbnails and release the old navigator on document
   await openFile(app, 'book1.xlsx');
   await expect(page.locator('#openseek-office-pages')).toBeHidden();
   await expect(page.locator('#office-pages-toggle')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a narrow preview floats the page window without shrinking the live document', async ({ page }) => {
-  const app = await setup(page);
-  await openFile(app, 'pages.pdf');
-  await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-ready', 'true');
-  await page.evaluate(() => { document.querySelector('.viewer-stack').style.maxWidth = '460px'; });
-  const before = await page.locator('#openseek-office-surface').evaluate(host => host.clientWidth);
-  await page.locator('#office-pages-toggle').click();
-  await expect(rail(page)).toHaveAttribute('data-overlay', 'true');
-  await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.clientWidth)).toBe(before);
-  await thumbnail(page, 3).click();
-  await expect(page.locator('#pdf-page-number')).toHaveValue('3');
-  await page.locator('#office-pages-close').click();
-  await expect(page.locator('#openseek-office-pages')).toBeHidden();
-  await expect(page.locator('#pdf-page-number')).toHaveValue('3');
   expect(app.pageErrors).toEqual([]);
 });

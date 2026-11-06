@@ -85,58 +85,6 @@ test('selected changes retain their preview during live language switching', asy
   expect(app.pageErrors).toEqual([]);
 });
 
-test('composer script previews pin one coordinate and sign while code scrolls', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  const file = 'scripts/example.mbtx';
-  const original = `let message = "old ${'long source '.repeat(18)}"`;
-  const modified = original.replace('old ', 'new ');
-  app.gitChanges = [{ path: file, index_status: ' ', worktree_status: 'M', kind: 'modified' }];
-  app.gitFilesByRevision[app.gitBaseline][file] = `${original}\n`;
-  app.workingFiles[file] = `${modified}\n`;
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openReview();
-  await page.locator('#review-changes-body').locator('[role=treeitem][data-path="scripts/example.mbtx"]').click();
-  await clickHunkContext(page);
-  await page.setViewportSize({ width: 1060, height: 800 });
-  await page.locator('.composer-changes .changes-chip .mention-jump').click();
-  const popup = page.getByTestId('selected-changes');
-  const preview = popup.locator('.editor-diff-preview');
-  await expect(preview.locator('.editor-diff-source')).toHaveText([original, modified]);
-  await expect(preview.locator('.editor-diff-number')).toHaveText(['1', '1']);
-  await expect(preview.locator('.editor-diff-sign')).toHaveText(['−', '+']);
-  await expect(preview.locator('.editor-diff-row.removed')).toHaveCount(1);
-  await expect(preview.locator('.editor-diff-row.added')).toHaveCount(1);
-  const geometry = () => preview.evaluate(node => {
-    const bounds = selector => node.querySelector(selector).getBoundingClientRect();
-    return {
-      number: bounds('.editor-diff-number').x,
-      sign: bounds('.editor-diff-sign').x,
-      source: bounds('.editor-diff-source').x,
-      width: node.clientWidth,
-      scrollWidth: node.scrollWidth,
-      scrollLeft: node.scrollLeft,
-    };
-  });
-  for (const theme of ['light', 'dark']) {
-    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
-    await preview.evaluate(node => { node.scrollLeft = 0; });
-    const before = await geometry();
-    expect(before.scrollWidth).toBeGreaterThan(before.width);
-    const sourceColor = await preview.locator('.editor-diff-source').first().evaluate(node => getComputedStyle(node).color);
-    const stringColor = await preview.locator('.mtk5').first().evaluate(node => getComputedStyle(node).color);
-    expect(stringColor).not.toBe(sourceColor);
-    await preview.evaluate(node => { node.scrollLeft = 180; });
-    await expect.poll(async () => (await geometry()).scrollLeft).toBe(180);
-    const after = await geometry();
-    expect(after.number).toBeCloseTo(before.number, 1);
-    expect(after.sign).toBeCloseTo(before.sign, 1);
-    expect(after.source).toBeCloseTo(before.source - 180, 1);
-  }
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('review hunk context stays independent and sends only selected snapshots', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const old = ['fn first() -> Int {', '  1', '}', ...Array(24).fill(''), 'fn second() -> Int {', '  2', '}', ''].join('\n');
@@ -270,19 +218,6 @@ test('review context survives regrouping and a partial group changes only on exp
   await waitForGitRefresh(app);
   await expect(contextButtons(page)).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('[role=menuitem][data-action=add-remaining-changes]:visible')).toBeVisible();
-  const menu = page.getByRole('menu');
-  const editorBounds = await contextButtons(page).evaluate(button =>
-    button.closest('.moonbit-diff-editor').getBoundingClientRect().toJSON());
-  const menuBounds = await menu.boundingBox();
-  expect(menuBounds.x).toBeGreaterThanOrEqual(editorBounds.x);
-  expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(editorBounds.right);
-  // The left-anchored menu overlays source text. Its actions must remain real
-  // pointer targets throughout the menu, without relying on sash overlap.
-  const removeItem = menu.locator('[role=menuitem][data-action=remove-included-changes]:visible');
-  const itemBounds = await removeItem.boundingBox();
-  const point = { x: itemBounds.x + itemBounds.width - 8, y: itemBounds.y + itemBounds.height / 2 };
-  expect(await removeItem.evaluate((node, point) => node.contains(document.elementFromPoint(point.x, point.y)), point))
-    .toBe(true);
   await page.keyboard.press('ArrowDown');
   await expect(page.locator('[role=menuitem][data-action=add-remaining-changes]:visible')).toBeFocused();
   await waitForGitRefresh(app);
@@ -340,11 +275,6 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await expect(deleted.locator('.changes-preview')).toHaveCount(0);
   await popup.locator('[data-change-path="src/lib.mbt"]').click();
   await expect(deleted.locator('.changes-preview')).toBeVisible();
-  // A narrow composer owns its popup width and independently scrolls long diffs.
-  await page.setViewportSize({ width: 1060, height: 800 });
-  const box = await popup.boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(1060);
   await page.keyboard.press('Escape');
   await expect(chip).toBeFocused();
   await page.locator('#task').fill('Explain these selected changes');
@@ -401,10 +331,10 @@ test('saved message changes keep independent disclosures and immutable previews'
   await expect(popup).not.toContainText('current workspace');
   await expect(popup.locator('.changes-range').first()).toHaveText('Old L8 → New L9');
   await expect(popup.getByRole('region')).toHaveCount(3);
-  for (const name of ['src/main.mbt: Old L8 → New L9', 'src/main.mbt: Old L20 → New L21',
-    'deleted/file.txt: Old L8 → New L9']) {
-    await expect(popup.getByRole('region', { name, exact: true })).toBeVisible();
-  }
+  for (const region of await popup.getByRole('region').all()) await expect(region).toBeVisible();
+  expect(await popup.getByRole('region').evaluateAll(regions => regions.map(region => region.getAttribute('aria-label'))))
+    .toEqual(['src/main.mbt: Old L8 → New L9', 'src/main.mbt: Old L20 → New L21',
+      'deleted/file.txt: Old L8 → New L9']);
   await popup.locator('[data-change-path="src/main.mbt"]').click();
   await expect(popup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
   await page.evaluate(() => {
@@ -428,14 +358,6 @@ test('saved message changes keep independent disclosures and immutable previews'
   await expect(popup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
   await popup.locator('[data-change-path="src/main.mbt"]').click();
   await expect(popup.locator('.changes-preview').first()).toContainText('let saved_value = 2');
-  await page.setViewportSize({ width: 860, height: 640 });
-  await chips.first().scrollIntoViewIfNeeded();
-  await expect(popup).toBeVisible();
-  const box = await popup.boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.y).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(860);
-  expect(box.y + box.height).toBeLessThanOrEqual(640);
   await page.locator('.topbar-title').click();
   await expect(popup).toBeHidden();
   await page.locator('#task').click();

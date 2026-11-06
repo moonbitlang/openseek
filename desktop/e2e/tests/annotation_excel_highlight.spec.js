@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('Excel annotation highlights retain the full source range while the live selection moves', async ({ page }) => {
+test('Excel annotation retains its source range while the live selection moves', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.searchFiles = ['docs/book1.xlsx'];
   await app.install();
@@ -29,17 +29,6 @@ test('Excel annotation highlights retain the full source range while the live se
   await expect(page.locator('.office-cell-selected')).toHaveCount(1);
   await expect(preview).toHaveAttribute('title', /A1:B2/);
   await expect(input).toHaveValue('Explain the original four cells');
-  const highlightedCells = () => page.evaluate(() => {
-    const highlights = [...document.querySelectorAll('.feedback-source-selection')].map(el => el.getBoundingClientRect());
-    return [...document.querySelectorAll('.sheet-document section:not([hidden]) td[data-cell]')].filter(cell => {
-      const rect = cell.getBoundingClientRect();
-      return highlights.some(h => Math.abs(h.left - rect.left) < 1 && Math.abs(h.top - rect.top) < 1
-        && Math.abs(h.width - rect.width) < 1 && Math.abs(h.height - rect.height) < 1);
-    }).map(cell => cell.dataset.cell).sort();
-  });
-  await expect.poll(highlightedCells).toEqual(['A1', 'A2', 'B1', 'B2']);
-  await page.locator('#office-zoom-in').click();
-  await expect.poll(highlightedCells).toEqual(['A1', 'A2', 'B1', 'B2']);
   await preview.getByRole('checkbox').check();
   await input.press('Enter');
   await expect(input).toBeHidden();

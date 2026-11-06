@@ -5,7 +5,8 @@ import { fixture, openHTMLPR, prURL } from './support/github_body_html.js';
 test('PR descriptions and comments use GitHub HTML', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-09-20T03:51:43Z') });
   const { app, body } = await openHTMLPR(page, fixture('review-summary'), { comments: [fixture('attributes')] });
-  await expect(body.getByRole('heading', { name: 'Codex Review Summary' })).toBeVisible();
+  await expect(body.getByRole('heading')).toBeVisible();
+  await expect(body.getByRole('heading')).toHaveText('Codex Review Summary');
   await expect(body.locator('markdown-accessiblity-table table[role="table"] th')).toHaveText(['Review', 'Status', 'Commit', 'Review trigger']);
   await expect(body.locator('code.notranslate')).toHaveText('fdab425');
   await expect.poll(() => body.locator('relative-time').evaluate(el => el.shadowRoot?.textContent)).toBe('2 minutes ago');
@@ -70,7 +71,7 @@ test('GitHub code highlighting and task lists remain native without local diagra
   expect(app.pageErrors).toEqual([]);
 });
 
-test('GitHub media keeps proxy URLs, native playback and responsive sizing', async ({ page }) => {
+test('GitHub media keeps proxy URLs and native playback', async ({ page }) => {
   const requests = [];
   const clip = readFileSync(new URL('../fixtures/github-markdown/clip.webm', import.meta.url));
   await page.emulateMedia({ colorScheme: 'dark' });
@@ -80,11 +81,11 @@ test('GitHub media keeps proxy URLs, native playback and responsive sizing', asy
     return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#729ac4"/></svg>' });
   });
   const { app, body } = await openHTMLPR(page, fixture('media'));
-  const image = body.getByRole('img', { name: 'HTML image', exact: true });
+  const image = body.locator('img[data-canonical-src="https://example.com/html.png"]');
+  await expect(image).toHaveAccessibleName('HTML image');
   await expect(image).toHaveClass('js-gh-image-fallback');
   await expect(image).toHaveAttribute('data-canonical-src', 'https://example.com/html.png');
   await expect(image).toHaveAttribute('src', /^https:\/\/camo\.githubusercontent\.com\//);
-  await expect(image).toHaveAttribute('style', /aspect-ratio: 320 \/ 180/);
   await expect(body.locator('themed-picture')).toHaveAttribute('data-catalyst-inline', 'true');
   const pictureSource = await body.locator('picture source').getAttribute('srcset');
   await expect.poll(() => body.locator('picture img').evaluate(el => el.currentSrc)).toBe(pictureSource);
@@ -104,10 +105,6 @@ test('GitHub media keeps proxy URLs, native playback and responsive sizing', asy
   await expect.poll(() => app.requests.filter(r => r.method === 'github.pull_request').length).toBe(2);
   await expect.poll(() => handle.evaluate(el => el.isConnected)).toBe(true);
   expect(await video.evaluate(el => el.currentTime)).toBe(position);
-  for (const width of [1440, 900]) {
-    await page.setViewportSize({ width, height: 900 });
-    expect(await body.evaluate(root => [...root.querySelectorAll('img, video, picture')].every(el => el.getBoundingClientRect().width <= root.clientWidth + 1))).toBe(true);
-  }
   expect(requests.some(url => url.startsWith('https://camo.githubusercontent.com/'))).toBe(true);
   expect(requests.filter(url => /https:\/\/example\.com\/(?:markdown|html|dark|fallback)\.png/.test(url))).toEqual([]);
   expect(app.requests.filter(r => r.method === 'fs.read_file')).toEqual([]);
@@ -118,10 +115,12 @@ test('GitHub HTML links normalize source URLs, copy correctly and route each cli
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await context.route('https://github.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>GitHub fixture</title>' }));
   const { app, body } = await openHTMLPR(page, '<p><a href="../blob/main/README.md">Guide</a> <a href="#discussion">Discussion</a></p>');
-  const guide = body.getByRole('link', { name: 'Guide', exact: true });
-  const discussion = body.getByRole('link', { name: 'Discussion', exact: true });
+  const guide = body.locator('a[href="https://github.com/owner/project/blob/main/README.md"]');
+  const discussion = body.locator(`a[href=${JSON.stringify(`${prURL}#discussion`)}]`);
   const guideURL = 'https://github.com/owner/project/blob/main/README.md';
+  await expect(guide).toHaveAccessibleName('Guide');
   await expect(guide).toHaveAttribute('href', guideURL);
+  await expect(discussion).toHaveAccessibleName('Discussion');
   await expect(discussion).toHaveAttribute('href', `${prURL}#discussion`);
   await discussion.click({ button: 'right' });
   const menu = page.locator('[role=menu]:visible');

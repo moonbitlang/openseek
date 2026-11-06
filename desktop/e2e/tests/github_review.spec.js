@@ -127,9 +127,11 @@ test('inline Review comments render HTML and media and preserve disclosure state
   fixture.threads[0].comments[0].body = 'Legacy inline Markdown must not be displayed';
   fixture.releaseReview();
   const comment = page.locator('.github-review-inline-block [data-thread-id="right"] .markdown');
-  await expect(comment.getByRole('link', { name: 'Guide', exact: true }))
+  await expect(comment.locator('a[href="https://github.com/owner/project/blob/main/README.md"]')).toHaveAccessibleName('Guide');
+  await expect(comment.locator('a[href="https://github.com/owner/project/blob/main/README.md"]'))
     .toHaveAttribute('href', 'https://github.com/owner/project/blob/main/README.md');
-  await expect(comment.getByRole('img', { name: 'Screenshot', exact: true }))
+  await expect(comment.locator('img[src="https://image.example.test/comment.png"]')).toHaveAccessibleName('Screenshot');
+  await expect(comment.locator('img[src="https://image.example.test/comment.png"]'))
     .toHaveAttribute('src', 'https://image.example.test/comment.png');
   await expect(comment.locator('markdown-accessiblity-table table')).toHaveCount(1);
   await expect(comment.locator('pre.notranslate code.notranslate')).toHaveText('<script>literal code</script>');
@@ -188,7 +190,8 @@ test('missing PR commits recover from Update checkout with retry, pending feedba
 test('inline discussions work across Line, Token and Tree with shared reply, resolve and delete actions', async ({ page }) => {
   const { app } = await openComments(page);
   const right = page.locator('.github-review-inline-block [data-thread-id="right"]');
-  await expect(right.locator('strong').filter({ hasText: 'coverage' })).toBeVisible();
+  await expect(right.locator('.github-review-markdown strong')).toBeVisible();
+  await expect(right.locator('.github-review-markdown strong')).toHaveText('coverage');
   for (const mode of ['Line', 'Token', 'Tree']) {
     await page.locator(`[data-diff-mode=${mode.toLowerCase()}]`).click();
     const editor = page.locator(mode === 'Line' ? '#diff-editor-host' : `.semantic-review[data-mode="${mode.toLowerCase()}"]`);
@@ -237,7 +240,7 @@ test('inline discussions work across Line, Token and Tree with shared reply, res
   expect(app.pageErrors).toEqual([]);
 });
 
-test('local line draft survives reload, failures and layout changes; Send publishes the anchored revision', async ({ page }) => {
+test('local line draft survives reload, failures and diff view changes; Send publishes the anchored revision', async ({ page }) => {
   const { app, fixture } = await openComments(page);
   const editor = page.locator('#diff-editor-host');
   const modified = editor.locator('.moonbit-diff-editor-modified');

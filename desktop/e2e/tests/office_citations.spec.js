@@ -171,7 +171,7 @@ test('Excel citations reveal a far virtual range without a native scroll and kee
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Excel citations into a closed panel wait for the virtual sheet layout before revealing', async ({ page }) => {
+test('Excel citations into a closed panel reveal the virtual sheet target after opening', async ({ page }) => {
   // The panel opens with the citation, so the first reveal can run before the
   // virtual viewport has a size. It must reveal once the sheet is laid out.
   const app = await openAnswer(page, [

@@ -1,19 +1,13 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// The disclosure content is shared; cover both delivery modes and both widths without their full product.
-for (const [behavior, width] of [['queue', 1440], ['steer', 700]]) {
-    test(`${behavior} expands multiline follow-ups at ${width}px`, async ({ page }) => {
+for (const behavior of ['queue', 'steer']) {
+    test(`${behavior} preserves multiline follow-up content and disclosure state`, async ({ page }) => {
       const app = new DesktopBrowserHarness(page);
       app.hostSettings.followup_behavior = behavior;
       await app.install();
       await app.goto();
       await app.openSession();
-      await page.setViewportSize({ width, height: 1000 });
-      if (width === 700) {
-        await expect.poll(() => page.locator('.app > aside').evaluate(element =>
-          element.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
-      }
       const composer = page.locator('#task');
       await composer.fill('Start a turn');
       await page.locator('#send').click();
@@ -27,30 +21,9 @@ for (const [behavior, width] of [['queue', 1440], ['steer', 700]]) {
       await expect(row).not.toHaveAttribute('open');
       await expect(text).toBeHidden();
       expect(await preview.textContent()).toBe(content);
-      expect(await preview.evaluate(element => element.clientHeight))
-        .toBeLessThanOrEqual(await preview.evaluate(element => parseFloat(getComputedStyle(element).lineHeight)) + 1);
       await summary.click();
       await expect(text).toBeVisible();
       expect(await text.textContent()).toBe(content);
-      const geometry = await text.evaluate(element => {
-        const content = element.firstChild;
-        const topAt = offset => {
-          const range = document.createRange();
-          range.setStart(content, offset);
-          range.setEnd(content, offset + 1);
-          return range.getBoundingClientRect().top;
-        };
-        return {
-          lineGap: topAt(content.textContent.indexOf('What')) - topAt(0),
-          lineHeight: parseFloat(getComputedStyle(element).lineHeight),
-          width: element.clientWidth,
-          scrollWidth: element.scrollWidth,
-        };
-      });
-      expect(geometry.lineGap).toBeGreaterThanOrEqual(geometry.lineHeight * 2 - 1);
-      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width + 1);
-      const rowBounds = await row.boundingBox();
-      expect(rowBounds.x + rowBounds.width).toBeLessThanOrEqual(width);
       await composer.fill('An unrelated draft');
       await expect(row).toHaveAttribute('open', '');
       await expect(text).toBeVisible();

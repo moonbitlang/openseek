@@ -116,7 +116,6 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   // compare the same rendered turn before and after the prepend.
   let release;
   cloud.pauseHistory = new Promise(resolve => { release = resolve; });
-  const third = transcript.locator('#turn-s7');
   const response = historyResponse();
   let before;
   try {
@@ -125,7 +124,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
     await expect.poll(() => requests.length).toBe(2);
     await expect(loadingOlder).toBeInViewport();
     await expect(rowSpinner).toBeVisible();
-    before = (await third.boundingBox()).y;
+    before = await transcript.evaluate(element => element.scrollHeight - element.scrollTop);
     await transcript.hover();
     await page.mouse.wheel(0, -400);
     expect(requests).toHaveLength(2);
@@ -137,7 +136,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   await expect(bubbles).toHaveText(['Second question', 'Third question']);
   await expect(loadingOlder).toHaveCount(0);
   await expect(rowSpinner).toHaveCount(0);
-  await expect.poll(async () => Math.abs((await third.boundingBox()).y - before)).toBeLessThan(2);
+  await expect.poll(() => transcript.evaluate(element => element.scrollHeight - element.scrollTop)).toBe(before);
 
   await transcript.evaluate(element => { element.scrollTop = 0; });
   await expect(bubbles).toHaveText(['First question', 'Second question', 'Third question']);

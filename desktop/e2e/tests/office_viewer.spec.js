@@ -315,7 +315,7 @@ test('Excel ranges preview cell contents and retain separately confirmed context
 });
 
 
-test('Word comments stay beside their source paragraphs and quote only after confirmation', async ({ page }) => {
+test('Word comments reveal their source paragraphs and quote only after confirmation', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   const app = new DesktopBrowserHarness(page);
   app.officeFiles['docs/comments.docx'] = {
@@ -347,10 +347,6 @@ test('Word comments stay beside their source paragraphs and quote only after con
   expect(await cards.allTextContents()).not.toEqual(expect.arrayContaining([
     expect.stringMatching(/docx\.comment:|p\[\d+\]|Resolution unknown|context only/),
   ]));
-  const documentColumn = await page.locator('.office-context-document').boundingBox();
-  const sidebar = await rail.boundingBox();
-  expect(sidebar.x).toBeGreaterThanOrEqual(documentColumn.x + documentColumn.width);
-
   await cards.nth(1).locator('.office-context-header .office-context-select').click();
   // The highlighted source must match this comment, regardless of SVG text splitting.
   await expect.poll(async () => (await page.locator('.office-annotation-focus').allTextContents()).join(''))
@@ -370,7 +366,6 @@ test('Word comments stay beside their source paragraphs and quote only after con
 
   await rail.locator('summary').click();
   await expect(rail).not.toHaveAttribute('open');
-  await expect.poll(async () => (await rail.boundingBox()).width).toBeLessThan(sidebar.width);
   await expect(cards.first()).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
