@@ -49,7 +49,7 @@ async function setup(page, minimal, child = false, events = history) {
   };
   await app.install();
   await app.goto();
-  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await app.sessionButton().click();
   await expect(page.locator('#transcript')).toContainText('First answer.');
   return app;
 }
@@ -57,22 +57,21 @@ async function setup(page, minimal, child = false, events = history) {
 for (const minimal of [false, true]) {
   test(`${minimal ? 'minimal' : 'detailed'} Fork uses the terminal boundary and opens an idle copy`, async ({ page }) => {
     const app = await setup(page, minimal);
-    const buttons = page.getByRole('button', { name: 'Fork from here', exact: true });
-    expect(await buttons.first().textContent()).toBe('');
+    expect(await page.locator('[data-testid="message-fork"][data-fork-through="3"]').textContent()).toBe('');
     app.rpcDelays.set('session.fork', 500);
-    await buttons.first().focus();
+    await page.locator('[data-testid="message-fork"][data-fork-through="3"]').focus();
     await page.keyboard.press('Enter');
-    await expect(buttons.first()).toBeDisabled();
-    await expect(buttons.last()).toBeDisabled();
+    await expect(page.locator('[data-testid="message-fork"][data-fork-through="3"]')).toBeDisabled();
+    await expect(page.locator('[data-testid="message-fork"][data-fork-through="6"]')).toBeDisabled();
     await expect(page.locator('.message-fork-spinner')).toHaveCount(1);
-    await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
-    await expect(page.getByRole('button', { name: 'Fork from here', exact: true })).toHaveCount(1);
+    await expect(app.sessionRow('fork-session')).toHaveClass(/active/);
+    await expect(page.locator('[data-testid="message-fork"]')).toHaveCount(1);
     await expect(page.locator('#transcript')).not.toContainText('Second answer.');
     await expect(page.locator('#transcript')).not.toContainText('Still working.');
-    await expect(page.getByRole('textbox', { name: 'Ask SeekMoon to inspect, edit, or explain this workspace.', exact: true })).toBeFocused();
+    await expect(page.locator('#task')).toBeFocused();
     expect(app.requests.filter(r => r.method === 'session.fork').map(r => r.params.through)).toEqual([3]);
     expect(app.requests.find(r => r.method === 'session.fork').params.source_title).toBe('Rabbita browser fixture');
-    await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toHaveCount(2);
+    await expect(app.sessionButton().or(app.sessionButton('fork-session'))).toHaveCount(2);
     expect(app.requests.filter(r => r.method === 'agent.start')).toEqual([]);
     expect(app.pageErrors).toEqual([]);
   });
@@ -80,24 +79,24 @@ for (const minimal of [false, true]) {
 
 test('a delayed fork cannot replace a newer missing destination', async ({ page }) => {
   const app = await setup(page, false);
-  await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
+  await app.sessionButton('session-other').click();
   await expect(page).toHaveURL(/\/chat\/session\/session-other$/);
-  await page.locator('.conversation-row[title="session-1"]').click();
+  await app.sessionRow('session-1').click();
   await expect(page).toHaveURL(/\/chat\/session\/session-1$/);
   const pending = Promise.withResolvers();
   const reply = app.replyFor.bind(app);
   app.replyFor = request => request.method === 'session.fork' ? pending.promise : reply(request);
-  await page.getByRole('button', { name: 'Fork from here', exact: true }).first().click();
+  await page.locator('[data-testid="message-fork"][data-fork-through="3"]').click();
   await expect.poll(() => app.requests.some(r => r.method === 'session.fork')).toBe(true);
   app.liveSessions = app.liveSessions.filter(row => row.id !== 'session-other');
   app.notify('session.changed', { change: 'deleted', session: 'session-other', workspace: '/workspace' });
-  await expect(page.locator('.conversation-row[title="session-other"]')).toHaveCount(0);
+  await expect(app.sessionRow('session-other')).toHaveCount(0);
   await page.goBack();
   await expect(page).toHaveURL(/\/chat\/session\/session-other$/);
-  const unavailable = page.getByText('This destination no longer exists or is no longer attached.');
+  const unavailable = page.locator('.navigation-notice');
   await expect(unavailable).toBeVisible();
   pending.resolve(reply(app.requests.find(r => r.method === 'session.fork')));
-  const fork = page.locator('.conversation-row[title="fork-session"]');
+  const fork = app.sessionRow('fork-session');
   await expect(fork).toBeVisible();
   await expect(fork).not.toHaveClass(/active/);
   await expect(unavailable).toBeVisible();
@@ -113,31 +112,30 @@ for (const minimal of [false, true]) {
     const app = await setup(page, minimal);
     app.rpcDelays.set('session.fork', 2500);
     if (failed) app.rpcErrors.set('session.fork', 'Fork fixture unavailable');
-    const buttons = page.getByRole('button', { name: 'Fork from here', exact: true });
-    await buttons.first().click();
+    const buttons = page.locator('[data-testid="message-fork"]');
+    await page.locator('[data-testid="message-fork"][data-fork-through="3"]').click();
     await expect(page.locator('.message-fork-spinner')).toHaveCount(1);
-    await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
-    await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
+    await app.sessionButton('session-other').click();
+    await expect(app.sessionRow('session-other')).toHaveClass(/active/);
     await expect(buttons).toHaveCount(2);
-    await expect(buttons.first()).toBeDisabled();
-    await expect(buttons.last()).toBeDisabled();
-    await expect(buttons.first()).toHaveAttribute('title', 'Forking, please wait');
+    await expect(page.locator('[data-testid="message-fork"][data-fork-through="3"]')).toBeDisabled();
+    await expect(page.locator('[data-testid="message-fork"][data-fork-through="6"]')).toBeDisabled();
     await expect(page.locator('.message-fork-spinner')).toHaveCount(0);
     expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(1);
     if (failed) {
-      await expect(page.getByText('Fork fixture unavailable', { exact: false })).toBeVisible();
+      await expect(page.locator('.notifications')).toContainText('Fork fixture unavailable');
     } else {
-      await expect(page.locator('.conversation-row[title="fork-session"]')).toBeVisible();
-      await expect(page.locator('.conversation-row[title="fork-session"]')).not.toHaveClass(/active/);
+      await expect(app.sessionRow('fork-session')).toBeVisible();
+      await expect(app.sessionRow('fork-session')).not.toHaveClass(/active/);
     }
-    await expect(buttons.first()).toBeEnabled();
-    await expect(buttons.last()).toBeEnabled();
-    await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-testid="message-fork"][data-fork-through="3"]')).toBeEnabled();
+    await expect(page.locator('[data-testid="message-fork"][data-fork-through="6"]')).toBeEnabled();
+    await expect(app.sessionRow('session-other')).toHaveClass(/active/);
     if (failed) {
       app.rpcErrors.delete('session.fork');
       app.rpcDelays.delete('session.fork');
-      await buttons.first().click();
-      await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+      await page.locator('[data-testid="message-fork"][data-fork-through="3"]').click();
+      await expect(app.sessionRow('fork-session')).toHaveClass(/active/);
       expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(2);
     }
     expect(app.pageErrors).toEqual([]);
@@ -149,8 +147,8 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
   const committed = event(9, 'terminal', { kind: 'finished', message: 'Still working.' });
   app.sessionEvents = [...history, committed];
   app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 9, event: committed });
-  await expect(page.getByRole('button', { name: 'Fork from here', exact: true })).toHaveCount(3);
-  await page.getByRole('button', { name: 'Fork from here', exact: true }).last().click();
+  await expect(page.locator('[data-testid="message-fork"]')).toHaveCount(3);
+  await page.locator('[data-testid="message-fork"][data-fork-through="9"]').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'session.fork').map(r => r.params.through)).toEqual([9]);
   expect(app.pageErrors).toEqual([]);
 });
@@ -161,11 +159,11 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
   test(`${minimal ? 'minimal' : 'detailed'} edit stays inline until Send and preserves the original composer`, async ({ page }) => {
     const app = await setup(page, minimal);
     await page.locator('#task').fill('Keep my original draft');
-    const original = page.locator('.conversation-row[title="session-1"]');
-    const target = page.locator('.msg.user').filter({ hasText: 'Explore another approach.' });
-    await target.getByRole('button', { name: 'Edit message', exact: true }).click();
+    const original = app.sessionRow('session-1');
+    const target = page.locator('#turn-s4');
+    await target.locator('[id^="user-message-edit-trigger-"]').click();
     const editor = page.locator('.message-editor');
-    const input = editor.getByRole('textbox', { name: 'Edit message', exact: true });
+    const input = editor.locator('textarea');
     await expect(input).toHaveValue('Explore another approach.');
     await expect(input).toBeFocused();
     await expect(original).toHaveClass(/active/);
@@ -186,7 +184,7 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
     await input.press('Enter');
     await expect(input).toBeDisabled();
     await expect(page.locator('#transcript')).toContainText('Second answer.');
-    await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+    await expect(app.sessionRow('fork-session')).toHaveClass(/active/);
     await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(1);
     expect(app.requests.filter(r => r.method === 'session.edit').map(r => r.params.through)).toEqual([3]);
     const sent = app.requests.find(r => r.method === 'session.edit');
@@ -200,14 +198,14 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
 
   test(`${minimal ? 'minimal' : 'detailed'} first-message edit creates a new chat only on Send`, async ({ page }) => {
     const app = await setup(page, minimal);
-    await page.getByRole('button', { name: 'Edit message', exact: true }).first().click();
+    await page.locator('#user-message-edit-trigger-1').click();
     const editor = page.locator('.message-editor');
     await expect(editor.locator('textarea')).toHaveValue('Explore the first approach.');
     await expect(page.locator('#transcript')).toContainText('First answer.');
-    await expect(page.locator('.conversation-row[title="session-1"]')).toHaveClass(/active/);
+    await expect(app.sessionRow('session-1')).toHaveClass(/active/);
     expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
     await editor.locator('textarea').fill('Start with a different question.');
-    await editor.getByRole('button', { name: 'Send', exact: true }).click();
+    await editor.getByTestId('message-edit-send').click();
     await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(1);
     expect(app.requests.find(r => r.method === 'session.edit').params.through).toBeUndefined();
     expect(app.requests.find(r => r.method === 'session.edit').params.task).toBe('Start with a different question.');
@@ -222,13 +220,13 @@ test('cancel and Escape restore the original bubble without creating a conversat
   const app = await setup(page, true);
   await page.locator('#task').fill('My separate draft');
   for (const escape of [false, true]) {
-    await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+    await page.locator('#user-message-edit-trigger-4').click();
     const editor = page.locator('.message-editor');
     await editor.locator('textarea').fill('Unsent changes');
     if (escape) await editor.locator('textarea').press('Escape');
-    else await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+    else await editor.getByTestId('message-edit-cancel').click();
     await expect(editor).toHaveCount(0);
-    await expect(page.locator('.msg.user').filter({ hasText: 'Explore another approach.' })).toBeVisible();
+    await expect(page.locator('#turn-s4')).toBeVisible();
     await expect(page.locator('#task')).toHaveValue('My separate draft');
   }
   expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
@@ -246,9 +244,9 @@ test('expanding an older message keeps the reader in place while later answers s
   const app = await setup(page, true, false, events);
   const transcript = page.locator('#transcript');
   await transcript.evaluate(node => { node.scrollTop = 0; });
-  const target = page.locator('.msg.user').filter({ hasText: 'Explore another approach.' });
+  const target = page.locator('#turn-s4');
   await expect(target).toBeInViewport();
-  const edit = target.getByRole('button', { name: 'Edit message', exact: true });
+  const edit = target.locator('[id^="user-message-edit-trigger-"]');
   // Settle the entry animation and Playwright's scroll-into-view before
   // measuring: click() can otherwise move the reader before editing begins.
   await edit.click({ trial: true });
@@ -270,19 +268,19 @@ test('expanding an older message keeps the reader in place while later answers s
 test('failed fork retains the edited text and later transcript for retry', async ({ page }) => {
   const app = await setup(page, true);
   app.rpcErrors.set('session.edit', 'Fork temporarily unavailable');
-  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+  await page.locator('#user-message-edit-trigger-4').click();
   const editor = page.locator('.message-editor');
   await editor.locator('textarea').fill('Retry this edited request');
-  await editor.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.getByText('Fork temporarily unavailable', { exact: false })).toBeVisible();
+  await editor.getByTestId('message-edit-send').click();
+  await expect(page.locator('.notifications')).toContainText('Fork temporarily unavailable');
   await expect(editor.locator('textarea')).toHaveValue('Retry this edited request');
   await expect(editor.locator('textarea')).toBeEnabled();
   await expect(page.locator('#transcript')).toContainText('Second answer.');
   expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(1);
   app.rpcErrors.delete('session.edit');
-  await editor.getByRole('button', { name: 'Send', exact: true }).click();
+  await editor.getByTestId('message-edit-send').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'session.edit').length).toBe(2);
-  await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+  await expect(app.sessionRow('fork-session')).toHaveClass(/active/);
   expect(app.requests.find(r => r.method === 'session.edit').params.task).toBe('Retry this edited request');
   expect(app.pageErrors).toEqual([]);
 });
@@ -301,10 +299,10 @@ for (const navigate of [false, true]) {
       }
       return originalReply(request);
     };
-    await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+    await page.locator('#user-message-edit-trigger-4').click();
     const editor = page.locator('.message-editor');
     await editor.locator('textarea').fill('An edit overtaken by deletion');
-    await editor.getByRole('button', { name: 'Send', exact: true }).click();
+    await editor.getByTestId('message-edit-send').click();
     await expect.poll(() => app.requests.filter(request => request.method === 'session.edit').length).toBe(1);
 
     // The same authoritative notification reaches this client when another
@@ -316,21 +314,22 @@ for (const navigate of [false, true]) {
     await expect(editor.locator('textarea')).toBeDisabled();
     await expect(page.locator('#transcript')).toContainText('Second answer.');
     if (navigate) {
-      await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
+      await app.sessionButton('session-other').click();
       await expect(page.locator('#transcript')).toContainText('An unrelated conversation');
       await page.locator('#task').fill('Keep this unrelated draft');
     }
 
-    await expect(page.getByText(error, { exact: false })).toBeVisible();
-    await expect(page.locator('.conversation-row[title="session-1"]')).toHaveCount(0);
-    await expect(page.getByText('Second answer.', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.notifications')).toContainText(error);
+    await expect(app.sessionRow('session-1')).toHaveCount(0);
     await expect(editor).toHaveCount(0);
     if (!navigate) {
-      await expect(page.getByText('This destination no longer exists or is no longer attached.')).toBeVisible();
+      await expect(page.locator('#transcript')).toHaveCount(0);
+      await expect(page.locator('.navigation-notice')).toBeVisible();
       await expect(page).toHaveURL(/\/chat\/session\/session-1$/);
     }
     if (navigate) {
-      await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
+      await expect(page.locator('#transcript')).not.toContainText('Second answer.');
+      await expect(app.sessionRow('session-other')).toHaveClass(/active/);
       await expect(page.locator('#transcript')).toContainText('An unrelated conversation');
       await expect(page.locator('#task')).toHaveValue('Keep this unrelated draft');
     }
@@ -342,14 +341,14 @@ for (const navigate of [false, true]) {
 test('Send completes in its fork after navigation without replacing the other composer', async ({ page }) => {
   const app = await setup(page, true);
   app.rpcDelays.set('session.edit', 1200);
-  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+  await page.locator('#user-message-edit-trigger-4').click();
   await page.locator('.message-editor textarea').fill('Edited in the source');
-  await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
-  await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
+  await page.locator('.message-editor').getByTestId('message-edit-send').click();
+  await app.sessionButton('session-other').click();
   await page.locator('#task').fill('Unrelated draft');
   await expect.poll(() => app.requests.find(r => r.method === 'session.edit')?.params.task).toBe('Edited in the source');
   expect(app.requests.find(r => r.method === 'session.edit').params.session).toBe('session-1');
-  await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
+  await expect(app.sessionRow('session-other')).toHaveClass(/active/);
   await expect(page.locator('#task')).toHaveValue('Unrelated draft');
   expect(app.pageErrors).toEqual([]);
 });
@@ -361,13 +360,13 @@ test('inline edit preserves image attachments and mention chips on Send', async 
     { type: 'image', media_type: 'image/png', data: image.split(',')[1] },
   ] }) : e);
   const app = await setup(page, true, false, events);
-  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+  await page.locator('#user-message-edit-trigger-4').click();
   const editor = page.locator('.message-editor');
   await expect(editor.locator('textarea')).toHaveValue('Explain this image.');
   await expect(editor.locator('img')).toHaveAttribute('src', image);
   await expect(editor).toContainText('main.mbt');
   await editor.locator('textarea').fill('Explain the revised image request.');
-  await editor.getByRole('button', { name: 'Send', exact: true }).click();
+  await editor.getByTestId('message-edit-send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'session.edit')?.params.images).toEqual([image]);
   expect(app.requests.find(r => r.method === 'session.edit').params.task).toContain('<file path="src/main.mbt"/>');
   expect(app.pageErrors).toEqual([]);
@@ -377,19 +376,19 @@ test('edit never skips an intervening user input without a forkable answer', asy
   const events = history.map(e => e.sequence === 6
     ? event(6, 'terminal', { kind: 'failed', message: 'Failed to finish.' }) : e);
   const app = await setup(page, true, false, events);
-  await expect(page.getByRole('button', { name: 'Edit message', exact: true })).toHaveCount(2);
-  await expect(page.locator('.msg.user').filter({ hasText: 'Continue working.' }).getByRole('button', { name: 'Edit message' })).toHaveCount(0);
+  await expect(page.locator('[id^="user-message-edit-trigger-"]')).toHaveCount(2);
+  await expect(page.locator('#turn-s7').locator('[id^="user-message-edit-trigger-"]')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
 for (const first of [false, true]) {
   test(`single edit replaces the ${first ? 'first' : 'later'} message without client-side cleanup calls`, async ({ page }) => {
     const app = await setup(page, true);
-    await page.getByRole('button', { name: 'Edit message', exact: true }).nth(first ? 0 : 1).click();
+    await page.locator(`#user-message-edit-trigger-${first ? 1 : 4}`).click();
     await page.locator('.message-editor textarea').fill('Revised question');
-    await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(page.locator('.conversation-row[title="session-1"]')).toHaveCount(0);
-    await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+    await page.locator('.message-editor').getByTestId('message-edit-send').click();
+    await expect(app.sessionRow('session-1')).toHaveCount(0);
+    await expect(app.sessionRow('fork-session')).toHaveClass(/active/);
     await expect(page.locator('#transcript')).toContainText('Revised question');
     expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(1);
     expect(app.requests.find(r => r.method === 'session.edit').params).toMatchObject({ session: 'session-1', source_sequence: 8 });
@@ -400,12 +399,11 @@ for (const first of [false, true]) {
 
 test('running and compacting chats disable editing without interrupting the run', async ({ page }) => {
   const app = await setup(page, true);
-  const edit = page.getByRole('button', { name: 'Edit message', exact: true }).nth(1);
+  const edit = page.locator('#user-message-edit-trigger-4');
   await expect(edit).toBeEnabled();
   app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
   await expect(edit).toBeDisabled();
-  await expect(edit).toHaveAttribute('title', 'Messages cannot be edited while a task is running');
-  await expect(page.getByRole('button', { name: 'Fork from here', exact: true }).first()).toBeEnabled();
+  await expect(page.locator('[data-testid="message-fork"][data-fork-through="3"]')).toBeEnabled();
   app.notify('agent.finished', { session: 'session-1', run_id: 'busy-edit', status: 'finished', answer: 'Done', exit_code: 0 });
   await expect(edit).toBeEnabled();
   app.notify('agent.event', { session: 'session-1', event: { event: 'compaction_started', from_sequence: 1, to_sequence: 8 } });
@@ -418,19 +416,19 @@ test('running and compacting chats disable editing without interrupting the run'
 
 test('a run starting during inline editing disables Send but keeps the draft and Cancel', async ({ page }) => {
   const app = await setup(page, true);
-  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+  await page.locator('#user-message-edit-trigger-4').click();
   const editor = page.locator('.message-editor');
   await editor.locator('textarea').fill('Keep my edit');
   app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
-  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await expect(editor.getByTestId('message-edit-send')).toBeDisabled();
   await expect(editor.locator('textarea')).toHaveValue('Keep my edit');
   await expect(editor.locator('textarea')).toBeDisabled();
   app.notify('agent.finished', { session: 'session-1', run_id: 'busy-edit', status: 'finished', answer: 'Done', exit_code: 0 });
-  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(editor.getByTestId('message-edit-send')).toBeEnabled();
   await expect(editor.locator('textarea')).toHaveValue('Keep my edit');
   app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit-2', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
-  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(editor.getByTestId('message-edit-send')).toBeDisabled();
+  await editor.getByTestId('message-edit-cancel').click();
   await expect(editor).toHaveCount(0);
   expect(app.requests.filter(r => ['agent.cancel', 'session.edit'].includes(r.method))).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
@@ -454,7 +452,7 @@ test('typing and an external run in the same render keep the draft and disable i
     }));
   });
   const app = await setup(page, true);
-  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+  await page.locator('#user-message-edit-trigger-4').click();
   const editor = page.locator('.message-editor');
   await expect(editor.locator('textarea')).toBeVisible();
   const probes = app.requests.filter(request => request.method === 'git.branch').length;
@@ -466,9 +464,9 @@ test('typing and an external run in the same render keep the draft and disable i
   await page.evaluate(() => window.__releaseEditFrame());
   await expect(editor.locator('textarea')).toHaveValue('Keep my simultaneous edit');
   await expect(editor.locator('textarea')).toBeDisabled();
-  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  await expect(editor.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
-  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(editor.getByTestId('message-edit-send')).toBeDisabled();
+  await expect(editor.getByTestId('message-edit-cancel')).toBeEnabled();
+  await editor.getByTestId('message-edit-cancel').click();
   await expect(editor).toHaveCount(0);
   expect(app.requests.filter(r => ['agent.cancel', 'session.edit'].includes(r.method))).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);

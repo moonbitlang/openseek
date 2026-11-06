@@ -28,9 +28,10 @@ function longSessionEvents(prefix) {
   return events;
 }
 
-async function openConversation(page, title, firstQuestion) {
-  await page.getByText(title, { exact: true }).first().click();
-  await page.locator('.transcript .msg-content', { hasText: firstQuestion }).first().waitFor();
+async function openConversation(page, app, id) {
+  await app.sessionButton(id).click();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', id);
+  await page.locator('#turn-s1 .msg-content').waitFor();
 }
 
 function distanceFromBottom(transcript) {
@@ -48,7 +49,7 @@ test('sending re-pins a transcript the reader had scrolled up', async ({ page })
   app.sessionEvents = longSessionEvents('First fixture:');
   await app.install();
   await app.goto();
-  await openConversation(page, 'Rabbita browser fixture', /^First fixture: question 1$/);
+  await openConversation(page, app, 'session-1');
 
   const transcript = page.locator('#transcript');
   await waitUntilScrollable(transcript);
@@ -56,7 +57,7 @@ test('sending re-pins a transcript the reader had scrolled up', async ({ page })
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(0);
 
   await page.locator('#task').fill('Run the browser E2E turn');
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'agent.start')).toBe(true);
   await expect.poll(() => distanceFromBottom(transcript)).toBeLessThanOrEqual(4);
@@ -108,7 +109,7 @@ test('returning to a conversation restores where the reader left it', async ({ p
   };
   await app.install();
   await app.goto();
-  await openConversation(page, 'Rabbita browser fixture', /^First fixture: question 1$/);
+  await openConversation(page, app, 'session-1');
 
   const transcript = page.locator('#transcript');
   await waitUntilScrollable(transcript);
@@ -116,12 +117,14 @@ test('returning to a conversation restores where the reader left it', async ({ p
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(600);
 
   await page.locator('.conversation-row[title="session-2"]').click();
-  await page.locator('.transcript .msg-content', { hasText: /^Second fixture: question 1$/ }).waitFor();
+  await expect(transcript).toHaveAttribute('data-transcript-session', 'session-2');
+  await expect(page.locator('#turn-s1 .msg-content')).toHaveText('Second fixture: question 1');
   // A conversation opened for the first time starts at its tail.
   await expect.poll(() => distanceFromBottom(transcript)).toBeLessThanOrEqual(4);
 
   await page.locator('.conversation-row[title="session-1"]').click();
-  await page.locator('.transcript .msg-content', { hasText: /^First fixture: question 1$/ }).waitFor();
+  await expect(transcript).toHaveAttribute('data-transcript-session', 'session-1');
+  await expect(page.locator('#turn-s1 .msg-content')).toHaveText('First fixture: question 1');
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(600);
   expect(app.pageErrors).toEqual([]);
 });

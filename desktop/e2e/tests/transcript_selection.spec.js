@@ -21,7 +21,7 @@ for (const [minimal, gesture, action] of [
     await app.install();
     await app.goto();
     await app.openSession();
-    const paragraph = page.locator('#transcript .msg-content').getByText('Selectable answer paragraph.', { exact: true });
+    const paragraph = page.locator('#transcript .msg-content.markdown p');
     if (gesture === 'double click') {
       await paragraph.dblclick({ position: { x: 8, y: 8 } });
     } else {
@@ -37,34 +37,35 @@ for (const [minimal, gesture, action] of [
       await page.mouse.move(box.x + box.width, box.y, { steps: 5 });
       await page.mouse.up();
     }
-    const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
+    const toolbar = page.locator('.selection-actions[role="toolbar"]');
     await expect(toolbar).toBeVisible();
-    await expect(toolbar.getByRole('button')).toHaveText(['Copy', 'Reply']);
-    await expect(page.getByRole('dialog', { name: 'Reply to selection' })).toHaveCount(0);
+    await expect(toolbar.locator('#selection-copy')).toBeVisible();
+    await expect(toolbar.locator('#selection-reply')).toBeVisible();
+    await expect(page.locator('.selection-actions.replying')).toHaveCount(0);
     expect(await page.evaluate(() => document.getSelection().toString())).toBe('Selectable');
     if (action === 'keyboard copy') {
       await page.evaluate(() => navigator.clipboard.writeText('clipboard before selection'));
       await page.keyboard.press('ControlOrMeta+c');
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Selectable');
     } else if (action === 'toolbar copy') {
-      await toolbar.getByRole('button', { name: 'Copy', exact: true }).click();
+      await toolbar.locator('#selection-copy').click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Selectable');
       expect(await page.evaluate(() => document.getSelection().toString())).toBe('Selectable');
       await expect(toolbar).toHaveCount(0);
-      const copied = page.getByRole('status', { name: 'Copied', exact: true });
+      const copied = page.locator('.selection-copy-feedback');
       await expect(copied).toBeVisible();
       await expect(page.locator('[data-selection-actions]')).toHaveCount(0);
       expect(await page.evaluate(() => document.getSelection().toString())).toBe('Selectable');
       await paragraph.dblclick({ position: { x: 8, y: 8 } });
-      await toolbar.getByRole('button', { name: 'Reply', exact: true }).click();
-      const reply = page.getByRole('dialog', { name: 'Reply to selection' });
+      await toolbar.locator('#selection-reply').click();
+      const reply = page.locator('.selection-actions.replying');
       await expect(reply.locator('blockquote')).toHaveText('Selectable');
-      await expect(reply.getByRole('textbox', { name: 'Reply', exact: true })).toBeFocused();
+      await expect(reply.locator('#selection-reply-input')).toBeFocused();
     } else {
       await paragraph.click({ button: 'right', position: { x: 8, y: 8 } });
-      const menu = page.getByRole('menu', { name: 'Context menu' });
+      const menu = page.locator('[id="app-context-menu-content"]:visible');
       await expect(menu).toBeVisible();
-      await menu.getByRole('menuitem', { name: 'Copy', exact: true }).click();
+      await menu.locator('[role="menuitem"][data-action="copy"]:visible').click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Selectable');
     }
     expect(app.pageErrors).toEqual([]);

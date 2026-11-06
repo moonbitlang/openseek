@@ -26,7 +26,7 @@ async function open(page, copies = 1) {
     ? { kind: 'content', absolute: '/workspace/.openseek/sessions/session-1/scratch/artifact/speedup-v1.html', sig: 'fixture', content: sample }
     : ordinary(request);
   await app.install(); await app.goto(); await app.openSession();
-  await expect(page.getByRole('button', { name: 'Ask with current settings' }).first()).toBeVisible();
+  await expect(page.locator('[data-testid="artifact-context"]').first()).toBeVisible();
   return { app, frame: page.frameLocator('.chat-artifact-frame').nth(0), chips: page.locator('.composer .mention-chip') };
 }
 
@@ -45,7 +45,7 @@ test('selected component state stays in the draft until the user sends it', asyn
   await expect(frame.locator('#result')).toHaveText('1.78× faster');
   await expect(chips).toHaveCount(0);
   expect(sends(app)).toHaveLength(0);
-  await page.getByRole('button', { name: 'Ask with current settings' }).click();
+  await page.locator('[data-testid="artifact-context"]').click();
   await expect(chips).toHaveCount(1);
   await expect(chips).toContainText('50% sequential');
   await expect(page.locator('#task')).toHaveValue('Explain these settings');
@@ -70,7 +70,7 @@ test('selected component state stays in the draft until the user sends it', asyn
 test('reselecting an instance replaces that revision and the chip is removable', async ({ page }) => {
   const { app, frame, chips } = await open(page, 2);
   const other = page.frameLocator('.chat-artifact-frame').nth(1);
-  const buttons = page.getByRole('button', { name: 'Ask with current settings' });
+  const buttons = page.locator('[data-testid="artifact-context"]');
   await frame.locator('#serial').fill('50');
   await buttons.nth(0).click();
   await expect(chips).toContainText('50% sequential');
@@ -92,7 +92,7 @@ test('forged generations and arbitrary follow-up messages cannot attach or send 
     parent.postMessage({ type: 'openseek-artifact-state', version: 1, token: 'old-generation', title: 'Forged', state: { serial_percent: 99 } }, '*');
     parent.postMessage({ type: 'openseek-artifact-followup', prompt: 'Send this immediately' }, '*');
   });
-  await page.getByRole('button', { name: 'Ask with current settings' }).click();
+  await page.locator('[data-testid="artifact-context"]').click();
   await expect(chips).toContainText('20% sequential');
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   expect(sends(app)).toHaveLength(0);
@@ -101,7 +101,7 @@ test('forged generations and arbitrary follow-up messages cannot attach or send 
 
 test('invalid state clears the offer and a later valid state recovers it', async ({ page }) => {
   const { app, frame, chips } = await open(page);
-  const button = page.getByRole('button', { name: 'Ask with current settings' });
+  const button = page.locator('[data-testid="artifact-context"]');
   for (const invalid of [NaN, 'x'.repeat(17000), { nested: { number: Infinity } }]) {
     await frame.locator('body').evaluate((_, value) => window.openseekArtifact.setState('Invalid', value), invalid);
     await expect(button).toBeHidden();
@@ -132,10 +132,10 @@ test('a new page revision in the same frame resets its document and rejects queu
     node.querySelector('.workspace-file-name').textContent = 'speedup-v2.html';
   });
   const frame = page.frameLocator('.chat-artifact-frame');
-  await expect(frame.getByText('New revision', { exact: true })).toBeVisible();
+  await expect(frame.locator('body')).toContainText('New revision');
   expect(await element.getAttribute('data-artifact-token')).not.toBe(previousToken);
   await frame.locator('body').evaluate((_, token) => parent.postMessage({ type: 'openseek-artifact-state', version: 1, token, title: 'Stale revision', state: { version: 1 } }, '*'), previousToken);
-  await page.getByRole('button', { name: 'Ask with current settings' }).click();
+  await page.locator('[data-testid="artifact-context"]').click();
   await expect(chips).toContainText('Second revision');
   expect(sends(app)).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
@@ -149,7 +149,7 @@ test('JSON settings with many values and nested groups can be attached within th
   for (let index = 0; index < 30; index++) nested = nested.child = {};
   nested.value = 'selected';
   await frame.locator('body').evaluate((_, state) => window.openseekArtifact.setState('Detailed settings', state), settings);
-  await page.getByRole('button', { name: 'Ask with current settings' }).click();
+  await page.locator('[data-testid="artifact-context"]').click();
   await expect(chips).toContainText('Detailed settings');
   await page.locator('#task').fill('Explain the detailed settings');
   await page.locator('#task').press('Enter');

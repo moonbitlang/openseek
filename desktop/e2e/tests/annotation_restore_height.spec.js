@@ -7,14 +7,14 @@ test('a multiline PDF annotation retains its height and position after scrolling
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle[aria-expanded="true"]').click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('report.pdf');
-  await page.getByRole('option', { name: /report\.pdf/ }).click();
+  await page.locator('#quick-open-list [data-path="docs/report.pdf"]').click();
   await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
-  const source = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'OpenSeek PDF preview' }).first();
+  const source = page.locator('.page[data-page-number="1"] [data-pdf-item="0"]');
   await source.evaluate(element => {
     const range = document.createRange();
     range.selectNodeContents(element);

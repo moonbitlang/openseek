@@ -42,7 +42,7 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     return super.replyFor(request);
   }
 
-  // The titlebar debug toggle is off while the minimal transcript is shown.
+  // Load the fixture before checking its minimal transcript blocks.
   async enableMinimal() {
     await this.openSession();
     await expect(this.page.locator('#stream .minimal-tools, #stream .minimal-tools-live, #stream .minimal-process, #stream .minimal-single-call').first()).toBeVisible();
@@ -195,7 +195,7 @@ test('minimal transcript groups live tools and folds completed work around user 
   const aggregate = tools.locator(':scope > summary > .minimal-tool-status');
   await expect(aggregate.locator('.minimal-failure-count')).toHaveCount(0);
   await expect(aggregate).not.toContainText(/tool calls? failed/);
-  await expect(aggregate.getByRole('img', { name: 'Tool failed' })).toBeVisible();
+  await expect(aggregate.locator('[data-tool-status="failed"]')).toBeVisible();
   const spinner = aggregate.locator('.tool-status-spinner');
   await expect(spinner).toBeVisible();
   expect(await spinner.evaluate(node => node.getAnimations().some(animation =>
@@ -203,15 +203,15 @@ test('minimal transcript groups live tools and folds completed work around user 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(spinner).toHaveCSS('animation-name', 'none');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await expect(stream.getByText('I will explore this project.', { exact: true })).toBeVisible();
-  await expect(stream.getByText('Now I can check the remaining details.', { exact: true })).toBeVisible();
+  await expect(stream.locator('.msg-content:visible')).toContainText(['I will explore this project.']);
+  await expect(stream.locator('.msg-content:visible')).toContainText(['Now I can check the remaining details.']);
   await expect(tools).not.toHaveAttribute('open', '');
   await tools.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(tools.locator('.minimal-call-caption')).toHaveText([
     'Read the project manifest', 'Cannot read the second file', 'Check project details',
   ]);
-  await expect(tools.locator('.minimal-call .tool-status').last()).toHaveAttribute('aria-label', 'Tool in progress');
+  await expect(tools.locator('.minimal-call .tool-status').last()).toHaveAttribute('data-tool-status', 'pending');
   const originalTools = await tools.elementHandle();
   app.append('tool_result', {
     tool_call_id: 'script', tool_name: 'mbtx', content: 'OUTPUT_SENTINEL', is_error: false,
@@ -243,12 +243,12 @@ test('minimal transcript groups live tools and folds completed work around user 
   await expect(processes.nth(1).locator(':scope > summary .minimal-failure-count')).toHaveCount(0);
   await expect(processes.nth(0).locator(':scope > summary')).not.toContainText(/tool calls? failed/);
   await expect(processes.nth(1).locator(':scope > summary')).not.toContainText(/tool calls? failed/);
-  await expect(processes.nth(0).locator(':scope > summary').getByRole('img', { name: 'Tool failed' })).toBeVisible();
-  await expect(processes.nth(1).locator(':scope > summary').getByRole('img', { name: 'Tool failed' })).toBeVisible();
-  await expect(stream.getByText('I will explore this project.', { exact: true })).toBeHidden();
-  await expect(stream.getByText('Please focus on the architecture.', { exact: true })).toBeVisible();
+  await expect(processes.nth(0).locator(':scope > summary').locator('[data-tool-status="failed"]')).toBeVisible();
+  await expect(processes.nth(1).locator(':scope > summary').locator('[data-tool-status="failed"]')).toBeVisible();
+  await expect(stream.locator('.msg-content:visible')).not.toContainText(['I will explore this project.']);
+  await expect(stream.locator('.msg-content:visible')).toContainText(['Please focus on the architecture.']);
   await expect(stream.locator('.msg-content strong')).toHaveText('final summary');
-  await expect(stream.getByRole('button', { name: 'Copy assistant message as Markdown', exact: true })).toHaveCount(1);
+  await expect(stream.locator('[data-copy-kind="assistant-message"]')).toHaveCount(1);
   // Minimal mode mirrors detailed mode's finish line: the confirmed final
   // answer carries its durable commit instant beside the copy action.
   await expect(stream.locator('.assistant-message-actions .assistant-message-time')).toHaveCount(1);
@@ -263,8 +263,8 @@ test('minimal transcript groups live tools and folds completed work around user 
   );
   // Prose keeps the outer process, but its single call needs no inner fold.
   await expect(processes.nth(1).locator('.minimal-tools')).toHaveCount(0);
-  await expect(processes.nth(1).locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
-  await expect(stream.locator('.minimal-call-caption').filter({ hasText: /^mcp__example__inspect$/ })).toBeVisible();
+  await expect(processes.nth(1).locator('.minimal-call .tool-status.failed')).toHaveAttribute('data-tool-status', 'failed');
+  await expect(stream.locator('.minimal-call-caption:visible')).toContainText(['mcp__example__inspect']);
   await expect(stream).not.toContainText(/REASONING_SENTINEL|PARAMETER_SENTINEL|OUTPUT_SENTINEL|SCRIPT_SENTINEL/);
   await expect(stream.locator('.tool-call-tabs, .activity-thinking')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
@@ -286,7 +286,7 @@ for (const replayed of [false, true]) test(`minimal transcript clears jump to la
   await app.goto();
   await app.enableMinimal();
   const transcript = page.locator('#transcript');
-  const jump = page.getByTitle('Jump to latest', { exact: true });
+  const jump = page.locator('.jump-latest');
   if (!replayed) {
     await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight))
       .toBeGreaterThan(1000);
@@ -360,7 +360,7 @@ test('minimal edit previews render unified lines and preserve call state', async
   }
   await expect(calls.last().locator('.minimal-call-caption')).toHaveText('Batch rejected');
   await expect(calls.locator('.editor-diff-preview').first()).toBeVisible();
-  await expect(calls.nth(1).locator('.tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
+  await expect(calls.nth(1).locator('.tool-status.failed')).toHaveAttribute('data-tool-status', 'failed');
   await expect(calls.locator('.editor-diff-preview')).toHaveCount(3);
   await expect(stream).not.toContainText('PARAMETER_SENTINEL');
   await expect(stream).not.toContainText('OUTPUT_SENTINEL');
@@ -368,25 +368,22 @@ test('minimal edit previews render unified lines and preserve call state', async
   await page.setViewportSize({ width: 640, height: 900 });
   await page.emulateMedia({ colorScheme: 'dark' });
   for (const block of await calls.locator('.minimal-edit-block').all()) {
-    await expect(block.getByRole('button', { name: 'Copy diff', exact: true })).toBeVisible();
+    await expect(block.locator('.edit-copy')).toBeVisible();
     const box = await block.boundingBox();
     expect(box.x + box.width).toBeLessThanOrEqual(640);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: 'light' });
-  const minimalDiffs = await calls.locator('.editor-diff-source').allTextContents();
   app.append('assistant', { content: 'Finished reviewing the edits.' });
   app.append('terminal', { kind: 'finished', message: 'Finished reviewing the edits.' });
   await expect(stream.locator('.editor-diff-preview').first()).toBeHidden();
-  await expect(stream.getByText('Finished reviewing the edits.', { exact: true })).toBeVisible();
+  await expect(stream.locator('.msg-content:visible')).toContainText(['Finished reviewing the edits.']);
   const completed = stream.locator('.minimal-process');
   await expect(completed.locator('.minimal-tools')).toHaveCount(0);
   await completed.locator(':scope > summary').click();
   await expect(completed.locator('.editor-diff-preview').first()).toBeVisible();
   await expect(completed.locator('.editor-diff-preview')).toHaveCount(3);
-  await expect(completed.locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
-
-
+  await expect(completed.locator('.minimal-call .tool-status.failed')).toHaveAttribute('data-tool-status', 'failed');
 });
 
 test('minimal diff pins line numbers and markers while source scrolls', async ({ page }) => {
@@ -442,7 +439,7 @@ test('minimal diff pins line numbers and markers while source scrolls', async ({
     expect(await gutters.evaluateAll(els => els.map(el => el.getBoundingClientRect().x))).toEqual(before);
     expect(await block.locator('.edit-titlebar').boundingBox()).toEqual(title);
     await block.hover();
-    await expect(block.getByRole('button', { name: 'Copy diff', exact: true })).toBeVisible();
+    await expect(block.locator('.edit-copy')).toBeVisible();
     await diff.evaluate(el => { el.scrollLeft = 0; });
   }
   expect(app.pageErrors).toEqual([]);
@@ -471,13 +468,13 @@ test('minimal job waits name their targets while pending and disappear after suc
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText(caption);
 
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests', caption]);
-  await expect(tools.locator('.minimal-call .tool-status.pending')).toHaveAttribute('aria-label', 'Tool in progress');
+  await expect(tools.locator('.minimal-call .tool-status.pending')).toHaveAttribute('data-tool-status', 'pending');
   const notice = 'background job bg-2 finished (exit=0): Run the pr tests';
   app.append('runtime_notice', { content: notice });
   app.append('tool_result', { tool_call_id: 'wait', tool_name: 'job_wait', content: 'WAIT_RESULT_SENTINEL', is_error: false });
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests']);
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Run the pr tests');
-  await expect(tools.getByText(notice, { exact: true })).toBeVisible();
+  await expect(tools).toContainText(notice);
   await expect(stream).not.toContainText('WAIT_RESULT_SENTINEL');
 
   app.append('assistant', { content: '', tool_calls: [
@@ -486,7 +483,7 @@ test('minimal job waits name their targets while pending and disappear after suc
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Wait for any of these jobs to complete: "Run the pr tests", bg-unknown');
   app.append('tool_result', { tool_call_id: 'wait-many', tool_name: 'job_wait', content: 'unknown job', brief: 'Unknown job bg-unknown', is_error: true });
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests', 'Unknown job bg-unknown']);
-  await expect(tools.locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
+  await expect(tools.locator('.minimal-call .tool-status.failed')).toHaveAttribute('data-tool-status', 'failed');
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Unknown job bg-unknown');
 
   // A wait-only group disappears without leaving an empty activity disclosure.

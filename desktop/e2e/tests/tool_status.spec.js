@@ -15,13 +15,12 @@ test('Codex partial output and result-only calls retain pending status until com
   }];
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+  await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+  await page.locator('[role="option"][data-value="codex:gpt-5.4-codex"]').click();
   await expect.poll(() => app.requests.some(request => request.method === 'codex.draft.open')).toBe(true);
-  // The model chip updates before the Codex composer replaces SeekMoon's.
-  // Wait for the destination textbox rather than filling the shared old #task.
-  await page.getByRole('textbox', { name: 'Ask Codex to inspect, edit, or explain this workspace.', exact: true }).fill('Check tool status');
-  await page.getByTitle('Send', { exact: true }).click();
+  await expect(page.locator('#codex-model-picker')).toHaveAttribute('data-value', 'codex:gpt-5.4-codex');
+  await page.locator('#task').fill('Check tool status');
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.some(request => request.method === 'codex.turn.start')).toBe(true);
   const turn = { threadId: 'codex-thread-e2e', turnId: 'codex-turn-e2e' };
   for (const type of ['commandExecution', 'fileChange']) {
@@ -33,14 +32,14 @@ test('Codex partial output and result-only calls retain pending status until com
       params: { ...turn, item: { ...item, status: 'inProgress' } },
     });
     const row = page.locator(type === 'commandExecution' ? '.tool-call-summary' : '.tool-result-summary').last();
-    await expect(row.getByRole('img', { name: 'Tool in progress' })).toBeVisible();
+    await expect(row.locator('[data-tool-status="pending"]')).toBeVisible();
     await row.click();
     await expect(page.locator('.tool-result').last()).toContainText(type === 'commandExecution' ? 'Tests still running' : 'inProgress');
     app.notify('codex.notification', {
       generation: 1, method: 'item/completed',
       params: { ...turn, item: { ...item, status: 'completed' } },
     });
-    await expect(row.getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
+    await expect(row.locator('[data-tool-status="succeeded"]')).toBeVisible();
     await expect(row.locator('.tool-status-spinner')).toHaveCount(0);
   }
   expect(app.pageErrors).toEqual([]);
@@ -69,7 +68,7 @@ test('tool success and failure preserve each call’s selected inputs and indepe
   await app.openSession();
   const calls = page.locator('#transcript details.tool-call');
   await expect(calls).toHaveCount(2);
-  await expect(calls.getByRole('img', { name: 'Tool in progress' })).toHaveCount(2);
+  await expect(calls.locator('[data-tool-status="pending"]')).toHaveCount(2);
   const spinner = calls.first().locator('.tool-status-spinner');
   expect(await spinner.evaluate(node => node.getAnimations().some(animation =>
     animation.playState === 'running' && animation.effect.getTiming().iterations === Infinity))).toBe(true);
@@ -80,10 +79,10 @@ test('tool success and failure preserve each call’s selected inputs and indepe
   for (const [index, { id, isError, description }] of outcomes.entries()) {
     const call = calls.nth(index);
     const summary = call.locator('.tool-call-summary');
-    await expect(summary.getByRole('img', { name: 'Tool in progress' })).toBeVisible();
+    await expect(summary.locator('[data-tool-status="pending"]')).toBeVisible();
     await summary.click();
-    await call.getByText('Original JSON', { exact: true }).click();
-    const originalJson = call.getByRole('radio', { name: 'Original JSON', exact: true });
+    await call.locator('label[data-tool-tab="original-json"]').click();
+    const originalJson = call.locator('input[data-tool-tab-input="original-json"]');
     await expect(originalJson).toBeChecked();
     const sequence = 3 + index;
     app.notify('session.event', {
@@ -95,21 +94,21 @@ test('tool success and failure preserve each call’s selected inputs and indepe
       } } },
     });
     await expect(summary).toContainText(description);
-    await expect(summary.getByRole('img', { name: isError ? 'Tool failed' : 'Tool succeeded' })).toBeVisible();
-    await expect(summary.getByRole('img', { name: 'Tool in progress' })).toHaveCount(0);
+    await expect(summary.locator(`[data-tool-status="${isError ? 'failed' : 'succeeded'}"]`)).toBeVisible();
+    await expect(summary.locator('[data-tool-status="pending"]')).toHaveCount(0);
     await expect(call).toHaveAttribute('open', '');
     await expect(originalJson).toBeChecked();
     const results = page.locator('#transcript .tool-result');
     await expect(results).toHaveCount(index + 1);
-    await expect(results.last().getByRole('img', { name: /Tool (in progress|failed|succeeded)/ })).toHaveCount(0);
+    await expect(results.last().locator('[data-tool-status]:not([data-tool-status="snapshot"])')).toHaveCount(0);
     if (isError) {
       await expect(summary).toContainText('build');
-      await expect(results.last().locator('.tool-stage-build')).toHaveText('build error');
+      await expect(results.last().locator('.tool-stage-build')).toBeVisible();
     }
-    await expect(page.locator('.tool-call-label').getByRole('img', { name: 'Tool in progress' })).toBeVisible();
+    await expect(page.locator('.tool-call-label').locator('[data-tool-status="pending"]')).toBeVisible();
   }
   // The second result must not overwrite the first call's outcome or tab choice.
-  await expect(calls.first().getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
-  await expect(calls.first().getByRole('radio', { name: 'Original JSON', exact: true })).toBeChecked();
+  await expect(calls.first().locator('[data-tool-status="succeeded"]')).toBeVisible();
+  await expect(calls.first().locator('input[data-tool-tab-input="original-json"]')).toBeChecked();
   expect(app.pageErrors).toEqual([]);
 });

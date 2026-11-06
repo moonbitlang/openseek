@@ -52,8 +52,8 @@ test('read workflow keeps thought, prose and tool order and highlights mixed out
   const call = page.locator('#transcript details.tool-call');
   await expect(call.locator('.tool-call-text')).toContainText('@builtin/read.mbtx');
   await page.locator('#transcript details.activity > summary').click();
-  const thought = page.getByText('The requested range should be enough.', { exact: true });
-  const prose = page.getByText('Inspect the requested files.', { exact: true });
+  const thought = page.locator('#transcript .activity-thinking');
+  const prose = page.locator('#transcript .msg-content.markdown:not(.activity-thinking)');
   await expect(thought).toBeVisible();
   await expect(prose).toBeVisible();
   // Wait for the details expansion before checking transcript order.
@@ -65,12 +65,12 @@ test('read workflow keeps thought, prose and tool order and highlights mixed out
       proseBox.y + proseBox.height <= callBox.y;
   }).toBe(true);
   await call.locator('.tool-call-summary').click();
-  await call.getByText('Filename', { exact: true }).click();
+  await call.locator('label[data-tool-tab="arguments"]').click();
   await expect(call.locator('.mbtx-args')).toContainText('src/main.mbt:120:120');
   await expect(call.locator('.mbtx-args')).toContainText('README.md');
   const result = page.locator('#transcript details.tool-result');
   await result.locator('.tool-result-summary').click();
-  await result.getByText('Output', { exact: true }).click();
+  await result.locator('label[data-tool-tab="output"]').click();
   const rendered = result.locator('pre.tool-call-output');
   await expect(rendered.locator('.read-moonbit-output')).toHaveCount(2);
   await expect(rendered.locator('.read-moonbit-gutter')).toHaveText(['120', '1']);
@@ -80,7 +80,7 @@ test('read workflow keeps thought, prose and tool order and highlights mixed out
     await expect.poll(() => textColorCount(code)).toBeGreaterThan(1);
   }
   await expect(rendered).toContainText('# Documentation <literal>');
-  await result.getByText('Original output', { exact: true }).click();
+  await result.locator('label[data-tool-tab="original-output"]').click();
   await expect(result.locator('pre.tool-card-original-json:visible')).toHaveText(output);
   expect(app.pageErrors).toEqual([]);
 });
@@ -184,7 +184,7 @@ test('write calls show numbered content highlighted by the path language', async
     else await expect.poll(colors).toBe(1);
   }
   const plain = calls.nth(writes.length - 1);
-  await plain.getByText('Original JSON', { exact: true }).click();
+  await plain.locator('label[data-tool-tab="original-json"]').click();
   await expect(plain.locator('pre.tool-card-original-json:visible')).toContainText('"notes.txt"');
   expect(app.pageErrors).toEqual([]);
 });

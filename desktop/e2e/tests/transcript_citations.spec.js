@@ -30,10 +30,10 @@ for (const minimal of [false, true]) {
     await app.install();
     await page.emulateMedia({ colorScheme: 'light' });
     await app.goto();
-    await page.getByText('文档分析与来源引用', { exact: true }).first().click();
+    await app.sessionButton().click();
     const markdown = page.locator('#transcript .msg-content.markdown');
     await expect(markdown.locator('.citation')).toHaveText(['1', '2', '3', '1']);
-    const sources = markdown.getByRole('group', { name: '来源', exact: true });
+    const sources = markdown.locator('.citation-sources');
     await expect(sources).not.toHaveAttribute('open');
     await expect(sources.locator('.citation-source')).toHaveCount(3);
     await expect(sources.locator('.citation-source-list')).toBeHidden();
@@ -146,7 +146,7 @@ test('citation actions stay message-local and code, unused definitions, and unsa
   await expect(messages.nth(1).locator('.citation[data-citation="2"] :is(a, button)')).toHaveCount(0);
   await expect(messages.nth(1).locator('.citation[data-citation="3"] :is(a, button)')).toHaveCount(0);
   await expect(messages.nth(1).locator('a[href^="javascript:"]')).toHaveCount(0);
-  await expect(messages.nth(1).getByRole('link', { name: 'Unused', exact: true })).toHaveCount(0);
+  await expect(messages.nth(1).locator('a[href="https://example.test/unused"]')).toHaveCount(0);
   await expect(messages.nth(1).locator('code').last()).toHaveText('[^4]');
   for (const [index, path] of [[0, '/workspace/first.docx'], [1, '/workspace/second.mbt:42']]) {
     await messages.nth(index).locator('.citation[data-citation="1"] button').click();

@@ -80,7 +80,7 @@ test('transcript renders editor diagram fences and retains them across updates a
 
   const workspace = app.projectRow('/workspace');
   await workspace.hover();
-  await workspace.getByTitle('New conversation in this project').click();
+  await app.projectControl('/workspace', 'new-conversation').click();
   await expect(transcript.locator('.chat-mermaid')).toHaveCount(0);
   await app.openSession();
   await expect(transcript.locator('.chat-mermaid').first().locator('svg')).toContainText('Alpha');
@@ -126,7 +126,7 @@ test('transcript ignores a Mermaid result after its conversation is removed', as
   const oldTarget = await page.locator('#transcript .chat-mermaid').elementHandle();
   const workspace = app.projectRow('/workspace');
   await workspace.hover();
-  await workspace.getByTitle('New conversation in this project').click();
+  await app.projectControl('/workspace', 'new-conversation').click();
   await expect(page.locator('#transcript .chat-mermaid')).toHaveCount(0);
   const disposedHtml = await oldTarget.evaluate(element => element.innerHTML);
   await page.evaluate(() => window.completeDiagram());
