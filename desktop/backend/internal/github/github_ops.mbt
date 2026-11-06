@@ -45,14 +45,16 @@ pub async fn current_pull_request(
   }
   // Addressed exactly like `git.branch`, so the two chips can never end up
   // describing different branches.
-  let base = match payload.cwd {
-    Some(cwd) =>
-      Some(@pathx.Absolute::parse_resource_path(cwd)) catch {
-        InvalidResourcePath => None
-      }
-    None => @work_dir.session_cwd(payload.session)
+  let base = if payload.cwd is Some(cwd) {
+    @pathx.Absolute::parse_resource_path(cwd) catch {
+      InvalidResourcePath => return nothing
+    }
+  } else {
+    guard @work_dir.session_cwd(payload.session) is Some(base) else {
+      return nothing
+    }
+    base
   }
-  guard base is Some(base) else { return nothing }
   // Read from `HEAD` rather than blindly trusting the caller. Codex-managed
   // worktrees are normally detached, though, so recover a branch only when it
   // demonstrably names the same commit: first app-server's creation-time hint,
