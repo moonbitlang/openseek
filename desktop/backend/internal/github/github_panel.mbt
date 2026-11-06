@@ -14,13 +14,13 @@ async fn github_command(
     extra_env=env.unwrap_or_else(@gitx.environment),
     inherit_env=false,
   ) catch {
-    error => raise HostError("Could not run GitHub CLI: \{error}")
+    error => raise Unavailable("Could not run GitHub CLI: \{error}")
   }
   guard code == 0 else {
     let detail = stderr.text() catch {
       _ => "GitHub CLI returned unreadable error output."
     }
-    raise HostError(
+    raise Unavailable(
       if detail.trim().is_empty() {
         "GitHub CLI failed (exit \{code})."
       } else {
@@ -29,7 +29,7 @@ async fn github_command(
     )
   }
   stdout.text() catch {
-    _ => raise HostError("GitHub CLI returned unreadable output.")
+    _ => raise InvalidResponse("GitHub CLI returned unreadable output.")
   }
 }
 
@@ -41,7 +41,7 @@ async fn github_panel_json(
 ) -> Json {
   let output = github_command(gh, dir, args)
   @json.parse(output) catch {
-    _ => raise HostError("GitHub CLI returned invalid JSON.")
+    _ => raise InvalidResponse("GitHub CLI returned invalid JSON.")
   }
 }
 
@@ -91,16 +91,16 @@ fn github_panel_item(
       "author": author,
       ..
     } else {
-    raise HostError("GitHub returned an invalid list item.")
+    raise InvalidResponse("GitHub returned an invalid list item.")
   }
   let number : Int32 = @json.from_json(number)
   guard number > 0 && !url.is_empty() else {
-    raise HostError("GitHub returned an invalid item identity.")
+    raise InvalidResponse("GitHub returned an invalid item identity.")
   }
   let author = match author {
     Null => None
     { "login": String(login), .. } => Some(login)
-    _ => raise HostError("GitHub returned an invalid author.")
+    _ => raise InvalidResponse("GitHub returned an invalid author.")
   }
   let draft = if kind is Issues {
     false
@@ -109,7 +109,9 @@ fn github_panel_item(
       { "isDraft": True, .. } => true
       { "isDraft": False, .. } => false
       _ =>
-        raise HostError("GitHub returned an invalid pull request draft state.")
+        raise InvalidResponse(
+          "GitHub returned an invalid pull request draft state.",
+        )
     }
   }
   {
@@ -134,7 +136,7 @@ async fn github_avatar_urls(
   let avatars : Map[String, String] = Map([])
   guard repository_url.strip_prefix("https://") is Some(rest) &&
     rest.split("/").next() is Some(host) else {
-    raise HostError("GitHub returned an invalid repository URL.")
+    raise InvalidResponse("GitHub returned an invalid repository URL.")
   }
   let ids : Array[String] = []
   for item in items {
@@ -156,7 +158,7 @@ async fn github_avatar_urls(
     }
     let result = query(args)
     guard result is { "data": { "nodes": Array(nodes), .. }, .. } else {
-      raise HostError("GitHub returned invalid avatar metadata.")
+      raise InvalidResponse("GitHub returned invalid avatar metadata.")
     }
     for node in nodes {
       match node {
@@ -164,7 +166,7 @@ async fn github_avatar_urls(
         { "login": String(login), "avatarUrl": String(url), .. } if url.has_prefix(
             "https://",
           ) => avatars[login] = url
-        _ => raise HostError("GitHub returned invalid avatar metadata.")
+        _ => raise InvalidResponse("GitHub returned invalid avatar metadata.")
       }
     }
   }
@@ -172,17 +174,17 @@ async fn github_avatar_urls(
 }
 
 ///|
-async fn github_list_op(
+pub async fn list(
   payload : @protocol.GithubListPayload,
 ) -> @protocol.GithubListReply {
   guard payload.limit > 0 && payload.limit <= 1000 else {
-    raise HostError("GitHub list size must be between 1 and 1000.")
+    raise InvalidRequest("GitHub list size must be between 1 and 1000.")
   }
   guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-    raise HostError("Select a workspace with an absolute checkout path.")
+    raise InvalidRequest("Select a workspace with an absolute checkout path.")
   }
   guard resolve_gh() is Some(gh) else {
-    raise HostError(
+    raise Unavailable(
       "Install GitHub CLI (gh) and run gh auth login to load pull requests and issues.",
     )
   }
@@ -202,16 +204,16 @@ async fn github_list(
     let repository = query(["repo", "view", "--json", "nameWithOwner,url"])
     guard repository
       is { "nameWithOwner": String(name), "url": String(url), .. } else {
-      raise HostError("GitHub returned invalid repository metadata.")
+      raise InvalidResponse("GitHub returned invalid repository metadata.")
     }
     let listing = query(github_list_args(payload.kind, url, payload.limit))
     guard listing is Array(raw_items) else {
-      raise HostError("GitHub returned an invalid list.")
+      raise InvalidResponse("GitHub returned an invalid list.")
     }
     (name, url, raw_items)
   })
   guard inventory is Some((name, url, raw_items)) else {
-    raise HostError(
+    raise Unavailable(
       "GitHub request timed out. Check your connection and retry.",
     )
   }

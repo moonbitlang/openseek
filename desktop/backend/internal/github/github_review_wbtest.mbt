@@ -156,7 +156,7 @@ async test "review file snapshots use pinned local commits across renames additi
         ("added.mbt", None, Some("added\n")),
         ("removed.mbt", Some("removed\n"), None),
       ] {
-      let reply = github_review_file_op({ cwd: dir, path, base, head, })
+      let reply = review_file({ cwd: dir, path, base, head, })
       assert_true(
         reply is ReviewFileLoaded(Some(file)) &&
         file.path == path &&
@@ -164,14 +164,9 @@ async test "review file snapshots use pinned local commits across renames additi
         file.modified == modified,
       )
     }
-    let missing = github_review_file_op({
-      cwd: dir,
-      path: "absent.mbt",
-      base,
-      head,
-    })
+    let missing = review_file({ cwd: dir, path: "absent.mbt", base, head, })
     assert_true(missing is ReviewFileLoaded(None))
-    let unavailable = github_review_file_op({
+    let unavailable = review_file({
       cwd: dir,
       path: "new name.mbt",
       base,
@@ -205,12 +200,7 @@ async test "review snapshots distinguish an absent side from an empty blob" {
       git_test_run(dir, ["add", "."])
       git_test_commit(dir, "head")
       let head = @gitx.output(repo, ["rev-parse", "HEAD"]).trim().to_owned()
-      let reply = github_review_file_op({
-        cwd: dir,
-        path: "empty.mbt",
-        base,
-        head,
-      })
+      let reply = review_file({ cwd: dir, path: "empty.mbt", base, head, })
       guard reply is ReviewFileLoaded(Some(file)) else {
         fail("expected the empty file's revision snapshot")
       }

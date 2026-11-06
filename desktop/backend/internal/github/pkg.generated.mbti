@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/github"
+
+import {
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn checkout(@protocol.GithubCheckoutPayload) -> @protocol.GithubCheckoutReply
+
+pub async fn checkout_status(@protocol.GithubWorkspacePayload) -> @protocol.GithubCheckoutStatus
+
+pub async fn current_pull_request(@protocol.GitPullRequestPayload) -> @protocol.GitPullRequestReply
+
+pub async fn list(@protocol.GithubListPayload) -> @protocol.GithubListReply
+
+pub async fn mutate_review(@protocol.GithubReviewMutationPayload) -> @protocol.GithubReviewMutationReply
+
+pub async fn pull_request(@protocol.GithubPullRequestPayload) -> @protocol.GithubPullRequestDetail
+
+pub async fn pull_request_summary(@protocol.GithubPullRequestSummaryPayload) -> @protocol.GithubPullRequestSummaryReply
+
+pub async fn read_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts
+
+pub async fn review(@protocol.GithubWorkspacePayload) -> @protocol.GithubReviewReply
+
+pub async fn review_file(@protocol.GithubReviewFilePayload) -> @protocol.GithubReviewFileReply
+
+pub async fn write_drafts(String?, @protocol.GithubDrafts) -> @protocol.EmptyReply
+
+// Errors
+pub suberror GithubError {
+  InvalidRequest(String)
+  InvalidResponse(String)
+  Unavailable(String)
+  Stale(String)
+  GitFailed(String)
+  DraftsUnavailable
+}
+pub fn GithubError::output(Self, &Logger) -> Unit
+pub fn GithubError::to_string(Self) -> String
+pub impl Show for GithubError
+
+// Types and methods
+
+// Type aliases
+
+// Traits

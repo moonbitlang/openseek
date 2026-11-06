@@ -7,14 +7,14 @@
 /// The address is model output and the lookup runs without the user asking,
 /// so it carries no credential meant for another host; see
 /// `github_pull_request_summary_environment`.
-async fn github_pull_request_summary_op(
+pub async fn pull_request_summary(
   payload : @protocol.GithubPullRequestSummaryPayload,
 ) -> @protocol.GithubPullRequestSummaryReply {
   guard github_pull_request_summary_identity(payload.url) is Some(identity) else {
     return { pull_request: None, }
   }
   guard resolve_gh() is Some(gh) else {
-    raise HostError("Install GitHub CLI (gh) and sign in to load PR status.")
+    raise Unavailable("Install GitHub CLI (gh) and sign in to load PR status.")
   }
   let env = github_pull_request_summary_environment(
     identity.host,
@@ -36,14 +36,14 @@ async fn github_pull_request_summary_op(
       env~,
     )
     @json.parse(output) catch {
-      _ => raise HostError("GitHub CLI returned invalid JSON.")
+      _ => raise InvalidResponse("GitHub CLI returned invalid JSON.")
     }
   })
   guard result is Some(raw) else {
-    raise HostError("PR status lookup timed out.")
+    raise Unavailable("PR status lookup timed out.")
   }
   guard parse_pull_request(raw) is Some(pull_request) else {
-    raise HostError("GitHub returned invalid PR status.")
+    raise InvalidResponse("GitHub returned invalid PR status.")
   }
   { pull_request: Some(pull_request), }
 }

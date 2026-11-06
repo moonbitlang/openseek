@@ -1,8 +1,6 @@
 ///|
 fn github_drafts_path(runtime_dir : String?, url : String) -> @pathx.Path raise {
-  guard runtime_dir is Some(dir) else {
-    raise HostError("Local comment draft storage is unavailable.")
-  }
+  guard runtime_dir is Some(dir) else { raise DraftsUnavailable }
   github_review_identity(url) |> ignore
   // Encoding makes the complete PR URL the identity without treating URL
   // segments as filesystem paths. Bound each component for long enterprise URLs.
@@ -20,7 +18,7 @@ fn github_drafts_path(runtime_dir : String?, url : String) -> @pathx.Path raise 
 }
 
 ///|
-async fn read_github_drafts(
+pub async fn read_drafts(
   runtime_dir : String?,
   key : @protocol.GithubDraftsKey,
 ) -> @protocol.GithubDrafts {
@@ -30,13 +28,15 @@ async fn read_github_drafts(
   }
   let saved : @protocol.GithubDrafts = @json.from_json(@json.parse(text))
   guard saved.url == key.url else {
-    raise HostError("Local comment drafts belong to a different pull request.")
+    raise InvalidRequest(
+      "Local comment drafts belong to a different pull request.",
+    )
   }
   saved
 }
 
 ///|
-async fn write_github_drafts(
+pub async fn write_drafts(
   runtime_dir : String?,
   drafts : @protocol.GithubDrafts,
 ) -> @protocol.EmptyReply {
