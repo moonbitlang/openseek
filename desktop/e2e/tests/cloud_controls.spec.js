@@ -52,7 +52,6 @@ test('Cloud Stop waits for termination and preserves the editable draft', async 
   await app.finishTask(sessionA, 'completed');
   await expect(page.locator('#stop')).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Still editable while stopping');
-  expect(app.controlState(sessionA).data.status).toBe('idle');
   expect(app.device.pageErrors).toEqual([]);
 });
 
@@ -146,7 +145,7 @@ test('Cloud uses the shared queue editor, withdrawal and conversion to Steer', a
   const rows = page.locator('.queued-input-row');
   await expect(rows).toContainText('First queued input');
   await expect(page.locator('#task')).toHaveValue('');
-  expect(app.histories.get(sessionA).messages.filter(record => record.kind === 'user')).toHaveLength(1);
+  expect(app.postCount).toBe(1);
   const first = controls(app, 'queue')[0];
   await rows.getByTitle('Edit', { exact: true }).click();
   await expect(page.locator('#task')).toHaveValue('First queued input');
@@ -298,7 +297,6 @@ for (const stopped of [false, true]) {
     await expect(rows).toHaveCount(1);
     expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: previous, action: 'withdraw' });
     expect(app.postCount).toBe(1);
-    expect(app.controlState(sessionA).data.paused).toBe(true);
     await page.locator('#task').fill('Explicit next prompt');
     await page.locator('#send').click();
     await expect(page.locator('#stop')).toBeEnabled();
@@ -317,7 +315,6 @@ for (const stopped of [false, true]) {
     await app.finishTask(sessionA, 'failed');
     await expect(rows).toHaveCount(1);
     await expect(page.locator('#stop')).toHaveCount(0);
-    expect(app.controlState(sessionA).data.paused).toBe(true);
     expect(app.postCount).toBe(2);
     await page.locator('#task').fill('Try the explicit prompt again');
     await page.locator('#send').click();

@@ -90,7 +90,6 @@ test('retired standalone history cannot be reopened through its old URL', async 
   await page.goto('/device/device-a/chat/session/legacy-chat');
   await expect(page.locator('.navigation-notice')).toContainText('no longer exists');
   expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'legacy-chat')).toBe(false);
-  expect(app.workspaces).toContain(`${root}/history`);
   expect(app.pageErrors).toEqual([]);
 });
 

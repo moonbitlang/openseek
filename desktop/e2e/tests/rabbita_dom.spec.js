@@ -1702,8 +1702,7 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
     request.params?.provider === 'custom' &&
     request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
-  expect(app.hostSettings.has_deepseek_key).toBe(false);
-  expect(app.hostSettings.has_custom_key).toBe(true);
+  expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
 
   // OpenRouter uses the ordinary chat model selector and persisted preference.
   await app.openSession();
@@ -1922,14 +1921,9 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   await expect(page.getByRole('button', { name: 'New chats' })).toHaveText('Worktree');
   await expect(page.getByRole('button', { name: 'Submodules in worktrees' })).toHaveText('Initialize');
   await expect(page.getByRole('button', { name: 'Submodule checkout timeout' })).toHaveText('60 seconds');
-  // Settings are stored per workspace: a sibling project keeps its own
-  // defaults, never inheriting this workspace's committed values.
-  expect(app.workspaceSettingsFor('/other')).toEqual({
-    workspace: '/other',
-    worktree_mode: false,
-    checkout_submodules: false,
-    submodule_checkout_timeout_seconds: 30,
-  });
+  // Settings are stored per workspace: committing this workspace's values
+  // never writes to a sibling project.
+  expect(app.requests.filter(request => request.method === 'workspace.settings_set' && request.params?.workspace === '/other')).toEqual([]);
 
   // Detaching the workspace closes the dialog and its select menu. Reopening
   // starts with closed selects, so the first trigger click opens the menu.

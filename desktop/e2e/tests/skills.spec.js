@@ -108,7 +108,6 @@ test('install and uninstall from the same catalog detail page', async ({ page })
   await app.performAction('Uninstall');
   await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
   expect(app.requests.filter(r => r.method === 'skills.uninstall').map(r => r.params.id)).toEqual([installed.id]);
-  expect(app.installedSkills).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
 

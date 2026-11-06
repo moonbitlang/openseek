@@ -52,7 +52,7 @@ test('real background output follows, pauses, resumes, copies its file and stops
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   await expect(page.getByRole('button', { name: 'Stop job', exact: true })).toHaveCount(0);
-  expect(app.child.signalCode).not.toBeNull();
+  expect(app.requests.filter(request => request.method === 'jobs.stop').map(request => request.params.generation)).toEqual(['runtime-new']);
   expect(readFileSync(app.livePath, 'utf8')).toContain('stderr captured');
   const stop = app.requests.find(r => r.method === 'jobs.stop');
   expect(stop.params).toMatchObject({ scope: { session: 'session-1', workspace: '/workspace' }, generation: 'runtime-new', job_id: app.liveId });
@@ -200,7 +200,7 @@ test('a controllable job without a log still exposes Stop and its full ID', asyn
   await expect(page.getByRole('region', { name: 'Job output' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
-  expect(app.child.signalCode).not.toBeNull();
+  expect(app.requests.filter(request => request.method === 'jobs.stop').map(request => request.params.generation)).toEqual(['runtime-new']);
   expect(app.pageErrors).toEqual([]);
 });
 

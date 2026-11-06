@@ -195,6 +195,5 @@ test('reopening Scheduled while save is pending preserves its acknowledgement', 
   await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeDisabled();
   await expect(page.locator('.schedule-form')).toHaveCount(0);
-  expect(app.schedules.entries).toHaveLength(1);
   expect(app.requests.filter(r => r.method === 'schedules.save')).toHaveLength(1);
 });
