@@ -17,7 +17,7 @@ for (const desktop of [false, true]) {
     expect(cloud.device.pageErrors).toEqual([]);
   });
 
-  test(`${desktop ? 'desktop' : 'browser'} creates Cloud on first send through the existing composer and unified account`, async ({ page, context }, testInfo) => {
+  test(`${desktop ? 'desktop' : 'browser'} creates Cloud on first send through the existing composer and unified account`, async ({ page, context }) => {
     const cloud = new CloudHarness(page, { desktop, cached: false });
     cloud.device.hostSettings.has_deepseek_key = false;
     await context.addCookies([{ name: 'session', value: 'fixture-account', url: authOrigin }]);
@@ -43,7 +43,6 @@ for (const desktop of [false, true]) {
     expect(cloud.hostRequests.filter(request => request.method === 'cloud.authorize')).toEqual([]);
     expect(await page.evaluate(() => localStorage.getItem('seekmoon.cloud.token.v1'))).toBeNull();
     expect(cloud.device.pageErrors).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`cloud-${desktop ? 'desktop' : 'browser'}.png`), fullPage: true });
   });
 }
 
@@ -261,7 +260,7 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
   });
 }
 
-test('Cloud renders each text fragment and hands off two tool-loop replies to delayed compact history', async ({ page }, testInfo) => {
+test('Cloud renders each text fragment and hands off two tool-loop replies to delayed compact history', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.trimHistory = true;
   cloud.streamEvents = [
@@ -324,9 +323,6 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   await expect(answer).toHaveCount(1);
   await expect(answer).toBeVisible();
   await expect(result).toBeVisible();
-  const screenshot = testInfo.outputPath('cloud-compact-history-handoff.png');
-  await page.locator('#transcript').screenshot({ path: screenshot });
-  await testInfo.attach('Tool loop after compact history handoff', { path: screenshot, contentType: 'image/png' });
   expect(cloud.device.pageErrors).toEqual([]);
 });
 

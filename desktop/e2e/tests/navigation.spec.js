@@ -36,7 +36,6 @@ test('management dialogs preserve the work surface, draft and browser entry', as
     await expect(page).toHaveURL(url);
     expect(await page.evaluate(() => history.length)).toBe(entries);
     expect(await originalComposer.evaluate(node => node.isConnected)).toBe(true);
-    await page.screenshot({ animations: 'disabled', path: test.info().outputPath(`${entry.toLowerCase()}-dialog.png`) });
     // Every dismissal animates out and leaves nothing interactive behind.
     if (dismiss === 'close') await dialog(page).getByRole('button', { name: 'Dismiss', exact: true }).click();
     else if (dismiss === 'escape') await page.keyboard.press('Escape');

@@ -24,7 +24,7 @@ async function choose(page, name) {
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText(name);
 }
 
-test('both agents share the first screen and Codex can choose its project in the title', async ({ page }, testInfo) => {
+test('both agents share the first screen and Codex can choose its project in the title', async ({ page }) => {
   const app = await open(page, ['/workspace', '/other']);
   const title = page.locator('.empty-title');
   const badge = page.locator('.empty-badge');
@@ -78,7 +78,6 @@ test('both agents share the first screen and Codex can choose its project in the
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
   await expect(page.locator('.mention-chip').filter({ hasText: 'src/main.mbt' })).toContainText('src/main.mbt');
   expect(app.requests.filter(r => r.method === 'codex.draft.close')).toHaveLength(0);
-  await page.screenshot({ path: testInfo.outputPath('codex-unified-first-screen.png') });
   const otherTrigger = page.getByRole('button', {
     name: 'Choose project, current project other', exact: true,
   });

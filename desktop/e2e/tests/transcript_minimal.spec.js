@@ -178,7 +178,7 @@ for (const retired of [false, true]) test(`minimal image collapse survives prece
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal transcript groups live tools and folds completed work around user messages', { tag: '@motion' }, async ({ page }, testInfo) => {
+test('minimal transcript groups live tools and folds completed work around user messages', { tag: '@motion' }, async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   const nextProse = app.sessionEvents.pop().item.payload;
   await app.install();
@@ -210,7 +210,6 @@ test('minimal transcript groups live tools and folds completed work around user 
   await expect(stream.getByText('I will explore this project.', { exact: true })).toBeVisible();
   await expect(stream.getByText('Now I can check the remaining details.', { exact: true })).toBeVisible();
   await expect(tools).not.toHaveAttribute('open', '');
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-working.png') });
   await tools.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(tools.locator('.minimal-call-caption')).toHaveText([
@@ -229,7 +228,6 @@ test('minimal transcript groups live tools and folds completed work around user 
   await expect(tools.locator('summary > .minimal-summary-text')).toHaveText('Read the project manifest · Cannot read the second file · Check project details');
   await expect(tools).toHaveAttribute('open', '');
   expect(await originalTools.evaluate(node => node.isConnected)).toBe(true);
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-running.png') });
 
   app.append('user', { content: 'Please focus on the architecture.' });
   app.append('assistant', { content: 'I will focus on architecture.', tool_calls: [
@@ -258,7 +256,6 @@ test('minimal transcript groups live tools and folds completed work around user 
   // Minimal mode mirrors detailed mode's finish line: the confirmed final
   // answer carries its durable commit instant beside the copy action.
   await expect(stream.locator('.assistant-message-actions .assistant-message-time')).toHaveCount(1);
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-completed.png') });
   for (const process of await processes.all()) {
     await process.locator(':scope > summary').click();
     for (const group of await process.locator('.minimal-tools').all()) {
@@ -388,7 +385,7 @@ test('detail toggle stays enabled when a Codex draft gains its working directory
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal edit previews share detailed-mode unified lines and preserve call state', async ({ page }, testInfo) => {
+test('minimal edit previews share detailed-mode unified lines and preserve call state', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture requested edits' } } },
@@ -435,7 +432,6 @@ test('minimal edit previews share detailed-mode unified lines and preserve call 
   await expect(stream).not.toContainText('PARAMETER_SENTINEL');
   await expect(stream).not.toContainText('OUTPUT_SENTINEL');
   await expect(stream.locator('.tool-call-tabs')).toHaveCount(0);
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-edit-diffs.png') });
   await page.setViewportSize({ width: 640, height: 900 });
   await page.emulateMedia({ colorScheme: 'dark' });
   for (const block of await calls.locator('.minimal-edit-block').all()) {
@@ -443,7 +439,6 @@ test('minimal edit previews share detailed-mode unified lines and preserve call 
     const box = await block.boundingBox();
     expect(box.x + box.width).toBeLessThanOrEqual(640);
   }
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-edit-diffs-dark-narrow.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: 'light' });
   const minimalDiffs = await calls.locator('.editor-diff-source').allTextContents();
@@ -474,7 +469,7 @@ test('minimal edit previews share detailed-mode unified lines and preserve call 
   await expect(stream.getByText('Original JSON', { exact: true }).first()).toBeVisible();
 });
 
-test('minimal diff pins line numbers and markers while source scrolls', async ({ page }, testInfo) => {
+test('minimal diff pins line numbers and markers while source scrolls', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 900 });
   const app = new MinimalTranscriptHarness(page);
   const source = '  let message = "' + 'long source '.repeat(24) + '"';
@@ -528,7 +523,6 @@ test('minimal diff pins line numbers and markers while source scrolls', async ({
     expect(await block.locator('.edit-titlebar').boundingBox()).toEqual(title);
     await block.hover();
     await expect(block.getByRole('button', { name: 'Copy diff', exact: true })).toBeVisible();
-    await block.screenshot({ animations: 'disabled', path: testInfo.outputPath(`scrolling-diff-${colorScheme}.png`) });
     await diff.evaluate(el => { el.scrollLeft = 0; });
   }
   expect(app.pageErrors).toEqual([]);

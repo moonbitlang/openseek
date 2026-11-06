@@ -280,7 +280,7 @@ test('Cloud recovery retries a failed history synchronization without another st
 
 
 for (const error of [false, true]) {
-  test(`Cloud reconnects after ${error ? 'a stream read failure' : 'EOF'} without resubmitting input`, async ({ page }, testInfo) => {
+  test(`Cloud reconnects after ${error ? 'a stream read failure' : 'EOF'} without resubmitting input`, async ({ page }) => {
     const app = await running(page);
     await app.emitSessionEvent(sessionA, 'assistant_message', { content: 'Already confirmed.' });
     await expect(page.locator('#transcript')).toContainText('Already confirmed.');
@@ -293,7 +293,6 @@ for (const error of [false, true]) {
     await expect(page.locator('#task')).toBeEnabled();
     await expect(page.locator('#send')).toBeDisabled();
     await expect.poll(() => observations(app).length).toBe(2);
-    if (!error) await page.locator('main').screenshot({ path: testInfo.outputPath('cloud-reconnecting.png') });
     app.pauseSessionEvents = null;
     next.resolve();
     await expect(page.locator('.composer-banner')).not.toBeVisible();

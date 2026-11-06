@@ -27,7 +27,7 @@ async function expectContained(locator) {
   expect(fits).toBe(true);
 }
 
-test('SSH failure output scrolls without widening the page and narrow retry remains usable', async ({ page }, testInfo) => {
+test('SSH failure output scrolls without widening the page and narrow retry remains usable', async ({ page }) => {
   const app = await start(page);
   await app.sshEvent({ disconnected: warning });
   await expect(page.locator('.onboarding-card')).toContainText('Connection failed');
@@ -36,13 +36,11 @@ test('SSH failure output scrolls without widening the page and narrow retry rema
   await expect(error).toHaveCSS('white-space', 'pre');
   await expectContained(error);
   expect(await error.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('ssh-failure.png') });
 
   await page.setViewportSize({ width: 900, height: 700 });
   const retry = page.getByRole('button', { name: 'Retry connection', exact: true });
   await expectContained(retry);
   await expect(page.getByRole('status', { name: 'Connection failed', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('ssh-narrow-retry.png') });
   await retry.click();
   await expect.poll(() => app.attempt).toBe(2);
   await expect(page.locator('.onboarding-card')).toContainText('Connecting…');
@@ -51,7 +49,7 @@ test('SSH failure output scrolls without widening the page and narrow retry rema
   expect(app.pageErrors).toEqual([]);
 });
 
-test('SSH host identity keeps fingerprint lines scrollable and confirmation controls reachable', async ({ page }, testInfo) => {
+test('SSH host identity keeps fingerprint lines scrollable and confirmation controls reachable', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 700 });
   const app = await start(page);
   const prompt = 'The authenticity of host example.test cannot be established.\n' +
@@ -66,13 +64,12 @@ test('SSH host identity keeps fingerprint lines scrollable and confirmation cont
   expect(await output.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
   const accept = dialog.getByRole('button', { name: 'Accept', exact: true });
   await expectContained(accept);
-  await page.screenshot({ path: testInfo.outputPath('ssh-fingerprint.png') });
   await accept.click();
   await expect.poll(() => app.requests.some(r => r.method === 'ssh.auth.respond')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
 
-test('SSH terminal stops claiming recovery after failure or cancellation in a narrow main pane', async ({ page }, testInfo) => {
+test('SSH terminal stops claiming recovery after failure or cancellation in a narrow main pane', async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 800 });
   await page.addInitScript(() => localStorage.setItem('openseek.theme', 'dark'));
   const app = await start(page);
@@ -90,7 +87,6 @@ test('SSH terminal stops claiming recovery after failure or cancellation in a na
   await expect(page.locator('.terminal-status')).toHaveText('Connection failed');
   const retry = page.getByRole('button', { name: 'Retry connection', exact: true });
   await expectContained(retry);
-  await page.screenshot({ path: testInfo.outputPath('ssh-terminal-failed-dark.png') });
   await retry.click();
   await expect.poll(() => app.attempt).toBe(3);
   await page.getByRole('button', { name: 'Cancel connection', exact: true }).click();

@@ -12,7 +12,7 @@ async function expectHeader(page, title) {
   })).toBe(true);
 }
 
-test('management dialogs preserve the empty project header', async ({ page }, testInfo) => {
+test('management dialogs preserve the empty project header', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.workspaces = [];
   app.liveSessions = [];
@@ -29,11 +29,9 @@ test('management dialogs preserve the empty project header', async ({ page }, te
     await expectHeader(page, 'SeekMoon');
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.screenshot({ path: testInfo.outputPath('settings-header.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true })).toBeInViewport();
-  await page.screenshot({ path: testInfo.outputPath('settings-header-narrow.png') });
   await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expectHeader(page, 'SeekMoon');
   expect(app.pageErrors).toEqual([]);

@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 {
   const minimal = true;
-  test(`PTC results retain edit diffs and interruptions across reload (${minimal ? 'minimal' : 'full'})`, async ({ page }, testInfo) => {
+  test(`PTC results retain edit diffs and interruptions across reload (${minimal ? 'minimal' : 'full'})`, async ({ page }) => {
     await page.addInitScript((enabled) => {
       localStorage.setItem('openseek.minimal_transcript', String(enabled));
     }, minimal);
@@ -59,7 +59,6 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
       await expect(interrupted).toContainText('Program call interrupted; changes may have occurred.');
       }
       if (pass === 0) {
-        await page.screenshot({ path: testInfo.outputPath('program-calls.png') });
         await page.reload();
         await app.openSession();
       }

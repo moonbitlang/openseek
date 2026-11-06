@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { CloudHarness, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
-test('desktop reopens cached Cloud turns offline and revalidates them after restart', async ({ page }, testInfo) => {
+test('desktop reopens cached Cloud turns offline and revalidates them after restart', async ({ page }) => {
   const cloud = new CloudHarness(page, { desktop: true });
   const files = new Map();
   cloud.historyCache = ({ action, session, page: history }) => {
@@ -50,7 +50,6 @@ test('desktop reopens cached Cloud turns offline and revalidates them after rest
   await cloud.row(sessionB).click();
   await expect(transcript.getByText('Saved reply B')).toBeVisible();
   await expect(transcript).toContainText('Cloud is unreachable');
-  await page.screenshot({ path: testInfo.outputPath('cloud-history-offline.png'), fullPage: true });
   releaseHistory();
   releaseList();
   const unchanged = await firstRead.response();

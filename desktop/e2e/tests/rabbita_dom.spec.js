@@ -1347,7 +1347,7 @@ test('a floating reply takes a comment of several lines', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('approval card mirrors host claims and sends an unclaimed decision', async ({ page }, testInfo) => {
+test('approval card mirrors host claims and sends an unclaimed decision', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -1370,12 +1370,10 @@ test('approval card mirrors host claims and sends an unclaimed decision', async 
 
   const approval = page.locator('.composer-approval');
   await expect(approval).toBeVisible();
-  await approval.screenshot({ path: testInfo.outputPath('approval-awaiting-answer.png') });
   // A different client answered: this page must stop offering either decision.
   app.notify('agent.approvals', { generation: 2, approvals: [{ ...pending, answered: true }] });
   await expect(approval.locator('.composer-approval-state')).toBeVisible();
   await expect(approval.getByRole('button')).toHaveCount(0);
-  await approval.screenshot({ path: testInfo.outputPath('approval-answer-submitted.png') });
   app.notify('agent.approvals', { generation: 3, approvals: [] });
   await expect(approval).toHaveCount(0);
 
@@ -1944,7 +1942,7 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   expect(app.pageErrors).toEqual([]);
 });
 
-test('composer follow-up menu supports keyboard choice and a queue default', async ({ page }, testInfo) => {
+test('composer follow-up menu supports keyboard choice and a queue default', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.hostSettings.followup_behavior = 'queue';
   await app.install();
@@ -1976,7 +1974,6 @@ test('composer follow-up menu supports keyboard choice and a queue default', asy
   const box = await menu.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(800);
-  await page.screenshot({ path: testInfo.outputPath('followup-menu.png') });
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
   await expect(choice).toBeFocused();
@@ -2106,13 +2103,9 @@ for (const layout of ['Split', 'Unified']) {
     })).toBe(true);
     await action.click();
     await expect(action).toHaveText('✓');
-    const panelBox = await page.locator('.editor').boundingBox();
-    const clip = { ...panelBox, height: Math.min(panelBox.height, 320) };
-    await page.screenshot({ path: `/tmp/hunk-gutter-${layout.toLowerCase()}-viewed.png`, clip });
     await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await action.click();
     await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
-    await page.screenshot({ path: `/tmp/hunk-gutter-${layout.toLowerCase()}.png`, clip });
     expect(app.pageErrors).toEqual([]);
   });
 }

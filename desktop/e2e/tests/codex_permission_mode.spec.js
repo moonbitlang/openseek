@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('the Codex approval mode uses the headed select and confirms full access', async ({ page }, testInfo) => {
+test('the Codex approval mode uses the headed select and confirms full access', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{ id: 'gpt-test', displayName: 'Codex focus', isDefault: true }];
   await app.install();
@@ -17,9 +17,6 @@ test('the Codex approval mode uses the headed select and confirms full access', 
   await expect(menu.locator('.custom-select-heading')).toHaveText('How should Codex approve operations?');
   await expect(menu.getByRole('option', { name: /Approve for me/ })).toHaveAttribute('aria-selected', 'true');
   await expect(menu.getByRole('option', { name: /Full access/ })).toContainText('Unrestricted internet access');
-  const path = testInfo.outputPath('codex-permission-menu.png');
-  await page.screenshot({ path });
-  await testInfo.attach('codex-permission-menu', { path, contentType: 'image/png' });
   await menu.getByRole('option', { name: /Request approval/ }).click();
   await expect(menu).toHaveCount(0);
   await expect(trigger).toHaveText('Request approval');
