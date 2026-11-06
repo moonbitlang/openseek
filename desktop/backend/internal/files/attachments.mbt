@@ -47,7 +47,7 @@ async fn load_attachment(
       let file = @fs.open(path.to_string(), mode=ReadOnly)
       defer file.close()
       let size = file.size()
-      guard size <= @openpath.MaxOfficeFileBytes.to_int64() else {
+      guard size <= MaxOfficeFileBytes.to_int64() else {
         raise InvalidRequest("documents must be 20 MiB or smaller")
       }
       {
@@ -57,7 +57,7 @@ async fn load_attachment(
       }
     }
     AttachmentBytes(name~, data_base64~) => {
-      guard data_base64.length() <= (@openpath.MaxOfficeFileBytes + 2) / 3 * 4 else {
+      guard data_base64.length() <= (MaxOfficeFileBytes + 2) / 3 * 4 else {
         raise InvalidRequest("documents must be 20 MiB or smaller")
       }
       let bytes = @base64.decode(data_base64) catch {
@@ -72,7 +72,7 @@ async fn load_attachment(
   guard !loaded.bytes.is_empty() else {
     raise InvalidRequest("attachment is empty")
   }
-  guard loaded.bytes.length() <= @openpath.MaxOfficeFileBytes else {
+  guard loaded.bytes.length() <= MaxOfficeFileBytes else {
     raise InvalidRequest("documents must be 20 MiB or smaller")
   }
   guard is_document_attachment(loaded.name) ||

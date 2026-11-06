@@ -1451,7 +1451,7 @@ async fn git_original_file_at(
   let size : Int64 = @string.parse_int64(size_text) catch {
     _ => raise Failed("Git returned an invalid blob size")
   }
-  if size > @openpath.MaxEditorFileBytes.to_int64() {
+  if size > @files.MaxEditorFileBytes.to_int64() {
     return OversizedOriginal
   }
   let content = @gitx.output_bytes(dir, ["cat-file", "-p", oid])

@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub const MaxEditorFileBytes : Int32 = 1048576
+
+pub const MaxOfficeFileBytes : Int32 = 20971520
+
 pub async fn browse(@protocol.BrowseDirectoryPayload) -> @protocol.BrowseDirectoryReply
 
 pub async fn capture(@protocol.ReadFilePayload) -> (String, Bytes)
