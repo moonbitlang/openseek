@@ -21,17 +21,11 @@ class SignInActivity : ComponentActivity() {
     /** Set once the code is being redeemed; later returns change nothing. */
     private var redeeming = false
     private val executor = Executors.newSingleThreadExecutor()
+    /** The browser closed without returning this flow's answer in its result. */
+    private var closed = false
     private val browser = AuthTabIntent.registerActivityResultLauncher(this) { result ->
         val answer = if (result.resultCode == AuthTabIntent.RESULT_OK) flow?.answer(result.resultUri?.toString()) else null
-        if (redeeming) {
-            // The fallback Custom Tab closes after its return reached onNewIntent,
-            // which runs first: this result waits for the activity's start.
-        } else if (answer != null) {
-            deliver(answer)
-        } else {
-            setResult(Activity.RESULT_CANCELED)
-            finish()
-        }
+        if (answer != null) deliver(answer) else closed = true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,6 +52,19 @@ class SignInActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         flow?.answer(intent.data?.toString())?.let(::deliver)
+    }
+
+    /**
+     * The Custom Tabs fallback closes with RESULT_CANCELED, and its return URL
+     * arrives through onNewIntent. A stopped activity starts, and so receives
+     * that result, before its new intent; both precede this resume.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (closed && !redeeming && !isFinishing) {
+            setResult(Activity.RESULT_CANCELED)
+            finish()
+        }
     }
 
     private fun exchange(code: String, verifier: String): String {
