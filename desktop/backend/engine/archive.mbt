@@ -309,7 +309,7 @@ async fn EngineManager::claim_session_family_move(
 /// place for the caller to roll the record moves back against.
 async fn SessionFamilyMove::remove_worktree_placements(
   self : SessionFamilyMove,
-  on_committed? : (String, Array[WorktreeInfo]) -> Unit,
+  on_committed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> Unit {
   guard self.workspace is Some(workspace) else { return }
   guard @worktree.drop_placements(workspace, self.members) is Some(remaining) else {
@@ -392,7 +392,7 @@ async fn move_session_family(
 ///|
 /// The archived conversations, one group per session store — the same reply
 /// shape as `list_sessions`, listing each store's `archived` twin instead.
-pub async fn archived_sessions() -> SessionsReply {
+pub async fn archived_sessions() -> @protocol.SessionsReply {
   session_listing_groups(archived=true)
 }
 
@@ -413,8 +413,8 @@ pub async fn archive_session(
   session : String,
   on_committed : (String, String) -> Unit,
   force~ : Bool = false,
-  on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
-) -> ArchiveReply {
+  on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
+) -> @protocol.ArchiveReply {
   let session = session.trim().to_owned()
   guard !session.is_empty() && @session_store.safe_session_id(session) else {
     raise EngineError("invalid session id")
@@ -441,8 +441,8 @@ async fn archive_session_commit(
   session : String,
   on_committed : (String, String) -> Unit,
   force~ : Bool = false,
-  on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
-) -> ArchiveNeedsForceReply? {
+  on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
+) -> @protocol.ArchiveNeedsForceReply? {
   let family = manager.claim_session_family_move(session, archived=false)
   defer family.release()
   manager.archive_commit_lock.acquire()
@@ -492,7 +492,7 @@ pub async fn unarchive_session(
   manager : EngineManager,
   session : String,
   on_committed : (String, String) -> Unit,
-) -> SessionsReply {
+) -> @protocol.SessionsReply {
   let session = session.trim().to_owned()
   guard !session.is_empty() && @session_store.safe_session_id(session) else {
     raise EngineError("invalid session id")
@@ -529,8 +529,8 @@ pub async fn delete_archived_session(
   session : String,
   workspace : String,
   on_committed : (String, String) -> Unit,
-  on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
-) -> SessionsReply {
+  on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
+) -> @protocol.SessionsReply {
   let session = session.trim().to_owned()
   guard !session.is_empty() && @session_store.safe_session_id(session) else {
     raise EngineError("invalid session id")
@@ -556,7 +556,7 @@ async fn delete_archived_session_commit(
   session : String,
   workspace : String,
   on_committed : (String, String) -> Unit,
-  on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> Unit {
   let selected = @session_store.ArchivedStore::for_workspace(workspace)
   let family = manager.claim_session_family_move(
@@ -599,8 +599,8 @@ pub async fn delete_session(
   worktree? : String,
   force~ : Bool = false,
   edit_replacement? : EditReplacement,
-  on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
-) -> SessionDeleteReply {
+  on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
+) -> @protocol.SessionDeleteReply {
   let session = session.trim().to_owned()
   guard !session.is_empty() && @session_store.safe_session_id(session) else {
     raise EngineError("invalid session id")
@@ -622,7 +622,7 @@ pub async fn delete_session(
   defer shared.release()
   family.refuse_new_members(session)
 
-  async fn commit() -> SessionDeleteReply {
+  async fn commit() -> @protocol.SessionDeleteReply {
     // Only the selected project's checkout may go: another project can hold a
     // conversation with the same id. And only the checkout the confirmation
     // named: one that appeared since — repaired by another client while the
@@ -683,7 +683,7 @@ pub async fn delete_session_check(
   manager : EngineManager,
   session : String,
   workspace : String,
-) -> SessionDeleteCheckReply {
+) -> @protocol.SessionDeleteCheckReply {
   let session = session.trim().to_owned()
   guard !session.is_empty() && @session_store.safe_session_id(session) else {
     raise EngineError("invalid session id")
@@ -710,7 +710,7 @@ async fn SessionFamilyMove::delete_records(
   self : SessionFamilyMove,
   archived~ : Bool,
   on_committed : (String, String) -> Unit,
-  on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> Unit {
   let source = if archived {
     @session_store.archived_root(self.root).join("sessions")

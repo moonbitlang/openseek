@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('Chinese covers feature pages, composer and dock after live switching', async ({ page }) => {
@@ -22,7 +22,6 @@ test('Chinese covers feature pages, composer and dock after live switching', asy
   const dismiss = skills.getByRole('button', { name: '关闭', exact: true });
   await expect(dismiss).toBeVisible();
   await expect(dismiss).toHaveText('');
-  await skills.locator('.management-dialog-header').screenshot({ path: test.info().outputPath('chinese-management-header.png') });
   await expect(page.getByPlaceholder('搜索技能…')).toBeVisible();
   await dismiss.click();
   await page.getByRole('button', { name: '定时任务', exact: true }).click();

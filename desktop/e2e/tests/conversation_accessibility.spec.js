@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('conversation titles support keyboard activation and independent row actions', async ({ page }) => {
@@ -213,7 +213,7 @@ async function expectRetainedFold(disclosure) {
   expect(result).toMatchObject({ foldedHeight: 0, retained: true, hidden: 'true', inert: true, focusable: false });
 }
 
-test('folding a project retains its expanded preview and reopens with five chats', async ({ page }) => {
+test('folding a project retains its expanded preview and reopens with five chats', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions = Array.from({ length: 12 }, (_, i) => ({
     id: `session-${i + 1}`, title: `Conversation ${i + 1}`, updated_at_ms: 12 - i,
@@ -235,7 +235,7 @@ test('folding a project retains its expanded preview and reopens with five chats
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sub-runs retain their DOM across their own and project folds', async ({ page }) => {
+test('sub-runs retain their DOM across their own and project folds', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions.push({ id: 'session-1-sr-1', title: 'Inspect animation', updated_at_ms: 2 });
   await app.install();

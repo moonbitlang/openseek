@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { pinchZoom } from './support/office_zoom.js';
 import { annotationPdf, formPdf, markupPdf } from './support/pdf_annotation_fixture.js';
@@ -338,7 +338,7 @@ test('encrypted PDFs retry incorrect passwords and release a cancelled session',
   expect(app.pageErrors).toEqual([]);
 });
 
-test('PDF uses the shared annotation composer with pinned drafts, Batch, and apply', async ({ page }, testInfo) => {
+test('PDF uses the shared annotation composer with pinned drafts, Batch, and apply', async ({ page }) => {
   const app = await setup(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
@@ -379,7 +379,6 @@ test('PDF uses the shared annotation composer with pinned drafts, Batch, and app
   await expect(page.locator('.mention-chip')).toHaveCount(1);
   await select(12);
   await input.fill('Apply both');
-  await page.screenshot({ path: testInfo.outputPath('pdf-annotation.png'), animations: 'disabled' });
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-CN'] });
     window.dispatchEvent(new Event('languagechange'));
@@ -398,7 +397,7 @@ test('PDF uses the shared annotation composer with pinned drafts, Batch, and app
   expect(app.pageErrors).toEqual([]);
 });
 
-test('PDF annotation retains a visible source selection while typing', async ({ page }, testInfo) => {
+test('PDF annotation retains a visible source selection while typing', async ({ page }) => {
   const app = await setup(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
@@ -436,7 +435,6 @@ test('PDF annotation retains a visible source selection while typing', async ({ 
   // own painted source fragments instead of trying to steal focus back.
   expect(await page.evaluate(() => window.getSelection().toString())).not.toContain('Selectable first page text');
   await expectHighlight();
-  await page.screenshot({ path: testInfo.outputPath('pdf-retained-selection.png') });
   const scale = await page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale);
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale)).toBeGreaterThan(scale + 0.05);
@@ -530,14 +528,13 @@ async function enableImages(page) {
   await page.getByRole('option', { name: /^DS Flash(?: ✓)?$/ }).click();
 }
 
-async function captureRegion(page, rect, { reverse = false, screenshotPath, confirm = true } = {}) {
+async function captureRegion(page, rect, { reverse = false, confirm = true } = {}) {
   await page.getByRole('button', { name: 'Capture region', exact: true }).click();
   await expect(page.locator('.pdf-region-capture')).toBeVisible();
   const a = { x: rect.x, y: rect.y }, b = { x: rect.x + rect.width, y: rect.y + rect.height };
   await page.mouse.move(...Object.values(reverse ? b : a));
   await page.mouse.down();
   await page.mouse.move(...Object.values(reverse ? a : b), { steps: 8 });
-  if (screenshotPath) await page.screenshot({ path: screenshotPath });
   await page.mouse.up();
   await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
   if (confirm && rect.width >= 4 && rect.height >= 4) {
@@ -552,7 +549,7 @@ async function captureRegion(page, rect, { reverse = false, screenshotPath, conf
 test.describe('PDF region screenshots', () => {
   test.use({ deviceScaleFactor: 2 });
 
-  test('crops real page pixels at display resolution and sends an image without losing typed text', async ({ page }, testInfo) => {
+  test('crops real page pixels at display resolution and sends an image without losing typed text', async ({ page }) => {
     const app = await setup(page);
     await enableImages(page);
     await openFile(app, 'report.pdf');
@@ -570,7 +567,7 @@ test.describe('PDF region screenshots', () => {
         rect.width*scale, rect.height*scale, 0, 0, rect.width*scale, rect.height*scale);
       return { url: image.toDataURL(), width: image.width, height: image.height };
     }, rect);
-    await captureRegion(page, rect, { screenshotPath: testInfo.outputPath('pdf-region-selection.png') });
+    await captureRegion(page, rect);
     const attachment = page.locator('.composer-image img');
     await expect(attachment).toHaveAttribute('src', expected.url);
     expect(await attachment.evaluate(img => [img.naturalWidth, img.naturalHeight])).toEqual([expected.width, expected.height]);
@@ -578,7 +575,6 @@ test.describe('PDF region screenshots', () => {
     await expect(page.locator('#task')).toHaveValue('Explain this figure');
     expect((await page.locator('.mention-chip').boundingBox()).height).toBeLessThan(40);
     expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-    await page.screenshot({ path: testInfo.outputPath('pdf-region-attachment.png') });
     await page.locator('#send').click();
     await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
     const request = app.requests.find(r => r.method === 'agent.start');
@@ -802,7 +798,7 @@ test('PDF capture mode keeps native scrolling and opens the shared feedback comp
 });
 
 for (const codex of [false, true]) {
-  test(`PDF capture feedback sends the image and instruction with existing ${codex ? 'Codex' : 'OpenSeek'} typing`, async ({ page }, testInfo) => {
+  test(`PDF capture feedback sends the image and instruction with existing ${codex ? 'Codex' : 'OpenSeek'} typing`, async ({ page }) => {
     const app = await setup(page, { codex });
     if (!codex) await enableImages(page);
     await openFile(app, 'report.pdf');
@@ -822,7 +818,6 @@ for (const codex of [false, true]) {
     await scroll.evaluate((el, top) => { el.scrollTop = top; }, before);
     await expect(input).toHaveValue('把这部分改成中文，并加上标题');
     await expect(input).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('pdf-capture-feedback.png'), animations: 'disabled' });
     await input.press('Alt+Enter');
     const method = codex ? 'codex.turn.start' : 'agent.start';
     await expect.poll(() => app.requests.filter(r => r.method === method).length).toBe(1);
@@ -969,7 +964,7 @@ async function hoverPdfText(page, text) {
   return b;
 }
 
-test('PDF element hover and a slightly moving click attach text, page and screenshot', async ({ page }, testInfo) => {
+test('PDF element hover and a slightly moving click attach text, page and screenshot', async ({ page }) => {
   const app = await setup(page);
   await enableImages(page);
   await openFile(app, 'report.pdf');
@@ -979,7 +974,6 @@ test('PDF element hover and a slightly moving click attach text, page and screen
   const box = await page.locator('.pdf-region-capture-box').boundingBox();
   expect(Math.abs(box.x - b.x)).toBeLessThanOrEqual(3);
   expect(Math.abs(box.width - b.width)).toBeLessThanOrEqual(5);
-  await page.screenshot({ path: testInfo.outputPath('pdf-element-hover.png') });
   await page.mouse.down();
   await page.mouse.move(b.x + b.width / 2 + 2, b.y + b.height / 2 + 1);
   await page.mouse.up();

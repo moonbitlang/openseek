@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionC } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id = sessionA) {
@@ -20,7 +20,7 @@ const creations = cloud => cloud.requests.filter(request => request.method === '
 {
   const desktop = false;
 
-  test(`${desktop ? 'desktop' : 'browser'} Cloud renames through the shared field and keeps its manual title after sending and reload`, async ({ page }, testInfo) => {
+  test(`${desktop ? 'desktop' : 'browser'} Cloud renames through the shared field and keeps its manual title after sending and reload`, async ({ page }) => {
     const cloud = new CloudHarness(page, { desktop });
     await cloud.install();
     await cloud.goto();
@@ -41,7 +41,6 @@ const creations = cloud => cloud.requests.filter(request => request.method === '
     await page.getByRole('button', { name: 'Chat', exact: true }).click();
     await cloud.open();
     await expect(page.locator('main h1')).toHaveText('Release planning');
-    await page.screenshot({ path: testInfo.outputPath(`cloud-renamed-${desktop ? 'desktop' : 'browser'}.png`), fullPage: true, animations: 'disabled' });
     expect(cloud.device.pageErrors).toEqual([]);
   });
 }
@@ -92,7 +91,7 @@ for (const status of [401, 404]) {
 {
   const desktop = false;
 
-  test(`${desktop ? 'desktop' : 'browser'} Cloud archives into the existing group, opens read only and restores with its draft`, async ({ page }, testInfo) => {
+  test(`${desktop ? 'desktop' : 'browser'} Cloud archives into the existing group, opens read only and restores with its draft`, async ({ page }) => {
     const cloud = new CloudHarness(page, { desktop });
     cloud.histories.set(sessionA, { messages: [{ task_id: 'earlier', kind: 'assistant_message', data: { content: 'Earlier Cloud answer.' }, created_at: 1000 }], generating: false });
     await cloud.install();
@@ -115,7 +114,6 @@ for (const status of [401, 404]) {
     await expect(page.locator('.archived-read-only')).toHaveText('Archived conversation · Read onlyRestore');
     await expect(page.locator('#task')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath(`cloud-archived-${desktop ? 'desktop' : 'browser'}.png`), fullPage: true, animations: 'disabled' });
     await page.locator('main').getByRole('button', { name: 'Restore', exact: true }).click();
     await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.live:/);
     await expect(page.locator('.archived-read-only')).toHaveCount(0);
@@ -150,7 +148,7 @@ for (const status of [401, 404]) {
   });
 }
 
-test('Cloud restore keeps its read-only view after failure and disables its archived-page actions while retrying', async ({ page }, testInfo) => {
+test('Cloud restore keeps its read-only view after failure and disables its archived-page actions while retrying', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.archived.add(sessionA);
   cloud.patchStatus = 503;
@@ -172,7 +170,6 @@ test('Cloud restore keeps its read-only view after failure and disables its arch
     const row = cloud.archivedRow(sessionA);
     await expect(row.getByRole('button', { name: 'Restore', exact: true })).toBeDisabled();
     await expect(row.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
-    await page.screenshot({ path: testInfo.outputPath('cloud-restore-pending-page.png'), fullPage: true });
     expect(cloud.requests.filter(request => request.method === 'DELETE')).toHaveLength(0);
   } finally {
     finish();

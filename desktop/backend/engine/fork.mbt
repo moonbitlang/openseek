@@ -25,7 +25,7 @@ pub async fn fork_session(
   manager : EngineManager,
   payload : @protocol.SessionForkPayload,
   on_created~ : (String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
   fork_session_in(
     manager,
@@ -56,7 +56,7 @@ async fn fork_session_in(
   payload : @protocol.SessionForkPayload,
   placement : ForkPlacement,
   on_created~ : (String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
   guard @session_store.safe_session_id(payload.session) && payload.through > 0 else {
     raise EngineError("invalid session fork boundary")

@@ -117,30 +117,17 @@ async fn scan_workspace_files(root : @pathx.Absolute) -> FileIndexSnapshot {
 async fn workspace_git_ignored_paths(
   root : @pathx.Absolute,
 ) -> Map[String, Unit] {
-  let env = git_environment()
-  env["LC_ALL"] = "C"
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
-    "git",
-    [
-      "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z",
-      "--", ".",
-    ],
-    cwd=root.to_string(),
-    extra_env=env,
-    inherit_env=false,
-  ) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return Map([])
+  guard @gitx.is_work_tree(root) else { return Map([]) }
+  let listing = @gitx.output(root, [
+    "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z",
+    "--", ".",
+  ]) catch {
+    @gitx.GitError(detail) =>
+      raise HostError("failed to read Git ignore rules: \{detail}")
     error => raise error
   }
-  if code != 0 {
-    let detail = stderr.text()
-    if detail.contains("not a git repository") {
-      return Map([])
-    }
-    raise HostError("failed to read Git ignore rules: \{detail}")
-  }
   let ignored : Map[String, Unit] = Map([])
-  for path in stdout.text().split("\u{0}") {
+  for path in listing.split("\u{0}") {
     if !path.is_empty() {
       ignored[path.to_owned()] = ()
     }
@@ -150,7 +137,7 @@ async fn workspace_git_ignored_paths(
 
 ///|
 priv enum FileSearchResponse {
-  SearchSucceeded(SearchFilesReply)
+  SearchSucceeded(@protocol.SearchFilesReply)
   SearchCancelled
   SearchFailed(String)
 }
@@ -265,7 +252,7 @@ async fn FileSearchService::search(
   query : String,
   max_results : Int32,
   request_generation : Int32,
-) -> SearchFilesReply {
+) -> @protocol.SearchFilesReply {
   let reply : @async.Queue[FileSearchResponse] = Queue(kind=Blocking(1))
   self.requests.put(
     Search(
@@ -311,7 +298,7 @@ async fn FileSearchService::clear_cache(
 fn file_search_reply(
   computed : FileSearchComputation,
   from_cache : Bool,
-) -> SearchFilesReply {
+) -> @protocol.SearchFilesReply {
   {
     files: computed.files,
     from_cache,
@@ -663,8 +650,8 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
 ///|
 async fn search_files_op(
   service : FileSearchService,
-  payload : SearchFilesPayload,
-) -> SearchFilesReply {
+  payload : @protocol.SearchFilesPayload,
+) -> @protocol.SearchFilesReply {
   let root = WirePath::parse(payload.path).absolute
   service.search(
     root,
@@ -678,7 +665,7 @@ async fn search_files_op(
 ///|
 async fn cancel_search_files_op(
   service : FileSearchService,
-  payload : CancelSearchFilesPayload,
+  payload : @protocol.CancelSearchFilesPayload,
 ) -> @protocol.EmptyReply {
   service.cancel(payload.cache_key, payload.generation)
   Acknowledged
@@ -687,7 +674,7 @@ async fn cancel_search_files_op(
 ///|
 async fn clear_file_search_cache_op(
   service : FileSearchService,
-  payload : ClearFileSearchCachePayload,
+  payload : @protocol.ClearFileSearchCachePayload,
 ) -> @protocol.EmptyReply {
   service.clear_cache(payload.cache_key)
   Acknowledged

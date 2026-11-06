@@ -1,13 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-async function capture(page, testInfo, name) {
-  const path = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({ path });
-  await testInfo.attach(name, { path, contentType: 'image/png' });
-}
-
-test('the approval mode is chosen per conversation and reaches agent.start', async ({ page }, testInfo) => {
+test('the approval mode is chosen per conversation and reaches agent.start', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -24,7 +18,6 @@ test('the approval mode is chosen per conversation and reaches agent.start', asy
   await expect(review).toHaveAttribute('aria-selected', 'true');
   await expect(ask).toContainText('You answer every permission request yourself');
   await expect(review).toContainText('asks you only when unsure');
-  await capture(page, testInfo, 'openseek-approval-menu');
   await ask.click();
   await expect(menu).toHaveCount(0);
   await expect(trigger).toHaveText('Request approval');

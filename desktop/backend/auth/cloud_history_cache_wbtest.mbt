@@ -6,10 +6,22 @@ async test "Cloud history survives a host restart and follows account retirement
   let store = AuthStore::load(runtime_dir=root)
   store.commit_session(first)
   let page : @protocol.CloudHistoryCachePage = {
-    session: { version: None, id: None, system_prompt: None, events: Some([]), },
-    messages: [
-      { "kind": "user", "data": { "content": "Cached chat\nSecond line" } },
-    ],
+    session: {
+      version: None,
+      id: None,
+      system_prompt: None,
+      events: Some([
+        {
+          sequence: 7,
+          ts: None,
+          item: User({
+            content: Content([Text("Cached chat\nSecond line")]),
+            submission_id: None,
+          }),
+        },
+      ]),
+    },
+    messages: [{ "kind": "user", "engine_sequence": 7, "data": {} }],
     offset: Some(3),
     etag: Some("etag-1"),
   }

@@ -70,7 +70,7 @@ async fn Schedules::execute(
       self.lock.acquire()
       defer self.lock.release()
       let state = self.load()
-      let settled = { ..run, status, finished_at: Some(schedule_now()), }
+      let settled = { ..run, status, finished_at: Some(@async.now()), }
       let runs = state.runs.map(item => {
         if item.id == run.id {
           settled

@@ -52,29 +52,12 @@ fn Conversation::streaming_render_identity(self : Conversation) -> String {
 }
 
 ///|
-/// The provisional reasoning to render. A sealed preview equal to reasoning
-/// committed during this step is already present in the durable activity card,
-/// so hide only that visual duplicate. Never hide an in-flight prefix and never
-/// mutate the preview from a commit: session commits carry no run/step identity,
-/// and an older delayed commit must not truncate a newer stream.
+/// The provisional reasoning to render beside the durable transcript.
 fn Conversation::reasoning_for_render(self : Conversation) -> (String?, Bool) {
-  guard self.turn.live.reasoning is Some(live) && !live.content.is_empty() else {
-    return (None, false)
-  }
-  let candidate = live.content.trim()
-  if live.complete && !candidate.is_empty() {
-    for message in self.messages.rev_iter() {
-      if message.kind is Assistant(reasoning=Some(thought), ..) {
-        if message.sequence is Some(sequence) &&
-          sequence > self.turn.reasoning_frontier &&
-          thought.trim() == candidate {
-          return (None, live.complete)
-        }
-        break
-      }
-    }
-  }
-  (Some(live.content), live.complete)
+  self.turn.live.visible_reasoning(
+    self.messages,
+    frontier=self.turn.reasoning_frontier,
+  )
 }
 
 ///|

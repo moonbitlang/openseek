@@ -199,11 +199,10 @@ jobs:
             --workdir "$GITHUB_WORKSPACE/desktop/e2e" \
             "$PLAYWRIGHT_IMAGE" npm test
 
-      # A test that fails once and passes its retry leaves the job green, and
-      # the failed attempt's screenshot and page snapshot are the only record
-      # of why. Keep the report for every finished run, not just failed ones.
+      # Failed tests' screenshots and page snapshots are the only record of
+      # why they failed.
       - name: Upload Playwright report
-        if: ${{ !cancelled() }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
           name: desktop-playwright-report

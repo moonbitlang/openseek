@@ -4,7 +4,7 @@ import { expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './desktop_browser_harness.js';
 
 export const authOrigin = 'https://openseek-api.moonbitlang.cn';
-export const cloudOrigin = 'https://cloud.moonbitlang.cn';
+export const cloudOrigin = 'https://cloud.moonbitlang.com';
 export const sessionA = '11111111-1111-4111-8111-111111111111';
 export const sessionB = '22222222-2222-4222-8222-222222222222';
 export const sessionC = '33333333-3333-4333-8333-333333333333';
@@ -83,6 +83,7 @@ export class CloudHarness {
     this.archived = new Set();
     this.histories = new Map();
     this.historyTurns = new Map();
+    this.trimHistory = false;
     this.nativeNotices = new Map();
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
@@ -471,11 +472,15 @@ export class CloudHarness {
       if (record.kind === 'user') {
         const mapped = { ...record, engine_sequence: items.length + 1 };
         items.push({ kind: record.kind, payload: record.data });
+        if (this.trimHistory) mapped.data = record.data.submission_id ? { submission_id: record.data.submission_id } : {};
         return mapped;
       }
       const payload = record.data;
       if (['tool_result', 'runtime_notice', 'summary'].includes(record.kind)) items.push({ kind: record.kind, payload });
-      if (record.kind === 'assistant_message') items.push({ kind: 'assistant', payload });
+      if (record.kind === 'assistant_message') {
+        items.push({ kind: 'assistant', payload });
+        if (this.trimHistory) return { ...record, data: {}, engine_sequence: items.length };
+      }
       if (record.kind === 'tool_call') {
         const call = payload.function ? { id: payload.id, name: payload.function.name, arguments: payload.function.arguments } : payload;
         items.push({ kind: 'assistant', payload: { content: '', tool_calls: [call] } });
@@ -489,7 +494,10 @@ export class CloudHarness {
       return record;
     });
     items.push(...(this.nativeNotices.get(session) || []));
-    return { messages, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
+    const projected = this.trimHistory
+      ? messages.filter(record => ['user', 'assistant_message', 'task_finished'].includes(record.kind))
+      : messages;
+    return { messages: projected, session: { events: items.map((item, index) => ({ sequence: index + 1, ts: 1000 + index, item })) } };
   }
 
   controlState(session) {
@@ -564,7 +572,7 @@ export class CloudHarness {
       this.controlSnapshots.set(session, { ...snapshot, data: { ...snapshot.data, compacting: false } });
     }
     const history = this.histories.get(session) || { messages: [], generating: false };
-    const transient = ['prediction_result', 'task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error', 'engine_failed'];
+    const transient = ['prediction_result', 'task_started', 'assistant_delta', 'reasoning_delta', 'reasoning_message', 'stream_retry', 'step', 'agent_finished', 'usage', 'compaction_started', 'compaction_finished', 'compaction_failed', 'auto_compaction_failed', 'auto_compaction_started', 'auto_compaction_finished', 'steer_applied', 'steer_dropped', 'goal_updated', 'goal_blocked', 'goal_unblocked', 'command_error', 'session_error', 'engine_failed'];
     if (!transient.includes(kind)) {
       this.histories.set(session, { ...history,
         messages: [...history.messages, { task_id: task, kind, data, created_at: 1000 + event.seq }],
@@ -652,7 +660,9 @@ export class CloudHarness {
 
   async open(id = sessionA) {
     await this.row(id).click();
-    await expect(this.row(id)).toHaveAttribute('aria-current', 'true');
+    // Wait on the main pane, not the row's sidebar state: every Cloud spec
+    // opens through here, and a sidebar regression belongs to the specs that
+    // assert it rather than to all of them.
     await expect(this.page.locator('main .topbar-title')).toHaveText(this.titles.get(id) || 'New chat');
     await this.page.locator('#task').waitFor();
   }

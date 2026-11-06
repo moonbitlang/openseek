@@ -3,7 +3,7 @@ pub async fn import_session(
   manager : EngineManager,
   payload : @protocol.SessionImportPayload,
   on_created~ : (String) -> Unit,
-  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+  on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit,
 ) -> String {
   let records = @session_import.prepare(payload.source)
   manager.workspace_lifecycle_lock.acquire()

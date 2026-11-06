@@ -226,12 +226,13 @@ control-frame definitions in `desktop/backend/tunnel`.
 | `-32700` | unparsable frame | — |
 | `-32600` | not a valid JSON-RPC request | — |
 | `-32601` | unknown method | 404 unknown op |
-| `-32602` | params failed to decode | 400 `PayloadError` |
-| `-32000` | engine error (`EngineError` — busy conversation, spawn failure, …) | 409 |
-| `-32001` | host error (`HostError` — bad path, LSP failure, …) | 409 |
-| `-32603` | internal error | 500 |
+| `-32602` | params failed to decode, or a `PayloadError` | 400 `PayloadError` |
+| `-32000` | the method ran and failed (a busy conversation, a refused path, a git refusal, an unexpected failure, …) | 409 / 500 |
 
-`error.message` is the user-facing text. `error.data` is unused for now.
+`error.message` is the user-facing text: the failing error's own message.
+Clients show it and do not branch on the code, so failures of every kind
+share `-32000`; an error type a method raises needs only a message written
+for the person reading it. `error.data` is unused for now.
 
 ## Connection lifecycle: reconnect = resync
 
@@ -802,7 +803,7 @@ Notification:
 
 Chat and Work keep their existing shared list, transcript, and composer.
 Cloud requests use the current client's account Bearer directly against
-`https://cloud.moonbitlang.cn`; there is no Cloud login, exchange, credential
+`https://cloud.moonbitlang.com`; there is no Cloud login, exchange, credential
 store, or `cloud.authorize` bridge command. Normal messages send only `content`,
 using the server's default model credential. Client reader disposal closes SSE
 without cancelling an already-running server task.

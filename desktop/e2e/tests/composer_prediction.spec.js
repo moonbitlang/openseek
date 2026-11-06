@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const prediction = (text = 'Commit the fix') => ({
@@ -52,7 +52,6 @@ test('accepting and clearing restores the broadcast suggestion without requests'
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(input).toHaveValue('');
   await input.focus();
-  await page.screenshot({ path: test.info().outputPath('composer-prediction.png') });
   await input.press('Shift+Tab');
   await expect(input).toHaveValue('');
   await input.focus();

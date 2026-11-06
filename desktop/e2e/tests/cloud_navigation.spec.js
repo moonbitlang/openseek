@@ -1,10 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const sessionURL = id => `${authOrigin}/cloud/session/${id}`;
 const creations = cloud => cloud.requests.filter(r => r.side === 'cloud' && r.path === '/v1/sessions' && r.method === 'POST');
 
-test('Cloud home opens the composer and creates a session only on first send', async ({ page }, testInfo) => {
+test('Cloud home opens the composer and creates a session only on first send', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
@@ -15,7 +15,6 @@ test('Cloud home opens the composer and creates a session only on first send', a
   await expect(composer).toBeEnabled();
   await expect(page).toHaveURL(`${authOrigin}/cloud`);
   expect(creations(cloud)).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath('cloud-home.png'), fullPage: true });
   await composer.fill('First Cloud message');
   expect(creations(cloud)).toEqual([]);
   await composer.press('Enter');
@@ -351,4 +350,31 @@ test('Cloud direct link keeps history readable but editing disabled after catalo
   await expect(page.locator('#task')).toBeDisabled();
   await expect(page.locator('aside').getByText('Couldn’t load chats', { exact: true })).toBeVisible();
   expect(creations(cloud)).toEqual([]);
+});
+
+test('Cloud keeps displayed history when a background read fails during a send', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  cloud.manualTasks = true;
+  cloud.histories.set(sessionA, {
+    messages: [{
+      task_id: 'old-task', kind: 'user', data: { content: 'Earlier Cloud message' }, created_at: 1000,
+    }],
+    generating: false,
+  });
+  await cloud.install();
+  await cloud.goto();
+  await cloud.open();
+  const transcript = page.locator('#transcript');
+  await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
+
+  cloud.historyStatus = 503;
+  await page.locator('#task').fill('Start a new turn');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.getByText(/HTTP 503/).first()).toBeVisible();
+  await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
+
+  cloud.historyStatus = 200;
+  await cloud.finishTask();
+  await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
+  await expect(transcript.getByText('Start a new turn', { exact: true })).toBeVisible();
 });

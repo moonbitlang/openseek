@@ -66,22 +66,12 @@ async fn SelfUpdate::cleanup(self : SelfUpdate) -> Unit {
 }
 
 ///|
-/// Reply to `check_update`, discriminated on the wire by a `kind` field.
-/// Every outcome is data — the op only rejects on cancellation — because
-/// each kind is worth a different amount of noise: `broken` can only be the
-/// publisher's fault (toast material), `malformed` also happens under
-/// captive portals (log material), `unreachable` is routine offline life.
-/// An available release carries an optional actionable reason when this
-/// installation itself cannot be replaced.
-type CheckUpdateReply = @protocol.CheckUpdateReply
-
-///|
 /// Ask the release manifest for a newer release. `installable` reports
 /// whether `download_update` would work here: a real signed .app bundle in a
 /// replaceable location, with a package published for this platform. Only a
 /// failed installation preflight carries `unavailable_reason`; a platform
 /// without a package remains the existing informational fallback.
-async fn SelfUpdate::check(self : SelfUpdate) -> CheckUpdateReply {
+async fn SelfUpdate::check(self : SelfUpdate) -> @protocol.CheckUpdateReply {
   let info = @update.check_for_update(current=self.app_version) catch {
     @update.Unreachable(reason~) => return Unreachable(reason~)
     @update.MalformedManifest(reason~) => {
@@ -113,18 +103,13 @@ async fn SelfUpdate::check(self : SelfUpdate) -> CheckUpdateReply {
 }
 
 ///|
-/// The immediate `update.download` reply. Completion arrives separately as
-/// `update.downloaded` or `update.download_failed` from the host-owned pump.
-type DownloadUpdateAcceptedReply = @protocol.DownloadUpdateAcceptedReply
-
-///|
 /// Accept one download for the app-lifetime pump, or say why not. The
 /// decision, the `busy` flip, and the enqueue contain no suspension point, so
 /// acceptance can neither race another request nor strand an accepted
 /// download when this request is cancelled right after replying.
 fn SelfUpdate::start_download(
   self : SelfUpdate,
-) -> DownloadUpdateAcceptedReply raise {
+) -> @protocol.DownloadUpdateAcceptedReply raise {
   guard self.work_dir is Some(_) && self.bundle_path is Some(_) else {
     raise HostError("this build cannot install updates")
   }
@@ -226,7 +211,7 @@ async fn SelfUpdate::run(
 /// tells the frontend to close the window; the actual reopen happens in
 /// `main` once the run loop has exited. `busy` covers the swap so no download
 /// can start while the staging dir and bundle path are being consumed.
-async fn SelfUpdate::apply(self : SelfUpdate) -> ApplyUpdateReply {
+async fn SelfUpdate::apply(self : SelfUpdate) -> @protocol.ApplyUpdateReply {
   guard !self.busy else {
     raise HostError("an update download is still in progress")
   }

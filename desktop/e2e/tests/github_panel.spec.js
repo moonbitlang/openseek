@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('GitHub inventory, PR details and checkout follow live language changes', async ({ page }, testInfo) => {
+test('GitHub inventory, PR details and checkout follow live language changes', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const fallback = app.replyFor.bind(app);
   const item = { number: 42, title: 'Keep this PR title', url: 'https://github.com/owner/project/pull/42', author: 'contributor', draft: false };
@@ -68,10 +68,8 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
   const dialog = page.getByRole('dialog', { name: '检出 PR #42 前有未提交的更改', exact: true });
   await expect(dialog.getByRole('button', { name: '暂存更改', exact: true })).toBeFocused();
   await expect(dialog).toContainText('丢弃会永久删除已跟踪文件的更改。未跟踪文件会保留。');
-  await page.screenshot({ path: testInfo.outputPath('github-checkout-zh.png') });
   await page.keyboard.press('Escape');
   await expect(checkout).toBeFocused();
-  await page.screenshot({ path: testInfo.outputPath('github-panel-zh.png') });
   expect(app.requests.filter(request => request.method === 'github.pull_request')).toHaveLength(1);
   expect(app.requests.filter(request => request.method === 'github.checkout').map(request => request.params.changes)).toEqual(['ask']);
   expect(app.pageErrors).toEqual([]);

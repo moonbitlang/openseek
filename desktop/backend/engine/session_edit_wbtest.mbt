@@ -36,7 +36,7 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
       { ..payload, submission_id: "wrong", },
       { ..payload, source_sequence: 1, },
     ] {
-    let result : Result[SessionDeleteReply, String] = Ok(
+    let result : Result[@protocol.SessionDeleteReply, String] = Ok(
       commit_session_edit(manager, invalid, (id, _) => notifications.push(id), on_worktree_changed=(
         _,
         _,

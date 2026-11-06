@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, authOrigin, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id) {
@@ -17,7 +17,7 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
 {
   const desktop = false;
 
-  test(`${desktop ? 'desktop' : 'browser'} deletes Cloud through the shared confirmation and stays in Chat`, async ({ page }, testInfo) => {
+  test(`${desktop ? 'desktop' : 'browser'} deletes Cloud through the shared confirmation and stays in Chat`, async ({ page }) => {
     const cloud = new CloudHarness(page, { desktop });
     await cloud.install();
     await cloud.goto();
@@ -29,7 +29,6 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
     await page.getByRole('menuitem', { name: 'Delete…', exact: true }).click();
     await expect(page.getByText(/“Cloud fixture A”.*permanently deleted/)).toContainText('Cloud fixture A');
     await expect(page.getByText(/“Cloud fixture A”.*permanently deleted/)).not.toContainText('worktree');
-    await page.screenshot({ path: testInfo.outputPath('cloud-delete-confirm.png'), fullPage: true });
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     expect(deletes(cloud)).toHaveLength(0);
     await expect(cloud.row(sessionA)).toBeVisible();
@@ -50,7 +49,7 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
 {
   const failure = 503;
 
-  test(`delete ${failure} preserves the account, conversation and normal delete action`, async ({ page }, testInfo) => {
+  test(`delete ${failure} preserves the account, conversation and normal delete action`, async ({ page }) => {
     const cloud = new CloudHarness(page);
     cloud.deleteStatus = failure === 'network' ? 204 : failure;
     cloud.deleteOffline = failure === 'network';
@@ -63,7 +62,6 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
     await expect(page.locator('aside')).toContainText(failure === 409 ? 'after it finishes' : failure === 503 ? 'HTTP 503' : 'unreachable');
     await expect(cloud.row(sessionA)).toHaveAttribute('aria-current', 'true');
     await expect(page.locator('#task')).toHaveValue('Preserve this draft');
-    if (failure === 503) await page.screenshot({ path: testInfo.outputPath('cloud-delete-error.png'), fullPage: true });
     expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
     cloud.deleteStatus = 204;
     cloud.deleteOffline = false;
@@ -146,7 +144,7 @@ test('a new generating list disables deletion after an earlier idle history', as
   await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeDisabled();
 });
 
-test('busy Cloud menus retain rename while deletion stays disabled with normal dismissal', async ({ page }, testInfo) => {
+test('busy Cloud menus retain rename while deletion stays disabled with normal dismissal', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.generating.add(sessionA);
   await cloud.install();
@@ -159,7 +157,6 @@ test('busy Cloud menus retain rename while deletion stays disabled with normal d
   await expect(action).toBeDisabled();
   const rename = popup.getByRole('menuitem', { name: 'Rename…', exact: true });
   await expect(popup).toBeFocused();
-  await page.screenshot({ path: testInfo.outputPath('cloud-delete-disabled-menu.png'), fullPage: true });
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
     await page.keyboard.press(key);
     await expect(rename).toBeFocused();

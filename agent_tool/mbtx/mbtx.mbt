@@ -1739,66 +1739,45 @@ fn description(
   }
   let base_head =
     #|Compile and run a self-contained MoonBit program and return its merged
-    #|stdout/stderr and exit status. This is BOTH your command runner and your
-    #|scripting surface: there is no shell tool, so commands, IO, and computation
-    #|happen inside the submitted MoonBit program.
+    #|stdout/stderr and exit status.
     #|
-    #|Every call requires a short description and at least one of source or
-    #|filename. There are three valid ways to supply the program:
+    #|There are three ways to call the tool:
     #|- source + filename: save the source to that writable filename and run it.
     #|  Use both together when creating a script you want to inspect or run again.
     #|- source without filename: run a one-off inline program without saving it.
     #|- filename without source: run a script that already exists.
-    #|Omit unused fields entirely; do not send null.
     #|
     #|For example, create and run a reusable script with
     #|`{"description":"Save and run a greeting","source":"---\nimport {\n  \"moonbitlang/core/env\",\n}\n---\n\nfn main {\n  println(@env.args()[1:])\n}\n","filename":"scripts/greet.mbtx"}`.
     #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
-    #|A filename-only call cannot create a script. Missing parent directories are
-    #|created. Identical existing content is reused; different content is never
-    #|overwritten. Use the edit tool to change a saved script. Saving is limited
-    #|to the writable workspace or configured scratch directory and is unavailable in read-only mode.
-    #|Pass `args` (an array of strings, default `[]`) to parameterize any script:
-    #|`{"description":"Run saved checks","filename":"scripts/check.mbtx","args":["--deny-warn"]}`.
-    #|The script runs on wasm. Import "moonbitlang/core/env" and read
-    #|`@env.args()[1:]` to skip the executable name.
-    #|Arguments are passed verbatim, without shell expansion or splitting.
-    #|When bundled resources are available, these scripts are already bundled:
-    #|Read text files with {"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}.
-    #|Selectors: path, path:start, path:start:end (inclusive, 1-based); batch in args.
-    #|Use ["--literal","name:123"] for numeric-colon filenames, and "--" before
-    #|option-like filenames. Headings, numbered lines and footers report each file,
-    #|including empty files; errors fail the call but remaining files still return.
-    #|Follow truncated/skipped_files with focused reads. args=["--help"] gives budgets.
-    #|@builtin/rg.mbtx searches text: args go to ripgrep unchanged (rg flags and
-    #|regex, not POSIX grep: -E is --encoding, alternation is a|b), e.g.
-    #|args=["fn parse", "-g", "*.mbt"]; output is path:line:text, bounded
-    #|like read, and no match exits 0 with a note.
-    #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
-    #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
-    #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
-    #|@builtin/ci-watch.mbtx monitors GitHub PR checks with gh;
-    #|@builtin/fix-deprecations.mbtx (with ptc=true, cwd at the module) fixes every
-    #|deprecation warning whose message names a bare replacement, one guarded edit
-    #|per site, and lists the rest for you; --dry-run plans only.
-    #|use args=["PR", "--repo", "OWNER/REPO", "--once"] for one snapshot.
-    #|Agent workflows (they start subagents): @builtin/review.mbtx (independent
-    #|worktree audit against the criteria in args), @builtin/change-review.mbtx
-    #|(working-tree review from three perspectives), @builtin/repo-map.mbtx
-    #|(architecture, validation, extension points) or @builtin/simplify.mbtx
-    #|(sweeps MoonBit packages for safe simplifications and opens one pull
-    #|request per package; --no-pr keeps them on local branches).
-    #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
-    #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
-    #|not implemented. Paths within the namespace cannot escape its root.
-    #|Ordinary names such as check.mbtx select workspace files. Use
-    #|./@builtin/check.mbtx for a literal workspace path. Relative paths resolve
-    #|from the workspace root; absolute paths stay absolute. No lookup fallback
-    #|occurs. `cwd` controls execution only, not filename resolution.
-    #|Existing scripts are read once; each run executes its selected snapshot
-    #|with the same sandbox and isolated imports as inline source.
-    #|Diagnostics cite `source:LINE:COL` or the supplied filename and line/column.
-    #|The tool always compiles to wasm and runs with moonrun.
+    #|Missing parent directories are created. A saved script is never overwritten
+    #|with different content; change it with the edit tool. Scripts compile to
+    #|wasm and run under moonrun.
+    #|
+    #|## Bundled scripts
+    #|
+    #|Filenames under `@builtin/` run read-only scripts built into OpenSeek: pass
+    #|`filename` and `args`, never `source`. Every other filename is a workspace
+    #|path, so `./@builtin/check.mbtx` is a workspace file. Args `["--help"]`
+    #|print a script's usage.
+    #|
+    #|- `@builtin/read.mbtx` reads text files with numbered lines, e.g. args
+    #|  `["src/main.mbt:120:200", "moon.mod"]`. Selectors are `path`,
+    #|  `path:start` or `path:start:end` (inclusive, 1-based). Output is bounded:
+    #|  follow truncated or skipped files with narrower reads. A failing file fails the call; the others still return.
+    #|- `@builtin/rg.mbtx` searches text. `args` go to ripgrep unchanged, so they
+    #|  are rg flags and regex, not POSIX grep (`-E` is `--encoding`; alternation
+    #|  is `a|b`), e.g. args `["fn parse", "-g", "*.mbt"]`. Output is
+    #|  `path:line:text`; no match exits 0 with a note.
+    #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
+    #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
+    #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and
+    #|  `@builtin/check-json.mbtx` (moon check --output-json).
+    #|- `@builtin/ci-watch.mbtx` monitors a GitHub PR's checks with gh;
+    #|  args `["PR", "--repo", "OWNER/REPO", "--once"]` take one snapshot.
+    #|- `@builtin/fix-deprecations.mbtx`, run with `cwd` at the module, fixes each
+    #|  deprecation warning whose message names a bare replacement, one guarded
+    #|  edit per site, and lists the rest; `--dry-run` only plans.
   // Rendered from `spawnable_commands`, the table that also builds the
   // moonrun policy: the list the model reads and the list moonrun enforces
   // cannot disagree, because there is only one.
@@ -1929,8 +1908,15 @@ fn description(
       #|script stops them. Each child gets its own transcript and appears in the
       #|desktop.
       #|
-      #|For an independent worktree review, run the bundled script:
-      #|`{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"]}`.
+      #|Bundled workflows that start subagents: `@builtin/review.mbtx` (below),
+      #|`@builtin/change-review.mbtx` (reviews the working tree from three
+      #|perspectives), `@builtin/repo-map.mbtx` (maps architecture, validation and
+      #|extension points) and `@builtin/simplify.mbtx` (sweeps MoonBit packages for
+      #|safe simplifications and opens one pull request per package; `--no-pr`
+      #|keeps them on local branches).
+      #|
+      #|For an independent worktree review, run `@builtin/review.mbtx`, e.g. with args
+      #|`["Check the CSV parser's CRLF and escaped-quote handling"]`.
       #|With empty args it audits the standing goal and its recorded baseline, which
       #|the engine supplies; args narrow that goal as an audit focus, or are the whole
       #|criteria when no goal stands. It prints the reviewer's full report (`findings`,

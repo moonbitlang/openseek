@@ -1,4 +1,4 @@
-# OpenSeek Connect for Android
+# SeekMoon for Android
 
 Remote conversations through Connect. Kotlin hosts the shared MoonBit/Rabbita
 frontend; Connect conversations and commands run on the selected computer.
@@ -65,6 +65,26 @@ overrides it for a direct Gradle build. Versions follow the release workflow's
 Android `versionCode` of `major * 10000 + minor * 100 + patch + 1`.
 Older releases predating Android remain valid rollback targets.
 
+## Self-update
+
+Release builds update themselves from the same manifest as Desktop
+(`https://openseek-api.moonbitlang.cn/desktop/releases/latest.json`). On each
+launch the app compares the manifest's `version` with its own `versionName`,
+downloads `platforms.android` into its cache in the background, and checks
+the SHA-256. When the APK is ready, a dialog offers to install it. If no
+newer release exists, or the release has no APK, the app shows nothing, and
+network failures only reach the log.
+
+Installing goes through `PackageInstaller`. The first time, Android asks the
+user to allow installs from SeekMoon (`REQUEST_INSTALL_PACKAGES`); the app
+then continues the installation when it returns from Settings. Android shows
+its own confirmation unless the device is on Android 12+ and this app
+installed the current version itself (`UPDATE_PACKAGES_WITHOUT_USER_ACTION`).
+If Android destroys the app while the user is in Settings, the pending
+installation is restored from the saved state. Android rejects an APK signed with a
+different key, which is why every release must keep the same keystore.
+Debug builds (`.debug`) never check for updates.
+
 The launcher icon uses the white rabbit paths from
 `desktop/package/macos/appicon.svg` and the blue background (`#3B6EF5`) from
 Desktop's packaged `AppIcon.icns` / `appicon.png`. Android applies its own
@@ -126,7 +146,7 @@ nothing of the frontend's layers or DOM (`desktop/frontend/dismiss/back.mbt`).
 
 Shared mobile layout, Chat/Connect entry and offline behavior are browser
 features. Their tests live under `desktop/e2e/tests` and require no Android
-build; see [Mobile browser client](../desktop/MOBILE_BROWSER.md). Android adds
+build; see [Desktop end-to-end tests](../desktop/e2e/README.md). Android adds
 only native authentication, insets/lifecycle, Back, file picking and packaging.
 `conversation.css` hides the terminal and side-panel buttons for this first
 conversation-only client.

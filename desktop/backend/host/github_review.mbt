@@ -199,7 +199,7 @@ async fn github_review_file(
 ) -> @protocol.GithubReviewFile? {
   // Both revisions are immutable. File navigation only needs local Git, not
   // another round-trip through every PR file and every review thread.
-  let changes = github_checkout_git(dir.0, [
+  let changes = @gitx.output(dir, [
     "diff", "--name-status", "-z", "--no-ext-diff", "--find-renames", base, head,
     "--",
   ])
@@ -209,12 +209,12 @@ async fn github_review_file(
     let original = if change.kind == "added" {
       None
     } else {
-      Some(github_checkout_git(dir.0, ["show", "\{base}:\{old_path}"]))
+      Some(@gitx.output(dir, ["show", "\{base}:\{old_path}"]))
     }
     let modified = if change.kind == "deleted" {
       None
     } else {
-      Some(github_checkout_git(dir.0, ["show", "\{head}:\{path}"]))
+      Some(@gitx.output(dir, ["show", "\{head}:\{path}"]))
     }
     for content in [original, modified] {
       if content is Some(text) && text.contains("\u{0}") {
@@ -339,7 +339,7 @@ async fn github_review_load(
       "The pull request changed while loading comments. Refresh to retry.",
     )
   }
-  guard github_checkout_branch(dir.0) == current.branch else {
+  guard github_checkout_branch(dir) == current.branch else {
     raise HostError(
       "The checkout changed while loading comments. Refresh to retry.",
     )

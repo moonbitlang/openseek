@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfoAAAAASUVORK5CYII=';
@@ -53,7 +53,7 @@ class CodexImagesHarness extends DesktopBrowserHarness {
   }
 }
 
-test('selected image-only input reaches Codex and remains visible in history', async ({ page }, testInfo) => {
+test('selected image-only input reaches Codex and remains visible in history', async ({ page }) => {
   const app = new CodexImagesHarness(page);
   await app.openCodex();
   await expect(page).toHaveURL(/\/codex\/new$/);
@@ -69,7 +69,6 @@ test('selected image-only input reaches Codex and remains visible in history', a
   await expect(page.locator('.composer-image')).toHaveCount(0);
   await expect(page.locator('.user-image')).toHaveAttribute('src', `data:image/png;base64,${png}`);
   await expect.poll(() => page.locator('.user-image').evaluate(img => img.naturalWidth)).toBe(1);
-  await page.screenshot({ path: testInfo.outputPath('codex-image-sent.png') });
   expect(app.pageErrors).toEqual([]);
 });
 

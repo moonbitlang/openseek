@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('code editor follows expand and restore panel animations', async ({ page }) => {
+test('code editor follows expand and restore panel animations', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.workingFiles['README.md'] = '# Resize fixture\n\nA Markdown view.\n';
   await app.install();

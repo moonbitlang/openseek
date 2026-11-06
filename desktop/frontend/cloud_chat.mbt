@@ -344,16 +344,13 @@ fn update_cloud(
     let (report, next) = next.notify_error(dispatch, failure.label())
     return (@cmd.batch([command, ..file_commands, report]), next)
   }
-  let preserve_scroll = if message
-    is @cloud.OlderLoaded(epoch, id, request, page) &&
-    epoch == before.epoch &&
-    model.transcript_slot() is Some(CloudTranscriptSlot(owner)) &&
-    owner.session() == id &&
-    before.conversations.get(id)
-    is Some({ history_older_request: Some((pending, offset, generation)), .. }) &&
-    generation == model.chat_navigation_generation &&
-    request == pending &&
-    page.offset == Some(offset) {
+  // Earlier turns arrive from the network or from cached pages rejoining the
+  // window; either way the visible turn must stay in place.
+  let preserve_scroll = if model.transcript_slot()
+    is Some(CloudTranscriptSlot(owner)) &&
+    before.conversations.get(owner.session()) is Some(previous) &&
+    next.cloud.conversations.get(owner.session()) is Some(current) &&
+    current.extends_history_backward(previous) {
     @transcript_component.preserve_prepend_scroll()
   } else {
     @cmd.none
@@ -443,12 +440,22 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   }
   let pending = self.cloud.draft_identity() == Some(owner) &&
     self.cloud.creating_session()
+  let native_users = Map([])
+  for event in conversation.document.events.unwrap_or([]) {
+    if event.item is @protocol.User(user) {
+      native_users[event.sequence] = user.content
+    }
+  }
   let history : Array[String] = []
   for record in conversation.records {
-    if record.kind == "user" && record.data is { "content": content, .. } {
-      let text = match content {
-        String(text) => text
-        Array(parts) =>
+    if record.kind == "user" {
+      let native = record.engine_sequence.bind(sequence => {
+        native_users.get(sequence)
+      })
+      let text = match (native, record.data) {
+        (Some(content), _) => content.text()
+        (_, { "content": String(text), .. }) => text
+        (_, { "content": Array(parts), .. }) =>
           parts
           .iter()
           .filter_map(part => {
@@ -619,7 +626,9 @@ fn Model::cloud_chat_rows(
         nested: false,
         subrun: false,
         active,
-        loading: conversation.map_or(false, conversation => conversation.loading),
+        loading: conversation.map_or(false, conversation => {
+          conversation.loading || conversation.history_older_request is Some(_)
+        }),
         load_failed: conversation.map_or(false, conversation => {
           conversation.history_required && conversation.notice is Some(_)
         }),

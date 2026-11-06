@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
@@ -79,7 +79,7 @@ test('PDF upload waits for confirmation then opens from its existing file mentio
   expect(app.pageErrors).toEqual([]);
 });
 
-test('cancelling or failing a document import keeps the editable draft', async ({ page }, testInfo) => {
+test('cancelling or failing a document import keeps the editable draft', async ({ page }) => {
   const app = await open(page);
   await page.locator('#task').fill('Keep this draft');
   await select(page);
@@ -91,7 +91,6 @@ test('cancelling or failing a document import keeps the editable draft', async (
   await select(page);
   await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Attachment upload failed');
-  await page.locator('.composer').screenshot({ path: testInfo.outputPath('attachment-error.png') });
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await expect(page.locator('#send')).toBeEnabled();

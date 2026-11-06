@@ -14,6 +14,11 @@ Two question-card layout flows also run in WebKit to cover Safari's grid
 sizing, clipping, and narrow-viewport interaction. Shared question state and
 protocol cases run in Chromium and model tests.
 
+`mobile_browser.spec.js` runs in Chromium and WebKit and covers the phone
+layout that browsers and the Android client share; it needs no Android build.
+Its reduced viewport heights simulate layout only, not a real phone's soft
+keyboard or browser toolbar.
+
 ## Setup
 
 From this directory:
@@ -51,6 +56,11 @@ Prefer accessible roles, labels, and visible text. Use classes only for
 product DOM whose presentation contract is itself under test. Mock network
 traffic with Playwright routes and use retrying assertions instead of fixed
 sleeps.
+
+Import `test` and `expect` from `tests/support/test.js`. Its pages run with CSS
+transitions and animations disabled, so clicks do not wait for moving targets.
+Tag a test `{ tag: '@motion' }` when it checks motion itself, such as a running
+spinner, reduced-motion handling, or geometry during or after a transition.
 
 ## Suite scope
 

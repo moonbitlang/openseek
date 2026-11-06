@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('message approvals survive idle reload and turn completion, and advance independently', async ({ page }, testInfo) => {
+test('message approvals survive idle reload and turn completion, and advance independently', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions.push(
     { id: 'target-first', title: 'Test B', updated_at_ms: 0 },
@@ -48,9 +48,6 @@ test('message approvals survive idle reload and turn completion, and advance ind
   });
   app.notify('agent.finished', { run_id: 'run-e2e', status: 'finished', answer: 'Done' });
   await expect(card).toContainText('Send to “Test B”');
-  const screenshot = testInfo.outputPath('pending-message-after-turn.png');
-  await card.screenshot({ path: screenshot });
-  await testInfo.attach('Message approval after turn completion', { path: screenshot, contentType: 'image/png' });
 
   await card.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(card).toContainText('Send to “Test C”');
@@ -92,7 +89,7 @@ test('a running engine approval takes priority over a background message approva
   expect(app.pageErrors).toEqual([]);
 });
 
-test('received messages and delivery results render tagged context live and after reload', async ({ page }, testInfo) => {
+test('received messages and delivery results render tagged context live and after reload', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const text = '这是跨会话审批测试，请确认收到。\n`inline code` <script>plain text</script>';
   const message = `<agent_message source_session="chat-A" message_id="msg-1">\n${text}\n</agent_message>`;
@@ -113,9 +110,6 @@ test('received messages and delivery results render tagged context live and afte
   app.sessionEvents.push(next);
   app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 2, event: next });
   await expect(page.locator('.session-message-source').last()).toHaveText('Message sent');
-  const screenshot = testInfo.outputPath('received-session-message.png');
-  await page.locator('#stream').screenshot({ path: screenshot });
-  await testInfo.attach('Received session message', { path: screenshot, contentType: 'image/png' });
   await page.reload();
   await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
   await expect(page.locator('.session-message')).toHaveCount(2);

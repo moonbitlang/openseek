@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 async function openCodex(page) {
@@ -40,7 +40,7 @@ function card(page, text) {
 }
 
 // Parallel exec_command calls can both wait for approval in the same thread.
-test('removing an earlier approval preserves keyboard focus and response ownership', async ({ page }, testInfo) => {
+test('removing an earlier approval preserves keyboard focus and response ownership', async ({ page }) => {
   const app = await openCodex(page);
   approval(app, 'first-command', 2);
   approval(app, 'second-command', 3);
@@ -49,12 +49,10 @@ test('removing an earlier approval preserves keyboard focus and response ownersh
   const approve = second.getByRole('button', { name: 'Approve once', exact: true });
   await approve.focus();
   const original = await approve.elementHandle();
-  await page.locator('.codex-pending').screenshot({ path: testInfo.outputPath('two-approvals-focused.png') });
   resolve(app, 'first-command', 4);
   await expect(card(page, 'first-command')).toHaveCount(0);
   await expect(approve).toBeFocused();
   expect(await approve.evaluate((node, old) => node === old, original)).toBe(true);
-  await page.locator('.codex-pending').screenshot({ path: testInfo.outputPath('surviving-approval-focused.png') });
   await page.keyboard.press('Enter');
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(1);
   expect(app.requests.find(r => r.method === 'codex.server_request.respond').params).toMatchObject({
@@ -66,7 +64,7 @@ test('removing an earlier approval preserves keyboard focus and response ownersh
 // Renderer fixtures cover both editable request types; this does not assert
 // that ordinary request_user_input can run alongside a blocked exec_command.
 for (const kind of ['question', 'mcp-form']) {
-  test(`${kind} retains its input node, selection and draft when a sibling resolves`, async ({ page }, testInfo) => {
+  test(`${kind} retains its input node, selection and draft when a sibling resolves`, async ({ page }) => {
     const app = await openCodex(page);
     approval(app, 'first-command', 2);
     if (kind === 'question') {
@@ -90,7 +88,6 @@ for (const kind of ['question', 'mcp-form']) {
     await input.fill(draft);
     await input.evaluate(node => node.setSelectionRange(3, 6, 'backward'));
     const original = await input.elementHandle();
-    await page.locator('.codex-pending').screenshot({ path: testInfo.outputPath('input-before-removal.png') });
     resolve(app, 'first-command', 4);
     await expect(card(page, 'first-command')).toHaveCount(0);
     await expect(input).toBeFocused();
@@ -98,7 +95,6 @@ for (const kind of ['question', 'mcp-form']) {
     expect(await input.evaluate((node, old) => node === old, original)).toBe(true);
     expect(await input.evaluate(node => [node.selectionStart, node.selectionEnd, node.selectionDirection]))
       .toEqual([3, 6, 'backward']);
-    await page.locator('.codex-pending').screenshot({ path: testInfo.outputPath('input-after-removal.png') });
     await page.keyboard.insertText('NEW');
     const edited = draft.slice(0, 3) + 'NEW' + draft.slice(6);
     await expect(input).toHaveValue(edited);

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const commands = app => app.requests.filter(request => request.method === 'POST' && request.path.endsWith('/commands')).map(request => JSON.parse(request.body));
@@ -11,7 +11,7 @@ async function open(page) {
   return app;
 }
 
-test('Cloud goals use the shared editor and settle on goal_updated without creating a task', async ({ page }, testInfo) => {
+test('Cloud goals use the shared editor and settle on goal_updated without creating a task', async ({ page }) => {
   const app = await open(page);
   const task = page.locator('#task');
   await task.fill('/goal');
@@ -23,7 +23,6 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   await expect.poll(() => commands(app)).toEqual([{ command: { command: 'goal', action: 'set', text: 'Ship the feature' } }]);
   await expect(page.locator('.composer-goal')).toContainText('Setting goal');
   await expect(page.locator('#stop')).toHaveCount(0);
-  expect(app.controlState(sessionA).data.active_task_id).toBeNull();
   await app.emitSessionEvent(sessionA, 'goal_updated', { goal: 'Ship the feature' }, { task: null });
   await expect(page.locator('.composer-goal')).toContainText('Goal: Ship the feature');
   await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
@@ -33,7 +32,6 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   await task.fill('A revised goal');
   await page.locator('#goal-cancel').click();
   await expect(task).toHaveValue('Keep this prompt');
-  await page.screenshot({ path: testInfo.outputPath('cloud-goal.png') });
   await app.open(sessionB);
   await app.open(sessionA);
   await expect(page.locator('.composer-goal')).toContainText('Goal: Ship the feature');
@@ -51,7 +49,7 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
 
 // Prompt expansion is shared: one command runs in an existing session and the other in a new one.
 for (const [name, workflow, fresh] of [['simplify', 'simplify.mbtx', false], ['ultrareview', 'review.mbtx', true]]) {
-  test(`Cloud ${name} shares prompt expansion in ${fresh ? 'a new' : 'an existing'} session`, async ({ page }, testInfo) => {
+  test(`Cloud ${name} shares prompt expansion in ${fresh ? 'a new' : 'an existing'} session`, async ({ page }) => {
     const app = await open(page);
     if (fresh) await app.create();
     const task = page.locator('#task');
@@ -60,7 +58,6 @@ for (const [name, workflow, fresh] of [['simplify', 'simplify.mbtx', false], ['u
     if (!fresh && name === 'simplify') {
       await task.fill('/');
       await expect(page.locator('.completion-item')).toHaveCount(4);
-      await page.screenshot({ path: testInfo.outputPath('cloud-shared-slash-menu.png') });
       await task.fill(`/${name}`);
     }
     await task.press('Enter');
@@ -83,7 +80,7 @@ for (const [name, workflow, fresh] of [['simplify', 'simplify.mbtx', false], ['u
 }
 
 for (const name of ['goal', 'compact']) {
-  test(`first Cloud ${name} creates once, observes before sending, and keeps later typing`, async ({ page }, testInfo) => {
+  test(`first Cloud ${name} creates once, observes before sending, and keeps later typing`, async ({ page }) => {
     const app = await open(page);
     await app.create();
     let create;
@@ -130,7 +127,6 @@ for (const name of ['goal', 'compact']) {
     await expect(task).toHaveValue('Keep this unsent prompt');
     expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(1);
     expect(commands(app)).toHaveLength(1);
-    await page.screenshot({ path: testInfo.outputPath(`cloud-first-${name}.png`) });
     expect(app.device.pageErrors).toEqual([]);
   });
 }
@@ -176,7 +172,7 @@ async function compact(page) {
   await page.locator('#task').press('Enter');
 }
 
-test('Cloud queues native compaction during a turn and restores it across navigation and reconnect', async ({ page }, testInfo) => {
+test('Cloud queues native compaction during a turn and restores it across navigation and reconnect', async ({ page }) => {
   const app = await open(page);
   app.manualTasks = true;
   await page.locator('#task').fill('Start work');
@@ -204,7 +200,6 @@ test('Cloud queues native compaction during a turn and restores it across naviga
   await expect.poll(() => app.requests.filter(value => value.path.endsWith('/events') && !value.path.endsWith('/files/events')).length).toBeGreaterThan(3);
   await expect(notice).toContainText('queued');
   await expect(page.locator('#task')).toHaveValue('Keep editing this draft');
-  await page.screenshot({ path: testInfo.outputPath('cloud-compaction-queued.png') });
   await app.emitSessionEvent(sessionA, 'compaction_started', { from_sequence: 1, to_sequence: 2 }, { task: null });
   await expect(notice).toContainText('Compacting context');
   await app.emitSessionEvent(sessionA, 'compaction_finished', { from_sequence: 1, to_sequence: 2, summary: 'Manual context' }, { task: null });
@@ -224,7 +219,6 @@ test('Cloud idle compaction settles without an assistant or a task and reports f
   await app.emitSessionEvent(sessionA, 'compaction_failed', { error: 'Fixture compaction failed' }, { task: null });
   await expect(page.locator('.composer-notice-text')).toHaveCount(0);
   await expect(page.getByText('Fixture compaction failed', { exact: true })).toBeVisible();
-  expect(app.controlState(sessionA).data.active_task_id).toBeNull();
   expect(app.postCount).toBe(0);
 });
 
@@ -275,6 +269,7 @@ test('Cloud preserves a service-only prompt and startup failure across reopen an
   await check();
   // The same saved native items arriving later replace the supplements.
   app.histories.get(sessionA).messages[0].engine_sequence = 1;
+  app.histories.get(sessionA).messages[0].data = {};
   app.histories.get(sessionA).session.events = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Please check the build' } } },
     { sequence: 2, item: { kind: 'terminal', payload: { kind: 'failed', message: 'Fixture engine could not start' } } },

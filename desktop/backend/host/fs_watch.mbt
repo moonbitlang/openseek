@@ -15,7 +15,7 @@
 /// later `unwatch` or `watch(B)`. The one-slot reply reports a workspace
 /// path error to the exact request task that asked.
 priv enum FsWatchRequest {
-  Watch(WatchWorkspacePayload, reply~ : @async.Queue[String?])
+  Watch(@protocol.WatchWorkspacePayload, reply~ : @async.Queue[String?])
   Unwatch(reply~ : @async.Queue[String?])
 }
 
@@ -64,7 +64,7 @@ priv struct WatchInterest {
 
 ///|
 fn WatchInterest::WatchInterest(
-  payload : WatchWorkspacePayload,
+  payload : @protocol.WatchWorkspacePayload,
 ) -> WatchInterest {
   let interest = {
     paths: Set([]),
@@ -187,7 +187,7 @@ fn FsWatchActor::FsWatchActor() -> FsWatchActor {
 /// one observable order even though WebSocket request tasks run concurrently.
 async fn FsWatchActor::watch(
   self : FsWatchActor,
-  payload : WatchWorkspacePayload,
+  payload : @protocol.WatchWorkspacePayload,
 ) -> Unit {
   let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
   self.requests.put(Watch(payload, reply~))
@@ -363,7 +363,7 @@ async fn FsWatchActor::run(
 
 ///|
 test "watch interest retains selected files, listed children, and ancestors" {
-  let payload : WatchWorkspacePayload = {
+  let payload : @protocol.WatchWorkspacePayload = {
     path: "/work/project",
     files: ["src/main.mbt", "node_modules/pkg/index.js"],
     directories: ["", "docs"],
@@ -498,7 +498,7 @@ async test "only an identical generation retains its active watcher" {
     let actor = FsWatchActor::FsWatchActor()
     let changes : @async.Queue[FsChangedPayload] = Queue(kind=Blocking(2))
     group.spawn_bg(() => actor.run(change => changes.put(change), _ => ()))
-    let payload : WatchWorkspacePayload = {
+    let payload : @protocol.WatchWorkspacePayload = {
       path: dir,
       files: ["src/main.mbt"],
       directories: ["", "src"],
@@ -530,13 +530,13 @@ async test "only an identical generation retains its active watcher" {
 
 ///|
 test "filesystem payloads carry absolute target paths" {
-  let payload : StatFilesPayload = @json.from_json({
+  let payload : @protocol.StatFilesPayload = @json.from_json({
     "paths": ["/work/project/a.mbt", "/work/project/src/b.mbt"],
   })
   assert_true(
     payload.paths == ["/work/project/a.mbt", "/work/project/src/b.mbt"],
   )
-  let selected : WatchWorkspacePayload = @json.from_json({
+  let selected : @protocol.WatchWorkspacePayload = @json.from_json({
     "path": "/work/project",
     "files": ["src/main.mbt"],
     "directories": ["", "src"],
@@ -547,7 +547,7 @@ test "filesystem payloads carry absolute target paths" {
   assert_eq(selected.directories, ["", "src"])
   assert_eq(selected.recursive, Some(true))
   assert_eq(selected.generation, "page-a:7")
-  let legacy : WatchWorkspacePayload = @json.from_json({
+  let legacy : @protocol.WatchWorkspacePayload = @json.from_json({
     "path": "/work/project",
     "files": [],
     "directories": [],

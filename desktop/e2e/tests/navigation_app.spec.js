@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('dialogs remain reachable in narrow and native titlebars', async ({ page }, testInfo) => {
+test('dialogs remain reachable in narrow and native titlebars', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install(); await app.goto();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -11,7 +11,6 @@ test('dialogs remain reachable in narrow and native titlebars', async ({ page },
     await page.setViewportSize({ width, height: 844 });
     await expect(dialog.getByRole('button', { name: 'Dismiss', exact: true })).toBeInViewport();
     expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`settings-${width}.png`) });
   }
   await dialog.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 844 });
@@ -28,6 +27,5 @@ test('dialogs remain reachable in narrow and native titlebars', async ({ page },
   expect(mode.x).toBeGreaterThanOrEqual(toggle.x + toggle.width);
   const sidebar = await page.locator('aside').boundingBox();
   expect(mode.x + mode.width).toBeLessThanOrEqual(sidebar.x + sidebar.width);
-  await page.screenshot({ path: testInfo.outputPath('native-titlebar.png') });
   expect(app.pageErrors).toEqual([]);
 });

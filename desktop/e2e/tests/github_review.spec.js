@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { fixture as htmlFixture } from './support/github_body_html.js';
 
@@ -67,7 +67,7 @@ async function openComments(page, { holdReview = false, missingRevision = false,
   return { app, fixture };
 }
 
-test('mounted GitHub comments, draft failures and focus follow live language changes', async ({ page }, testInfo) => {
+test('mounted GitHub comments, draft failures and focus follow live language changes', async ({ page }) => {
   const { app } = await openComments(page);
   const right = page.locator('.github-review-inline-block [data-thread-id="right"]');
   const draft = 'Keep this unsaved draft in its original language.';
@@ -109,13 +109,12 @@ test('mounted GitHub comments, draft failures and focus follow live language cha
     await expect(right).toBeVisible();
     await expect(reply).toHaveValue(draft);
     await expect(right.locator('.github-review-markdown')).toContainText('Could we add coverage for the new limit?');
-    if (locale.tag === 'zh-Hans') await page.screenshot({ path: testInfo.outputPath('github-comments-zh.png') });
   }
   expect(app.requests.filter(request => request.method === 'github.review_mutate')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
 
-test('inline Review comments render HTML and media and preserve disclosure state across edits', async ({ page }, testInfo) => {
+test('inline Review comments render HTML and media and preserve disclosure state across edits', async ({ page }) => {
   const requests = [];
   await page.route('https://**/*', route => {
     requests.push(route.request().url());
@@ -147,7 +146,6 @@ test('inline Review comments render HTML and media and preserve disclosure state
   await page.locator('.github-review-inline-block [data-thread-id="right"]').getByRole('textbox', { name: 'Reply', exact: true }).fill('Local draft triggers a render');
   await expect.poll(() => handle.evaluate(el => el.isConnected && el.open)).toBe(true);
   await expect.poll(() => comment.locator('relative-time').evaluate(el => Boolean(el.shadowRoot?.textContent))).toBe(true);
-  await comment.screenshot({ path: testInfo.outputPath('review-html-comment.png') });
   expect(app.pageErrors).toEqual([]);
 });
 

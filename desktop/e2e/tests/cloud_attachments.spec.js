@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { CloudHarness, authOrigin, sessionA, sessionC } from './support/cloud_harness.js';
 
@@ -50,7 +50,7 @@ async function select(page, files) {
 const creations = cloud => cloud.requests.filter(request => request.path === '/v1/sessions' && request.method === 'POST');
 const messages = cloud => cloud.requests.filter(request => request.path.endsWith('/commands') && request.method === 'POST');
 
-test('blank Cloud keeps confirmed files and image bytes in memory until first Send, then restores immutable history', async ({ page }, testInfo) => {
+test('blank Cloud keeps confirmed files and image bytes in memory until first Send, then restores immutable history', async ({ page }) => {
   const cloud = new AttachmentHarness(page);
   await cloud.install(); await cloud.goto(); await cloud.create();
   await select(page, [document, image]);
@@ -60,7 +60,6 @@ test('blank Cloud keeps confirmed files and image bytes in memory until first Se
   expect(creations(cloud)).toHaveLength(0);
   expect(cloud.imports).toEqual([]);
   expect(cloud.prepares).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath('cloud-attachments-draft.png'), fullPage: true });
   await page.locator('#task').fill('Inspect the attachments');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => messages(cloud).length).toBe(1);

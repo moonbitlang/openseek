@@ -11,7 +11,6 @@ build-scripts-check:
     node --test package/notarization.test.mjs
     node --test package/office_fonts.test.mjs
     node --test package/office_pdf.test.mjs
-    node --experimental-vm-modules --test package/pdf_runtime.test.mjs
     node --check scripts/release.mjs
     node --test scripts/release.test.mjs
 

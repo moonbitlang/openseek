@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 const creations = cloud => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions');

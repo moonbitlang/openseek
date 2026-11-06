@@ -23,6 +23,23 @@
   container-type: size;
 }
 
+.transcript-loading-older {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 820px;
+  margin: 0 auto 20px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.transcript-loading-older::before,
+.transcript-loading-older::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--color-border);
+}
+
 .stream {
   /* A column of rows, and deliberately not a one-column grid. A grid sizes
      its tracks from every item, so each change to the reply being streamed

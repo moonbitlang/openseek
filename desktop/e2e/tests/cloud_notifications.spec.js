@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionB } from './support/cloud_harness.js';
 
 const shown = app => app.notifications.filter(call => call.method === 'show');
@@ -16,7 +16,7 @@ async function running(page, { desktop = true } = {}) {
   return app;
 }
 
-test('Cloud background completion uses the shared notification, badge and click navigation', async ({ page }, testInfo) => {
+test('Cloud background completion uses the shared notification, badge and click navigation', async ({ page }) => {
   const app = await running(page);
   await app.open(sessionB);
   let releaseHistory;
@@ -28,7 +28,6 @@ test('Cloud background completion uses the shared notification, badge and click 
   await expect.poll(() => badge(app)).toBe(1);
   await expect(app.row(sessionA).locator('..').getByRole('status')).toBeVisible();
   await expect.poll(() => page.evaluate(session => window.cloudSessionStreams.get(session)?.size || 0, sessionA)).toBe(0);
-  await page.screenshot({ path: testInfo.outputPath('cloud-unread-completion.png') });
   app.pauseHistory = null;
   releaseHistory();
   const payload = shown(app)[0].params.payload;

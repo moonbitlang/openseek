@@ -5,7 +5,7 @@ let listing_prompt_caches : Map[String, Map[String, CachedListingPrompt]] = Map(
 )
 
 ///|
-async fn session_listing_groups(archived~ : Bool) -> SessionsReply {
+async fn session_listing_groups(archived~ : Bool) -> @protocol.SessionsReply {
   let workspaces = @workspaces.registered()
   let roots : Set[String] = Set([])
   for workspace in workspaces {
@@ -14,7 +14,7 @@ async fn session_listing_groups(archived~ : Bool) -> SessionsReply {
     roots.add(@session_store.archived_root(root).to_string())
   }
   listing_prompt_caches.retain((root, _) => roots.contains(root))
-  let groups : Array[SessionGroup] = []
+  let groups : Array[@protocol.SessionGroup] = []
   for workspace in workspaces {
     let root = @workspaces.store_root(workspace)
     groups.push(
@@ -35,12 +35,12 @@ async fn session_listing_groups(archived~ : Bool) -> SessionsReply {
 async fn session_group(
   workspace : @pathx.Absolute,
   root : @pathx.Absolute,
-) -> SessionGroup {
+) -> @protocol.SessionGroup {
   let name = workspace.to_path().basename().to_owned()
   let workspace = workspace.resource_path()
   let native_root = root.to_string()
   let root = root.resource_path()
-  fn failed(error : String) -> SessionGroup {
+  fn failed(error : String) -> @protocol.SessionGroup {
     { workspace, name, session_root: root, sessions: [], error, }
   }
 

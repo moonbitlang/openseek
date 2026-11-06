@@ -2,6 +2,8 @@
 package "openseek_desktop/backend/internal/browser_signin"
 
 // Values
+pub fn pkce_challenge(String) -> String
+
 pub fn sign_in_markup(String, return_to~ : String) -> String
 
 // Errors

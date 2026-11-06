@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
+pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
 pub fn discard_legacy_credential() -> Unit
 
@@ -138,8 +138,9 @@ pub(all) struct Conversation {
   history_etag : String?
   history_reading : Bool
   history_disk_request : Int32?
-  history_pages : Map[Int32, History]
+  history_window : HistoryWindow
   history_older_request : (Int32, Int32, Int32)?
+  history_turn_request : (Int32, Int32)?
   history_resume_baseline : (String?, Int32?)?
   history_refresh_after_read : Bool
   events : Array[Event]
@@ -171,7 +172,10 @@ pub(all) struct Conversation {
   task : String?
   last_seq : Int32?
   live : @engine_session.Stream
+  reasoning_frontier : Int32
   pending_assistants : Array[PendingAssistant]
+  live_task : String?
+  assistant_handoffs : Map[String, Int32]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
@@ -181,10 +185,12 @@ pub fn Conversation::can_load_older_history(Self) -> Bool
 pub fn Conversation::control_context(Self) -> Array[@composer.ContextComponent]
 pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @composer.PrimaryAction
 pub fn Conversation::equal(Self, Self) -> Bool
+pub fn Conversation::extends_history_backward(Self, Self) -> Bool
 pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
 pub fn Conversation::not_equal(Self, Self) -> Bool
 pub fn Conversation::prediction_source(Self, ready~ : Bool) -> Int32?
 pub fn Conversation::run_heartbeat(Self) -> @composer.RunHeartbeat?
+pub fn Conversation::visible_reasoning(Self, Array[@transcript.TranscriptItem]) -> (String?, Bool)
 pub fn Conversation::with_command_result(Self, Self, String) -> (Self, Bool)
 
 #derive(Eq)
@@ -230,6 +236,15 @@ pub fn History::equal(Self, Self) -> Bool
 pub fn History::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
+pub struct HistoryWindow {
+  lo : Int32
+  pages : Array[History]
+  detached : Map[Int32, History]
+}
+pub fn HistoryWindow::equal(Self, Self) -> Bool
+pub fn HistoryWindow::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
 pub struct MetadataSave {
   request : Int32
   edit : SessionEdit
@@ -263,6 +278,8 @@ pub(all) enum Msg {
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, @cloud_client.Failure)
+  TurnLoaded(Int32, String, Int32, History)
+  TurnFailed(Int32, String, Int32, @cloud_client.Failure)
   HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, @cloud_client.Failure)
   WatchOpened(Int32, String, StreamLease)
@@ -288,7 +305,7 @@ pub(all) enum Msg {
 #derive(Eq)
 pub struct PendingAssistant {
   task : String
-  history_request : Int32
+  history_request : Int32?
   item : @transcript.TranscriptItem
 }
 pub fn PendingAssistant::equal(Self, Self) -> Bool

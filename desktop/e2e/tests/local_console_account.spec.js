@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { LocalConsoleHarness, browserAccount } from './support/local_console_harness.js';
 import { sessionA } from './support/cloud_harness.js';
 
@@ -10,7 +10,7 @@ async function openLocalWork(page, local) {
 
 const storedAccount = page => page.evaluate(() => JSON.parse(localStorage.getItem('seekmoon.account.v1')));
 
-test('local Console shows account storage failures and retries without reconnecting the local host', async ({ page, baseURL }, testInfo) => {
+test('local Console shows account storage failures and retries without reconnecting the local host', async ({ page, baseURL }) => {
   const local = new LocalConsoleHarness(page, baseURL);
   await local.install();
   await page.addInitScript(() => {
@@ -28,7 +28,6 @@ test('local Console shows account storage failures and retries without reconnect
   await expect(home.getByText(/Could not read account storage:/)).toBeVisible();
   await expect(home.getByRole('button', { name: 'Sign in with GitHub' })).toHaveCount(0);
   await expect.poll(() => local.localSockets.length).toBe(1);
-  await page.screenshot({ path: testInfo.outputPath('account-storage-error.png') });
   await page.evaluate(() => { window.accountStorageUnavailable = false; });
   await home.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(home.getByText(/Could not read account storage:/)).toHaveCount(0);

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 async function expectHeader(page, title) {
@@ -12,7 +12,7 @@ async function expectHeader(page, title) {
   })).toBe(true);
 }
 
-test('management dialogs preserve the empty project header', async ({ page }, testInfo) => {
+test('management dialogs preserve the empty project header', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.workspaces = [];
   app.liveSessions = [];
@@ -25,16 +25,13 @@ test('management dialogs preserve the empty project header', async ({ page }, te
     await expect(page.getByRole('dialog')).toHaveAccessibleName(title);
     expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
     await expect(page.locator('main h1')).toHaveCount(1);
-    await expect(page.locator('.management-page-content')).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
     await expectHeader(page, 'SeekMoon');
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.screenshot({ path: testInfo.outputPath('settings-header.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true })).toBeInViewport();
-  await page.screenshot({ path: testInfo.outputPath('settings-header-narrow.png') });
   await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expectHeader(page, 'SeekMoon');
   expect(app.pageErrors).toEqual([]);

@@ -17,20 +17,6 @@ fn sample_session(avatar~ : String) -> AuthSession {
 }
 
 ///|
-test "pkce challenge is the verifier's unpadded base64url sha256" {
-  // Cross-checked against RFC 7636 S256 (python:
-  // urlsafe_b64encode(sha256(b"test-verifier")).rstrip("=")) — and against
-  // the relay's own challenge_s256, which must accept what start_url sends.
-  inspect(
-    pkce_challenge("test-verifier"),
-    content="JBbiqONGWPaAmwXk_8bT6UnlPfrn65D32eZlJS-zGG0",
-  )
-  inspect(pkce_challenge("test-verifier").length(), content="43")
-  // Stable across calls — the exchange must send what start_url promised.
-  assert_true(pkce_challenge("v") == pkce_challenge("v"))
-}
-
-///|
 test "start url carries every parameter, name percent-encoded" {
   inspect(
     start_url(

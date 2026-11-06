@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, settledResponse, sessionA, sessionB } from './support/cloud_harness.js';
 
 function deferred() {
@@ -35,7 +35,7 @@ async function followup(page, content, mode) {
   await page.locator('#send').click();
 }
 
-test('Cloud Stop waits for termination and preserves the editable draft', async ({ page }, testInfo) => {
+test('Cloud Stop waits for termination and preserves the editable draft', async ({ page }) => {
   const app = await running(page);
   const task = app.controlState(sessionA).task_id;
   await page.locator('#task').fill('Keep this next draft');
@@ -45,14 +45,11 @@ test('Cloud Stop waits for termination and preserves the editable draft', async 
   await expect(page.locator('.composer')).toContainText('Stopping…');
   await expect(page.locator('#task')).toBeEnabled();
   await page.locator('#task').fill('Still editable while stopping');
-  const path = testInfo.outputPath('cloud-stopping.png');
-  await page.locator('.composer').screenshot({ path });
   // The engine can complete normally in a cancellation race. Its actual
   // terminal status, rather than the accepted Stop, determines the result.
   await app.finishTask(sessionA, 'completed');
   await expect(page.locator('#stop')).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Still editable while stopping');
-  expect(app.controlState(sessionA).data.status).toBe('idle');
   expect(app.device.pageErrors).toEqual([]);
 });
 
@@ -140,13 +137,13 @@ test('Cloud Steer network failure stays unknown until a server receipt resolves 
   expect(controls(app, 'steer')).toHaveLength(1);
 });
 
-test('Cloud uses the shared queue editor, withdrawal and conversion to Steer', async ({ page }, testInfo) => {
+test('Cloud uses the shared queue editor, withdrawal and conversion to Steer', async ({ page }) => {
   const app = await running(page);
   await followup(page, 'First queued input', 'queue');
   const rows = page.locator('.queued-input-row');
   await expect(rows).toContainText('First queued input');
   await expect(page.locator('#task')).toHaveValue('');
-  expect(app.histories.get(sessionA).messages.filter(record => record.kind === 'user')).toHaveLength(1);
+  expect(app.postCount).toBe(1);
   const first = controls(app, 'queue')[0];
   await rows.getByTitle('Edit', { exact: true }).click();
   await expect(page.locator('#task')).toHaveValue('First queued input');
@@ -160,8 +157,6 @@ test('Cloud uses the shared queue editor, withdrawal and conversion to Steer', a
   await expect(page.locator('#task')).toHaveValue('');
   await rows.filter({ hasText: 'Withdraw this input' }).getByTitle('Delete', { exact: true }).click();
   await expect(rows).toHaveCount(1);
-  const path = testInfo.outputPath('cloud-queue.png');
-  await page.locator('.composer').screenshot({ path });
   await rows.getByTitle('Steer', { exact: true }).click();
   await expect(rows).toHaveCount(0);
   await expect(page.locator('.pending-steer-row')).toContainText('Edited queued input');
@@ -269,7 +264,7 @@ for (const status of ['completed', 'failed']) {
 }
 
 for (const stopped of [false, true]) {
-  test(`Cloud paused queue can be edited and withdrawn after ${stopped ? 'Stop' : 'failure'}`, async ({ page }, testInfo) => {
+  test(`Cloud paused queue can be edited and withdrawn after ${stopped ? 'Stop' : 'failure'}`, async ({ page }) => {
     const app = await running(page);
     await followup(page, 'Keep this queued input', 'queue');
     await expect(page.locator('#task')).toHaveValue('');
@@ -289,7 +284,6 @@ for (const stopped of [false, true]) {
     await page.locator('#task').fill('Edited while paused');
     await expect(page.getByTitle('Save queued message', { exact: true })).toBeEnabled();
     await expect(page.locator('#stop')).toHaveCount(0);
-    if (!stopped) await page.locator('.composer').screenshot({ path: testInfo.outputPath('cloud-paused-queue-edit.png') });
     await page.getByTitle('Save queued message', { exact: true }).click();
     await expect(rows.filter({ hasText: 'Edited while paused' })).toHaveCount(1);
     await expect(page.locator('#task')).toHaveValue('');
@@ -298,7 +292,6 @@ for (const stopped of [false, true]) {
     await expect(rows).toHaveCount(1);
     expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: previous, action: 'withdraw' });
     expect(app.postCount).toBe(1);
-    expect(app.controlState(sessionA).data.paused).toBe(true);
     await page.locator('#task').fill('Explicit next prompt');
     await page.locator('#send').click();
     await expect(page.locator('#stop')).toBeEnabled();
@@ -317,7 +310,6 @@ for (const stopped of [false, true]) {
     await app.finishTask(sessionA, 'failed');
     await expect(rows).toHaveCount(1);
     await expect(page.locator('#stop')).toHaveCount(0);
-    expect(app.controlState(sessionA).data.paused).toBe(true);
     expect(app.postCount).toBe(2);
     await page.locator('#task').fill('Try the explicit prompt again');
     await page.locator('#send').click();

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { BackgroundJobsHarness } from './support/background_jobs_harness.js';
 
@@ -16,7 +16,7 @@ async function expandHistory(page) {
   if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
 }
 
-test('real background output follows, pauses, resumes, copies its file and stops', async ({ page, context }, testInfo) => {
+test('real background output follows, pauses, resumes, copies its file and stops', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await mount(page);
   await expect(page.locator('.jobs-id').first()).toHaveText('bg-…456789ab');
@@ -46,13 +46,11 @@ test('real background output follows, pauses, resumes, copies its file and stops
   app.write('new output while reading earlier lines\n');
   await expect.poll(() => readFileSync(app.livePath, 'utf8')).toContain('new output while reading');
   await expect.poll(() => output.evaluate(el => el.scrollTop)).toBe(top);
-  await page.screenshot({ path: testInfo.outputPath('jobs-light.png'), fullPage: true });
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.screenshot({ path: testInfo.outputPath('jobs-dark.png'), fullPage: true });
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   await expect(page.getByRole('button', { name: 'Stop job', exact: true })).toHaveCount(0);
-  expect(app.child.signalCode).not.toBeNull();
+  expect(app.requests.filter(request => request.method === 'jobs.stop').map(request => request.params.generation)).toEqual(['runtime-new']);
   expect(readFileSync(app.livePath, 'utf8')).toContain('stderr captured');
   const stop = app.requests.find(r => r.method === 'jobs.stop');
   expect(stop.params).toMatchObject({ scope: { session: 'session-1', workspace: '/workspace' }, generation: 'runtime-new', job_id: app.liveId });
@@ -60,7 +58,7 @@ test('real background output follows, pauses, resumes, copies its file and stops
   expect(app.pageErrors).toEqual([]);
 });
 
-test('historical selection rejects late reads, reports errors and fits a narrow panel', async ({ page }, testInfo) => {
+test('historical selection rejects late reads, reports errors and fits a narrow panel', async ({ page }) => {
   await mount(page);
   app.rpcDelays.set('jobs.read', 1200);
   app.write('must stay with the live job\n');
@@ -84,7 +82,6 @@ test('historical selection rejects late reads, reports errors and fits a narrow 
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await expect(page.getByRole('button', { name: 'Copy tail command', exact: true })).toBeInViewport();
-  await page.screenshot({ path: testInfo.outputPath('jobs-narrow.png'), fullPage: true });
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -200,11 +197,11 @@ test('a controllable job without a log still exposes Stop and its full ID', asyn
   await expect(page.getByRole('region', { name: 'Job output' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
-  expect(app.child.signalCode).not.toBeNull();
+  expect(app.requests.filter(request => request.method === 'jobs.stop').map(request => request.params.generation)).toEqual(['runtime-new']);
   expect(app.pageErrors).toEqual([]);
 });
 
-test('UUID suffix collisions expand labels while selection and copying retain full IDs', async ({ page, context }, testInfo) => {
+test('UUID suffix collisions expand labels while selection and copying retain full IDs', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   app = new BackgroundJobsHarness(page);
   const otherId = '0194e3c1-2346-7abc-8def-abcd456789ab';
@@ -222,11 +219,10 @@ test('UUID suffix collisions expand labels while selection and copying retain fu
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await expect(page.getByRole('button', { name: 'Copy job ID', exact: true })).toBeInViewport();
-  await page.screenshot({ path: testInfo.outputPath('jobs-uuid-narrow.png'), fullPage: true });
   expect(app.pageErrors).toEqual([]);
 });
 
-test('groups lifecycle states and defaults to an active job even after newer history', async ({ page }, testInfo) => {
+test('groups lifecycle states and defaults to an active job even after newer history', async ({ page }) => {
   app = new BackgroundJobsHarness(page);
   const live = app.jobs[0];
   const fixtures = [
@@ -268,18 +264,15 @@ test('groups lifecycle states and defaults to an active job even after newer his
       }
     }
   }
-  await page.screenshot({ path: testInfo.outputPath('jobs-lifecycle-light.png'), fullPage: true });
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.screenshot({ path: testInfo.outputPath('jobs-lifecycle-dark.png'), fullPage: true });
   await page.setViewportSize({ width: 1000, height: 850 });
   await page.getByRole('button', { name: /Lifecycle limited/ }).click();
   await expect.poll(() => page.locator('.jobs-panel, .jobs-row, .jobs-status').evaluateAll(elements => elements.every(el => el.scrollWidth <= el.clientWidth + 1))).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('jobs-lifecycle-narrow.png'), fullPage: true });
   expect(app.requests.filter(r => r.method === 'jobs.stop')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
 
-test('completion drains paused output then stops log polling while history stays fresh', async ({ page, context }, testInfo) => {
+test('completion drains paused output then stops log polling while history stays fresh', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await mount(page);
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
@@ -308,7 +301,6 @@ test('completion drains paused output then stops log polling while history stays
   expect(app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(reads);
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('jobs-completed-narrow.png'), fullPage: true });
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -342,7 +334,7 @@ test('interrupted jobs drain final diagnostics despite stale persisted byte coun
   expect(app.pageErrors).toEqual([]);
 });
 
-test('history stays folded by default while active jobs remain visible across refreshes', async ({ page }, testInfo) => {
+test('history stays folded by default while active jobs remain visible across refreshes', async ({ page }) => {
   await mount(page);
   const toggle = page.locator('.jobs-history-toggle');
   const active = page.getByRole('group', { name: 'In progress', exact: true });
@@ -363,7 +355,6 @@ test('history stays folded by default while active jobs remain visible across re
   await expect(oldJob).toHaveCount(0);
   await expect(active.getByRole('button', { name: /Watch build output/ })).toBeVisible();
   await active.getByRole('button', { name: /Watch build output/ }).click();
-  await page.screenshot({ path: testInfo.outputPath('jobs-history-folded.png'), fullPage: true });
   // A completing selection remains readable without opening its History group.
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
@@ -388,7 +379,7 @@ test('history-only sessions wait for explicit selection before loading a log', a
   expect(app.pageErrors).toEqual([]);
 });
 
-test('background program calls update live and retain edit diffs after reload', async ({ page }, testInfo) => {
+test('background program calls update live and retain edit diffs after reload', async ({ page }) => {
   app = new BackgroundJobsHarness(page);
   const job = app.jobs[0].job;
   job.data = { ptc_calls: [
@@ -411,7 +402,6 @@ test('background program calls update live and retain edit diffs after reload', 
   await expect(edit).toContainText('before');
   await expect(edit).toContainText('after');
   await expect(edit.getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('background-program-calls.png') });
   job.cleanup_error = 'PTC script exited with unfinished tool calls';
   job.state = { kind: 'exited', code: 0 };
   job.revision++;
@@ -431,7 +421,7 @@ test('background program calls update live and retain edit diffs after reload', 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('subagent jobs read as agents with their outcome, spend and transcript', async ({ page }, testInfo) => {
+test('subagent jobs read as agents with their outcome, spend and transcript', async ({ page }) => {
   app = new BackgroundJobsHarness(page);
   const live = app.view('runtime-new', 'agent-live', app.oldPath, { kind: 'running' });
   live.job.command = 'openseek run --kind explore --session session-1-sr-1';
@@ -462,13 +452,11 @@ test('subagent jobs read as agents with their outcome, spend and transcript', as
   await row.click();
   await expect(page.locator('.jobs-detail')).toContainText('Session: session-1-sr-2');
   await expect(page.getByRole('button', { name: 'Open transcript', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('jobs-subagents-light.png'), fullPage: true });
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.screenshot({ path: testInfo.outputPath('jobs-subagents-dark.png'), fullPage: true });
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a worker job shows its worktree, where its changes stand and why', async ({ page }, testInfo) => {
+test('a worker job shows its worktree, where its changes stand and why', async ({ page }) => {
   app = new BackgroundJobsHarness(page);
   const worktree = (state) => ({
     name: 'csv-quotes', path: '/work/demo/.worktrees/csv-quotes',
@@ -503,12 +491,9 @@ test('a worker job shows its worktree, where its changes stand and why', async (
   await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: committed 9c41d2e8f0 on its branch, ready to take');
   await expect(detail).toContainText('/work/demo/.worktrees/csv-quotes');
   await expect(page.getByRole('button', { name: 'Copy worktree path', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('jobs-worker-committed.png'), fullPage: true });
   await history.locator('.jobs-row', { hasText: 'worker: rename the reader' }).click();
   await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: not mergeable; kept for inspection');
   await expect(detail.locator('.jobs-worktree-reason')).toHaveText('out-of-scope changes (allowed: src/csv): src/main.mbt');
-  await page.screenshot({ path: testInfo.outputPath('jobs-worker-unmergeable.png'), fullPage: true });
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.screenshot({ path: testInfo.outputPath('jobs-worker-unmergeable-dark.png'), fullPage: true });
   expect(app.pageErrors).toEqual([]);
 });

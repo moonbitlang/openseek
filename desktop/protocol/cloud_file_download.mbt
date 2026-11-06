@@ -1,6 +1,6 @@
 ///|
 /// The Cloud API origin is shared by browser requests and window-only downloads.
-pub const CloudOrigin = "https://cloud.moonbitlang.cn"
+pub const CloudOrigin = "https://cloud.moonbitlang.com"
 
 ///|
 /// Only complete original bytes belong here, never a rendered preview.

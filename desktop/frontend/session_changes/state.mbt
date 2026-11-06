@@ -25,8 +25,13 @@ pub(all) enum Msg {
   Changed(@interop.ConversationKey)
   /// The host answered list question number `serial`.
   Listed(serial~ : Int32, Result[@protocol.SessionArtifacts, String])
+  /// The user folded or unfolded the conversation's merged pull requests.
+  MergedToggled(@interop.ConversationKey)
   /// The user asked to take `artifact` off the conversation's list.
   Remove(@interop.ConversationKey, @protocol.SessionArtifact)
+  /// The user asked to take every one of `artifacts` off the conversation's
+  /// list at once: each is removed as if asked for on its own.
+  RemoveAll(@interop.ConversationKey, Array[@protocol.SessionArtifact])
   /// The host answered the removal of `artifact` with the list that remains.
   Removed(
     @interop.ConversationKey,
@@ -81,6 +86,8 @@ pub struct State {
   /// Why the last removal for the conversation failed, until the next one
   /// succeeds or the overview moves to another conversation.
   remove_error : String?
+  /// Whether the conversation's merged pull requests show their own rows.
+  merged_open : Bool
   /// Each attached pull request's lookups, by address.
   lookups : Map[String, Lookup]
   /// Counts the overview's arrivals and the list's changes, the moments every
@@ -121,6 +128,7 @@ pub fn State::initial() -> State {
     serial: 0,
     removing: [],
     remove_error: None,
+    merged_open: false,
     lookups: {},
     generation: 0,
   }
@@ -192,31 +200,16 @@ pub fn update(
         Err(message) => (@cmd.none, { ..state, phase: CheckFailed(message), })
       }
     }
-    Remove(conversation, artifact) => {
-      guard state.conversation == Some(conversation) &&
-        !state.removing.contains(artifact) else {
+    MergedToggled(conversation) => {
+      guard state.conversation == Some(conversation) else {
         return (@cmd.none, state)
       }
-      let cmd = @cmd.attempt(
-        result => {
-          emit(
-            Removed(
-              conversation,
-              artifact,
-              result.map_err(@interop.bridge_error_text),
-            ),
-          )
-        },
-        () => {
-          @interop.bridge_request(
-            conversation.channel,
-            @commands.session_artifacts_remove,
-            { session: conversation.session, artifact, },
-          )
-        },
-      )
-      (cmd, { ..state, removing: [..state.removing, artifact], })
+      (@cmd.none, { ..state, merged_open: !state.merged_open, })
     }
+    Remove(conversation, artifact) =>
+      remove(emit, conversation, [artifact], state)
+    RemoveAll(conversation, artifacts) =>
+      remove(emit, conversation, artifacts, state)
     // The reply is the list as the removal left it, which another client may
     // already have changed again, and an answer still out may predate the
     // removal. Neither is the last word: the list is asked for again, showing
@@ -258,6 +251,49 @@ pub fn update(
       }
     }
   }
+}
+
+///|
+/// Ask the host to remove each of `artifacts` not already being removed. The
+/// host applies each removal to the latest saved list under its own lock, so
+/// removals in flight together never undo one another.
+fn remove(
+  emit : @cmd.Emit[Msg],
+  conversation : @interop.ConversationKey,
+  artifacts : Array[@protocol.SessionArtifact],
+  state : State,
+) -> (@cmd.Cmd, State) {
+  guard state.conversation == Some(conversation) else {
+    return (@cmd.none, state)
+  }
+  let removing = state.removing.copy()
+  let commands : Array[@cmd.Cmd] = []
+  for artifact in artifacts {
+    guard !removing.contains(artifact) else { continue }
+    removing.push(artifact)
+    commands.push(
+      @cmd.attempt(
+        result => {
+          emit(
+            Removed(
+              conversation,
+              artifact,
+              result.map_err(@interop.bridge_error_text),
+            ),
+          )
+        },
+        () => {
+          @interop.bridge_request(
+            conversation.channel,
+            @commands.session_artifacts_remove,
+            { session: conversation.session, artifact, },
+          )
+        },
+      ),
+    )
+  }
+  guard !commands.is_empty() else { return (@cmd.none, state) }
+  (@cmd.batch(commands), { ..state, removing, })
 }
 
 ///|
@@ -318,7 +354,7 @@ fn look_up(
 ///|
 /// Ask the host for `conversation`'s list, showing `waiting` until it answers.
 /// A conversation the state did not describe starts with no removals of its
-/// own.
+/// own and its merged pull requests folded.
 fn ask(
   emit : @cmd.Emit[Msg],
   conversation : @interop.ConversationKey,
@@ -339,7 +375,7 @@ fn ask(
   let state = if state.conversation == Some(conversation) {
     state
   } else {
-    { ..state, removing: [], remove_error: None, }
+    { ..state, removing: [], remove_error: None, merged_open: false, }
   }
   (cmd, { ..state, conversation: Some(conversation), phase: waiting, serial, })
 }

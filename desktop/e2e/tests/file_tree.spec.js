@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('switching editors reveals the active file inside collapsed directories', async ({ page }) => {
@@ -156,7 +156,7 @@ test('a failed ancestor listing stops until the next explicit reveal', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Files scrolls below the view tabs and keeps desktop row height on narrow screens', async ({ page }, testInfo) => {
+test('Files scrolls below the view tabs and keeps desktop row height on narrow screens', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.directoryEntries['/workspace'] = Array.from({ length: 80 }, (_, index) => ({
     name: `file_${String(index).padStart(2, '0')}_with_a_very_long_deployment_configuration_name_for_truncation.mbt`,
@@ -186,7 +186,6 @@ test('Files scrolls below the view tabs and keeps desktop row height on narrow s
   await expect.poll(async () => (await tree.locator('.tree-file').first().boundingBox()).height).toBe(desktopRowHeight);
   expect(await tree.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await expect.poll(() => tree.locator('.tree-name').first().evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-  await page.locator('.file-tree-pane').screenshot({ path: testInfo.outputPath('files-narrow.png') });
   expect(app.pageErrors).toEqual([]);
 });
 

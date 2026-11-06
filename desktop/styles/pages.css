@@ -174,7 +174,10 @@ dialog.management-dialog::backdrop {
   max-width: none;
   margin-inline-end: 0;
 }
-.management-dialog > .management-page {
+.management-dialog-pane:not([hidden]) {
+  display: contents;
+}
+.management-dialog-pane > .management-page {
   flex: 1;
   width: 100%;
   box-sizing: border-box;
@@ -188,7 +191,7 @@ dialog.management-dialog::backdrop {
     calc((100% - 72rem) / 2)
   );
 }
-.management-dialog > .management-page > .management-page-content {
+.management-dialog-pane > .management-page > .management-page-content {
   width: 100%;
   max-width: none;
   margin-inline: 0;
@@ -479,7 +482,7 @@ button.archived-chat-open:hover .archived-chat-title {
   justify-self: start;
 }
 
-#saveApiKey {
+.save-api-key {
   align-self: flex-end;
 }
 

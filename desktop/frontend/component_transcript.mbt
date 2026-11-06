@@ -80,7 +80,9 @@ fn Model::chat_column(self : Model) -> ChatColumn {
       conversation.document.events.map_or(true, events => events.is_empty()) {
       return Loading
     }
-    if conversation.history_required && conversation.notice is Some(message) {
+    if !conversation.history_cached &&
+      conversation.history_required &&
+      conversation.notice is Some(message) {
       return LoadFailed(message~, retry=true)
     }
     return CloudTranscript(slot=CloudTranscriptSlot(owner))
@@ -253,6 +255,10 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   if self.screen is Chat &&
     self.cloud_identity() is Some(owner) &&
     self.cloud_conversation() is Some(conversation) {
+    let items = conversation.items()
+    let (streaming_reasoning, reasoning_complete) = conversation.visible_reasoning(
+      items,
+    )
     return @transcript_component.Input(
       locale=self.locale,
       dark_mode=self.theme.is_dark(self.system_dark),
@@ -267,13 +273,12 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       project_menu_open=false,
       project_query="",
       root=None,
-      items=@transcript_component.VisibleRow::history(conversation.items()),
+      items=@transcript_component.VisibleRow::history(items),
       older_history=conversation.can_load_older_history(),
+      loading_older_history=conversation.history_older_request is Some(_),
       streaming_response=conversation.live.response,
-      streaming_reasoning?=conversation.live.reasoning.map(r => r.content),
-      reasoning_complete=conversation.live.reasoning.map_or(false, r => {
-        r.complete
-      }),
+      streaming_reasoning?,
+      reasoning_complete~,
       // Deltas do not change the committed-event count, so the live bubble
       // keeps one identity until a semantic response/step boundary.
       streaming_identity="\{conversation.task.unwrap_or("idle")}:\{conversation.document.events.unwrap_or([]).last().map_or(0, event => event.sequence)}",

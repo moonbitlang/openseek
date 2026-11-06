@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // Substitute only the native transport. The production dialog, modal focus,
@@ -301,7 +301,7 @@ test('a host share pending during account change never uses the new account or e
 });
 
 
-test('host share phases stay indeterminate through retry and finish with the link', async ({ page }, testInfo) => {
+test('host share phases stay indeterminate through retry and finish with the link', async ({ page }) => {
   const app = new ExportHarness(page);
   let finish;
   app.pendingShare = new Promise(resolve => finish = resolve);
@@ -323,7 +323,6 @@ test('host share phases stay indeterminate through retry and finish with the lin
     expect(app.count('session.share')).toBe(1);
     expect(app.count('session.snapshot')).toBe(0);
     expect(app.clientUploads).toEqual([]);
-    await dialog.screenshot({ path: testInfo.outputPath('share-phases.png'), animations: 'disabled' });
     finish();
     await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
     await expect(dialog.getByRole('progressbar')).toHaveCount(0);
@@ -402,7 +401,7 @@ test('share login stays retryable while rejected account cleanup is pending', as
   }
 });
 
-test('one header menu contains export and import, dismisses with Escape, and restores focus', async ({ page }, testInfo) => {
+test('one header menu contains export and import, dismisses with Escape, and restores focus', async ({ page }) => {
   const app = new ExportHarness(page);
   await app.openDesktop();
   const trigger = page.getByRole('button', { name: 'Export and import', exact: true });
@@ -413,7 +412,6 @@ test('one header menu contains export and import, dismisses with Escape, and res
   await expect(menu.getByRole('menuitem', { name: 'Import', exact: true })).toBeVisible();
   await expect(menu.getByRole('separator')).toHaveCount(0);
   await expect(menu).toBeInViewport({ ratio: 1 });
-  await page.screenshot({ path: testInfo.outputPath('share-import-menu.png') });
   await page.keyboard.press('Escape');
   await expect(menu).not.toBeVisible();
   await expect(trigger).toBeFocused();
@@ -430,7 +428,7 @@ test('one header menu contains export and import, dismisses with Escape, and res
 
 
 for (const browser of [false, true]) {
-  test(`${browser ? 'remote Host' : 'Local'} file share reuses account authority and stays pending across dismissal`, async ({ page }, testInfo) => {
+  test(`${browser ? 'remote Host' : 'Local'} file share reuses account authority and stays pending across dismissal`, async ({ page }) => {
     const app = new ExportHarness(page);
     if (!browser) app.accountSignedIn = false;
     app.directoryEntries['/workspace'] = [{ name: 'src', is_dir: true }, { name: 'artifact.bin', is_dir: false }];
@@ -483,7 +481,6 @@ for (const browser of [false, true]) {
     expect(app.count('fs.share_file')).toBe(1);
     finish(); app.pendingShare = null;
     await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(app.shareReply.url);
-    if (!browser) await page.screenshot({ path: testInfo.outputPath('local-file-share.png') });
     await page.keyboard.press('Escape');
     await row.click();
     await page.locator('.viewer-breadcrumb').getByRole('button', { name: 'Share', exact: true }).click();

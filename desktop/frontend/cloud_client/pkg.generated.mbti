@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
+pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
 pub fn check_status(Int32) -> Unit raise RequestError
 

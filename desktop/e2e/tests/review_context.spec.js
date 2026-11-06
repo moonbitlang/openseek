@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 async function openReview(page, app) {
@@ -101,7 +101,7 @@ test('selected changes retain their preview during live language switching', asy
   expect(app.pageErrors).toEqual([]);
 });
 
-test('composer script previews pin one coordinate and sign while code scrolls', async ({ page }, testInfo) => {
+test('composer script previews pin one coordinate and sign while code scrolls', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const file = 'scripts/example.mbtx';
   const original = `let message = "old ${'long source '.repeat(18)}"`;
@@ -149,12 +149,11 @@ test('composer script previews pin one coordinate and sign while code scrolls', 
     expect(after.number).toBeCloseTo(before.number, 1);
     expect(after.sign).toBeCloseTo(before.sign, 1);
     expect(after.source).toBeCloseTo(before.source - 180, 1);
-    await page.screenshot({ path: testInfo.outputPath(`composer-diff-${theme}-scrolled.png`) });
   }
   expect(app.pageErrors).toEqual([]);
 });
 
-test('review hunk context stays independent and sends only selected snapshots', async ({ page }, testInfo) => {
+test('review hunk context stays independent and sends only selected snapshots', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const old = ['fn first() -> Int {', '  1', '}', ...Array(24).fill(''), 'fn second() -> Int {', '  2', '}', ''].join('\n');
   app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = old;
@@ -191,7 +190,6 @@ test('review hunk context stays independent and sends only selected snapshots', 
   const plainColor = await popup.locator('.editor-diff-source').first().evaluate(node => getComputedStyle(node).color);
   await expect.poll(() => popup.locator('.mtk6').first().evaluate(node => getComputedStyle(node).color))
     .not.toBe(plainColor);
-  await page.screenshot({ path: testInfo.outputPath('selected-context.png') });
   await popup.getByRole('button', { name: 'Open in review', exact: true }).click();
   await expect(popup).toBeHidden();
   await expect(first).toHaveText('In context');
@@ -244,7 +242,6 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await sentChip.click();
   await expect(popup.locator('.editor-diff-source')).toHaveText(selectedPreview);
   await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath('sent-context-reloaded.png') });
   await page.keyboard.press('Escape');
   await expect(sentChip).toBeFocused();
   // A fresh session has no Review inventory yet. The saved message must be
@@ -257,11 +254,10 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await expect(first).toHaveText('Add to context');
   await expect(page.locator('.notification')).toHaveCount(0);
   expect(app.requests.filter(request => request.method === 'git.changes').length).toBeGreaterThan(changesRequests);
-  await page.screenshot({ path: testInfo.outputPath('sent-context-cold-review.png') });
   expect(app.pageErrors).toEqual([]);
 });
 
-test('review context survives regrouping and a partial group changes only on explicit action', async ({ page }, testInfo) => {
+test('review context survives regrouping and a partial group changes only on explicit action', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   // Line groups nearby edits together; semantic sections split the functions.
   const old = 'fn first() -> Int { 1 }\n\nfn second() -> Int { 2 }\n';
@@ -303,12 +299,10 @@ test('review context survives regrouping and a partial group changes only on exp
   const point = { x: itemBounds.x + itemBounds.width - 8, y: itemBounds.y + itemBounds.height / 2 };
   expect(await removeItem.evaluate((node, point) => node.contains(document.elementFromPoint(point.x, point.y)), point))
     .toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('partial-context.png') });
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeFocused();
   await waitForGitRefresh(app);
   await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeFocused();
-  await page.screenshot({ path: testInfo.outputPath('partial-context-after-refresh.png') });
   await page.keyboard.press('Enter');
   await expect(contextButtons(page)).toHaveText('In context');
   await expect(contextButtons(page)).toBeFocused();
@@ -334,7 +328,7 @@ test('review context survives regrouping and a partial group changes only on exp
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Codex composer groups multiple files and preserves deletion context on send', async ({ page }, testInfo) => {
+test('Codex composer groups multiple files and preserves deletion context on send', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
     defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }] }];
@@ -364,7 +358,6 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await expect(deleted.locator('.changes-preview')).toBeVisible();
   // A narrow composer owns its popup width and independently scrolls long diffs.
   await page.setViewportSize({ width: 1060, height: 800 });
-  await page.screenshot({ path: testInfo.outputPath('codex-multiple-files.png') });
   const box = await popup.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(1060);
@@ -391,12 +384,11 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await expect(popup.locator('.changes-file').filter({ hasText: 'lib.mbt' })
     .locator('.editor-diff-row.added')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath('codex-sent-multiple-files.png') });
   expect(app.pageErrors).toEqual([]);
 });
 
 
-test('saved message changes keep independent disclosures and immutable previews', async ({ page }, testInfo) => {
+test('saved message changes keep independent disclosures and immutable previews', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const selection = (file, oldText, newText, oldLine = 8, newLine = 9) => `<file path="${file}" version="saved-comparison">\n<hunk>\n<original lines="${oldLine}">\n${oldText}\n</original>\n<modified lines="${newLine}">\n${newText}\n</modified>\n</hunk>\n</file>`;
   const prompt = (task, selections) => `${task}\n\n<user_mentions>\n<review_changes workspace="/workspace">\n${
@@ -460,7 +452,6 @@ test('saved message changes keep independent disclosures and immutable previews'
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(860);
   expect(box.y + box.height).toBeLessThanOrEqual(640);
-  await page.screenshot({ path: testInfo.outputPath('saved-message-changes-narrow.png') });
   await page.getByText('Ready', { exact: true }).click();
   await expect(popup).toBeHidden();
   await page.locator('#task').click();

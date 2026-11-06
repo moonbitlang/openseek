@@ -5,10 +5,12 @@ priv enum UiMessage {
   Current
   PullRequestCount(Int32)
   BranchCount(Int32)
+  MergedCount(Int32)
   CheckFailed
   RemoveFailed
   PartialCount
   Remove
+  RemoveMerged
   StateOpen
   StateDraft
   StateMerged
@@ -37,6 +39,12 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, BranchCount(count)) => "\{count} 个分支"
     (TraditionalChinese, BranchCount(count)) => "\{count} 個分支"
     (Japanese, BranchCount(count)) => "ブランチ \{count} 件"
+    (English, MergedCount(count)) => "\{count} merged"
+    (Spanish, MergedCount(1)) => "1 fusionada"
+    (Spanish, MergedCount(count)) => "\{count} fusionadas"
+    (SimplifiedChinese, MergedCount(count)) => "\{count} 个已合并"
+    (TraditionalChinese, MergedCount(count)) => "\{count} 個已合併"
+    (Japanese, MergedCount(count)) => "マージ済み \{count} 件"
     (English, CheckFailed) => "The attached changes could not be read"
     (Spanish, CheckFailed) => "No se pudieron leer los cambios adjuntos"
     (SimplifiedChinese, CheckFailed) => "未能读取附加的更改"
@@ -59,6 +67,14 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Remove) => "从此对话中移除"
     (TraditionalChinese, Remove) => "從此對話中移除"
     (Japanese, Remove) => "この会話から削除"
+    (English, RemoveMerged) =>
+      "Remove merged pull requests from this conversation"
+    (Spanish, RemoveMerged) =>
+      "Quitar de esta conversación las solicitudes fusionadas"
+    (SimplifiedChinese, RemoveMerged) => "从此对话中移除已合并的 PR"
+    (TraditionalChinese, RemoveMerged) => "從此對話中移除已合併的 PR"
+    (Japanese, RemoveMerged) =>
+      "マージ済みの PR をこの会話から削除"
     (English, StateOpen) => "Open"
     (Spanish, StateOpen) => "Abierta"
     (SimplifiedChinese, StateOpen) => "已打开"

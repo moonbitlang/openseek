@@ -44,7 +44,7 @@ priv struct ParsedTextMatch {
 
 ///|
 priv enum TextSearchOutcome {
-  TextSearchFinished(SearchTextReply)
+  TextSearchFinished(@protocol.SearchTextReply)
   TextSearchFailed(String)
 }
 
@@ -52,7 +52,7 @@ priv enum TextSearchOutcome {
 priv struct RunningTextSearch {
   generation : Int32
   root : String
-  reply : @async.Queue[SearchTextReply]
+  reply : @async.Queue[@protocol.SearchTextReply]
   task : @async.Task[Unit]
 }
 
@@ -99,8 +99,8 @@ priv enum TextSearchRequest {
   Search(
     command~ : String?,
     root~ : @pathx.Absolute,
-    payload~ : SearchTextPayload,
-    reply~ : @async.Queue[SearchTextReply]
+    payload~ : @protocol.SearchTextPayload,
+    reply~ : @async.Queue[@protocol.SearchTextReply]
   )
   Cancel(
     session_key~ : String,
@@ -130,7 +130,7 @@ fn empty_text_search_reply(
   generation : Int32,
   cancelled~ : Bool = false,
   error? : @protocol.TextSearchError,
-) -> SearchTextReply {
+) -> @protocol.SearchTextReply {
   {
     root,
     generation,
@@ -148,9 +148,9 @@ async fn TextSearchService::search(
   self : TextSearchService,
   command : String?,
   root : @pathx.Absolute,
-  payload : SearchTextPayload,
-) -> SearchTextReply {
-  let reply : @async.Queue[SearchTextReply] = Queue(kind=Blocking(1))
+  payload : @protocol.SearchTextPayload,
+) -> @protocol.SearchTextReply {
+  let reply : @async.Queue[@protocol.SearchTextReply] = Queue(kind=Blocking(1))
   self.requests.put(Search(command~, root~, payload~, reply~))
   reply.get()
 }
@@ -650,7 +650,7 @@ fn text_search_unicode_escapes_to_pcre2(pattern : String) -> String {
 }
 
 ///|
-fn text_search_word_pattern(payload : SearchTextPayload) -> String {
+fn text_search_word_pattern(payload : @protocol.SearchTextPayload) -> String {
   let pattern = if payload.regex {
     text_search_unicode_escapes_to_pcre2(payload.query)
   } else {
@@ -668,7 +668,7 @@ fn text_search_word_pattern(payload : SearchTextPayload) -> String {
 }
 
 ///|
-fn text_search_args(payload : SearchTextPayload) -> Array[String] {
+fn text_search_args(payload : @protocol.SearchTextPayload) -> Array[String] {
   let args : Array[String] = ["--hidden", "--no-require-git"]
   args.push(
     if payload.case_sensitive {
@@ -827,7 +827,7 @@ fn safe_utf16_end(text : String, offset : Int32) -> Int32 {
 fn project_text_match(
   parsed : ParsedTextMatch,
   remaining : Int32,
-) -> (TextSearchMatch?, Int32, Bool) {
+) -> (@protocol.TextSearchMatch?, Int32, Bool) {
   let ranges : Array[@protocol.TextSearchRange] = []
   let mut overflow = false
   for byte_range in parsed.byte_ranges {
@@ -989,8 +989,8 @@ fn text_search_exit_is_fatal(
 async fn run_text_search(
   command : String?,
   root : @pathx.Absolute,
-  payload : SearchTextPayload,
-) -> SearchTextReply {
+  payload : @protocol.SearchTextPayload,
+) -> @protocol.SearchTextReply {
   let reply_root = root.resource_path()
   let native_root = root.to_string()
   if payload.query.is_empty() {
@@ -1131,8 +1131,8 @@ async fn run_text_search(
 async fn search_text_op(
   command : String?,
   service : TextSearchService,
-  payload : SearchTextPayload,
-) -> SearchTextReply {
+  payload : @protocol.SearchTextPayload,
+) -> @protocol.SearchTextReply {
   let root = WirePath::parse(payload.root).absolute
   service.search(command, root, payload)
 }
@@ -1140,7 +1140,7 @@ async fn search_text_op(
 ///|
 async fn cancel_search_text_op(
   service : TextSearchService,
-  payload : CancelSearchTextPayload,
+  payload : @protocol.CancelSearchTextPayload,
 ) -> @protocol.EmptyReply {
   service.cancel(payload.session_key, payload.generation)
   Acknowledged
@@ -1148,7 +1148,7 @@ async fn cancel_search_text_op(
 
 ///|
 test "text search arguments mirror VS Code regex, ignore, and glob defaults" {
-  let payload : SearchTextPayload = {
+  let payload : @protocol.SearchTextPayload = {
     root: "/work",
     query: "moon.*bit",
     regex: true,
@@ -1288,7 +1288,7 @@ test "ripgrep byte ranges become one-based UTF-16 emoji columns" {
 
 ///|
 test "literal case-sensitive arguments are deterministic and follow symlinks" {
-  let payload : SearchTextPayload = {
+  let payload : @protocol.SearchTextPayload = {
     root: "/work",
     query: "Moon",
     regex: false,
@@ -1346,7 +1346,7 @@ test "JavaScript Unicode escapes and double-dash queries use regex arguments" {
     text_search_unicode_escapes_to_pcre2("foo\\\\u1234"),
     "foo\\\\u1234",
   )
-  let payload : SearchTextPayload = {
+  let payload : @protocol.SearchTextPayload = {
     root: "/work",
     query: "--",
     regex: false,
@@ -1486,7 +1486,7 @@ test "ripgrep failures classify regex and permission diagnostics" {
 async test "text search replies echo resource-form workspace roots" {
   let root = @pathx.Path(".").resolve()
   let resource_root = root.resource_path()
-  let payload : SearchTextPayload = {
+  let payload : @protocol.SearchTextPayload = {
     root: resource_root,
     query: "",
     regex: false,
@@ -1510,7 +1510,7 @@ async test "cancel-before-search frontier rejects the stale generation" {
     service.cancel("search:stale", 7)
     let root = @pathx.Path(".").resolve()
     let resource_root = root.resource_path()
-    let payload : SearchTextPayload = {
+    let payload : @protocol.SearchTextPayload = {
       root: resource_root,
       query: "moon",
       regex: false,

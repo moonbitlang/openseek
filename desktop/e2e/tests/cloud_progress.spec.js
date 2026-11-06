@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA } from './support/cloud_harness.js';
 
-test('Cloud detail toggle updates the transcript and preserves the preference across narrow layouts and reloads', async ({ page }, testInfo) => {
+test('Cloud detail toggle updates the transcript and preserves the preference across narrow layouts and reloads', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.histories.set(sessionA, {
     messages: [{ task_id: 'fixture-task', kind: 'assistant_message', created_at: 1000,
@@ -17,12 +17,10 @@ test('Cloud detail toggle updates the transcript and preserves the preference ac
   await expect(page.locator('#transcript')).toContainText('Cloud answer');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#transcript')).not.toContainText('Cloud reasoning details');
-  await page.screenshot({ path: testInfo.outputPath('cloud-minimal.png'), animations: 'disabled' });
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(toggle).toHaveClass(/active/);
   await expect(page.locator('#transcript .activity-thinking')).toHaveText('Cloud reasoning details');
-  await page.screenshot({ path: testInfo.outputPath('cloud-detailed.png'), animations: 'disabled' });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(toggle).toHaveCount(0);
   await expect(page.locator('#transcript')).not.toContainText('Cloud reasoning details');
@@ -107,7 +105,7 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
   }
 });
 
-test('Cloud title status uses recorded outcomes and marks archived history read-only', async ({ page }, testInfo) => {
+test('Cloud title status uses recorded outcomes and marks archived history read-only', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.histories.set(sessionA, { messages: [{
     task_id: 'context-task', kind: 'task_finished', created_at: 100,
@@ -119,7 +117,6 @@ test('Cloud title status uses recorded outcomes and marks archived history read-
   await expect(status.locator('.run-dot')).toHaveClass('run-dot warn');
   await page.reload(); await cloud.open();
   await expect(status).toHaveText('Context limit reached');
-  await page.screenshot({ path: testInfo.outputPath('cloud-title-context-limit.png'), fullPage: true });
   cloud.archived.add(sessionA);
   await page.reload();
   await cloud.openArchived(sessionA);
@@ -130,7 +127,7 @@ test('Cloud title status uses recorded outcomes and marks archived history read-
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('Cloud title status covers loading, service failure and first-send startup without local API configuration', async ({ page }, testInfo) => {
+test('Cloud title status covers loading, service failure and first-send startup without local API configuration', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.device.hostSettings.has_deepseek_key = false;
   let loaded, created;
@@ -152,7 +149,6 @@ test('Cloud title status covers loading, service failure and first-send startup 
     await cloud.create();
     await expect(status).toHaveText('Ready');
     expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
-    await page.screenshot({ path: testInfo.outputPath('cloud-title-ready.png'), fullPage: true });
     cloud.sendStatus = 202;
     await page.locator('#task').fill('First message');
     await page.getByRole('button', { name: 'Send', exact: true }).click();

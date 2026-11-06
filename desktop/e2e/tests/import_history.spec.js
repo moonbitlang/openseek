@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const event = (sequence, kind, payload) => ({ sequence, item: { kind, payload } });
@@ -96,14 +96,12 @@ for (const worktree of [false, true]) {
   });
 }
 
-test('closing a pending import does not navigate away and narrow dialog fits', async ({ page }, testInfo) => {
+test('closing a pending import does not navigate away and narrow dialog fits', async ({ page }) => {
   const { app, dialog } = await setup(page);
-  await dialog.screenshot({ path: testInfo.outputPath('import-dialog-desktop.png') });
   await dialog.getByRole('button', { name: 'Close imported history' }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await openImport(page);
   expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-  await dialog.screenshot({ path: testInfo.outputPath('import-dialog-narrow.png') });
   app.rpcDelays.set('session.import', 300);
   await dialog.getByRole('textbox').fill('https://shares.example/v1/shares/sh_test');
   await dialog.getByRole('button', { name: 'Import link', exact: true }).click();

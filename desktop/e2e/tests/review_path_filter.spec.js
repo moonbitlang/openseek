@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('Review filters changed paths live, clears, and preserves the open diff', async ({ page }) => {
@@ -44,7 +44,7 @@ test('Review filters changed paths live, clears, and preserves the open diff', a
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Review combines extension checkboxes with paths and clears both filters', async ({ page }, testInfo) => {
+test('Review combines extension checkboxes with paths and clears both filters', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.gitChanges.push(
     { path: 'docs/guide.md', index_status: ' ', worktree_status: 'M', kind: 'modified' },
@@ -91,7 +91,6 @@ test('Review combines extension checkboxes with paths and clears both filters', 
   await expect(menu).toBeVisible();
   for (const colorScheme of ['light', 'dark']) {
     await page.emulateMedia({ colorScheme });
-    await page.screenshot({ path: testInfo.outputPath(`file-filters-${colorScheme}.png`) });
   }
   await page.setViewportSize({ width: 390, height: 760 });
   await expect(menu).toBeVisible();

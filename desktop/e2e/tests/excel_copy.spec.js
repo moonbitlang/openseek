@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { test, expect } from './support/test.js';
+import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 async function openWorkbook(page) {
@@ -36,17 +36,6 @@ async function selectRange(page, start, end, sheet = 'Clipboard') {
   await expect(page.getByRole('button', { name: 'Copy table', exact: true })).toBeVisible();
 }
 
-async function captureCopyPane(page, filename) {
-  mkdirSync('/tmp/openseek-excel-copy', { recursive: true });
-  const toolbar = await page.locator('.viewer-breadcrumb').boundingBox();
-  const viewport = page.viewportSize();
-  const left = Math.floor(toolbar.x);
-  await page.screenshot({
-    path: `/tmp/openseek-excel-copy/${filename}`,
-    clip: { x: left, y: 0, width: viewport.width - left, height: Math.min(370, viewport.height) },
-  });
-}
-
 test('Excel copies real selected values as TSV and literal Markdown without attaching context', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const app = await openWorkbook(page);
@@ -62,7 +51,6 @@ test('Excel copies real selected values as TSV and literal Markdown without atta
     .toBe('| 商品 | 说明 | 金额 |\n| --- | --- | --- |\n| 月光杯 🌙 | 管道\\|反斜\\\\<br>"引号"\t&lt;文字&gt; | 123 |');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await expect(page.locator('.office-selection-preview textarea')).toHaveValue('');
-  await captureCopyPane(page, 'selection-copy.png');
   await expect(page.locator('.excel-copy-controls')).toBeVisible();
   await page.getByRole('tab', { name: 'Long', exact: true }).click();
   await expect(page.locator('.excel-copy-controls')).toHaveCount(0);
@@ -95,7 +83,6 @@ test('Excel copy controls remain usable in a narrow pane', async ({ page }) => {
     expect(rect.x).toBeGreaterThanOrEqual(0);
     expect(rect.x + rect.width).toBeLessThanOrEqual(1000);
   }
-  await captureCopyPane(page, 'selection-copy-narrow.png');
   expect(app.pageErrors).toEqual([]);
 });
 

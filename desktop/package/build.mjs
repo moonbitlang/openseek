@@ -540,7 +540,7 @@ class Build {
       // The same development identity a packaged development build gets, for
       // the same reason: never the shipped one.
       const config = await this.developmentConfig();
-      return await this.proton(["-C", ".", "dev", "--config", config, "--no-frontend", "--setup"]);
+      return await this.proton(["-C", ".", "dev", "--config", config, "--no-frontend"]);
     }
     await this.package(options);
   }

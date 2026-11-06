@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('panel toggle keeps its node, focus and position across drawer transitions', async ({ page }) => {
+test('panel toggle keeps its node, focus and position across drawer transitions', { tag: '@motion' }, async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();

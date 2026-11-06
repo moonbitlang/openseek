@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { CloudHarness, authOrigin } from './support/cloud_harness.js';
 
@@ -16,7 +16,7 @@ async function assertFits(page) {
 
 test.use({ viewport: { width: 393, height: 851 }, isMobile: true, hasTouch: true });
 
-test('phone conversation sends once, stops, reconnects and keeps the composer visible when the available viewport height shrinks', async ({ page }, info) => {
+test('phone conversation sends once, stops, reconnects and keeps the composer visible when the available viewport height shrinks', async ({ page }) => {
   const app = await installConsole(page);
   await app.goto();
   // Layout checks begin after the initial conversation has finished activating.
@@ -39,7 +39,6 @@ test('phone conversation sends once, stops, reconnects and keeps the composer vi
   await assertFits(page);
   const box = await page.locator('#task').boundingBox();
   expect(box.y + box.height).toBeLessThanOrEqual(480);
-  await page.screenshot({ animations: 'disabled', path: info.outputPath('conversation-keyboard-height.png') });
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -130,7 +129,7 @@ test('a held, modified or consumed Escape closes only what one press would', asy
   expect(app.pageErrors).toEqual([]);
 });
 
-test('long engine-start failures remain readable within the phone viewport and restore the draft', async ({ page }, info) => {
+test('long engine-start failures remain readable within the phone viewport and restore the draft', async ({ page }) => {
   const app = await installConsole(page);
   const failure = 'Engine failed to start: invalid option\nUsage: openseek serve [OPTIONS]\n' +
     '--session-root <directory> Directory containing durable sessions.\n'.repeat(65);
@@ -155,12 +154,10 @@ test('long engine-start failures remain readable within the phone viewport and r
   expect(bounds.y).toBeGreaterThanOrEqual(header.y + header.height);
   await expect(notice).toHaveCSS('overflow-y', 'auto');
   await expect(notice).toHaveCSS('white-space', 'pre-wrap');
-  await page.screenshot({ animations: 'disabled', path: info.outputPath('bounded-engine-error.png') });
   await page.setViewportSize({ width: 393, height: 480 });
   const reduced = await notice.boundingBox();
   const reducedTask = await page.locator('#task').boundingBox();
   expect(reduced.y + reduced.height).toBeLessThanOrEqual(reducedTask.y);
-  await page.screenshot({ animations: 'disabled', path: info.outputPath('bounded-engine-error-reduced.png') });
   await notice.click();
   await expect(notice).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
@@ -170,7 +167,7 @@ for (const viewport of [
   { width: 320, height: 568 },
   { width: 851, height: 393 },
 ]) {
-  test(`conversation and drawer fit ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
+  test(`conversation and drawer fit ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     const app = await installConsole(page);
     await app.goto();
@@ -196,17 +193,15 @@ for (const viewport of [
       const option = await page.locator('.sidebar-mode-option').first().boundingBox();
       expect(option.y).toBeGreaterThanOrEqual(mode.y);
       expect(option.y + option.height).toBeLessThanOrEqual(mode.y + mode.height);
-      await page.screenshot({ animations: 'disabled', path: info.outputPath('drawer.png') });
       await page.locator('.sidebar-backdrop').click({ position: { x: viewport.width - 5, y: 100 } });
       await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
     }
-    await page.screenshot({ animations: 'disabled', path: info.outputPath('conversation.png') });
     await expect(page.locator('#task')).toHaveValue('An unsent mobile browser draft');
     expect(app.pageErrors).toEqual([]);
   });
 }
 
-test('signed-out entry fits a small phone and remains scrollable at reduced height', async ({ page }, info) => {
+test('signed-out entry fits a small phone and remains scrollable at reduced height', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
@@ -217,7 +212,6 @@ test('signed-out entry fits a small phone and remains scrollable at reduced heig
   const box = await login.boundingBox();
   expect(box.height).toBeGreaterThanOrEqual(44);
   expect(box.x + box.width).toBeLessThanOrEqual(320);
-  await page.screenshot({ animations: 'disabled', path: info.outputPath('small-login.png') });
   await page.setViewportSize({ width: 320, height: 320 });
   await login.scrollIntoViewIfNeeded();
   const reduced = await login.boundingBox();
@@ -225,7 +219,7 @@ test('signed-out entry fits a small phone and remains scrollable at reduced heig
   expect(reduced.y + reduced.height).toBeLessThanOrEqual(320);
 });
 
-test('Cloud conversation fits a small phone and a multiline draft survives a height change', async ({ page }, info) => {
+test('Cloud conversation fits a small phone and a multiline draft survives a height change', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   const cloud = new CloudHarness(page);
   await cloud.install();
@@ -250,5 +244,4 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   expect(cloud.device.ticketRequests).toHaveLength(0);
   expect(cloud.device.socket).toBeNull();
   expect(cloud.device.pageErrors).toEqual([]);
-  await page.screenshot({ animations: 'disabled', path: info.outputPath('cloud-small-height.png') });
 });

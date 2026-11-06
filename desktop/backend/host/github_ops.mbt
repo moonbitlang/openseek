@@ -36,9 +36,9 @@ const GhExecutable : String = "gh"
 
 ///|
 async fn git_pull_request_op(
-  payload : GitPullRequestPayload,
-) -> GitPullRequestReply {
-  let nothing : GitPullRequestReply = {
+  payload : @protocol.GitPullRequestPayload,
+) -> @protocol.GitPullRequestReply {
+  let nothing : @protocol.GitPullRequestReply = {
     pull_request: None,
     compare_url: None,
     branch: None,
@@ -54,20 +54,18 @@ async fn git_pull_request_op(
   // worktrees are normally detached, though, so recover a branch only when it
   // demonstrably names the same commit: first app-server's creation-time hint,
   // then the one unambiguous local branch pointing exactly at HEAD.
-  guard git_branch(base.0) is Some(checkout) else { return nothing }
-  let mut head = git_symbolic_branch(base.0)
+  guard git_branch(base) is Some(checkout) else { return nothing }
+  let mut head = git_symbolic_branch(base)
   if head is None && payload.branch_hint is Some(hint) {
-    let valid_hint = git_output_opt(base.0, [
-      "check-ref-format", "--branch", hint,
-    ])
-    let current = git_revision_commit(base.0, "HEAD")
-    let hinted = git_revision_commit(base.0, "refs/heads/\{hint}")
+    let valid_hint = @gitx.probe(base, ["check-ref-format", "--branch", hint])
+    let current = git_revision_commit(base, "HEAD")
+    let hinted = git_revision_commit(base, "refs/heads/\{hint}")
     if valid_hint is Some(_) && current is Some(_) && current == hinted {
       head = Some(hint)
     }
   }
   if head is None &&
-    git_output_opt(base.0, [
+    @gitx.probe(base, [
       "for-each-ref", "--format=%(refname:short)", "--points-at", "HEAD", "refs/heads",
     ])
     is Some(output) {
@@ -83,7 +81,10 @@ async fn git_pull_request_op(
     }
   }
   let branch = head.unwrap_or(checkout)
-  let unanswered : GitPullRequestReply = { ..nothing, branch: Some(branch), }
+  let unanswered : @protocol.GitPullRequestReply = {
+    ..nothing,
+    branch: Some(branch),
+  }
   // A hash remains useful display text but must never become a gh branch
   // filter when no exact local ref was recovered.
   guard head is Some(head) else { return unanswered }
@@ -93,7 +94,7 @@ async fn git_pull_request_op(
   // named `main`; showing that merged request here makes the current main
   // branch look like the historical fork. Stop before resolving gh so neither
   // that chip nor a create-pull-request link can appear on the default branch.
-  if git_is_default_branch(base.0, branch=head) {
+  if git_is_default_branch(base, branch=head) {
     return unanswered
   }
   guard resolve_gh() is Some(gh) else { return unanswered }
@@ -109,7 +110,7 @@ async fn branch_pull_request(
   gh : @pathx.Absolute,
   dir : @pathx.Absolute,
   branch : String,
-) -> GitPullRequestReply {
+) -> @protocol.GitPullRequestReply {
   let listing = gh_json(gh, dir, [
     "pr",
     "list",
@@ -122,7 +123,7 @@ async fn branch_pull_request(
     "--json",
     PullRequestFields,
   ])
-  let nothing : GitPullRequestReply = {
+  let nothing : @protocol.GitPullRequestReply = {
     pull_request: None,
     compare_url: None,
     branch: Some(branch),
@@ -143,7 +144,7 @@ async fn branch_pull_request(
   // with the commits. That is the ordinary state of a branch an agent just
   // made, which is exactly when the offer would be most tempting to click —
   // and the remote-tracking refs settle it without touching the network.
-  guard git_branch_on_remote(dir.0, branch) else { return nothing }
+  guard git_branch_on_remote(dir, branch) else { return nothing }
   // Some remote having it is not enough. The link names one repository, and
   // gh's pick is not always the one that was pushed to: gh prefers a remote
   // called `upstream` over `origin`, so a fork checkout resolves to the parent
@@ -181,7 +182,7 @@ async fn branch_pull_request(
 /// someone else's work; those are dropped unless dropping them leaves nothing,
 /// which is exactly what a fork checkout looks like, every pull request in it
 /// being cross-repository.
-fn pick_pull_request(candidates : Array[Json]) -> GitPullRequest? {
+fn pick_pull_request(candidates : Array[Json]) -> @protocol.GitPullRequest? {
   let own = candidates.filter(candidate => {
     candidate is Object(fields) &&
     fields.get("isCrossRepository") is Some(False)
@@ -200,7 +201,7 @@ fn pick_pull_request(candidates : Array[Json]) -> GitPullRequest? {
 /// Decode one `gh pr list` element. Every field the chip renders is required:
 /// a record missing one is a gh version whose output this does not understand,
 /// which is worth showing nothing for rather than a half-filled chip.
-fn parse_pull_request(json : Json) -> GitPullRequest? {
+fn parse_pull_request(json : Json) -> @protocol.GitPullRequest? {
   guard json is Object(fields) else { return None }
   guard fields.get("title") is Some(String(title)) else { return None }
   guard fields.get("url") is Some(String(url)) else { return None }
@@ -243,7 +244,7 @@ fn json_count(fields : Map[String, Json], key : String) -> Int32? {
 ///|
 /// Summarize the head commit's checks. None when the commit reports none at
 /// all — no checks configured is not the same as checks that have not run.
-fn parse_checks(rollup : Json?) -> GitChecks? {
+fn parse_checks(rollup : Json?) -> @protocol.GitChecks? {
   guard rollup is Some(Array(entries)) && !entries.is_empty() else {
     return None
   }
@@ -313,7 +314,7 @@ async fn gh_json(
     gh.0,
     args,
     cwd=dir.0,
-    extra_env=git_environment(),
+    extra_env=@gitx.environment(),
     inherit_env=false,
   ) catch {
     _ => return None
