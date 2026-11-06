@@ -125,27 +125,16 @@ a:where(.setting-link) {
   overflow: visible;
   width: 100%;
   box-sizing: border-box;
-  --management-content-padding: clamp(
-    var(--space-6),
-    3vw,
-    calc(var(--space-7) * 1.5)
-  );
-  padding: max(
-    var(--management-content-padding),
-    calc((100% - 72rem) / 2)
-  );
 }
 #management-dialog .management-page > .management-page-content {
   width: 100%;
   max-width: none;
   margin-inline: 0;
 }
-/* ---------- shared management content ---------- */
 .management-page {
   grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-7) 2rem 2rem;
 }
 
 .management-page-content {

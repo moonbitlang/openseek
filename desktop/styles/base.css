@@ -107,15 +107,6 @@ samp,
   font-weight: 400;
 }
 
-/* A form field has exactly one focus-border owner. A plain input owns itself;
-   a composite field puts the owner on its bordered wrapper and marks the
-   nested text control as the target. Explicit data attributes keep this rule
-   out of the embedded Viewer even though it shares the document. */
-[data-focus-owner]:focus,
-[data-focus-owner]:has([data-focus-target]:focus) {
-  border-color: var(--color-focus-ring);
-}
-
 /* Every app-owned select uses the same popup surface and option semantics.
    Reusing one scoped anchor name gives each select a private positioning seam;
    its top-layer menu escapes pane clipping without exposing unique CSS names
