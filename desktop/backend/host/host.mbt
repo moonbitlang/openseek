@@ -68,7 +68,7 @@ pub fn HostConnection::HostConnection() -> HostConnection {
     file_search: FileSearchService(),
     text_search: TextSearchService(),
     semantic_search: SemanticSearchService(),
-    terminal: @terminal.new_terminal_state(),
+    terminal: TerminalState(),
   }
 }
 
@@ -137,7 +137,7 @@ pub async fn HostConnection::run(
     // signal. It must not be tied to the page-reload session sweep below.
     defer self.terminal.shutdown()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(self.terminal, push => {
+      self.terminal.run_pump(push => {
         match push {
           Output(id~, sequence~, data~) =>
             emit(TerminalOutput({ id, sequence, data: @base64.encode(data), }))
@@ -281,8 +281,7 @@ pub fn endpoints(
       create_directory_op(payload)
     }),
     Endpoint(@commands.terminal_open, payload => {
-      @terminal.open(
-        connection.terminal,
+      connection.terminal.open(
         payload,
         engine=state.engine,
         runtime_dir?=state.runtime_dir,
@@ -291,12 +290,11 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.terminal_input, payload => {
-      @terminal.input(connection.terminal, payload)
+      connection.terminal.input(payload)
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_resize, payload => {
-      @terminal.resize_terminal(
-        connection.terminal,
+      connection.terminal.resize(
         id=payload.id,
         cols=payload.cols,
         rows=payload.rows,
@@ -304,15 +302,11 @@ pub fn endpoints(
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_ack, payload => {
-      @terminal.ack_terminal(
-        connection.terminal,
-        id=payload.id,
-        sequence=payload.sequence,
-      )
+      connection.terminal.ack(id=payload.id, sequence=payload.sequence)
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_close, payload => {
-      @terminal.close_terminal(connection.terminal, id=payload.id)
+      connection.terminal.close(id=payload.id)
       Acknowledged
     }),
     Endpoint(@commands.moon_package_graph, payload => {

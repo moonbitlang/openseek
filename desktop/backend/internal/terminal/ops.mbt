@@ -17,8 +17,8 @@ fn @protocol.TerminalInputPayload::bytes(
 }
 
 ///|
-pub async fn open(
-  terminals : TerminalState,
+pub async fn TerminalState::open(
+  self : TerminalState,
   payload : @protocol.TerminalOpenPayload,
   engine~ : String,
   runtime_dir? : @pathx.Path,
@@ -56,8 +56,7 @@ pub async fn open(
     guard !command.is_blank() else {
       raise TerminalError("terminal command must not be empty")
     }
-    let id = open_terminal(
-      terminals,
+    let id = self.spawn(
       cwd=root.to_string(),
       cols=payload.cols,
       rows=payload.rows,
@@ -70,22 +69,21 @@ pub async fn open(
     path_entries,
     windows~,
   )
-  let id = open_terminal(
-    terminals,
+  let id = self.spawn(
     cwd=root.to_string(),
     cols=payload.cols,
     rows=payload.rows,
   )
   if activation_command is Some(command) {
-    write_terminal(terminals, id~, @utf8.encode(command)) catch {
+    self.write(id~, @utf8.encode(command)) catch {
       TerminalError(message) => {
-        close_terminal(terminals, id~)
+        self.close(id~)
         raise TerminalError(
           "could not activate terminal command-line tools: \{message}",
         )
       }
       error => {
-        close_terminal(terminals, id~)
+        self.close(id~)
         raise error
       }
     }
@@ -180,9 +178,9 @@ test "a ! command runs under the user's shell with the toolchain first on PATH" 
 }
 
 ///|
-pub async fn input(
-  terminals : TerminalState,
+pub async fn TerminalState::input(
+  self : TerminalState,
   payload : @protocol.TerminalInputPayload,
 ) -> Unit {
-  write_terminal(terminals, id=payload.id, payload.bytes())
+  self.write(id=payload.id, payload.bytes())
 }

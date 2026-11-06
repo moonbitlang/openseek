@@ -1,5 +1,5 @@
 // The pump that owns every PTY child: spawned in the host services' task
-// group (like the LSP and watcher pumps), it consumes `open_terminal`
+// group (like the LSP and watcher pumps), it consumes `spawn`
 // requests and runs one task per session. The connection owner shuts down the
 // terminal state before its group ends, waking this pump and closing every
 // session. Each PTY belongs to its session's task group, which releases the
@@ -12,17 +12,17 @@ const ReadChunkBytes = 16384
 ///|
 /// Run terminal sessions until the state shuts down or this task is cancelled,
 /// forwarding every session's pushes through `emit`.
-pub async fn run_terminal_pump(
-  state : TerminalState,
+pub async fn TerminalState::run_pump(
+  self : TerminalState,
   emit : async (TerminalPush) -> Unit,
 ) -> Unit {
   @async.with_task_group(group => {
     for ;; {
-      let request = state.requests.get() catch {
+      let request = self.requests.get() catch {
         TerminalPumpClosed => return
         error => raise error
       }
-      group.spawn_bg(allow_failure=true, () => run_session(state, request, emit))
+      group.spawn_bg(allow_failure=true, () => run_session(self, request, emit))
     }
   })
 }
@@ -41,7 +41,7 @@ async fn TerminalSession::close_when_requested(
 
 ///|
 /// One session's lifetime: spawn the PTY child, answer the opener, then loop
-/// reading output until the child exits (or `close_terminal` requests it),
+/// reading output until the child exits (or `close` requests it),
 /// pausing whenever the flow-control debt passes the high watermark.
 async fn run_session(
   state : TerminalState,
