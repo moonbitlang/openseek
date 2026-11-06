@@ -2394,7 +2394,7 @@ pub fn breadcrumb_view(
           title=label,
           attrs=@html.Attrs::build().aria_label(label),
           on_click=command,
-          [@icons.icon_link_external(), @html.text(label)],
+          [@icons.icon_eye(), @html.text(label)],
         )
       } else {
         @html.nothing
@@ -2449,7 +2449,7 @@ pub fn breadcrumb_view(
         title=label,
         on_click=command,
         attrs=@html.Attrs::build().aria_label(label),
-        [icon(@icons.icon_link_external), @html.text(label)],
+        [icon(@icons.icon_folder_opened), @html.text(label)],
       ),
     )
   }
