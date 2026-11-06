@@ -1,0 +1,130 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  @fs.mkdir("\{dir}/parent")
+  let result = @shell.Cmd(
+    "moonrun",
+    [
+      engine,
+      "--",
+      "run",
+      "--dir",
+      "\{dir}/parent/new",
+      "--api-url",
+      ClosedEndpoint,
+      "say hi",
+    ],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_RETRY_ATTEMPTS": "1",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_true(result.exit_code() != 0)
+  println("exit-non-zero")
+  assert_true(@fs.kind("\{dir}/parent/new") is Directory)
+  println("dir-created")
+  println(
+    result
+    .stderr()
+    .split("\n")
+    .filter(line => line.has_prefix("created "))
+    .count(),
+  )
+  session_ids(engine, dir, ["--dir", "\{dir}/parent/new"], normalize=true)
+  let list = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "sessions", "list", "--dir", "\{dir}/parent/fresh"],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(list.exit_code(), 0)
+  assert_true(@fs.kind("\{dir}/parent/fresh") is Directory)
+  println("session-dir-created")
+  println(list.stdout().split("\n").filter(line => !line.is_empty()).count())
+}
+
+///|
+const ClosedEndpoint = "http://127.0.0.1:9/chat/completions"
+
+///|
+async fn session_ids(
+  engine : String,
+  dir : String,
+  args : Array[String],
+  normalize~ : Bool = false,
+) -> Unit {
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "sessions", "list", ..args],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  let ids = result
+    .stdout()
+    .split("\n")
+    .filter_map(line => {
+      if line.is_empty() {
+        None
+      } else {
+        Some(line.split("\t").next().unwrap_or("").to_owned())
+      }
+    })
+    .collect()
+  ids.sort()
+  for id in ids {
+    println(if normalize && id.has_prefix("cli-") { "cli-<stamp>" } else { id })
+  }
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

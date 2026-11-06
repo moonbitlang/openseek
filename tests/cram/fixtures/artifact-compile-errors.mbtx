@@ -1,0 +1,102 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let project = "\{dir}/session/scratch/app"
+  let output = "\{dir}/session/scratch/artifact"
+  let manifest =
+    #|name = "example/artifact"
+    #|version = "0.0.0"
+  let package_config =
+    #|pkgtype(kind: "executable")
+    #|options(link: { "js": { "format": "iife" } })
+  let source =
+    #|fn main { println("The application has loaded") }
+  put("\{project}/moon.mod", manifest)
+  put("\{project}/moon.pkg", package_config)
+  put("\{project}/main.mbt", source)
+  let builder = build("\{root}/share/artifact/build.mbtx")
+
+  put("\{project}/main.mbt", "fn main { missing_function() }")
+  let broken = @shell.Cmd(
+    "moonrun",
+    [builder, "--", project, output, "broken.html"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  assert_eq(broken.exit_code(), 1)
+  assert_true(broken.stderr().contains("missing_function"))
+  assert_true(broken.stderr().contains("\{project}/main.mbt"))
+  assert_unpublished(output, "broken.html")
+  println("compiler error: no artifact published")
+
+  let warning_source =
+    #|fn main {
+    #|  let unused = 42
+    #|  println("Would otherwise build")
+    #|}
+  put("\{project}/main.mbt", warning_source)
+  let warning = @shell.Cmd(
+    "moonrun",
+    [builder, "--", project, output, "warning.html"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  assert_eq(warning.exit_code(), 1)
+  assert_true(warning.stderr().contains("unused_value"))
+  assert_unpublished(output, "warning.html")
+  println("compiler warning: no artifact published")
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn assert_unpublished(output : String, name : String) -> Unit {
+  assert_false(@fs.exists("\{output}/\{name}"))
+  assert_false(@fs.exists("\{output}/\{name}.source"))
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

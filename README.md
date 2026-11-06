@@ -52,7 +52,7 @@ integration gates are:
 
 ```sh
 just check              # native + JS workspace checks and formatting
-just test               # native + JS workspace tests and OpenSeek cram tests
+just test               # native + JS workspace tests and CLI documentation tests
 just build              # native + JS MoonBit builds
 just editor-build       # editor web distribution and server
 just editor-test        # editor-only tests on every supported target
@@ -70,11 +70,8 @@ When passing editor paths containing spaces, quote the whole assignment:
 `just --justfile editor/justfile "ROOT=C:/Users/me/My Project" dev`.
 
 The CLI documentation tests (`just test-cli`, included in `just test`) run
-with `moon testcli`. Complex fixtures explicitly use Bash. On Windows,
-`just test` selects Git for Windows' Bash at
-`%ProgramFiles%/Git/bin/bash.exe`, avoiding the WSL launcher on `PATH`.
-For a custom Git installation, set
-`just "TESTCLI_SHELL=D:/Git/bin/bash.exe" test`.
+with `moon testcli`. Their fixtures use MoonBit file and process APIs and need
+no Bash or sh interpreter.
 
 Windows installer packaging (`just desktop-package`) also needs NSIS with
 `makensis.exe` on `PATH` (usually under `C:/Program Files (x86)/NSIS`).
@@ -346,13 +343,13 @@ notes.
 ## Verified CLI Documentation (testcli)
 
 The CLI behaviour is documented as executable `mooncram` blocks under `tests/`,
-run with `moon testcli test --target native tests/cram`. Simple cases name local
-packages or `.mbtx` scripts directly. Complex shell scenarios use explicit
+run with `moon testcli test tests/cram`. Simple cases name local
+packages or `.mbtx` scripts directly. Complex scenarios use MoonBit
 fixtures with isolated temporary directories; see [the authoring guide](tests/cram/README.md).
 
 - [`tests/cram/cli.md`](tests/cram/cli.md) — offline `openseek` subcommand
   examples (top-level and `run` help, and the `run`/`serve`/`sessions` behaviors).
-  They make no network calls and run in CI via `moon testcli test --target native tests/cram`.
+  They make no network calls and run in CI via `moon testcli test tests/cram`.
 - [`tests/cram/run-requests.md`](tests/cram/run-requests.md) — `run` driven by a
   parent: a JSON request on stdin, presets (`--kind`), the result file, refusals,
   cancellation by closing stdin, and the one-general-child lease
@@ -364,11 +361,9 @@ fixtures with isolated temporary directories; see [the authoring guide](tests/cr
 - [`tests/cram/validation-workflows.md`](tests/cram/validation-workflows.md) —
   the bundled check, test, and formatting scripts, exercised on a temporary project.
 - [`tests/live/deepseek.md`](tests/live/deepseek.md) — a real, non-mock DeepSeek
-  round trip. It is opt-in (`DEEPSEEK=sk-... moon testcli test --target native tests/live`) and
-  parses the agent's JSONL log with MoonBit itself: a `moon run -e` script reads
-  the stream through the published [`moonbitlang/jsonl`](https://mooncakes.io/docs/moonbitlang/jsonl)
-  package and asserts on typed `Json` values — no `jq` — without pinning
-  nondeterministic content such as token counts or model phrasing.
+  round trip. It is opt-in (`DEEPSEEK=sk-... moon testcli test tests/live`) and
+  parses the agent's JSONL log with MoonBit's JSON parser and pattern matching,
+  without pinning nondeterministic content such as token counts or model phrasing.
 
 For the evaluation-backed roadmap, see
 [`agent-improvement-guide.md`](agent-improvement-guide.md). It explains why the

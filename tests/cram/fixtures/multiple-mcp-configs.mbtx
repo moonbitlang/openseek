@@ -1,0 +1,71 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  for name in ["first", "second"] {
+    put("\{dir}/\{name}.json", "{\"mcpServers\":{}}")
+  }
+  let result = @shell.Cmd(
+    "moonrun",
+    [
+      engine, "--", "mcp", "--mcp-config", "first.json", "--mcp-config=", "--mcp-config=second.json",
+    ],
+    cwd=dir,
+    env={ "OPENSEEK_MCP_CONFIG": "missing.json", "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  emit(result.stdout())
+}
+
+///|
+async fn emit(text : String) -> Unit {
+  @stdio.stdout.text.write(text)
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

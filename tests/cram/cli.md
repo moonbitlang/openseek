@@ -1,9 +1,9 @@
 # Verified OpenSeek CLI Documentation
 
-Run `moon testcli test --target native tests/cram/cli.md` from the repository root.
-Simple cases name the local package directly. [Shell fixtures](fixtures/cli.sh)
-use [the fixture runner](../cli-fixture.mbtx), which builds the engine and runs
-each scenario in a fresh temporary directory.
+Run `moon testcli test tests/cram/cli.md` from the repository root.
+Simple cases name the local package directly. [Standalone MoonBit scripts](fixtures/) handle cases that need temporary
+files or process control. Each script builds and runs the real local engine for
+Wasm and cleans up its temporary directory.
 
 `openseek` is the headless automation CLI: a subcommand tree under `run`,
 `serve`, `mcp`, and `sessions` (the interactive terminal UI
@@ -54,14 +54,40 @@ binary (its own repository, `moonbitlang/openseek_tui`).
 
 There is no free-form top-level prompt: a bare word that is not a subcommand is
 rejected by argparse rather than silently opening the UI with that word as a
-prompt. (argparse does not yet suggest a near-miss subcommand the way it does for
-options — tracked upstream in moonbitlang/core — so the message is a plain
-rejection for now.)
+prompt. The diagnostic suggests `serve` for this misspelling.
 
-```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh a-misspelled-subcommand-is-an-error-not-a-prompt
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek serv
+@STDOUT (empty)
+@STDERR
 error: unexpected value 'serv' found; no more were expected
+
+  tip: a similar subcommand exists: 'serve'
+
+Usage: openseek [options] <command>
+
+DeepSeek-backed MoonBit coding agent (headless automation CLI).
+
+Commands:
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp       List configured MCP servers and the tools they expose.
+  sessions  Manage durable sessions.
+
+Options:
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
+"" (escaped)
+[1]
 ```
 
 ## UI Options Are Not Top-Level Flags
@@ -72,19 +98,71 @@ an engine subcommand. So `openseek --prompt x run …` is an error; use
 `openseek_tui --prompt "…"` for the UI, and `openseek run "…"` for a headless
 task.
 
-```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh ui-options-are-not-top-level-flags
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek --prompt x run TASK
+@STDOUT (empty)
+@STDERR
 error: unexpected argument '--prompt' found
+
+Usage: openseek [options] <command>
+
+DeepSeek-backed MoonBit coding agent (headless automation CLI).
+
+Commands:
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp       List configured MCP servers and the tools they expose.
+  sessions  Manage durable sessions.
+
+Options:
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
+"" (escaped)
+[1]
 ```
 
 With no free-form positional, `--` cannot smuggle a prompt: a value after it is
 rejected by the parser.
 
-```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh ui-options-are-not-top-level-flags-2
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek -- something
+@STDOUT (empty)
+@STDERR
 error: unexpected value 'something' found; no more were expected
+
+Usage: openseek [options] <command>
+
+DeepSeek-backed MoonBit coding agent (headless automation CLI).
+
+Commands:
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp       List configured MCP servers and the tools they expose.
+  sessions  Manage durable sessions.
+
+Options:
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
+"" (escaped)
+[1]
 ```
 
 ## Bare `openseek` Is Rejected
@@ -92,10 +170,36 @@ error: unexpected value 'something' found; no more were expected
 `openseek` is automation-only: there is no default subcommand, so a bare
 invocation is an error (launch the interactive UI with `openseek_tui`).
 
-```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh bare-openseek-is-rejected
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek
+@STDOUT (empty)
+@STDERR
 error: the following required argument was not provided: 'subcommand'
+
+Usage: openseek [options] <command>
+
+DeepSeek-backed MoonBit coding agent (headless automation CLI).
+
+Commands:
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp       List configured MCP servers and the tools they expose.
+  sessions  Manage durable sessions.
+
+Options:
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
+"" (escaped)
+[1]
 ```
 
 ## `openseek run` Runs One Task Headlessly
@@ -176,11 +280,12 @@ not the variable that would have supplied one — `DEEPSEEK` here, `KIMI` for a
 Kimi model. Those options are hidden from `--help`, so this is where they are
 written down.
 
-```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh api-key-is-required-for-agent-runs
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek run "summarize this project"
+@STDOUT (empty)
+@STDERR
 error: an API key is required for deepseek-flash: pass --api-key
-stdout-empty
+[1]
 ```
 
 ## A Result File Says How the Run Ended
@@ -192,7 +297,7 @@ succeeded or not; `docs/run-result.md` is the full contract. A stale file at
 parent reads the file, not the streams.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh a-result-file-says-how-the-run-ended
+$ moonx fixtures/result-file.mbtx
 exit 1
 {"version":1,"status":"failed","reason":"an API key is required for deepseek-flash: pass --api-key"}
 exit 1
@@ -205,21 +310,59 @@ The task is free-form after option parsing has stopped, but a leading
 option-looking token is still an option. This catches stale or misspelled flags
 instead of silently turning them into prompt text.
 
-```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh unknown-options-are-rejected-before-task-text
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek run --xxy he
+@STDOUT (empty)
+@STDERR
 error: unexpected argument '--xxy' found
-stdout-empty
+
+Usage: openseek run [options] [task...]
+
+Run one task headlessly; print its answer on stdout and its progress on stderr.
+
+Arguments:
+  task...  Task description.
+
+Options:
+  -h, --help                                                   Show help information.
+  --api-key <api-key>                                          API key for the selected chat provider. [default: ]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                                      Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                                        Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                                          Create or resume this durable session id.
+  --session-root <session-root>                                Directory containing durable OpenSeek sessions. [default: .openseek]
+  --no-session                                                 Run ephemerally: do not record this run to a durable session.
+  --inspect                                                    Watch this run live in the browser: start (or reuse) the session viewer, `moonx moonbitlang/inspect --ensure --watch`, print its link and open it in your default browser before the agent starts. Needs a recorded session.
+  --review-gate                                                On goal(met), audit the worktree against the goal with a review subagent and inject the findings as an advisory notice.
+  --cancel-on-stdin-eof                                        For a parent that launches this run: read the JSON request as one line, keep reading stdin, and cancel the run when it closes. Needs --input-format json. The run delegates no further work.
+  --dir <dir>                                                  Workspace directory for relative paths; creates only the final path component if its parent exists. [default: .]
+  --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
+  --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
+  --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
+  --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package, and a new session's system prompt names the servers. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
+  --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
+  --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run). [env: OPENSEEK_APPROVAL] [default: never]
+  --result-file <result-file>                                  Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.
+  --result-root <result-root>                                  The directory --result-file must be written in: the result must be a new file inside it. A launcher pins it to decide where a run it starts may write.
+  --kind <kind>                                                Run a preset instead of the general agent: explore, review, approval, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.
+  --claim <claim>                                              Start the --kind run in the --session its launcher claimed for it, presenting the claim's token. Without it, a --kind run refuses a session that already exists.
+  --input-format <input-format>                                text: the task is the command-line words. json: read one JSON request from stdin instead (see docs/run-result.md). [default: text]
+"" (escaped)
+[1]
 ```
 
 When the task itself must start with `-`, use the normal option delimiter.
 Here parsing succeeds and the run reaches the later API-key validation.
 
-```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh unknown-options-are-rejected-before-task-text-2
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek run -- "--xxy he"
+@STDOUT (empty)
+@STDERR
 error: an API key is required for deepseek-flash: pass --api-key
-stdout-empty
+[1]
 ```
 
 ## `openseek sessions` Is Offline
@@ -230,7 +373,7 @@ the summary event the compaction *appends* is stamped with the wall clock, so
 both `sessions show` calls strip `ts` to stay deterministic.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-sessions-is-offline
+$ moonx fixtures/sessions-offline.mbtx
 demo
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
 compacted session demo events 1..2; last_sequence=3
@@ -250,7 +393,7 @@ model that the files were not copied with it.
 terminal event; an id that already exists is never replaced.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-sessions-fork-continues-a-conversation-another-way
+$ moonx fixtures/session-fork.mbtx
 retry
 user
 terminal
@@ -270,7 +413,7 @@ of. Only the names are read: a server whose URL needs a variable this process
 does not have is still named.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-sessions-fork-continues-a-conversation-another-way-2
+$ moonx fixtures/session-fork-mcp.mbtx
 Configured MCP servers: `tracker`, `host`
 ```
 
@@ -294,7 +437,7 @@ closed port pins `OPENSEEK_RETRY_ATTEMPTS=1`: none of them is testing the retry
 budget, and the suite's runtime should not track its default.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-run-records-a-session-by-default
+$ moonx fixtures/default-session.mbtx
 exit-non-zero
 1
 0
@@ -310,7 +453,7 @@ ever being routed back through one: once, events went through `@xlog`, and
 rendered nothing with no error to explain it.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-run-records-a-session-by-default-2
+$ moonx fixtures/session-log-levels.mbtx
 warn: 1
 error: 1
 ```
@@ -319,7 +462,7 @@ error: 1
 behind.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-run-records-a-session-by-default-3
+$ moonx fixtures/no-session.mbtx
 ephemeral
 ```
 
@@ -331,7 +474,7 @@ directory, reports it on stderr, and resolves the default session root under
 it.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh dir-selects-the-workspace-root
+$ moonx fixtures/workspace-directory.mbtx
 exit-non-zero
 dir-created
 1
@@ -357,11 +500,11 @@ cancels arrive as JSONL commands on stdin, and the usual event stream leaves on
 stdout. The command surface is testable offline — a malformed command is
 reported as a `command_error` event rather than killing the server, an idle
 `cancel` is a no-op, and stdin EOF shuts the server down cleanly (exit 0)
-without ever touching the network. The `grep -o` keeps only the stable event
+without ever touching the network. The fixture keeps only the stable event
 tag, since a line also carries the event's payload fields.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin
+$ moonx fixtures/serve-unknown-command.mbtx
 "event":"command_error"
 ```
 
@@ -372,14 +515,14 @@ carries a `steer_dropped` event so the controller can ask the user to resubmit �
 and, usefully for this offline test, no turn means no network.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-2
+$ moonx fixtures/serve-late-steer.mbtx
 "event":"steer_dropped"
 ```
 
 Tagged steering keeps its submission id in the rejection receipt:
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-3
+$ moonx fixtures/serve-tagged-late-steer.mbtx
 {"event":"steer_dropped","content":"too late","submission_id":"late-steer"}
 ```
 
@@ -389,25 +532,53 @@ changes. Every one carries the whole state, so a controller keeps the latest.
 With nothing configured there are no configs and no servers:
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-4
+$ moonx fixtures/serve-mcp-status.mbtx
 {"event":"mcp_status","status":{"configs":[],"servers":[]}}
 ```
 
-A server that cannot start is listed with its failure rather than left out (the `grep -o` stops before the error text, which
+A server that cannot start is listed with its failure rather than left out (the fixture stops before the error text, which
 is the operating system's):
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-5
+$ moonx fixtures/serve-failed-mcp-status.mbtx
 "event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
 ```
 
 `serve` takes no positional; a stray task is rejected by the parser before
 anything runs.
 
-```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh openseek-serve-speaks-jsonl-commands-on-stdin-6
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek serve "do something"
+@STDOUT (empty)
+@STDERR
 error: unexpected value 'do something' found; no more were expected
+
+Usage: openseek serve [options]
+
+Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+
+Options:
+  -h, --help                                                   Show help information.
+  --api-key <api-key>                                          API key for the selected chat provider. [default: ]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                                      Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                                        Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                                          Create or resume this durable session id.
+  --session-root <session-root>                                Directory containing durable OpenSeek sessions. [default: .openseek]
+  --no-session                                                 Run ephemerally: do not record this server's conversation to a durable session.
+  --review-gate                                                On goal(met), audit the worktree against the goal with a review subagent and inject the findings as an advisory notice.
+  --dir <dir>                                                  Workspace directory for relative paths; creates only the final path component if its parent exists. [default: .]
+  --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
+  --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
+  --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
+  --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package, and a new session's system prompt names the servers. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
+  --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
+  --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run). [env: OPENSEEK_APPROVAL] [default: never]
+"" (escaped)
+[1]
 ```
 
 ## MoonBit CLI Argument Parsing Pattern
@@ -418,7 +589,7 @@ with `@env.args()`. This tiny package verifies the current `FlagArg`,
 `PositionArg`, and `Matches` shape.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh moonbit-cli-argument-parsing-pattern
+$ moonx fixtures/argparse-example.mbtx
 input=sample.toml
 stdin=true
 ```
@@ -429,6 +600,6 @@ The validation command accepts repeated paths. Explicit arguments replace the
 environment fallback, and empty arguments do not name a file.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/cli.sh multiple-mcp-configuration-files
+$ moonx fixtures/multiple-mcp-configs.mbtx
 first.json, second.json: no servers configured
 ```

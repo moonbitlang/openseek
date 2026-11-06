@@ -1,8 +1,6 @@
 # Use Windows PowerShell without requiring Git Bash or WSL.
 set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 
-export TESTCLI_SHELL := if os() == "windows" { env_var("ProgramFiles") / "Git/bin/bash.exe" } else { "bash" }
-
 default:
     just --list
 
@@ -50,10 +48,10 @@ tui *args:
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
 test: test-moon test-cli test-app-server test-turn-finish test-subagents test-workflows
 
-# Run the offline CLI documentation tests (Git Bash on Windows).
+# Run the offline CLI documentation tests using MoonBit fixtures.
 test-cli:
-    moon testcli test --target native --timeout-ms 300000 tests/cram
-    moon -C openseek_tui testcli test --target native --timeout-ms 300000 tests/cram
+    moon testcli test --timeout-ms 300000 tests/cram
+    moon -C openseek_tui testcli test --timeout-ms 300000 tests/cram
 
 # Verify direct service startup and sibling engine resolution after changing workspace.
 test-app-server:

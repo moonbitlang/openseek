@@ -1,0 +1,78 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  put(
+    "\{dir}/mcp.json",
+    (
+      #|{"mcpServers":{"notes":{"command":"openseek-no-such-mcp-server"}}}
+    ),
+  )
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "serve", "--mcp-config", "mcp.json"],
+    cwd=dir,
+    env={ "DEEPSEEK": "test-key", "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  for line in result.stdout().split("\n") {
+    if line.is_empty() {
+      continue
+    }
+    if @json.parse(line) is { "event": String("mcp_status"), .. } {
+      let marker = "\"event\":\"mcp_status\""
+      guard line.find(marker) is Some(start) &&
+        line.find("\"state\":\"failed\"") is Some(end) else {
+        fail("missing failed MCP state")
+      }
+      println(line[start:end + "\"state\":\"failed\"".length()])
+    }
+  }
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

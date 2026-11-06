@@ -1,11 +1,11 @@
 # Verified `openseek run` Requests and Results
 
-These examples are executed by `moon testcli test --target native tests/cram/run-requests.md`. They drive
+These examples are executed by `moon testcli test tests/cram/run-requests.md`. They drive
 `openseek run --input-format json` through the real binary: one JSON request
 on stdin, the result in `--result-file` (the contract is `docs/run-result.md`).
 The `echo` preset is modelless, and the model-backed cases point at a closed
 local port, so the suite needs no API key and makes no external API calls.
-The [request fixtures](fixtures/run-requests.sh) retain the stdin, timing, and
+The [request fixtures](fixtures/cancel-on-stdin-eof.mbtx) retain the stdin, timing, and
 result-file assertions; each runs in a fresh temporary directory.
 
 ## A Request From a File: stdin EOF Ends the Input
@@ -14,7 +14,7 @@ In batch mode stdin is read through EOF, so a redirected file works and EOF
 never cancels anything. The result echoes the request's id and the preset.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh a-request-from-a-file-stdin-eof-ends-the-input
+$ moonx fixtures/request-from-file.mbtx
 exit 0
 {"version":1,"request_id":"r-1","kind":"echo","status":"completed","output":{"probe":42}}
 ```
@@ -25,7 +25,7 @@ exit 0
 must be the same. A mismatch is refused before anything runs.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh kind-and-the-request-s-kind-must-agree
+$ moonx fixtures/request-kind.mbtx
 exit 0
 {"version":1,"kind":"echo","status":"completed","output":"hi"}
 error: --kind explore does not match the request's kind echo
@@ -36,7 +36,7 @@ exit 1
 ## Requests That Cannot Run Are Refused Up Front
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh requests-that-cannot-run-are-refused-up-front
+$ moonx fixtures/invalid-requests.mbtx
 error: unknown kind: nope
 exit 1
 error: worker input requires an absolute `worker_root`
@@ -71,7 +71,7 @@ A preset names its session only once it records something, so the modelless
 `echo` reports none.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh a-refused-request-still-answers-under-its-id-and-leaves-nothing-behind
+$ moonx fixtures/refused-request-result.mbtx
 error: explore requires a non-empty query
 {"version":1,"request_id":"r-3","status":"failed","reason":"explore requires a non-empty query"}
 no ws
@@ -89,7 +89,7 @@ accepted once; until the child records something (the modelless `echo` never
 does) an accepted marker stays, so the id is not listed as a session. `--claim` needs `--session`, and only a `--kind` run takes it.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh a-claimed-session-is-accepted-once-with-its-token
+$ moonx fixtures/claimed-session.mbtx
 error: a --kind run starts a new session, and p-sr-1 already exists
 exit 1
 error: session p-sr-1 was claimed for another run
@@ -112,7 +112,7 @@ inherited `OPENSEEK_APPROVAL` does not reach it, and an explicit
 failed run.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh a-parent-managed-run-one-line-in-stdin-held-open
+$ moonx fixtures/managed-run.mbtx
 exit 0
 {"version":1,"kind":"echo","status":"completed","output":[1,2]}
 {"version":1,"kind":"echo","status":"completed","output":"inherited"}
@@ -134,7 +134,7 @@ file inside `--result-root`: a path outside it, or an existing file, is
 refused and left untouched.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh a-delegated-run-takes-only-what-its-launch-grants
+$ moonx fixtures/delegated-capabilities.mbtx
 error: argument '--dir' cannot be used multiple times
 error: a delegated run (--cancel-on-stdin-eof) does not take --mcp-config: it gets only what its parent's launch grants
 MCP config ignored: a delegated run starts no MCP servers its parent did not grant
@@ -149,7 +149,7 @@ A malformed `OPENSEEK_MAX_STEPS` does not refuse a request that carries its own
 step ceiling: the environment is parsed only when it would apply.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh a-delegated-run-takes-only-what-its-launch-grants-2
+$ moonx fixtures/request-step-limit.mbtx
 error: an API key is required for deepseek-flash: pass --api-key
 ```
 
@@ -160,7 +160,7 @@ the parent closes stdin after a second. The run is cancelled and its result
 says `interrupted`, with the usage it recorded (none).
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh closing-stdin-cancels-a-managed-run-which-still-reports
+$ moonx fixtures/cancel-on-stdin-eof.mbtx
 exit 1
 {"version":1,"request_id":"r-9","status":"interrupted","reason":"cancelled","usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":0},"steps":0}
 ```
@@ -169,12 +169,12 @@ exit 1
 
 A delegated general run holds the workspace's lease until it ends; a second
 one in the same workspace is refused at once. A parallel writer should be a
-`worker`, which gets its own worktree. (The background request is written by
-`sh -c` rather than a `( … )` subshell: a background bash subshell re-seeks
-this script's stdin when it exits, and the script would run again.)
+`worker`, which gets its own worktree. The MoonBit fixture starts the two child
+processes concurrently and holds the first child's stdin open while the second
+attempts to acquire the lease.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/run-requests.sh one-delegated-general-run-per-workspace
+$ moonx fixtures/workspace-lease.mbtx
 error: another delegated general run is already working in WORKSPACE; run a worker for parallel writes
 {"version":1,"status":"failed","reason":"another delegated general run is already working in WORKSPACE; run a worker for parallel writes"}
 ```

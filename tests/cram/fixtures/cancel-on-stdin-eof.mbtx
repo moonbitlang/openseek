@@ -1,0 +1,81 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  let request =
+    #|{"version":1,"request_id":"r-9","input":{"task":"say hi"}}
+  @async.with_task_group(group => {
+    let child = @process.spawn(
+      group,
+      "moonrun",
+      [
+        engine,
+        "--",
+        "run",
+        "--no-session",
+        "--dir",
+        "\{dir}/ws",
+        "--input-format",
+        "json",
+        "--cancel-on-stdin-eof",
+        "--api-url",
+        "http://127.0.0.1:9/chat/completions",
+        "--result-file",
+        "\{dir}/result.json",
+      ],
+      cwd=dir,
+      stdin=FeedFromParent,
+      stdout=Discard,
+      stderr=Discard,
+      extra_env={
+        "DEEPSEEK": "test-key",
+        "MOON_WORK": "off",
+        "OPENSEEK_RETRY_ATTEMPTS": "20",
+        "OPENSEEK_RETRY_BACKOFF_MS": "500",
+      },
+    )
+    child.stdin.text.write(request + "\n")
+    @async.sleep(1000)
+    child.stdin.close()
+    println("exit \{child.wait()}")
+  })
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/result.json"))
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

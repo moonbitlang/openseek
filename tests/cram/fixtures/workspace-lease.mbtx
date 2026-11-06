@@ -1,0 +1,114 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  @fs.mkdir("\{dir}/ws")
+  let args = [
+    engine,
+    "--",
+    "run",
+    "--no-session",
+    "--dir",
+    "\{dir}/ws",
+    "--input-format",
+    "json",
+    "--cancel-on-stdin-eof",
+    "--api-url",
+    "http://127.0.0.1:9/chat/completions",
+  ]
+  let environment = {
+    "DEEPSEEK": "test-key",
+    "MOON_WORK": "off",
+    "OPENSEEK_RETRY_ATTEMPTS": "20",
+    "OPENSEEK_RETRY_BACKOFF_MS": "500",
+  }
+  @async.with_task_group(group => {
+    let first = @process.spawn(
+      group,
+      "moonrun",
+      [..args, "--result-file", "\{dir}/first.json"],
+      cwd=dir,
+      stdin=FeedFromParent,
+      stdout=Discard,
+      stderr=Discard,
+      extra_env=environment,
+    )
+    first.stdin.text.write(
+      (
+        #|{"version":1,"input":{"task":"first"}}
+        #|
+      ),
+    )
+    @async.sleep(1000)
+
+    let second = @process.spawn(
+      group,
+      "moonrun",
+      [..args, "--result-file", "\{dir}/second.json"],
+      cwd=dir,
+      stdin=FeedFromParent,
+      stdout=Discard,
+      stderr=Collect,
+      extra_env=environment,
+    )
+    second.stdin.text.write(
+      (
+        #|{"version":1,"input":{"task":"second"}}
+        #|
+      ),
+    )
+    let error = second.stderr.text.read_all()
+    assert_eq(second.wait(), 1)
+    second.stdin.close()
+    @stdio.stdout.text.write(
+      error.replace_all(old="\{dir}/ws", new="WORKSPACE"),
+    )
+
+    first.stdin.close()
+    assert_eq(first.wait(), 1)
+  })
+  @stdio.stdout.text.write(
+    @fs.read_text("\{dir}/second.json").replace_all(
+      old="\{dir}/ws",
+      new="WORKSPACE",
+    ),
+  )
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

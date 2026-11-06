@@ -1,0 +1,82 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
+  let json = [..base, "--input-format", "json"]
+  let result_args = ["--result-file", "\{dir}/result.json"]
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", ..json, "--kind", "echo", ..result_args],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(
+      (
+        #|{"version":1,"input":"hi"}
+      ),
+    ),
+  ).output()
+  println("exit \{result.exit_code()}")
+  report_file(dir)
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", ..json, "--kind", "explore", ..result_args],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(
+      (
+        #|{"version":1,"kind":"echo","input":"hi"}
+      ),
+    ),
+  ).output()
+  emit(result.stderr())
+  println("exit \{result.exit_code()}")
+  report_file(dir)
+}
+
+///|
+async fn emit(text : String) -> Unit {
+  @stdio.stdout.text.write(text)
+}
+
+///|
+async fn report_file(dir : String) -> Unit {
+  emit(@fs.read_text("\{dir}/result.json"))
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

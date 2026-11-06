@@ -1,0 +1,122 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let scratch = "\{dir}/session/scratch"
+  @fs.mkdir(scratch, recursive=true)
+  let work = "\{scratch}/component-work/authored"
+  let init = build("\{root}/share/artifact/init.mbtx")
+  let write = build("\{root}/share/artifact/write.mbtx")
+  let init_args = [scratch, "\{root}/share/artifact/rabbita", "authored"]
+  assert_eq(
+    @shell.Cmd(
+      "moonrun",
+      [init, "--", ..init_args],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(""),
+    )
+    .output()
+    .exit_code(),
+    0,
+  )
+  assert_true(@fs.exists("\{work}/bridge.mbt"))
+  assert_false(@fs.exists("\{work}/_build"))
+  assert_false(@fs.exists("\{work}/.mooncakes"))
+
+  let staged = "\{scratch}/staged-sources/data.json"
+  let data =
+    #|{"value": 2}
+  put(staged, data)
+  let written = @shell.Cmd(
+    "moonrun",
+    [write, "--", scratch, work, "data/input.json", staged],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  assert_eq(written.exit_code(), 0)
+  assert_eq(@fs.read_text("\{work}/data/input.json"), data)
+  println("initialized project and wrote staged data")
+
+  assert_eq(
+    @shell.Cmd(
+      "moonrun",
+      [init, "--", ..init_args],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(""),
+    )
+    .output()
+    .exit_code(),
+    1,
+  )
+  assert_eq(@fs.read_text("\{work}/data/input.json"), data)
+  println("reinitialization refused; existing data preserved")
+
+  let outside_project = "\{dir}/outside-scratch"
+  @fs.mkdir(outside_project)
+  let outside = @shell.Cmd(
+    "moonrun",
+    [write, "--", scratch, outside_project, "main.mbt", staged],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  expected_failure(
+    outside, "project must be a working directory inside session scratch",
+  )
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+fn expected_failure(result : @shell.Output, message : String) -> Unit raise {
+  assert_eq(result.exit_code(), 1)
+  assert_eq(result.stdout(), "")
+  assert_true(result.stderr().contains(message))
+  println(message)
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

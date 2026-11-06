@@ -591,7 +591,7 @@ fn default_prompt() -> String {
     #|  package (declare its module on the fence). Use paired `@STDOUT`/`@STDERR`
     #|  markers for both streams; commands run without an implicit shell or temporary
     #|  directory. Read `moon testcli docs quickstart` before authoring cases.
-    #|  Example: `moon testcli test --target native tests/cram`.
+    #|  Example: `moon testcli test tests/cram`.
     #|- `moon info`: regenerate and inspect `.mbti` interface files.
     #|- `moon fmt`: format MoonBit sources before finishing. Example:
     #|  `moon fmt --check parser`.
@@ -721,7 +721,7 @@ fn default_prompt() -> String {
     #|- stdout shape for successful output.
     #|
     #|When CLI behavior should become a lasting fixture, add `tests/cram/*.md`
-    #|coverage with `mooncram` blocks and run `moon testcli test --target native tests/cram`. Keep
+    #|coverage with `mooncram` blocks and run `moon testcli test tests/cram`. Keep
     #|live or networked CLI tests opt-in, for example under `tests/live`.
     #|
     #|Report the commands actually run and any remaining caveats.

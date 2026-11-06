@@ -1,0 +1,79 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let ui = build("\{root}/cmd/openseek_tui")
+  let store = "\{dir}/store"
+  let session = "\{store}/sessions/demo"
+  @fs.mkdir(session, recursive=true)
+  @fs.write_text(
+    "\{session}/openseek_session-demo.jsonl",
+    (
+      #|{"version":1,"id":"demo","system_prompt":"system"}
+      #|
+    ),
+    create_mode=CreateNew,
+  )
+  let args = [
+    "--session", "demo", "--session-root", store, "--system-prompt-file", "prompt.md",
+  ]
+  let result = @shell.Cmd(
+    "moonrun",
+    [ui, "--", ..args],
+    cwd=dir,
+    env={
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "DEEPSEEK": "test-key",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 1)
+  assert_eq(result.stdout(), "")
+  @stdio.stdout.text.write(
+    result
+    .stderr()
+    .replace(
+      old="--dir \{dir} --session-root \{store}",
+      new="--dir <workspace> --session-root <root>",
+    ),
+  )
+  println("status=\{result.exit_code()}")
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

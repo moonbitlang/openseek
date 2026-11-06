@@ -1,0 +1,112 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  let args = [
+    engine,
+    "--",
+    "run",
+    "--no-session",
+    "--dir",
+    "\{dir}/ws",
+    "--input-format",
+    "json",
+    "--cancel-on-stdin-eof",
+  ]
+  let requests = [
+    (
+      #|{"version":1,"kind":"echo","input":[1,2]}
+    ),
+    (
+      #|{"version":1,"kind":"echo","input":"inherited"}
+    ),
+  ]
+  for index, request in requests {
+    let environment = { "MOON_WORK": "off" }
+    if index == 1 {
+      environment["OPENSEEK_APPROVAL"] = "ask"
+    }
+    @async.with_task_group(group => {
+      let child = @process.spawn(
+        group,
+        "moonrun",
+        [..args, "--result-file", "\{dir}/result.json"],
+        cwd=dir,
+        stdin=FeedFromParent,
+        stdout=Discard,
+        stderr=Discard,
+        extra_env=environment,
+      )
+      child.stdin.text.write(request + "\n")
+      @async.sleep(1000)
+      child.stdin.close()
+      let code = child.wait()
+      assert_eq(code, 0)
+      if index == 0 {
+        println("exit \{code}")
+      }
+    })
+    @stdio.stdout.text.write(@fs.read_text("\{dir}/result.json"))
+  }
+  let refused = @shell.Cmd(
+    "moonrun",
+    [..args, "--approval", "always"],
+    cwd=dir,
+    stdin=Text(
+      (
+        #|{"version":1,"kind":"echo","input":0}
+        #|
+      ),
+    ),
+  ).output()
+  assert_eq(refused.exit_code(), 1)
+  @stdio.stdout.text.write(refused.stderr())
+
+  let empty = @shell.Cmd(
+    "moonrun",
+    [..args, "--result-file", "\{dir}/result.json"],
+    cwd=dir,
+    stdin=Text(""),
+  ).output()
+  @stdio.stdout.text.write(empty.stderr())
+  println("exit \{empty.exit_code()}")
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/result.json"))
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

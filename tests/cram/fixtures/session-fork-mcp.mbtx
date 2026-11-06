@@ -1,0 +1,116 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  put(
+    "\{dir}/sessions/demo/openseek_session-demo.jsonl",
+    (
+      #|{"version":1,"id":"demo","system_prompt":"system"}
+      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+      #|{"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
+      #|
+    ),
+  )
+  put(
+    "\{dir}/mcp.json",
+    (
+      #|{"mcpServers":{"tracker":{"command":"tracker-mcp"},"host":{"url":"${OPENSEEK_CRAM_UNSET_URL}"}}}
+    ),
+  )
+  let result = @shell.Cmd(
+    "moonrun",
+    [
+      engine,
+      "--",
+      "sessions",
+      "fork",
+      "demo",
+      "--as",
+      "with-mcp",
+      "--session-root",
+      dir,
+      "--mcp-config",
+      "\{dir}/mcp.json",
+    ],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  let session = show_session(engine, dir, "with-mcp")
+  guard session is { "system_prompt": String(prompt), .. } else {
+    fail("missing system prompt")
+  }
+  let wanted = "Configured MCP servers: `tracker`, `host`"
+  assert_true(prompt.contains(wanted))
+  println(wanted)
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn show_session(engine : String, dir : String, id : String) -> Json {
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "sessions", "show", id, "--session-root", dir],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  @json.parse(result.stdout())
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

@@ -1,0 +1,134 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let project = "\{dir}/session/scratch/app"
+  let output = "\{dir}/session/scratch/artifact"
+  let manifest =
+    #|name = "example/artifact"
+    #|version = "0.0.0"
+  let package_config =
+    #|pkgtype(kind: "executable")
+    #|options(link: { "js": { "format": "iife" } })
+  let source =
+    #|fn main { println("The application has loaded") }
+  put("\{project}/moon.mod", manifest)
+  put("\{project}/moon.pkg", package_config)
+  put("\{project}/main.mbt", source)
+  let builder = build("\{root}/share/artifact/build.mbtx")
+
+  let original_page = publish(builder, project, output, dir, "chart-v1.html")
+  let template =
+    #|<!doctype html><html><head><style>.answer{padding:1rem}</style></head>
+    #|<body><div id="app"></div><!-- openseek:script --></body></html>
+  let source =
+    #|fn main { println("</ScRiPt><p>Still application data</p>") }
+  put("\{project}/index.html", template)
+  put("\{project}/main.mbt", source)
+
+  let page = publish(builder, project, output, dir, "answer-v2.html")
+  assert_true(page.contains("<div id=\"app\"></div><script>"))
+  assert_true(page.contains(".answer{padding:1rem}"))
+  assert_true(page.contains("<\\/ScRiPt>"))
+  assert_false(page.contains("<!-- openseek:script -->"))
+
+  let restored = "\{dir}/restored-app"
+  copy_tree("\{output}/answer-v2.html.source", restored)
+  @fs.rmdir(project, recursive=true)
+  let result = @shell.Cmd(
+    "moonrun",
+    [builder, "--", restored, output, "answer-v3.html"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  emit(result.stdout())
+  assert_true(@fs.exists("\{output}/answer-v3.html"))
+  assert_eq(@fs.read_text("\{output}/chart-v1.html"), original_page)
+}
+
+///|
+async fn emit(text : String) -> Unit {
+  @stdio.stdout.text.write(text)
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn copy_tree(source : String, destination : String) -> Unit {
+  @fs.mkdir(destination, recursive=true)
+  for name in @fs.readdir(source, include_hidden=true) {
+    let src = "\{source}/\{name}"
+    let dest = "\{destination}/\{name}"
+    if @fs.kind(src) is Directory {
+      copy_tree(src, dest)
+    } else {
+      @fs.write_binary(dest, @fs.read_binary(src), create_mode=CreateNew)
+    }
+  }
+}
+
+///|
+async fn publish(
+  build : String,
+  project : String,
+  output : String,
+  dir : String,
+  name : String,
+) -> String {
+  let result = @shell.Cmd(
+    "moonrun",
+    [build, "--", project, output, name],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  emit(result.stdout())
+  @fs.read_text("\{output}/\{name}")
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

@@ -1,0 +1,63 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "serve"],
+    cwd=dir,
+    env={ "DEEPSEEK": "test-key", "MOON_WORK": "off" },
+    stdin=Text(
+      (
+        #|{"command":"reboot"}
+        #|{"command":"cancel"}
+        #|
+      ),
+    ),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  for line in result.stdout().split("\n") {
+    if line.is_empty() {
+      continue
+    }
+    if @json.parse(line) is { "event": String("command_error"), .. } {
+      println("\"event\":\"command_error\"")
+    }
+  }
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

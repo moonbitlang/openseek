@@ -20,21 +20,21 @@ In OpenSeek, the equivalent of the first example below is:
 {"filename":"@builtin/read.mbtx","args":["sample.mbt"]}
 ```
 
-These tests run the script directly with `moonx`; they verify its text
+These MoonBit fixtures build and run the actual script; they verify its text
 output and exit status. The [mbtx package tests](../../agent_tool/mbtx/read_workflow_test.mbt)
 cover execution through the tool, including sandbox and output-limit behavior.
 See [Writing CLI documentation tests](README.md) to add examples for another script.
 
 ## Set up the examples
 
-The [read fixture](fixtures/read-workflow.sh) creates fresh inputs for every
+The [read fixture](fixtures/read-workflow.mbtx) creates fresh inputs for every
 case: `sample.mbt` contains `first`, `selected`, and `last`, with a trailing
 newline; `note.txt` contains `whole file` without a newline; `empty.txt` is empty;
 `dir` is a directory; `log:12` contains `kept`; and `--weird` contains `dash`.
 
 Each named scenario invokes the actual `read.mbtx` with the selectors described
-below. [The fixture runner](../cli-fixture.mbtx) owns the temporary directory and
-removes it after the case. No files or shell variables persist between cases.
+below. It owns the temporary directory and removes it after the case. Each case
+starts with fresh files.
 
 ## Read a whole file
 
@@ -49,7 +49,7 @@ footer. The footer fields describe the selected output:
 | `truncated` | Whether the output budget prevented the full selected range from being shown. |
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh sample.mbt
+$ moonx fixtures/read-workflow.mbtx sample.mbt
 === "sample.mbt" ===
 1 |first
 2 |selected
@@ -64,7 +64,7 @@ Selectors are `path`, `path:start`, or `path:start:end`; lines are 1-based
 and both ends are included.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh sample.mbt:2:3
+$ moonx fixtures/read-workflow.mbtx sample.mbt:2:3
 === "sample.mbt" ===
 2 |selected
 3 |last
@@ -72,7 +72,7 @@ $ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh sample.mbt:2:3
 ```
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh sample.mbt:3
+$ moonx fixtures/read-workflow.mbtx sample.mbt:3
 === "sample.mbt" ===
 3 |last
 4 |
@@ -87,7 +87,7 @@ a range on one file does not affect the next. Batch the paths you already know
 into a single call rather than calling once per file.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh sample.mbt:2:3 note.txt
+$ moonx fixtures/read-workflow.mbtx sample.mbt:2:3 note.txt
 === "sample.mbt" ===
 2 |selected
 3 |last
@@ -101,7 +101,7 @@ The same path may appear more than once, which is how two distant regions of
 one file arrive together:
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh sample.mbt:1:1 sample.mbt:3
+$ moonx fixtures/read-workflow.mbtx sample.mbt:1:1 sample.mbt:3
 === "sample.mbt" ===
 1 |first
 <system>start_line=1 shown_lines=1 total_lines=4 truncated=false</system>
@@ -117,7 +117,7 @@ A range beyond the end is not an error: the footer reports what the file
 holds. An empty file says so explicitly.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh sample.mbt:10:20 empty.txt
+$ moonx fixtures/read-workflow.mbtx sample.mbt:10:20 empty.txt
 === "sample.mbt" ===
 <system>start_line=10 shown_lines=0 total_lines=4 truncated=false</system>
 === "empty.txt" ===
@@ -130,7 +130,7 @@ A missing file reports its error under its own heading; the files after it
 are still returned, and the call exits 1 so the tool reports it as an error.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh absent.txt note.txt
+$ moonx fixtures/read-workflow.mbtx absent.txt note.txt
 === "absent.txt" ===
 error reading file: "@fs.kind(): \"absent.txt\": No such file or directory"
 === "note.txt" ===
@@ -142,7 +142,7 @@ error reading file: "@fs.kind(): \"absent.txt\": No such file or directory"
 A directory is refused with the way to list it instead.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh dir
+$ moonx fixtures/read-workflow.mbtx dir
 === "dir" ===
 error reading file: "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files"
 [1]
@@ -155,24 +155,24 @@ way needs `--literal`. This fixture uses Unix filename rules; Windows reserves
 the colon, so it is not a portable literal-filename example.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh log:12
+$ moonx fixtures/read-workflow.mbtx log:12
 === "log" ===
 error reading file: "@fs.kind(): \"log\": No such file or directory"
 [1]
 ```
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh --literal log:12
+$ moonx fixtures/read-workflow.mbtx --literal log:12
 === "log:12" ===
 1 |kept
 <system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>
 ```
 
-A name starting with `--` needs two separators: the first `--` ends `moonx`
-option parsing, and the second is passed to `read.mbtx` to end its option parsing.
+A name starting with `--` needs a preceding `--` separator. The fixture forwards
+arguments unchanged, so this separator ends option parsing in `read.mbtx`.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh -- -- --weird
+$ moonx fixtures/read-workflow.mbtx -- --weird
 === "--weird" ===
 1 |dash
 <system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>
@@ -188,7 +188,7 @@ smaller range to continue. Truncation is a successful read, so there is no
 Nine bytes fit the first line (`1 |first`) but not the next line's gutter:
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh --max-output-bytes 9 sample.mbt
+$ moonx fixtures/read-workflow.mbtx --max-output-bytes 9 sample.mbt
 === "sample.mbt" ===
 1 |first
 <system>start_line=1 shown_lines=1 total_lines=4 truncated=true</system>
@@ -199,7 +199,7 @@ A budget can also cut a line short. Five bytes leave room for the gutter
 Cuts preserve UTF-8 character boundaries.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh --max-output-bytes 5 sample.mbt
+$ moonx fixtures/read-workflow.mbtx --max-output-bytes 5 sample.mbt
 === "sample.mbt" ===
 1 |fi
 <system>start_line=1 shown_lines=1 total_lines=4 truncated=true</system>
@@ -210,19 +210,19 @@ $ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh --max-output-bytes 5 sa
 Argument errors name what was wrong and exit 1 before any file is read.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh sample.mbt:5:4
+$ moonx fixtures/read-workflow.mbtx sample.mbt:5:4
 error: read expected path:start:end with end >= start (inclusive, 1-based)
 [1]
 ```
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh --unknown
+$ moonx fixtures/read-workflow.mbtx --unknown
 error: read unknown option; use --help or -- before a filename starting with --
 [1]
 ```
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx -- fixtures/read-workflow.sh --help
+$ moonx fixtures/read-workflow.mbtx --help
 Usage: mbtx(filename="@builtin/read.mbtx", args=["path", "path:start", "path:start:end"])
 Ranges are inclusive and 1-based. --max-output-bytes N sets each file's UTF-8 body budget (default 12000, maximum 50000). The batch is bounded to 40000 UTF-8 bytes; use smaller batches/ranges when truncated. --literal PATH reads a path without interpreting colon suffixes. -- ends option parsing. Relative paths use cwd (default workspace).
 ```

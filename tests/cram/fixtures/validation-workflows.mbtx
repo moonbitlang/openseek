@@ -1,0 +1,136 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  put(
+    "\{dir}/moon.mod",
+    (
+      #|name = "example/workflow_docs"
+      #|
+    ),
+  )
+  put("\{dir}/moon.pkg", "")
+  put(
+    "\{dir}/answer.mbt",
+    (
+      #|///|
+      #|pub fn answer() -> Int {42}
+      #|
+    ),
+  )
+  put(
+    "\{dir}/answer_test.mbt",
+    (
+      #|///|
+      #|test "answer" { assert_eq(@workflow_docs.answer(), 42) }
+      #|
+    ),
+  )
+  let commands : Map[String, String] = Map([])
+  for name in ["check", "test", "check-test", "info-fmt", "check-json"] {
+    let script = build("\{root}/share/workflow/\{name}.mbtx")
+    commands[name] = script
+    let result = @shell.Cmd(
+      "moonrun",
+      [script, "--"],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(""),
+    ).output()
+    assert_eq(result.exit_code(), 0)
+    emit(result.stdout())
+    if name == "info-fmt" {
+      for line in @fs.read_text("\{dir}/pkg.generated.mbti").split("\n") {
+        if line.has_prefix("pub fn") {
+          println(line)
+        }
+      }
+      emit(@fs.read_text("\{dir}/answer.mbt"))
+    }
+  }
+  put(
+    "\{dir}/answer.mbt",
+    (
+      #|///|
+      #|pub fn answer() -> Int { "wrong" }
+      #|
+    ),
+  )
+  for name in ["check", "check-test"] {
+    guard commands.get(name) is Some(cmd) else {
+      fail("missing validation command")
+    }
+    let result = @shell.Cmd(
+      "moonrun",
+      [cmd, "--"],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(""),
+    ).output()
+    assert_eq(result.exit_code(), 1)
+    assert_eq(result.stdout(), "")
+    println(last_line(result.stderr()))
+  }
+}
+
+///|
+async fn emit(text : String) -> Unit {
+  @stdio.stdout.text.write(text)
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+fn last_line(text : String) -> String {
+  text
+  .trim_end(chars="\n")
+  .split("\n")
+  .collect()
+  .last()
+  .unwrap_or("")
+  .to_owned()
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

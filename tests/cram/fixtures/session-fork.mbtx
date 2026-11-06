@@ -1,0 +1,169 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  put(
+    "\{dir}/sessions/demo/openseek_session-demo.jsonl",
+    (
+      #|{"version":1,"id":"demo","system_prompt":"system"}
+      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+      #|{"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
+      #|{"sequence":3,"ts":0,"item":{"kind":"user","payload":{"content":"go on"}}}
+      #|
+    ),
+  )
+  let result = @shell.Cmd(
+    "moonrun",
+    [
+      engine, "--", "sessions", "fork", "demo", "--as", "retry", "--session-root",
+      dir,
+    ],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  emit(result.stdout())
+  let session = show_session(engine, dir, "retry")
+  guard session is { "events": Array(events), .. } else {
+    fail("missing session events")
+  }
+  for event in events {
+    guard event is { "item": { "kind": String(kind), .. }, .. } else {
+      fail("missing event kind")
+    }
+    println(kind)
+  }
+  assert_true(session.stringify().contains("sessions/retry/scratch"))
+  println("sessions/retry/scratch")
+  for extra in [["--as", "retry"], ["--as", "early", "--through", "1"]] {
+    let failure = @shell.Cmd(
+      "moonrun",
+      [engine, "--", "sessions", "fork", "demo", ..extra, "--session-root", dir],
+      cwd=dir,
+      env={
+        "DEEPSEEK": "",
+        "KIMI": "",
+        "OPENSEEK_MODEL": "deepseek-flash",
+        "MOON_WORK": "off",
+      },
+      stdin=Text(""),
+    ).output()
+    assert_true(failure.exit_code() != 0)
+    emit(failure.stderr())
+    println("exit-non-zero")
+  }
+  session_ids(engine, dir, ["--session-root", dir])
+}
+
+///|
+async fn emit(text : String) -> Unit {
+  @stdio.stdout.text.write(text)
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn session_ids(
+  engine : String,
+  dir : String,
+  args : Array[String],
+  normalize~ : Bool = false,
+) -> Unit {
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "sessions", "list", ..args],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  let ids = result
+    .stdout()
+    .split("\n")
+    .filter_map(line => {
+      if line.is_empty() {
+        None
+      } else {
+        Some(line.split("\t").next().unwrap_or("").to_owned())
+      }
+    })
+    .collect()
+  ids.sort()
+  for id in ids {
+    println(if normalize && id.has_prefix("cli-") { "cli-<stamp>" } else { id })
+  }
+}
+
+///|
+async fn show_session(engine : String, dir : String, id : String) -> Json {
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "sessions", "show", id, "--session-root", dir],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  @json.parse(result.stdout())
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

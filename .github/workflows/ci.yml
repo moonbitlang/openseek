@@ -153,8 +153,8 @@ jobs:
       - name: testcli (offline CLI docs)
         if: matrix.target == 'native'
         run: |
-          moon testcli test --target native --timeout-ms 300000 tests/cram
-          moon -C openseek_tui testcli test --target native --timeout-ms 300000 tests/cram
+          moon testcli test --timeout-ms 300000 tests/cram
+          moon -C openseek_tui testcli test --timeout-ms 300000 tests/cram
 
       - name: App-server launch, turn lifecycle and subagents (offline CLI)
         if: matrix.target == 'native'

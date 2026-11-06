@@ -1,0 +1,77 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  let request : Json = {
+    "command": "prompt",
+    "content": "Use the mbtx tool to run a snippet that prints exactly: openseek-cram. Then call finish with the word done.",
+  }
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "serve", "--model", "deepseek-flash", "--max-steps", "6"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(request.stringify() + "\n"),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  let values : Array[Json] = []
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() {
+      values.push(@json.parse(line))
+    }
+  }
+  let mut used_mbtx = false
+  let mut mbtx_output_seen = false
+  for value in values {
+    if value
+      is {
+        "event": String("tool_result"),
+        "tool_name": String("mbtx"),
+        "content": String(out),
+        ..
+      } {
+      used_mbtx = true
+      if out.contains("openseek-cram") {
+        mbtx_output_seen = true
+      }
+    }
+  }
+  println("used_mbtx=\{used_mbtx}")
+  println("mbtx_output_seen=\{mbtx_output_seen}")
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

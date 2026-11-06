@@ -16,14 +16,14 @@ moon testcli check tests/cram
 moon -C openseek_tui testcli check tests/cram
 
 # One document while editing.
-moon testcli test --target native tests/cram/read-workflow.md
+moon testcli test tests/cram/read-workflow.md
 
 # All offline CLI documentation tests; also included in just test and native CI.
 just test-cli
 ```
 
-Local executable cases require `--target native`; `.mbtx` cases always run as
-Wasm. The TUI suite starts in its own module because fence module declarations
+Local executable cases and `.mbtx` scripts use testcli's default Wasm backend.
+The TUI suite starts in its own module because fence module declarations
 must match the `moon.mod` in testcli's startup directory. First builds may download
 package dependencies. Tests make no external model API calls.
 
@@ -45,25 +45,20 @@ fence, or an exact remote package version. Commands occupy one source line.
    markers, using `(empty)` or `(ignore)` where appropriate. Direct cases do
    not accept `2>&1`. Use exact output for stable values and narrow `(glob)` or
    `(regex)` patterns for variable fields.
-4. For scenarios needing shell pipelines, fixture creation, or process control,
-   add a named scenario under `fixtures/` and invoke `../cli-fixture.mbtx`.
-   `--package ../..` builds the engine; TUI scenarios use
-   `--package ../../cmd/openseek_tui`. The runner adds only that build's executable
-   directory to PATH, creates a fresh working directory and nested TMPDIR, and
-   removes them after the scenario. `$TESTDIR` is the Markdown directory.
-   Scenario files contain shell code, while testcli owns output matching and
-   the case's exit status. Stateful workflows run as a single scenario and
-   explicitly assert each intermediate command's status.
+4. For cases needing temporary files or process control, add one standalone
+   `.mbtx` under `fixtures/`, named after the behavior being tested. Invoke it
+   directly, for example `moonx fixtures/cancel-on-stdin-eof.mbtx`.
+   Put setup, the command, and assertions together in that script, and clean up
+   temporary directories with `defer`. Use `@shell.Cmd` for ordinary process
+   calls; use `@process` pipes when stdin timing is the behavior under test.
+   Keep simple commands and pipelines directly in the document.
 5. Run `check`, then `test`, review the output, and link the guide from usage docs.
    New Markdown files under this directory are discovered by the recipe and CI.
 
-The TUI's `tests/cli-fixture.mbtx` is a symlink to the shared runner. The publishing
-script materializes it when staging the standalone module.
-
-On Windows, `just test-cli` exports `TESTCLI_SHELL` pointing at Git for Windows'
-Bash. Override it with `just "TESTCLI_SHELL=D:/Git/bin/bash.exe" test-cli` for a
-custom installation. This selects the fixture shell only: Unix filenames and
-OS error text still make some cases platform-specific. CI runs this suite on Linux.
+The scripts use MoonBit's standard library and need no Bash or sh interpreter.
+Each script can be built on its own, including in the standalone TUI release.
+Unix filenames and OS error text still make some cases platform-specific; CI
+runs this suite on Linux.
 
 Use ordinary `sh` fences for commands the reader should run. Read the toolchain's
 embedded reference with `moon testcli docs commands`, `moon testcli docs expectations`,
@@ -74,10 +69,10 @@ and `moon testcli docs execution` when adding a new kind of case.
 For an intentional output change, preview the update, then apply and review it:
 
 ```sh
-moon testcli update --target native --timeout-ms 300000 tests/cram/read-workflow.md --dry-run
-moon testcli update --target native --timeout-ms 300000 tests/cram/read-workflow.md
+moon testcli update --timeout-ms 300000 tests/cram/read-workflow.md --dry-run
+moon testcli update --timeout-ms 300000 tests/cram/read-workflow.md
 git diff -- tests/cram/read-workflow.md
-moon testcli test --target native tests/cram/read-workflow.md
+moon testcli test tests/cram/read-workflow.md
 ```
 
 `update` writes the original Markdown files directly and may normalize passing

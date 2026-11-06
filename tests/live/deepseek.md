@@ -6,22 +6,16 @@ the offline suite can run in CI without credentials, while these are opt-in:
 
 ```bash
 export DEEPSEEK=sk-...            # a real provider API key
-moon testcli test --target native tests/live --timeout-ms 300000
+moon testcli test tests/live --timeout-ms 300000
 ```
 
 `openseek run` prints its answer for a person. The machine-readable
 stream is `openseek serve`: fed one `prompt` command on stdin, it runs that
 turn, exits at stdin EOF, and writes one JSON object per line (JSONL) to
-stdout. Instead of an
-external tool such as `jq`, we parse that log with MoonBit itself: the published
-[`moonbitlang/jsonl`](https://mooncakes.io/docs/moonbitlang/jsonl) package reads stdin
-and hands back typed `Json` values, so the assertions are plain MoonBit `is`
-pattern matches. Its `read_stdin` helper encapsulates `moonbitlang/async/stdio`,
-so each script imports only `moonbitlang/jsonl` plus `moonbitlang/async` — the
-latter is unavoidable because `async fn main` requires it. The `grep '='` only
-drops `moon`'s own dependency-resolution chatter, not any log content.
+stdout. The MoonBit fixture captures that stream, parses each line into a `Json`
+value, and uses pattern matching to inspect usage, lifecycle, and tool events.
 
-The [live fixtures](fixtures/deepseek.sh) run in fresh temporary directories.
+The [live fixtures](fixtures/) run in fresh temporary directories.
 They remain opt-in and are excluded from `just test-cli` and CI.
 
 Every example gives the cheap Flash model a trivial, self-contained task and a
@@ -53,7 +47,7 @@ invoked the `finish` tool with the requested answer (`finished_with_DONE`). The
 count, and a `=~ re"…"` regex match for the answer text.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/deepseek.sh a-real-round-trip-that-finishes
+$ moonx fixtures/round-trip.mbtx
 real_api_round_trip=true
 finished_with_DONE=true
 ```
@@ -71,7 +65,7 @@ run, and asserting the full set would break every time the engine grows a new
 event kind.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/deepseek.sh the-expected-lifecycle-events-appear
+$ moonx fixtures/lifecycle.mbtx
 events={agent_step, usage, agent_finished}
 ```
 
@@ -82,7 +76,7 @@ match the event tag and bind the answer at once, pulling the value straight out
 of the log — here it is exactly what we asked the model to finish with.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/deepseek.sh pulling-a-value-out-of-a-record
+$ moonx fixtures/final-answer.mbtx
 final_answer=DONE
 ```
 
@@ -95,7 +89,7 @@ its `tool_name`, and use a regex on its `content` to confirm the snippet really
 ran and its output flowed back.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx --package ../.. fixtures/deepseek.sh watching-the-agent-use-a-tool
+$ moonx fixtures/tool-result.mbtx
 used_mbtx=true
 mbtx_output_seen=true
 ```

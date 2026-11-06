@@ -1,0 +1,127 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
+  let echo =
+    #|{"version":1,"kind":"echo","input":0}
+    #|
+  @fs.mkdir("\{dir}/ws")
+  put(
+    "\{dir}/store/sessions/p-sr-1/claim.json",
+    (
+      #|{"sha256":"46e9bc3476c92ea24fb17adac6cd9cdacff7a34a5c753100787da5a29984f836"}
+    ),
+  )
+  let claimed = ["--session", "p-sr-1", "--session-root", "\{dir}/store"]
+  for
+    args in [
+      claimed,
+      [..claimed, "--claim", "t-2"],
+      [..claimed, "--claim", "t-1"],
+    ] {
+    let result = @shell.Cmd(
+      "moonrun",
+      [
+        engine,
+        "--",
+        "run",
+        "--input-format",
+        "json",
+        "--dir",
+        "\{dir}/ws",
+        ..args,
+      ],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(echo),
+    ).output()
+    emit(result.stderr())
+    println("exit \{result.exit_code()}")
+  }
+  for name in @fs.readdir("\{dir}/store/sessions/p-sr-1", sort=true) {
+    println(name)
+  }
+  for
+    args in [[..claimed, "--claim", "t-1"], ["--no-session", "--claim", "t-1"]] {
+    let result = @shell.Cmd(
+      "moonrun",
+      [
+        engine,
+        "--",
+        "run",
+        "--input-format",
+        "json",
+        "--dir",
+        "\{dir}/ws",
+        ..args,
+      ],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(echo),
+    ).output()
+    emit(result.stderr())
+    println("exit \{result.exit_code()}")
+  }
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", ..base, "--claim", "t-1", "words"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 1)
+  emit(result.stderr())
+}
+
+///|
+async fn emit(text : String) -> Unit {
+  @stdio.stdout.text.write(text)
+}
+
+///|
+async fn put(path : String, text : String) -> Unit {
+  @fs.mkdir(
+    @path.Path(path).dirname().to_string(),
+    recursive=true,
+    allow_exist=true,
+  )
+  @fs.write_text(path, text, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

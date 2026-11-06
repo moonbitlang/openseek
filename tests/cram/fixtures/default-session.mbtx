@@ -1,0 +1,104 @@
+---
+import {
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "run", "--api-url", ClosedEndpoint, "say hi"],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_RETRY_ATTEMPTS": "1",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_true(result.exit_code() != 0)
+  println("exit-non-zero")
+  println(
+    result
+    .stderr()
+    .split("\n")
+    .filter(line => line.has_prefix("session cli-"))
+    .count(),
+  )
+  println(@utf8.encode(result.stdout()).length())
+  session_ids(engine, dir, [], normalize=true)
+}
+
+///|
+const ClosedEndpoint = "http://127.0.0.1:9/chat/completions"
+
+///|
+async fn session_ids(
+  engine : String,
+  dir : String,
+  args : Array[String],
+  normalize~ : Bool = false,
+) -> Unit {
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", "sessions", "list", ..args],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "",
+      "KIMI": "",
+      "OPENSEEK_MODEL": "deepseek-flash",
+      "MOON_WORK": "off",
+    },
+    stdin=Text(""),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  let ids = result
+    .stdout()
+    .split("\n")
+    .filter_map(line => {
+      if line.is_empty() {
+        None
+      } else {
+        Some(line.split("\t").next().unwrap_or("").to_owned())
+      }
+    })
+    .collect()
+  ids.sort()
+  for id in ids {
+    println(if normalize && id.has_prefix("cli-") { "cli-<stamp>" } else { id })
+  }
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}

@@ -13,7 +13,7 @@ Run this document from the repository root:
 moon testcli test tests/cram/validation-workflows.md --timeout-ms 300000
 ```
 
-The [validation fixture](fixtures/validation-workflows.sh) creates a temporary
+The [validation fixture](fixtures/validation-workflows.mbtx) creates a temporary
 project with a compact `answer` function and one passing test. It runs the actual
 scripts, checks every command's exit status, and removes the fixture directory
 when finished. No model or credentials are needed.
@@ -35,7 +35,7 @@ stderr lines identify the failed check; the latter script prints no test summary
 The glob matches only the runtime source location and compiler exit code.
 
 ```mooncram
-$ moonx ../cli-fixture.mbtx fixtures/validation-workflows.sh
+$ moonx fixtures/validation-workflows.mbtx
 Total tests: 1, passed: 1, failed: 0.
 Total tests: 1, passed: 1, failed: 0.
 pub fn answer() -> Int32

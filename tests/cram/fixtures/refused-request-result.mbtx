@@ -1,0 +1,96 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/path",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
+  defer @fs.rmdir(temporary, recursive=true)
+  let dir = @fs.realpath(temporary)
+  let engine = build(root)
+  let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
+  let json = [..base, "--input-format", "json"]
+  let result_args = ["--result-file", "\{dir}/result.json"]
+  let echo =
+    #|{"version":1,"kind":"echo","input":0}
+    #|
+  let result = @shell.Cmd(
+    "moonrun",
+    [engine, "--", ..json, ..result_args],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(
+      (
+        #|{"version":1,"request_id":"r-3","kind":"explore","input":{}}
+      ),
+    ),
+  ).output()
+  assert_eq(result.exit_code(), 1)
+  emit(result.stderr())
+  report_file(dir)
+  assert_false(@fs.exists("\{dir}/ws"))
+  println("no ws")
+  let result = @shell.Cmd(
+    "moonrun",
+    [
+      engine,
+      "--",
+      "run",
+      "--input-format",
+      "json",
+      "--session",
+      "s-echo",
+      "--session-root",
+      "\{dir}/sessions",
+      "--dir",
+      "\{dir}/ws",
+      ..result_args,
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(echo),
+  ).output()
+  assert_eq(result.exit_code(), 0)
+  report_file(dir)
+}
+
+///|
+async fn emit(text : String) -> Unit {
+  @stdio.stdout.text.write(text)
+}
+
+///|
+async fn report_file(dir : String) -> Unit {
+  emit(@fs.read_text("\{dir}/result.json"))
+}
+
+///|
+async fn build(path : String) -> String {
+  let cwd = if @fs.kind(path) is Directory {
+    path
+  } else {
+    @path.Path(path).dirname().to_string()
+  }
+  let result = @shell.Cmd(
+    "moon",
+    ["build", "--target", "wasm", "--output-json", path],
+    cwd~,
+  ).output()
+  result.check()
+  for line in result.stdout().split("\n") {
+    if !line.is_empty() &&
+      @json.parse(line)
+      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
+      return wasm
+    }
+  }
+  fail("moon build returned no executable artifact")
+}
