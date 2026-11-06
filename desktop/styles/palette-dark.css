@@ -1,13 +1,13 @@
 /* SeekMoon dark palette. Replace this file with Theme Lab's CSS copy.
  * Semantic mappings stay in tokens.css. */
 :root {
-  --dark-bg-canvas: #16181d;
-  --dark-bg-surface: #1c1f26;
-  --dark-bg-subtle: #23272f;
-  --dark-text-primary: #f1f3f7;
-  --dark-text-secondary: #a3a8b4;
+  --dark-bg-canvas: #191919;
+  --dark-bg-surface: #1f1f1f;
+  --dark-bg-subtle: #252525;
+  --dark-text-primary: #f1f1f1;
+  --dark-text-secondary: #a3a3a3;
   --dark-text-muted: #969daa;
-  --dark-text-inline-code: var(--light-text-primary);
+  --dark-text-inline-code: var(--dark-text-primary);
   --dark-border: #2c313b;
   --dark-seam: #262b33;
   --dark-accent: #5b8cff;
