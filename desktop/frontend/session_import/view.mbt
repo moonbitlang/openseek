@@ -32,10 +32,11 @@ pub fn Model::view(
       @html.div([
         @rui.dialog_description(
           label(
-            locale, "Import as a conversation you can continue in the current workspace. Original workspace files are not imported.",
-            "导入后可在当前工作区继续聊天。原工作区文件不会随对话一起导入。",
+            locale, "Import as a conversation you can continue in the selected project. Original workspace files are not imported.",
+            "导入后可在所选项目中继续聊天。原工作区文件不会随对话一起导入。",
           ),
         ),
+        @html.p(class="session-import-destination", content.target.workspace),
         @html.div(class="session-import-actions", [
           @html.button(
             class="button secondary",

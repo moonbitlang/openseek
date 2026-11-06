@@ -14,6 +14,7 @@ pub(all) enum Message {
   ShowMoreChats
   MoreActions
   NewProjectConversation
+  ImportConversation
   WorkspaceSettings
   WorkspaceDefaults
   DetachProject
@@ -40,6 +41,11 @@ pub(all) enum Message {
 /// Translate sidebar chrome without changing stable component identities.
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, ImportConversation) => "Import conversation"
+    (Spanish, ImportConversation) => "Importar conversación"
+    (SimplifiedChinese, ImportConversation) => "导入对话"
+    (TraditionalChinese, ImportConversation) => "匯入對話"
+    (Japanese, ImportConversation) => "会話をインポート"
     (English, NoMatchingConversations) => "No matching conversations"
     (SimplifiedChinese, NoMatchingConversations) => "未找到匹配的对话"
     (TraditionalChinese, NoMatchingConversations) => "找不到符合的對話"

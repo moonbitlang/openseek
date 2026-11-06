@@ -1081,3 +1081,8 @@ button.archived-chat-open:hover .archived-chat-title {
   --rui-button-fg: var(--color-text-primary);
   --rui-button-border: var(--color-border);
 }
+
+.session-import-destination {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}

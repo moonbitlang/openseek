@@ -106,9 +106,9 @@ class ExportHarness extends DesktopBrowserHarness {
   count(method) { return this.requests.filter(request => request.method === method).length; }
 
   async openExport() {
-    await this.page.getByRole('button', { name: 'Export and import', exact: true }).click();
-    await this.page.getByRole('menuitem', { name: 'Export', exact: true }).click();
-    const dialog = this.page.getByRole('dialog', { name: 'Export conversation', exact: true });
+    await this.page.locator('[id="conversation-transfer:actions-trigger"]').click();
+    await this.page.locator('[id="conversation-transfer:actions-content"]').getByRole('menuitem').click();
+    const dialog = this.page.locator('#conversation-export-dialog');
     await expect(dialog).toBeVisible();
     return dialog;
   }
@@ -389,23 +389,6 @@ test('share login stays retryable while rejected account cleanup is pending', as
     finishSignIn();
   }
 });
-
-test('the header export and import menu opens the import dialog', async ({ page }) => {
-  const app = new ExportHarness(page);
-  await app.openDesktop();
-  const trigger = page.getByRole('button', { name: 'Export and import', exact: true });
-  await expect(trigger).toHaveCount(1);
-  await trigger.click();
-  const menu = page.getByRole('menu', { name: 'Export and import', exact: true });
-  await expect(menu.getByRole('menuitem', { name: 'Export', exact: true })).toBeVisible();
-  await expect(menu.getByRole('menuitem', { name: 'Import', exact: true })).toBeVisible();
-  await expect(menu.getByRole('separator')).toHaveCount(0);
-  await menu.getByRole('menuitem', { name: 'Import', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Import conversation', exact: true });
-  await expect(dialog).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
 
 for (const browser of [false, true]) {
   test(`${browser ? 'remote Host' : 'Local'} file share reuses account authority and stays pending across dismissal`, async ({ page }) => {
