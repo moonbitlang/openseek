@@ -178,7 +178,7 @@ pub fn new_terminal_state() -> TerminalState {
 /// Requires `run_terminal_pump` to be running (the host services' task
 /// group), otherwise the call waits until it is. A permanently shut down state
 /// rejects the request instead of leaving its caller parked.
-pub async fn open_terminal(
+async fn open_terminal(
   state : TerminalState,
   cwd~ : String,
   cols~ : Int32,
@@ -209,7 +209,7 @@ pub async fn open_terminal(
 
 ///|
 /// Write user input (already encoded as terminal input bytes) to a session.
-pub async fn write_terminal(
+async fn write_terminal(
   state : TerminalState,
   id~ : String,
   data : Bytes,

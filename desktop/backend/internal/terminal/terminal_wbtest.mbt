@@ -1,10 +1,10 @@
-// Behavioral tests through the public API: a real pump running in a task
+// Behavioral tests: a real pump running in a task
 // group, sessions spawning real PTY children. Process-specific cases are
 // platform-gated; lifecycle cases use the platform's default shell.
 
 ///|
 /// Collect pushes from a pump into a queue the test can await on.
-fn new_push_queue() -> @async.Queue[@terminal.TerminalPush] {
+fn new_push_queue() -> @async.Queue[TerminalPush] {
   Queue(kind=Unbounded)
 }
 
@@ -12,14 +12,14 @@ fn new_push_queue() -> @async.Queue[@terminal.TerminalPush] {
 /// The `TerminalError` message an open in the current directory refuses with;
 /// `None` when it opened, or when it failed some other way.
 async fn open_refusal(
-  state : @terminal.TerminalState,
+  state : TerminalState,
   command? : Array[String],
 ) -> String? {
   try {
-    let _ = @terminal.open_terminal(state, cwd=".", cols=80, rows=24, command?)
+    let _ = open_terminal(state, cwd=".", cols=80, rows=24, command?)
     None
   } catch {
-    @terminal.TerminalError(message) => Some(message)
+    TerminalError(message) => Some(message)
     _ => None
   }
 }
@@ -27,7 +27,7 @@ async fn open_refusal(
 ///|
 #cfg(not(platform="windows"))
 async fn wait_for_output(
-  pushes : @async.Queue[@terminal.TerminalPush],
+  pushes : @async.Queue[TerminalPush],
   needle : String,
 ) -> Unit {
   let mut seen = ""
@@ -43,7 +43,7 @@ async fn wait_for_output(
 
 ///|
 #cfg(not(platform="windows"))
-async fn wait_for_exit(pushes : @async.Queue[@terminal.TerminalPush]) -> Unit {
+async fn wait_for_exit(pushes : @async.Queue[TerminalPush]) -> Unit {
   for ;; {
     if pushes.get() is Exited(..) {
       break
@@ -55,19 +55,19 @@ async fn wait_for_exit(pushes : @async.Queue[@terminal.TerminalPush]) -> Unit {
 #cfg(not(platform="windows"))
 async test "terminal session round-trips output and reports exit" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      run_terminal_pump(state, push => pushes.put(push))
     })
-    let id = @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
+    let id = open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
       "/bin/cat",
     ])
-    @terminal.write_terminal(state, id~, @utf8.encode("ping\n"))
+    write_terminal(state, id~, @utf8.encode("ping\n"))
     @async.with_timeout(5000, () => wait_for_output(pushes, "ping"))
-    @terminal.resize_terminal(state, id~, cols=100, rows=30)
-    @terminal.close_terminal(state, id~)
+    resize_terminal(state, id~, cols=100, rows=30)
+    close_terminal(state, id~)
     @async.with_timeout(5000, () => wait_for_exit(pushes))
   })
 }
@@ -76,14 +76,14 @@ async test "terminal session round-trips output and reports exit" {
 #cfg(not(platform="windows"))
 async test "terminal session runs in the requested directory" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      run_terminal_pump(state, push => pushes.put(push))
     })
     ignore(
-      @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
+      open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
         "/bin/sh", "-c", "pwd",
       ]),
     )
@@ -98,11 +98,11 @@ async test "terminal session runs in the requested directory" {
 /// instead of first opening a shell that later exits 127.
 async test "a missing program fails while opening the session" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      run_terminal_pump(state, push => pushes.put(push))
     })
     let missing = ["openseek-terminal-test-program-that-does-not-exist"]
     let failed = open_refusal(state, command=missing) is Some(_)
@@ -112,7 +112,7 @@ async test "a missing program fails while opening the session" {
 
 ///|
 async test "an empty command is rejected before spawning" {
-  let state = @terminal.new_terminal_state()
+  let state = new_terminal_state()
   let failed = open_refusal(state, command=[]) is Some(_)
   assert_true(failed)
 }
@@ -123,10 +123,10 @@ async test "an empty command is rejected before spawning" {
 async test "shutdown wakes an idle terminal pump" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let state = @terminal.new_terminal_state()
+      let state = new_terminal_state()
       let pushes = new_push_queue()
       group.spawn_bg(allow_failure=true, () => {
-        @terminal.run_terminal_pump(state, push => pushes.put(push))
+        run_terminal_pump(state, push => pushes.put(push))
       })
       @async.pause()
       state.shutdown()
@@ -139,7 +139,7 @@ async test "shutdown wakes an idle terminal pump" {
 /// ends. Shutdown must reject that call, and all later opens, without a pump.
 async test "shutdown rejects pending and later terminal opens" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     let pending_rejected : @async.Queue[Bool] = Queue(kind=Blocking(1))
     group.spawn_bg(allow_failure=true, () => {
       let rejected = open_refusal(state) is Some("terminal service is closed")
@@ -160,15 +160,15 @@ async test "shutdown rejects pending and later terminal opens" {
 #cfg(not(platform="windows"))
 async test "close_all_terminals retires every live session" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      run_terminal_pump(state, push => pushes.put(push))
     })
-    let first = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
-    let second = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
-    @terminal.close_all_terminals(state)
+    let first = open_terminal(state, cwd=".", cols=80, rows=24)
+    let second = open_terminal(state, cwd=".", cols=80, rows=24)
+    close_all_terminals(state)
     let exited : Array[String] = []
     @async.with_timeout(5000, () => {
       while exited.length() < 2 {
@@ -190,7 +190,7 @@ async test "close_all_terminals retires every live session" {
 /// queued request instead of starting a shell with no tab to own it.
 async test "close_all_terminals cancels queued opens from an older page" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     defer state.shutdown()
     let pushes = new_push_queue()
     let cancelled : @async.Queue[Bool] = Queue(kind=Blocking(1))
@@ -202,9 +202,9 @@ async test "close_all_terminals cancels queued opens from an older page" {
     // Let the opener enqueue its request and block on the reply before the
     // reconnect sweep advances the page connection.
     @async.pause()
-    @terminal.close_all_terminals(state)
+    close_all_terminals(state)
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      run_terminal_pump(state, push => pushes.put(push))
     })
     let was_cancelled = @async.with_timeout(5000, () => cancelled.get())
     assert_true(was_cancelled)
@@ -239,13 +239,13 @@ async test "close_all_terminals cancels queued opens from an older page" {
 #cfg(not(platform="windows"))
 async test "a cumulative acknowledgement resumes terminal output" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      run_terminal_pump(state, push => pushes.put(push))
     })
-    let id = @terminal.open_terminal(state, cwd=".", cols=80, rows=24, command=[
+    let id = open_terminal(state, cwd=".", cols=80, rows=24, command=[
       "/usr/bin/yes", "flow-control",
     ])
     let chunks : Array[(Int32, Int32)] = []
@@ -268,25 +268,25 @@ async test "a cumulative acknowledgement resumes terminal output" {
     guard chunks.last() is Some(last) else {
       fail("terminal produced no output chunks")
     }
-    @terminal.ack_terminal(state, id~, sequence=last.0)
+    ack_terminal(state, id~, sequence=last.0)
     let resumed = @async.with_timeout_opt(5000, () => pushes.get())
     assert_true(resumed is Some(Output(id=output_id, ..)) && output_id == id)
-    @terminal.close_terminal(state, id~)
+    close_terminal(state, id~)
     @async.with_timeout(5000, () => wait_for_exit(pushes))
   })
 }
 
 ///|
 test "ops on unknown terminal ids degrade cleanly" {
-  let state = @terminal.new_terminal_state()
+  let state = new_terminal_state()
   // ack and close are fire-and-forget: an id that already exited is fine.
-  @terminal.ack_terminal(state, id="missing-terminal", sequence=1)
-  @terminal.close_terminal(state, id="missing-terminal")
+  ack_terminal(state, id="missing-terminal", sequence=1)
+  close_terminal(state, id="missing-terminal")
   let failed = try {
-    @terminal.resize_terminal(state, id="missing-terminal", cols=80, rows=24)
+    resize_terminal(state, id="missing-terminal", cols=80, rows=24)
     false
   } catch {
-    @terminal.TerminalError(_) => true
+    TerminalError(_) => true
     _ => false
   }
   assert_true(failed)
@@ -294,7 +294,7 @@ test "ops on unknown terminal ids degrade cleanly" {
 
 ///|
 #cfg(not(platform="windows"))
-async fn exit_code(pushes : @async.Queue[@terminal.TerminalPush]) -> Int32 {
+async fn exit_code(pushes : @async.Queue[TerminalPush]) -> Int32 {
   for ;; {
     if pushes.get() is Exited(code~, ..) {
       return code
@@ -308,14 +308,14 @@ async fn exit_code(pushes : @async.Queue[@terminal.TerminalPush]) -> Int32 {
 #cfg(not(platform="windows"))
 async test "a command session reports the command's exit code" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      run_terminal_pump(state, push => pushes.put(push))
     })
     ignore(
-      @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
+      open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
         "/bin/sh", "-c", "echo out; exit 3",
       ]),
     )
@@ -330,23 +330,23 @@ async test "a command session reports the command's exit code" {
 #cfg(not(platform="windows"))
 async test "Ctrl+C typed into a command session interrupts the command" {
   @async.with_task_group(group => {
-    let state = @terminal.new_terminal_state()
+    let state = new_terminal_state()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      run_terminal_pump(state, push => pushes.put(push))
     })
-    let id = @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
+    let id = open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
       "/bin/cat",
     ])
     // Wait for both the terminal echo and cat's reply before interrupting.
     // A shell printing "ready" before spawning sleep leaves a signal-delivery
     // race, and the shell may translate its child's SIGINT into exit code 130.
-    @terminal.write_terminal(state, id~, b"ready\n")
+    write_terminal(state, id~, b"ready\n")
     @async.with_timeout(5000, () => {
       wait_for_output(pushes, "ready\r\nready\r\n")
     })
-    @terminal.write_terminal(state, id~, b"\x03")
+    write_terminal(state, id~, b"\x03")
     // SIGINT is reported as -2, not a shell-translated exit code or SIGKILL
     // from the session's cleanup path.
     assert_eq(@async.with_timeout(5000, () => exit_code(pushes)), -2)
