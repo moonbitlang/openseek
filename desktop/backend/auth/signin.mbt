@@ -37,7 +37,7 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
   guard @entropy.random_hex(16) is Some(oauth_state) else {
     raise AuthError("no OS entropy available for sign-in")
   }
-  let challenge = pkce_challenge(verifier)
+  let challenge = @browser_signin.pkce_challenge(verifier)
 
   // The one-shot loopback listener, on an OS-assigned port.
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {

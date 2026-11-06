@@ -1663,7 +1663,7 @@ async fn[G] start_serve_engine(
     message_receipts: Receipts(),
     queued_runs: [],
     job_requests: Map([]),
-    last_activity_ms: engine_clock_ms(),
+    last_activity_ms: @async.now(),
     mcp_status: None,
   }
   startup_engine = Some(engine)
@@ -2388,7 +2388,7 @@ fn test_serve_engine(
   session_root? : @pathx.Absolute,
   follower? : SessionFollower,
   condemned~ : Bool = false,
-  last_activity_ms~ : Int64 = engine_clock_ms(),
+  last_activity_ms~ : Int64 = @async.now(),
   id~ : String = "test",
 ) -> ServeEngine {
   {

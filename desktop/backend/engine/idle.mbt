@@ -28,17 +28,11 @@ const EngineIdleTimeoutMs : Int64 = 43200000L
 const EngineIdleScanMs = 60000
 
 ///|
-/// Wall-clock milliseconds, as engine activity stamps record them. Wall time
-/// on purpose: a machine that slept for the night comes back with engines
+/// Record that this engine did, or was asked to do, something just now. Wall
+/// time on purpose: a machine that slept for the night comes back with engines
 /// that really were idle that long.
-fn engine_clock_ms() -> Int64 {
-  @sys.now().reinterpret_as_int64()
-}
-
-///|
-/// Record that this engine did, or was asked to do, something just now.
 fn ServeEngine::touch(self : ServeEngine) -> Unit {
-  self.last_activity_ms = engine_clock_ms()
+  self.last_activity_ms = @async.now()
 }
 
 ///|
@@ -187,7 +181,7 @@ async fn EngineManager::reap_idle_engines_forever(self : EngineManager) -> Unit 
   for ;; {
     @async.sleep(EngineIdleScanMs)
     ignore(
-      self.reap_idle_engines(now=engine_clock_ms(), idle_ms=EngineIdleTimeoutMs),
+      self.reap_idle_engines(now=@async.now(), idle_ms=EngineIdleTimeoutMs),
     )
   }
 }

@@ -1,28 +1,7 @@
 // The PKCE pieces of the loopback sign-in (docs/remote-protocol.md,
-// "Desktop sign-in"): challenge derivation, the start URL the system
-// browser opens, and the loopback callback parser. All pure — the flow in
-// signin.mbt wires them to the listener and the exchange.
-
-///|
-/// The standard S256 challenge (RFC 7636): the unpadded base64url of the
-/// verifier's SHA-256, exactly what the relay's `challenge_s256` computes
-/// on its side of the comparison. Core's encoder speaks only the standard
-/// alphabet, so its two URL-unsafe characters are swapped after the fact.
-fn pkce_challenge(verifier : String) -> String {
-  let digest = Bytes::from_array(@crypto.sha256(@utf8.encode(verifier)))
-  let standard = @base64.encode(digest, padding=false)
-  let builder = StringBuilder()
-  for c in standard {
-    builder.write_char(
-      match c {
-        '+' => '-'
-        '/' => '_'
-        c => c
-      },
-    )
-  }
-  builder.to_string()
-}
+// "Desktop sign-in"): the start URL the system browser opens and the
+// loopback callback parser. All pure — the flow in signin.mbt wires them to
+// the listener and the exchange.
 
 ///|
 /// The canonical account entry; state and S256 challenge are locally generated.
