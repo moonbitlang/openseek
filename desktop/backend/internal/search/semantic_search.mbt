@@ -97,7 +97,7 @@ fn SemanticSearchCancellationFrontiers::record(
 ///|
 priv enum SemanticSearchRequest {
   Search(
-    command~ : SemanticProvider,
+    command~ : MoonxProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchSemanticPayload,
     reply~ : @async.Queue[@protocol.SearchSemanticReply]
@@ -148,7 +148,7 @@ fn empty_semantic_search_reply(
 ///|
 async fn SemanticSearchService::search(
   self : SemanticSearchService,
-  command : SemanticProvider,
+  command : MoonxProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
 ) -> @protocol.SearchSemanticReply {
@@ -607,7 +607,7 @@ async fn publish_semantic_progress(
 
 ///|
 async fn run_semantic_search(
-  command : SemanticProvider,
+  command : MoonxProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
   emit : async (@protocol.Notification) -> Unit,
@@ -785,7 +785,7 @@ pub async fn search_semantic(
   service : SemanticSearchService,
   root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
-  command : SemanticProvider,
+  command : MoonxProvider,
 ) -> @protocol.SearchSemanticReply {
   service.search(command, root, payload)
 }
@@ -914,6 +914,6 @@ async test "cancel-before-semantic-search frontier rejects the stale generation"
 }
 
 ///|
-fn test_provider() -> SemanticProvider {
-  SemanticProvider(engine="unused", runtime_dir=None, source=External)
+fn test_provider() -> MoonxProvider {
+  MoonxProvider(engine="unused", runtime_dir=None, source=External)
 }

@@ -17,7 +17,7 @@ pub fn app_bundle_path(String) -> String?
 
 pub async fn chat_workspace_root() -> @protocol.ChatWorkspaceRoot
 
-pub async fn desktop_resources(@resources.Resources) -> HostResources
+pub fn desktop_resources(@resources.Resources) -> HostResources
 
 pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -> Array[@endpoint.Endpoint]
 
@@ -55,18 +55,12 @@ pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit, a
 pub struct HostResources {
   moonbit : @moonbit.ToolchainSource
   viz : VizAssets?
-  bin_dir : String?
-  ripgrep : String?
 }
 pub fn HostResources::from_path() -> Self
 
 type HostState
 pub async fn HostState::sync_builtin_skills(Self, () -> Unit) -> Unit
 pub async fn HostState::viz_assets(Self) -> VizAssets
-
-type PackagedTools
-pub fn PackagedTools::apply_to_process_env(Self) -> Unit
-pub async fn PackagedTools::resolve(@resources.Resources?) -> Self?
 
 pub struct VizAssets {
   shell : String

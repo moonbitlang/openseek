@@ -22,7 +22,6 @@ pub async fn TerminalState::open(
   engine~ : String,
   runtime_dir? : @pathx.Path,
   source~ : @moonbit.ToolchainSource,
-  bin_dir? : String,
 ) -> @protocol.TerminalOpenReply {
   guard @work_dir.resolve_in_workspace(
       payload.session,
@@ -32,11 +31,10 @@ pub async fn TerminalState::open(
     is Some(root) else {
     raise NoWorkspace
   }
-  // Match the engine and language services: packaged command-line tools and a
-  // packaged MoonBit seed win when present. Queue one combined path update
-  // after shell startup so rc/profile files cannot overwrite the selection.
-  // Its entries leave the final order as moon-bin, packaged-bin, then the
-  // shell's PATH. Unknown shells stay usable without receiving a command in
+  // Match the engine and language services: a packaged MoonBit seed wins when
+  // present. Queue one combined path update after shell startup so rc/profile
+  // files cannot overwrite the selection. Its entries leave the final order as
+  // moon-bin, then the shell's PATH. Unknown shells stay usable without receiving a command in
   // another shell's syntax. MOON_HOME remains the user's registry and caches.
   let toolchain = @moonbit.resolve_toolchain(engine, runtime_dir?, source~)
   let windows = @async.platform is Windows
@@ -46,9 +44,6 @@ pub async fn TerminalState::open(
     @sys.get_env_var("SHELL").unwrap_or("/bin/sh")
   }
   let path_entries = [toolchain.bin_dir.to_string()]
-  if bin_dir is Some(bin_dir) {
-    path_entries.push(bin_dir)
-  }
   // A `!` command is the session's only process: no login shell starts, so
   // there is no prompt to activate and the path rides the command's own argv.
   if payload.command is Some(command) {

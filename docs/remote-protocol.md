@@ -652,9 +652,9 @@ The protocol is intentionally single-root: `../`, `~/`, and absolute search
 locations are rejected instead of escaping `root`. Includes are emitted first
 and every default or request exclusion follows, so an exclusion wins when both
 match. The Host accepts at most 20,000 occurrences and sets `limit_hit` when the
-cap is reached. A connection teardown cancels every process it owns. Installed
-builds resolve only their packaged ripgrep; a `PATH` fallback is permitted
-solely for a detected development layout.
+cap is reached. A connection teardown cancels every process it owns. The Host runs the
+pinned `cli/rg` package (ripgrep ported to MoonBit) through the selected
+MoonBit toolchain's `moonx`; installed builds do not bundle a native ripgrep.
 
 ### terminal.* — connection-scoped PTYs
 

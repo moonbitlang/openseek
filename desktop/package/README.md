@@ -1,7 +1,8 @@
 # Bundling command-line binaries
 
 `package/build.mjs` acquires and stages the native tools shipped with
-SeekMoon. Ripgrep is the reference implementation.
+SeekMoon: the engine and the MoonBit seed. Text search needs no bundled
+binary; it runs the `cli/rg` package through the seed's `moonx`.
 
 Adding a binary is complete only when acquisition, package layout, runtime
 lookup, child-process `PATH`, licensing, signing, and installed-artifact

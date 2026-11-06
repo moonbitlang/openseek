@@ -38,7 +38,7 @@ pub fn TerminalState::ack(Self, id~ : String, sequence~ : Int32) -> Unit
 pub fn TerminalState::close(Self, id~ : String) -> Unit
 pub fn TerminalState::close_all(Self) -> Unit
 pub async fn TerminalState::input(Self, @protocol.TerminalInputPayload) -> Unit
-pub async fn TerminalState::open(Self, @protocol.TerminalOpenPayload, engine~ : String, runtime_dir? : @pathx.Path, source~ : @moonbit.ToolchainSource, bin_dir? : String) -> @protocol.TerminalOpenReply
+pub async fn TerminalState::open(Self, @protocol.TerminalOpenPayload, engine~ : String, runtime_dir? : @pathx.Path, source~ : @moonbit.ToolchainSource) -> @protocol.TerminalOpenReply
 pub fn TerminalState::resize(Self, id~ : String, cols~ : Int32, rows~ : Int32) -> Unit raise
 pub async fn TerminalState::run_pump(Self, async (TerminalPush) -> Unit) -> Unit
 pub fn TerminalState::shutdown(Self) -> Unit

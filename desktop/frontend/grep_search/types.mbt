@@ -24,7 +24,7 @@ enum Phase {
 
 ///|
 /// One of the two Search engines, modeled on semgrep's search modes: plain
-/// text search runs the Host's bundled ripgrep; semantic search runs
+/// text search runs cli/rg (ripgrep ported to MoonBit) through moonx; semantic search runs
 /// moongrep's structural MoonBit code patterns.
 #derive(Eq, Debug)
 enum Mode {

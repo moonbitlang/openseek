@@ -2,9 +2,6 @@
 const PackagedFrontendEntryPath = "seekmoon/web/index.html"
 
 ///|
-const PackagedRipgrepPath = "seekmoon/bin/rg"
-
-///|
 const PackagedVizDir = "seekmoon/web/viz"
 
 ///|
@@ -19,14 +16,6 @@ const DevelopmentVizShellPath = "web/index.html"
 /// targets at `debug` for the development launcher, the same profile
 /// `engine_command` resolves for the development engine.
 const DevelopmentVizBundlePath = "_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js"
-
-///|
-#cfg(platform="windows")
-const PackagedExecutableSuffix = ".exe"
-
-///|
-#cfg(not(platform="windows"))
-const PackagedExecutableSuffix = ""
 
 ///|
 /// Locate the visualizer assets belonging to this exact host build.
@@ -65,92 +54,6 @@ pub async fn VizAssets::read(self : VizAssets) -> (String, String) {
       raise HostError("could not read session visualizer bundle: \{error}")
   }
   (shell, bundle)
-}
-
-///|
-/// The installed directory containing the Desktop's packaged command-line
-/// tools. The value exists only when the pinned ripgrep asset is present, so
-/// an incomplete installed bundle cannot shadow the user's PATH with an empty
-/// or unrelated directory.
-struct PackagedTools {
-  bin_dir : String
-  ripgrep : String
-}
-
-///|
-/// Resolve a canonical resource root. This type method lets tests exercise
-/// path policy without pretending their test executable is a Proton package.
-async fn PackagedTools::resolve_from_resource_dir(
-  resource_dir : String,
-) -> PackagedTools? {
-  let path = @pathx.Path(resource_dir)
-    .join(PackagedRipgrepPath + PackagedExecutableSuffix)
-    .normalize()
-  guard @fs.exists(path.to_string()) else { return None }
-  Some({ bin_dir: path.dirname().to_string(), ripgrep: path.to_string(), })
-}
-
-///|
-fn PackagedTools::path_with_precedence(
-  self : PackagedTools,
-  current : String?,
-) -> String {
-  if current is Some(path) &&
-    (path == self.bin_dir || path.has_prefix(self.bin_dir + @env.path_sep)) {
-    return path
-  }
-  @env.prepend_to_path_env(self.bin_dir, current)
-}
-
-///|
-/// Locate ripgrep in the canonical resource tree. An installed bundle
-/// with a missing asset fails closed instead of silently
-/// running a machine-global ripgrep of an unknown version.
-async fn ripgrep_command(resources : @resources.Resources?) -> String? {
-  if PackagedTools::resolve(resources) is Some(tools) {
-    return Some(tools.ripgrep)
-  }
-  if resources is Some(resources) && resources.packaged {
-    None
-  } else {
-    Some("rg")
-  }
-}
-
-///|
-async test "packaged tools use only the canonical resource directory" {
-  let root : @pathx.Path = @fs.tmpdir(prefix="openseek-ripgrep-resolution-")
-  defer @fs.rmdir(root.to_string(), recursive=true)
-  let resources = root.join("Resources")
-  let resource_dir = resources.to_string()
-  assert_true(PackagedTools::resolve_from_resource_dir(resource_dir) is None)
-  let packaged = resources
-    .join(PackagedRipgrepPath + PackagedExecutableSuffix)
-    .to_string()
-  @fs.mkdir(@pathx.Path(packaged).dirname().to_string(), recursive=true)
-  @fs.write_file(packaged, "rg", create_mode=CreateOrTruncate)
-  guard PackagedTools::resolve_from_resource_dir(resource_dir)
-    is Some(installed_tools) else {
-    fail("expected canonical packaged tools")
-  }
-  let installed_bin = @pathx.Path(packaged).dirname().to_string()
-  assert_eq(
-    installed_tools.path_with_precedence(Some("/usr/bin")),
-    "\{installed_bin}\{@env.path_sep}/usr/bin",
-  )
-  let already_first = "\{installed_bin}\{@env.path_sep}/usr/bin"
-  assert_eq(
-    installed_tools.path_with_precedence(Some(already_first)),
-    already_first,
-  )
-}
-
-///|
-async test "unpackaged search commands use documented development providers" {
-  let development : @resources.Resources = { dir: "desktop", packaged: false, }
-  assert_eq(ripgrep_command(Some(development)), Some("rg"))
-  // A host told of no resource directory resolves its tools the same way.
-  assert_eq(ripgrep_command(None), Some("rg"))
 }
 
 ///|

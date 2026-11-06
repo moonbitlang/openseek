@@ -220,7 +220,7 @@ pub fn endpoints(
     }),
     Endpoint(@commands.fs_search_text, payload => {
       @search.search_text(
-        state.resources.ripgrep,
+        state.moonx_provider(),
         connection.text_search,
         @pathx.Absolute::parse_resource_path(payload.root),
         payload,
@@ -234,7 +234,7 @@ pub fn endpoints(
         connection.semantic_search,
         @pathx.Absolute::parse_resource_path(payload.root),
         payload,
-        state.semantic_provider(),
+        state.moonx_provider(),
       )
     }),
     Endpoint(@commands.fs_cancel_search_semantic, payload => {
@@ -243,7 +243,7 @@ pub fn endpoints(
     Endpoint(@commands.pattern_repair, payload => {
       @pattern_repair.repair(
         state.engine,
-        state.semantic_provider(),
+        state.moonx_provider(),
         @engine.pattern_repair_environment(manager, model=payload.model),
         payload,
       )
@@ -270,7 +270,6 @@ pub fn endpoints(
         engine=state.engine,
         runtime_dir?=state.runtime_dir,
         source=state.resources.moonbit,
-        bin_dir?=state.resources.bin_dir,
       )
     }),
     Endpoint(@commands.terminal_input, payload => {

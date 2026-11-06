@@ -569,7 +569,8 @@ pub(all) struct CancelSearchFilesPayload {
 }
 
 ///|
-/// Search workspace text through the Host's bundled ripgrep. `session_key`
+/// Search workspace text through the Host's cli/rg (ripgrep ported to
+/// MoonBit, run by the selected toolchain's moonx). `session_key`
 /// names one panel/search lifetime; generations are monotonic inside it, so a
 /// newer request can cancel an older process without affecting another panel.
 #derive(Debug, Eq)

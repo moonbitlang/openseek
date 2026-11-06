@@ -4,14 +4,12 @@
 pub struct HostResources {
   moonbit : @moonbit.ToolchainSource
   viz : VizAssets?
-  bin_dir : String?
-  ripgrep : String?
 }
 
 ///|
 /// Explicit environment-based policy for unbundled tools and focused tests.
 pub fn HostResources::from_path() -> HostResources {
-  { moonbit: External, viz: None, bin_dir: None, ripgrep: Some("rg"), }
+  { moonbit: External, viz: None, }
 }
 
 ///|
