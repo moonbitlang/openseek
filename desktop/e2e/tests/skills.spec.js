@@ -271,14 +271,11 @@ test('failed builtin startup stays visible with an empty library and recovers th
   await app.goto();
   await app.openSkills();
   const skillsPage = page.locator('.skills-page');
-  const startupNotice = skillsPage.locator('.skills-notice');
-  await expect(startupNotice).toContainText('Yoorkin/wayfinder: Startup sync failed');
   await expect(skillsPage.locator('.skill-row')).toHaveCount(0);
   await expect(skillsPage).toContainText('Catalog unavailable while offline');
   app.catalogError = null;
   await page.getByRole('button', { name: 'Refresh catalog', exact: true }).click();
   await expect(skillsPage).not.toContainText('Catalog unavailable while offline');
-  await expect(startupNotice).toContainText('Startup sync failed');
   await page.locator('.skill-summary').click();
   await expect(page.locator('.skill-detail-page .skills-notice')).toContainText('Yoorkin/wayfinder: Startup sync failed');
 

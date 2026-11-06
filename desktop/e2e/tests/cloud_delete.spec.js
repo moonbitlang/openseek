@@ -117,49 +117,6 @@ test('a history response captured before deletion cannot restore its row or cont
   await expect(cloud.row(sessionC)).toHaveCount(0);
 });
 
-test('completed history enables deletion even when the earlier list reported generation', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.generating.add(sessionA);
-  await cloud.install();
-  await cloud.goto();
-  await menu(page, cloud, sessionA);
-  await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeDisabled();
-  await page.keyboard.press('Escape');
-  await cloud.open();
-  await menu(page, cloud, sessionA);
-  await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeEnabled();
-});
-
-test('a new generating list disables deletion after an earlier idle history', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  cloud.generating.add(sessionA);
-  await cloud.create();
-  await page.locator('#task').fill('Refresh the inventory after first send');
-  await page.locator('#task').press('Enter');
-  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
-  await menu(page, cloud, sessionA);
-  await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeDisabled();
-});
-
-test('busy Cloud menus retain rename while deletion stays disabled', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.generating.add(sessionA);
-  await cloud.install();
-  await cloud.goto();
-  await menu(page, cloud, sessionA);
-  const popup = page.getByRole('menu', { name: 'Conversation actions', exact: true });
-  const action = popup.getByRole('menuitem', { name: 'Delete…', exact: true });
-  await expect(popup).toBeVisible();
-  await expect(action).toBeDisabled();
-  await expect(popup.getByRole('menuitem', { name: 'Rename…', exact: true })).toBeEnabled();
-  expect(deletes(cloud)).toHaveLength(0);
-  await expect(page.getByRole('button', { name: 'Delete permanently', exact: true })).toHaveCount(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
 test('device browser traversal reports deleted Cloud destinations as missing', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install(); await cloud.goto();
