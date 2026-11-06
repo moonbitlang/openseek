@@ -109,7 +109,7 @@
 
   --color-accent: light-dark(var(--light-accent), var(--dark-accent));
   --color-switch-on: #315fd5;
-  --color-on-accent: light-dark(var(--light-on-accent), var(--dark-on-accent));
+  --color-on-accent: #ffffff;
   --color-accent-soft: light-dark(var(--light-accent-soft), var(--dark-accent-soft));
   --color-accent-border: light-dark(
     var(--light-accent-border),
