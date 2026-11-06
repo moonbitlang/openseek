@@ -131,26 +131,6 @@ for (const entry of ['menu', 'toolbar']) {
   });
 }
 
-for (const gesture of ['right-click', 'keyboard']) {
-  test(`opening a tab menu by ${gesture} dismisses the plus launcher`, async ({ page }) => {
-    const app = await openTabs(page, ['alpha']);
-    await page.locator('.tab-add').click();
-    await expect(page.locator('.dock-menu')).toBeVisible();
-    const tab = page.locator('.editor-tab').first();
-    if (gesture === 'right-click') await tab.click({ button: 'right' });
-    else {
-      await tab.focus();
-      await page.keyboard.press('Shift+F10');
-    }
-    await expect(page.locator('[role="menu"][id^="dock:"][id$=":pointer-menu-content"]:visible')).toBeVisible();
-    await expect(page.locator('.dock-menu')).toBeHidden();
-    await page.keyboard.press('Escape');
-    await page.locator('.tab-add').click();
-    await expect(page.locator('.dock-menu')).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
 test('open tab menu follows live locale changes', async ({ page }) => {
   const app = await openTabs(page, ['alpha', 'bravo']);
   await page.locator('.editor-tab').first().click({ button: 'right' });

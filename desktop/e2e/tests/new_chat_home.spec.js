@@ -66,7 +66,7 @@ test('both agents share the first screen and Codex can choose its project in the
   await expect(title).toHaveText('What should we build in other?');
   await expect(app.projectRow('/other')).toHaveClass(/\bactive\b/);
   await expect(transcript).toHaveAttribute('data-transcript-session', session);
-  await expect(page.locator('#openseek-model-picker:visible, #codex-model-picker:visible')).toContainText('Codex test');
+  await expect(page.locator('#codex-model-picker')).toHaveAttribute('data-value', 'codex:gpt-test');
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/other');
   await expect(task).toHaveValue(draftText);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
