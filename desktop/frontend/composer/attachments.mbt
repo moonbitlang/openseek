@@ -284,6 +284,7 @@ fn Entry::attachment_confirmations(
           class="composer-context-row composer-attachment-confirm",
           attrs=@html.Attrs::build()
             .role("group")
+            .data_set("attachment-name", name)
             .aria_label(ui(locale, UploadAttachment)),
           [
             @html.div(class="composer-attachment-name", name),

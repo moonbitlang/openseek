@@ -71,7 +71,7 @@ for (const [behavior, width] of [['queue', 1440], ['steer', 700]]) {
       await expect(text).toBeVisible();
       if (behavior === 'queue') {
         await composer.fill('');
-        await row.getByTitle('Edit', { exact: true }).click();
+        await row.getByTestId('queued-input-edit').click();
         await expect(composer).toHaveValue(content);
         await expect(row).toHaveAttribute('open', '');
       }
@@ -88,31 +88,34 @@ test('queue disclosures keep their own state when earlier messages are removed',
   const composer = page.locator('#task');
   await composer.fill('Start a turn');
   await page.locator('#send').click();
+  const ids = [];
   for (const content of ['First message', 'Second message\nFull details', 'Third message']) {
     await composer.fill(content);
     await composer.press('Enter');
-    await expect(page.locator('.queued-input-row').filter({ hasText: content })).toBeVisible();
+    const id = app.requests.filter(r => r.method === 'agent.queue').at(-1).params.id;
+    ids.push(id);
+    await expect(page.locator(`[data-queued-input-id=${JSON.stringify(id)}]`)).toContainText(content);
   }
   await composer.fill('');
   const rows = page.locator('.queued-input-row');
-  const second = rows.filter({ hasText: 'Second message' });
-  const third = rows.filter({ hasText: 'Third message' });
+  const second = page.locator(`[data-queued-input-id=${JSON.stringify(ids[1])}]`);
+  const third = page.locator(`[data-queued-input-id=${JSON.stringify(ids[2])}]`);
   await second.locator('summary').click();
-  await rows.filter({ hasText: 'First message' }).getByTitle('Delete', { exact: true }).click();
+  await page.locator(`[data-queued-input-id=${JSON.stringify(ids[0])}]`).getByTestId('queued-input-delete').click();
   await expect(rows).toHaveCount(2);
   await expect(second).toHaveAttribute('open', '');
   await expect(third).not.toHaveAttribute('open');
-  await third.getByTitle('Edit', { exact: true }).click();
+  await third.getByTestId('queued-input-edit').click();
   await expect(composer).toHaveValue('Third message');
   await expect(third).not.toHaveAttribute('open');
   await composer.fill('Third message\nEdited details');
-  await page.getByTitle('Save queued message', { exact: true }).click();
+  await page.locator('#send').click();
   await expect(third.locator('.followup-content')).toHaveText('Third message\nEdited details');
   await expect(third).not.toHaveAttribute('open');
-  await second.getByTitle('Delete', { exact: true }).click();
+  await second.getByTestId('queued-input-delete').click();
   await expect(rows).toHaveCount(1);
   await expect(third).not.toHaveAttribute('open');
-  await third.getByTitle('Steer', { exact: true }).click();
+  await third.getByTestId('queued-input-steer').click();
   await expect(rows).toHaveCount(0);
   const steer = page.locator('.pending-steer-row');
   await expect(steer).toBeVisible();

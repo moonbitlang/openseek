@@ -45,11 +45,11 @@ async function openNative(page, pick, prepare) {
     const app = await openNative(page, () => delayed
       ? new Promise(resolve => { cancel = () => resolve({}); }) : {});
     for (let attempt = 0; attempt < 3; attempt++) {
-      await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+      await page.locator('#composer-attach').click();
       await expect.poll(() => app.requests.filter(r => r.method === 'host.pick_attachment').length).toBe(attempt + 1);
-      await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
+      await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeEnabled();
       await expect(page.locator('#send')).toBeEnabled();
-      await expect(page.getByText('Reading attachments…', { exact: true })).toBeHidden();
+      await expect(page.locator('.composer-image-notice:not(.error)')).toBeHidden();
       if (delayed) cancel();
       await expect(page.locator('#task')).toHaveValue('Keep this draft');
     }
@@ -62,24 +62,24 @@ test('native selection blocks send only while preparing the selected attachment'
   let finish;
   const app = await openNative(page, () => ({ path: '/workspace/report.pdf' }),
     () => new Promise(resolve => { finish = () => resolve({ kind: 'reference', path: 'report.pdf' }); }));
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.locator('#composer-attach').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'fs.prepare_attachment').length).toBe(1);
   await expect(page.locator('#send')).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeDisabled();
   finish();
-  await expect(page.locator('.mention-chip').filter({ hasText: 'report.pdf' })).toBeVisible();
+  await expect(page.locator('.mention-chip[data-mention-path="report.pdf"]')).toBeVisible();
   await expect(page.locator('#send')).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
 test('native picker failure shows an error without blocking the draft', async ({ page }) => {
   const app = await openNative(page, () => { throw new Error('picker failed'); });
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'picker failed' })).toBeVisible();
+  await page.locator('#composer-attach').click();
+  await expect(page.locator('.composer-image-notice.error')).toContainText('picker failed');
   await expect(page.locator('#send')).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
-  await expect(page.getByText('Reading attachments…', { exact: true })).toBeHidden();
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeEnabled();
+  await expect(page.locator('.composer-image-notice:not(.error)')).toBeHidden();
   expect(app.requests.some(r => r.method === 'fs.prepare_attachment')).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });
