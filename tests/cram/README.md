@@ -45,7 +45,11 @@ fence, or an exact remote package version. Commands occupy one source line.
    markers, using `(empty)` or `(ignore)` where appropriate. Direct cases do
    not accept `2>&1`. Use exact output for stable values and narrow `(glob)` or
    `(regex)` patterns for variable fields.
-4. For cases needing temporary files or process control, add one standalone
+4. Keep read-only input files under `fixtures/` and use `#cwd` when needed.
+   Feed literal stdin through `fixtures/stdin.mbtx`, for example
+   `moonx fixtures/stdin.mbtx '{"command":"cancel"}' | DEEPSEEK=test-key moonx moonbitlang/openseek serve`.
+   The runner owns building, pipefail, and stdout/stderr/exit-status comparison.
+   For cases that actually create or modify files or need process control, add one standalone
    `.mbtx` under `fixtures/`, named after the behavior being tested. Invoke it
    directly, for example `moonx fixtures/cancel-on-stdin-eof.mbtx`.
    Put setup and commands together in that script, and clean up temporary
@@ -59,7 +63,8 @@ fence, or an exact remote package version. Commands occupy one source line.
    New Markdown files under this directory are discovered by the recipe and CI.
 
 The scripts use MoonBit's standard library and need no Bash or sh interpreter.
-Each script can be built on its own, including in the standalone TUI release.
+Each script can be built on its own. The TUI suite invokes its package directly
+and includes its session data in the standalone release.
 Unix filenames and OS error text still make some cases platform-specific; CI
 runs this suite on Linux.
 

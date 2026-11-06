@@ -9,31 +9,18 @@ import {
 
 ///|
 async fn main {
-  let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let result = @shell.Cmd(
     "moon",
-    [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
-      "run",
-      "--api-url",
-      ClosedEndpoint,
-      "say hi",
-    ],
+    [..run, "run", "--api-url", ClosedEndpoint, "say hi"],
     cwd=dir,
     env={
       "DEEPSEEK": "test-key",
       "OPENSEEK_RETRY_ATTEMPTS": "1",
       "MOON_WORK": "off",
     },
-    stdin=Text(""),
   ).output()
   println("exit=\{result.exit_code()}")
 
@@ -45,18 +32,12 @@ async fn main {
     .count(),
   )
   println(@utf8.encode(result.stdout()).length())
-  let result = @shell.Cmd(
-    "moon",
-    ["run", "--quiet", "--target", "wasm", engine, "--", "sessions", "list"],
-    cwd=dir,
-    env={
-      "DEEPSEEK": "",
-      "KIMI": "",
-      "OPENSEEK_MODEL": "deepseek-flash",
-      "MOON_WORK": "off",
-    },
-    stdin=Text(""),
-  ).output()
+  let result = @shell.Cmd("moon", [..run, "sessions", "list"], cwd=dir, env={
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }).output()
   println("exit=\{result.exit_code()}")
   let ids = result
     .stdout()

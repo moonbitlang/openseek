@@ -10,9 +10,8 @@ import {
 ///|
 async fn main {
   let root = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let scratch = "\{dir}/session/scratch"
   @fs.mkdir(scratch, recursive=true)
   let work = "\{scratch}/component-work/authored"
@@ -24,7 +23,6 @@ async fn main {
     ["run", "--quiet", "--target", "wasm", init, "--", ..init_args],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{result.exit_code()}")
   println("template_copied=\{@fs.exists("\{work}/bridge.mbt")}")
@@ -44,7 +42,6 @@ async fn main {
     ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{written.exit_code()}")
   println(
@@ -56,7 +53,6 @@ async fn main {
     ["run", "--quiet", "--target", "wasm", init, "--", ..init_args],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{result.exit_code()}")
   println(
@@ -73,7 +69,6 @@ async fn main {
     ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{outside.exit_code()}")
   @stdio.stdout.text.write(outside.stdout())

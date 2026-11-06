@@ -375,13 +375,9 @@ both `sessions show` calls strip `ts` to stay deterministic.
 
 ```mooncram
 $ moonx fixtures/sessions-offline.mbtx
-exit=0
 demo
-exit=0
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
-exit=0
 compacted session demo events 1..2; last_sequence=3
-exit=0
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},{"sequence":3,"item":{"kind":"summary","payload":{"content":"hello and answer","from_sequence":1,"to_sequence":2}}}]}
 ```
 
@@ -516,13 +512,13 @@ cancels arrive as JSONL commands on stdin, and the usual event stream leaves on
 stdout. The command surface is testable offline — a malformed command is
 reported as a `command_error` event rather than killing the server, an idle
 `cancel` is a no-op, and stdin EOF shuts the server down cleanly (exit 0)
-without ever touching the network. The fixture keeps only the stable event
-tag, since a line also carries the event's payload fields.
+without ever touching the network. The snapshot records the startup MCP status
+and the resulting command error.
 
-```mooncram
-$ moonx fixtures/serve-unknown-command.mbtx
-exit=0
-"event":"command_error"
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"command":"reboot"}' '{"command":"cancel"}' | DEEPSEEK=test-key moonx moonbitlang/openseek serve
+{"event":"mcp_status","status":{"configs":[],"servers":[]}}
+{"event":"command_error","error":"unknown command: reboot"}
 ```
 
 A steer with no turn to land in is rejected rather than converted into a prompt:
@@ -531,17 +527,17 @@ an engine must never start a turn the controller did not ask for. The rejection
 carries a `steer_dropped` event so the controller can ask the user to resubmit —
 and, usefully for this offline test, no turn means no network.
 
-```mooncram
-$ moonx fixtures/serve-late-steer.mbtx
-exit=0
-"event":"steer_dropped"
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"command":"steer","text":"too late"}' | DEEPSEEK=test-key moonx moonbitlang/openseek serve
+{"event":"mcp_status","status":{"configs":[],"servers":[]}}
+{"event":"steer_dropped","content":"too late"}
 ```
 
 Tagged steering keeps its submission id in the rejection receipt:
 
-```mooncram
-$ moonx fixtures/serve-tagged-late-steer.mbtx
-exit=0
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"command":"steer","text":"too late","submission_id":"late-steer"}' | DEEPSEEK=test-key moonx moonbitlang/openseek serve
+{"event":"mcp_status","status":{"configs":[],"servers":[]}}
 {"event":"steer_dropped","content":"too late","submission_id":"late-steer"}
 ```
 
@@ -550,19 +546,20 @@ The engine reports what it holds of its MCP servers without being asked: an
 changes. Every one carries the whole state, so a controller keeps the latest.
 With nothing configured there are no configs and no servers:
 
-```mooncram
-$ moonx fixtures/serve-mcp-status.mbtx
-exit=0
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key moonx moonbitlang/openseek serve
 {"event":"mcp_status","status":{"configs":[],"servers":[]}}
 ```
 
-A server that cannot start is listed with its failure rather than left out (the fixture stops before the error text, which
-is the operating system's):
+A server that cannot start is listed with its failure rather than left out.
+The diagnostic text varies by operating system; the server identity and failed
+state remain part of the snapshot:
 
-```mooncram
-$ moonx fixtures/serve-failed-mcp-status.mbtx
-exit=0
-"event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key moonx moonbitlang/openseek serve --mcp-config fixtures/mcp/failed.json
+{"event":"mcp_connect_failed","server":"notes","error":"*"} (glob)
+{"event":"mcp_tools_registered","servers":1,"tools":0,"names":[]}
+{"event":"mcp_status","status":{"configs":\[{"path":"fixtures/mcp/failed.json","state":"loaded"}\],"servers":\[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed","error":"*"}\]}} (glob)
 ```
 
 `serve` takes no positional; a stray task is rejected by the parser before
@@ -606,12 +603,11 @@ Options:
 
 Native MoonBit CLIs should use `moonbitlang/core/argparse` and call
 `@argparse.parse(...)` on a `Command` instead of hand-rolling argument parsing
-with `@env.args()`. This tiny package verifies the current `FlagArg`,
+with `@env.args()`. This standalone script verifies the current `FlagArg`,
 `PositionArg`, and `Matches` shape.
 
 ```mooncram
-$ moonx fixtures/argparse-example.mbtx
-exit=0
+$ moonx fixtures/argparse-example.mbtx --stdin sample.toml
 input=sample.toml
 stdin=true
 ```
@@ -621,8 +617,7 @@ stdin=true
 The validation command accepts repeated paths. Explicit arguments replace the
 environment fallback, and empty arguments do not name a file.
 
-```mooncram
-$ moonx fixtures/multiple-mcp-configs.mbtx
-exit=0
-first.json, second.json: no servers configured
+```mooncram moonbitlang/openseek
+$ OPENSEEK_MCP_CONFIG=missing.json moonx moonbitlang/openseek mcp --mcp-config fixtures/mcp/first.json --mcp-config= --mcp-config=fixtures/mcp/second.json
+fixtures/mcp/first.json, fixtures/mcp/second.json: no servers configured
 ```

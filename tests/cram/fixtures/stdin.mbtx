@@ -1,4 +1,10 @@
+---
+import { "moonbitlang/core/env" }
+---
+
 ///|
 fn main {
-  println("hello")
+  for line in @env.args()[1:] {
+    println(line)
+  }
 }

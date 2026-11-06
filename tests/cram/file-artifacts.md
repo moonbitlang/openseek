@@ -1,7 +1,9 @@
 # Creating session file artifacts
 
 These cases exercise the public artifact scripts on real temporary MoonBit
-projects. Each command selects one [standalone MoonBit script](fixtures/)
+projects. The shared [input project](fixtures/artifact-app/) is read-only;
+scenarios that edit its sources copy it into their temporary directory.
+Each command selects one [standalone MoonBit script](fixtures/)
 with its own directory, removed on success or failure. Each scenario prints observed exit
 statuses, diagnostics, and generated-file properties; testcli compares them
 with the snapshots below.

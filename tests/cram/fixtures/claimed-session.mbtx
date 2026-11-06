@@ -9,10 +9,9 @@ import {
 
 ///|
 async fn main {
-  let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
   let echo =
     #|{"version":1,"kind":"echo","input":0}
@@ -35,20 +34,7 @@ async fn main {
     ] {
     let result = @shell.Cmd(
       "moon",
-      [
-        "run",
-        "--quiet",
-        "--target",
-        "wasm",
-        engine,
-        "--",
-        "run",
-        "--input-format",
-        "json",
-        "--dir",
-        "\{dir}/ws",
-        ..args,
-      ],
+      [..run, "run", "--input-format", "json", "--dir", "\{dir}/ws", ..args],
       cwd=dir,
       env={ "MOON_WORK": "off" },
       stdin=Text(echo),
@@ -63,20 +49,7 @@ async fn main {
     args in [[..claimed, "--claim", "t-1"], ["--no-session", "--claim", "t-1"]] {
     let result = @shell.Cmd(
       "moon",
-      [
-        "run",
-        "--quiet",
-        "--target",
-        "wasm",
-        engine,
-        "--",
-        "run",
-        "--input-format",
-        "json",
-        "--dir",
-        "\{dir}/ws",
-        ..args,
-      ],
+      [..run, "run", "--input-format", "json", "--dir", "\{dir}/ws", ..args],
       cwd=dir,
       env={ "MOON_WORK": "off" },
       stdin=Text(echo),
@@ -86,13 +59,9 @@ async fn main {
   }
   let result = @shell.Cmd(
     "moon",
-    [
-      "run", "--quiet", "--target", "wasm", engine, "--", ..base, "--claim", "t-1",
-      "words",
-    ],
+    [..run, ..base, "--claim", "t-1", "words"],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{result.exit_code()}")
   @stdio.stdout.text.write(result.stderr())

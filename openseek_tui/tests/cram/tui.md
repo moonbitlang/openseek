@@ -1,10 +1,9 @@
 # Verified OpenSeek TUI CLI Documentation
 
 Run these examples from the repository root with
-`moon -C openseek_tui testcli test tests/cram`. Simple cases invoke the local
-`cmd/openseek_tui` package directly. The [MoonBit fixtures](fixtures/)
-create temporary sessions and launch the UI through `moon run`, using the default
-Wasm backend. They remove their temporary directories after each case.
+`moon -C openseek_tui testcli test tests/cram`. Every case invokes the local
+`cmd/openseek_tui` package directly with testcli's default Wasm backend.
+The session cases use a [read-only session fixture](fixtures/store/sessions/demo/openseek_session-demo.jsonl).
 
 `openseek_tui` is the dedicated interactive terminal UI; an initial prompt is
 passed with `--prompt` (there is no free-form positional). The engine it spawns
@@ -153,21 +152,26 @@ Pass --engine <path> to a working openseek binary, or omit --engine to run the p
 The prompt is written into a new session's header, so a session that already
 exists keeps the one it stored. Naming one with an existing `--session` is
 refused before the engine runs, pointing at the fork that changes it. The
-paths inside that hint are this machine's, so they are normalized here.
+paths inside that hint are this machine's, so the snapshot matches only their
+variable directory prefix.
 
-```mooncram
-$ moonx fixtures/existing-session-prompt.mbtx
+```mooncram moonbitlang/openseek_tui
+$ DEEPSEEK=test-key OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek_tui/cmd/openseek_tui --session demo --session-root fixtures/store --system-prompt-file prompt.md
+@STDOUT (empty)
+@STDERR
 error: --system-prompt-file applies only when this launch creates the session, and session demo already exists with the system prompt it stored. Fork it to change the prompt:
-  openseek sessions fork demo --as <new-id> --dir <workspace> --session-root <root> --system-prompt-file <file>
-status=1
+  openseek sessions fork demo --as <new-id> --dir */tests/cram --session-root fixtures/store --system-prompt-file <file> (glob)
+[1]
 ```
 
 `--continue` resolves to the same stored session and is refused the same way;
 the hint repeats the addendum flag when that is what was given.
 
-```mooncram
-$ moonx fixtures/continued-session-prompt.mbtx
+```mooncram moonbitlang/openseek_tui
+$ DEEPSEEK=test-key OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek_tui/cmd/openseek_tui --continue --session-root fixtures/store --system-prompt-addendum-file prompt.md
+@STDOUT (empty)
+@STDERR
 error: --system-prompt-addendum-file applies only when this launch creates the session, and session demo already exists with the system prompt it stored. Fork it to change the prompt:
-  openseek sessions fork demo --as <new-id> --dir <workspace> --session-root <root> --system-prompt-addendum-file <file>
-status=1
+  openseek sessions fork demo --as <new-id> --dir */tests/cram --session-root fixtures/store --system-prompt-addendum-file <file> (glob)
+[1]
 ```

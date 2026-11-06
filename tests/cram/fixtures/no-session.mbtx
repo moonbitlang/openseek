@@ -9,9 +9,8 @@ import {
 ///|
 async fn main {
   let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let result = @shell.Cmd(
     "moon",
     [
@@ -33,7 +32,6 @@ async fn main {
       "OPENSEEK_RETRY_ATTEMPTS": "1",
       "MOON_WORK": "off",
     },
-    stdin=Text(""),
   ).output()
   println("exit=\{result.exit_code()}")
   println("session_root_exists=\{@fs.exists("\{dir}/.openseek")}")

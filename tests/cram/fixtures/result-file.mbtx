@@ -10,10 +10,9 @@ import {
 
 ///|
 async fn main {
-  let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let path = "\{dir}/result.json"
   @fs.write_text(path, "stale\n", create_mode=CreateNew)
   let environment = {
@@ -25,12 +24,7 @@ async fn main {
   let result = @shell.Cmd(
     "moon",
     [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
+      ..run,
       "run",
       "--no-session",
       "--dir",
@@ -53,12 +47,7 @@ async fn main {
   let result = @process.run(
     "moon",
     [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
+      ..run,
       "run",
       "--no-session",
       "--dir",

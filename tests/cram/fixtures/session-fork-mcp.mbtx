@@ -9,10 +9,15 @@ import {
 
 ///|
 async fn main {
-  let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let env = {
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   @fs.mkdir("\{dir}/sessions/demo", recursive=true)
   @fs.write_text(
     "\{dir}/sessions/demo/openseek_session-demo.jsonl",
@@ -34,12 +39,7 @@ async fn main {
   let result = @shell.Cmd(
     "moon",
     [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
+      ..run,
       "sessions",
       "fork",
       "demo",
@@ -51,29 +51,14 @@ async fn main {
       "\{dir}/mcp.json",
     ],
     cwd=dir,
-    env={
-      "DEEPSEEK": "",
-      "KIMI": "",
-      "OPENSEEK_MODEL": "deepseek-flash",
-      "MOON_WORK": "off",
-    },
-    stdin=Text(""),
+    env~,
   ).output()
   println("exit=\{result.exit_code()}")
   let result = @shell.Cmd(
     "moon",
-    [
-      "run", "--quiet", "--target", "wasm", engine, "--", "sessions", "show", "with-mcp",
-      "--session-root", dir,
-    ],
+    [..run, "sessions", "show", "with-mcp", "--session-root", dir],
     cwd=dir,
-    env={
-      "DEEPSEEK": "",
-      "KIMI": "",
-      "OPENSEEK_MODEL": "deepseek-flash",
-      "MOON_WORK": "off",
-    },
-    stdin=Text(""),
+    env~,
   ).output()
   println("exit=\{result.exit_code()}")
   let session = @json.parse(result.stdout())

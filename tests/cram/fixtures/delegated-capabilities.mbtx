@@ -9,10 +9,9 @@ import {
 
 ///|
 async fn main {
-  let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
   let json = [..base, "--input-format", "json"]
   let echo =
@@ -28,9 +27,7 @@ async fn main {
   let managed = [..json, "--cancel-on-stdin-eof"]
   let result = @shell.Cmd(
     "moon",
-    [
-      "run", "--quiet", "--target", "wasm", engine, "--", ..managed, "--dir", "/",
-    ],
+    [..run, ..managed, "--dir", "/"],
     cwd=dir,
     env={ "MOON_WORK": "off" },
     stdin=Text(echo),
@@ -39,17 +36,7 @@ async fn main {
   println(result.stderr().split("\n").next().unwrap_or(""))
   let result = @shell.Cmd(
     "moon",
-    [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
-      ..managed,
-      "--mcp-config",
-      "\{dir}/mcp.json",
-    ],
+    [..run, ..managed, "--mcp-config", "\{dir}/mcp.json"],
     cwd=dir,
     env={ "MOON_WORK": "off" },
     stdin=Text(echo),
@@ -58,7 +45,7 @@ async fn main {
   @stdio.stdout.text.write(result.stderr())
   let result = @shell.Cmd(
     "moon",
-    ["run", "--quiet", "--target", "wasm", engine, "--", ..managed],
+    [..run, ..managed],
     cwd=dir,
     env={ "OPENSEEK_MCP_CONFIG": "\{dir}/mcp.json", "MOON_WORK": "off" },
     stdin=Text(echo),
@@ -68,12 +55,7 @@ async fn main {
   let result = @shell.Cmd(
     "moon",
     [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
+      ..run,
       ..managed,
       "--result-root",
       "\{dir}/out",
@@ -91,12 +73,7 @@ async fn main {
   let result = @shell.Cmd(
     "moon",
     [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
+      ..run,
       ..managed,
       "--result-root",
       "\{dir}/out",
@@ -113,12 +90,7 @@ async fn main {
   let result = @shell.Cmd(
     "moon",
     [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
+      ..run,
       ..managed,
       "--result-root",
       "\{dir}/out",

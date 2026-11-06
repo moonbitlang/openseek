@@ -9,27 +9,18 @@ import {
 ///|
 async fn main {
   let root = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let project = "\{dir}/session/scratch/app"
   @fs.mkdir(project, recursive=true)
   let output = "\{dir}/session/scratch/artifact"
-  let manifest =
-    #|name = "example/artifact"
-    #|version = "0.0.0"
-  let package_config =
-    #|pkgtype(kind: "executable")
-    #|options(link: { "js": { "format": "iife" } })
-  let source =
-    #|fn main { println("The application has loaded") }
-  @fs.write_text("\{project}/moon.mod", manifest, create_mode=CreateOrTruncate)
-  @fs.write_text(
-    "\{project}/moon.pkg",
-    package_config,
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_text("\{project}/main.mbt", source, create_mode=CreateOrTruncate)
+  for name in ["moon.mod", "moon.pkg", "main.mbt"] {
+    @fs.write_text(
+      "\{project}/\{name}",
+      @fs.read_text("fixtures/artifact-app/\{name}"),
+      create_mode=CreateNew,
+    )
+  }
   let builder = "\{root}/share/artifact/build.mbtx"
 
   @fs.write_text(
@@ -44,7 +35,6 @@ async fn main {
     ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{broken.exit_code()}")
   println(
@@ -73,7 +63,6 @@ async fn main {
     ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{warning.exit_code()}")
   println("unused_value_reported=\{warning.stderr().contains("unused_value")}")

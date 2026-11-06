@@ -9,9 +9,8 @@ import {
 ///|
 async fn main {
   let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   for level in ["warn", "error"] {
     let result = @shell.Cmd(
       "moon",
@@ -36,7 +35,6 @@ async fn main {
         "MOON_XLOG": level,
         "MOON_WORK": "off",
       },
-      stdin=Text(""),
     ).output()
     println("exit=\{result.exit_code()}")
     println(

@@ -1,56 +1,17 @@
 ---
-import {
-  "moonbitlang/core/async",
-  "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/shell",
-  "moonbitlang/core/async/stdio",
-}
+import { "moonbitlang/core/argparse" }
 ---
 
 ///|
-async fn main {
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
-  @fs.mkdir("\{dir}/cmd/echoargs", recursive=true)
-  @fs.write_text(
-    "\{dir}/moon.mod",
-    (
-      #|name = "example/cli"
-      #|version = "0.1.0"
-      #|
-    ),
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_text(
-    "\{dir}/cmd/echoargs/moon.pkg",
-    (
-      #|import { "moonbitlang/core/argparse" }
-      #|pkgtype(kind: "executable")
-      #|
-    ),
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_text(
-    "\{dir}/cmd/echoargs/main.mbt",
-    (
-      #|fn main raise {
-      #|  let matches = @argparse.Command("echoargs", flags=[@argparse.FlagArg("stdin", long="stdin")], positionals=[@argparse.PositionArg("input", default_values=["-"])]).parse()
-      #|  guard matches.values is { "input": [input, ..], .. } else { fail("missing input") }
-      #|  println("input=\{input}")
-      #|  println("stdin=\{matches.flags.get("stdin").unwrap_or(false)}")
-      #|}
-    ),
-    create_mode=CreateOrTruncate,
-  )
-  let cmd = "\{dir}/cmd/echoargs"
-  let result = @shell.Cmd(
-    "moon",
-    ["run", "--quiet", "--target", "wasm", cmd, "--", "--stdin", "sample.toml"],
-    cwd=dir,
-    env={ "MOON_WORK": "off" },
-    stdin=Text(""),
-  ).output()
-  println("exit=\{result.exit_code()}")
-  @stdio.stdout.text.write(result.stdout())
+fn main raise {
+  let matches = @argparse.Command(
+    "echoargs",
+    flags=[@argparse.FlagArg("stdin", long="stdin")],
+    positionals=[@argparse.PositionArg("input", default_values=["-"])],
+  ).parse()
+  guard matches.values is { "input": [input, ..], .. } else {
+    fail("missing input")
+  }
+  println("input=\{input}")
+  println("stdin=\{matches.flags.get("stdin").unwrap_or(false)}")
 }

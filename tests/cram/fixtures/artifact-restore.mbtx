@@ -10,27 +10,11 @@ import {
 ///|
 async fn main {
   let root = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let project = "\{dir}/session/scratch/app"
-  @fs.mkdir(project, recursive=true)
   let output = "\{dir}/session/scratch/artifact"
-  let manifest =
-    #|name = "example/artifact"
-    #|version = "0.0.0"
-  let package_config =
-    #|pkgtype(kind: "executable")
-    #|options(link: { "js": { "format": "iife" } })
-  let source =
-    #|fn main { println("The application has loaded") }
-  @fs.write_text("\{project}/moon.mod", manifest, create_mode=CreateOrTruncate)
-  @fs.write_text(
-    "\{project}/moon.pkg",
-    package_config,
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_text("\{project}/main.mbt", source, create_mode=CreateOrTruncate)
+  copy_tree("fixtures/artifact-app", project)
   let builder = "\{root}/share/artifact/build.mbtx"
 
   let original_page = publish(builder, project, output, dir, "chart-v1.html")
@@ -62,7 +46,6 @@ async fn main {
     ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{result.exit_code()}")
   @stdio.stdout.text.write(result.stdout())
@@ -99,7 +82,6 @@ async fn publish(
     ["run", "--quiet", "--target", "wasm", builder, "--", project, output, name],
     cwd=dir,
     env={ "MOON_WORK": "off" },
-    stdin=Text(""),
   ).output()
   println("exit=\{result.exit_code()}")
   @stdio.stdout.text.write(result.stdout())

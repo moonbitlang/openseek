@@ -8,20 +8,20 @@ import {
 
 ///|
 async fn main {
-  let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let env = {
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   @fs.mkdir("\{dir}/parent")
   let result = @shell.Cmd(
     "moon",
     [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
+      ..run,
       "run",
       "--dir",
       "\{dir}/parent/new",
@@ -35,7 +35,6 @@ async fn main {
       "OPENSEEK_RETRY_ATTEMPTS": "1",
       "MOON_WORK": "off",
     },
-    stdin=Text(""),
   ).output()
   println("exit=\{result.exit_code()}")
 
@@ -50,26 +49,9 @@ async fn main {
   )
   let result = @shell.Cmd(
     "moon",
-    [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
-      "sessions",
-      "list",
-      "--dir",
-      "\{dir}/parent/new",
-    ],
+    [..run, "sessions", "list", "--dir", "\{dir}/parent/new"],
     cwd=dir,
-    env={
-      "DEEPSEEK": "",
-      "KIMI": "",
-      "OPENSEEK_MODEL": "deepseek-flash",
-      "MOON_WORK": "off",
-    },
-    stdin=Text(""),
+    env~,
   ).output()
   println("exit=\{result.exit_code()}")
   let ids = result
@@ -89,26 +71,9 @@ async fn main {
   }
   let list = @shell.Cmd(
     "moon",
-    [
-      "run",
-      "--quiet",
-      "--target",
-      "wasm",
-      engine,
-      "--",
-      "sessions",
-      "list",
-      "--dir",
-      "\{dir}/parent/fresh",
-    ],
+    [..run, "sessions", "list", "--dir", "\{dir}/parent/fresh"],
     cwd=dir,
-    env={
-      "DEEPSEEK": "",
-      "KIMI": "",
-      "OPENSEEK_MODEL": "deepseek-flash",
-      "MOON_WORK": "off",
-    },
-    stdin=Text(""),
+    env~,
   ).output()
   println("exit=\{list.exit_code()}")
   println(

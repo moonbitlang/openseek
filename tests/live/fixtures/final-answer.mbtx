@@ -10,9 +10,8 @@ import {
 ///|
 async fn main {
   let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   let request : Json = {
     "command": "prompt",
     "content": "Call the finish tool immediately with the answer DONE. Use no other tool.",

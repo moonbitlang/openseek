@@ -28,7 +28,7 @@ strings and views: ok
 The CLI example counts what it reads; here stdin is six bytes:
 
 ```mooncram
-$ moonx fixtures/stdin.mbtx | moonx ../../share/examples/cli_count_input.mbtx --stdin
+$ moonx fixtures/stdin.mbtx hello | moonx ../../share/examples/cli_count_input.mbtx --stdin
 6
 ```
 

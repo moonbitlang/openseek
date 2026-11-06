@@ -5,8 +5,9 @@ These examples are executed by `moon testcli test tests/cram/run-requests.md`. T
 on stdin, the result in `--result-file` (the contract is `docs/run-result.md`).
 The `echo` preset is modelless, and the model-backed cases point at a closed
 local port, so the suite needs no API key and makes no external API calls.
-The [request fixtures](fixtures/cancel-on-stdin-eof.mbtx) retain the stdin, timing, and
-result-file assertions; each runs in a fresh temporary directory.
+Validation cases call the CLI directly through testcli pipelines.
+[Fixtures](fixtures/cancel-on-stdin-eof.mbtx) handle result files and stdin
+timing in temporary directories, printing observations for the snapshots.
 
 ## A Request From a File: stdin EOF Ends the Input
 
@@ -35,32 +36,78 @@ exit 1
 
 ## Requests That Cannot Run Are Refused Up Front
 
-```mooncram
-$ moonx fixtures/invalid-requests.mbtx
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"version":1,"kind":"nope","input":{}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: unknown kind: nope
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"kind":"worker","input":{"task":"fix things"}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: worker input requires an absolute `worker_root`
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"kind":"review","input":{"goal":"g","base":"origin/main"}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: review takes a goal or a base, not both
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"kind":"review","input":{"base":" "}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: review requires a non-empty goal or base
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":2,"input":{}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: unsupported request version 2
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"task":"t"},"schema":{"type":"object"}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: this engine does not support the request's `schema`
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"prompt":"t"}}' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: a general request's input needs a non-empty `task`
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"task":"t"}}' | moonx moonbitlang/openseek run --no-session --input-format json words
+@STDOUT (empty)
+@STDERR
 error: a task on the command line cannot be combined with --input-format json
-exit 1
+[1]
+
+$ moonx moonbitlang/openseek run --no-session --kind echo words
+@STDOUT (empty)
+@STDERR
 error: --kind needs --input-format json: a preset reads a JSON request
-exit 1
+[1]
+
+$ moonx moonbitlang/openseek run --no-session --cancel-on-stdin-eof words
+@STDOUT (empty)
+@STDERR
 error: --cancel-on-stdin-eof needs --input-format json
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx 'not json' | moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: the request on stdin is not JSON: Invalid character 'o' at line 1, column 1
-exit 1
+[1]
+
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"task":"t"}}' | moonx moonbitlang/openseek run --no-session --input-format json --cancel-on-stdin-eof --review-gate
+@STDOUT (empty)
+@STDERR
 error: a delegated run (--cancel-on-stdin-eof) does not take --review-gate: it gets only what its parent's launch grants
-exit 1
+[1]
 ```
 
 ## A Refused Request Still Answers Under Its Id, and Leaves Nothing Behind
@@ -159,10 +206,12 @@ exit=0
 A malformed `OPENSEEK_MAX_STEPS` does not refuse a request that carries its own
 step ceiling: the environment is parsed only when it would apply.
 
-```mooncram
-$ moonx fixtures/request-step-limit.mbtx
-exit=1
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"version":1,"input":{"task":"t"},"limits":{"max_steps":2}}' | DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash OPENSEEK_MAX_STEPS=bad moonx moonbitlang/openseek run --no-session --input-format json
+@STDOUT (empty)
+@STDERR
 error: an API key is required for deepseek-flash: pass --api-key
+[1]
 ```
 
 ## Closing stdin Cancels a Managed Run, Which Still Reports

@@ -10,9 +10,8 @@ import {
 ///|
 async fn main {
   let root = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   @fs.write_text(
     "\{dir}/moon.mod",
     (
@@ -47,7 +46,6 @@ async fn main {
       ["run", "--quiet", "--target", "wasm", script, "--"],
       cwd=dir,
       env={ "MOON_WORK": "off" },
-      stdin=Text(""),
     ).output()
     println("exit=\{result.exit_code()}")
     @stdio.stdout.text.write(result.stdout())
@@ -76,7 +74,6 @@ async fn main {
       ["run", "--quiet", "--target", "wasm", script, "--"],
       cwd=dir,
       env={ "MOON_WORK": "off" },
-      stdin=Text(""),
     ).output()
     println("exit=\{result.exit_code()}")
     @stdio.stdout.text.write(result.stdout())

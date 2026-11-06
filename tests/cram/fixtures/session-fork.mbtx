@@ -10,10 +10,15 @@ import {
 
 ///|
 async fn main {
-  let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let env = {
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   @fs.mkdir("\{dir}/sessions/demo", recursive=true)
   @fs.write_text(
     "\{dir}/sessions/demo/openseek_session-demo.jsonl",
@@ -28,35 +33,17 @@ async fn main {
   )
   let result = @shell.Cmd(
     "moon",
-    [
-      "run", "--quiet", "--target", "wasm", engine, "--", "sessions", "fork", "demo",
-      "--as", "retry", "--session-root", dir,
-    ],
+    [..run, "sessions", "fork", "demo", "--as", "retry", "--session-root", dir],
     cwd=dir,
-    env={
-      "DEEPSEEK": "",
-      "KIMI": "",
-      "OPENSEEK_MODEL": "deepseek-flash",
-      "MOON_WORK": "off",
-    },
-    stdin=Text(""),
+    env~,
   ).output()
   println("exit=\{result.exit_code()}")
   @stdio.stdout.text.write(result.stdout())
   let result = @shell.Cmd(
     "moon",
-    [
-      "run", "--quiet", "--target", "wasm", engine, "--", "sessions", "show", "retry",
-      "--session-root", dir,
-    ],
+    [..run, "sessions", "show", "retry", "--session-root", dir],
     cwd=dir,
-    env={
-      "DEEPSEEK": "",
-      "KIMI": "",
-      "OPENSEEK_MODEL": "deepseek-flash",
-      "MOON_WORK": "off",
-    },
-    stdin=Text(""),
+    env~,
   ).output()
   println("exit=\{result.exit_code()}")
   let session = @json.parse(result.stdout())
@@ -76,36 +63,18 @@ async fn main {
   for extra in [["--as", "retry"], ["--as", "early", "--through", "1"]] {
     let failure = @shell.Cmd(
       "moon",
-      [
-        "run", "--quiet", "--target", "wasm", engine, "--", "sessions", "fork", "demo",
-        ..extra, "--session-root", dir,
-      ],
+      [..run, "sessions", "fork", "demo", ..extra, "--session-root", dir],
       cwd=dir,
-      env={
-        "DEEPSEEK": "",
-        "KIMI": "",
-        "OPENSEEK_MODEL": "deepseek-flash",
-        "MOON_WORK": "off",
-      },
-      stdin=Text(""),
+      env~,
     ).output()
     println("exit=\{failure.exit_code()}")
     @stdio.stdout.text.write(failure.stderr())
   }
   let result = @shell.Cmd(
     "moon",
-    [
-      "run", "--quiet", "--target", "wasm", engine, "--", "sessions", "list", "--session-root",
-      dir,
-    ],
+    [..run, "sessions", "list", "--session-root", dir],
     cwd=dir,
-    env={
-      "DEEPSEEK": "",
-      "KIMI": "",
-      "OPENSEEK_MODEL": "deepseek-flash",
-      "MOON_WORK": "off",
-    },
-    stdin=Text(""),
+    env~,
   ).output()
   println("exit=\{result.exit_code()}")
   let ids = result

@@ -11,9 +11,8 @@ import {
 ///|
 async fn main {
   let engine = @fs.realpath("../..")
-  let temporary = @fs.tmpdir(prefix="openseek-testcli-")
-  defer @fs.rmdir(temporary, recursive=true)
-  let dir = @fs.realpath(temporary)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
   @fs.mkdir("\{dir}/sessions/demo", recursive=true)
   @fs.write_text(
     "\{dir}/sessions/demo/openseek_session-demo.jsonl",
@@ -43,9 +42,8 @@ async fn main {
       "OPENSEEK_MODEL": "deepseek-flash",
       "MOON_WORK": "off",
     },
-    stdin=Text(""),
   ).output()
-  println("exit=\{result.exit_code()}")
+  result.check()
   let ids = result
     .stdout()
     .split("\n")
@@ -94,9 +92,8 @@ async fn main {
       "OPENSEEK_MODEL": "deepseek-flash",
       "MOON_WORK": "off",
     },
-    stdin=Text(""),
   ).output()
-  println("exit=\{result.exit_code()}")
+  result.check()
   @stdio.stdout.text.write(result.stdout())
   println(
     show_session(engine, dir, "demo")
@@ -120,8 +117,7 @@ async fn show_session(engine : String, dir : String, id : String) -> Json {
       "OPENSEEK_MODEL": "deepseek-flash",
       "MOON_WORK": "off",
     },
-    stdin=Text(""),
   ).output()
-  println("exit=\{result.exit_code()}")
+  result.check()
   @json.parse(result.stdout())
 }
