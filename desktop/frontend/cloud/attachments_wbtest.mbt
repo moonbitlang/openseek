@@ -90,6 +90,7 @@ test "first Cloud file-only submission creates once and admits the prepared file
           steers: [],
           compacting: false,
           compact_queued: false,
+          approval: None,
         },
       }),
     ),

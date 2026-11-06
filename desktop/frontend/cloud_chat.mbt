@@ -140,6 +140,14 @@ fn update_cloud(
   } else {
     None
   }
+  let approval_notifications = if model.account.map(account => {
+      account.user.user_id
+    }) ==
+    before.user_id {
+    cloud_approval_notifications(before, cloud)
+  } else {
+    []
+  }
   let cloud = if completion is Some((id, _)) {
     let conversations = cloud.conversations.copy()
     conversations[id] = {
@@ -270,6 +278,15 @@ fn update_cloud(
     },
     cloud,
     navigation,
+    // A turn that starts in the Cloud conversation on screen, from this
+    // client or another, locks its approval mode, so the menu closes with it.
+    select_menu: if model.select_menu is Some(OpenSeekApprovalMenu) &&
+      model.cloud_identity() is Some(owner) &&
+      !cloud.can_choose_approval(owner.session()) {
+      None
+    } else {
+      model.select_menu
+    },
     sidebar_mode: if message is @cloud.Create {
       @sidebar.ChatMode
     } else {
@@ -362,6 +379,9 @@ fn update_cloud(
       ..file_commands,
       cloud_command_results(dispatch, before, next.cloud, message),
       completion.map_or(@cmd.none, value => value.1.command(locale=next.locale)),
+      ..approval_notifications.map(notification => {
+        notification.command(locale=next.locale)
+      }),
     ],
   )
   if ((deleted && removed_selection) || archived_selection) &&
@@ -571,6 +591,11 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
           open: false,
           title: "DeepSeek Flash",
         }),
+        @composer.ApprovalStatus({
+          mode: self.cloud.approval(owner.session()),
+          open: self.select_menu is Some(OpenSeekApprovalMenu),
+          enabled: self.cloud.can_choose_approval(owner.session()),
+        }),
       ],
       placeholder: shell_text(self.locale, AskPlaceholder),
       disabled: pending || !self.cloud.can_compose(owner.session()),
@@ -664,7 +689,10 @@ fn Model::cloud_chat_rows(
             conversation.map_or(false, conversation => {
               conversation.sending || conversation.generating
             }),
-          needs_input=false,
+          needs_input=!archived &&
+            conversation.map_or(false, conversation => {
+              conversation.awaits_approval()
+            }),
           unseen_outcome=if !archived &&
             conversation is Some({ unseen_finish: true, .. } as conversation) {
             Some(

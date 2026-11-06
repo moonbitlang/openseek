@@ -60,7 +60,8 @@ fn ControlInput::submission_id(self : ControlInput) -> String {
     QueueAdd(id~, ..)
     | QueueEdit(id~, ..)
     | QueueWithdraw(id~)
-    | QueueSteer(id~) => id
+    | QueueSteer(id~)
+    | Approve(id~, ..) => id
     Stop => self.key
   }
 }
@@ -104,10 +105,50 @@ pub fn Conversation::control_primary_action(
 }
 
 ///|
+/// A permission question from the control snapshot that this client has not
+/// answered: the turn is blocked on the person.
+pub fn Conversation::awaits_approval(self : Conversation) -> Bool {
+  self.control is Some({ approval: Some(question), .. }) &&
+  self.approval_answered != Some(question.id)
+}
+
+///|
+/// The question a live control snapshot newly published, while this client
+/// has not answered it. The stream's baseline snapshot, read before
+/// `last_seq` is known, recovers a question asked while this client was away
+/// and is never reported here.
+pub fn Conversation::published_approval(
+  self : Conversation,
+  previous : Conversation,
+) -> ControlApproval? {
+  guard previous.last_seq is Some(_) &&
+    self.awaits_approval() &&
+    self.control is Some({ approval: Some(question), .. }) &&
+    !(previous.control is Some({ approval: Some(earlier), .. }) &&
+    earlier.id == question.id) else {
+    return None
+  }
+  Some(question)
+}
+
+///|
 pub fn Conversation::control_context(
   self : Conversation,
 ) -> Array[@composer.ContextComponent] {
   let context : Array[@composer.ContextComponent] = []
+  // First, because it is the only notice the turn waits on: a tool is
+  // blocked until the question is answered.
+  if self.control is Some({ approval: Some(question), .. }) {
+    context.push(
+      @composer.ApprovalRequest({
+        tool_name: question.tool_name,
+        detail: question.detail,
+        target_label: None,
+        body: question.body,
+        answered: self.approval_answered == Some(question.id),
+      }),
+    )
+  }
   let pending : Array[@composer.PendingSteerInput] = []
   for input in self.control_inputs {
     if input.operation is (Steer(..) | QueueSteer(..)) {
@@ -349,7 +390,13 @@ fn Conversation::control_snapshot(
   task : String?,
   data : ControlState,
 ) -> Conversation {
-  let mut next = { ..self, control: Some(data), }
+  let mut next = {
+    ..self,
+    control: Some(data),
+    approval_answered: self.approval_answered.filter(id => {
+      data.approval is Some(question) && question.id == id
+    }),
+  }
   for input in self.control_inputs {
     if Some(input.task_id) != task {
       continue
@@ -608,7 +655,11 @@ fn State::update_control(
     }
     return Some(
       (
-        self.replace(session, { ..changed, control: conversation.control, }),
+        self.replace(session, {
+          ..changed,
+          control: conversation.control,
+          approval_answered: conversation.approval_answered,
+        }),
         @cmd.none,
       ),
     )
@@ -620,6 +671,12 @@ fn State::update_control(
         input.key == id && input.task_id == task
       }) else {
       return Some((self, @cmd.none))
+    }
+    if conversation.control_inputs.iter().find_first(input => input.key == id)
+      is Some({ operation: Approve(id=question, ..), .. }) {
+      return Some(
+        self.approval_delivered(session, conversation, id, question, message),
+      )
     }
     let changed = match message {
       ControlAttachmentStored(_, _, _, _, source, path) =>
@@ -749,6 +806,31 @@ fn State::update_control(
   })
   let id = @uuid.mint()
   let (operation, draft, attachments) = match message {
+    ControlAction(_, @composer.ApprovalAnswered(allow~, ..)) => {
+      // The answer settles only the question on screen, once, and only while
+      // its task still runs; later snapshots own whether it was settled.
+      guard running &&
+        control.approval is Some(question) &&
+        conversation.approval_answered != Some(question.id) else {
+        return Some((self, @cmd.none))
+      }
+      let (next, command) = self.begin_control(
+        session,
+        task,
+        Approve(id=question.id, allow~),
+        emit,
+        token,
+      )
+      return Some(
+        (
+          next.replace(session, {
+            ..next.conversations[session],
+            approval_answered: Some(question.id),
+          }),
+          command,
+        ),
+      )
+    }
     ControlAction(_, @composer.StopRequested(..)) => {
       guard running &&
         !conversation.control_inputs.any(input => input.operation is Stop) else {
@@ -885,6 +967,49 @@ fn State::update_control(
       draft?,
       attachments~,
     ),
+  )
+}
+
+///|
+/// An accepted answer stays answered until the snapshot settles the question.
+/// A refused or undelivered one returns the card to the person, whose next
+/// answer the server fences against the question it still holds.
+fn State::approval_delivered(
+  self : State,
+  session : String,
+  conversation : Conversation,
+  key : String,
+  question : String,
+  message : Msg,
+) -> (State, @cmd.Cmd) {
+  let settled = {
+    ..conversation,
+    control_inputs: conversation.control_inputs.filter(input => input.key != key),
+  }
+  let changed = match message {
+    ControlFinished(_, _, _, _, Accepted) => settled
+    ControlFinished(_, _, _, _, Rejected(reason)) =>
+      {
+        ..settled,
+        approval_answered: settled.approval_answered.filter(id => id != question),
+        notice: Some("Cloud did not accept the answer: \{reason}."),
+      }
+    ControlFailed(_, _, _, _, failure) =>
+      {
+        ..settled,
+        approval_answered: settled.approval_answered.filter(id => id != question),
+        notice: Some(failure.label()),
+      }
+    _ => conversation
+  }
+  let state = self.replace(session, changed)
+  (
+    if message is ControlFailed(_, _, _, _, Unauthorized) {
+      { ..state, needs_sign_in: true, }
+    } else {
+      state
+    },
+    @cmd.none,
   )
 }
 

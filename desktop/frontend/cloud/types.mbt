@@ -6,6 +6,8 @@ pub(all) struct Session {
   updated_at : Double?
   generating : Bool
   archived : Bool
+  // The policy the next engine starts with; a running turn keeps its own.
+  approval : @protocol.OpenSeekApproval
 }
 
 ///|
@@ -146,6 +148,9 @@ pub(all) struct Conversation {
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
   controls : @engine_session.State
+  // The permission question this client answered, kept answered until the
+  // control snapshot settles it or publishes another.
+  approval_answered : String?
   notice : String?
 }
 
@@ -203,6 +208,7 @@ fn Conversation::empty() -> Conversation {
     heartbeat: None,
     retrying: None,
     controls: @engine_session.State::empty(),
+    approval_answered: None,
     notice: None,
   }
 }
@@ -241,6 +247,7 @@ pub enum CommandInput {
 pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
+  SetApproval(@protocol.OpenSeekApproval)
 }
 
 ///|
@@ -248,6 +255,7 @@ impl ToJson for SessionEdit with fn to_json(self) {
   match self {
     Rename(title) => { "title": Json(title) }
     Archive(archived) => { "archived": Json(archived) }
+    SetApproval(mode) => { "approval": mode.to_json() }
   }
 }
 
@@ -438,6 +446,15 @@ fn decode_sessions(json : Json) -> Array[Session] raise RequestError {
     archived: match item {
       Object(fields) if !fields.contains("archived") => false
       _ => required_bool(item, "archived")
+    },
+    // Servers that predate approval modes start every engine asking.
+    approval: match item {
+      Object(fields) if !fields.contains("approval") => ApprovalAsk
+      Object(fields) =>
+        @json.from_json(fields["approval"]) catch {
+          _ => raise @cloud_client.RequestError(Malformed)
+        }
+      _ => raise @cloud_client.RequestError(Malformed)
     },
   })
 }
