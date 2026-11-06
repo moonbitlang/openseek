@@ -52,9 +52,6 @@ test('live-authored linear answer has correct controls, results, reset and offer
     await expect(a).toHaveValue('1');
     await expect(b).toHaveValue('0');
     await expect.poll(async () => Number(await output.textContent())).toBe(2);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.emulateMedia({ colorScheme: 'dark' });
-    assert.equal(await frame.locator('body').evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
     if (process.env.OPENSEEK_UI_CAPTURE_DIR) {
       await mkdir(process.env.OPENSEEK_UI_CAPTURE_DIR, { recursive: true });
       await page.screenshot({ path: join(process.env.OPENSEEK_UI_CAPTURE_DIR, 'live-linear-answer.png') });

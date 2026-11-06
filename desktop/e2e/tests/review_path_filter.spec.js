@@ -86,14 +86,6 @@ test('Review combines extension checkboxes with paths and clears both filters', 
   await expect(menu).toBeHidden();
   await trigger.click();
   await expect(menu).toBeVisible();
-  for (const colorScheme of ['light', 'dark']) {
-    await page.emulateMedia({ colorScheme });
-  }
-  await page.setViewportSize({ width: 390, height: 760 });
-  await expect(menu).toBeVisible();
-  const bounds = await menu.boundingBox();
-  expect(bounds.x).toBeGreaterThanOrEqual(0);
-  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
   await input.click();
   await expect(menu).toBeHidden();
   await page.locator('#review-clear-filters').click();

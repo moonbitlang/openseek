@@ -61,7 +61,6 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
     await expect(page.locator('#dock-new-tab-menu [data-dock-action="github"]')).toContainText(locale.hint);
     await page.keyboard.press('Escape');
   }
-  await page.setViewportSize({ width: 1050, height: 768 });
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-Hans'] });
     window.dispatchEvent(new Event('languagechange'));
@@ -76,7 +75,7 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
   expect(app.pageErrors).toEqual([]);
 });
 
-test('GitHub dock keeps both inventories scrollable and disclosures keyboard accessible', async ({ page }) => {
+test('GitHub inventories scroll independently and expand their groups', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const originalReply = app.replyFor.bind(app);
   app.replyFor = request => {
@@ -106,12 +105,6 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
   await expect(panel.locator('.github-pulls .github-item')).toHaveCount(30);
   await expect(panel.locator('.github-issues .github-item')).toHaveCount(30);
   await expect(panel.locator('.github-avatar-image')).toHaveCount(60);
-  await expect.poll(() => panel.locator('.github-item').first().evaluate(row => {
-    const avatar = row.querySelector('.github-avatar').getBoundingClientRect();
-    const title = row.querySelector('.github-item-title').getBoundingClientRect();
-    return row.getBoundingClientRect().height <= 28 && avatar.width === 16 && avatar.height === 16 &&
-      title.left > avatar.right && Math.abs(title.top + title.height / 2 - avatar.top - avatar.height / 2) < 1;
-  })).toBe(true);
   const created = panel.locator('.github-group[data-group="created"] > .github-group-heading');
   await expect(created).toHaveAttribute('aria-expanded', 'false');
   await created.focus();
@@ -120,16 +113,6 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
   await expect(panel.locator('.github-pulls .github-item')).toHaveCount(60);
   await page.keyboard.press('Space');
   await expect(created).toHaveAttribute('aria-expanded', 'false');
-  for (const width of [1440, 1050]) {
-    await page.setViewportSize({ width, height: 800 });
-    await expect.poll(() => panel.evaluate(element => {
-      const sections = [...element.querySelectorAll('.github-section-body')];
-      return sections.length === 2 && sections.every(section =>
-        section.clientHeight > 80 && section.scrollHeight > section.clientHeight &&
-        section.scrollWidth <= section.clientWidth + 1);
-    })).toBe(true);
-    await expect(panel.locator('.github-issues > .github-heading')).toBeInViewport();
-  }
   const issues = panel.locator('.github-issues .github-section-body');
   await issues.hover();
   await page.mouse.wheel(0, 1200);

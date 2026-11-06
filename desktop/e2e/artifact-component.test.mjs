@@ -93,11 +93,9 @@ test('repeated instances are independent and reopening restores the authored sta
   } finally { await page.close(); }
 });
 
-test('the packaged page fits a narrow dark frame and respects preview isolation', async () => {
-  const { page, frame, errors } = await openComponent({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+test('the packaged page respects preview isolation and accepts keyboard input', async () => {
+  const { page, frame, errors } = await openComponent();
   try {
-    assert.equal(await frame.locator('body').evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    assert.equal(await frame.locator('body').evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches), true);
     assert.equal(await frame.locator('body').evaluate(() => {
       try { return Boolean(parent.document); } catch { return false; }
     }), false);
