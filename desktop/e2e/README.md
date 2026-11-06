@@ -14,6 +14,11 @@ Two question-card layout flows also run in WebKit to cover Safari's grid
 sizing, clipping, and narrow-viewport interaction. Shared question state and
 protocol cases run in Chromium and model tests.
 
+`mobile_browser.spec.js` runs in Chromium and WebKit and covers the phone
+layout that browsers and the Android client share; it needs no Android build.
+Its reduced viewport heights simulate layout only, not a real phone's soft
+keyboard or browser toolbar.
+
 ## Setup
 
 From this directory:

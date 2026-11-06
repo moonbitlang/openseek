@@ -146,7 +146,7 @@ nothing of the frontend's layers or DOM (`desktop/frontend/dismiss/back.mbt`).
 
 Shared mobile layout, Chat/Connect entry and offline behavior are browser
 features. Their tests live under `desktop/e2e/tests` and require no Android
-build; see [Mobile browser client](../desktop/MOBILE_BROWSER.md). Android adds
+build; see [Desktop end-to-end tests](../desktop/e2e/README.md). Android adds
 only native authentication, insets/lifecycle, Back, file picking and packaging.
 `conversation.css` hides the terminal and side-panel buttons for this first
 conversation-only client.
