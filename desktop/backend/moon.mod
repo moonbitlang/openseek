@@ -3,6 +3,7 @@ name = "openseek_desktop/backend"
 version = "0.1.5"
 
 import {
+  "moonbitlang/http_file_server@0.1.0",
   "moonbitlang/jsonl@0.2.1",
   "moonbitlang/openseek_protocol@0.4.1",
   "moonbit-community/pty@0.4.3",

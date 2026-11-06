@@ -75,6 +75,7 @@ pub async fn LocalConsole::run(
   entry~ : String,
 ) -> Unit {
   defer self.server.close()
+  let root = @static_files.Directory(root)
   @async.with_task_group(group => {
     for ;; {
       let (conn, _) = self.server.accept()
