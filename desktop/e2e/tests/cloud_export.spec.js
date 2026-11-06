@@ -39,8 +39,8 @@ async function setup(page, { desktop = false } = {}) {
     return route.abort('failed');
   });
   await cloud.goto(); await cloud.open();
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
+  await page.locator('#conversation-export').click();
+  const dialog = page.locator('#conversation-export-dialog');
   await expect(dialog).toBeVisible();
   return { cloud, uploads, dialog };
 }
@@ -49,8 +49,8 @@ test('Cloud downloads the original server snapshot and shares without a host exp
   const { cloud, uploads, dialog } = await setup(page);
   await expect(dialog).toContainText('Anyone with the link can view it for 7 days');
   const beforeHistory = cloud.requests.filter(request => request.path.endsWith('/messages')).length;
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(`${authOrigin}/v1/shares/sh_fixture`);
+  await dialog.getByTestId('export-share').click();
+  await expect(dialog.getByTestId('export-link')).toHaveValue(`${authOrigin}/v1/shares/sh_fixture`);
   const shares = cloud.requests.filter(request => request.path.endsWith('/share'));
   expect(shares).toHaveLength(1);
   expect(shares[0].headers.authorization).toBe('Bearer ts_fixture-123');
@@ -58,7 +58,7 @@ test('Cloud downloads the original server snapshot and shares without a host exp
   expect(cloud.requests.filter(request => request.path.endsWith('/messages'))).toHaveLength(beforeHistory);
   expect(uploads).toEqual([]);
   const pending = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
+  await dialog.getByTestId('export-download').click();
   const downloaded = await pending;
   expect(downloaded.suggestedFilename()).toBe('conversation.html');
   const html = await readFile(await downloaded.path(), 'utf8');
@@ -81,7 +81,7 @@ for (const status of [401, 409, 503]) {
   test(`Cloud share ${status} ${status === 401 ? 'expires the account' : 'preserves it'}`, async ({ page }) => {
     const { cloud, uploads, dialog } = await setup(page);
     cloud.shareStatus = status;
-    await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+    await dialog.getByTestId('export-share').click();
     if (status === 401) {
       await expect(dialog).toBeHidden();
       await expect(cloud.row(sessionA)).toBeHidden();
@@ -91,7 +91,7 @@ for (const status of [401, 409, 503]) {
         ? 'This conversation has no complete original log to export.'
         : 'Cloud answered HTTP 503');
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
-      await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+      await expect(dialog.getByTestId('export-share')).toBeEnabled();
     }
     expect(uploads).toEqual([]);
     expect(cloud.device.pageErrors).toEqual([]);
@@ -108,7 +108,7 @@ test('desktop Cloud downloads use the window save dialog and preserve cancel, sa
     if (failure) throw new Error(failure);
     return reply;
   };
-  const download = dialog.getByRole('button', { name: 'Download', exact: true });
+  const download = dialog.getByTestId('export-download');
   const saves = () => cloud.hostRequests.filter(request => request.method === 'session.snapshot_save');
   await download.click();
   await expect.poll(() => saves().length).toBe(1);
@@ -132,14 +132,14 @@ test('desktop Cloud downloads use the window save dialog and preserve cancel, sa
 test('a disconnected Cloud share is not automatically resubmitted', async ({ page }) => {
   const { cloud, uploads, dialog } = await setup(page);
   cloud.disconnectShare = true;
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await dialog.getByTestId('export-share').click();
   await expect(dialog).toContainText('Cloud is unreachable');
   const shares = () => cloud.requests.filter(request => request.path.endsWith('/share'));
   expect(shares()).toHaveLength(1);
   const oldKey = JSON.parse(shares()[0].body).idempotency_key;
   cloud.disconnectShare = false;
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
+  await dialog.getByTestId('export-share').click();
+  await expect(dialog.getByTestId('export-link')).toBeVisible();
   expect(shares()).toHaveLength(2);
   expect(JSON.parse(shares()[1].body).idempotency_key).not.toBe(oldKey);
   expect(uploads).toEqual([]);
@@ -154,7 +154,7 @@ for (const status of [401, 409, 503]) {
     const downloads = [];
     page.on('download', download => downloads.push(download));
     const beforeHistory = cloud.requests.filter(request => request.path.endsWith('/messages')).length;
-    await dialog.getByRole('button', { name: 'Download', exact: true }).click();
+    await dialog.getByTestId('export-download').click();
     if (status === 401) {
       await expect(dialog).toBeHidden();
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
@@ -163,7 +163,7 @@ for (const status of [401, 409, 503]) {
         ? 'This conversation has no complete original log to export.'
         : `Cloud answered HTTP ${status}`);
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+      await expect(dialog.getByTestId('export-download')).toBeEnabled();
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
     }
     expect(downloads).toEqual([]);
@@ -179,9 +179,9 @@ for (const failure of ['malformed', 'disconnected']) {
     if (failure === 'malformed') cloud.exportSnapshots.set(sessionA, { html: snapshot.html });
     else cloud.exportOffline = true;
     const beforeHistory = cloud.requests.filter(request => request.path.endsWith('/messages')).length;
-    await dialog.getByRole('button', { name: 'Download', exact: true }).click();
+    await dialog.getByTestId('export-download').click();
     await expect(dialog).toContainText(failure === 'malformed' ? 'Cloud returned an invalid response' : 'Cloud is unreachable');
-    await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+    await expect(dialog.getByTestId('export-download')).toBeEnabled();
     expect(cloud.hostRequests.filter(request => request.method === 'session.snapshot_save')).toEqual([]);
     expect(cloud.requests.filter(request => request.path.endsWith('/messages'))).toHaveLength(beforeHistory);
     expect(cloud.device.pageErrors).toEqual([]);

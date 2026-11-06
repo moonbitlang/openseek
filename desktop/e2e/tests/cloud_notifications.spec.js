@@ -97,15 +97,15 @@ test('Cloud cancellation stays silent and sign-out retires its unread badge and 
   await app.finishTask();
   await expect.poll(() => shown(app).length).toBe(1);
   const payload = shown(app)[0].params.payload;
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
-  await section.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
+  const section = page.locator('#management-dialog');
+  await section.locator('#settings-sign-out').click();
   await expect(app.row(sessionA)).toBeHidden();
   await expect.poll(() => badge(app)).toBe(0);
   await page.evaluate(payload => window.desktopEvent('notification.click', { payload }), payload);
   // Let the click render before asserting, so a stale frame cannot pass.
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.locator('#management-dialog')).toBeVisible();
   expect(app.device.pageErrors).toEqual([]);
 });
 

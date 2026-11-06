@@ -16,13 +16,13 @@ const largeSelection = () => Array.from({ length: 101 }, (_, index) => ({
 async function openCodeSearch(page) {
   await page.keyboard.press(await page.evaluate(() =>
     navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F'));
-  await page.getByRole('button', { name: 'Code search', exact: true }).click();
-  await page.getByRole('textbox', { name: 'pattern', exact: true }).fill('inspect($(x:arg))');
+  await page.locator('#search-mode-code').click();
+  await page.locator('#search-pattern-0').fill('inspect($(x:arg))');
 }
 
 async function selectWholePattern(page) {
   await openCodeSearch(page);
-  await page.getByLabel('Select pattern', { exact: true }).click();
+  await page.getByTestId('search-select-pattern').click();
 }
 
 test('semantic selection follows match, file, and pattern controls', async ({ page }) => {
@@ -39,31 +39,31 @@ test('semantic selection follows match, file, and pattern controls', async ({ pa
 
   const results = page.locator('.search-results');
   const chip = page.locator('.mention-chip');
-  await expect(results.getByRole('button', { name: 'Select match', exact: true })).toHaveCount(3);
-  await results.getByRole('button', { name: 'Select match', exact: true }).first().click();
+  await expect(results.locator('[data-testid=search-select-match][aria-pressed=false]')).toHaveCount(3);
+  await results.locator('[data-testid=search-select-match][aria-pressed=false]').first().click();
   await expect(chip).toContainText('1 matches');
   // A partially selected file becomes fully selected without collapsing it.
-  await results.getByLabel('Select file', { exact: true }).first().click();
-  await expect(results.getByRole('button', { name: 'Deselect match', exact: true })).toHaveCount(2);
+  await results.getByTestId('search-select-file').first().click();
+  await expect(results.locator('[data-testid=search-select-match][aria-pressed=true]')).toHaveCount(2);
   await expect(chip).toContainText('2 matches');
-  await results.getByLabel('Deselect file', { exact: true }).click();
+  await results.getByTestId('search-select-file').click();
   await expect(chip).toHaveCount(0);
-  await results.getByRole('button', { name: 'Select match', exact: true }).first().click();
-  await results.getByLabel('Select pattern', { exact: true }).click();
-  await expect(results.getByRole('button', { name: 'Deselect match', exact: true })).toHaveCount(3);
+  await results.locator('[data-testid=search-select-match][aria-pressed=false]').first().click();
+  await results.getByTestId('search-select-pattern').click();
+  await expect(results.locator('[data-testid=search-select-match][aria-pressed=true]')).toHaveCount(3);
   await expect(results.locator('.search-selection-toolbar')).toContainText('3 selected');
   await expect(chip).toContainText('3 matches');
-  await results.getByLabel('Deselect pattern', { exact: true }).click();
+  await results.getByTestId('search-select-pattern').click();
   await expect(chip).toHaveCount(0);
-  await results.getByLabel('Select pattern', { exact: true }).click();
-  await results.getByRole('button', { name: 'Clear selection', exact: true }).click();
-  await expect(results.getByRole('button', { name: 'Select match', exact: true })).toHaveCount(3);
+  await results.getByTestId('search-select-pattern').click();
+  await results.locator('#search-clear-selection').click();
+  await expect(results.locator('[data-testid=search-select-match][aria-pressed=false]')).toHaveCount(3);
   await expect(chip).toHaveCount(0);
-  await results.getByRole('button', { name: 'Select match', exact: true }).first().click();
+  await results.locator('[data-testid=search-select-match][aria-pressed=false]').first().click();
   await expect(chip).toContainText('1 matches');
-  await page.getByRole('button', { name: 'Text search', exact: true }).click();
+  await page.locator('#search-mode-text').click();
   await expect(chip).toHaveCount(0);
-  await page.getByRole('button', { name: 'Code search', exact: true }).click();
+  await page.locator('#search-mode-code').click();
   await expect(chip).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
@@ -85,14 +85,14 @@ test('large semantic selection retries and sends its original draft while later 
 
   const composer = page.locator('#task');
   await composer.fill('Inspect the original selection');
-  await page.getByTitle('Send', { exact: true }).click();
-  await expect(page.getByText('Could not prepare semantic-search selection: disk full', { exact: true })).toBeVisible();
+  await page.locator('#send').click();
+  await expect(page.locator('.notification')).toContainText('Could not prepare semantic-search selection: disk full');
   await expect(composer).toBeEnabled();
   await expect(composer).toHaveValue('Inspect the original selection');
   expect(app.requests.filter(request => request.method === 'agent.start')).toHaveLength(0);
 
   app.rpcErrors.delete(method);
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect(composer).toBeDisabled();
   await expect.poll(() => app.requests.filter(request => request.method === method).length).toBe(2);
   const attempts = app.requests.filter(request => request.method === method);
@@ -100,7 +100,7 @@ test('large semantic selection retries and sends its original draft while later 
   expect(attempts[1].params.matches).toHaveLength(101);
 
   // Preparing disables text input, but search selection remains interactive.
-  await page.getByRole('button', { name: 'Deselect match', exact: true }).first().click();
+  await page.locator('[data-testid=search-select-match][aria-pressed=true]').first().click();
   await expect(chips.filter({ hasText: '100 matches' })).toHaveCount(1);
   expect(app.requests.filter(request => request.method === 'agent.start')).toHaveLength(0);
   materialization.resolve({ path, match_count: 101, file_count: 1 });
@@ -124,17 +124,17 @@ test('closing the follow-up menu does not steal focus back from the composer', a
   await app.openSession();
   const composer = page.locator('#task');
   await composer.fill('Start a turn');
-  await page.getByTitle('Send', { exact: true }).click();
-  const choice = page.getByRole('button', { name: 'Follow-up action', exact: true });
+  await page.locator('#send').click();
+  const choice = page.locator('#composer-followup-select');
   await expect(choice).toContainText('Steer now');
   await composer.fill('Queued draft to preserve');
   await choice.click();
-  await expect(page.getByRole('listbox', { name: 'Follow-up action' })).toBeVisible();
+  await expect(page.locator('#composer-followup-select-menu')).toBeVisible();
 
   // Put the user's next focus change between selection and the closing paint.
   // Enter must still reach the composer when that paint eventually completes.
   await page.clock.pauseAt(await page.evaluate(() => Date.now()) + 100);
-  await page.getByRole('option', { name: 'Queue next', exact: true }).click();
+  await page.locator('[role=option][data-value=queue]').click();
   await composer.focus();
   await page.clock.runFor(32);
   await expect(choice).toContainText('Queue next');
@@ -158,22 +158,22 @@ test('queued message Edit waits for semantic preparation so the send keeps its d
   await app.openSession();
   const composer = page.locator('#task');
   await composer.fill('Start a turn');
-  await page.getByTitle('Send', { exact: true }).click();
-  const choice = page.getByRole('button', { name: 'Follow-up action', exact: true });
+  await page.locator('#send').click();
+  const choice = page.locator('#composer-followup-select');
   await expect(choice).toContainText('Steer now');
   await composer.fill('Queued draft to preserve');
   await choice.click();
-  await page.getByRole('option', { name: 'Queue next', exact: true }).click();
+  await page.locator('[role=option][data-value=queue]').click();
   await composer.press('Enter');
   const queued = page.locator('.queued-input-row');
   await expect(queued).toContainText('Queued draft to preserve');
 
   await selectWholePattern(page);
   await composer.fill('Inspect the original selection');
-  await page.getByTitle('Steer the running task', { exact: true }).click();
+  await page.locator('#send').click();
   await expect(composer).toBeDisabled();
   // Edit is inert while the frozen draft waits for its file.
-  await queued.getByTitle('Edit', { exact: true }).click();
+  await queued.getByTestId('queued-input-edit').click();
   await expect(composer).toHaveValue('Inspect the original selection');
   materialization.resolve({ path, match_count: 101, file_count: 1 });
   await expect(composer).toBeEnabled();
@@ -185,10 +185,10 @@ test('queued message Edit waits for semantic preparation so the send keeps its d
   expect(app.requests.filter(request => request.method === 'agent.queue' && request.params.action === 'edit'))
     .toHaveLength(0);
   await expect(queued).toContainText('Queued draft to preserve');
-  await queued.getByTitle('Edit', { exact: true }).click();
+  await queued.getByTestId('queued-input-edit').click();
   await expect(composer).toHaveValue('Queued draft to preserve');
   await composer.fill('Edited after preparation');
-  await page.getByTitle('Save queued message', { exact: true }).click();
+  await page.locator('#send').click();
   await expect(queued).toContainText('Edited after preparation');
   expect(app.pageErrors).toEqual([]);
 });
@@ -205,28 +205,28 @@ for (const provider of ['OpenSeek session', 'Codex']) {
     await app.install();
     await app.goto();
     if (provider === 'Codex') {
-      await page.getByRole('button', { name: 'Model', exact: true }).click();
-      await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+      await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+      await page.locator('[role=option][data-value="codex:gpt-5.4-codex"]').click();
     } else if (provider === 'OpenSeek session') {
       await app.openSession();
     } else {
       // The shell can render before the new chat has an active workspace.
-      await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
+      await expect(page.locator('#empty-project-trigger')).toBeVisible();
     }
     await openCodeSearch(page);
-    await page.getByRole('button', { name: 'Select match', exact: true }).first().click();
+    await page.locator('[data-testid=search-select-match][aria-pressed=false]').first().click();
     const chip = page.locator('.mention-chip .mention-jump');
     await expect(chip).toContainText('1 matches');
-    await page.getByTitle('Open src/main.mbt:1', { exact: true }).click();
+    await page.locator('.search-preview-line[data-path="src/main.mbt"][data-line="1"]').click();
     await expect(page.locator('.search-results')).toBeHidden();
     await chip.click();
-    await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible();
+    await expect(page.locator('#search-show-all')).toBeVisible();
     await expect(page.locator('.search-semantic-hit')).toHaveCount(1);
-    await page.getByRole('button', { name: 'Show all', exact: true }).click();
+    await page.locator('#search-show-all').click();
     await expect(page.locator('.search-semantic-hit')).toHaveCount(2);
-    await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+    await page.locator('#right-panel-toggle').click();
     await chip.click();
-    await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible();
+    await expect(page.locator('#search-show-all')).toBeVisible();
     await expect(page.locator('.search-semantic-hit')).toHaveCount(1);
     expect(app.pageErrors).toEqual([]);
   });
@@ -252,19 +252,19 @@ for (const worktree of [false, true]) {
     app.rpcErrors.set(method, 'disk full');
     await app.install();
     await app.goto();
-    await page.getByRole('button', { name: 'Model', exact: true }).click();
-    await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+    await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+    await page.locator('[role=option][data-value="codex:gpt-5.4-codex"]').click();
     if (worktree) await page.locator('button.composer-worktree').click();
     await selectWholePattern(page);
     const composer = page.locator('#task');
     await composer.fill('Inspect selected matches');
     expect(app.requests.filter(request => request.method === method)).toHaveLength(0);
-    await page.getByTitle('Send', { exact: true }).click();
-    await expect(page.getByText('Codex turn: disk full', { exact: true })).toBeVisible();
+    await page.locator('#send').click();
+    await expect(page.locator('.transcript-error-message')).toContainText('Codex turn: disk full');
     await expect(composer).toHaveValue('Inspect selected matches');
     expect(app.requests.filter(request => request.method === 'codex.turn.start')).toHaveLength(0);
     app.rpcErrors.delete(method);
-    await page.getByTitle('Send', { exact: true }).click();
+    await page.locator('#send').click();
     await expect.poll(() => app.requests.filter(request => request.method === 'codex.turn.start').length).toBe(1);
     const started = app.requests.find(request => request.method === 'codex.turn.start');
     expect(started.params.input).toContainEqual({ type: 'mention', name: 'selection.jsonl', path: `${root}/${path}` });
@@ -275,7 +275,7 @@ for (const worktree of [false, true]) {
     await selectWholePattern(page);
     await expect(page.locator('.mention-chip')).toContainText('101 matches');
     await composer.fill('Inspect these too');
-    await page.getByTitle('Steer the running task', { exact: true }).click();
+    await page.locator('#send').click();
     await expect.poll(() => app.requests.filter(request => request.method === 'codex.turn.steer').length).toBe(1);
     const steered = app.requests.find(request => request.method === 'codex.turn.steer');
     expect(steered.params.input).toContainEqual({ type: 'mention', name: 'selection.jsonl', path: `${root}/${path}` });
@@ -297,15 +297,15 @@ for (const clear of [false, true]) {
     const composer = page.locator('#task');
     const chips = page.locator('.mention-chip');
     await composer.fill('Inspect selected matches');
-    await page.getByTitle('Send', { exact: true }).click();
+    await page.locator('#send').click();
     await expect(composer).toBeDisabled();
-    if (clear) await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
-    else await page.getByRole('button', { name: 'Deselect match', exact: true }).first().click();
-    await expect(page.getByText('Could not prepare semantic-search selection: disk full', { exact: true })).toBeVisible();
+    if (clear) await page.locator('#search-clear-selection').click();
+    else await page.locator('[data-testid=search-select-match][aria-pressed=true]').first().click();
+    await expect(page.locator('.notification')).toContainText('Could not prepare semantic-search selection: disk full');
     await expect(composer).toHaveValue('Inspect selected matches');
     await expect(chips).toHaveCount(clear ? 0 : 1);
     if (!clear) await expect(chips).toContainText('100 matches');
-    await page.getByTitle('Send', { exact: true }).click();
+    await page.locator('#send').click();
     await expect.poll(() => app.requests.find(request => request.method === 'agent.start')).toBeTruthy();
     const sent = app.requests.find(request => request.method === 'agent.start').params.task;
     expect(sent.match(/<match file=/g) || []).toHaveLength(clear ? 0 : 100);
@@ -324,12 +324,12 @@ test('a fresh draft cannot switch agents while its semantic snapshot is being wr
   app.replyFor = request => request.method === method ? materialization.promise : replyFor(request);
   await app.install();
   await app.goto();
-  await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
+  await expect(page.locator('#empty-project-trigger')).toBeVisible();
   await selectWholePattern(page);
-  const picker = page.getByRole('button', { name: 'Model', exact: true });
+  const picker = page.locator('#openseek-model-picker, #codex-model-picker, #model');
   await expect(picker).toBeEnabled();
   await picker.click();
-  await expect(page.getByRole('option', { name: 'GPT-5.4 Codex', exact: true })).toBeVisible();
+  await expect(page.locator('[role=option][data-value="codex:gpt-5.4-codex"]')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.locator('#task').fill('Inspect the original selection');
   await page.locator('#send').click();

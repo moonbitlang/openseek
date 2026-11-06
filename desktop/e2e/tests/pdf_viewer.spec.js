@@ -34,14 +34,14 @@ async function setup(page, { codex = false, openTree = true } = {}) {
   await app.goto();
   if (!codex) await app.openSession();
   if (codex) {
-    await page.getByRole('button', { name: 'Model', exact: true }).click();
-    await page.getByRole('option', { name: 'Codex images', exact: true }).click();
+    await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+    await page.locator('[role=option][data-value="codex:gpt-test"]').click();
     await expect(page.locator('#task')).toHaveAttribute('placeholder', 'Ask Codex to inspect, edit, or explain this workspace.');
   }
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle').click();
   if (openTree) {
     await app.openReview({ waitForHistory: false });
-    await page.getByRole('tab', { name: 'Files', exact: true }).click();
+    await page.locator('#explorer-files-tab').click();
   }
   return app;
 }
@@ -49,9 +49,9 @@ async function setup(page, { codex = false, openTree = true } = {}) {
 async function expectPdf(page) {
   await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
   await expect(page.locator('.pdfViewer .page')).toHaveCount(2);
-  await expect(page.getByRole('spinbutton', { name: 'PDF page number', exact: true })).toBeEnabled();
+  await expect(page.locator('#pdf-page-number')).toBeEnabled();
   await expect(page.locator('.viewer-notice')).toHaveClass(/hidden/);
-  await expect(page.getByRole('dialog', { name: 'Unlock PDF', exact: true })).toBeHidden();
+  await expect(page.locator('#pdf-password-dialog')).toBeHidden();
 }
 
 test('opening a PDF defaults to a hidden tree and preserves manual reopening across files', async ({ page }) => {
@@ -85,10 +85,10 @@ test('opening a PDF defaults to a hidden tree and preserves manual reopening acr
   expect(frames.every(frame => !frame.visible && frame.animations === 0)).toBe(true);
   app.rpcDelays.delete('fs.read_file');
   await expect(page.locator('.file-tree-pane')).toBeHidden();
-  await page.getByTitle('Show file tree', { exact: true }).click();
+  await page.locator('#file-tree-toggle').click();
   await expect(page.locator('.file-tree-pane')).toBeVisible();
-  await page.getByRole('button', { name: 'Next page', exact: true }).click();
-  await expect(page.getByRole('spinbutton', { name: 'PDF page number', exact: true })).toHaveValue('2');
+  await page.locator('#pdf-next-page').click();
+  await expect(page.locator('#pdf-page-number')).toHaveValue('2');
   await expect(page.locator('.file-tree-pane')).toBeVisible();
   await openFile(app, 'report.docx');
   await expect(page.locator('.word-page').first()).toBeVisible();
@@ -108,7 +108,7 @@ test('opening an extensionless PDF from a hidden panel keeps the default tree cl
   const app = await setup(page, { openTree: false });
   await openFile(app, 'report.docx');
   await expect(page.locator('.word-page').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+  await page.locator('#right-panel-toggle').click();
   await expect(page.locator('.file-tree-pane')).toBeHidden();
   app.rpcDelays.set('fs.read_file', 1200);
   await page.evaluate(() => {
@@ -144,17 +144,17 @@ test('PDF controls and confirmed text selections retain structured context', asy
   await expect(page.locator('.textLayer').first()).toContainText('OpenSeek PDF preview');
   await expect(page.locator('.pdfViewer canvas').first()).toBeVisible();
   const zoom = Number((await page.locator('.office-viewer-zoom-value').innerText()).replace('%', ''));
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.locator('#office-zoom-in').click();
   await expect(page.locator('.office-viewer-zoom-value')).toHaveText(`${Math.min(400, Math.max(25, zoom + 10))}%`);
-  await page.getByRole('button', { name: 'Fit page width', exact: true }).click();
+  await page.locator('#pdf-fit-width').click();
   await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScaleValue))
     .toBe('page-width');
-  await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+  await page.locator('#pdf-rotate').click();
   await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.pagesRotation)).toBe(90);
-  await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('Second');
+  await page.locator('#office-find').fill('Second');
   await expect(page.locator('.pdf-search-count')).toHaveText('1 / 1');
-  await expect(page.getByRole('spinbutton', { name: 'PDF page number', exact: true })).toHaveValue('2');
-  await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('');
+  await expect(page.locator('#pdf-page-number')).toHaveValue('2');
+  await page.locator('#office-find').fill('');
   // PDF.js removes match highlights asynchronously; until then the item's
   // text is split around a highlight span and has no single text node.
   await expect(page.locator('.textLayer .highlight')).toHaveCount(0);
@@ -197,7 +197,7 @@ test('PDF controls and confirmed text selections retain structured context', asy
   await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toHaveCount(2);
   await page.locator('#task').fill('Explain this PDF passage');
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task).toContain('<office_selection>');
   const task = app.requests.find(request => request.method === 'agent.start').params.task;
   const selection = JSON.parse(task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
@@ -219,7 +219,7 @@ test('PDF fit width follows panel animations while manual zoom stays fixed', asy
   const app = await setup(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  await page.getByRole('button', { name: 'Fit page width', exact: true }).click();
+  await page.locator('#pdf-fit-width').click();
   const surface = page.locator('#openseek-office-surface');
   const expectFits = async () => {
     await expect.poll(() => surface.evaluate(host => {
@@ -232,14 +232,14 @@ test('PDF fit width follows panel animations while manual zoom stays fixed', asy
     await expect.poll(() => page.locator('.content').evaluate(element => element.getAnimations().length)).toBe(0);
     await expectFits();
   }
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.locator('#office-zoom-in').click();
   // The zoom reaches PDF.js after the next render; reading the scale before
   // then would record the fitted value as the manual one.
   await expect.poll(() => surface.evaluate(host => host.__officeViewerPdf.viewer.currentScaleValue))
     .not.toBe('page-width');
   const scale = () => surface.evaluate(host => host.__officeViewerPdf.viewer.currentScale);
   const manualScale = await scale();
-  await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
+  await page.locator('#panel-expand').click();
   await expect.poll(() => page.locator('.content').evaluate(element => element.getAnimations().length)).toBe(0);
   expect(await scale()).toBe(manualScale);
   expect(app.pageErrors).toEqual([]);
@@ -249,8 +249,8 @@ test('PDF tab switches retain the reading position and discard retired runtime c
   const app = await setup(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  await page.getByRole('button', { name: 'Next page', exact: true }).click();
-  await expect(page.getByRole('spinbutton', { name: 'PDF page number', exact: true })).toHaveValue('2');
+  await page.locator('#pdf-next-page').click();
+  await expect(page.locator('#pdf-page-number')).toHaveValue('2');
   await page.locator('#openseek-office-surface').evaluate(host => { window.retiredPdf = host.__officeViewerPdf; });
   await openFile(app, 'report.docx');
   await expect(page.locator('.word-page')).toContainText('Walking on imported air');
@@ -258,7 +258,7 @@ test('PDF tab switches retain the reading position and discard retired runtime c
   expect(await page.evaluate(() => window.retiredPdf.alive)).toBe(false);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  await expect(page.getByRole('spinbutton', { name: 'PDF page number', exact: true })).toHaveValue('2');
+  await expect(page.locator('#pdf-page-number')).toHaveValue('2');
   await page.evaluate(() => {
     window.retiredPdf.options.onState(JSON.stringify({ status: 'error', message: 'Stale PDF failure' }));
     window.retiredPdf.options.onSelection('invalid retired selection');
@@ -290,19 +290,20 @@ test('PDF controls and failures follow live language changes without parser deta
     window.dispatchEvent(new Event('languagechange'));
   });
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
-  await expect(page.getByRole('searchbox', { name: '在文档中查找', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '适应页宽', exact: true })).toBeVisible();
-  await expect(page.getByRole('spinbutton', { name: 'PDF 页码', exact: true })).toBeEnabled();
+  await expect(page.locator('#office-find')).toHaveAccessibleName('在文档中查找');
+  await expect(page.locator('#pdf-fit-width')).toHaveAccessibleName('适应页宽');
+  await expect(page.locator('#pdf-page-number')).toBeEnabled();
+  await expect(page.locator('#pdf-page-number')).toHaveAccessibleName('PDF 页码');
   await openFile(app, 'broken.pdf');
   await expect(page.locator('.viewer-notice')).toContainText('无法预览此 PDF。请重新打开文件。');
   await expect(page.locator('.viewer-notice')).not.toContainText(/Invalid PDF|base64|Error:|stack/i);
   await openFile(app, 'encrypted.pdf');
-  const dialog = page.getByRole('dialog', { name: '解锁 PDF', exact: true });
+  const dialog = page.locator('#pdf-password-dialog');
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel('PDF 密码', { exact: true }).fill('wrong-password');
-  await dialog.getByRole('button', { name: '解锁', exact: true }).click();
+  await dialog.locator('#pdf-password').fill('wrong-password');
+  await dialog.locator('#pdf-password-submit').click();
   await expect(dialog.getByRole('alert')).toHaveText('密码错误。');
-  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await dialog.locator('#pdf-password-cancel').click();
   await expect(dialog).toBeHidden();
   await expect(page.locator('.viewer-notice')).toContainText('已取消 PDF 预览。重新打开文件即可重试。');
   expect(app.pageErrors).toEqual([]);
@@ -311,17 +312,17 @@ test('PDF controls and failures follow live language changes without parser deta
 test('encrypted PDFs retry incorrect passwords and release a cancelled session', async ({ page }) => {
   const app = await setup(page);
   await openFile(app, 'encrypted.pdf');
-  const dialog = page.getByRole('dialog', { name: 'Unlock PDF', exact: true });
-  const input = page.getByLabel('PDF password', { exact: true });
+  const dialog = page.locator('#pdf-password-dialog');
+  const input = page.locator('#pdf-password');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('alert')).toBeHidden();
   await input.fill('incorrect');
-  await dialog.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await dialog.locator('#pdf-password-submit').click();
   await expect(dialog.getByRole('alert')).toHaveText('Incorrect password.');
   await expect(dialog.getByRole('alert')).toBeVisible();
   await expect(input).toHaveValue('');
   await input.fill('open-seek');
-  await dialog.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await dialog.locator('#pdf-password-submit').click();
   await expectPdf(page);
   await expect(dialog).toBeHidden();
   await expect(input).toHaveValue('');
@@ -329,7 +330,7 @@ test('encrypted PDFs retry incorrect passwords and release a cancelled session',
   await openFile(app, 'encrypted.pdf');
   await expect(dialog).toBeVisible();
   await page.locator('#openseek-office-surface').evaluate(host => { window.cancelledPdf = host.__officeViewerPdf; });
-  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await dialog.locator('#pdf-password-cancel').click();
   await expect(dialog).toBeHidden();
   await expect(page.locator('.viewer-notice')).toHaveText('PDF preview cancelled. Reopen the file to try again.');
   expect(await page.evaluate(() => window.cancelledPdf.alive)).toBe(false);
@@ -436,7 +437,7 @@ test('PDF annotation retains a visible source selection while typing', async ({ 
   expect(await page.evaluate(() => window.getSelection().toString())).not.toContain('Selectable first page text');
   await expectHighlight();
   const scale = await page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale);
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.locator('#office-zoom-in').click();
   await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale)).toBeGreaterThan(scale + 0.05);
   await expect(async () => expectHighlight()).toPass();
   await page.locator('.pdf-container').evaluate(element => { element.scrollTop += 30; });
@@ -524,12 +525,12 @@ test('PDF annotation closes on an outside click before the input is focused', as
 });
 
 async function enableImages(page) {
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: /^DS Flash(?: ✓)?$/ }).click();
+  await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+  await page.locator('[role=option][data-value="openseek:deepseek-v4-flash"]').click();
 }
 
 async function captureRegion(page, rect, { reverse = false, confirm = true } = {}) {
-  await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+  await page.locator('#pdf-capture').click();
   await expect(page.locator('.pdf-region-capture')).toBeVisible();
   const a = { x: rect.x, y: rect.y }, b = { x: rect.x + rect.width, y: rect.y + rect.height };
   await page.mouse.move(...Object.values(reverse ? b : a));
@@ -589,9 +590,9 @@ test.describe('PDF region screenshots', () => {
     await enableImages(page);
     await openFile(app, 'report.pdf');
     await expectPdf(page);
-    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-    await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
-    await page.getByRole('button', { name: 'Next page', exact: true }).click();
+    await page.locator('#office-zoom-in').click();
+    await page.locator('#pdf-rotate').click();
+    await page.locator('#pdf-next-page').click();
     await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
       host.__officeViewerPdf.viewer.getPageView(1).renderingState)).toBe(3);
     const source = page.locator('.page[data-page-number="2"] canvas');
@@ -611,7 +612,7 @@ test.describe('PDF region screenshots', () => {
     await enableImages(page);
     await openFile(app, 'report.pdf');
     await expectPdf(page);
-    const button = page.getByRole('button', { name: 'Capture region', exact: true });
+    const button = page.locator('#pdf-capture');
     await button.click();
     await expect(page.locator('.pdf-region-capture')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -680,7 +681,7 @@ test(`PDF screenshots include form appearances (${rotation}, partial ${partial},
     : note ? '.annotationLayer .textAnnotation' : '.annotationLayer .textWidgetAnnotation');
   await expect(annotation).toBeVisible();
   for (let angle = 0; angle < rotation; angle += 90) {
-    await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+    await page.locator('#pdf-rotate').click();
   }
   if (note) await annotation.locator('img').evaluate(img => img.decode());
   else await expect(annotation.locator('canvas')).toBeVisible();
@@ -755,7 +756,7 @@ test.describe('PDF touch capture', () => {
       }
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     };
-    const button = page.getByRole('button', { name: 'Capture region', exact: true });
+    const button = page.locator('#pdf-capture');
     await button.click();
     await expect(page.locator('.pdf-region-capture')).toBeVisible();
     await drag();
@@ -780,7 +781,7 @@ test('PDF capture mode keeps native scrolling and opens the shared feedback comp
   await enableImages(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  const button = page.getByRole('button', { name: 'Capture region', exact: true });
+  const button = page.locator('#pdf-capture');
   await button.click();
   const container = page.locator('.pdf-container');
   const before = await container.evaluate(el => el.scrollTop);
@@ -858,7 +859,7 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   await enableImages(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.locator('#office-zoom-in').click();
   await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
     host.__officeViewerPdf.viewer.currentScaleValue)).not.toBe('page-width');
   await page.locator('#task').fill('Existing draft');
@@ -874,7 +875,7 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   const feedback = page.locator('.pdf-capture-feedback');
   await captureRegion(page, await captureRect(), { confirm: false });
   await feedback.locator('textarea').fill('Make the heading larger');
-  await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+  await page.locator('#pdf-rotate').click();
   await expect(feedback.locator('textarea')).toHaveValue('Make the heading larger');
   // Rotation can move this region beyond the right edge at manual zoom.
   // Offscreen selection fragments are clipped, so reveal it before checking.
@@ -890,7 +891,7 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   await expect(page.locator('.composer-image')).toHaveCount(1);
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
   for (const rotation of [180, 270, 0]) {
-    await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+    await page.locator('#pdf-rotate').click();
     await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
       host.__officeViewerPdf.viewer.pagesRotation)).toBe(rotation);
   }
@@ -922,7 +923,7 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
     await captureRegion(page, rect, { confirm: false });
     const feedback = page.locator('.pdf-capture-feedback');
     const input = feedback.locator('textarea');
-    const camera = page.getByRole('button', { name: 'Capture region', exact: true });
+    const camera = page.locator('#pdf-capture');
     if (comment) await input.fill(comment);
     // The unfocused, attachment-backed draft must survive a real outside click.
     await page.locator('#task').click();
@@ -969,7 +970,7 @@ test('PDF element hover and a slightly moving click attach text, page and screen
   await enableImages(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+  await page.locator('#pdf-capture').click();
   const b = await hoverPdfText(page, 'OpenSeek PDF preview');
   const box = await page.locator('.pdf-region-capture-box').boundingBox();
   expect(Math.abs(box.x - b.x)).toBeLessThanOrEqual(3);
@@ -1018,7 +1019,7 @@ for (const tagged of [false, true]) {
     await enableImages(page);
     await openFile(app, 'report.pdf');
     await expectPdf(page);
-    const button = page.getByRole('button', { name: 'Capture region', exact: true });
+    const button = page.locator('#pdf-capture');
     await button.click();
     const first = await hoverPdfText(page, 'Hello');
     const last = await page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'world' }).first().boundingBox();
@@ -1048,7 +1049,7 @@ test('PDF element mode ignores blank clicks and dragging overrides a hovered tar
   await enableImages(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+  await page.locator('#pdf-capture').click();
   const b = await hoverPdfText(page, 'OpenSeek PDF preview');
   await page.mouse.click(b.x, b.y + 150);
   await expect(page.locator('.pdf-region-capture')).toBeVisible();
@@ -1072,15 +1073,15 @@ test('PDF element hover follows scroll and works on a rotated zoomed second page
   await enableImages(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  const button = page.getByRole('button', { name: 'Capture region', exact: true });
+  const button = page.locator('#pdf-capture');
   await button.click();
   await hoverPdfText(page, 'OpenSeek PDF preview');
   await page.mouse.wheel(0, 200);
   await expect(page.locator('.pdf-region-capture-box')).toBeHidden();
-  await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+  await page.locator('#pdf-rotate').click();
   await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Next page', exact: true }).click();
-  await page.getByRole('button', { name: 'Fit page width', exact: true }).click();
+  await page.locator('#pdf-next-page').click();
+  await page.locator('#pdf-fit-width').click();
   await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
     host.__officeViewerPdf.viewer.getPageView(1).renderingState)).toBe(3);
   const text = page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'Second page selection' }).first();
@@ -1118,13 +1119,13 @@ for (const [tagged, intrinsic, rotation] of [[true, 0, 90], [false, 90, 180]]) {
       await openFile(app, 'report.pdf');
       await expectPdf(page);
       for (let turn = 0; turn < rotation / 90; turn++) {
-        await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+        await page.locator('#pdf-rotate').click();
       }
       const hello = page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'Hello' }).first();
       await hello.scrollIntoViewIfNeeded();
       await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
         host.__officeViewerPdf.viewer.getPageView(0).renderingState)).toBe(3);
-      await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+      await page.locator('#pdf-capture').click();
       await hoverPdfText(page, 'Hello');
       const world = await page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'world' }).first().boundingBox();
       const box = await page.locator('.pdf-region-capture-box').boundingBox();
@@ -1161,7 +1162,7 @@ for (const restart of [false, true]) {
         return new Promise(resolve => { window.releasePdfIndex = () => resolve(null); });
       };
     });
-    const camera = page.getByRole('button', { name: 'Capture region', exact: true });
+    const camera = page.locator('#pdf-capture');
     await camera.click();
     await expect.poll(() => page.evaluate(() => window.pdfIndexPending)).toBe(true);
     if (restart) {

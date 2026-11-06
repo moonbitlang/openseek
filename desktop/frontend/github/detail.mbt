@@ -119,7 +119,9 @@ fn detail_actions(
     ),
     @html.button(
       class="github-action-button",
-      attrs=@html.Attrs::build().aria_label(ui(locale, RefreshPullRequest)),
+      attrs=@html.Attrs::build()
+        .id("github-detail-refresh")
+        .aria_label(ui(locale, RefreshPullRequest)),
       disabled=!active || detail.loading,
       on_click=emit(RefreshDetail),
       [

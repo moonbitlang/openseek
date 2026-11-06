@@ -80,16 +80,16 @@ class CloudFilesHarness extends CloudHarness {
   }
 }
 
-const tree = page => page.getByRole('tree', { name: 'Workspace files', exact: true });
+const tree = page => page.locator('#workspace-files');
 const file = (page, name) => tree(page).getByRole('treeitem', { name, exact: true });
 const source = page => page.locator('#viewer-host');
 
 async function openFiles(page, cloud) {
   await cloud.open();
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('#right-panel-toggle').click();
   const launcher = page.locator('.dock-launcher');
   await expect(launcher.getByRole('button')).toHaveText([/Search/, /Files/]);
-  await launcher.getByRole('button', { name: /^Files / }).click();
+  await launcher.locator('[data-dock-action=files]').click();
   await expect(tree(page).getByRole('treeitem').first()).toBeVisible();
 }
 
@@ -100,7 +100,7 @@ async function openText(page) {
 }
 
 async function showTree(page) {
-  const toggle = page.getByRole('button', { name: 'Show file tree', exact: true });
+  const toggle = page.locator('#file-tree-toggle');
   if (await toggle.isVisible()) await toggle.click();
 }
 
@@ -133,11 +133,11 @@ for (const entry of ['empty panel', 'new-tab menu']) {
     let row;
     if (entry === 'empty panel') {
       await cloud.open();
-      await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-      row = page.locator('.dock-launcher').getByRole('button', { name: /^Search / });
+      await page.locator('#right-panel-toggle').click();
+      row = page.locator('.dock-launcher').locator('[data-dock-action=search]');
     } else {
       await openFiles(page, cloud);
-      await page.getByRole('button', { name: 'New tab', exact: true }).click();
+      await page.locator('#dock-new-tab').click();
       const menu = page.locator('.dock-menu');
       await expect(menu.getByRole('menuitem')).toHaveText([/Search/, /Files/]);
       row = menu.getByRole('menuitem', { name: 'Search', exact: true });
@@ -147,8 +147,8 @@ for (const entry of ['empty panel', 'new-tab menu']) {
     await expect(page.locator('.dock-menu')).toHaveCount(0);
     await expect(page.locator('.dock-launcher')).toBeHidden();
     await expect(page.locator('.editor-tab.active .tab-name')).toHaveText('Search');
-    await expect(page.getByRole('tab', { name: 'Search', exact: true })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('.workspace-search').getByRole('textbox', { name: 'Search', exact: true })).toBeVisible();
+    await expect(page.locator('#explorer-search-tab')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.workspace-search').locator('#workspace-search-input')).toBeVisible();
     expect(fileHostRequests(cloud)).toEqual([]);
     expect(cloud.device.pageErrors).toEqual([]);
   });
@@ -202,7 +202,7 @@ test('Cloud Office selections reuse the existing feedback composer and send rela
   await expect(feedback).toBeHidden();
   await expect(page.locator('.composer .mention-chip')).toContainText('book1.xlsx');
   await expect(page.locator('#task')).toHaveValue('Existing Cloud draft');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => cloud.postCount).toBe(1);
   const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
   const content = JSON.parse(send.body).command.content;
@@ -241,7 +241,7 @@ test('Cloud PDF text and region feedback reuse the current PDF surface, capture 
   await feedback.locator('textarea').press('Enter');
   await expect(feedback).toBeHidden();
   const bounds = await page.locator('.pdfViewer canvas').first().boundingBox();
-  await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+  await page.locator('#pdf-capture').click();
   await expect(page.locator('.pdf-region-capture')).toBeVisible();
   await page.mouse.move(bounds.x + 30, bounds.y + 30); await page.mouse.down();
   await page.mouse.move(bounds.x + 210, bounds.y + 120, { steps: 8 }); await page.mouse.up();
@@ -253,7 +253,7 @@ test('Cloud PDF text and region feedback reuse the current PDF surface, capture 
   await expect(capture).toBeHidden();
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await page.locator('#task').fill('Keep the PDF context');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => cloud.postCount).toBe(1);
   const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
   const content = JSON.parse(send.body).command.content;
@@ -287,7 +287,7 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   await expect(source(page).locator('h1')).toHaveCount(0);
   await page.locator('.workspace-file-card').click();
   await expect(source(page)).toContainText('<h1>Cloud source</h1>');
-  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
+  await expect(page.locator('#composer-attach')).toBeVisible();
   const input = page.locator('#task');
   const directories = () => cloud.fileRequests.filter(request => !request.content && !request.head && !request.index);
   const indexes = () => cloud.fileRequests.filter(request => request.index);
@@ -312,7 +312,7 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   expect(directories().map(request => request.path)).toEqual(expect.arrayContaining(['', 'src']));
   expect(indexes()).toHaveLength(1);
   await input.fill('Update the heading');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => cloud.postCount).toBe(1);
   const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
   expect(JSON.parse(request.body).command.content).toBe('Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>');
@@ -331,8 +331,8 @@ test('Cloud file links and mentions reuse source previews and the composer envel
 test('Cloud browses nested text files through the existing read-only Files pane', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
-  await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: 'Search', exact: true })).toHaveCount(1);
+  await expect(page.locator('#explorer-changes-tab')).toHaveCount(0);
+  await expect(page.locator('#explorer-search-tab')).toHaveCount(1);
   await openText(page);
   expect(cloud.fileRequests.at(-1)).toMatchObject({ session: sessionA, path: 'src/hello #.mbt', content: true });
   expect(cloud.fileRequests.at(-1).headers.authorization).toBe('Bearer ts_fixture-123');
@@ -341,7 +341,7 @@ test('Cloud browses nested text files through the existing read-only Files pane'
   let finishRefresh;
   cloud.holdRead = new Promise(resolve => { finishRefresh = resolve; });
   const previousReads = cloud.fileRequests.filter(request => request.content).length;
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await expect.poll(() => cloud.fileRequests.filter(request => request.content).length).toBe(previousReads + 1);
   await expect(source(page)).toContainText('Cloud text');
   await expect(page.locator('.viewer-notice')).toBeHidden();
@@ -354,16 +354,16 @@ test('Cloud browses nested text files through the existing read-only Files pane'
 test('Search from Settings preserves the Cloud dock without importing Host tabs', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
   await cloud.install(); await cloud.goto();
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.locator('#sidebar-work-mode').click();
   await cloud.device.openSession();
   await cloud.device.openQuickOpen();
   await page.locator('#quick-open-input').fill('main');
   await page.getByRole('option', { name: /main\.mbt/ }).click();
   await expect(page.locator('.editor-tab .tab-name')).toHaveText(['main.mbt']);
-  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#right-panel-toggle').click();
+  await page.locator('#sidebar-chat-mode').click();
   await openFiles(page, cloud); await openText(page);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   const shortcut = await page.evaluate(() =>
     navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
@@ -386,8 +386,8 @@ test('Cloud keeps Office and PDF previews in existing tabs and unsupported binar
   cloud.contents.set(`${sessionA}:image.png`, { kind: 'binary_content', data_base64: 'AA==', media_type: 'image/png', sig: 'image' });
   cloud.contents.set(`${sessionA}:large.txt`, { kind: 'oversized' });
   await cloud.install(); await cloud.goto(); await cloud.open();
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await page.locator('#right-panel-toggle').click();
+  await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
   await file(page, 'report.docx').click();
   await expect(page.locator('.word-page')).toBeVisible();
   const wordPage = await page.locator('.word-page').elementHandle();
@@ -398,7 +398,7 @@ test('Cloud keeps Office and PDF previews in existing tabs and unsupported binar
   await expectFileValidation(page, sessionA, 'report.docx', () => cloud.open(sessionA));
   await expect(page.locator('.word-page')).toBeVisible();
   expect(cloud.fileRequests.filter(request => request.content && request.path === 'report.docx')).toHaveLength(wordReads);
-  await expect(page.getByRole('button', { name: 'Annotate region', exact: true })).toBeDisabled();
+  await expect(page.locator('#office-annotate-region')).toBeDisabled();
   await showTree(page); await file(page, 'book1.xlsx').click();
   await expect(page.locator('.sheet-document table').first()).toBeVisible();
   await showTree(page); await file(page, 'report.pdf').click();
@@ -411,9 +411,9 @@ test('Cloud keeps Office and PDF previews in existing tabs and unsupported binar
   await expectFileValidation(page, sessionA, 'report.pdf', () => cloud.open(sessionA));
   await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
   expect(cloud.fileRequests.filter(request => request.content && request.path === 'report.pdf')).toHaveLength(pdfReads);
-  await expect(page.getByRole('button', { name: 'Capture region', exact: true })).toBeEnabled();
+  await expect(page.locator('#pdf-capture')).toBeEnabled();
   const bounds = await page.locator('.pdfViewer canvas').first().boundingBox();
-  await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+  await page.locator('#pdf-capture').click();
   await expect(page.locator('.pdf-region-capture')).toBeVisible();
   await page.mouse.move(bounds.x + 30, bounds.y + 30); await page.mouse.down();
   await page.mouse.move(bounds.x + 210, bounds.y + 120, { steps: 8 }); await page.mouse.up();
@@ -457,7 +457,7 @@ test('generation completion refreshes Cloud directories and an open text preview
   cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: '// Generated text', sig: 'generated', absolute: '/src/hello #.mbt' });
   cloud.directories.get(`${sessionA}:src`).push({ name: 'new.txt', is_dir: false });
   await page.locator('#task').fill('Update the example');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(source(page)).toContainText('Generated text');
   expect(cloud.fileRequests.filter(request => request.content).length).toBeGreaterThan(previousReads);
   await showTree(page); await expect(file(page, 'new.txt')).toBeVisible();
@@ -468,12 +468,12 @@ test('blank Cloud drafts do not create sessions or expose files, while archived 
   const cloud = new CloudFilesHarness(page);
   cloud.archived.add(sessionB);
   await cloud.install(); await cloud.goto(); await cloud.create();
-  await expect(page.getByRole('button', { name: 'Show panel', exact: true })).toHaveCount(0);
+  await expect(page.locator('#right-panel-toggle')).toHaveCount(0);
   expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toEqual([]);
   expect(cloud.fileRequests).toEqual([]);
   await cloud.openArchived(sessionB);
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await page.locator('#right-panel-toggle').click();
+  await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
   await openText(page);
   expect(cloud.fileRequests.at(-1).session).toBe(sessionB);
   await expect(page.locator('.archived-read-only')).toContainText('Read only');
@@ -485,11 +485,11 @@ test('Cloud directory and file errors are visible and retry without Host fallbac
   const cloud = new CloudFilesHarness(page);
   cloud.fileStatus = 403;
   await cloud.install(); await cloud.goto(); await cloud.open();
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await page.locator('#right-panel-toggle').click();
+  await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
   await expect(page.locator('.file-panel-error')).toContainText('HTTP 403');
   cloud.fileStatus = 200;
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await file(page, 'src').click();
   await expect(file(page, 'hello #.mbt')).toBeVisible();
   cloud.fileStatus = 404;
@@ -515,10 +515,10 @@ test('changed Cloud oversized previews require a fresh explicit click for each u
     kind: 'content', content: 'Explicitly requested large preview.', sig: 'large', absolute: '/large.txt',
   });
   await cloud.install(); await cloud.goto(); await cloud.open();
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await page.locator('#right-panel-toggle').click();
+  await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
   await file(page, 'large.txt').click();
-  const preview = page.getByRole('button', { name: 'Preview anyway', exact: true });
+  const preview = page.locator('#file-preview-anyway');
   const reads = () => cloud.fileRequests.filter(request => request.content);
   await expect(page.locator('.viewer-notice')).toContainText('too large to preview');
   await expect(preview).toBeVisible();
@@ -531,7 +531,7 @@ test('changed Cloud oversized previews require a fresh explicit click for each u
   cloud.largePreviews.set(`${sessionA}:large.txt`, {
     kind: 'content', content: 'Explicitly requested changed large preview.', sig: 'large:2', absolute: '/large.txt',
   });
-  await expectFileValidation(page, sessionA, 'large.txt', () => page.getByRole('tab', { name: 'Files', exact: true }).click(), 200);
+  await expectFileValidation(page, sessionA, 'large.txt', () => page.locator('#explorer-files-tab').click(), 200);
   await expect(preview).toBeVisible();
   expect(reads().at(-1).allowLarge).toBeNull();
   await preview.click();
@@ -540,14 +540,14 @@ test('changed Cloud oversized previews require a fresh explicit click for each u
     kind: 'content', content: 'Explicitly requested generated large preview.', sig: 'large:3', absolute: '/large.txt',
   });
   await page.locator('#task').fill('Update the file');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(preview).toBeVisible();
   expect(reads().at(-1).allowLarge).toBeNull();
   await preview.click();
   await expect(source(page)).toContainText('Explicitly requested generated large preview.');
   await page.locator('.editor-tab.active').getByRole('button', { name: 'Close', exact: true }).click();
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await page.locator('#right-panel-toggle').click();
+  await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
   await file(page, 'large.txt').click();
   await expect(preview).toBeVisible();
   expect(reads().at(-1).allowLarge).toBeNull();
@@ -562,10 +562,10 @@ test('Host oversized notices keep their existing behavior without the Cloud over
     ? { kind: 'oversized' } : original(request);
   await app.install(); await app.goto(); await app.openSession();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await file(page, 'large.txt').click();
   await expect(page.locator('.viewer-notice')).toContainText('too large to preview');
-  await expect(page.getByRole('button', { name: 'Preview anyway', exact: true })).toHaveCount(0);
+  await expect(page.locator('#file-preview-anyway')).toHaveCount(0);
 });
 
 
@@ -575,14 +575,14 @@ test('Cloud file reads show loading instead of the unselected placeholder', asyn
   cloud.contents.set(`${sessionA}:large.txt`, { kind: 'oversized' });
   cloud.largePreviews.set(`${sessionA}:large.txt`, { kind: 'content', content: 'Large preview ready.', sig: 'large', absolute: '/large.txt' });
   await cloud.install(); await cloud.goto(); await cloud.open();
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await page.locator('#right-panel-toggle').click();
+  await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
   let release;
   cloud.holdRead = new Promise(resolve => { release = resolve; });
   await file(page, 'large.txt').click();
   await expect(page.locator('.viewer-notice')).toHaveText('Loading file…');
   release(); cloud.holdRead = null;
-  const preview = page.getByRole('button', { name: 'Preview anyway', exact: true });
+  const preview = page.locator('#file-preview-anyway');
   await expect(preview).toBeVisible();
   cloud.holdRead = new Promise(resolve => { release = resolve; });
   await showTree(page); await file(page, 'large.txt').click();
@@ -590,7 +590,7 @@ test('Cloud file reads show loading instead of the unselected placeholder', asyn
   release(); cloud.holdRead = null;
   await expect(preview).toBeVisible();
   cloud.holdRead = new Promise(resolve => { release = resolve; });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await expect(page.locator('.viewer-notice')).toHaveText('Loading file…');
   release(); cloud.holdRead = null;
   await expect(preview).toBeVisible();
@@ -611,12 +611,12 @@ test('Cloud open text and explicitly allowed large previews survive session swit
   cloud.contents.set(`${sessionA}:large.txt`, { kind: 'oversized' });
   cloud.largePreviews.set(`${sessionA}:large.txt`, { kind: 'content', content: text, sig: 'large', absolute: '/large.txt' });
   await cloud.install(); await cloud.goto(); await cloud.open();
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await page.locator('#right-panel-toggle').click();
+  await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
   for (const name of ['saved.txt', 'large.txt']) {
     await showTree(page);
     await file(page, name).click();
-    if (name === 'large.txt') await page.getByRole('button', { name: 'Preview anyway', exact: true }).click();
+    if (name === 'large.txt') await page.locator('#file-preview-anyway').click();
     await expect(source(page)).toContainText('Cloud cache line 0');
     await source(page).getByRole('region').hover();
     await page.mouse.wheel(0, 100000);
@@ -633,7 +633,7 @@ test('Cloud open text and explicitly allowed large previews survive session swit
   await page.locator('.editor-tab.active').getByRole('button', { name: 'Close', exact: true }).click();
   await showTree(page);
   await file(page, 'large.txt').click();
-  await expect(page.getByRole('button', { name: 'Preview anyway', exact: true })).toBeVisible();
+  await expect(page.locator('#file-preview-anyway')).toBeVisible();
   expect(cloud.fileRequests.filter(request => request.content).at(-1).allowLarge).toBeNull();
   expect(fileHostRequests(cloud)).toEqual([]);
 });
@@ -645,7 +645,7 @@ test('changed oversized Cloud caches return to the size limit after a session sw
   cloud.largePreviews.set(`${sessionA}:large.txt`, { kind: 'content', content: 'Previously approved large body.', sig: 'large:1', absolute: '/large.txt' });
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
   await file(page, 'large.txt').click();
-  const preview = page.getByRole('button', { name: 'Preview anyway', exact: true });
+  const preview = page.locator('#file-preview-anyway');
   await preview.click();
   await expect(source(page)).toContainText('Previously approved large body.');
   await cloud.open(sessionB);
@@ -672,7 +672,7 @@ test('a delayed Cloud validator cannot reload a restored session after a newer r
   await expect.poll(() => cloud.fileRequests.filter(request => request.head).length).toBe(1);
   await cloud.open(sessionB);
   cloud.holdHead = null;
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
   await openText(page);
   await expect(source(page)).toContainText(`// ${sessionB}`);
   cloud.contents.set(`${sessionA}:${path}`, { kind: 'content', content: '// Current A text', sig: 'current', absolute: `/${path}` });
@@ -694,7 +694,7 @@ test('a Cloud generation finishing off screen invalidates only its parked file c
   let finish;
   cloud.pauseStream = new Promise(resolve => { finish = resolve; });
   await page.locator('#task').fill('Update this file in the background');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(page.locator('#transcript').getByText('Update this file in the background', { exact: true })).toBeVisible();
   await cloud.open(sessionB);
   cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: '// Background generation finished', sig: 'finished', absolute: '/src/hello #.mbt' });
@@ -720,20 +720,20 @@ test('Cloud text search reuses options, results, keyboard tabs and positioned fi
     return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ generation: body.generation, matches: [{ path: 'src/hello #.mbt', line_number: 2, preview: '  // moon moon', preview_start_column: 1, ranges: [{ start_column: 6, end_column: 10 }, { start_column: 11, end_column: 15 }] }], match_count: 2, file_count: 1, limit_hit: false, cancelled: false }) });
   });
   await cloud.goto(); await openFiles(page, cloud);
-  const filesTab = page.getByRole('tab', { name: 'Files', exact: true });
+  const filesTab = page.locator('#explorer-files-tab');
   await filesTab.focus(); await page.keyboard.press('ArrowRight');
-  const searchTab = page.getByRole('tab', { name: 'Search', exact: true });
+  const searchTab = page.locator('#explorer-search-tab');
   await expect(searchTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(0);
+  await expect(page.locator('#explorer-changes-tab')).toHaveCount(0);
   const search = page.locator('.workspace-search');
-  await expect(search.getByRole('button', { name: 'Code search', exact: true })).toHaveCount(1);
-  await search.getByTitle('Match Case', { exact: true }).click();
-  await search.getByTitle('Match Whole Word', { exact: true }).click();
-  await search.getByTitle('Use Regular Expression', { exact: true }).click();
-  await search.getByTitle('Toggle Search Details', { exact: true }).click();
-  await search.getByRole('textbox', { name: 'files to include', exact: true }).fill('src/**/*.mbt');
-  await search.getByRole('textbox', { name: 'files to exclude', exact: true }).fill('**/*_test.mbt');
-  const query = search.getByRole('textbox', { name: 'Search', exact: true });
+  await expect(search.locator('#search-mode-code')).toHaveCount(1);
+  await search.locator('#search-match-case').click();
+  await search.locator('#search-whole-word').click();
+  await search.locator('#search-regex').click();
+  await search.locator('#search-details-toggle').click();
+  await search.locator('#search-include').fill('src/**/*.mbt');
+  await search.locator('#search-exclude').fill('**/*_test.mbt');
+  const query = search.locator('#workspace-search-input');
   await query.fill('['); await query.press('Enter');
   await expect(search.getByRole('alert')).toContainText('regex parse error: unclosed character class');
   await query.fill('moon'); await query.press('Enter');
@@ -844,10 +844,10 @@ test('Cloud code search streams shared results, navigates ranges, and cancels an
   });
   try {
     await cloud.goto(); await openFiles(page, cloud);
-    await page.getByRole('tab', { name: 'Search', exact: true }).click();
+    await page.locator('#explorer-search-tab').click();
     const search = page.locator('.workspace-search');
-    await search.getByRole('button', { name: 'Code search', exact: true }).click();
-    const pattern = search.getByRole('textbox', { name: 'pattern', exact: true });
+    await search.locator('#search-mode-code').click();
+    const pattern = search.locator('#search-pattern-0');
     await pattern.fill('inspect($_)'); await pattern.press('Enter');
     await expect(search.locator('.search-result-row')).toContainText('inspect(1)');
     await expect(search.locator('.search-summary')).toHaveText('1 match in 1 file so far…');
@@ -876,9 +876,9 @@ const semanticHit = (index = 0, pattern = 'inspect($_)') => ({
 
 async function openCloudCodeSearch(page, cloud, pattern = 'inspect($_)') {
   await cloud.goto(); await openFiles(page, cloud);
-  await page.getByRole('tab', { name: 'Search', exact: true }).click();
-  await page.getByRole('button', { name: 'Code search', exact: true }).click();
-  const input = page.getByRole('textbox', { name: 'pattern', exact: true });
+  await page.locator('#explorer-search-tab').click();
+  await page.locator('#search-mode-code').click();
+  const input = page.locator('#search-pattern-0');
   await input.fill(pattern); await input.press('Enter');
   return input;
 }
@@ -953,21 +953,21 @@ for (const count of [1, 101]) {
       return route.fulfill({ status: fail ? 500 : 200, headers: semanticHeaders, contentType: 'application/json', body: JSON.stringify({ path: '.openseek/agent-context/semantic-search/selection.jsonl', match_count: count, file_count: 1 }) });
     });
     await openCloudCodeSearch(page, cloud);
-    await page.getByLabel('Select pattern', { exact: true }).click();
+    await page.getByTestId('search-select-pattern').click();
     const chip = page.locator('.composer .mention-chip');
     await expect(chip).toContainText(`${count} matches`);
     expect(materializations).toHaveLength(0);
-    await chip.getByTitle(`Open semantic search with ${count} matches`, { exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible();
+    await chip.getByTestId('mention-jump').click();
+    await expect(page.locator('#search-show-all')).toBeVisible();
     await page.locator('#task').fill('Explain these matches');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page.locator('#send').click();
     if (fail) {
-      await expect(page.getByText('Cloud answered HTTP 500. Try again.', { exact: true })).toBeVisible();
+      await expect(page.locator('.notification')).toContainText('Cloud answered HTTP 500. Try again.');
       await expect(page.locator('#task')).toHaveValue('Explain these matches');
       expect(cloud.postCount).toBe(0);
       fail = false;
-      await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(page.locator('#send')).toBeEnabled();
+      await page.locator('#send').click();
     }
     await expect.poll(() => cloud.postCount).toBe(1);
     const sent = JSON.parse(cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands')).body).command.content;
@@ -1018,7 +1018,7 @@ test('Cloud pattern repair uses server defaults and applies only a validated can
   await expect(page.locator('.search-pattern-repair-trace')).toContainText('Fixture repair trace');
   expect(Object.keys(repairs[0].body).sort()).toEqual(['generation', 'pattern']);
   expect(repairs[0].headers.authorization).toBe('Bearer ts_fixture-123');
-  await page.getByText('Show repair details', { exact: true }).click();
+  await page.locator('.search-pattern-repair-details > summary').click();
   passed = true;
   await fix.click();
   await expect(pattern).toHaveValue('inspect($_)');
@@ -1043,7 +1043,7 @@ for (const unchanged of [true, false]) {
     if (!unchanged) cloud.contents.set(key, { kind: 'content', content: 'changed', sig: 'v2', absolute: '/src/hello #.mbt' });
     const before = cloud.fileRequests.length;
     const transfer = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+    await page.locator('#file-download').click();
     const download = await transfer;
     expect(download.suggestedFilename()).toBe('hello #.mbt');
     expect(readFileSync(await download.path())).toEqual(unchanged ? Buffer.from(original) : raw);
@@ -1053,7 +1053,7 @@ for (const unchanged of [true, false]) {
     expect(requests.filter(r => r.download)).toHaveLength(unchanged ? 0 : 1);
     expect(requests.filter(r => r.content)).toHaveLength(0);
     expect(requests.every(r => r.headers.authorization === 'Bearer ts_fixture-123')).toBe(true);
-    await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
+    await expect(page.locator('#file-download')).toBeEnabled();
     expect(fileHostRequests(cloud)).toEqual([]);
   });
 }
@@ -1078,7 +1078,7 @@ for (const preview of ['oversized', 'office', 'pending']) {
     else await expect(page.locator('.viewer-notice')).toContainText(preview === 'pending' ? 'Loading file' : 'too large');
     const before = cloud.fileRequests.length;
     const transfer = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+    await page.locator('#file-download').click();
     const download = await transfer;
     expect(readFileSync(await download.path())).toEqual(raw);
     expect(download.suggestedFilename()).toBe(name);
@@ -1097,15 +1097,15 @@ test('Cloud download failure shows progress, reports the error and permits retry
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
   await file(page, 'src').click(); await file(page, 'hello #.mbt').click();
   await expect(page.locator('.viewer-notice')).toContainText('too large');
-  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Downloading…', exact: true })).toBeDisabled();
+  await page.locator('#file-download').click();
+  await expect(page.locator('#file-download')).toBeDisabled();
   release();
   await expect(page.locator('.notification')).toContainText('503');
-  await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
+  await expect(page.locator('#file-download')).toBeEnabled();
   await page.locator('.notification').click();
   cloud.downloadStatus = 200; cloud.holdDownload = null;
   const transfer = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await page.locator('#file-download').click();
   await transfer;
   await expect(page.locator('.notification')).toHaveCount(0);
 });
@@ -1119,15 +1119,15 @@ test('a retired Cloud account cannot hand its delayed download to the browser', 
   await file(page, 'src').click(); await file(page, 'hello #.mbt').click();
   await expect(page.locator('.viewer-notice')).toContainText('too large');
   const downloads = []; page.on('download', d => downloads.push(d));
-  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await page.locator('#file-download').click();
   await expect.poll(() => cloud.fileRequests.filter(r => r.download).length).toBe(1);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const account = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
-  await account.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
+  const account = page.locator('#management-dialog');
+  await account.locator('#settings-sign-out').click();
   const response = settledResponse(page, r => new URL(r.url()).pathname.endsWith('/files/download'));
   release(); await response;
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  await expect(account.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(account.locator('#settings-sign-in')).toBeVisible();
   expect(downloads).toEqual([]);
 });
 
@@ -1140,16 +1140,16 @@ test('Desktop Cloud downloads use the window command with the original cache and
     : reply(request);
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
   const before = cloud.fileRequests.length;
-  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await page.locator('#file-download').click();
   await expect.poll(() => cloud.hostRequests.filter(r => r.method === 'cloud.file_download').length).toBe(1);
   const payload = cloud.hostRequests.find(r => r.method === 'cloud.file_download').params;
   expect(payload).toMatchObject({ account: '123', session: sessionA, path: 'src/hello #.mbt' });
   expect(Buffer.from(payload.cached.data_base64, 'base64').toString()).toContain('Cloud text');
   expect(payload.cached.etag).toMatch(/^W\/"content-v1-/);
   expect(cloud.fileRequests.slice(before)).toEqual([]);
-  await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
+  await expect(page.locator('#file-download')).toBeEnabled();
   failure = true;
-  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await page.locator('#file-download').click();
   await expect(page.locator('.notification')).toHaveText('Downloads is not writable');
 });
 
@@ -1169,7 +1169,7 @@ for (const kind of ['image', 'pdf']) {
     else await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
     const before = cloud.fileRequests.length;
     const transfer = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+    await page.locator('#file-download').click();
     const download = await transfer;
     expect(readFileSync(await download.path())).toEqual(original);
     expect(cloud.fileRequests.slice(before).filter(r => r.head)).toHaveLength(1);
@@ -1189,9 +1189,9 @@ for (const status of [200, 503]) {
     await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
     await file(page, 'src').click(); await file(page, 'hello #.mbt').click();
     await expect(page.locator('.viewer-notice')).toContainText('too large');
-    await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+    await page.locator('#file-download').click();
     await expect.poll(() => cloud.fileRequests.filter(r => r.download).length).toBe(1);
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.locator('#sidebar-settings').click();
     const transfer = status === 200 ? page.waitForEvent('download') : null;
     release();
     if (transfer) {
@@ -1215,18 +1215,18 @@ test('an older Cloud download cannot clear a newer download of the same file', a
     return { kind: 'saved', path: '/Downloads/hello #.mbt', revealed: true };
   };
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
-  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await page.locator('#file-download').click();
   await expect.poll(() => requested).toBe(1);
   await cloud.open(sessionB); await cloud.open(sessionA);
   await expect(source(page)).toContainText('Cloud text');
-  await page.getByRole('button', { name: 'Download to local', exact: true }).click();
+  await page.locator('#file-download').click();
   await expect.poll(() => requested).toBe(2);
   first();
   await expect.poll(() => completed).toBe(1);
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  await expect(page.getByRole('button', { name: 'Downloading…', exact: true })).toBeDisabled();
+  await expect(page.locator('#file-download')).toBeDisabled();
   second();
-  await expect(page.getByRole('button', { name: 'Download to local', exact: true })).toBeEnabled();
+  await expect(page.locator('#file-download')).toBeEnabled();
 });
 
 async function selectCloudCode(page) {
@@ -1234,7 +1234,7 @@ async function selectCloudCode(page) {
   await line.click();
   await page.keyboard.press('Home');
   await page.keyboard.press('Shift+End');
-  const input = source(page).locator('.agent-feedback-input-widget textarea');
+  const input = source(page).locator('[data-agent-feedback-input]');
   await expect(input).toBeVisible();
   return input;
 }
@@ -1260,7 +1260,7 @@ test('Cloud code feedback preserves the owning draft, sends Annotation and reope
   await chip.locator('button').first().click();
   await expect(source(page)).toContainText('Cloud text');
   await expect(source(page).locator('.agent-feedback-widget')).toContainText('Explain this function');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => cloud.postCount).toBe(1);
   const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
   expect(send.path).toContain(sessionA);
@@ -1289,8 +1289,8 @@ for (const batch of [true, false]) {
     await expect(page.locator('#stop')).toBeEnabled();
     await page.locator('#task').fill('Existing Cloud draft');
     if (!batch) {
-      await page.getByRole('button', { name: 'Follow-up action', exact: true }).click();
-      await page.getByRole('option', { name: /^Steer now/ }).click();
+      await page.locator('#composer-followup-select').click();
+      await page.locator('[role=option][data-value=steer]').click();
     }
     const feedback = await selectCloudCode(page);
     await feedback.fill('Keep this in my draft');
@@ -1318,7 +1318,7 @@ for (const batch of [true, false]) {
     }
     expect(cloud.postCount).toBe(0);
     await cloud.openArchived(sessionB);
-    await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+    await page.locator('.dock-launcher').locator('[data-dock-action=files]').click();
     await openText(page);
     const line = source(page).locator('.view-lines .view-line').nth(1);
     await line.click(); await page.keyboard.press('Home'); await page.keyboard.press('Shift+End');
@@ -1355,15 +1355,15 @@ test('Cloud file sharing works before preview and from an unpreviewable file pat
   cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'oversized' });
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
   await file(page, 'src').click({ button: 'right' });
-  await expect(page.getByRole('menu', { name: 'Context menu', exact: true })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Share', exact: true })).toHaveCount(0);
-  await page.getByRole('menu', { name: 'Context menu', exact: true }).press('Escape');
+  await expect(page.getByRole('menu')).toBeVisible();
+  await expect(page.locator('[role=menuitem][data-action=share]')).toHaveCount(0);
+  await page.getByRole('menu').press('Escape');
   await file(page, 'src').click();
   let finish;
   cloud.holdFileShare = new Promise(resolve => { finish = resolve; });
   await file(page, 'hello #.mbt').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Share file', exact: true });
+  await page.locator('[role=menuitem][data-action=share]').click();
+  const dialog = page.locator('#file-share-dialog');
   await expect(dialog).toBeVisible();
   const shares = () => cloud.fileRequests.filter(request => request.share);
   await expect.poll(() => shares().length).toBe(1);
@@ -1373,14 +1373,14 @@ test('Cloud file sharing works before preview and from an unpreviewable file pat
   await expect(dialog).toBeHidden();
   finish(); cloud.holdFileShare = null;
   await file(page, 'hello #.mbt').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(`${authOrigin}/v1/shares/file-fixture`);
+  await page.locator('[role=menuitem][data-action=share]').click();
+  await expect(dialog.getByTestId('export-link')).toHaveValue(`${authOrigin}/v1/shares/file-fixture`);
   expect(shares()).toHaveLength(1);
-  await dialog.getByRole('button', { name: 'Copy share link' }).click();
+  await dialog.getByTestId('export-copy').click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${authOrigin}/v1/shares/file-fixture`);
-  await expect(dialog.getByRole('link', { name: 'Open link', exact: true })).toHaveAttribute('href', `${authOrigin}/v1/shares/file-fixture`);
+  await expect(dialog.getByTestId('export-open-link')).toHaveAttribute('href', `${authOrigin}/v1/shares/file-fixture`);
   await context.route(`${authOrigin}/v1/shares/file-fixture`, route => route.fulfill({ contentType: 'text/html', body: '<title>Shared file</title>Public share page' }));
-  const [publicPage] = await Promise.all([page.waitForEvent('popup'), dialog.getByRole('link', { name: 'Open link', exact: true }).click()]);
+  const [publicPage] = await Promise.all([page.waitForEvent('popup'), dialog.getByTestId('export-open-link').click()]);
   await expect(publicPage).toHaveURL(`${authOrigin}/v1/shares/file-fixture`);
   await publicPage.close();
   await page.keyboard.press('Escape');
@@ -1400,14 +1400,14 @@ test('Cloud file share failure permits explicit retry without an automatic resen
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
   cloud.shareStatus = 503;
   await page.locator('.viewer-breadcrumb').getByRole('button', { name: 'Share', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Share file', exact: true });
+  const dialog = page.locator('#file-share-dialog');
   await expect(dialog).toContainText('HTTP 503');
   const shares = () => cloud.fileRequests.filter(request => request.share);
   expect(shares()).toHaveLength(1);
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+  await expect(dialog.getByTestId('export-share')).toBeEnabled();
   cloud.shareStatus = 201;
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
+  await dialog.getByTestId('export-share').click();
+  await expect(dialog.getByTestId('export-link')).toBeVisible();
   expect(shares()).toHaveLength(2);
   expect(shares()[1].body.idempotency_key).not.toBe(shares()[0].body.idempotency_key);
   expect(cloud.device.pageErrors).toEqual([]);
@@ -1428,10 +1428,10 @@ for (const target of ['tree', 'link', 'card', 'citation']) {
     if (target === 'tree') {
       await openFiles(page, cloud);
       await file(page, 'src').click({ button: 'right' });
-      const menu = page.getByRole('menu', { name: 'Context menu', exact: true });
+      const menu = page.getByRole('menu');
       await expect(menu).toBeVisible();
-      await expect(menu.getByRole('menuitem', { name: 'Share', exact: true })).toHaveCount(0);
-      await expect(menu.getByRole('menuitem', { name: 'Download to local', exact: true })).toHaveCount(0);
+      await expect(menu.locator('[role=menuitem][data-action=share]')).toHaveCount(0);
+      await expect(menu.locator('[role=menuitem][data-action=download]')).toHaveCount(0);
       await menu.press('Escape');
     }
     const source = target === 'tree' ? file(page, 'artifact.bin')
@@ -1439,19 +1439,19 @@ for (const target of ['tree', 'link', 'card', 'citation']) {
       : target === 'card' ? page.locator('.workspace-file-card')
       : page.locator('.citation-link.file-link');
     await source.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Share file', exact: true });
-    await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
+    await page.locator('[role=menuitem][data-action=share]').click();
+    const dialog = page.locator('#file-share-dialog');
+    await expect(dialog.getByTestId('export-link')).toBeVisible();
     expect(cloud.fileRequests.find(request => request.share).body.path).toBe('artifact.bin');
     await page.keyboard.press('Escape');
     let finish;
     cloud.holdDownload = new Promise(resolve => { finish = resolve; });
     const download = page.waitForEvent('download');
     await source.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Download to local', exact: true }).click();
+    await page.locator('[role=menuitem][data-action=download]').click();
     await expect.poll(() => cloud.fileRequests.filter(request => request.download).length).toBe(1);
     await source.click({ button: 'right' });
-    await expect(page.getByRole('menuitem', { name: 'Download to local', exact: true })).toBeDisabled();
+    await expect(page.locator('[role=menuitem][data-action=download]')).toBeDisabled();
     finish(); cloud.holdDownload = null;
     const saved = await download;
     expect(saved.suggestedFilename()).toBe('artifact.bin');
@@ -1475,7 +1475,7 @@ test('Cloud context download reuses a cached file while another preview stays ac
   const before = cloud.fileRequests.length;
   const download = page.waitForEvent('download');
   await file(page, 'hello #.mbt').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Download to local', exact: true }).click();
+  await page.locator('[role=menuitem][data-action=download]').click();
   const saved = await download;
   expect(saved.suggestedFilename()).toBe('hello #.mbt');
   expect(readFileSync(await saved.path())).toEqual(Buffer.from(cloud.contents.get(`${sessionA}:src/hello #.mbt`).content));

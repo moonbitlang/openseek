@@ -119,17 +119,17 @@ test('account replacement closes this client sockets and cannot display the old 
   await expect.poll(() => terminal.requests('terminal.open').length).toBe(1);
   const old = terminal.connections[0];
   terminal.output(old, 'OLD_ACCOUNT\r\n');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const account = page.locator('.settings-group', { hasText: 'Account · Remote access' });
-  await account.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
+  const account = page.locator('#management-dialog');
+  await account.locator('#settings-sign-out').click();
   await expect.poll(() => old.closed).toBe(true);
   cloud.userId = '456';
-  await account.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(account.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await account.locator('#settings-sign-in').click();
+  await expect(account.locator('#settings-sign-out')).toBeVisible();
+  const settings = page.locator('#management-dialog');
   await settings.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(settings).not.toBeVisible();
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
   await cloud.open();
   if (await show(page).isVisible()) await show(page).click();
   await expect.poll(() => terminal.connections.length).toBe(2);
@@ -269,8 +269,8 @@ for (const mode of ['steer', 'queue']) {
     await page.locator('#send').click();
     await expect(page.locator('#stop')).toBeEnabled();
     const tab = await shell(page, terminal, 'ls');
-    await page.getByRole('button', { name: 'Follow-up action', exact: true }).click();
-    await page.getByRole('option', { name: mode === 'queue' ? /^Queue next/ : /^Steer now/ }).click();
+    await page.locator('#composer-followup-select').click();
+    await page.locator(`[role=option][data-value=${mode}]`).click();
     await page.locator('#task').fill('Next draft');
     finish(terminal, tab);
     if (mode === 'queue') {
@@ -327,8 +327,8 @@ test('signing out while Cloud ! runs clears the operation without submitting it 
   const { cloud, terminal } = await setup(page, { desktop: true });
   await cloud.open();
   const tab = await shell(page, terminal, 'ls');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.locator('.settings-group', { hasText: 'Account · Remote access' }).getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
+  await page.locator('#management-dialog').getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect.poll(() => tab.connection.closed).toBe(true);
   expect(cloud.postCount).toBe(0);
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
@@ -345,7 +345,7 @@ test('a delayed Host worktree command stays on its owning Host after switching t
   await cloud.install();
   await terminal.install();
   await cloud.goto();
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.locator('#sidebar-work-mode').click();
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
   await page.locator('button.composer-worktree').click();
@@ -356,7 +356,7 @@ test('a delayed Host worktree command stays on its owning Host after switching t
   await page.locator('#task').press('Enter');
   await expect.poll(() => cloud.device.requests.filter(request => request.method === 'worktree.create').length).toBe(1);
   const create = cloud.device.requests.find(request => request.method === 'worktree.create');
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
   await cloud.open();
   await page.locator('#task').fill('Keep this Cloud draft');
   const url = page.url();

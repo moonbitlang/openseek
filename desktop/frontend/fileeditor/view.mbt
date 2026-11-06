@@ -667,6 +667,7 @@ fn viewer_notice(
     content.push(
       @html.button(
         type_="button",
+        id="file-preview-anyway",
         class="button secondary small",
         on_click=dispatch(
           PreviewLargeFile(owner=ctx.owner, epoch=state.request_epoch, path~),
@@ -787,6 +788,7 @@ fn tree_pane(
     @html.div(
       class="explorer-tabs",
       attrs=@html.Attrs::build()
+        .id("explorer-views")
         .role("tablist")
         .aria_label(ui(locale, ExplorerViews)),
       [
@@ -1154,6 +1156,7 @@ fn git_graph_inventory(
         @html.div(
           class="git-graph-list",
           attrs=@html.Attrs::build()
+            .id("git-commit-history")
             .role("tree")
             .aria_label(ui(locale, CommitHistory)),
           children,
@@ -1690,6 +1693,7 @@ fn file_inventory(
       attrs=@html.Attrs::build()
         .id("workspace-file-tree")
         .role("tree")
+        .id("workspace-files")
         .aria_label(ui(locale, WorkspaceFiles))
         .tabindex(if entries.is_empty() { 0 } else { -1 }),
       children,
@@ -2192,7 +2196,9 @@ fn office_viewer_toolbar(
           state.pending_region_feedback(ctx) is Some(_) ||
           state.has_pinned_office_selection(ctx),
         on_click=dispatch(OfficeRegionRequested),
-        attrs=@html.Attrs::build().aria_label(ui(locale, OfficeRegion)),
+        attrs=@html.Attrs::build()
+          .id("office-annotate-region")
+          .aria_label(ui(locale, OfficeRegion)),
         @icons.icon(@icons.icon_region_capture),
       ),
       excel_copy_controls(locale~, dispatch, state, ctx),
@@ -2211,6 +2217,7 @@ fn office_viewer_toolbar(
             placeholder=ui(locale, OfficeFind),
             on_input=dispatch.map(value => OfficeSearchChanged(value)),
             attrs=@html.Attrs::build()
+              .id("office-find")
               .aria_label(ui(locale, OfficeFind))
               .data_set("focus-owner", ""),
           ),
@@ -2222,7 +2229,9 @@ fn office_viewer_toolbar(
         title=ui(locale, OfficeZoomOut),
         disabled=config.zoom <= minimum,
         on_click=zoom_out,
-        attrs=@html.Attrs::build().aria_label(ui(locale, OfficeZoomOut)),
+        attrs=@html.Attrs::build()
+          .id("office-zoom-out")
+          .aria_label(ui(locale, OfficeZoomOut)),
         "−",
       ),
       @html.span(class="office-viewer-zoom-value", "\{config.zoom}%"),
@@ -2232,7 +2241,9 @@ fn office_viewer_toolbar(
         title=ui(locale, OfficeZoomIn),
         disabled=config.zoom >= maximum,
         on_click=zoom_in,
-        attrs=@html.Attrs::build().aria_label(ui(locale, OfficeZoomIn)),
+        attrs=@html.Attrs::build()
+          .id("office-zoom-in")
+          .aria_label(ui(locale, OfficeZoomIn)),
         "+",
       ),
       if pdf {
@@ -2317,6 +2328,9 @@ pub fn breadcrumb_view(
             } else {
               ui(locale, ShowFileTree)
             },
+            attrs=@html.Attrs::build()
+              .id("file-tree-toggle")
+              .aria_expanded(state.tree_open.to_string()),
             on_click=dispatch(ToggleTree),
             icon(icon_folder),
           ),
@@ -2411,7 +2425,7 @@ pub fn breadcrumb_view(
           type_="button",
           class="file-reveal-button",
           title=label,
-          attrs=@html.Attrs::build().aria_label(label),
+          attrs=@html.Attrs::build().id("file-share").aria_label(label),
           on_click=command,
           [@icons.icon_link_external(), @html.text(label)],
         )
@@ -2442,6 +2456,9 @@ pub fn breadcrumb_view(
       } else {
         ui(locale, ShowFileTree)
       },
+      attrs=@html.Attrs::build()
+        .id("file-tree-toggle")
+        .aria_expanded(state.tree_open.to_string()),
       on_click=dispatch(ToggleTree),
       icon(icon_folder),
     ),

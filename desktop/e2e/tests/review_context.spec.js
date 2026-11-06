@@ -6,7 +6,7 @@ async function openReview(page, app) {
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.locator('#review-changes-body').locator('[role=treeitem][data-path="src/main.mbt"]').click();
 }
 
 const contextButtons = page => page.locator('.review-hunk-context-button:visible');
@@ -71,9 +71,10 @@ test('selected changes retain their preview during live language switching', asy
     window.dispatchEvent(new Event('languagechange'));
   });
   await expect(chip).toContainText('更改 · 1 个文件');
-  const popup = page.getByRole('dialog', { name: '所选更改' });
+  const popup = page.getByTestId('selected-changes');
+  await expect(popup).toHaveAccessibleName('所选更改');
   await expect(popup).toBeVisible();
-  await expect(popup.getByRole('button', { name: '在审阅中打开', exact: true })).toBeVisible();
+  await expect(popup.getByTestId('changes-open-review')).toHaveAccessibleName('在审阅中打开');
   await expect(popup).toContainText('仅包含所选更改。');
   await expect(region).toHaveAccessibleName(/^src\/main\.mbt: 原始 L.+ → 修改后 L.+$/);
   expect(await popup.locator('.changes-preview').allTextContents()).toEqual(preview);
@@ -82,9 +83,10 @@ test('selected changes retain their preview during live language switching', asy
     window.dispatchEvent(new Event('languagechange'));
   });
   await expect(chip).toContainText('変更 · 1 ファイル');
-  const japanesePopup = page.getByRole('dialog', { name: '選択した変更', exact: true });
+  const japanesePopup = page.getByTestId('selected-changes');
+  await expect(japanesePopup).toHaveAccessibleName('選択した変更');
   await expect(japanesePopup).toBeVisible();
-  await expect(japanesePopup.getByRole('button', { name: 'レビューで開く', exact: true })).toBeVisible();
+  await expect(japanesePopup.getByTestId('changes-open-review')).toHaveAccessibleName('レビューで開く');
   await expect(japanesePopup).toContainText('選択した変更のみが含まれます。');
   await expect(region).toHaveAccessibleName(/^src\/main\.mbt: 変更前 L.+ → 変更後 L.+$/);
   expect(await japanesePopup.locator('.changes-preview').allTextContents()).toEqual(preview);
@@ -93,9 +95,10 @@ test('selected changes retain their preview during live language switching', asy
     window.dispatchEvent(new Event('languagechange'));
   });
   await expect(chip).toContainText('更改 · 1 個檔案');
-  const traditionalPopup = page.getByRole('dialog', { name: '所選更改', exact: true });
+  const traditionalPopup = page.getByTestId('selected-changes');
+  await expect(traditionalPopup).toHaveAccessibleName('所選更改');
   await expect(traditionalPopup).toBeVisible();
-  await expect(traditionalPopup.getByRole('button', { name: '在審閱中開啟', exact: true })).toBeVisible();
+  await expect(traditionalPopup.getByTestId('changes-open-review')).toHaveAccessibleName('在審閱中開啟');
   await expect(region).toHaveAccessibleName(/^src\/main\.mbt: 原始 L.+ → 修改後 L.+$/);
   expect(await traditionalPopup.locator('.changes-preview').allTextContents()).toEqual(preview);
   expect(app.pageErrors).toEqual([]);
@@ -113,11 +116,11 @@ test('composer script previews pin one coordinate and sign while code scrolls', 
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: scripts\/example\.mbtx/ }).click();
+  await page.locator('#review-changes-body').locator('[role=treeitem][data-path="scripts/example.mbtx"]').click();
   await clickHunkContext(page);
   await page.setViewportSize({ width: 1060, height: 800 });
   await page.locator('.composer-changes .changes-chip .mention-jump').click();
-  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  const popup = page.getByTestId('selected-changes');
   const preview = popup.locator('.editor-diff-preview');
   await expect(preview.locator('.editor-diff-source')).toHaveText([original, modified]);
   await expect(preview.locator('.editor-diff-number')).toHaveText(['1', '1']);
@@ -173,14 +176,14 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await page.mouse.move(0, 0);
   await expect(context).toHaveCSS('opacity', '0');
   await expect(context).toHaveCSS('pointer-events', 'none');
-  await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  await page.getByRole('button', { name: 'Mark hunk viewed', exact: true }).click();
+  await expect(page.locator('#review-hunk-toggle')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('#review-hunk-toggle').click();
   await expect(first).toHaveText('In context');
   const chip = page.locator('.composer-changes .changes-chip .mention-jump');
   await expect(chip).toContainText('Changes · 1 file');
   await page.locator('#task').fill('Extract the selected change');
   await chip.click();
-  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  const popup = page.getByTestId('selected-changes');
   await expect(popup).toBeVisible();
   await expect(popup.locator('.changes-preview')).toContainText('100');
   await expect(popup.locator('.changes-preview')).not.toContainText('200');
@@ -190,20 +193,20 @@ test('review hunk context stays independent and sends only selected snapshots', 
   const plainColor = await popup.locator('.editor-diff-source').first().evaluate(node => getComputedStyle(node).color);
   await expect.poll(() => popup.locator('.mtk6').first().evaluate(node => getComputedStyle(node).color))
     .not.toBe(plainColor);
-  await popup.getByRole('button', { name: 'Open in review', exact: true }).click();
+  await popup.getByTestId('changes-open-review').click();
   await expect(popup).toBeHidden();
   await expect(first).toHaveText('In context');
   await chip.click();
   await page.keyboard.press('Escape');
   await expect(popup).toBeHidden();
   await chip.click();
-  await popup.getByRole('button', { name: 'Remove change', exact: true }).click();
+  await popup.getByTestId('changes-remove').click();
   await expect(chip).toHaveCount(0);
   await expect(first).toHaveText('Add to context');
   await expect(page.locator('#task')).toHaveValue('Extract the selected change');
   await clickHunkContext(page, first);
   await expect(chip).toContainText('Changes · 1 file');
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task).toContain('<review_changes workspace=');
   const prompt = app.requests.find(request => request.method === 'agent.start').params.task;
   expect(prompt).toContain('Extract the selected change');
@@ -228,8 +231,8 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await sentChip.click();
   await expect(popup).toContainText('Included in this message');
   await expect(popup.locator('.editor-diff-source')).toHaveText(selectedPreview);
-  await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
-  await popup.getByRole('button', { name: 'Open in review', exact: true }).click();
+  await expect(popup.locator('[data-testid=changes-remove], [data-testid=changes-remove-group]')).toHaveCount(0);
+  await popup.getByTestId('changes-open-review').click();
   await expect(popup).toBeHidden();
   await expect(first).toHaveText('Add to context');
   // Reload from the persisted message text, without any composer state.
@@ -241,7 +244,7 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await app.openSession();
   await sentChip.click();
   await expect(popup.locator('.editor-diff-source')).toHaveText(selectedPreview);
-  await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
+  await expect(popup.locator('[data-testid=changes-remove], [data-testid=changes-remove-group]')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(sentChip).toBeFocused();
   // A fresh session has no Review inventory yet. The saved message must be
@@ -249,7 +252,7 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await expect(contextButtons(page)).toHaveCount(0);
   const changesRequests = app.requests.filter(request => request.method === 'git.changes').length;
   await sentChip.click();
-  await popup.getByRole('button', { name: 'Open in review', exact: true }).click();
+  await popup.getByTestId('changes-open-review').click();
   await expect(popup).toBeHidden();
   await expect(first).toHaveText('Add to context');
   await expect(page.locator('.notification')).toHaveCount(0);
@@ -264,16 +267,16 @@ test('review context survives regrouping and a partial group changes only on exp
   app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = old;
   app.workingFiles['src/main.mbt'] = old.replace('{ 1 }', '{ 10 }').replace('{ 2 }', '{ 20 }');
   await openReview(page, app);
-  await page.getByRole('button', { name: 'Token diff', exact: true }).click();
+  await page.locator('[data-diff-mode=token]').click();
   await expect(contextButtons(page)).toHaveCount(2);
   await clickHunkContext(page);
   await expect(contextButtons(page).first()).toHaveText('In context');
   await expect(contextButtons(page).last()).toHaveText('Add to context');
-  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+  await page.locator('[data-diff-mode=line]').click();
   await expect(contextButtons(page)).toHaveCount(1);
   await expect(contextButtons(page)).toHaveText('Partly in context');
   await page.locator('.composer-changes .changes-chip .mention-jump').click();
-  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  const popup = page.getByTestId('selected-changes');
   await expect(popup).toContainText('10');
   await expect(popup.locator('.changes-preview')).not.toContainText('20');
   await page.keyboard.press('Escape');
@@ -306,11 +309,11 @@ test('review context survives regrouping and a partial group changes only on exp
   await page.keyboard.press('Enter');
   await expect(contextButtons(page)).toHaveText('In context');
   await expect(contextButtons(page)).toBeFocused();
-  await page.getByRole('button', { name: 'Tree diff', exact: true }).click();
+  await page.locator('[data-diff-mode=tree]').click();
   await expect(contextButtons(page)).toHaveCount(2);
   for (const button of await contextButtons(page).all()) await expect(button).toHaveText('In context');
   await clickHunkContext(page, contextButtons(page).last());
-  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+  await page.locator('[data-diff-mode=line]').click();
   await expect(contextButtons(page)).toHaveCount(1);
   await expect(contextButtons(page)).toHaveText('Partly in context');
   await clickHunkContext(page, contextButtons(page));
@@ -336,25 +339,25 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   delete app.workingFiles['src/lib.mbt'];
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+  await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+  await page.locator('[role=option][data-value="codex:gpt-5.4-codex"]').click();
   await app.openReview();
   const files = page.locator('#review-changes-body');
-  await files.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await files.locator('[role=treeitem][data-path="src/main.mbt"]').click();
   await clickHunkContext(page);
-  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-  await files.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
+  await page.locator('#file-tree-toggle').click();
+  await files.locator('[role=treeitem][data-path="src/lib.mbt"]').click();
   await clickHunkContext(page);
   const chip = page.locator('.composer-changes .changes-chip .mention-jump');
   await expect(chip).toContainText('Changes · 2 files');
   await chip.click();
-  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  const popup = page.getByTestId('selected-changes');
   const deleted = popup.locator('.changes-file').filter({ hasText: 'lib.mbt' });
   await expect(deleted.locator('.editor-diff-row.removed').first()).toBeVisible();
   await expect(deleted.locator('.editor-diff-row.added')).toHaveCount(0);
-  await popup.getByTitle('src/lib.mbt', { exact: true }).click();
+  await popup.locator('[data-change-path="src/lib.mbt"]').click();
   await expect(deleted.locator('.changes-preview')).toHaveCount(0);
-  await popup.getByTitle('src/lib.mbt', { exact: true }).click();
+  await popup.locator('[data-change-path="src/lib.mbt"]').click();
   await expect(deleted.locator('.changes-preview')).toBeVisible();
   // A narrow composer owns its popup width and independently scrolls long diffs.
   await page.setViewportSize({ width: 1060, height: 800 });
@@ -364,7 +367,7 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await page.keyboard.press('Escape');
   await expect(chip).toBeFocused();
   await page.locator('#task').fill('Explain these selected changes');
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.find(request => request.method === 'codex.turn.start'))
     .toBeTruthy();
   const input = app.requests.find(request => request.method === 'codex.turn.start').params.input;
@@ -383,7 +386,7 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await expect(popup.locator('.changes-file')).toHaveCount(2);
   await expect(popup.locator('.changes-file').filter({ hasText: 'lib.mbt' })
     .locator('.editor-diff-row.added')).toHaveCount(0);
-  await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
+  await expect(popup.locator('[data-testid=changes-remove], [data-testid=changes-remove-group]')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -412,7 +415,7 @@ test('saved message changes keep independent disclosures and immutable previews'
   const chips = page.locator('.user-bubble .changes-chip .mention-jump');
   await expect(chips).toHaveText(['Changes · 2 files', 'Changes · 1 file']);
   await chips.first().click();
-  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  const popup = page.getByTestId('selected-changes');
   await expect(popup).toContainText('let saved_value = 2');
   await expect(popup).not.toContainText('current workspace');
   await expect(popup.locator('.changes-range').first()).toHaveText('Old L8 → New L9');
@@ -421,13 +424,13 @@ test('saved message changes keep independent disclosures and immutable previews'
     'deleted/file.txt: Old L8 → New L9']) {
     await expect(popup.getByRole('region', { name, exact: true })).toBeVisible();
   }
-  await popup.getByTitle('src/main.mbt', { exact: true }).click();
+  await popup.locator('[data-change-path="src/main.mbt"]').click();
   await expect(popup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'languages', { configurable: true, value: ['ja-JP'] });
     window.dispatchEvent(new Event('languagechange'));
   });
-  const localizedPopup = page.getByRole('dialog', { name: '選択した変更', exact: true });
+  const localizedPopup = page.getByTestId('selected-changes');
   await expect(localizedPopup).toBeVisible();
   await expect(chips.first()).toHaveText('変更 · 2 ファイル');
   await expect(localizedPopup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
@@ -438,11 +441,11 @@ test('saved message changes keep independent disclosures and immutable previews'
   });
   await expect(popup).toBeVisible();
   await chips.last().click();
-  await expect(page.getByRole('dialog', { name: 'Selected changes' })).toHaveCount(1);
+  await expect(page.getByTestId('selected-changes')).toHaveCount(1);
   await expect(popup.locator('.changes-preview')).toContainText('let another_value = 20');
   await chips.first().click();
   await expect(popup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
-  await popup.getByTitle('src/main.mbt', { exact: true }).click();
+  await popup.locator('[data-change-path="src/main.mbt"]').click();
   await expect(popup.locator('.changes-preview').first()).toContainText('let saved_value = 2');
   await page.setViewportSize({ width: 860, height: 640 });
   await chips.first().scrollIntoViewIfNeeded();
@@ -452,12 +455,12 @@ test('saved message changes keep independent disclosures and immutable previews'
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(860);
   expect(box.y + box.height).toBeLessThanOrEqual(640);
-  await page.getByText('Ready', { exact: true }).click();
+  await page.locator('#task').click();
   await expect(popup).toBeHidden();
   await page.locator('#task').click();
   await expect(page.locator('#task')).toBeFocused();
   await chips.first().click();
-  await popup.getByRole('button', { name: 'Close selected changes', exact: true }).click();
+  await popup.getByTestId('changes-close').click();
   await expect(popup).toBeHidden();
   await expect(chips.first()).toBeFocused();
   expect(app.pageErrors).toEqual([]);
@@ -492,7 +495,7 @@ last added
   await app.goto();
   await app.openSession();
   await page.locator('.user-bubble .changes-chip .mention-jump').click();
-  const preview = page.getByRole('dialog', { name: 'Selected changes' }).locator('.editor-diff-preview');
+  const preview = page.getByTestId('selected-changes').locator('.editor-diff-preview');
   await expect(preview.locator('.editor-diff-number')).toHaveText(['8', '', '12', '9', '', '15']);
   await expect(preview.locator('.editor-diff-source')).toHaveText([
     '<before> & old', '…', 'last removed', '<after> & new', '…', 'last added',
@@ -514,7 +517,7 @@ test('queued save consumes only the submitted part of a merged review selection'
   await page.locator('#send').click();
   await composer.fill('Queued message');
   await composer.press('Enter');
-  await page.locator('.queued-input-row').getByTitle('Edit', { exact: true }).click();
+  await page.locator('.queued-input-row').getByTestId('queued-input-edit').click();
   await expect(composer).toHaveValue('Queued message');
   await clickHunkContext(page, contextButtons(page).first());
   const replyFor = app.replyFor.bind(app);
@@ -526,7 +529,7 @@ test('queued save consumes only the submitted part of a merged review selection'
     }
     return replyFor(request);
   };
-  await page.getByTitle('Save queued message', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => heldRequest?.id).toBeDefined();
   await expect(composer).toBeDisabled();
   await clickHunkContext(page, contextButtons(page).nth(1));
@@ -539,7 +542,7 @@ test('queued save consumes only the submitted part of a merged review selection'
   await expect(contextButtons(page).first()).toHaveText('Add to context');
   await expect(contextButtons(page).nth(1)).toHaveText('In context');
   await page.locator('.composer-changes .changes-chip .mention-jump').click();
-  const preview = page.getByRole('dialog', { name: 'Selected changes' }).locator('.changes-preview');
+  const preview = page.getByTestId('selected-changes').locator('.changes-preview');
   await expect(preview).toContainText('200');
   await expect(preview).not.toContainText('100');
   await page.keyboard.press('Escape');

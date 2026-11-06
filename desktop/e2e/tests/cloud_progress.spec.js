@@ -27,7 +27,7 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     const status = page.locator('main .run-status');
     await expect(status).toHaveText('Ready');
     await page.locator('#task').fill('Explain the input');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page.locator('#send').click();
     const heartbeat = page.locator('.composer-running-text');
     const reasoning = page.locator('#transcript .activity-thinking');
     await expect(heartbeat).toHaveText('Thinking…');
@@ -56,7 +56,7 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     await expect(status).toHaveText('Finished');
     await expect(status.locator('.run-dot')).toHaveClass('run-dot ok');
     await expect(page.locator('#task')).toHaveValue('');
-    await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
+    await expect(page.locator('#send')).toHaveCount(0);
     await expect(reasoning).toHaveCount(1);
     await expect(reasoning).toHaveText('Complete reasoning');
     await expect(page.locator('#transcript').getByText('Answer', { exact: true })).toHaveCount(1);
@@ -105,7 +105,7 @@ test('Cloud title status covers loading, service failure and first-send startup 
     cloud.sendStatus = 503;
     cloud.sendErrorBody = 'server model credentials are not configured';
     await page.locator('#task').fill('Check the service');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page.locator('#send').click();
     await expect(status).toHaveText('Error');
     await expect(status.locator('.run-dot')).toHaveClass('run-dot danger');
     await cloud.create();
@@ -113,7 +113,7 @@ test('Cloud title status covers loading, service failure and first-send startup 
     expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
     cloud.sendStatus = 202;
     await page.locator('#task').fill('First message');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page.locator('#send').click();
     await expect(status).toHaveText('Starting');
     await expect(status.locator('.run-dot')).toHaveClass(/pulse/);
     created();

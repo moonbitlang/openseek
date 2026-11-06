@@ -43,7 +43,7 @@ class AttachmentHarness extends CloudHarness {
 
 async function select(page, files) {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.locator('#composer-attach').click();
   await (await chooser).setFiles(files);
 }
 
@@ -61,7 +61,7 @@ test('blank Cloud keeps confirmed files and image bytes in memory until first Se
   expect(cloud.imports).toEqual([]);
   expect(cloud.prepares).toEqual([]);
   await page.locator('#task').fill('Inspect the attachments');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => messages(cloud).length).toBe(1);
   await expect(page.locator('#task')).toHaveValue('');
   expect(creations(cloud)).toHaveLength(1);
@@ -90,7 +90,7 @@ test('a failed first image send preserves the draft and known session, and expli
   await cloud.install(); await cloud.goto(); await cloud.create();
   await select(page, image);
   await page.locator('#task').fill('Keep these pixels');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(page.getByRole('main')).toContainText('Cloud model credentials are not configured');
   await expect(page.locator('#task')).toHaveValue('Keep these pixels');
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
@@ -98,7 +98,7 @@ test('a failed first image send preserves the draft and known session, and expli
   expect(cloud.imports).toHaveLength(1);
   expect(messages(cloud)).toHaveLength(1);
   cloud.sendStatus = 202;
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(page.locator('#task')).toHaveValue('');
   expect(creations(cloud)).toHaveLength(1);
   expect(cloud.imports).toHaveLength(1);
@@ -123,7 +123,7 @@ test('existing Cloud documents use Upload confirmation and retain bytes after a 
   await expect(page.locator('.composer .mention-chip')).toContainText('report.pdf');
   expect(cloud.imports).toHaveLength(2);
   expect(cloud.imports[0].source).toEqual(cloud.imports[1].source);
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => messages(cloud).length).toBe(1);
   expect(JSON.parse(messages(cloud)[0].body).command.content).toContain('.openseek/attachments/fixture-2/report.pdf');
   expect(creations(cloud)).toHaveLength(0);
@@ -142,7 +142,7 @@ for (const [method, editText] of [['picker', false], ['paste', true]]) {
       await cloud.install(); await cloud.goto(); await cloud.open();
       await select(page, image);
       await page.locator('#task').fill('Submitted content');
-      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await page.locator('#send').click();
       await expect.poll(() => messages(cloud).length).toBe(1);
       if (method === 'picker') {
         await select(page, image);
@@ -160,9 +160,9 @@ for (const [method, editText] of [['picker', false], ['paste', true]]) {
       await expect(page.locator('.composer-image')).toHaveCount(1);
       await expect(page.locator('#transcript .user-image')).toHaveCount(1);
       finish();
-      await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+      await expect(page.locator('#send')).toBeEnabled();
       await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await page.locator('#send').click();
       await expect.poll(() => messages(cloud).length).toBe(2);
       expect(JSON.parse(messages(cloud)[1].body).command.content).toEqual([
         { type: 'text', text: editText ? 'Next draft' : '' },

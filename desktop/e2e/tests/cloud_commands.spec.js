@@ -35,7 +35,7 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   await app.open(sessionB);
   await app.open(sessionA);
   await expect(page.locator('.composer-goal')).toContainText('Goal: Ship the feature');
-  await page.locator('.composer-goal').getByRole('button', { name: 'Clear the standing goal', exact: true }).click();
+  await page.locator('.composer-goal').locator('#goal-clear').click();
   await expect.poll(() => commands(app)).toHaveLength(2);
   expect(commands(app)[1]).toEqual({ command: { command: 'goal', action: 'clear' } });
   await expect(page.locator('.composer-goal')).toContainText('Clearing goal');

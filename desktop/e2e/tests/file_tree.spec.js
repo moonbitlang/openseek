@@ -13,15 +13,15 @@ test('switching editors reveals the active file inside collapsed directories', a
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle').click();
   await app.openReview();
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
+  await page.locator('#explorer-files-tab').click();
+  const tree = page.locator('#workspace-files');
   const src = tree.getByRole('treeitem', { name: 'src', exact: true });
   const main = tree.getByRole('treeitem', { name: 'main.mbt', exact: true });
   await src.click();
   await main.click();
-  await page.getByTitle('Show file tree', { exact: true }).click();
+  await page.locator('#file-tree-toggle').click();
   await tree.getByRole('treeitem', { name: 'README.md', exact: true }).click();
   await src.click();
   await expect(main).toHaveCount(0);
@@ -29,7 +29,7 @@ test('switching editors reveals the active file inside collapsed directories', a
   await expect(src).toHaveAttribute('aria-expanded', 'true');
   await expect(main).toHaveAttribute('aria-selected', 'true');
   await expect(tree.locator(':focus')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
+  await page.locator('#panel-expand').click();
   await expect(main).toBeVisible();
   await expect(main).toHaveAttribute('aria-selected', 'true');
   await expect(src).toHaveAttribute('aria-expanded', 'true');
@@ -48,14 +48,14 @@ test('Quick Open centers the revealed file and centers again when Files becomes 
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle').click();
   await app.openReview();
-  const files = page.getByRole('tab', { name: 'Files', exact: true });
+  const files = page.locator('#explorer-files-tab');
   await files.click();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
+  const tree = page.locator('#workspace-files');
   await app.openQuickOpen();
   await page.getByRole('option', { name: /file_40\.mbt/ }).click();
-  await page.getByTitle('Show file tree', { exact: true }).click();
+  await page.locator('#file-tree-toggle').click();
   const row = tree.getByRole('treeitem', { name: 'file_40.mbt', exact: true });
   const scrollport = page.locator('.workspace-file-list');
   await expect(row).toHaveAttribute('aria-selected', 'true');
@@ -75,7 +75,7 @@ test('Quick Open centers the revealed file and centers again when Files becomes 
   await files.focus();
   await expect(row).not.toBeInViewport();
   await expect(scrollport).toHaveJSProperty('scrollTop', 0);
-  await page.getByRole('tab', { name: 'Search', exact: true }).click();
+  await page.locator('#explorer-search-tab').click();
   await files.click();
   await expect(row).toBeInViewport();
   await expect.poll(async () => {
@@ -102,17 +102,17 @@ test('a late directory reply cannot reveal an editor that is no longer active', 
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle').click();
   await app.openReview();
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
+  await page.locator('#explorer-files-tab').click();
+  const tree = page.locator('#workspace-files');
   const readme = tree.getByRole('treeitem', { name: 'README.md', exact: true });
   await expect(readme).toBeVisible();
   // Delay only the directory response, so the newer editor can win first.
   app.rpcDelays.set('fs.read_directory', 1000);
   await app.openQuickOpen();
   await page.getByRole('option', { name: /main\.mbt/ }).click();
-  await page.getByTitle('Show file tree', { exact: true }).click();
+  await page.locator('#file-tree-toggle').click();
   await expect.poll(() => app.requests.some(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toBe(true);
   await readme.click();
   const main = tree.getByRole('treeitem', { name: 'main.mbt', exact: true });
@@ -131,17 +131,17 @@ test('a failed ancestor listing stops until the next explicit reveal', async ({ 
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle').click();
   await app.openReview();
-  const files = page.getByRole('tab', { name: 'Files', exact: true });
+  const files = page.locator('#explorer-files-tab');
   await files.click();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
+  const tree = page.locator('#workspace-files');
   const src = tree.getByRole('treeitem', { name: 'src', exact: true });
   await expect(src).toBeVisible();
   app.rpcErrors.set('fs.read_directory', 'Directory unavailable');
   await app.openQuickOpen();
   await page.getByRole('option', { name: /main\.mbt/ }).click();
-  await page.getByTitle('Show file tree', { exact: true }).click();
+  await page.locator('#file-tree-toggle').click();
   await expect(page.locator('.file-panel-error')).toContainText('Directory unavailable');
   // Tree focus dispatches unrelated updates; these must not retry the failure.
   await src.focus();
@@ -149,7 +149,7 @@ test('a failed ancestor listing stops until the next explicit reveal', async ({ 
   await src.focus();
   expect(app.requests.filter(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toHaveLength(1);
   app.rpcErrors.delete('fs.read_directory');
-  await page.getByRole('tab', { name: 'Search', exact: true }).click();
+  await page.locator('#explorer-search-tab').click();
   await files.click();
   await expect(tree.getByRole('treeitem', { name: 'main.mbt', exact: true })).toHaveAttribute('aria-selected', 'true');
   expect(app.requests.filter(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toHaveLength(2);
@@ -165,10 +165,10 @@ test('Files scrolls below the view tabs and keeps desktop row height on narrow s
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle').click();
   await app.openReview();
-  const tabs = page.getByRole('tablist', { name: 'Explorer views' });
-  await tabs.getByRole('tab', { name: 'Files', exact: true }).click();
+  const tabs = page.locator('#explorer-views');
+  await tabs.locator('#explorer-files-tab').click();
   const tree = page.locator('.workspace-file-list');
   // The first row starts directly below the view tabs, without a second title.
   expect((await tree.locator('.tree-file').first().boundingBox()).y - (await tree.boundingBox()).y).toBe(4);
@@ -177,10 +177,10 @@ test('Files scrolls below the view tabs and keeps desktop row height on narrow s
   await tree.locator('.tree-file').last().scrollIntoViewIfNeeded();
   expect(await tree.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
   expect(await tabs.boundingBox()).toEqual(tabsBefore);
-  await tabs.getByRole('tab', { name: 'Search', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Search', exact: true })).toBeVisible();
+  await tabs.locator('#explorer-search-tab').click();
+  await expect(page.locator('#workspace-search-input')).toBeVisible();
   await expect(tree).toHaveCount(0);
-  await tabs.getByRole('tab', { name: 'Files', exact: true }).click();
+  await tabs.locator('#explorer-files-tab').click();
   await page.setViewportSize({ width: 390, height: 760 });
   await expect(tree).toBeVisible();
   await expect.poll(async () => (await tree.locator('.tree-file').first().boundingBox()).height).toBe(desktopRowHeight);
@@ -204,11 +204,11 @@ test('file tree exposes hierarchy and one keyboard entry with directional naviga
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator('#sidebar-toggle').click();
   await app.openReview();
-  const files = page.getByRole('tab', { name: 'Files', exact: true });
+  const files = page.locator('#explorer-files-tab');
   await files.click();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
+  const tree = page.locator('#workspace-files');
   const src = tree.getByRole('treeitem', { name: 'src', exact: true });
   const readme = tree.getByRole('treeitem', { name: 'README.md', exact: true });
   await expect(src).toBeVisible();
@@ -242,7 +242,7 @@ test('file tree exposes hierarchy and one keyboard entry with directional naviga
   await expect(main).toBeFocused();
   await expect(main).toHaveAttribute('aria-selected', 'false');
   await main.press('Enter');
-  await page.getByTitle('Show file tree', { exact: true }).click();
+  await page.locator('#file-tree-toggle').click();
   await expect(main).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.editor-tabs .editor-tab.active')).toContainText('main.mbt');
   await main.focus();
@@ -297,22 +297,22 @@ for (const layout of ['right-sidebar', 'bottom-panel']) {
     await app.install();
     await app.goto();
     await app.openSession();
-    const tree = page.getByRole('tree', { name: 'Workspace files' });
+    const tree = page.locator('#workspace-files');
     for (const name of ['a.mbt', 'b.mbt']) {
       await app.openReview();
-      await page.getByRole('tab', { name: 'Files', exact: true }).click();
+      await page.locator('#explorer-files-tab').click();
       await expect(tree).toBeVisible();
       await tree.getByRole('treeitem', { name, exact: true }).click();
       await expect(page.locator('.editor-tab.active')).toContainText(name);
       await expect(tree).toBeHidden();
     }
-    await page.getByTitle('Show file tree', { exact: true }).click();
+    await page.locator('#file-tree-toggle').click();
     await tree.getByRole('treeitem', { name: 'a.mbt', exact: true }).click();
     await expect(tree).toBeVisible();
-    await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
-    await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+    await page.locator('#right-panel-toggle').click();
+    await page.locator('#right-panel-toggle').click();
     await expect(tree).toBeVisible();
-    await page.getByTitle('Hide file tree', { exact: true }).click();
+    await page.locator('#file-tree-toggle').click();
     await expect(tree).toBeHidden();
 
     await page.setViewportSize({ width: 390, height: 760 });
@@ -325,11 +325,11 @@ for (const layout of ['right-sidebar', 'bottom-panel']) {
       })).toBeLessThanOrEqual(1);
     };
     await expectFullViewer();
-    await page.getByTitle('Show file tree', { exact: true }).click();
+    await page.locator('#file-tree-toggle').click();
     await expect(tree).toBeVisible();
-    await page.getByTitle('Hide file tree', { exact: true }).click();
+    await page.locator('#file-tree-toggle').click();
     await expectFullViewer();
-    await page.getByTitle('Show file tree', { exact: true }).click();
+    await page.locator('#file-tree-toggle').click();
     await tree.getByRole('treeitem', { name: 'b.mbt', exact: true }).click();
     await expect(page.locator('.editor-tab.active')).toContainText('b.mbt');
     await expectFullViewer();
@@ -360,7 +360,7 @@ for (const target of ['group_40', 'group_40/nested']) {
     await app.goto();
     await app.openSession();
     const link = page.locator('.transcript').getByRole('button', { name: 'Target directory' });
-    const tree = page.getByRole('tree', { name: 'Workspace files' });
+    const tree = page.locator('#workspace-files');
     const destination = tree.getByRole('treeitem', { name: target.split('/').at(-1), exact: true });
     const scrollport = page.locator('.workspace-file-list');
     await link.click();
@@ -397,8 +397,8 @@ test('a repeated directory link retries failed listings without rereading cached
   await app.openSession();
   // Cache the root listing, then fail both the target and its ancestor.
   await app.openReview();
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
+  await page.locator('#explorer-files-tab').click();
+  const tree = page.locator('#workspace-files');
   await expect(tree.getByRole('treeitem', { name: 'src', exact: true })).toBeVisible();
   app.rpcErrors.set('fs.read_directory', 'Directory unavailable');
   const link = page.locator('.transcript').getByRole('button', { name: 'Target directory' });
@@ -408,7 +408,7 @@ test('a repeated directory link retries failed listings without rereading cached
   await expect.poll(() => reads('/workspace/src/nested')).toBe(1);
   // Unrelated focus updates must not automatically retry.
   await tree.getByRole('treeitem', { name: 'src', exact: true }).focus();
-  await page.getByRole('tab', { name: 'Files', exact: true }).focus();
+  await page.locator('#explorer-files-tab').focus();
   expect(reads('/workspace/src')).toBe(1);
   expect(reads('/workspace/src/nested')).toBe(1);
   const rootReads = reads('/workspace');

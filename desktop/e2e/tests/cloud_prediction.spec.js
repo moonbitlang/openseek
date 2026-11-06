@@ -132,8 +132,8 @@ test('missing failed and obsolete Cloud predictions leave ordinary chat availabl
   await cloud.publish(prediction(11, 'Old suggestion'), { persist: false });
   await expect(input).not.toHaveAttribute('placeholder', 'Old suggestion');
   await input.fill('Continue normally');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('#send')).toBeEnabled();
+  await page.locator('#send').click();
   await expect.poll(() => cloud.postCount).toBe(1);
   await expect(page.getByText('您好 🌙 — calculation complete.', { exact: true }).first()).toBeVisible();
   cloud.assertNoPredictionRequests();

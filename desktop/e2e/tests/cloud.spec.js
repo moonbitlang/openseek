@@ -29,7 +29,7 @@ for (const desktop of [false, true]) {
     await expect(page.locator('main h1')).toHaveText('New chat');
     expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
     await page.locator('#task').fill('Calculate 1 + 1');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page.locator('#send').click();
     await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
     await expect(page.locator('main h1')).toHaveText('Calculate 1 + 1');
     await expect(page.locator('#task')).toHaveValue('');
@@ -50,15 +50,15 @@ test('browser login and session recovery use only v2 account endpoints', async (
   const cloud = new CloudHarness(page, { cached: false });
   await cloud.install();
   await page.goto(`${authOrigin}/console/index.html?device=device-a`);
-  const login = page.getByRole('link', { name: /Sign in.*GitHub/i });
+  const login = page.locator('#console-sign-in');
   await expect(login).toHaveAttribute('href', /^\/v2\/auth\/login\?/);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   const recovered = page.waitForResponse(response => new URL(response.url()).pathname === '/v2/auth/session');
-  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  await settings.getByRole('button', { name: 'Sign in', exact: true }).click();
+  const settings = page.locator('#management-dialog');
+  await settings.locator('#settings-sign-in').click();
   await recovered;
   await expect(settings).not.toBeVisible();
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
   await expect(cloud.row(sessionA)).toBeVisible();
   expect(cloud.requests.filter(request => request.side === 'api' && request.path === '/v2/auth/login')).toHaveLength(1);
   expect(cloud.requests.filter(request => request.side === 'api' && request.path === '/v2/auth/session' && request.method === 'POST')).toHaveLength(1);
@@ -71,7 +71,7 @@ test('Cloud list retry recovers after a network failure without resending or los
   cloud.listOffline = true;
   await cloud.install();
   await page.goto(`${authOrigin}/console/index.html?device=device-a`);
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
   const sidebar = page.locator('aside');
   await expect(sidebar.getByText('Couldn’t load chats', { exact: true })).toBeVisible();
   await cloud.create();
@@ -113,7 +113,7 @@ test('drafts and task admission stay owned by the existing composer during gener
   cloud.pauseSend = new Promise(resolve => { admit = resolve; });
   cloud.pauseStream = new Promise(resolve => { complete = resolve; });
   await page.locator('#task').fill('Submitted question');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => cloud.postCount).toBe(1);
   await page.locator('#task').fill('Draft before admission');
   await page.locator('#task').press('Enter');
@@ -135,7 +135,7 @@ test('drafts and task admission stay owned by the existing composer during gener
   await page.locator('#task').fill('Second conversation draft');
   // Empty drafts disable Send. After filling cold B, enabled Send proves the
   // editor and recovered history belong to B; A is still generating.
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(page.locator('#send')).toBeEnabled();
   await expect(page.locator('#task')).toHaveValue('Second conversation draft');
   await expect(cloud.rowContainer(sessionA).locator('.sidebar-run-status.running')).toHaveCount(1);
   complete();
@@ -146,9 +146,9 @@ test('drafts and task admission stay owned by the existing composer during gener
   await cloud.open(sessionA);
   await expect(cloud.rowContainer(sessionA).locator('.sidebar-run-status.running')).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Draft after admission');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(page.locator('#send')).toBeEnabled();
   await cloud.open(sessionB);
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(page.locator('#send')).toBeEnabled();
   await expect(page.locator('#task')).toHaveValue('Second conversation draft');
   expect(cloud.postCount).toBe(1);
 });
@@ -158,9 +158,9 @@ test('browser account sign-out clears Cloud and never signs out the computer', a
   await cloud.install();
   await cloud.goto();
   await cloud.open();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
-  await section.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
+  const section = page.locator('#management-dialog');
+  await section.locator('#settings-sign-out').click();
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.cloud.token.v1'))).toBeNull();
   await expect(cloud.row(sessionA)).toBeHidden();
   expect(cloud.requests.filter(request => request.path === '/v2/auth/logout')).toHaveLength(1);
@@ -175,16 +175,16 @@ test('missing service credentials show a server configuration error without aski
   await cloud.goto();
   await cloud.open();
   await page.locator('#task').fill('Keep this draft');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   const message = 'Cloud model credentials are not configured. Contact the service administrator.';
   const notice = page.locator('#transcript').getByText(message, { exact: true });
   await expect(notice).toBeVisible();
   await expect(page.locator('aside')).not.toContainText(message);
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(page.locator('#send')).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Set API key', exact: true })).toHaveCount(0);
   cloud.sendStatus = 202;
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(page.locator('#task')).toHaveValue('');
   await expect(notice).toHaveCount(0);
 });
@@ -209,7 +209,7 @@ test('Cloud selection replies use the shared composer without a device or accoun
   await expect(task).toHaveValue('Existing draft\n\n> Selectable\n\nQuoted reply\n\n');
   await task.pressSequentially('More detail');
   const content = await task.inputValue();
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => cloud.postCount).toBe(1);
   const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/commands'));
   expect(JSON.parse(request.body).command.content).toBe(content);
@@ -225,20 +225,20 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
   await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toHaveCount(0);
   await cloud.open();
   await page.locator('#task').fill('Cloud draft');
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.locator('#sidebar-work-mode').click();
   const local = page.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
   await local.click();
   await expect(local).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('main > .topbar h1')).toHaveText('Rabbita browser fixture');
   await expect(page.locator('#transcript').getByText('Browser result', { exact: true })).toBeVisible();
   await page.locator('#task').fill('Local draft');
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
   await cloud.open();
   await expect(page.locator('#task')).toHaveValue('Cloud draft');
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.locator('#sidebar-work-mode').click();
   await local.click();
   await expect(page.locator('#task')).toHaveValue('Local draft');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => cloud.device.requests.find(request => request.method === 'agent.start')?.params.task).toBe('Local draft');
   expect(cloud.postCount).toBe(0);
   expect(cloud.device.pageErrors).toEqual([]);
@@ -253,7 +253,7 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
     await cloud.install();
     await cloud.goto();
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.locator('#sidebar-settings').click();
     await expect(page.getByText(message, { exact: true })).toBeVisible();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
     expect(cloud.exchangeCount).toBe(0);
@@ -287,7 +287,7 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   await cloud.goto();
   await cloud.open();
   await page.locator('#task').fill('Stream the reply');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(page.locator('#transcript').getByText('你', { exact: true })).toBeVisible();
   await expect(page.locator('#transcript').getByText('你好 🌙', { exact: true })).toHaveCount(0);
   first();
@@ -329,7 +329,7 @@ test('Cloud disconnect replaces provisional text with authoritative history and 
   let disconnect;
   cloud.eventPauses = new Map([[1, new Promise(resolve => disconnect = resolve)]]);
   await cloud.install(); await cloud.goto(); await cloud.open();
-  await page.locator('#task').fill('Question'); await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#task').fill('Question'); await page.locator('#send').click();
   await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toBeVisible();
   await page.locator('#task').fill('Draft after admission');
   const recovered = settledResponse(page, response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/v1/sessions/${sessionA}/messages`);
@@ -337,7 +337,7 @@ test('Cloud disconnect replaces provisional text with authoritative history and 
   await expect(page.locator('#transcript').getByText('Authoritative answer', { exact: true })).toHaveCount(1);
   await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Draft after admission');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(page.locator('#send')).toBeEnabled();
   expect(cloud.postCount).toBe(1);
   await expect(page.locator('#frontend-crash')).toHaveCount(0);
   expect(cloud.device.pageErrors).toEqual([]);
@@ -353,12 +353,12 @@ test('Cloud sign-out closes the local reader even when stream cancellation rejec
   try {
     await cloud.install(); await cloud.goto(); await cloud.open();
     await page.locator('#task').fill('Question');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await page.locator('#send').click();
     await expect(page.locator('#transcript').getByText('Partial text', { exact: true })).toBeVisible();
     const cancelled = cloud.sessionStreamCancellations;
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const section = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
-    await section.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await page.locator('#sidebar-settings').click();
+    const section = page.locator('#management-dialog');
+    await section.locator('#settings-sign-out').click();
     await expect.poll(() => cloud.sessionStreamCancellations).toBeGreaterThan(cancelled);
     resume();
     await expect(cloud.row(sessionA)).toBeHidden();
@@ -378,13 +378,13 @@ test('browser returns from Cloud to Work project new chat', async ({ page }) => 
   await cloud.goto();
   await cloud.open();
   await page.locator('#task').fill('Retain Cloud draft');
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.locator('#sidebar-work-mode').click();
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
   await expect(page.locator('main h1')).toHaveText('New chat');
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeEnabled();
   await page.locator('#task').fill('Retain Work draft');
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
   await cloud.open();
   await expect(page.locator('#task')).toHaveValue('Retain Cloud draft');
   expect(cloud.postCount).toBe(0);
@@ -404,8 +404,8 @@ for (const destination of ['settings', 'not-a-page']) {
       await page.locator('#task').press('Enter');
       await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);
       if (destination !== 'not-a-page') {
-        await page.getByRole('button', { name: 'Settings', exact: true }).click();
-        await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
+        await page.locator('#sidebar-settings').click();
+        await expect(page.locator('#management-dialog')).toBeVisible();
       } else {
         await page.evaluate(() => {
           history.pushState(null, '', '/device/device-a/not-a-page');
@@ -416,7 +416,7 @@ for (const destination of ['settings', 'not-a-page']) {
       complete();
       await expect.poll(() => cloud.requests.some(request => request.path === `/v1/sessions/${sessionC}/messages`)).toBe(true);
       if (destination === 'settings') {
-        const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+        const settings = page.locator('#management-dialog');
         await expect(settings).toBeVisible();
         await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
         await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionC}`);

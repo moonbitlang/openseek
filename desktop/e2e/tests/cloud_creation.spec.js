@@ -13,7 +13,7 @@ for (const desktop of [false, true]) {
     await expect(page.getByTitle('Show terminal (Ctrl+`)', { exact: true })).toBeVisible();
     await expect(cloud.row(sessionC)).toHaveCount(0);
     await page.locator('#task').fill('Unsubmitted Cloud draft');
-    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+    await expect(page.locator('#send')).toBeEnabled();
     expect(creations(cloud)).toHaveLength(0);
   });
 }
@@ -38,7 +38,7 @@ test('Cloud chat connection errors stay in the chat that triggered them', async 
   const disconnectPost = route => route.request().method() === 'POST' ? route.abort('failed') : route.fallback();
   await page.route(command, disconnectPost);
   await task.fill('Keep this failed send');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(page.locator('#transcript')).toContainText(message);
   await expect(sidebar).not.toContainText(message);
   await expect(task).toHaveValue('Keep this failed send');
@@ -92,7 +92,7 @@ test('a first-send rejection preserves the input and retries the existing Cloud 
   expect((await history).status()).toBe(200);
   await expect(page.getByRole('main')).toContainText('Cloud model credentials are not configured');
   await expect(page.locator('#task')).toHaveValue('Keep this initial input');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(page.locator('#send')).toBeEnabled();
   cloud.sendStatus = 202;
   await page.locator('#task').fill('Edited retry');
   await page.locator('#task').press('Enter');
@@ -125,7 +125,7 @@ test('first Cloud admission preserves later typing in the shared composer', asyn
 test('Cloud blank stays selected across sidebar browsing, shortcuts and Settings above Work', async ({ page }) => {
   const cloud = new CloudHarness(page, { desktop: true });
   const sidebar = name => page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name, exact: true });
-  const model = page.getByRole('button', { name: 'Model', exact: true });
+  const model = page.locator('#openseek-model-picker, #codex-model-picker, #model');
   const heading = page.locator('main > .topbar h1');
   const shortcut = await page.evaluate(() => navigator.platform.includes('Mac') ? 'Meta+N' : 'Control+N');
   await cloud.install(); await cloud.goto();
@@ -144,11 +144,11 @@ test('Cloud blank stays selected across sidebar browsing, shortcuts and Settings
   await page.keyboard.press(shortcut);
   await expect(sidebar('Chat')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(heading).toHaveText('New chat');
   await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await sidebar('Work').click();
   await page.keyboard.press(shortcut);
