@@ -242,17 +242,25 @@ pub fn endpoints(
     }),
     Endpoint(@commands.pattern_repair, payload => {
       match @engine.pattern_repair_environment(manager, model=payload.model) {
-        Ready(env) => pattern_repair_op(state, env, payload)
-        Configuration(message) =>
-          pattern_repair_failure(payload, Unavailable, None, message, [])
-        Unavailable =>
-          pattern_repair_failure(
+        Ready(env) =>
+          @pattern_repair.repair(
+            state.engine,
+            state.semantic_provider(),
+            env,
             payload,
-            Unavailable,
-            None,
-            "Pattern Repair settings are unavailable.",
-            [],
           )
+        Configuration(message)
+        | (
+          Unavailable with message = "Pattern Repair settings are unavailable.",
+        ) =>
+          {
+            root: payload.root,
+            generation: payload.generation,
+            candidate_pattern: None,
+            validation_status: Unavailable,
+            message,
+            trace: [],
+          }
       }
     }),
     Endpoint(@commands.fs_clear_file_search_cache, payload => {
