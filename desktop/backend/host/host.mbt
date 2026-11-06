@@ -189,10 +189,13 @@ pub fn endpoints(
 ) -> Array[@endpoint.Endpoint] {
   [
     Endpoint(@commands.github_drafts_get, payload => {
-      read_github_drafts(state.runtime_dir.map(dir => dir.to_string()), payload)
+      @github.read_github_drafts(
+        state.runtime_dir.map(dir => dir.to_string()),
+        payload,
+      )
     }),
     Endpoint(@commands.github_drafts_set, payload => {
-      write_github_drafts(
+      @github.write_github_drafts(
         state.runtime_dir.map(dir => dir.to_string()),
         payload,
       )
@@ -350,33 +353,39 @@ pub fn endpoints(
       state.updates.start_download()
     }),
     Endpoint(@commands.update_apply, _ => state.updates.apply()),
-    Endpoint(@commands.git_branch, payload => git_branch_op(payload)),
-    Endpoint(@commands.git_pull_request, payload => git_pull_request_op(payload)),
-    Endpoint(@commands.github_list, payload => github_list_op(payload)),
-    Endpoint(@commands.github_review, payload => github_review_op(payload)),
+    Endpoint(@commands.git_branch, payload => @git.git_branch_op(payload)),
+    Endpoint(@commands.git_pull_request, payload => {
+      @github.git_pull_request_op(payload)
+    }),
+    Endpoint(@commands.github_list, payload => @github.github_list_op(payload)),
+    Endpoint(@commands.github_review, payload => {
+      @github.github_review_op(payload)
+    }),
     Endpoint(@commands.github_review_file, payload => {
-      github_review_file_op(payload)
+      @github.github_review_file_op(payload)
     }),
     Endpoint(@commands.github_review_mutate, payload => {
-      github_review_mutate_op(payload)
+      @github.github_review_mutate_op(payload)
     }),
     Endpoint(@commands.github_pull_request, payload => {
-      github_pull_request_op(payload)
+      @github.github_pull_request_op(payload)
     }),
     Endpoint(@commands.github_pull_request_summary, payload => {
-      github_pull_request_summary_op(payload)
+      @github.github_pull_request_summary_op(payload)
     }),
-    Endpoint(@commands.github_checkout, payload => github_checkout_op(payload)),
+    Endpoint(@commands.github_checkout, payload => {
+      @github.github_checkout_op(payload)
+    }),
     Endpoint(@commands.github_checkout_status, payload => {
-      github_checkout_status_op(payload)
+      @github.github_checkout_status_op(payload)
     }),
-    Endpoint(@commands.git_changes, payload => git_changes_op(payload)),
-    Endpoint(@commands.git_history, payload => git_history_op(payload)),
+    Endpoint(@commands.git_changes, payload => @git.git_changes_op(payload)),
+    Endpoint(@commands.git_history, payload => @git.git_history_op(payload)),
     Endpoint(@commands.git_commit_changes, payload => {
-      git_commit_changes_op(payload)
+      @git.git_commit_changes_op(payload)
     }),
     Endpoint(@commands.git_original_file, payload => {
-      git_original_file_op(payload)
+      @git.git_original_file_op(payload)
     }),
     Endpoint(@commands.host_open_path, payload => open_path_op(payload)),
     Endpoint(@commands.host_reveal_path, payload => reveal_path_op(payload)),

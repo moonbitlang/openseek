@@ -147,7 +147,7 @@ async test "pull request HTML failures never return a truncated or raw Markdown 
       |> ignore
       false
     } catch {
-      HostError(_) => true
+      InvalidResponse(_) | Unavailable(_) | Stale(_) => true
       _ => false
     }
     assert_true(rejected)

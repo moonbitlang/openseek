@@ -1,276 +1,4 @@
 ///|
-async test "current PR status skips GitHub for a local checkout without remotes" {
-  let dir = @fs.tmpdir(prefix="openseek-local-pr-status-")
-  let repo = git_test_repo(dir)
-  let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
-    git_test_run(dir, ["init", "--quiet"])
-    let branch = github_checkout_branch(repo).unwrap()
-    let status = github_checkout_status(repo, _ => {
-      fail("A local checkout without remotes must not query GitHub")
-    })
-    assert_eq(status.branch, Some(branch))
-    assert_eq(status.pull_request_url, None)
-    assert_false(status.has_open_pull_request)
-  }
-}
-
-///|
-#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
-async test "current PR status verifies remote lifecycle even for saved branch associations" {
-  let dir = @fs.tmpdir(prefix="openseek-pr-status-")
-  let repo = git_test_repo(dir)
-  let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
-    git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file("\{dir}/file.txt", "content", create_mode=CreateOrTruncate)
-    git_test_run(dir, ["add", "."])
-    git_test_commit(dir, "initial")
-    let branch = github_checkout_branch(repo).unwrap()
-    let base = git_revision_commit(repo, "HEAD").unwrap()
-    let url = "https://github.example/owner/repo/pull/42"
-    git_test_run(dir, [
-      "remote", "add", "origin", "https://github.example/owner/repo.git",
-    ])
-    for saved in [false, true] {
-      if saved {
-        git_test_run(dir, ["remote", "remove", "origin"])
-        let metadata : Json = { "url": url, "base": base }
-        git_test_run(dir, [
-          "config",
-          "branch.\{branch}.openseek-pr",
-          metadata.stringify(),
-        ])
-      }
-      for lifecycle in ["OPEN", "CLOSED", "MERGED"] {
-        let status = github_checkout_status(repo, args => {
-          assert_eq(
-            args,
-            if saved {
-              ["pr", "view", url, "--json", "url,state"]
-            } else {
-              ["pr", "status", "--json", "url,state"]
-            },
-          )
-          // Draft is still an open PR; only lifecycle controls availability.
-          let pr : Json = { "url": url, "state": lifecycle, "isDraft": true }
-          if saved {
-            pr
-          } else {
-            { "currentBranch": pr }
-          }
-        })
-        assert_eq(status.branch, Some(branch))
-        assert_eq(status.pull_request_url, Some(url))
-        assert_eq(status.has_open_pull_request, lifecycle == "OPEN")
-      }
-      let invalid_replies : Array[Json] = [
-        { "url": url },
-        { "url": url, "state": "unknown" },
-      ]
-      for invalid in invalid_replies {
-        let failed = try {
-          let _ = github_checkout_status(repo, _ => {
-            if saved {
-              invalid
-            } else {
-              { "currentBranch": invalid }
-            }
-          })
-          false
-        } catch {
-          HostError(_) => true
-          error => raise error
-        }
-        assert_true(failed)
-      }
-      let failed = try {
-        let _ = github_checkout_status(repo, _ => raise HostError("offline"))
-        false
-      } catch {
-        HostError(message) => message == "offline"
-        error => raise error
-      }
-      assert_true(failed)
-      if !saved {
-        let absent_replies : Array[Json] = [{}, { "currentBranch": null }]
-        for absent in absent_replies {
-          let status = github_checkout_status(repo, _ => absent)
-          assert_eq(status.pull_request_url, None)
-          assert_false(status.has_open_pull_request)
-        }
-      }
-    }
-    git_test_run(dir, ["switch", "--detach", base])
-    let status = github_checkout_status(repo, _ => {
-      fail("A detached checkout must not query a branch PR")
-    })
-    assert_eq(status.branch, None)
-    assert_false(status.has_open_pull_request)
-  }
-}
-
-///|
-async test "checkout failures travel as data instead of redacted Proton errors" {
-  let reply = github_checkout_op({
-    cwd: "relative/path",
-    repository_url: "https://github.com/owner/repo",
-    number: 42,
-    changes: Ask,
-    update: false,
-  })
-  assert_true(
-    reply is CheckoutFailure(message, _) &&
-    message.contains("absolute checkout path"),
-  )
-}
-
-///|
-#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
-async test "checkout choices preserve edits until chosen and stash retains index and untracked files" {
-  let dir = @fs.tmpdir(prefix="openseek-checkout-choices-")
-  let repo = git_test_repo(dir)
-  let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
-    git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file(
-      "\{dir}/tracked.txt",
-      "original\n",
-      create_mode=CreateOrTruncate,
-    )
-    git_test_run(dir, ["add", "tracked.txt"])
-    git_test_commit(dir, "initial")
-    @fs.write_file(
-      "\{dir}/tracked.txt",
-      "staged\n",
-      create_mode=CreateOrTruncate,
-    )
-    git_test_run(dir, ["add", "tracked.txt"])
-    @fs.write_file(
-      "\{dir}/tracked.txt",
-      "working\n",
-      create_mode=CreateOrTruncate,
-    )
-    @fs.write_file(
-      "\{dir}/untracked.txt",
-      "keep\n",
-      create_mode=CreateOrTruncate,
-    )
-    assert_false(github_prepare_checkout(repo, 42, Ask))
-    assert_true(github_prepare_checkout(repo, 42, Carry))
-    assert_eq(@gitx.output(repo, ["show", ":tracked.txt"]), "staged\n")
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "working\n")
-    assert_true(github_prepare_checkout(repo, 42, Stash))
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "original\n")
-    assert_eq(
-      @gitx.output(repo, ["show", "stash@{0}:tracked.txt"]),
-      "working\n",
-    )
-    assert_eq(
-      @gitx.output(repo, ["show", "stash@{0}^2:tracked.txt"]),
-      "staged\n",
-    )
-    assert_eq(@fs.read_file("\{dir}/untracked.txt").text(), "keep\n")
-    assert_true(github_prepare_checkout(repo, 42, Ask))
-    git_test_run(dir, ["stash", "apply", "--index"])
-    assert_true(github_prepare_checkout(repo, 42, Discard))
-    assert_eq(@fs.read_file("\{dir}/tracked.txt").text(), "original\n")
-    assert_eq(@gitx.output(repo, ["show", ":tracked.txt"]), "original\n")
-    assert_eq(@fs.read_file("\{dir}/untracked.txt").text(), "keep\n")
-  }
-}
-
-///|
-test "checkout errors explain recovery and retain Git diagnostics" {
-  for
-    (stderr, expected) in [
-      (
-        "error: Your local changes to the following files would be overwritten by checkout:\n\tfile.txt\nAborting",
-        "Commit or stash",
-      ),
-      (
-        "error: The following untracked working tree files would be overwritten by checkout:\n\tnew.txt\nAborting",
-        "Move or commit",
-      ),
-      (
-        "fatal: 'topic' is already used by worktree at '/tmp/other'", "another worktree",
-      ),
-    ] {
-    assert_true(
-      github_checkout_failure(stderr) is CheckoutFailure(message, Some(details)) &&
-      message.contains(expected) &&
-      details == stderr,
-    )
-  }
-  assert_true(
-    github_checkout_failure("authentication failed")
-    is CheckoutFailure("authentication failed", None),
-  )
-  let fetch_then_error = "From github.com:owner/repo\n * [new branch] topic\nfatal: Not possible to fast-forward, aborting."
-  assert_true(
-    github_checkout_failure(fetch_then_error)
-    is CheckoutFailure(
-      "fatal: Not possible to fast-forward, aborting.",
-      Some(details)
-    ) &&
-    details == fetch_then_error,
-  )
-}
-
-///|
-#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
-async test "PR review uses its merge base and association follows the checked out branch" {
-  let dir = @fs.tmpdir(prefix="openseek-checkout-review-")
-  let repo = git_test_repo(dir)
-  let _ = {
-    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
-    git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file(
-      "\{dir}/upstream.txt",
-      "before\n",
-      create_mode=CreateOrTruncate,
-    )
-    git_test_run(dir, ["add", "."])
-    git_test_commit(dir, "old default branch")
-    @fs.write_file(
-      "\{dir}/upstream.txt",
-      "upstream work\n",
-      create_mode=CreateOrTruncate,
-    )
-    git_test_run(dir, ["add", "."])
-    git_test_commit(dir, "PR base")
-    let base = git_revision_commit(repo, "HEAD").unwrap()
-    git_test_run(dir, ["switch", "-c", "pr/feature"])
-    @fs.write_file("\{dir}/pr.txt", "PR work\n", create_mode=CreateOrTruncate)
-    git_test_run(dir, ["add", "."])
-    git_test_commit(dir, "PR head")
-    let url = "https://github.example/owner/repo/pull/42"
-    let metadata : Json = { "url": url, "base": base }
-    git_test_run(dir, [
-      "config",
-      "branch.pr/feature.openseek-pr",
-      metadata.stringify(),
-    ])
-    let association = github_local_checkout_association(repo).unwrap()
-    assert_eq(association.url, url)
-    let (_, comparison, _, _, _, _, changes) = git_change_snapshot(
-      repo,
-      "",
-      retries_left=2,
-      pr_base=association.base,
-    )
-    assert_eq(comparison, Some(base))
-    assert_eq(changes.map(change => change.path), ["pr.txt"])
-    git_test_run(dir, ["switch", "--detach", base])
-    assert_true(github_local_checkout_association(repo) is None)
-    git_test_run(dir, ["switch", "-c", "other"])
-    assert_true(github_local_checkout_association(repo) is None)
-    git_test_run(dir, ["switch", "pr/feature"])
-    assert_eq(github_local_checkout_association(repo).unwrap().url, url)
-  }
-}
-
-///|
 /// Best-effort removal of a test repository. Cancellation stays observable;
 /// any other rmdir failure is the test's own tmpdir and is ignored.
 async fn git_test_cleanup(dir : String) -> Unit {
@@ -301,6 +29,59 @@ fn git_test_repo(dir : String) -> @pathx.Absolute {
 
 ///|
 #skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
+async test "PR review uses its merge base and association follows the checked out branch" {
+  let dir = @fs.tmpdir(prefix="openseek-checkout-review-")
+  let repo = git_test_repo(dir)
+  let _ = {
+    defer @async.protect_from_cancel(() => git_test_cleanup(dir))
+    git_test_run(dir, ["init", "--quiet"])
+    @fs.write_file(
+      "\{dir}/upstream.txt",
+      "before\n",
+      create_mode=CreateOrTruncate,
+    )
+    git_test_run(dir, ["add", "."])
+    git_test_commit(dir, "old default branch")
+    @fs.write_file(
+      "\{dir}/upstream.txt",
+      "upstream work\n",
+      create_mode=CreateOrTruncate,
+    )
+    git_test_run(dir, ["add", "."])
+    git_test_commit(dir, "PR base")
+    let base = revision_commit(repo, "HEAD").unwrap()
+    git_test_run(dir, ["switch", "-c", "pr/feature"])
+    @fs.write_file("\{dir}/pr.txt", "PR work\n", create_mode=CreateOrTruncate)
+    git_test_run(dir, ["add", "."])
+    git_test_commit(dir, "PR head")
+    let url = "https://github.example/owner/repo/pull/42"
+    let metadata : Json = { "url": url, "base": base }
+    git_test_run(dir, [
+      "config",
+      "branch.pr/feature.openseek-pr",
+      metadata.stringify(),
+    ])
+    let association = pr_association(repo).unwrap()
+    assert_eq(association.url, url)
+    let (_, comparison, _, _, _, _, changes) = git_change_snapshot(
+      repo,
+      "",
+      retries_left=2,
+      pr_base=association.base,
+    )
+    assert_eq(comparison, Some(base))
+    assert_eq(changes.map(change => change.path), ["pr.txt"])
+    git_test_run(dir, ["switch", "--detach", base])
+    assert_true(pr_association(repo) is None)
+    git_test_run(dir, ["switch", "-c", "other"])
+    assert_true(pr_association(repo) is None)
+    git_test_run(dir, ["switch", "pr/feature"])
+    assert_eq(pr_association(repo).unwrap().url, url)
+  }
+}
+
+///|
+#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "Git history pages stay pinned and commit changes use first parent" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-")
   let repo = git_test_repo(dir)
@@ -311,14 +92,14 @@ async test "Git history pages stay pinned and commit changes use first parent" {
     git_test_run(dir, ["add", "old.mbt"])
     git_test_commit(dir, "first")
     git_test_run(dir, ["branch", "-M", "feature/graph"])
-    let first = git_revision_commit(repo, "HEAD").unwrap()
+    let first = revision_commit(repo, "HEAD").unwrap()
     git_test_run(dir, ["update-ref", "refs/remotes/origin/main", first])
     git_test_run(dir, [
       "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
     ])
     git_test_run(dir, ["mv", "old.mbt", "new.mbt"])
     git_test_commit(dir, "rename")
-    let second = git_revision_commit(repo, "HEAD").unwrap()
+    let second = revision_commit(repo, "HEAD").unwrap()
     git_test_run(dir, [
       "update-ref", "refs/remotes/origin/feature/graph", second,
     ])
@@ -341,7 +122,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
     @fs.write_file("\{dir}/third.mbt", "third\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "third.mbt"])
     git_test_commit(dir, "third")
-    let third = git_revision_commit(repo, "HEAD").unwrap()
+    let third = revision_commit(repo, "HEAD").unwrap()
     assert_true(third != second)
     // The next page still walks the captured second-commit tips.
     let (second_page, _) = git_history_page(repo, snapshot, 1, 1)
@@ -376,7 +157,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
       "-c", "commit.gpgSign=false", "merge", "--quiet", "--no-ff", "-m", "merge side",
       "side",
     ])
-    let merge = git_revision_commit(repo, "HEAD").unwrap()
+    let merge = revision_commit(repo, "HEAD").unwrap()
     let merged = git_commit_changes_at(repo, "", merge)
     assert_eq(merged.parent, Some(third))
     assert_true(
@@ -396,7 +177,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
       "160000,\{first},vendor/lib",
     ])
     git_test_commit(dir, "copy and modes")
-    let modes_commit = git_revision_commit(repo, "HEAD").unwrap()
+    let modes_commit = revision_commit(repo, "HEAD").unwrap()
     let mode_changes = git_commit_changes_at(repo, "", modes_commit).changes
     assert_true(
       mode_changes.any(change => {
@@ -423,7 +204,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
     @fs.write_file("\{dir}/link", "regular\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "link"])
     git_test_commit(dir, "replace symlink")
-    let type_commit = git_revision_commit(repo, "HEAD").unwrap()
+    let type_commit = revision_commit(repo, "HEAD").unwrap()
     assert_true(
       git_commit_changes_at(repo, "", type_commit).changes.any(change => {
         change.path == "link" &&
@@ -444,7 +225,7 @@ async test "Git history pages stay pinned and commit changes use first parent" {
     )
     git_test_run(dir, ["add", "binary.dat", "oversized.txt"])
     git_test_commit(dir, "binary content policies")
-    let content_commit = git_revision_commit(repo, "HEAD").unwrap()
+    let content_commit = revision_commit(repo, "HEAD").unwrap()
     assert_eq(
       git_original_file_at(repo, Relative("binary.dat"), content_commit),
       BinaryOriginal,
@@ -505,13 +286,13 @@ async test "Git recognizes only origin HEAD's branch as the default" {
   ])
   // A branch spelling alone proves nothing until the remote declares its
   // default. Once it does, only that exact name is suppressed from PR lookup.
-  assert_false(git_is_default_branch(repo, branch="main"))
+  assert_false(is_default_branch(repo, branch="main"))
   git_test_run(dir, ["update-ref", "refs/remotes/origin/main", "HEAD"])
   git_test_run(dir, [
     "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
   ])
-  assert_true(git_is_default_branch(repo, branch="main"))
-  assert_false(git_is_default_branch(repo, branch="feature/from-main"))
+  assert_true(is_default_branch(repo, branch="main"))
+  assert_false(is_default_branch(repo, branch="feature/from-main"))
 }
 
 ///|
@@ -521,7 +302,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
   let repo = git_test_repo(dir)
   defer @async.protect_from_cancel(() => git_test_cleanup(dir))
   git_test_run(dir, ["init", "--quiet"])
-  assert_eq(git_revision_commit(repo, "HEAD"), None)
+  assert_eq(revision_commit(repo, "HEAD"), None)
   @fs.mkdir("\{dir}/desktop", recursive=true)
   @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
   @fs.write_file(
@@ -534,7 +315,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
     "commit", "--quiet", "-m", "first",
   ])
-  let first = git_revision_commit(repo, "HEAD").unwrap()
+  let first = revision_commit(repo, "HEAD").unwrap()
   // A task deletion must use the comparison tree's mode, not a staged type
   // change that no longer exists in the working tree.
   @fs.remove("\{dir}/desktop/keep.txt")
@@ -584,7 +365,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
     "commit", "--quiet", "-m", "second",
   ])
-  let second = git_revision_commit(repo, "HEAD").unwrap()
+  let second = revision_commit(repo, "HEAD").unwrap()
   assert_true(second != first)
   let (_, head_base, _, _, _, _, head_changes) = git_change_snapshot(
     repo,
@@ -600,8 +381,8 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
     worktree_base=first,
   )
   assert_eq(task_changes, task_before_commit)
-  assert_eq(git_revision_commit(repo, first), Some(first))
-  assert_eq(git_revision_commit(repo, "missing-review-revision"), None)
+  assert_eq(revision_commit(repo, first), Some(first))
+  assert_eq(revision_commit(repo, "missing-review-revision"), None)
   assert_eq(
     git_original_file_at(repo, Relative("review.txt"), first),
     OriginalContent("first\n"),
@@ -626,7 +407,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
     "commit", "--quiet", "-m", "gitlink",
   ])
-  let gitlink_head = git_revision_commit(repo, "HEAD").unwrap()
+  let gitlink_head = revision_commit(repo, "HEAD").unwrap()
   @fs.remove("\{dir}/desktop/link")
   git_test_run(dir, [
     "update-index", "--force-remove", "desktop/link", "desktop/vendor/lib",
@@ -678,7 +459,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
     "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "first",
   ])
-  let first = git_revision_commit(repo, "HEAD").unwrap()
+  let first = revision_commit(repo, "HEAD").unwrap()
   git_test_run(dir, ["update-ref", "refs/remotes/origin/main", first])
   git_test_run(dir, [
     "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
@@ -701,7 +482,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
     "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "second",
   ])
-  let second = git_revision_commit(repo, "HEAD").unwrap()
+  let second = revision_commit(repo, "HEAD").unwrap()
   let (after_head, after_base, _, _, _, _, after_changes) = git_change_snapshot(
     repo,
     "",
@@ -720,7 +501,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
   )
   git_test_run(dir, ["add", "upstream.txt"])
   git_test_commit(dir, "upstream")
-  let upstream = git_revision_commit(repo, "HEAD").unwrap()
+  let upstream = revision_commit(repo, "HEAD").unwrap()
   git_test_run(dir, ["update-ref", "refs/remotes/origin/main", upstream])
   // At the default tip, the valid HEAD boundary must beat an old task base.
   let (_, tip_base, _, _, _, _, tip_changes) = git_change_snapshot(

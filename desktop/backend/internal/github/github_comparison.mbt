@@ -9,7 +9,7 @@ async fn github_pull_request_merge_base(
   head : String,
 ) -> String {
   if @gitx.probe(dir, ["merge-base", base, head]) is Some(local_base) &&
-    valid_commit_identity(local_base) {
+    @git.valid_commit_identity(local_base) {
     return local_base
   }
   // A newly pushed revision might not have been fetched locally yet. Resolve
@@ -24,8 +24,8 @@ async fn github_pull_request_merge_base(
     ])
     .trim()
     .to_owned()
-  guard valid_commit_identity(remote) else {
-    raise HostError("GitHub returned an invalid merge base.")
+  guard @git.valid_commit_identity(remote) else {
+    raise InvalidResponse("GitHub returned an invalid merge base.")
   }
   remote
 }

@@ -1,15 +1,15 @@
 ///|
-async fn github_pull_request_op(
+pub async fn github_pull_request_op(
   payload : @protocol.GithubPullRequestPayload,
 ) -> @protocol.GithubPullRequestDetail {
   guard payload.number > 0 && payload.repository_url.has_prefix("https://") else {
-    raise HostError("Select a pull request from a GitHub repository.")
+    raise InvalidRequest("Select a pull request from a GitHub repository.")
   }
   guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-    raise HostError("Select a workspace with an absolute checkout path.")
+    raise InvalidRequest("Select a workspace with an absolute checkout path.")
   }
   guard resolve_gh() is Some(gh) else {
-    raise HostError(
+    raise Unavailable(
       "Install GitHub CLI (gh) and run gh auth login to load pull requests.",
     )
   }
@@ -19,7 +19,7 @@ async fn github_pull_request_op(
   match reply {
     Some(reply) => reply
     None =>
-      raise HostError(
+      raise Unavailable(
         "GitHub request timed out. Check your connection and retry.",
       )
   }
@@ -42,7 +42,7 @@ async fn github_pull_request(
     "number,title,url,author,isDraft,state,baseRefName,headRefName,additions,deletions,changedFiles,statusCheckRollup,createdAt,reviewRequests,latestReviews,assignees,labels,milestone,mergeable",
   ])
   guard raw is { "url": String(url), .. } else {
-    raise HostError("GitHub returned invalid pull request details.")
+    raise InvalidResponse("GitHub returned invalid pull request details.")
   }
   let identity = github_review_identity(url)
   let (body_html, comments) = github_pull_request_content(identity, query)
@@ -86,7 +86,7 @@ async fn github_pull_request_content(
         },
         ..
       } else {
-      raise HostError("GitHub returned invalid pull request content.")
+      raise InvalidResponse("GitHub returned invalid pull request content.")
     }
     if body_html is None {
       body_html = Some(html)
@@ -97,7 +97,7 @@ async fn github_pull_request_content(
       None => break
       Some(after) => {
         guard !seen.contains(after) else {
-          raise HostError("GitHub repeated a comment page. Refresh to retry.")
+          raise Stale("GitHub repeated a comment page. Refresh to retry.")
         }
         seen.push(after)
         cursor = next
@@ -105,7 +105,7 @@ async fn github_pull_request_content(
     }
   }
   guard body_html is Some(body_html) else {
-    raise HostError("GitHub omitted the pull request body.")
+    raise InvalidResponse("GitHub omitted the pull request body.")
   }
   (body_html, comments)
 }
@@ -115,7 +115,7 @@ fn github_comment_author(raw : Json) -> String? raise {
   match raw {
     Null => None
     { "login": String(login), .. } => Some(login)
-    _ => raise HostError("GitHub returned an invalid comment author.")
+    _ => raise InvalidResponse("GitHub returned an invalid comment author.")
   }
 }
 
@@ -129,7 +129,7 @@ fn github_detail_comment(raw : Json) -> @protocol.GithubComment raise {
       "createdAt": String(created_at),
       ..
     } else {
-    raise HostError("GitHub returned an invalid comment.")
+    raise InvalidResponse("GitHub returned an invalid comment.")
   }
   { author: github_comment_author(author), body_html, url, created_at, }
 }
@@ -141,7 +141,7 @@ fn github_check_url(raw : Json) -> String? raise {
     // Normalize it at the provider boundary; our protocol uses absence.
     Null | String("") => None
     String(url) => Some(url)
-    _ => raise HostError("GitHub returned an invalid check URL.")
+    _ => raise InvalidResponse("GitHub returned an invalid check URL.")
   }
 }
 
@@ -159,7 +159,7 @@ fn github_detail_check(raw : Json) -> @protocol.GithubCheck raise {
     } => {
       let state = if status == "COMPLETED" {
         guard conclusion is String(state) && !state.is_empty() else {
-          raise HostError(
+          raise InvalidResponse(
             "GitHub returned a completed check without a conclusion.",
           )
         }
@@ -174,7 +174,8 @@ fn github_detail_check(raw : Json) -> @protocol.GithubCheck raise {
         workflow: match workflow {
           Null | String("") => None
           String(name) => Some(name)
-          _ => raise HostError("GitHub returned an invalid workflow name.")
+          _ =>
+            raise InvalidResponse("GitHub returned an invalid workflow name.")
         },
       }
     }
@@ -185,7 +186,7 @@ fn github_detail_check(raw : Json) -> @protocol.GithubCheck raise {
       "targetUrl": url,
       ..
     } => { name, state, url: github_check_url(url), workflow: None, }
-    _ => raise HostError("GitHub returned an invalid status check.")
+    _ => raise InvalidResponse("GitHub returned an invalid status check.")
   }
 }
 
@@ -214,12 +215,12 @@ fn github_pull_request_detail(
       "milestone": milestone,
       ..
     } else {
-    raise HostError("GitHub returned invalid pull request details.")
+    raise InvalidResponse("GitHub returned invalid pull request details.")
   }
   let raw_checks = match rollup {
     Null => []
     Array(checks) => checks
-    _ => raise HostError("GitHub returned invalid status checks.")
+    _ => raise InvalidResponse("GitHub returned invalid status checks.")
   }
   {
     item,
@@ -237,20 +238,20 @@ fn github_pull_request_detail(
     reviewers: github_detail_reviewers(reviews, requests),
     assignees: assignees.map(raw => {
       guard raw is { "login": String(login), .. } else {
-        raise HostError("GitHub returned an invalid assignee.")
+        raise InvalidResponse("GitHub returned an invalid assignee.")
       }
       login
     }),
     labels: labels.map(raw => {
       guard raw is { "name": String(name), .. } else {
-        raise HostError("GitHub returned an invalid label.")
+        raise InvalidResponse("GitHub returned an invalid label.")
       }
       name
     }),
     milestone: match milestone {
       Null => None
       { "title": String(title), .. } => Some(title)
-      _ => raise HostError("GitHub returned an invalid milestone.")
+      _ => raise InvalidResponse("GitHub returned an invalid milestone.")
     },
   }
 }
@@ -263,7 +264,7 @@ fn github_detail_reviewers(
   let reviewers : Map[String, @protocol.GithubReviewer] = Map([])
   for review in reviews {
     guard review is { "author": author, "state": String(state), .. } else {
-      raise HostError("GitHub returned an invalid review.")
+      raise InvalidResponse("GitHub returned an invalid review.")
     }
     if github_comment_author(author) is Some(name) {
       reviewers[name] = { name, state, }
@@ -273,7 +274,7 @@ fn github_detail_reviewers(
     let name = match request {
       { "login": String(login), .. } => login
       { "name": String(name), .. } => name
-      _ => raise HostError("GitHub returned an invalid review request.")
+      _ => raise InvalidResponse("GitHub returned an invalid review request.")
     }
     reviewers[name] = { name, state: "REQUESTED", }
   }

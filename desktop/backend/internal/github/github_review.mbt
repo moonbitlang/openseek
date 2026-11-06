@@ -13,10 +13,10 @@ fn github_review_identity(url : String) -> GithubReviewIdentity raise {
     !host.is_empty() &&
     !owner.is_empty() &&
     !repo.is_empty() else {
-    raise HostError("Select a GitHub pull request.")
+    raise InvalidRequest("Select a GitHub pull request.")
   }
   let number = @string.parse_int(number)
-  guard number > 0 else { raise HostError("Invalid pull request number.") }
+  guard number > 0 else { raise InvalidRequest("Invalid pull request number.") }
   { host, owner, repo, number, }
 }
 
@@ -38,7 +38,7 @@ fn github_review_comment(raw : Json) -> @protocol.GithubReviewComment raise {
       "viewerCanDelete": can_delete,
       ..
     } else {
-    raise HostError("GitHub returned an invalid review comment.")
+    raise InvalidResponse("GitHub returned an invalid review comment.")
   }
   // GitHub comment IDs exceed a 32-bit MoonBit Int. Keep the decimal identity
   // intact across JS, native and the REST path, including BigInt's string form.
@@ -46,13 +46,13 @@ fn github_review_comment(raw : Json) -> @protocol.GithubReviewComment raise {
     String(id) if github_review_valid_id(id) => id
     Number(n, ..) if n > 0.0 && n <= 9007199254740991.0 && n.floor() == n =>
       n.to_int64().to_string()
-    _ => raise HostError("GitHub returned an invalid review comment ID.")
+    _ => raise InvalidResponse("GitHub returned an invalid review comment ID.")
   }
   let (author, avatar_url) = match author {
     Null => (None, None)
     { "login": String(login), "avatarUrl": String(avatar), .. } =>
       (Some(login), Some(avatar))
-    _ => raise HostError("GitHub returned an invalid review author.")
+    _ => raise InvalidResponse("GitHub returned an invalid review author.")
   }
   {
     id,
@@ -75,16 +75,16 @@ fn github_review_page(raw : Json) -> (Array[Json], String?) raise {
       "pageInfo": { "hasNextPage": more, "endCursor": cursor, .. },
       ..
     } else {
-    raise HostError("GitHub returned invalid review pagination.")
+    raise InvalidResponse("GitHub returned invalid review pagination.")
   }
   match more {
     False => (nodes, None)
     True =>
       match cursor {
         String(cursor) if !cursor.is_empty() => (nodes, Some(cursor))
-        _ => raise HostError("GitHub omitted the next review cursor.")
+        _ => raise InvalidResponse("GitHub omitted the next review cursor.")
       }
-    _ => raise HostError("GitHub returned invalid review pagination.")
+    _ => raise InvalidResponse("GitHub returned invalid review pagination.")
   }
 }
 
@@ -112,10 +112,10 @@ async fn github_review_graphql(
 ///|
 fn github_graphql_data(raw : Json) -> Json raise {
   if raw is { "errors": Array(errors), .. } && !errors.is_empty() {
-    raise HostError("GitHub request failed: \{Json(errors).stringify()}")
+    raise Unavailable("GitHub request failed: \{Json(errors).stringify()}")
   }
   guard raw is { "data": data, .. } else {
-    raise HostError("GitHub omitted the GraphQL response.")
+    raise InvalidResponse("GitHub omitted the GraphQL response.")
   }
   data
 }
@@ -141,7 +141,7 @@ async fn github_review_threads_page(
   }
   let data = github_review_graphql(gh, dir, identity, query, fields)
   guard data is { "repository": { "pullRequest": pr, .. }, .. } else {
-    raise HostError("The pull request is unavailable to your GitHub account.")
+    raise Unavailable("The pull request is unavailable to your GitHub account.")
   }
   pr
 }
@@ -156,7 +156,7 @@ async fn github_review_thread(
   guard raw is Object(fields) &&
     fields.get("id") is Some(String(id)) &&
     fields.get("comments") is Some(page) else {
-    raise HostError("GitHub returned an invalid review thread.")
+    raise InvalidResponse("GitHub returned an invalid review thread.")
   }
   let (nodes, first_cursor) = github_review_page(page)
   let comments = nodes.map(github_review_comment)
@@ -164,7 +164,7 @@ async fn github_review_thread(
   let seen : Array[String] = []
   while cursor is Some(after) {
     guard !seen.contains(after) else {
-      raise HostError("GitHub repeated a comment page. Refresh to retry.")
+      raise Stale("GitHub repeated a comment page. Refresh to retry.")
     }
     seen.push(after)
     let query = "query($id:ID!,$after:String!){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$after){nodes{\{GithubReviewCommentFields}} pageInfo{hasNextPage endCursor}}}}}"
@@ -175,7 +175,7 @@ async fn github_review_thread(
       "after=\{after}",
     ])
     guard data is { "node": { "comments": page, .. }, .. } else {
-      raise HostError("The review thread changed. Refresh to retry.")
+      raise Stale("The review thread changed. Refresh to retry.")
     }
     let (nodes, next) = github_review_page(page)
     comments.append(nodes.map(github_review_comment))
@@ -185,7 +185,7 @@ async fn github_review_thread(
   normalized["comments"] = Json(comments)
   let thread : @protocol.GithubReviewThread = @json.from_json(Json(normalized))
   guard thread.side == "LEFT" || thread.side == "RIGHT" else {
-    raise HostError("GitHub returned an unknown diff side.")
+    raise InvalidResponse("GitHub returned an unknown diff side.")
   }
   thread
 }
@@ -203,7 +203,7 @@ async fn github_review_file(
     "diff", "--name-status", "-z", "--no-ext-diff", "--find-renames", base, head,
     "--",
   ])
-  for change in parse_git_diff_name_status_z(changes) {
+  for change in @git.parse_diff_name_status_z(changes) {
     guard change.path == path else { continue }
     let old_path = change.original_path.unwrap_or(path)
     let original = if change.kind == "added" {
@@ -218,7 +218,9 @@ async fn github_review_file(
     }
     for content in [original, modified] {
       if content is Some(text) && text.contains("\u{0}") {
-        raise HostError("Inline comments are unavailable for binary files.")
+        raise InvalidRequest(
+          "Inline comments are unavailable for binary files.",
+        )
       }
     }
     return Some({ path, original, modified, })
@@ -227,14 +229,14 @@ async fn github_review_file(
 }
 
 ///|
-async fn github_review_file_op(
+pub async fn github_review_file_op(
   payload : @protocol.GithubReviewFilePayload,
 ) -> @protocol.GithubReviewFileReply {
   try {
     guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) &&
-      valid_commit_identity(payload.base) &&
-      valid_commit_identity(payload.head) else {
-      raise HostError("Select a checkout and a valid PR revision.")
+      @git.valid_commit_identity(payload.base) &&
+      @git.valid_commit_identity(payload.head) else {
+      raise InvalidRequest("Select a checkout and a valid PR revision.")
     }
     ReviewFileLoaded(
       github_review_file(dir, payload.path, payload.base, payload.head),
@@ -252,7 +254,7 @@ async fn github_review_load(
   payload : @protocol.GithubWorkspacePayload,
 ) -> @protocol.GithubReview? {
   guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-    raise HostError("Select a checkout with an absolute path.")
+    raise InvalidRequest("Select a checkout with an absolute path.")
   }
   let current = github_checkout_status_op({ cwd: payload.cwd, })
   guard current.has_open_pull_request && current.pull_request_url is Some(url) else {
@@ -260,7 +262,7 @@ async fn github_review_load(
   }
   let identity = github_review_identity(url)
   guard resolve_gh() is Some(gh) else {
-    raise HostError(
+    raise Unavailable(
       "Install GitHub CLI and run gh auth login to load comments.",
     )
   }
@@ -273,9 +275,9 @@ async fn github_review_load(
       "reviewThreads": page,
       ..
     } &&
-    valid_commit_identity(head) &&
-    valid_commit_identity(base) else {
-    raise HostError("GitHub returned an invalid pull request revision.")
+    @git.valid_commit_identity(head) &&
+    @git.valid_commit_identity(base) else {
+    raise InvalidResponse("GitHub returned an invalid pull request revision.")
   }
   let merge_base = github_pull_request_merge_base(
     gh,
@@ -294,13 +296,13 @@ async fn github_review_load(
   let seen : Array[String] = []
   while cursor is Some(after) {
     guard !seen.contains(after) else {
-      raise HostError("GitHub repeated a thread page. Refresh to retry.")
+      raise Stale("GitHub repeated a thread page. Refresh to retry.")
     }
     seen.push(after)
     let pr = github_review_threads_page(gh, dir, identity, cursor)
     guard pr is { "head": String(next_head), "reviewThreads": page, .. } &&
       next_head == head else {
-      raise HostError(
+      raise Stale(
         "The pull request changed while loading comments. Refresh to retry.",
       )
     }
@@ -335,12 +337,12 @@ async fn github_review_load(
     } &&
     latest_head == head &&
     latest_base == base else {
-    raise HostError(
+    raise Stale(
       "The pull request changed while loading comments. Refresh to retry.",
     )
   }
-  guard github_checkout_branch(dir) == current.branch else {
-    raise HostError(
+  guard @git.current_branch(dir) == current.branch else {
+    raise Stale(
       "The checkout changed while loading comments. Refresh to retry.",
     )
   }
@@ -348,7 +350,7 @@ async fn github_review_load(
 }
 
 ///|
-async fn github_review_op(
+pub async fn github_review_op(
   payload : @protocol.GithubWorkspacePayload,
 ) -> @protocol.GithubReviewReply {
   try {
@@ -376,9 +378,9 @@ fn github_review_mutation_args(
       guard (side == "LEFT" || side == "RIGHT") &&
         line > 0 &&
         !path.is_empty() &&
-        valid_commit_identity(head) &&
+        @git.valid_commit_identity(head) &&
         !body.trim().is_empty() else {
-        raise HostError("Choose a valid PR line and enter a comment.")
+        raise InvalidRequest("Choose a valid PR line and enter a comment.")
       }
       args.append([
         "--method",
@@ -398,7 +400,7 @@ fn github_review_mutation_args(
     }
     Reply(comment~, body~) => {
       guard github_review_valid_id(comment) && !body.trim().is_empty() else {
-        raise HostError("Enter a reply to an existing comment.")
+        raise InvalidRequest("Enter a reply to an existing comment.")
       }
       args.append([
         "--method",
@@ -410,13 +412,13 @@ fn github_review_mutation_args(
     }
     Delete(comment~) => {
       guard github_review_valid_id(comment) else {
-        raise HostError("Invalid GitHub comment ID.")
+        raise InvalidRequest("Invalid GitHub comment ID.")
       }
       args.append(["--method", "DELETE", "\{root}/comments/\{comment}"])
     }
     Resolve(thread~, resolved~) => {
       guard !thread.is_empty() else {
-        raise HostError("Invalid GitHub thread ID.")
+        raise InvalidRequest("Invalid GitHub thread ID.")
       }
       let mutation = if resolved {
         "resolveReviewThread"
@@ -441,17 +443,17 @@ fn github_review_valid_id(id : String) -> Bool {
 }
 
 ///|
-async fn github_review_mutate_op(
+pub async fn github_review_mutate_op(
   payload : @protocol.GithubReviewMutationPayload,
 ) -> @protocol.GithubReviewMutationReply {
   try {
     let result = @async.with_timeout_opt(30000, () => {
       let identity = github_review_identity(payload.url)
       guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-        raise HostError("Select a checkout with an absolute path.")
+        raise InvalidRequest("Select a checkout with an absolute path.")
       }
       guard resolve_gh() is Some(gh) else {
-        raise HostError("Install GitHub CLI and run gh auth login.")
+        raise Unavailable("Install GitHub CLI and run gh auth login.")
       }
       if payload.action is Post(head~, ..) {
         let latest = github_panel_json(gh, dir, [
@@ -462,7 +464,7 @@ async fn github_review_mutate_op(
         ])
         guard latest is { "head": { "sha": String(current), .. }, .. } &&
           current == head else {
-          raise HostError(
+          raise Stale(
             "The pull request changed. Refresh comments before sending; your draft is kept locally.",
           )
         }
@@ -475,7 +477,7 @@ async fn github_review_mutate_op(
       if payload.action is Resolve(thread~, resolved~) {
         let response = @json.parse(output)
         if response is { "errors": Array(errors), .. } && !errors.is_empty() {
-          raise HostError(
+          raise Unavailable(
             "GitHub could not update the conversation: \{Json(errors).stringify()}",
           )
         }
@@ -491,7 +493,7 @@ async fn github_review_mutate_op(
           ) &&
           id == thread &&
           confirmed == Json(resolved) else {
-          raise HostError(
+          raise Stale(
             "GitHub did not confirm the conversation update. Refresh before retrying.",
           )
         }

@@ -35,7 +35,7 @@ const GhExecutable : String = "gh.exe"
 const GhExecutable : String = "gh"
 
 ///|
-async fn git_pull_request_op(
+pub async fn git_pull_request_op(
   payload : @protocol.GitPullRequestPayload,
 ) -> @protocol.GitPullRequestReply {
   let nothing : @protocol.GitPullRequestReply = {
@@ -54,12 +54,12 @@ async fn git_pull_request_op(
   // worktrees are normally detached, though, so recover a branch only when it
   // demonstrably names the same commit: first app-server's creation-time hint,
   // then the one unambiguous local branch pointing exactly at HEAD.
-  guard git_branch(base) is Some(checkout) else { return nothing }
-  let mut head = git_symbolic_branch(base)
+  guard @git.head_branch(base) is Some(checkout) else { return nothing }
+  let mut head = @git.symbolic_branch(base)
   if head is None && payload.branch_hint is Some(hint) {
     let valid_hint = @gitx.probe(base, ["check-ref-format", "--branch", hint])
-    let current = git_revision_commit(base, "HEAD")
-    let hinted = git_revision_commit(base, "refs/heads/\{hint}")
+    let current = @git.revision_commit(base, "HEAD")
+    let hinted = @git.revision_commit(base, "refs/heads/\{hint}")
     if valid_hint is Some(_) && current is Some(_) && current == hinted {
       head = Some(hint)
     }
@@ -94,7 +94,7 @@ async fn git_pull_request_op(
   // named `main`; showing that merged request here makes the current main
   // branch look like the historical fork. Stop before resolving gh so neither
   // that chip nor a create-pull-request link can appear on the default branch.
-  if git_is_default_branch(base, branch=head) {
+  if @git.is_default_branch(base, branch=head) {
     return unanswered
   }
   guard resolve_gh() is Some(gh) else { return unanswered }
@@ -144,7 +144,7 @@ async fn branch_pull_request(
   // with the commits. That is the ordinary state of a branch an agent just
   // made, which is exactly when the offer would be most tempting to click —
   // and the remote-tracking refs settle it without touching the network.
-  guard git_branch_on_remote(dir, branch) else { return nothing }
+  guard @git.branch_on_remote(dir, branch) else { return nothing }
   // Some remote having it is not enough. The link names one repository, and
   // gh's pick is not always the one that was pushed to: gh prefers a remote
   // called `upstream` over `origin`, so a fork checkout resolves to the parent

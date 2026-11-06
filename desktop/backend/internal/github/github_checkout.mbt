@@ -1,5 +1,5 @@
 ///|
-async fn github_checkout_op(
+pub async fn github_checkout_op(
   payload : @protocol.GithubCheckoutPayload,
 ) -> @protocol.GithubCheckoutReply {
   // Proton redacts raised handler errors. Carry actionable Git diagnostics in
@@ -14,13 +14,13 @@ async fn checkout_pull_request(
   payload : @protocol.GithubCheckoutPayload,
 ) -> @protocol.GithubCheckoutReply {
   guard payload.number > 0 && payload.repository_url.has_prefix("https://") else {
-    raise HostError("Select a pull request from a GitHub repository.")
+    raise InvalidRequest("Select a pull request from a GitHub repository.")
   }
   guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-    raise HostError("Select a workspace with an absolute checkout path.")
+    raise InvalidRequest("Select a workspace with an absolute checkout path.")
   }
   guard resolve_gh() is Some(gh) else {
-    raise HostError(
+    raise Unavailable(
       "Install GitHub CLI (gh) and run gh auth login to check out pull requests.",
     )
   }
@@ -30,7 +30,7 @@ async fn checkout_pull_request(
       guard current.branch is Some(branch) &&
         current.pull_request_url ==
         Some("\{payload.repository_url}/pull/\{payload.number}") else {
-        raise HostError(
+        raise Stale(
           "The current pull request changed. Refresh GitHub before updating.",
         )
       }
@@ -54,8 +54,8 @@ async fn checkout_pull_request(
       payload.repository_url,
     ]
     if branch is Some(branch) {
-      guard github_checkout_branch(dir) == Some(branch) else {
-        raise HostError(
+      guard @git.current_branch(dir) == Some(branch) else {
+        raise Stale(
           "The branch changed before updating. Refresh GitHub to retry.",
         )
       }
@@ -64,31 +64,17 @@ async fn checkout_pull_request(
       args.append(["--branch", branch])
     }
     let _ = github_command(gh, dir, args)
-    guard github_checkout_branch(dir) is Some(branch) else {
-      raise HostError(
+    guard @git.current_branch(dir) is Some(branch) else {
+      raise GitFailed(
         "Checkout completed, but the current branch could not be read. Refresh the repository to check its state.",
       )
     }
     // The PR's merge base belongs to the fetched head history. Persist the
     // association on this branch, like VS Code does, so Review survives a
     // restart and does not inherit the task's previous comparison boundary.
-    try {
-      let _ = @gitx.output(dir, [
-        "merge-base",
-        "--is-ancestor",
-        association.base,
-        "HEAD",
-      ])
-      let metadata : Json = { "url": association.url, "base": association.base }
-      let _ = @gitx.output(dir, [
-        "config",
-        "--local",
-        "branch.\{branch}.openseek-pr",
-        metadata.stringify(),
-      ])
-    } catch {
+    @git.save_pr_association(dir, branch~, association) catch {
       error =>
-        raise HostError(
+        raise GitFailed(
           "Checked out PR #\{payload.number} on \{branch}, but could not prepare Review: \{error}",
         )
     }
@@ -97,7 +83,7 @@ async fn checkout_pull_request(
   match reply {
     Some(reply) => reply
     None =>
-      raise HostError(
+      raise Unavailable(
         "Pull request checkout timed out. Check the repository state before retrying.",
       )
   }
@@ -177,16 +163,16 @@ fn github_checkout_failure(details : String) -> @protocol.GithubCheckoutReply {
 }
 
 ///|
-async fn github_checkout_status_op(
+pub async fn github_checkout_status_op(
   payload : @protocol.GithubWorkspacePayload,
 ) -> @protocol.GithubCheckoutStatus {
   guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-    raise HostError("Select a workspace with an absolute checkout path.")
+    raise InvalidRequest("Select a workspace with an absolute checkout path.")
   }
   let result = @async.with_timeout_opt(GithubRequestTimeoutMs, () => {
     github_checkout_status(dir, args => {
       guard resolve_gh() is Some(gh) else {
-        raise HostError(
+        raise Unavailable(
           "Install GitHub CLI to identify the current pull request.",
         )
       }
@@ -194,7 +180,7 @@ async fn github_checkout_status_op(
     })
   })
   guard result is Some(status) else {
-    raise HostError(
+    raise Stale(
       "Could not read the current pull request. Refresh GitHub to retry.",
     )
   }
@@ -209,16 +195,16 @@ async fn github_checkout_status(
   // pr status resolves the current local branch (including fork tracking) and
   // represents a branch with no PR by omitting currentBranch. CLI failures
   // remain errors rather than being mistaken for a successful empty lookup.
-  let branch = github_checkout_branch(dir)
+  let branch = @git.current_branch(dir)
   guard branch is Some(_) else {
     return { branch, pull_request_url: None, has_open_pull_request: false, }
   }
   // Local metadata identifies the PR even after a branch rename. Its lifecycle
   // still belongs to GitHub: a saved association may have closed or merged.
-  let pr = if github_local_checkout_association(dir) is Some(association) {
+  let pr = if @git.pr_association(dir) is Some(association) {
     let result = query(["pr", "view", association.url, "--json", "url,state"])
     guard result is Object(_) else {
-      raise HostError("GitHub returned an invalid current pull request.")
+      raise InvalidResponse("GitHub returned an invalid current pull request.")
     }
     Some(result)
   } else if @gitx.run(dir, ["remote"]).is_empty() {
@@ -229,7 +215,7 @@ async fn github_checkout_status(
   } else {
     let result = query(["pr", "status", "--json", "url,state"])
     guard result is Object(object) else {
-      raise HostError("GitHub returned an invalid current pull request.")
+      raise InvalidResponse("GitHub returned an invalid current pull request.")
     }
     object.get("currentBranch")
   }
@@ -240,10 +226,11 @@ async fn github_checkout_status(
       ) &&
       (state == "OPEN" || state == "CLOSED" || state == "MERGED") =>
       (Some(url), state == "OPEN")
-    _ => raise HostError("GitHub returned an invalid current pull request.")
+    _ =>
+      raise InvalidResponse("GitHub returned an invalid current pull request.")
   }
-  guard github_checkout_branch(dir) == branch else {
-    raise HostError(
+  guard @git.current_branch(dir) == branch else {
+    raise Stale(
       "The branch changed while reading its pull request. Refresh GitHub to retry.",
     )
   }
@@ -251,22 +238,16 @@ async fn github_checkout_status(
 }
 
 ///|
-priv struct GithubCheckoutAssociation {
-  url : String
-  base : String
-}
-
-///|
 async fn github_checkout_association(
   gh : @pathx.Absolute,
   dir : @pathx.Absolute,
   payload : @protocol.GithubCheckoutPayload,
-) -> GithubCheckoutAssociation {
+) -> @git.PullRequestAssociation {
   let parts = [
     for part in payload.repository_url.split("/") => part.to_owned()
   ]
   guard parts is ["https:", "", host, owner, repo] else {
-    raise HostError("Select a pull request from a GitHub repository.")
+    raise InvalidRequest("Select a pull request from a GitHub repository.")
   }
   let raw = github_panel_json(gh, dir, [
     "api",
@@ -281,61 +262,12 @@ async fn github_checkout_association(
       "html_url": String(url),
       ..
     } &&
-    valid_commit_identity(base) &&
-    valid_commit_identity(head) else {
-    raise HostError("GitHub returned an invalid pull request comparison.")
+    @git.valid_commit_identity(base) &&
+    @git.valid_commit_identity(head) else {
+    raise InvalidResponse("GitHub returned an invalid pull request comparison.")
   }
   let merge_base = github_pull_request_merge_base(
     gh, dir, host, owner, repo, base, head,
   )
-  { url, base: merge_base, }
-}
-
-///|
-async fn github_local_checkout_association(
-  dir : @pathx.Absolute,
-) -> GithubCheckoutAssociation? {
-  guard github_checkout_branch(dir) is Some(branch) else { return None }
-  let (code, stdout) = @gitx.output_with_status(dir, [
-    "config",
-    "--local",
-    "--get",
-    "branch.\{branch}.openseek-pr",
-  ])
-  if code == 1 {
-    return None
-  }
-  let raw = @json.parse(stdout)
-  guard raw is { "url": String(url), "base": String(base), .. } &&
-    url.has_prefix("https://") &&
-    valid_commit_identity(base) else {
-    raise HostError("The current branch has invalid pull request metadata.")
-  }
-  let (code, _) = @gitx.output_with_status(dir, [
-    "merge-base", "--is-ancestor", base, "HEAD",
-  ])
-  if code == 1 {
-    return None
-  }
-  guard github_checkout_branch(dir) == Some(branch) else {
-    raise HostError(
-      "The branch changed while reading its pull request. Refresh GitHub to retry.",
-    )
-  }
-  Some({ url, base, })
-}
-
-///|
-async fn github_checkout_branch(dir : @pathx.Absolute) -> String? {
-  let (code, stdout) = @gitx.output_with_status(dir, [
-    "symbolic-ref", "--quiet", "--short", "HEAD",
-  ])
-  if code == 1 {
-    return None
-  }
-  let branch = git_single_line(stdout)
-  guard !branch.is_empty() else {
-    raise HostError("Git returned an empty branch name.")
-  }
-  Some(branch)
+  PullRequestAssociation(url~, base=merge_base)
 }

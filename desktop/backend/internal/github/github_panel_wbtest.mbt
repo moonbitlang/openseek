@@ -48,7 +48,7 @@ async test "avatar failures preserve inventory and remain distinct from absent a
         github_list_fixture(args)
       } else {
         match response {
-          None => raise HostError("offline")
+          None => raise Unavailable("offline")
           Some(json) => json
         }
       }

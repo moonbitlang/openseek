@@ -4,7 +4,7 @@
 // branch", never an error.
 
 ///|
-async fn git_branch_op(
+pub async fn git_branch_op(
   payload : @protocol.GitBranchPayload,
 ) -> @protocol.GitBranchReply {
   // A live run hands us its cwd; a resumed conversation has none, so fall
@@ -15,7 +15,7 @@ async fn git_branch_op(
     None => @work_dir.session_cwd(payload.session)
   }
   guard base is Some(base) else { return { branch: None, diffstat: None, } }
-  guard git_branch(base) is Some(branch) else {
+  guard head_branch(base) is Some(branch) else {
     // Not a repository, or no git: there is nothing to count either.
     return { branch: None, diffstat: None, }
   }
@@ -36,7 +36,7 @@ async fn git_branch_op(
   // display figure that every run boundary and every popover opening
   // recomputes; a two-checkout round trip inside one count corrects itself at
   // the next one.
-  guard git_branch(base) is Some(after) else {
+  guard head_branch(base) is Some(after) else {
     return { branch: None, diffstat: None, }
   }
   if after != branch {
@@ -49,7 +49,7 @@ async fn git_branch_op(
 /// The branch checked out at `dir` (`git rev-parse --abbrev-ref HEAD`), with
 /// a detached HEAD named by its short hash instead of the literal "HEAD".
 /// None when `dir` is not a git repository or git is unavailable.
-async fn git_branch(dir : @pathx.Absolute) -> String? {
+pub async fn head_branch(dir : @pathx.Absolute) -> String? {
   let name = match @gitx.probe(dir, ["rev-parse", "--abbrev-ref", "HEAD"]) {
     Some("HEAD") => @gitx.probe(dir, ["rev-parse", "--short", "HEAD"])
     Some(name) if !name.is_empty() => Some(name)
@@ -64,16 +64,16 @@ async fn git_branch(dir : @pathx.Absolute) -> String? {
 }
 
 ///|
-/// The branch `HEAD` points at, and nothing else. Unlike `git_branch` this
+/// The branch `HEAD` points at, and nothing else. Unlike `branch` this
 /// does not stand in a short hash for a detached checkout: a hash is a fine
 /// thing to show a person and a nonsense thing to hand an API that filters by
 /// branch name.
-async fn git_symbolic_branch(dir : @pathx.Absolute) -> String? {
+pub async fn symbolic_branch(dir : @pathx.Absolute) -> String? {
   guard @gitx.probe(dir, ["symbolic-ref", "--short", "--quiet", "HEAD"])
     is Some(output) else {
     return None
   }
-  let name = git_single_line(output)
+  let name = single_line(output)
   if name.is_empty() {
     None
   } else {
@@ -85,7 +85,7 @@ async fn git_symbolic_branch(dir : @pathx.Absolute) -> String? {
 /// Whether some remote already has `branch`. Read from the remote-tracking
 /// refs, so it answers for the state this checkout last saw — which is exactly
 /// the state a push from here updates.
-async fn git_branch_on_remote(dir : @pathx.Absolute, branch : String) -> Bool {
+pub async fn branch_on_remote(dir : @pathx.Absolute, branch : String) -> Bool {
   for remote in git_remotes(dir) {
     if @gitx.probe(dir, [
         "rev-parse",
@@ -186,7 +186,7 @@ async fn git_base_ref(dir : @pathx.Absolute, hint? : String) -> String? {
     is Some(output) else {
     return None
   }
-  let name = git_single_line(output)
+  let name = single_line(output)
   // A dangling `origin/HEAD` abbreviates to itself and names no branch.
   if name.is_empty() || name == "origin/HEAD" {
     None
@@ -200,7 +200,7 @@ async fn git_base_ref(dir : @pathx.Absolute, hint? : String) -> String? {
 /// remote-tracking ref is Git's local statement of that identity; comparing
 /// names, rather than commits, keeps a feature branch made at the current
 /// default-branch tip eligible for its own pull request.
-async fn git_is_default_branch(dir : @pathx.Absolute, branch~ : String) -> Bool {
+pub async fn is_default_branch(dir : @pathx.Absolute, branch~ : String) -> Bool {
   git_base_ref(dir) is Some(base) && base == "origin/\{branch}"
 }
 
@@ -233,7 +233,7 @@ async fn git_branch_base(
   guard @gitx.probe(dir, ["merge-base", "HEAD", base_ref]) is Some(output) else {
     return ("HEAD", None)
   }
-  let commit = git_single_line(output)
+  let commit = single_line(output)
   if commit.is_empty() {
     ("HEAD", None)
   } else {
@@ -259,7 +259,7 @@ async fn git_review_branch_base(
   guard @gitx.probe(dir, ["merge-base", head, base_ref]) is Some(output) else {
     return None
   }
-  let base = git_single_line(output)
+  let base = single_line(output)
   if base.is_empty() {
     None
   } else {
@@ -530,7 +530,7 @@ fn parse_git_status_z(output : String) -> Array[@protocol.GitChange] {
 /// for renames and copies. Task comparisons are one logical working-tree
 /// column; unlike porcelain status, they intentionally do not claim anything
 /// about what is currently staged.
-fn parse_git_diff_name_status_z(output : String) -> Array[@protocol.GitChange] {
+pub fn parse_diff_name_status_z(output : String) -> Array[@protocol.GitChange] {
   if !output.is_empty() && !output.has_suffix("\u{0}") {
     return []
   }
@@ -767,7 +767,7 @@ fn git_change_with_path_kind(
 /// Git's textual plumbing commands terminate their single-line output with a
 /// line ending. Remove only that terminator: leading or trailing spaces can be
 /// significant in repository paths.
-fn git_single_line(output : String) -> String {
+pub fn single_line(output : String) -> String {
   output.trim_end(chars="\r\n").to_owned()
 }
 
@@ -794,7 +794,7 @@ async fn git_index_metadata(dir : @pathx.Absolute) -> String {
 /// Resolve one revision to an immutable commit identity. A missing revision is
 /// ordinary (an unborn HEAD or an object that disappeared), so any failure to
 /// resolve reads as None.
-async fn git_revision_commit(
+pub async fn revision_commit(
   dir : @pathx.Absolute,
   revision : String,
 ) -> String? {
@@ -807,7 +807,7 @@ async fn git_revision_commit(
 }
 
 ///|
-fn valid_commit_identity(revision : String) -> Bool {
+pub fn valid_commit_identity(revision : String) -> Bool {
   if revision.length() != 40 && revision.length() != 64 {
     return false
   }
@@ -859,7 +859,7 @@ async fn git_change_snapshot(
   Set[String],
   Array[@protocol.GitChange],
 ) {
-  let head = git_revision_commit(dir, "HEAD")
+  let head = revision_commit(dir, "HEAD")
   let review_base = if pr_base is Some(_) {
     pr_base
   } else if git_review_branch_base(dir, head) is Some(branch_base) {
@@ -909,7 +909,7 @@ async fn git_change_snapshot(
         "diff", "--name-status", "-z", "--no-ext-diff", "--find-renames", base, "--",
         ".",
       ])
-      let task_changes = parse_git_diff_name_status_z(diff_raw).filter_map(change => {
+      let task_changes = parse_diff_name_status_z(diff_raw).filter_map(change => {
         git_change_relative_to_workspace(change, workspace_prefix)
       })
       git_task_changes_with_untracked(task_changes, status_changes)
@@ -967,9 +967,9 @@ async fn git_change_snapshot(
         worktree_base?,
       )
     }
-    raise HostError("Git index kept changing while task changes were read")
+    raise Stale("Git index kept changing while task changes were read")
   }
-  let confirmed_head = git_revision_commit(dir, "HEAD")
+  let confirmed_head = revision_commit(dir, "HEAD")
   if confirmed_head != head {
     if retries_left > 0 {
       return git_change_snapshot(
@@ -980,7 +980,7 @@ async fn git_change_snapshot(
         worktree_base?,
       )
     }
-    raise HostError("HEAD kept changing while Git changes were read")
+    raise Stale("HEAD kept changing while Git changes were read")
   }
   (
     head, review_base, known_gitlinks, known_symlinks, deleted_gitlinks, deleted_symlinks,
@@ -989,7 +989,7 @@ async fn git_change_snapshot(
 }
 
 ///|
-async fn git_changes_op(
+pub async fn git_changes_op(
   payload : @protocol.GitChangesPayload,
 ) -> @protocol.GitChangesReply {
   guard @work_dir.resolve_in_workspace(
@@ -998,16 +998,16 @@ async fn git_changes_op(
       workspace?=payload.workspace,
     )
     is Some(root) else {
-    raise HostError("could not resolve the conversation workspace")
+    raise InvalidRequest("could not resolve the conversation workspace")
   }
   if !@gitx.is_work_tree(root) {
     return { repository: false, head: None, baseline: None, changes: [], }
   }
   // Strip only the line ending: a workspace directory may begin with a space.
-  let workspace_prefix = git_single_line(
+  let workspace_prefix = single_line(
     @gitx.output(root, ["rev-parse", "--show-prefix"]),
   )
-  let pr_base = github_local_checkout_association(root).map(pr => pr.base)
+  let pr_base = pr_association(root).map(pr => pr.base)
   let worktree_base = if pr_base is Some(_) {
     None
   } else {
@@ -1017,10 +1017,10 @@ async fn git_changes_op(
     )
     if recorded_base is Some(base) {
       guard valid_commit_identity(base) else {
-        raise HostError("recorded Git task baseline is invalid")
+        raise Failed("recorded Git task baseline is invalid")
       }
-      guard git_revision_commit(root, base) is Some(commit) else {
-        raise HostError("recorded Git task baseline is unavailable")
+      guard revision_commit(root, base) is Some(commit) else {
+        raise Failed("recorded Git task baseline is unavailable")
       }
       Some(commit)
     } else {
@@ -1100,7 +1100,7 @@ async fn git_history_upstream(dir : @pathx.Absolute) -> String? {
     is Some(output) else {
     return None
   }
-  let upstream = git_single_line(output)
+  let upstream = single_line(output)
   if upstream.is_empty() || upstream == "@{upstream}" {
     None
   } else {
@@ -1119,7 +1119,7 @@ async fn git_history_default_ref(
     let symbolic = "refs/remotes/\{remote}/HEAD"
     if @gitx.probe(dir, ["symbolic-ref", "--quiet", "--short", symbolic])
       is Some(output) {
-      let name = git_single_line(output)
+      let name = single_line(output)
       if !name.is_empty() && name != symbolic {
         return Some(name)
       }
@@ -1133,11 +1133,11 @@ async fn capture_git_history_snapshot(
   dir : @pathx.Absolute,
   review_base : String?,
 ) -> @protocol.GitHistorySnapshot {
-  let head = git_revision_commit(dir, "HEAD")
+  let head = revision_commit(dir, "HEAD")
   let branch = match
     @gitx.probe(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]) {
     Some(output) => {
-      let name = git_single_line(output)
+      let name = single_line(output)
       if name.is_empty() {
         None
       } else {
@@ -1163,14 +1163,14 @@ async fn capture_git_history_snapshot(
   }
   let upstream = git_history_upstream(dir)
   if upstream is Some(upstream) &&
-    git_revision_commit(dir, upstream) is Some(upstream_commit) {
+    revision_commit(dir, upstream) is Some(upstream_commit) {
     push_history_ref(refs, tips, upstream, upstream_commit, "upstream")
   }
   match review_base {
     Some(base) => push_history_ref(refs, tips, "Review base", base, "base")
     None =>
       if git_history_default_ref(dir, upstream) is Some(base_ref) &&
-        git_revision_commit(dir, base_ref) is Some(base) {
+        revision_commit(dir, base_ref) is Some(base) {
         push_history_ref(refs, tips, base_ref, base, "base")
       }
   }
@@ -1185,30 +1185,30 @@ async fn validate_git_history_snapshot(
   snapshot : @protocol.GitHistorySnapshot,
 ) -> @protocol.GitHistorySnapshot {
   if snapshot.refs.length() > 16 || snapshot.tips.length() > 16 {
-    raise HostError("Git history snapshot contains too many refs")
+    raise Failed("Git history snapshot contains too many refs")
   }
   for tip in snapshot.tips {
     guard valid_commit_identity(tip) &&
-      git_revision_commit(dir, tip) is Some(resolved) &&
+      revision_commit(dir, tip) is Some(resolved) &&
       resolved == tip else {
-      raise HostError("Git history snapshot contains an unavailable commit")
+      raise Failed("Git history snapshot contains an unavailable commit")
     }
   }
   for ref_ in snapshot.refs {
     guard ref_.name.length() <= 512 &&
       ["current", "upstream", "base", "head"].contains(ref_.kind) &&
       valid_commit_identity(ref_.revision) &&
-      git_revision_commit(dir, ref_.revision) is Some(resolved) &&
+      revision_commit(dir, ref_.revision) is Some(resolved) &&
       resolved == ref_.revision &&
       snapshot.tips.contains(ref_.revision) else {
-      raise HostError("Git history snapshot contains an invalid ref")
+      raise Failed("Git history snapshot contains an invalid ref")
     }
   }
   if snapshot.head is Some(head) {
     guard valid_commit_identity(head) &&
-      git_revision_commit(dir, head) is Some(resolved) &&
+      revision_commit(dir, head) is Some(resolved) &&
       resolved == head else {
-      raise HostError("Git history snapshot contains an unavailable HEAD")
+      raise Failed("Git history snapshot contains an unavailable HEAD")
     }
   }
   snapshot
@@ -1277,7 +1277,7 @@ async fn git_history_page(
 }
 
 ///|
-async fn git_history_op(
+pub async fn git_history_op(
   payload : @protocol.GitHistoryPayload,
 ) -> @protocol.GitHistoryReply {
   guard payload.skip >= 0 &&
@@ -1287,7 +1287,7 @@ async fn git_history_op(
       workspace?=payload.workspace,
     )
     is Some(root) else {
-    raise HostError("could not resolve the conversation workspace")
+    raise InvalidRequest("could not resolve the conversation workspace")
   }
   let empty : @protocol.GitHistorySnapshot = {
     head: None,
@@ -1305,8 +1305,8 @@ async fn git_history_op(
   let review_base = match recorded_base {
     Some(base) => {
       guard valid_commit_identity(base) &&
-        git_revision_commit(root, base) is Some(commit) else {
-        raise HostError("recorded Git task baseline is unavailable")
+        revision_commit(root, base) is Some(commit) else {
+        raise Failed("recorded Git task baseline is unavailable")
       }
       Some(commit)
     }
@@ -1353,8 +1353,8 @@ async fn git_commit_changes_at(
   workspace_prefix : String,
   commit : String,
 ) -> @protocol.GitCommitChangesReply {
-  guard git_revision_commit(dir, commit) is Some(commit) else {
-    raise HostError("Git commit is unavailable")
+  guard revision_commit(dir, commit) is Some(commit) else {
+    raise Failed("Git commit is unavailable")
   }
   let parents = @gitx.run(dir, ["show", "-s", "--format=%P", commit])
   let parent = if parents.is_empty() {
@@ -1372,7 +1372,7 @@ async fn git_commit_changes_at(
     "diff", "--name-status", "-z", "--no-ext-diff", "--find-renames", "--find-copies-harder",
     base, commit, "--", ".",
   ])
-  let parsed = parse_git_diff_name_status_z(raw).filter_map(change => {
+  let parsed = parse_diff_name_status_z(raw).filter_map(change => {
     git_change_relative_to_workspace(change, workspace_prefix)
   })
   let (new_gitlinks, new_symlinks) = git_tree_object_modes(
@@ -1404,7 +1404,7 @@ async fn git_commit_changes_at(
 }
 
 ///|
-async fn git_commit_changes_op(
+pub async fn git_commit_changes_op(
   payload : @protocol.GitCommitChangesPayload,
 ) -> @protocol.GitCommitChangesReply {
   guard valid_commit_identity(payload.commit) &&
@@ -1414,13 +1414,13 @@ async fn git_commit_changes_op(
       workspace?=payload.workspace,
     )
     is Some(root) else {
-    raise HostError("invalid Git commit request")
+    raise InvalidRequest("invalid Git commit request")
   }
   if !@gitx.is_work_tree(root) {
-    raise HostError("workspace is not a Git repository")
+    raise InvalidRequest("workspace is not a Git repository")
   }
   // Strip only the line ending: a workspace directory may begin with a space.
-  let workspace_prefix = git_single_line(
+  let workspace_prefix = single_line(
     @gitx.output(root, ["rev-parse", "--show-prefix"]),
   )
   git_commit_changes_at(root, workspace_prefix, payload.commit)
@@ -1434,9 +1434,7 @@ async fn git_original_file_at(
 ) -> @protocol.GitOriginalFileReply {
   // Resolve the requested revision to an immutable commit before addressing
   // its path. The caller has already validated the workspace and tree path.
-  guard git_revision_commit(dir, revision) is Some(commit) else {
-    return Missing
-  }
+  guard revision_commit(dir, revision) is Some(commit) else { return Missing }
   // `./` makes the tree path relative to Git's current directory, which is
   // the conversation workspace even when that workspace is a repository
   // subdirectory. Resolve the commit:path name once; all following checks and
@@ -1451,7 +1449,7 @@ async fn git_original_file_at(
   }
   let size_text = @gitx.run(dir, ["cat-file", "-s", oid])
   let size : Int64 = @string.parse_int64(size_text) catch {
-    _ => raise HostError("Git returned an invalid blob size")
+    _ => raise Failed("Git returned an invalid blob size")
   }
   if size > @openpath.MaxEditorFileBytes.to_int64() {
     return OversizedOriginal
@@ -1466,7 +1464,7 @@ async fn git_original_file_at(
 }
 
 ///|
-async fn git_original_file_op(
+pub async fn git_original_file_op(
   payload : @protocol.GitOriginalFilePayload,
 ) -> @protocol.GitOriginalFileReply {
   guard @work_dir.resolve_in_workspace(
@@ -1476,7 +1474,7 @@ async fn git_original_file_op(
     )
     is Some(root) &&
     git_tree_relative(payload.path) is Some(relative) else {
-    raise HostError("path is outside the conversation workspace")
+    raise InvalidRequest("path is outside the conversation workspace")
   }
   if !@gitx.is_work_tree(root) {
     return Missing
@@ -1486,7 +1484,7 @@ async fn git_original_file_op(
   let revision = match payload.revision {
     Some(revision) => {
       guard valid_commit_identity(revision) else {
-        raise HostError("invalid Git revision identity")
+        raise InvalidRequest("invalid Git revision identity")
       }
       revision
     }
@@ -1534,7 +1532,7 @@ test "Git porcelain parser keeps status columns and rename source" {
 
 ///|
 test "Git task-diff parser keeps scored rename sources and untracked rows" {
-  let changes = parse_git_diff_name_status_z(
+  let changes = parse_diff_name_status_z(
     "M\u{0}src/modified.mbt\u{0}A\u{0}src/added.mbt\u{0}R100\u{0}src/old.mbt\u{0}src/new.mbt\u{0}C075\u{0}src/source.mbt\u{0}src/copy.mbt\u{0}",
   )
   assert_true(
@@ -1576,10 +1574,10 @@ test "Git task-diff parser keeps scored rename sources and untracked rows" {
       { path: "recreated.mbt", kind: "untracked", .. },
     ],
   )
-  assert_true(parse_git_diff_name_status_z("M\u{0}").is_empty())
-  assert_true(parse_git_diff_name_status_z("R100\u{0}old.mbt\u{0}").is_empty())
+  assert_true(parse_diff_name_status_z("M\u{0}").is_empty())
+  assert_true(parse_diff_name_status_z("R100\u{0}old.mbt\u{0}").is_empty())
   assert_true(
-    parse_git_diff_name_status_z("C100\u{0}\u{0}copy.mbt\u{0}").is_empty(),
+    parse_diff_name_status_z("C100\u{0}\u{0}copy.mbt\u{0}").is_empty(),
   )
   assert_true(parse_git_untracked_z("unterminated.mbt").is_empty())
 }
@@ -1624,9 +1622,9 @@ test "Git tree paths are lexically contained without resolving symlinks" {
 
 ///|
 test "Git single-line output preserves significant path whitespace" {
-  assert_eq(git_single_line(" spaced/\n"), " spaced/")
-  assert_eq(git_single_line("trailing /\r\n"), "trailing /")
-  assert_eq(git_single_line("\n"), "")
+  assert_eq(single_line(" spaced/\n"), " spaced/")
+  assert_eq(single_line("trailing /\r\n"), "trailing /")
+  assert_eq(single_line("\n"), "")
 }
 
 ///|
