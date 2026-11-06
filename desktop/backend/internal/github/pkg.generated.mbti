@@ -6,27 +6,27 @@ import {
 }
 
 // Values
-pub async fn git_pull_request_op(@protocol.GitPullRequestPayload) -> @protocol.GitPullRequestReply
+pub async fn checkout(@protocol.GithubCheckoutPayload) -> @protocol.GithubCheckoutReply
 
-pub async fn github_checkout_op(@protocol.GithubCheckoutPayload) -> @protocol.GithubCheckoutReply
+pub async fn checkout_status(@protocol.GithubWorkspacePayload) -> @protocol.GithubCheckoutStatus
 
-pub async fn github_checkout_status_op(@protocol.GithubWorkspacePayload) -> @protocol.GithubCheckoutStatus
+pub async fn current_pull_request(@protocol.GitPullRequestPayload) -> @protocol.GitPullRequestReply
 
-pub async fn github_list_op(@protocol.GithubListPayload) -> @protocol.GithubListReply
+pub async fn list(@protocol.GithubListPayload) -> @protocol.GithubListReply
 
-pub async fn github_pull_request_op(@protocol.GithubPullRequestPayload) -> @protocol.GithubPullRequestDetail
+pub async fn mutate_review(@protocol.GithubReviewMutationPayload) -> @protocol.GithubReviewMutationReply
 
-pub async fn github_pull_request_summary_op(@protocol.GithubPullRequestSummaryPayload) -> @protocol.GithubPullRequestSummaryReply
+pub async fn pull_request(@protocol.GithubPullRequestPayload) -> @protocol.GithubPullRequestDetail
 
-pub async fn github_review_file_op(@protocol.GithubReviewFilePayload) -> @protocol.GithubReviewFileReply
+pub async fn pull_request_summary(@protocol.GithubPullRequestSummaryPayload) -> @protocol.GithubPullRequestSummaryReply
 
-pub async fn github_review_mutate_op(@protocol.GithubReviewMutationPayload) -> @protocol.GithubReviewMutationReply
+pub async fn read_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts
 
-pub async fn github_review_op(@protocol.GithubWorkspacePayload) -> @protocol.GithubReviewReply
+pub async fn review(@protocol.GithubWorkspacePayload) -> @protocol.GithubReviewReply
 
-pub async fn read_github_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts
+pub async fn review_file(@protocol.GithubReviewFilePayload) -> @protocol.GithubReviewFileReply
 
-pub async fn write_github_drafts(String?, @protocol.GithubDrafts) -> @protocol.EmptyReply
+pub async fn write_drafts(String?, @protocol.GithubDrafts) -> @protocol.EmptyReply
 
 // Errors
 pub suberror GithubError {

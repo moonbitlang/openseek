@@ -4,7 +4,7 @@
 // branch", never an error.
 
 ///|
-pub async fn git_branch_op(
+pub async fn branch(
   payload : @protocol.GitBranchPayload,
 ) -> @protocol.GitBranchReply {
   // A live run hands us its cwd; a resumed conversation has none, so fall
@@ -989,7 +989,7 @@ async fn git_change_snapshot(
 }
 
 ///|
-pub async fn git_changes_op(
+pub async fn changes(
   payload : @protocol.GitChangesPayload,
 ) -> @protocol.GitChangesReply {
   guard @work_dir.resolve_in_workspace(
@@ -1277,7 +1277,7 @@ async fn git_history_page(
 }
 
 ///|
-pub async fn git_history_op(
+pub async fn history(
   payload : @protocol.GitHistoryPayload,
 ) -> @protocol.GitHistoryReply {
   guard payload.skip >= 0 &&
@@ -1404,7 +1404,7 @@ async fn git_commit_changes_at(
 }
 
 ///|
-pub async fn git_commit_changes_op(
+pub async fn commit_changes(
   payload : @protocol.GitCommitChangesPayload,
 ) -> @protocol.GitCommitChangesReply {
   guard valid_commit_identity(payload.commit) &&
@@ -1464,7 +1464,7 @@ async fn git_original_file_at(
 }
 
 ///|
-pub async fn git_original_file_op(
+pub async fn original_file(
   payload : @protocol.GitOriginalFilePayload,
 ) -> @protocol.GitOriginalFileReply {
   guard @work_dir.resolve_in_workspace(

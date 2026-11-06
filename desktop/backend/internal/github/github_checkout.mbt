@@ -1,5 +1,5 @@
 ///|
-pub async fn github_checkout_op(
+pub async fn checkout(
   payload : @protocol.GithubCheckoutPayload,
 ) -> @protocol.GithubCheckoutReply {
   // Proton redacts raised handler errors. Carry actionable Git diagnostics in
@@ -26,7 +26,7 @@ async fn checkout_pull_request(
   }
   let reply : @protocol.GithubCheckoutReply? = @async.with_timeout_opt(120000, () => {
     let branch = if payload.update {
-      let current = github_checkout_status_op({ cwd: payload.cwd, })
+      let current = checkout_status({ cwd: payload.cwd, })
       guard current.branch is Some(branch) &&
         current.pull_request_url ==
         Some("\{payload.repository_url}/pull/\{payload.number}") else {
@@ -163,7 +163,7 @@ fn github_checkout_failure(details : String) -> @protocol.GithubCheckoutReply {
 }
 
 ///|
-pub async fn github_checkout_status_op(
+pub async fn checkout_status(
   payload : @protocol.GithubWorkspacePayload,
 ) -> @protocol.GithubCheckoutStatus {
   guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {

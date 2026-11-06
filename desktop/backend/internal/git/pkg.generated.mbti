@@ -7,23 +7,23 @@ import {
 }
 
 // Values
+pub async fn branch(@protocol.GitBranchPayload) -> @protocol.GitBranchReply
+
 pub async fn branch_on_remote(@pathx.Absolute, String) -> Bool
+
+pub async fn changes(@protocol.GitChangesPayload) -> @protocol.GitChangesReply
+
+pub async fn commit_changes(@protocol.GitCommitChangesPayload) -> @protocol.GitCommitChangesReply
 
 pub async fn current_branch(@pathx.Absolute) -> String?
 
-pub async fn git_branch_op(@protocol.GitBranchPayload) -> @protocol.GitBranchReply
-
-pub async fn git_changes_op(@protocol.GitChangesPayload) -> @protocol.GitChangesReply
-
-pub async fn git_commit_changes_op(@protocol.GitCommitChangesPayload) -> @protocol.GitCommitChangesReply
-
-pub async fn git_history_op(@protocol.GitHistoryPayload) -> @protocol.GitHistoryReply
-
-pub async fn git_original_file_op(@protocol.GitOriginalFilePayload) -> @protocol.GitOriginalFileReply
-
 pub async fn head_branch(@pathx.Absolute) -> String?
 
+pub async fn history(@protocol.GitHistoryPayload) -> @protocol.GitHistoryReply
+
 pub async fn is_default_branch(@pathx.Absolute, branch~ : String) -> Bool
+
+pub async fn original_file(@protocol.GitOriginalFilePayload) -> @protocol.GitOriginalFileReply
 
 pub fn parse_diff_name_status_z(String) -> Array[@protocol.GitChange]
 

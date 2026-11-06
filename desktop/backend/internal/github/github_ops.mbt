@@ -35,7 +35,7 @@ const GhExecutable : String = "gh.exe"
 const GhExecutable : String = "gh"
 
 ///|
-pub async fn git_pull_request_op(
+pub async fn current_pull_request(
   payload : @protocol.GitPullRequestPayload,
 ) -> @protocol.GitPullRequestReply {
   let nothing : @protocol.GitPullRequestReply = {

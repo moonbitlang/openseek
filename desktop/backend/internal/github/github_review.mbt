@@ -229,7 +229,7 @@ async fn github_review_file(
 }
 
 ///|
-pub async fn github_review_file_op(
+pub async fn review_file(
   payload : @protocol.GithubReviewFilePayload,
 ) -> @protocol.GithubReviewFileReply {
   try {
@@ -256,7 +256,7 @@ async fn github_review_load(
   guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
     raise InvalidRequest("Select a checkout with an absolute path.")
   }
-  let current = github_checkout_status_op({ cwd: payload.cwd, })
+  let current = checkout_status({ cwd: payload.cwd, })
   guard current.has_open_pull_request && current.pull_request_url is Some(url) else {
     return None
   }
@@ -350,7 +350,7 @@ async fn github_review_load(
 }
 
 ///|
-pub async fn github_review_op(
+pub async fn review(
   payload : @protocol.GithubWorkspacePayload,
 ) -> @protocol.GithubReviewReply {
   try {
@@ -443,7 +443,7 @@ fn github_review_valid_id(id : String) -> Bool {
 }
 
 ///|
-pub async fn github_review_mutate_op(
+pub async fn mutate_review(
   payload : @protocol.GithubReviewMutationPayload,
 ) -> @protocol.GithubReviewMutationReply {
   try {

@@ -1,5 +1,5 @@
 ///|
-pub async fn github_pull_request_op(
+pub async fn pull_request(
   payload : @protocol.GithubPullRequestPayload,
 ) -> @protocol.GithubPullRequestDetail {
   guard payload.number > 0 && payload.repository_url.has_prefix("https://") else {

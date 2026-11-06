@@ -7,7 +7,7 @@
 /// The address is model output and the lookup runs without the user asking,
 /// so it carries no credential meant for another host; see
 /// `github_pull_request_summary_environment`.
-pub async fn github_pull_request_summary_op(
+pub async fn pull_request_summary(
   payload : @protocol.GithubPullRequestSummaryPayload,
 ) -> @protocol.GithubPullRequestSummaryReply {
   guard github_pull_request_summary_identity(payload.url) is Some(identity) else {

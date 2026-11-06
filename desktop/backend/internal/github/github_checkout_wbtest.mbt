@@ -112,7 +112,7 @@ async test "current PR status verifies remote lifecycle even for saved branch as
 
 ///|
 async test "checkout failures travel as data instead of redacted Proton errors" {
-  let reply = github_checkout_op({
+  let reply = checkout({
     cwd: "relative/path",
     repository_url: "https://github.com/owner/repo",
     number: 42,

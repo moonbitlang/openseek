@@ -174,7 +174,7 @@ async fn github_avatar_urls(
 }
 
 ///|
-pub async fn github_list_op(
+pub async fn list(
   payload : @protocol.GithubListPayload,
 ) -> @protocol.GithubListReply {
   guard payload.limit > 0 && payload.limit <= 1000 else {
