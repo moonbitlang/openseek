@@ -35,7 +35,7 @@ async fn merged_output_text(
 async test "sandbox denies a source write and the command reports it" {
   @vfs.with_tmpdir(prefix="openseek-sandbox-capability-", dir => {
     guard @sandbox.SandboxedCommand::create_if_available(
-        dir,
+        workspace_root=dir,
         "sh",
         ["-c", "printf x > \{dir}/new.mbt"],
         profile_path="\{dir}/denied.sb",
@@ -58,7 +58,7 @@ async test "a writable subtree is re-allowed; the rest stays denied" {
   @vfs.with_tmpdir(prefix="openseek-sandbox-capability-lab-", dir => {
     @fs.mkdir("\{dir}/lab")
     guard @sandbox.SandboxedCommand::create_if_available(
-        dir,
+        workspace_root=dir,
         "sh",
         ["-c", "printf x > \{dir}/lab/draft.mbt"],
         profile_path="\{dir}/allowed.sb",
@@ -71,7 +71,7 @@ async test "a writable subtree is re-allowed; the rest stays denied" {
     assert_eq(lab_exit, 0)
     assert_true(@fs.exists("\{dir}/lab/draft.mbt"))
     guard @sandbox.SandboxedCommand::create_if_available(
-        dir,
+        workspace_root=dir,
         "sh",
         ["-c", "printf x > \{dir}/new.mbt"],
         profile_path="\{dir}/denied.sb",
@@ -90,7 +90,7 @@ async test "a writable subtree is re-allowed; the rest stays denied" {
 async test "exec command produces the argv shape without a shell" {
   @vfs.with_tmpdir(prefix="openseek-sandbox-capability-argv-", dir => {
     guard @sandbox.SandboxedCommand::create_if_available(
-        dir,
+        workspace_root=dir,
         "moon",
         ["check", "--target", "native"],
         profile_path="\{dir}/profile.sb",
@@ -130,7 +130,7 @@ async fn create_raises(root : String, writable_subtree~ : String) -> Bool {
   try {
     ignore(
       @sandbox.SandboxedCommand::create_if_available(
-        root,
+        workspace_root=root,
         "sh",
         ["-c", ":"],
         profile_path="\{root}/profile.sb",
@@ -157,7 +157,7 @@ async test "profile subjects flow into denial reporting" {
       create_mode=CreateOrTruncate,
     )
     guard @sandbox.SandboxedCommand::create_if_available(
-        dir,
+        workspace_root=dir,
         "sh",
         ["-c", ":"],
         profile_path="\{dir}/profile.sb",
@@ -185,7 +185,7 @@ async test "a writable lab cannot overwrite or remove its sandbox profile" {
         "rm '\{profile_path}'",
       ] {
       guard @sandbox.SandboxedCommand::create_if_available(
-          workspace,
+          workspace_root=workspace,
           "sh",
           ["-c", operation],
           profile_path~,
@@ -200,7 +200,7 @@ async test "a writable lab cannot overwrite or remove its sandbox profile" {
       assert_eq(@fs.read_file(profile_path).text(), before)
     }
     guard @sandbox.SandboxedCommand::create_if_available(
-        workspace,
+        workspace_root=workspace,
         "sh",
         ["-c", "printf scratch > '\{lab}/scratch.mbt'"],
         profile_path~,
@@ -226,7 +226,7 @@ async test "source directory cannot be moved outside the protected workspace" {
       create_mode=CreateOrTruncate,
     )
     guard @sandbox.SandboxedCommand::create_if_available(
-        workspace,
+        workspace_root=workspace,
         "sh",
         ["-c", "mv '\{workspace}/src' '\{dir}/escaped'"],
         profile_path="\{dir}/profile.sb",
@@ -250,7 +250,7 @@ async test "directory writes are denied in the workspace; files and _build are n
     let workspace = "\{dir}/workspace"
     @fs.mkdir("\{workspace}/assets", recursive=true)
     guard @sandbox.SandboxedCommand::create_if_available(
-        workspace,
+        workspace_root=workspace,
         "sh",
         ["-c", "mkdir '\{workspace}/fresh'"],
         profile_path="\{dir}/profile.sb",
@@ -263,7 +263,7 @@ async test "directory writes are denied in the workspace; files and _build are n
     assert_false(@fs.exists("\{workspace}/fresh"))
     assert_true(command.output_reports_denial(text), msg=text)
     guard @sandbox.SandboxedCommand::create_if_available(
-        workspace,
+        workspace_root=workspace,
         "sh",
         [
           "-c",

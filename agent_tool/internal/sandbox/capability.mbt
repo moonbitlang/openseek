@@ -53,9 +53,9 @@ struct SandboxedCommand {
 /// profile even inside a writable lab. Prepare again before a new spawn.
 /// A write failure raises rather than disabling protection.
 pub async fn SandboxedCommand::create_if_available(
-  workspace_root : String,
   program : String,
   args : Array[String],
+  workspace_root~ : String,
   profile_path~ : String,
   writable_subtree? : String,
 ) -> SandboxedCommand? {

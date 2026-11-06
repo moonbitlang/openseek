@@ -22,7 +22,7 @@ async test "prepare, run, and classify a command" {
   defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let argv = ["sandbox-ready"]
   let prepared = @sandbox.SandboxedCommand::create_if_available(
-    ".",
+    workspace_root=".",
     "echo",
     argv,
     profile_path="\{dir}/profile.sb",

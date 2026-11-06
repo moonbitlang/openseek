@@ -751,7 +751,7 @@ async fn execute(
       // the sandbox.
       None if read_only =>
         @sandbox.SandboxedCommand::create_if_available(
-          workspace_root,
+          workspace_root~,
           program,
           command_argv,
           // Per-call storage outlives both compilation and any background run.
