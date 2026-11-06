@@ -117,30 +117,17 @@ async fn scan_workspace_files(root : @pathx.Absolute) -> FileIndexSnapshot {
 async fn workspace_git_ignored_paths(
   root : @pathx.Absolute,
 ) -> Map[String, Unit] {
-  let env = git_environment()
-  env["LC_ALL"] = "C"
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
-    "git",
-    [
-      "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z",
-      "--", ".",
-    ],
-    cwd=root.to_string(),
-    extra_env=env,
-    inherit_env=false,
-  ) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return Map([])
+  guard @gitx.is_work_tree(root) else { return Map([]) }
+  let listing = @gitx.output(root, [
+    "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z",
+    "--", ".",
+  ]) catch {
+    @gitx.GitError(detail) =>
+      raise HostError("failed to read Git ignore rules: \{detail}")
     error => raise error
   }
-  if code != 0 {
-    let detail = stderr.text()
-    if detail.contains("not a git repository") {
-      return Map([])
-    }
-    raise HostError("failed to read Git ignore rules: \{detail}")
-  }
   let ignored : Map[String, Unit] = Map([])
-  for path in stdout.text().split("\u{0}") {
+  for path in listing.split("\u{0}") {
     if !path.is_empty() {
       ignored[path.to_owned()] = ()
     }

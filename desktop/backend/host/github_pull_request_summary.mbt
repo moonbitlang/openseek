@@ -18,7 +18,7 @@ async fn github_pull_request_summary_op(
   }
   let env = github_pull_request_summary_environment(
     identity.host,
-    git_environment(),
+    @gitx.environment(),
   )
   let result = @async.with_timeout_opt(GithubRequestTimeoutMs, () => {
     let output = github_command(

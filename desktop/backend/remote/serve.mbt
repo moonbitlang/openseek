@@ -401,6 +401,9 @@ async fn run_request(
       return error_envelope(id, CodeEngineError, message)
     @host.HostError(message) =>
       return error_envelope(id, CodeHostError, message)
+    // Host ops run git through the shared runner, whose refusals carry git's
+    // own message for the person reading it.
+    @gitx.GitError(message) => return error_envelope(id, CodeHostError, message)
     error =>
       return error_envelope(id, CodeInternalError, "internal error: \{error}")
   }

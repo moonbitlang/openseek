@@ -15,7 +15,7 @@ async fn git_branch_op(
     None => @work_dir.session_cwd(payload.session)
   }
   guard base is Some(base) else { return { branch: None, diffstat: None, } }
-  guard git_branch(base.0) is Some(branch) else {
+  guard git_branch(base) is Some(branch) else {
     // Not a repository, or no git: there is nothing to count either.
     return { branch: None, diffstat: None, }
   }
@@ -36,7 +36,7 @@ async fn git_branch_op(
   // display figure that every run boundary and every popover opening
   // recomputes; a two-checkout round trip inside one count corrects itself at
   // the next one.
-  guard git_branch(base.0) is Some(after) else {
+  guard git_branch(base) is Some(after) else {
     return { branch: None, diffstat: None, }
   }
   if after != branch {
@@ -49,24 +49,18 @@ async fn git_branch_op(
 /// The branch checked out at `dir` (`git rev-parse --abbrev-ref HEAD`), with
 /// a detached HEAD named by its short hash instead of the literal "HEAD".
 /// None when `dir` is not a git repository or git is unavailable.
-async fn git_branch(dir : String) -> String? {
-  let name = git_output(dir, ["rev-parse", "--abbrev-ref", "HEAD"])
-  let name = if name == "HEAD" {
-    git_output(dir, ["rev-parse", "--short", "HEAD"])
-  } else if name.is_empty() {
+async fn git_branch(dir : @pathx.Absolute) -> String? {
+  let name = match @gitx.probe(dir, ["rev-parse", "--abbrev-ref", "HEAD"]) {
+    Some("HEAD") => @gitx.probe(dir, ["rev-parse", "--short", "HEAD"])
+    Some(name) if !name.is_empty() => Some(name)
     // An unborn HEAD has no commit for `rev-parse` to resolve — it fails
     // outright — but the symbolic branch is already there. That is the state a
     // fresh `git init` leaves, where every line is staged or untracked and so
     // is exactly what the diffstat's empty-tree baseline exists to count.
-    git_output(dir, ["symbolic-ref", "--short", "HEAD"])
-  } else {
-    name
+    _ => @gitx.probe(dir, ["symbolic-ref", "--short", "HEAD"])
   }
-  if name.is_empty() {
-    None
-  } else {
-    Some(name)
-  }
+  guard name is Some(name) && !name.is_empty() else { return None }
+  Some(name)
 }
 
 ///|
@@ -74,8 +68,8 @@ async fn git_branch(dir : String) -> String? {
 /// does not stand in a short hash for a detached checkout: a hash is a fine
 /// thing to show a person and a nonsense thing to hand an API that filters by
 /// branch name.
-async fn git_symbolic_branch(dir : String) -> String? {
-  guard git_output_opt(dir, ["symbolic-ref", "--short", "--quiet", "HEAD"])
+async fn git_symbolic_branch(dir : @pathx.Absolute) -> String? {
+  guard @gitx.probe(dir, ["symbolic-ref", "--short", "--quiet", "HEAD"])
     is Some(output) else {
     return None
   }
@@ -91,9 +85,9 @@ async fn git_symbolic_branch(dir : String) -> String? {
 /// Whether some remote already has `branch`. Read from the remote-tracking
 /// refs, so it answers for the state this checkout last saw — which is exactly
 /// the state a push from here updates.
-async fn git_branch_on_remote(dir : String, branch : String) -> Bool {
+async fn git_branch_on_remote(dir : @pathx.Absolute, branch : String) -> Bool {
   for remote in git_remotes(dir) {
-    if git_output_opt(dir, [
+    if @gitx.probe(dir, [
         "rev-parse",
         "--verify",
         "--quiet",
@@ -108,9 +102,9 @@ async fn git_branch_on_remote(dir : String, branch : String) -> Bool {
 
 ///|
 /// The configured remotes, in Git's order.
-async fn git_remotes(dir : String) -> Array[String] {
+async fn git_remotes(dir : @pathx.Absolute) -> Array[String] {
   let remotes : Array[String] = []
-  guard git_output_opt(dir, ["remote"]) is Some(listing) else { return remotes }
+  guard @gitx.probe(dir, ["remote"]) is Some(listing) else { return remotes }
   for line in listing.split("\n") {
     let remote = line.trim_end(chars="\r")
     if !remote.is_empty() {
@@ -164,14 +158,13 @@ async fn git_diffstat(
   dir : @pathx.Absolute,
   hint? : String,
 ) -> @protocol.GitDiffStat? {
-  let native = dir.0
   // An unborn HEAD has no commit to diff against, but its index can already
   // hold staged additions, so the empty tree stands in for the missing commit.
-  guard git_output_opt(native, ["rev-parse", "--verify", "--quiet", "HEAD"])
+  guard @gitx.probe(dir, ["rev-parse", "--verify", "--quiet", "HEAD"])
     is Some(_) else {
     return git_diffstat_from(dir, EmptyTreeObject, None)
   }
-  let (baseline, base) = git_branch_base(native, hint?)
+  let (baseline, base) = git_branch_base(dir, hint?)
   git_diffstat_from(dir, baseline, base)
 }
 
@@ -180,15 +173,14 @@ async fn git_diffstat(
 /// `origin`, the repository a pull request's base belongs to for every
 /// checkout that is not a fork; a hint `origin` does not have falls through to
 /// the default rather than measuring from nothing.
-async fn git_base_ref(dir : String, hint? : String) -> String? {
+async fn git_base_ref(dir : @pathx.Absolute, hint? : String) -> String? {
   if hint is Some(branch) && !branch.is_empty() {
     let hinted = "origin/\{branch}"
-    if git_output_opt(dir, ["rev-parse", "--verify", "--quiet", hinted])
-      is Some(_) {
+    if @gitx.probe(dir, ["rev-parse", "--verify", "--quiet", hinted]) is Some(_) {
       return Some(hinted)
     }
   }
-  guard git_output_opt(dir, [
+  guard @gitx.probe(dir, [
       "rev-parse", "--abbrev-ref", "--verify", "--quiet", "origin/HEAD",
     ])
     is Some(output) else {
@@ -208,7 +200,7 @@ async fn git_base_ref(dir : String, hint? : String) -> String? {
 /// remote-tracking ref is Git's local statement of that identity; comparing
 /// names, rather than commits, keeps a feature branch made at the current
 /// default-branch tip eligible for its own pull request.
-async fn git_is_default_branch(dir : String, branch~ : String) -> Bool {
+async fn git_is_default_branch(dir : @pathx.Absolute, branch~ : String) -> Bool {
   git_base_ref(dir) is Some(base) && base == "origin/\{branch}"
 }
 
@@ -231,11 +223,14 @@ async fn git_is_default_branch(dir : String, branch~ : String) -> Bool {
 /// — leaves the count covering uncommitted work alone, which the absent ref
 /// name tells the composer to say out loud instead of implying a comparison
 /// never made.
-async fn git_branch_base(dir : String, hint? : String) -> (String, String?) {
+async fn git_branch_base(
+  dir : @pathx.Absolute,
+  hint? : String,
+) -> (String, String?) {
   guard git_base_ref(dir, hint?) is Some(base_ref) else {
     return ("HEAD", None)
   }
-  guard git_output_opt(dir, ["merge-base", "HEAD", base_ref]) is Some(output) else {
+  guard @gitx.probe(dir, ["merge-base", "HEAD", base_ref]) is Some(output) else {
     return ("HEAD", None)
   }
   let commit = git_single_line(output)
@@ -255,10 +250,13 @@ async fn git_branch_base(dir : String, hint? : String) -> (String, String?) {
 ///
 /// `None` means the boundary could not be determined. The caller chooses
 /// whether a valid HEAD boundary should use porcelain status.
-async fn git_review_branch_base(dir : String, head : String?) -> String? {
+async fn git_review_branch_base(
+  dir : @pathx.Absolute,
+  head : String?,
+) -> String? {
   guard head is Some(head) else { return None }
   guard git_base_ref(dir) is Some(base_ref) else { return None }
-  guard git_output_opt(dir, ["merge-base", head, base_ref]) is Some(output) else {
+  guard @gitx.probe(dir, ["merge-base", head, base_ref]) is Some(output) else {
     return None
   }
   let base = git_single_line(output)
@@ -279,7 +277,6 @@ async fn git_diffstat_from(
   baseline : String,
   base : String?,
 ) -> @protocol.GitDiffStat? {
-  let native = dir.0
   // `-- .` scopes the diff to the conversation workspace, which may be a
   // subdirectory of the repository, exactly as `git.changes` does. With no
   // second revision the comparison runs to the working tree, so uncommitted
@@ -292,7 +289,7 @@ async fn git_diffstat_from(
   // than a glance — hence the deadline rather than a size rule, which would
   // silently score a large file that Git would have counted fine as zero.
   guard @async.with_timeout_opt(DiffstatTimeoutMs, () => {
-      git_output_opt(native, ["diff", "--numstat", baseline, "--", "."])
+      @gitx.probe(dir, ["diff", "--numstat", baseline, "--", "."])
     })
     is Some(Some(tracked)) else {
     // Git failed, or it is still going. Either way nothing is counted, so
@@ -300,14 +297,15 @@ async fn git_diffstat_from(
     return None
   }
   let tracked = { ..parse_numstat(tracked), base, }
-  guard git_output_opt(native, [
-      "ls-files", "--others", "--exclude-standard", "-z", "--", ".",
-    ])
-    is Some(listing) else {
+  // Exact output, not `probe`: trimming would eat a leading space of the
+  // first NUL-separated path.
+  let listing = @gitx.output(dir, [
+    "ls-files", "--others", "--exclude-standard", "-z", "--", ".",
+  ]) catch {
     // The listing itself was unreadable — a filename that is not valid UTF-8
     // defeats the text conversion even though Git succeeded. Every untracked
     // file is then missing from the total, which is a floor, not the whole.
-    return Some({ ..tracked, partial: true, })
+    _ => return Some({ ..tracked, partial: true, })
   }
   // `--others` spells its paths from Git's current directory, which is this
   // workspace. Validating each one lexically keeps a path that cannot address
@@ -400,17 +398,17 @@ async fn git_untracked_numstat(
   dir : @pathx.Absolute,
   path : @pathx.Relative,
 ) -> @protocol.GitDiffStat? {
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
-    "git",
-    ["diff", "--numstat", "--no-index", "--", "/dev/null", path.0],
-    cwd=dir.0,
-    extra_env=git_environment(),
-    inherit_env=false,
-  ) catch {
+  let (code, stdout) = @gitx.output_with_status(dir, [
+    "diff",
+    "--numstat",
+    "--no-index",
+    "--",
+    "/dev/null",
+    path.0,
+  ]) catch {
     _ => return None
   }
-  guard code <= 1 else { return None }
-  let stat = parse_numstat(stdout.text() catch { _ => return None })
+  let stat = parse_numstat(stdout)
   // Status 1 is `--no-index`'s "there were differences", but it is also what a
   // path Git could not read exits with — a file the agent deleted between
   // `ls-files` and this command, which is an ordinary race in a live
@@ -439,47 +437,6 @@ fn parse_numstat(output : String) -> @protocol.GitDiffStat {
     removed += @string.parse_int(removed_text) catch { _ => 0 }
   }
   { added, removed, files, base: None, partial: false, }
-}
-
-///|
-/// Run Git for a result that may legitimately be empty. Unlike `git_output`, a
-/// command that failed reads as None rather than an empty string, so a caller
-/// whose empty output means "nothing changed" can tell the two apart.
-async fn git_output_opt(dir : String, args : Array[String]) -> String? {
-  let (code, stdout, _) = git_collect(dir, args) catch { _ => return None }
-  guard code == 0 else { return None }
-  Some(stdout.text() catch { _ => return None })
-}
-
-///|
-/// Remove Git subprocess overrides while retaining PATH, identity, locale, and
-/// the user's ordinary Git configuration through HOME/XDG_CONFIG_HOME. Hooks
-/// and nested Git commands export repository-local variables, and explicit
-/// config/quarantine overrides can redirect object and hook lookup too. The
-/// desktop host must instead discover everything from its validated workspace
-/// `cwd`. Matching is case-insensitive because Windows preserves arbitrary key
-/// casing; removing the whole namespace also covers future Git overrides.
-fn sanitize_git_environment(env : Map[String, String]) -> Unit {
-  let remove = [
-    for name, _ in env if name.to_upper().has_prefix("GIT_") => name
-  ]
-  for name in remove {
-    env.remove(name)
-  }
-}
-
-///|
-fn git_environment() -> Map[String, String] {
-  let env = @sys.get_env_vars()
-  sanitize_git_environment(env)
-  env
-}
-
-///|
-async fn git_output(dir : String, args : Array[String]) -> String {
-  let (code, stdout, _) = git_collect(dir, args) catch { _ => return "" }
-  guard code == 0 else { return "" }
-  (stdout.text() catch { _ => "" }).trim().to_owned()
 }
 
 ///|
@@ -826,70 +783,27 @@ fn git_tree_relative(path : String) -> @pathx.Relative? {
 }
 
 ///|
-/// Run Git without trimming or merging stdout: porcelain `-z` and blob bytes
-/// are byte-sensitive. Cancellation remains observable to the connection;
-/// other spawn failures become ordinary request errors.
-async fn git_collect(
-  dir : String,
-  args : Array[String],
-) -> (Int32, &@io.Data, &@io.Data) {
-  @processx.collect_output_no_stdin(
-    "git",
-    args,
-    cwd=dir,
-    extra_env=git_environment(),
-    inherit_env=false,
-  ) catch {
-    error => raise HostError("failed to run Git: \{error}")
-  }
-}
-
-///|
 /// Capture the exact index entries used by one review snapshot. Task mode
 /// reads this again after its diff/untracked queries, so an index-only change
 /// retries just like a concurrent commit instead of publishing mixed rows.
-async fn git_index_metadata(dir : String) -> String {
-  let (code, stdout, stderr) = git_collect(dir, [
-    "ls-files", "--full-name", "--stage", "-z", "--", ".",
-  ])
-  guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to inspect Git index"
-      } else {
-        detail
-      },
-    )
-  }
-  stdout.text() catch {
-    _ => raise HostError("Git returned a non-UTF-8 index path")
-  }
+async fn git_index_metadata(dir : @pathx.Absolute) -> String {
+  @gitx.output(dir, ["ls-files", "--full-name", "--stage", "-z", "--", "."])
 }
 
 ///|
 /// Resolve one revision to an immutable commit identity. A missing revision is
-/// ordinary (an unborn HEAD or an object that disappeared); malformed command
-/// output is a host failure rather than an ambiguous missing baseline.
-async fn git_revision_commit(dir : String, revision : String) -> String? {
-  let (code, stdout, _) = git_collect(dir, [
-    "rev-parse",
-    "--verify",
-    "\{revision}^{commit}",
-  ])
-  if code != 0 {
+/// ordinary (an unborn HEAD or an object that disappeared), so any failure to
+/// resolve reads as None.
+async fn git_revision_commit(
+  dir : @pathx.Absolute,
+  revision : String,
+) -> String? {
+  guard @gitx.probe(dir, ["rev-parse", "--verify", "\{revision}^{commit}"])
+    is Some(commit) &&
+    !commit.is_empty() else {
     return None
   }
-  let commit = git_single_line(
-    stdout.text() catch {
-      _ => raise HostError("Git returned a non-UTF-8 revision identity")
-    },
-  )
-  if commit.is_empty() {
-    None
-  } else {
-    Some(commit)
-  }
+  Some(commit)
 }
 
 ///|
@@ -931,7 +845,7 @@ test "Git review revisions accept only full hexadecimal object identities" {
 /// Bracket the snapshot with revision reads and retry a concurrent
 /// commit/checkout instead of relying on the next poll to self-heal.
 async fn git_change_snapshot(
-  dir : String,
+  dir : @pathx.Absolute,
   workspace_prefix : String,
   retries_left~ : Int32,
   pr_base? : String,
@@ -969,44 +883,18 @@ async fn git_change_snapshot(
   )
   let status_changes = match review_base {
     Some(_) => {
-      let (code, stdout, stderr) = git_collect(dir, [
+      let raw = @gitx.output(dir, [
         "ls-files", "--full-name", "--others", "--exclude-standard", "-z", "--",
         ".",
       ])
-      guard code == 0 else {
-        let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-        raise HostError(
-          if detail.is_empty() {
-            "failed to read untracked Git paths"
-          } else {
-            detail
-          },
-        )
-      }
-      let raw = stdout.text() catch {
-        _ => raise HostError("Git returned a non-UTF-8 untracked path")
-      }
       parse_git_untracked_z(raw).filter_map(change => {
         git_change_relative_to_workspace(change, workspace_prefix)
       })
     }
     None => {
-      let (code, stdout, stderr) = git_collect(dir, [
+      let raw = @gitx.output(dir, [
         "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".",
       ])
-      guard code == 0 else {
-        let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-        raise HostError(
-          if detail.is_empty() {
-            "failed to read Git changes"
-          } else {
-            detail
-          },
-        )
-      }
-      let raw = stdout.text() catch {
-        _ => raise HostError("Git returned a non-UTF-8 changed path")
-      }
       parse_git_status_z(raw).filter_map(change => {
         git_change_relative_to_workspace(change, workspace_prefix)
       })
@@ -1017,23 +905,10 @@ async fn git_change_snapshot(
       // Exhaustive copy discovery scans unchanged sources and is too costly
       // for a three-second poll. Copies without cheap Git evidence remain
       // correct additions with an empty baseline.
-      let (diff_code, diff_stdout, diff_stderr) = git_collect(dir, [
+      let diff_raw = @gitx.output(dir, [
         "diff", "--name-status", "-z", "--no-ext-diff", "--find-renames", base, "--",
         ".",
       ])
-      guard diff_code == 0 else {
-        let detail = (diff_stderr.text() catch { _ => "" }).trim().to_owned()
-        raise HostError(
-          if detail.is_empty() {
-            "failed to read Git task changes"
-          } else {
-            detail
-          },
-        )
-      }
-      let diff_raw = diff_stdout.text() catch {
-        _ => raise HostError("Git returned a non-UTF-8 task path")
-      }
       let task_changes = parse_git_diff_name_status_z(diff_raw).filter_map(change => {
         git_change_relative_to_workspace(change, workspace_prefix)
       })
@@ -1067,20 +942,7 @@ async fn git_change_snapshot(
       for path in batch {
         tree_args.push(path)
       }
-      let (tree_code, tree_stdout, tree_stderr) = git_collect(dir, tree_args)
-      guard tree_code == 0 else {
-        let detail = (tree_stderr.text() catch { _ => "" }).trim().to_owned()
-        raise HostError(
-          if detail.is_empty() {
-            "failed to inspect Git review tree"
-          } else {
-            detail
-          },
-        )
-      }
-      let comparison_metadata = tree_stdout.text() catch {
-        _ => raise HostError("Git returned a non-UTF-8 review tree path")
-      }
+      let comparison_metadata = @gitx.output(dir, tree_args)
       let comparison_gitlinks = parse_git_mode_paths(
         comparison_metadata, workspace_prefix, "160000",
       )
@@ -1138,29 +1000,14 @@ async fn git_changes_op(
     is Some(root) else {
     raise HostError("could not resolve the conversation workspace")
   }
-  let dir = root.to_string()
-  if git_output(dir, ["rev-parse", "--is-inside-work-tree"]) != "true" {
+  if !@gitx.is_work_tree(root) {
     return { repository: false, head: None, baseline: None, changes: [], }
   }
-  let (prefix_code, prefix_stdout, prefix_stderr) = git_collect(dir, [
-    "rev-parse", "--show-prefix",
-  ])
-  guard prefix_code == 0 else {
-    let detail = (prefix_stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to resolve Git workspace prefix"
-      } else {
-        detail
-      },
-    )
-  }
+  // Strip only the line ending: a workspace directory may begin with a space.
   let workspace_prefix = git_single_line(
-    prefix_stdout.text() catch {
-      _ => raise HostError("Git returned a non-UTF-8 workspace prefix")
-    },
+    @gitx.output(root, ["rev-parse", "--show-prefix"]),
   )
-  let pr_base = github_local_checkout_association(dir).map(pr => pr.base)
+  let pr_base = github_local_checkout_association(root).map(pr => pr.base)
   let worktree_base = if pr_base is Some(_) {
     None
   } else {
@@ -1172,7 +1019,7 @@ async fn git_changes_op(
       guard valid_commit_identity(base) else {
         raise HostError("recorded Git task baseline is invalid")
       }
-      guard git_revision_commit(dir, base) is Some(commit) else {
+      guard git_revision_commit(root, base) is Some(commit) else {
         raise HostError("recorded Git task baseline is unavailable")
       }
       Some(commit)
@@ -1189,7 +1036,7 @@ async fn git_changes_op(
     deleted_symlinks,
     changes,
   ) = git_change_snapshot(
-    dir,
+    root,
     workspace_prefix,
     retries_left=2,
     pr_base?,
@@ -1246,8 +1093,8 @@ fn push_history_ref(
 }
 
 ///|
-async fn git_history_upstream(dir : String) -> String? {
-  guard git_output_opt(dir, [
+async fn git_history_upstream(dir : @pathx.Absolute) -> String? {
+  guard @gitx.probe(dir, [
       "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}",
     ])
     is Some(output) else {
@@ -1264,10 +1111,13 @@ async fn git_history_upstream(dir : String) -> String? {
 ///|
 /// Prefer the configured upstream remote's symbolic default, then the
 /// repository's ordinary origin/HEAD declaration. No branch-name guessing.
-async fn git_history_default_ref(dir : String, upstream : String?) -> String? {
+async fn git_history_default_ref(
+  dir : @pathx.Absolute,
+  upstream : String?,
+) -> String? {
   if upstream is Some(upstream) && upstream.split_once("/") is Some((remote, _)) {
     let symbolic = "refs/remotes/\{remote}/HEAD"
-    if git_output_opt(dir, ["symbolic-ref", "--quiet", "--short", symbolic])
+    if @gitx.probe(dir, ["symbolic-ref", "--quiet", "--short", symbolic])
       is Some(output) {
       let name = git_single_line(output)
       if !name.is_empty() && name != symbolic {
@@ -1280,12 +1130,12 @@ async fn git_history_default_ref(dir : String, upstream : String?) -> String? {
 
 ///|
 async fn capture_git_history_snapshot(
-  dir : String,
+  dir : @pathx.Absolute,
   review_base : String?,
 ) -> @protocol.GitHistorySnapshot {
   let head = git_revision_commit(dir, "HEAD")
   let branch = match
-    git_output_opt(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]) {
+    @gitx.probe(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]) {
     Some(output) => {
       let name = git_single_line(output)
       if name.is_empty() {
@@ -1331,7 +1181,7 @@ async fn capture_git_history_snapshot(
 /// The client echoes only values previously produced by this host. Validate
 /// every object identity again before it can become a Git argv entry.
 async fn validate_git_history_snapshot(
-  dir : String,
+  dir : @pathx.Absolute,
   snapshot : @protocol.GitHistorySnapshot,
 ) -> @protocol.GitHistorySnapshot {
   if snapshot.refs.length() > 16 || snapshot.tips.length() > 16 {
@@ -1397,7 +1247,7 @@ fn parse_git_history_z(output : String) -> Array[@protocol.GitHistoryCommit] {
 
 ///|
 async fn git_history_page(
-  dir : String,
+  dir : @pathx.Absolute,
   snapshot : @protocol.GitHistorySnapshot,
   skip : Int32,
   limit : Int32,
@@ -1418,21 +1268,7 @@ async fn git_history_page(
     args.push(tip)
   }
   args.push("--")
-  let (code, stdout, stderr) = git_collect(dir, args)
-  guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to read Git history"
-      } else {
-        detail
-      },
-    )
-  }
-  let raw = stdout.text() catch {
-    _ => raise HostError("Git returned non-UTF-8 history metadata")
-  }
-  let commits = parse_git_history_z(raw)
+  let commits = parse_git_history_z(@gitx.output(dir, args))
   let has_more = commits.length() > limit
   if has_more {
     ignore(commits.pop())
@@ -1453,14 +1289,13 @@ async fn git_history_op(
     is Some(root) else {
     raise HostError("could not resolve the conversation workspace")
   }
-  let dir = root.to_string()
   let empty : @protocol.GitHistorySnapshot = {
     head: None,
     branch: None,
     refs: [],
     tips: [],
   }
-  if git_output(dir, ["rev-parse", "--is-inside-work-tree"]) != "true" {
+  if !@gitx.is_work_tree(root) {
     return { repository: false, snapshot: empty, commits: [], has_more: false, }
   }
   let recorded_base = @work_dir.session_review_base(
@@ -1470,7 +1305,7 @@ async fn git_history_op(
   let review_base = match recorded_base {
     Some(base) => {
       guard valid_commit_identity(base) &&
-        git_revision_commit(dir, base) is Some(commit) else {
+        git_revision_commit(root, base) is Some(commit) else {
         raise HostError("recorded Git task baseline is unavailable")
       }
       Some(commit)
@@ -1478,8 +1313,8 @@ async fn git_history_op(
     None => None
   }
   let snapshot = match payload.snapshot {
-    Some(snapshot) => validate_git_history_snapshot(dir, snapshot)
-    None => capture_git_history_snapshot(dir, review_base)
+    Some(snapshot) => validate_git_history_snapshot(root, snapshot)
+    None => capture_git_history_snapshot(root, review_base)
   }
   let limit = if payload.limit <= 0 {
     50
@@ -1488,32 +1323,24 @@ async fn git_history_op(
   } else {
     payload.limit
   }
-  let (commits, has_more) = git_history_page(dir, snapshot, payload.skip, limit)
+  let (commits, has_more) = git_history_page(
+    root,
+    snapshot,
+    payload.skip,
+    limit,
+  )
   { repository: true, snapshot, commits, has_more, }
 }
 
 ///|
 async fn git_tree_object_modes(
-  dir : String,
+  dir : @pathx.Absolute,
   workspace_prefix : String,
   revision : String,
 ) -> (Set[String], Set[String]) {
-  let (code, stdout, stderr) = git_collect(dir, [
+  let output = @gitx.output(dir, [
     "ls-tree", "-r", "--full-name", "-z", revision, "--", ".",
   ])
-  guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to inspect Git commit tree"
-      } else {
-        detail
-      },
-    )
-  }
-  let output = stdout.text() catch {
-    _ => raise HostError("Git returned a non-UTF-8 commit tree path")
-  }
   (
     parse_git_mode_paths(output, workspace_prefix, "160000"),
     parse_git_mode_paths(output, workspace_prefix, "120000"),
@@ -1522,48 +1349,29 @@ async fn git_tree_object_modes(
 
 ///|
 async fn git_commit_changes_at(
-  dir : String,
+  dir : @pathx.Absolute,
   workspace_prefix : String,
   commit : String,
 ) -> @protocol.GitCommitChangesReply {
   guard git_revision_commit(dir, commit) is Some(commit) else {
     raise HostError("Git commit is unavailable")
   }
-  let parent = match
-    git_output_opt(dir, ["show", "-s", "--format=%P", commit]) {
-    Some(output) => {
-      let parents = git_single_line(output)
-      if parents.is_empty() {
-        None
-      } else {
-        Some(
-          match parents.split_once(" ") {
-            Some((first, _)) => first.to_owned()
-            None => parents
-          },
-        )
-      }
-    }
-    None => raise HostError("failed to inspect Git commit parents")
-  }
-  let base = parent.unwrap_or(EmptyTreeObject)
-  let (code, stdout, stderr) = git_collect(dir, [
-    "diff", "--name-status", "-z", "--no-ext-diff", "--find-renames", "--find-copies-harder",
-    base, commit, "--", ".",
-  ])
-  guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to read Git commit changes"
-      } else {
-        detail
+  let parents = @gitx.run(dir, ["show", "-s", "--format=%P", commit])
+  let parent = if parents.is_empty() {
+    None
+  } else {
+    Some(
+      match parents.split_once(" ") {
+        Some((first, _)) => first.to_owned()
+        None => parents
       },
     )
   }
-  let raw = stdout.text() catch {
-    _ => raise HostError("Git returned a non-UTF-8 commit path")
-  }
+  let base = parent.unwrap_or(EmptyTreeObject)
+  let raw = @gitx.output(dir, [
+    "diff", "--name-status", "-z", "--no-ext-diff", "--find-renames", "--find-copies-harder",
+    base, commit, "--", ".",
+  ])
   let parsed = parse_git_diff_name_status_z(raw).filter_map(change => {
     git_change_relative_to_workspace(change, workspace_prefix)
   })
@@ -1608,34 +1416,19 @@ async fn git_commit_changes_op(
     is Some(root) else {
     raise HostError("invalid Git commit request")
   }
-  let dir = root.to_string()
-  if git_output(dir, ["rev-parse", "--is-inside-work-tree"]) != "true" {
+  if !@gitx.is_work_tree(root) {
     raise HostError("workspace is not a Git repository")
   }
-  let (prefix_code, prefix_stdout, prefix_stderr) = git_collect(dir, [
-    "rev-parse", "--show-prefix",
-  ])
-  guard prefix_code == 0 else {
-    let detail = (prefix_stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to resolve Git workspace prefix"
-      } else {
-        detail
-      },
-    )
-  }
+  // Strip only the line ending: a workspace directory may begin with a space.
   let workspace_prefix = git_single_line(
-    prefix_stdout.text() catch {
-      _ => raise HostError("Git returned a non-UTF-8 workspace prefix")
-    },
+    @gitx.output(root, ["rev-parse", "--show-prefix"]),
   )
-  git_commit_changes_at(dir, workspace_prefix, payload.commit)
+  git_commit_changes_at(root, workspace_prefix, payload.commit)
 }
 
 ///|
 async fn git_original_file_at(
-  dir : String,
+  dir : @pathx.Absolute,
   relative : @pathx.Relative,
   revision : String,
 ) -> @protocol.GitOriginalFileReply {
@@ -1649,67 +1442,24 @@ async fn git_original_file_at(
   // subdirectory. Resolve the commit:path name once; all following checks and
   // the read use the immutable blob ID.
   let object = "\{commit}:./\{relative.0}"
-  let (oid_code, oid_stdout, _) = git_collect(dir, [
-    "rev-parse", "--verify", object,
-  ])
-  if oid_code != 0 {
+  guard @gitx.probe(dir, ["rev-parse", "--verify", object]) is Some(oid) &&
+    !oid.is_empty() else {
     return Missing
   }
-  let oid = git_single_line(oid_stdout.text() catch { _ => return Missing })
-  if oid.is_empty() {
-    return Missing
-  }
-  let (type_code, type_stdout, type_stderr) = git_collect(dir, [
-    "cat-file", "-t", oid,
-  ])
-  guard type_code == 0 else {
-    let detail = (type_stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to inspect Git baseline"
-      } else {
-        detail
-      },
-    )
-  }
-  let object_type = git_single_line(type_stdout.text() catch { _ => "" })
-  if object_type != "blob" {
+  if @gitx.run(dir, ["cat-file", "-t", oid]) != "blob" {
     return BinaryOriginal
   }
-  let (size_code, size_stdout, size_stderr) = git_collect(dir, [
-    "cat-file", "-s", oid,
-  ])
-  guard size_code == 0 else {
-    let detail = (size_stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to size Git baseline"
-      } else {
-        detail
-      },
-    )
-  }
-  let size_text = git_single_line(size_stdout.text() catch { _ => "" })
+  let size_text = @gitx.run(dir, ["cat-file", "-s", oid])
   let size : Int64 = @string.parse_int64(size_text) catch {
     _ => raise HostError("Git returned an invalid blob size")
   }
   if size > @openpath.MaxEditorFileBytes.to_int64() {
     return OversizedOriginal
   }
-  let (content_code, content, stderr) = git_collect(dir, ["cat-file", "-p", oid])
-  guard content_code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to read Git baseline"
-      } else {
-        detail
-      },
-    )
-  }
+  let content = @gitx.output_bytes(dir, ["cat-file", "-p", oid])
   // Use the same content policy as working-tree reads so a tab cannot treat
   // its current file and Git baseline as different kinds of content.
-  match @filekind.classify(content.binary()) {
+  match @filekind.classify(content) {
     Utf8Text(text) => OriginalContent(text)
     Pdf | Image(_) | UnknownBinary => BinaryOriginal
   }
@@ -1728,8 +1478,7 @@ async fn git_original_file_op(
     git_tree_relative(payload.path) is Some(relative) else {
     raise HostError("path is outside the conversation workspace")
   }
-  let dir = root.to_string()
-  if git_output(dir, ["rev-parse", "--is-inside-work-tree"]) != "true" {
+  if !@gitx.is_work_tree(root) {
     return Missing
   }
   // New clients pass the exact HEAD identity returned with their change
@@ -1743,7 +1492,7 @@ async fn git_original_file_op(
     }
     None => "HEAD"
   }
-  git_original_file_at(dir, relative, revision)
+  git_original_file_at(root, relative, revision)
 }
 
 ///|
@@ -1863,27 +1612,6 @@ test "Git change categories cover conflicts deletions and type changes" {
   assert_eq(git_change_kind(" ", "D"), "deleted")
   assert_eq(git_change_kind("T", " "), "type-changed")
   assert_eq(git_change_kind("C", " "), "copied")
-}
-
-///|
-test "Git subprocess environment cannot redirect the workspace repository" {
-  let env : Map[String, String] = {
-    "PATH": "/usr/bin",
-    "Git_Dir": "/elsewhere/.git",
-    "git_work_tree": "/elsewhere",
-    "GIT_CONFIG_COUNT": "1",
-    "GIT_CONFIG_GLOBAL": "/elsewhere/gitconfig",
-    "GIT_QUARANTINE_PATH": "/elsewhere/quarantine",
-    "HOME": "/home/test",
-  }
-  sanitize_git_environment(env)
-  assert_eq(env.get("PATH"), Some("/usr/bin"))
-  assert_eq(env.get("HOME"), Some("/home/test"))
-  assert_false(env.contains("Git_Dir"))
-  assert_false(env.contains("git_work_tree"))
-  assert_false(env.contains("GIT_CONFIG_COUNT"))
-  assert_false(env.contains("GIT_CONFIG_GLOBAL"))
-  assert_false(env.contains("GIT_QUARANTINE_PATH"))
 }
 
 ///|
