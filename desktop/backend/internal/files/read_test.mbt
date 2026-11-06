@@ -44,7 +44,7 @@ async test "interactive reads can exceed the editor default with an explicit byt
     .resource_path()
   let content = "x".repeat(@files.MaxEditorFileBytes + 1)
   @fs.write_file(
-    @pathx.Absolute::from_uri_path(path).unwrap().to_string(),
+    @pathx.Absolute::parse_resource_path(path).to_string(),
     content,
   )
   assert_eq(@files.read_file({ path, root: None, max_bytes: None, }), Oversized)

@@ -225,8 +225,8 @@ test "POSIX absolute paths round-trip through URI paths" {
   let absolute = absolute_fixture("/work/a b/#file.mbt")
   assert_eq(absolute.to_uri_path(), Some("/work/a b/#file.mbt"))
   assert_eq(
-    @pathx.Absolute::from_uri_path("/work/a b/#file.mbt"),
-    Some(absolute),
+    @pathx.Absolute::parse_resource_path("/work/a b/#file.mbt"),
+    absolute,
   )
 }
 
@@ -235,7 +235,11 @@ test "POSIX absolute paths round-trip through URI paths" {
 test "resource URI conversion rejects double-rooted POSIX paths" {
   let absolute = absolute_fixture("//server/share/a.mbt")
   assert_true(absolute.to_uri_path() is None)
-  assert_true(@pathx.Absolute::from_uri_path("//server/share/a.mbt") is None)
+  try @pathx.Absolute::parse_resource_path("//server/share/a.mbt") catch {
+    InvalidResourcePath => ()
+  } noraise {
+    _ => fail("expected an invalid resource path")
+  }
 }
 
 ///|
@@ -251,10 +255,8 @@ test "Windows drive paths round-trip through URI paths" {
     absolute_fixture("C:\\Users\\mbt\\Workspace\\tty").to_uri_path(),
     Some("/c:/Users/mbt/Workspace/tty"),
   )
-  assert_true(
-    @pathx.Absolute::from_uri_path("/C:/work/a b/#file.mbt") is Some(decoded) &&
-    decoded.normalize() == absolute.normalize(),
-  )
+  let decoded = @pathx.Absolute::parse_resource_path("/C:/work/a b/#file.mbt")
+  assert_eq(decoded.normalize(), absolute.normalize())
 }
 
 ///|
@@ -263,6 +265,11 @@ test "resource URI conversion rejects UNC and root-relative Windows paths" {
   for path in ["\\\\server\\share\\a.mbt", "\\rooted\\a.mbt"] {
     assert_true(absolute_fixture(path).to_uri_path() is None)
   }
-  assert_true(@pathx.Absolute::from_uri_path("//server/share/a.mbt") is None)
-  assert_true(@pathx.Absolute::from_uri_path("/rooted/a.mbt") is None)
+  for path in ["//server/share/a.mbt", "/rooted/a.mbt"] {
+    try @pathx.Absolute::parse_resource_path(path) catch {
+      InvalidResourcePath => ()
+    } noraise {
+      _ => fail("expected an invalid resource path")
+    }
+  }
 }

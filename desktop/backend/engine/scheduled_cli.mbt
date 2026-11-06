@@ -107,9 +107,7 @@ async fn[G] Schedules::run_cli(
   on_workspaces? : (Array[String]) -> Unit,
 ) -> Int32 {
   if spec.workspace is None {
-    guard @pathx.Absolute::from_uri_path(run.workspace) is Some(directory) else {
-      raise EngineError("Invalid automatic working directory")
-    }
+    let directory = @pathx.Absolute::parse_resource_path(run.workspace)
     @fsx.ensure_dir(directory.to_path())
     @workspaces.register_task_directory(directory, on_committed=paths => {
       if on_workspaces is Some(notify) {
@@ -208,9 +206,7 @@ async fn scheduled_session_result(
   run : @protocol.ScheduleRun,
   exit_code~ : Int32,
 ) -> @protocol.ScheduleRunStatus {
-  guard @pathx.Absolute::from_uri_path(run.workspace) is Some(workspace) else {
-    raise EngineError("Invalid scheduled workspace")
-  }
+  let workspace = @pathx.Absolute::parse_resource_path(run.workspace)
   let store = @store.SessionStore(@workspaces.store_root(workspace).to_string())
   // A CLI that failed before its first append left no session: that is a
   // turn without a terminal, and the exit code explains it. Any other load

@@ -7,17 +7,23 @@
 pub async fn branch(
   payload : @protocol.GitBranchPayload,
 ) -> @protocol.GitBranchReply {
+  let nothing : @protocol.GitBranchReply = { branch: None, diffstat: None, }
   // A live run hands us its cwd; a resumed conversation has none, so fall
   // back to the directory the session's engine runs in (mirrors
   // `host.open_path`).
-  let base = match payload.cwd {
-    Some(cwd) => @pathx.Absolute::from_uri_path(cwd)
-    None => @work_dir.session_cwd(payload.session)
+  let base = if payload.cwd is Some(cwd) {
+    @pathx.Absolute::parse_resource_path(cwd) catch {
+      InvalidResourcePath => return nothing
+    }
+  } else {
+    guard @work_dir.session_cwd(payload.session) is Some(base) else {
+      return nothing
+    }
+    base
   }
-  guard base is Some(base) else { return { branch: None, diffstat: None, } }
   guard head_branch(base) is Some(branch) else {
     // Not a repository, or no git: there is nothing to count either.
-    return { branch: None, diffstat: None, }
+    return nothing
   }
   let diffstat = git_diffstat(base, hint?=payload.base_hint)
   // The count takes long enough — a diff, plus one subprocess per untracked

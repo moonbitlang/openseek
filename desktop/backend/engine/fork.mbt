@@ -78,8 +78,8 @@ async fn fork_session_in(
   defer manager.workspace_lifecycle_lock.release()
   let lease = manager.begin_record_read(payload.session)
   defer manager.end_record_read(payload.session, lease)
-  guard @pathx.Absolute::from_uri_path(payload.workspace) is Some(requested) &&
-    @workspaces.registered_dir(requested) is Some(workspace) else {
+  let requested = @pathx.Absolute::parse_resource_path(payload.workspace)
+  guard @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }
   let root = @workspaces.store_root(workspace)

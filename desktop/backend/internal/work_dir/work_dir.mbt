@@ -100,8 +100,10 @@ pub async fn resolve_host_workspace_authorization(
   session : String,
   workspace : String,
 ) -> @pathx.Absolute? {
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(requested) &&
-    host_workspace_authorizations.resolve(session, requested)
+  let requested = @pathx.Absolute::parse_resource_path(workspace) catch {
+    InvalidResourcePath => return None
+  }
+  guard host_workspace_authorizations.resolve(session, requested)
     is Some(authorized) else {
     return None
   }
@@ -151,14 +153,19 @@ pub async fn session_review_base(
   session : String,
   workspace? : String,
 ) -> String? {
-  let workspace = if workspace is Some(hint) &&
-    @pathx.Absolute::from_uri_path(hint) is Some(hint) &&
-    @workspaces.registered_dir(hint) is Some(workspace) {
-    Some(workspace)
-  } else {
-    @session_store.workspace_of(session)
+  if workspace is Some(path) {
+    let registered = try @pathx.Absolute::parse_resource_path(path) catch {
+      InvalidResourcePath => None
+    } noraise {
+      path => @workspaces.registered_dir(path)
+    }
+    if registered is Some(workspace) {
+      return @worktree.tree_base(workspace, session)
+    }
   }
-  guard workspace is Some(workspace) else { return None }
+  guard @session_store.workspace_of(session) is Some(workspace) else {
+    return None
+  }
   @worktree.tree_base(workspace, session)
 }
 
@@ -176,18 +183,19 @@ pub async fn resolve_in_workspace(
   relative : String,
   workspace? : String,
 ) -> @pathx.Absolute? {
-  let root = match workspace {
-    Some(hint) if @pathx.Absolute::from_uri_path(hint) is Some(hint) =>
-      match @workspaces.registered_dir(hint) {
-        // The hint names the workspace; a session bound to one of its
-        // worktrees still roots in that checkout. A Codex thread instead
-        // supplies an exact process-local cwd authorized by app-server.
-        Some(dir) =>
-          @worktree.tree_dir(dir, session).map(root => root.to_path())
-        None => host_workspace_authorizations.resolve(session, hint)
-      }
-    Some(_) => None
-    None => of_session(session)
+  let root = if workspace is Some(workspace) {
+    let workspace = @pathx.Absolute::parse_resource_path(workspace) catch {
+      InvalidResourcePath => return None
+    }
+    if @workspaces.registered_dir(workspace) is Some(dir) {
+      // A session bound to a worktree still roots in that checkout.
+      @worktree.tree_dir(dir, session).map(root => root.to_path())
+    } else {
+      // Codex can supply an exact process-local cwd authorized by app-server.
+      host_workspace_authorizations.resolve(session, workspace)
+    }
+  } else {
+    of_session(session)
   }
   guard root is Some(root) else { return None }
   guard root.to_absolute() is Some(root) else { return None }

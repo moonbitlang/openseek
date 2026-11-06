@@ -5,9 +5,7 @@ pub async fn pull_request(
   guard payload.number > 0 && payload.repository_url.has_prefix("https://") else {
     raise InvalidRequest("Select a pull request from a GitHub repository.")
   }
-  guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-    raise InvalidRequest("Select a workspace with an absolute checkout path.")
-  }
+  let dir = @pathx.Absolute::parse_resource_path(payload.cwd)
   guard resolve_gh() is Some(gh) else {
     raise Unavailable(
       "Install GitHub CLI (gh) and run gh auth login to load pull requests.",

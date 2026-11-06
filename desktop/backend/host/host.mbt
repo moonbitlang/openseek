@@ -211,7 +211,7 @@ pub fn endpoints(
     Endpoint(@commands.fs_search_files, payload => {
       @search.search_files(
         connection.file_search,
-        WirePath::parse(payload.path).absolute,
+        @pathx.Absolute::parse_resource_path(payload.path),
         payload,
       )
     }),
@@ -222,7 +222,7 @@ pub fn endpoints(
       @search.search_text(
         state.resources.ripgrep,
         connection.text_search,
-        WirePath::parse(payload.root).absolute,
+        @pathx.Absolute::parse_resource_path(payload.root),
         payload,
       )
     }),
@@ -232,7 +232,7 @@ pub fn endpoints(
     Endpoint(@commands.fs_search_semantic, payload => {
       @search.search_semantic(
         connection.semantic_search,
-        WirePath::parse(payload.root).absolute,
+        @pathx.Absolute::parse_resource_path(payload.root),
         payload,
         state.semantic_provider(),
       )

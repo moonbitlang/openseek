@@ -108,8 +108,8 @@ async fn write_settings(
 /// be read: op payloads name a workspace, but the registry — host state —
 /// decides which directories the webview may reach.
 pub async fn settings(workspace : String) -> @protocol.WorkspaceSettingsPayload {
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
-    registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard registered_dir(absolute) is Some(dir) else {
     raise WorkspaceError("\{workspace} is not a registered workspace")
   }
   settings_lock.acquire()
@@ -130,8 +130,8 @@ pub async fn update_settings(
   checkout_submodules? : Bool,
   submodule_checkout_timeout_seconds? : Int32,
 ) -> @protocol.WorkspaceSettingsPayload {
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
-    registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard registered_dir(absolute) is Some(dir) else {
     raise WorkspaceError("\{workspace} is not a registered workspace")
   }
   settings_lock.acquire()
@@ -174,9 +174,7 @@ test "workspace settings parse tolerantly and keep unknown fields" {
   fields["worktree_mode"] = Json(true)
   assert_true(worktree_mode_of(fields))
   assert_true(fields.get("future") is Some(_))
-  guard @pathx.Absolute::from_uri_path("/repo") is Some(workspace) else {
-    fail("expected an absolute workspace path")
-  }
+  let workspace = @pathx.Absolute::parse_resource_path("/repo")
   let payload = settings_payload(workspace, fields)
   assert_true(payload.checkout_submodules)
   assert_eq(payload.submodule_checkout_timeout_seconds, 30)

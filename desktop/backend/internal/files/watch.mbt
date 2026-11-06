@@ -156,7 +156,7 @@ async fn FsWatchRequest::keeps_active_watcher(
   match self {
     Unwatch(..) => false
     Watch(payload, reply~) => {
-      let root = wire_path(payload.path) catch {
+      let root = @pathx.Absolute::parse_resource_path(payload.path) catch {
         error => {
           reply.put(Some(error))
           return true
@@ -219,7 +219,7 @@ async fn FsWatchRequest::activate(
       None
     }
     Watch(payload, reply~) => {
-      let root = wire_path(payload.path) catch {
+      let root = @pathx.Absolute::parse_resource_path(payload.path) catch {
         error => {
           reply.put(Some(error))
           return None

@@ -233,8 +233,8 @@ pub async fn review_file(
   payload : @protocol.GithubReviewFilePayload,
 ) -> @protocol.GithubReviewFileReply {
   try {
-    guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) &&
-      @git.valid_commit_identity(payload.base) &&
+    let dir = @pathx.Absolute::parse_resource_path(payload.cwd)
+    guard @git.valid_commit_identity(payload.base) &&
       @git.valid_commit_identity(payload.head) else {
       raise InvalidRequest("Select a checkout and a valid PR revision.")
     }
@@ -253,9 +253,7 @@ pub async fn review_file(
 async fn github_review_load(
   payload : @protocol.GithubWorkspacePayload,
 ) -> @protocol.GithubReview? {
-  guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-    raise InvalidRequest("Select a checkout with an absolute path.")
-  }
+  let dir = @pathx.Absolute::parse_resource_path(payload.cwd)
   let current = checkout_status({ cwd: payload.cwd, })
   guard current.has_open_pull_request && current.pull_request_url is Some(url) else {
     return None
@@ -449,9 +447,7 @@ pub async fn mutate_review(
   try {
     let result = @async.with_timeout_opt(30000, () => {
       let identity = github_review_identity(payload.url)
-      guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-        raise InvalidRequest("Select a checkout with an absolute path.")
-      }
+      let dir = @pathx.Absolute::parse_resource_path(payload.cwd)
       guard resolve_gh() is Some(gh) else {
         raise Unavailable("Install GitHub CLI and run gh auth login.")
       }

@@ -121,7 +121,7 @@ async test "checkout failures travel as data instead of redacted Proton errors" 
   })
   assert_true(
     reply is CheckoutFailure(message, _) &&
-    message.contains("absolute checkout path"),
+    message.contains("path is not absolute"),
   )
 }
 
@@ -242,6 +242,6 @@ async fn git_test_run(dir : String, args : Array[String]) -> Unit {
 }
 
 ///|
-fn git_test_repo(dir : String) -> @pathx.Absolute {
-  @pathx.Absolute::from_uri_path(dir).unwrap()
+fn git_test_repo(dir : String) -> @pathx.Absolute raise {
+  @pathx.Absolute::parse_resource_path(dir)
 }

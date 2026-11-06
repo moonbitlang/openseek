@@ -355,7 +355,7 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
   assert_true(automatic.run_requested)
   let first = service.take_due()[0]
   assert_eq(service.list().entries[1].next_at, automatic.next_at)
-  let folder = @pathx.Absolute::from_uri_path(first.1.workspace).unwrap()
+  let folder = @pathx.Absolute::parse_resource_path(first.1.workspace)
   assert_false(@fsx.is_dir(folder.to_path()))
   assert_false(folder.to_string().has_prefix(checkout.to_string()))
   assert_true(@gitx.is_linked_worktree(runtime.resolve()))

@@ -192,8 +192,8 @@ pub async fn Schedules::save(
     // Validate typed callers too, and resolve only registered project paths.
     let spec : @protocol.ScheduleSpec = @json.from_json(payload.spec.to_json())
     if spec.workspace is Some(workspace) {
-      guard @pathx.Absolute::from_uri_path(workspace) is Some(path) &&
-        @workspaces.registered_dir(path) is Some(_) else {
+      let path = @pathx.Absolute::parse_resource_path(workspace)
+      guard @workspaces.registered_dir(path) is Some(_) else {
         raise EngineError("Choose an attached project for this schedule")
       }
     }
