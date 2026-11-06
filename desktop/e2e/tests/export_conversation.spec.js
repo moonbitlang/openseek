@@ -117,10 +117,6 @@ class ExportHarness extends DesktopBrowserHarness {
 test('export opens choices and downloads locally without publishing', async ({ page }) => {
   const app = new ExportHarness(page);
   await app.openDesktop();
-  const details = page.getByRole('button', { name: 'Detailed mode', exact: true });
-  await expect(details).toHaveAttribute('aria-pressed', 'false');
-  await expect(details).not.toHaveClass(/active/);
-  await expect(details.locator('xpath=preceding-sibling::*[1]')).toHaveAttribute('title', 'Export and import');
   const dialog = await app.openExport();
   expect(app.count('session.export')).toBe(0);
   expect(app.hostShares.length).toBe(0);

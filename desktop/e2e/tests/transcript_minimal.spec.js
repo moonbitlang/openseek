@@ -1,3 +1,4 @@
+import { chooseTranscriptView, openTranscriptView } from './support/transcript_view.js';
 import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
@@ -42,14 +43,10 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     return super.replyFor(request);
   }
 
-  // The titlebar debug toggle is off while the minimal transcript is shown.
+  // Minimal is the default conversation view.
   async enableMinimal() {
     await this.openSession();
     await expect(this.page.locator('#stream .minimal-tools, #stream .minimal-tools-live, #stream .minimal-process, #stream .minimal-single-call').first()).toBeVisible();
-  }
-
-  detailedMode() {
-    return this.page.getByRole('button', { name: 'Detailed mode', exact: true });
   }
 
   append(kind, payload, ts) {
@@ -331,31 +328,29 @@ test('minimal transcript is the default and detailed mode persists', async ({ pa
   await page.reload();
   await app.openSession();
   await expect(page.locator('.minimal-tools')).toHaveCount(1);
-  const toggle = app.detailedMode();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(toggle).not.toHaveClass(/active/);
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(toggle).toHaveClass(/active/);
-  // A click must update the current transcript without reopening the task.
+  let control = await openTranscriptView(page);
+  await expect(control.getByRole('button', { name: 'Minimal', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await control.getByRole('button', { name: 'Detail', exact: true }).click();
+  await expect(control.getByRole('button', { name: 'Detail', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  // Selecting an already selected segment keeps one active preference.
+  await control.getByRole('button', { name: 'Detail', exact: true }).click();
+  await page.keyboard.press('Escape');
   await expect(page.locator('#stream .minimal-tools')).toHaveCount(0);
   await expect(page.locator('#stream details.tool-call').first()).toBeVisible();
-  await app.openSession();
-  await expect(page.locator('.minimal-tools')).toHaveCount(0);
   await expect(page.locator('#stream')).toContainText('REASONING_SENTINEL');
-  await expect(page.locator('#stream details.tool-call').first()).toBeVisible();
   await page.reload();
   await app.openSession();
   await expect(page.locator('.minimal-tools')).toHaveCount(0);
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await toggle.focus();
+  control = await openTranscriptView(page);
+  await expect(control.getByRole('button', { name: 'Detail', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await control.getByRole('button', { name: 'Minimal', exact: true }).focus();
   await page.keyboard.press('Space');
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await app.openSession();
+  await expect(control.getByRole('button', { name: 'Minimal', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
   await expect(page.locator('.minimal-tools')).toHaveCount(1);
   await page.reload();
   await app.openSession();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.minimal-tools')).toHaveCount(1);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -429,7 +424,7 @@ test('minimal edit previews share detailed-mode unified lines and preserve call 
 
   // Detailed mode keeps the original diff prefixes, while minimal mode uses backgrounds; its
   // Original JSON tabs remain available. Expand parents before tool rows.
-  await app.detailedMode().click();
+  await chooseTranscriptView(page, 'Detail');
   await app.openSession();
   await expect(stream.locator('details.tool-call')).toHaveCount(2);
   for (const disclosure of await stream.locator('details.activity, details.activity-step-group').all()) {
@@ -556,7 +551,7 @@ test('minimal job waits name their targets while pending and disappear after suc
   await expect(singleWait).toHaveCount(0);
 
   // Full transcript still exposes all three wait calls for inspection.
-  await app.detailedMode().click();
+  await chooseTranscriptView(page, 'Detail');
   await app.openSession();
   await expect(stream.locator('details.tool-call')).toHaveCount(4);
   expect(app.pageErrors).toEqual([]);

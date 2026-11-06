@@ -1,3 +1,4 @@
+import { chooseTranscriptView } from './support/transcript_view.js';
 import { test, expect } from './support/test.js';
 import { CloudHarness, settledResponse, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
@@ -319,7 +320,7 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(result).toHaveCount(1);
-  await page.getByRole('button', { name: 'Detailed mode', exact: true }).click();
+  await chooseTranscriptView(page, 'Detail');
   await expect(answer).toHaveCount(1);
   await expect(answer).toBeVisible();
   await expect(result).toBeVisible();

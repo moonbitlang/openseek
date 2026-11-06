@@ -71,7 +71,6 @@ pub(all) struct PageActions {
   conversation_heading : (String, String, @common.Uri?) -> Array[@html.Html]
   transcript : @html.Html
   composer : @html.Html
-  detail_toggle : @html.Html
 }
 
 pub(all) struct SidebarContext {

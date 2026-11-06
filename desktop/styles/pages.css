@@ -1061,3 +1061,23 @@ button.archived-chat-open:hover .archived-chat-title {
 @media (max-width: 640px) { .schedule-form-grid { grid-template-columns: 1fr; gap: 0; } }
 
 .schedule-log-content { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--font-size-sm) var(--font-mono); }
+
+/* Use RUI's button variables so hover and focus retain the shared recipe. */
+.transcript-view-control {
+  padding: var(--space-1);
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
+}
+.transcript-view-control > [data-slot="button"] {
+  --rui-control-radius-top-left: var(--radius-sm);
+  --rui-control-radius-top-right: var(--radius-sm);
+  --rui-control-radius-bottom-left: var(--radius-sm);
+  --rui-control-radius-bottom-right: var(--radius-sm);
+  --rui-button-fg: var(--color-text-secondary);
+  min-width: 5.5rem;
+}
+.transcript-view-control > [data-slot="button"][aria-pressed="true"] {
+  --rui-button-bg: var(--color-bg-surface);
+  --rui-button-fg: var(--color-text-primary);
+  --rui-button-border: var(--color-border);
+}

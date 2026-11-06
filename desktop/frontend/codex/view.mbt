@@ -476,8 +476,6 @@ pub(all) struct PageActions {
   // Codex and OpenSeek each instantiate the same composer component with
   // source-specific Input; the page only places the rendered component.
   composer : @html.Html
-  // The same global display preference and control serve both sources.
-  detail_toggle : @html.Html
 }
 
 ///|
@@ -522,10 +520,6 @@ pub fn State::header(
       ],
     ),
   )
-  // The narrow titlebar carries no conversation controls, matching OpenSeek.
-  if !narrow {
-    topbar.push(actions.detail_toggle)
-  }
   // These are OpenSeek's existing host panels, re-rooted by `file_ctx` and
   // `terminal_ctx` to the selected app-server thread. They stay in this one
   // topbar instead of creating a nested Codex application frame.
