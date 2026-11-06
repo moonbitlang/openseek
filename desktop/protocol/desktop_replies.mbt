@@ -261,6 +261,11 @@ pub impl FromJson for SessionListEntry with fn from_json(json, path) {
 }
 
 ///|
+/// One sidebar group of `list_sessions`: the conversations stored under one
+/// session root. `workspace` is the project directory and `name` its display
+/// label (the folder's basename). A group whose listing failed carries the
+/// engine's message in `error` and an empty `sessions` — one broken workspace
+/// must not take the whole sidebar down.
 #derive(Debug, Eq)
 pub(all) struct SessionGroup {
   workspace : String
@@ -1094,6 +1099,12 @@ pub(all) struct OpenPathDirectoryTarget {
 }
 
 ///|
+/// Reply to `open_path`: the route one transcript-referenced path took —
+/// `Opened` (system opener), `Editor` (built-in editor, optional position),
+/// `Directory` (built-in Files tree), or `Refused` with its user-facing
+/// reason. Refusals ride the reply because the local bridge would flatten a
+/// raised error to the generic "op ext:openseek/host.open_path failed".
+///
 /// Reply to `open_path`. Text and browser targets carry absolute URI paths; directory
 /// targets remain relative to the conversation checkout for its Files tree.
 #derive(Debug, Eq)
@@ -1207,6 +1218,7 @@ pub impl FromJson for RevealPathReply with fn from_json(json, path) {
 }
 
 ///|
+/// Reply to `apply_update`: the swap succeeded and the window may close.
 #derive(Debug, Eq)
 pub(all) struct ApplyUpdateReply {
   applied : Bool
@@ -1257,6 +1269,11 @@ pub(all) struct GitDiffStat {
 }
 
 ///|
+/// Reply to `git.branch`. `branch` is the checked-out branch (a detached
+/// HEAD reads as its short hash); absent when the directory is not a git
+/// repository or git is unavailable. `diffstat` summarizes the same working
+/// tree the file panel lists.
+///
 /// `diffstat` is absent for the same reasons `branch` is (no repository, no
 /// git), and additionally when the diff itself failed — the branch chip is
 /// worth showing on its own. Older peers omit the field entirely, which
@@ -1475,12 +1492,15 @@ pub(all) struct DirEntry {
 }
 
 ///|
+/// Reply to `read_directory`: the directory's entries, directories first.
 #derive(Debug, Eq)
 pub(all) struct ReadDirReply {
   entries : Array[DirEntry]
 }
 
 ///|
+/// Ranked root-relative paths, capped for Quick Open. `from_cache`
+/// distinguishes a newly populated session from a reused one.
 #derive(Debug, Eq)
 pub(all) struct SearchFilesReply {
   files : Array[String]
@@ -1596,6 +1616,7 @@ pub(all) struct SearchSemanticReply {
 }
 
 ///|
+/// Reply to `read_file`, discriminated on the wire by a `kind` field.
 #derive(Debug, Eq)
 pub(all) enum ReadFileReply {
   Binary
@@ -1753,6 +1774,10 @@ pub impl FromJson for FileSignature with fn from_json(json, path) {
 }
 
 ///|
+/// One file's stat outcome: `Present("{seconds}:{nanos}")` of its mtime,
+/// `Missing` when the path no longer resolves to a file, or `Failed` with the
+/// OS error for anything else. The frontend only ever compares signatures for
+/// equality, so the shape stays opaque text — no Int64 crossing JSON.
 #derive(Debug, Eq)
 pub(all) struct FileStat {
   path : String
@@ -1882,6 +1907,10 @@ pub impl ToJson for TerminalOpenReply with fn to_json(self) {
 }
 
 ///|
+/// One Moon IDE navigation result. The host validates the CLI path against the
+/// physical root, then maps it back under the supplied root's lexical
+/// spelling. Its compact range becomes explicit numeric fields while
+/// line and column values retain the coordinates emitted by Moon IDE.
 #derive(Debug, Eq)
 pub(all) struct MoonIdeLocation {
   path : String
@@ -1947,6 +1976,7 @@ pub impl ToJson for MoonIdeLocation with fn to_json(self) {
 }
 
 ///|
+/// Shared reply shape for `moonide.definition` and `moonide.references`.
 #derive(Debug, Eq)
 pub(all) struct MoonIdeLocationsReply {
   locations : Array[MoonIdeLocation]
@@ -2089,6 +2119,7 @@ pub impl ToJson for MoonIdeCodeLens with fn to_json(self) {
 }
 
 ///|
+/// Host-normalized Moon IDE reference CodeLens rows.
 #derive(Debug, Eq)
 pub(all) struct MoonIdeCodeLensReply {
   lenses : Array[MoonIdeCodeLens]
@@ -2120,6 +2151,8 @@ pub(all) struct LspDiagnostic {
 }
 
 ///|
+/// Reply to `lsp_open`: the file's current diagnostics (an LSP-shaped
+/// `diagnostics` array, 0-based ranges), empty when the check reported none.
 /// The field is absent when the check itself could not run — "no data", which
 /// the client answers by keeping the markers it has, distinct from the empty
 /// array's "no problems", which clears them.
@@ -2129,6 +2162,9 @@ pub(all) struct LspDiagnosticsReply {
 }
 
 ///|
+/// Reply to `hover`. An empty `value` means "no hover here". `range` (the four
+/// position fields) marks the symbol the tooltip describes, valid only when
+/// `has_range` is set; the front-end maps it back to a document offset.
 #derive(Debug, Eq)
 pub(all) struct LspHoverReply {
   value : String
@@ -2148,6 +2184,8 @@ pub(all) struct SymbolPosition {
 }
 
 ///|
+/// A symbol's location range on the wire, mirroring the LSP shape with
+/// zero-based positions.
 #derive(Debug, Eq)
 pub(all) struct SymbolRange {
   start : SymbolPosition
@@ -2155,6 +2193,12 @@ pub(all) struct SymbolRange {
 }
 
 ///|
+/// One row of a `workspace_symbols` reply. `path` is root-relative and
+/// `range` is the symbol's zero-based range (the front-end shows it
+/// one-based) — all zeros when the row carried none; `kind` is the raw LSP
+/// `SymbolKind` number, forwarded for the front-end to label or icon as it
+/// likes, and omitted when unknown. `container` is the enclosing symbol's
+/// name, omitted when the symbol has none.
 #derive(Debug, Eq)
 pub(all) struct SymbolItem {
   name : String
@@ -2165,12 +2209,20 @@ pub(all) struct SymbolItem {
 }
 
 ///|
+/// Reply to `workspace_symbols`: the matching symbols, capped host-side.
 #derive(Debug, Eq)
 pub(all) struct WorkspaceSymbolsReply {
   symbols : Array[SymbolItem]
 }
 
 ///|
+/// Reply to `check_update`, discriminated on the wire by a `kind` field.
+/// Every outcome is data — the op only rejects on cancellation — because
+/// each kind is worth a different amount of noise: `broken` can only be the
+/// publisher's fault (toast material), `malformed` also happens under
+/// captive portals (log material), `unreachable` is routine offline life.
+/// An available release carries an optional actionable reason when this
+/// installation itself cannot be replaced.
 #derive(Debug, Eq)
 pub(all) enum CheckUpdateReply {
   UpToDate
@@ -2255,6 +2307,8 @@ pub impl FromJson for CheckUpdateReply with fn from_json(json, path) {
 }
 
 ///|
+/// The immediate `update.download` reply. Completion arrives separately as
+/// `update.downloaded` or `update.download_failed` from the host-owned pump.
 #derive(Debug, Eq)
 pub(all) struct DownloadUpdateAcceptedReply {
   accepted : Bool

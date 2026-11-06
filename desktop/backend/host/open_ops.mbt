@@ -15,7 +15,7 @@ priv struct ResolvedHostReference {
 /// here prevents the two user actions from drifting into different security
 /// or path semantics.
 async fn resolve_host_reference(
-  payload : OpenPathPayload,
+  payload : @protocol.OpenPathPayload,
 ) -> Result[ResolvedHostReference, String] {
   // A live run hands us its cwd; a resumed conversation has none, so fall back
   // to the directory the session's engine runs in.
@@ -48,9 +48,9 @@ async fn resolve_host_reference(
 /// raised error: the local bridge flattens a raise to the generic
 /// "op ext:openseek/host.open_path failed" and hides the reason.
 async fn open_path_op(
-  payload : OpenPathPayload,
+  payload : @protocol.OpenPathPayload,
   preview_browser~ : Bool = false,
-) -> OpenPathReply {
+) -> @protocol.OpenPathReply {
   let reference = match resolve_host_reference(payload) {
     Ok(reference) => reference
     Err(message) => return refusal(message)
@@ -115,7 +115,9 @@ async fn open_path_op(
 /// Resolve and reveal the same path that `open_path` would route, but never
 /// substitute the built-in editor or a default application for the file
 /// manager. Position suffixes identify the underlying file.
-async fn reveal_path_op(payload : OpenPathPayload) -> RevealPathReply {
+async fn reveal_path_op(
+  payload : @protocol.OpenPathPayload,
+) -> @protocol.RevealPathReply {
   let reference = match resolve_host_reference(payload) {
     Ok(reference) => reference
     Err(message) => return RevealRefused(message)
@@ -162,7 +164,7 @@ async fn should_reveal_checkout_directory(
 /// A refusal travels inside the reply instead of raising: the local bridge
 /// flattens a raised host error to the generic
 /// "op ext:openseek/host.open_path failed" and hides this message.
-fn refusal(message : String) -> OpenPathReply {
+fn refusal(message : String) -> @protocol.OpenPathReply {
   Refused(message)
 }
 

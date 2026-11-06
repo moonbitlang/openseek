@@ -150,7 +150,7 @@ async fn workspace_git_ignored_paths(
 
 ///|
 priv enum FileSearchResponse {
-  SearchSucceeded(SearchFilesReply)
+  SearchSucceeded(@protocol.SearchFilesReply)
   SearchCancelled
   SearchFailed(String)
 }
@@ -265,7 +265,7 @@ async fn FileSearchService::search(
   query : String,
   max_results : Int32,
   request_generation : Int32,
-) -> SearchFilesReply {
+) -> @protocol.SearchFilesReply {
   let reply : @async.Queue[FileSearchResponse] = Queue(kind=Blocking(1))
   self.requests.put(
     Search(
@@ -311,7 +311,7 @@ async fn FileSearchService::clear_cache(
 fn file_search_reply(
   computed : FileSearchComputation,
   from_cache : Bool,
-) -> SearchFilesReply {
+) -> @protocol.SearchFilesReply {
   {
     files: computed.files,
     from_cache,
@@ -663,8 +663,8 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
 ///|
 async fn search_files_op(
   service : FileSearchService,
-  payload : SearchFilesPayload,
-) -> SearchFilesReply {
+  payload : @protocol.SearchFilesPayload,
+) -> @protocol.SearchFilesReply {
   let root = WirePath::parse(payload.path).absolute
   service.search(
     root,
@@ -678,7 +678,7 @@ async fn search_files_op(
 ///|
 async fn cancel_search_files_op(
   service : FileSearchService,
-  payload : CancelSearchFilesPayload,
+  payload : @protocol.CancelSearchFilesPayload,
 ) -> @protocol.EmptyReply {
   service.cancel(payload.cache_key, payload.generation)
   Acknowledged
@@ -687,7 +687,7 @@ async fn cancel_search_files_op(
 ///|
 async fn clear_file_search_cache_op(
   service : FileSearchService,
-  payload : ClearFileSearchCachePayload,
+  payload : @protocol.ClearFileSearchCachePayload,
 ) -> @protocol.EmptyReply {
   service.clear_cache(payload.cache_key)
   Acknowledged

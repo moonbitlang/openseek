@@ -7,21 +7,12 @@
 // shown are always the host machine's.
 
 ///|
-type BrowseDirectoryPayload = @protocol.BrowseDirectoryPayload
-
-///|
-type BrowseDirectoryReply = @protocol.BrowseDirectoryReply
-
-///|
-type CreateDirectoryPayload = @protocol.CreateDirectoryPayload
-
-///|
 /// A refusal (bad path, not a directory, unreadable) travels inside the
 /// reply: the local bridge would flatten a raised error down to
 /// "op ext:openseek/fs.browse failed".
 async fn browse_directory_op(
-  payload : BrowseDirectoryPayload,
-) -> BrowseDirectoryReply {
+  payload : @protocol.BrowseDirectoryPayload,
+) -> @protocol.BrowseDirectoryReply {
   browse_directory_listing(payload) catch {
     HostError(message) => BrowseError(message)
     error => raise error
@@ -30,8 +21,8 @@ async fn browse_directory_op(
 
 ///|
 async fn browse_directory_listing(
-  payload : BrowseDirectoryPayload,
-) -> BrowseDirectoryReply {
+  payload : @protocol.BrowseDirectoryPayload,
+) -> @protocol.BrowseDirectoryReply {
   let requested = payload.path.unwrap_or("").trim().to_owned()
   // The resource-path root "/" is a real location in every listing's URI
   // space, but on Windows no directory lives there: the level above the
@@ -102,8 +93,8 @@ async fn browse_directory_listing(
 /// then return the new folder's listing. The frontend can therefore enter the
 /// folder using the same fenced reply path as ordinary navigation.
 async fn create_directory_op(
-  payload : CreateDirectoryPayload,
-) -> BrowseDirectoryReply {
+  payload : @protocol.CreateDirectoryPayload,
+) -> @protocol.BrowseDirectoryReply {
   create_directory_listing(payload) catch {
     HostError(message) => BrowseError(message)
     error => raise error
@@ -112,8 +103,8 @@ async fn create_directory_op(
 
 ///|
 async fn create_directory_listing(
-  payload : CreateDirectoryPayload,
-) -> BrowseDirectoryReply {
+  payload : @protocol.CreateDirectoryPayload,
+) -> @protocol.BrowseDirectoryReply {
   let name = payload.name.trim().to_owned()
   guard !name.is_empty() else { raise HostError("folder name cannot be empty") }
   guard name != "." && name != ".." && !name.contains_any(chars="/\\") else {

@@ -76,7 +76,7 @@ fn moonide_relative_path(
 /// spelling used by existing client models, and the canonical physical root
 /// used for CLI cwd, relative locations, and symlink containment.
 async fn resolve_moonide_request(
-  payload : MoonIdeNavigationPayload,
+  payload : @protocol.MoonIdeNavigationPayload,
 ) -> MoonIdeRequest {
   guard payload.line > 0 && payload.column > 0 else {
     raise PayloadError("line and column must be positive one-based integers")
@@ -168,7 +168,7 @@ fn moonide_result_path(
 fn parse_moonide_output(
   output : String,
   physical_workspace : @pathx.Absolute,
-) -> MoonIdeLocationsReply raise HostError {
+) -> @protocol.MoonIdeLocationsReply raise HostError {
   let json = @json.parse(output) catch {
     _ => raise HostError("moon ide returned malformed JSON")
   }
@@ -177,7 +177,7 @@ fn parse_moonide_output(
     Array(items) => items
     _ => raise HostError("moon ide returned an unexpected JSON value")
   }
-  let locations : Array[MoonIdeLocation] = []
+  let locations : Array[@protocol.MoonIdeLocation] = []
   for item in items {
     guard item is Object(fields) &&
       fields.get("path") is Some(String(path)) &&
@@ -210,7 +210,7 @@ fn parse_moonide_output(
 ///|
 /// The CLI emits a plain absolute file path.
 /// Preserve literal percent escapes; only editor resource URIs use URI encoding.
-fn parse_moonide_codelens_location(json : Json) -> MoonIdeLocation? {
+fn parse_moonide_codelens_location(json : Json) -> @protocol.MoonIdeLocation? {
   guard json is Object(fields) &&
     fields.get("path") is Some(String(raw_path)) &&
     fields.get("range") is Some(String(raw_range)) &&
@@ -260,7 +260,7 @@ fn parse_moonide_codelens_position(json : Json) -> @protocol.LspPosition? {
 /// request owns that identity.
 fn parse_moonide_codelens_output(
   output : String,
-) -> MoonIdeCodeLensReply raise HostError {
+) -> @protocol.MoonIdeCodeLensReply raise HostError {
   let json = @json.parse(output) catch {
     _ => raise HostError("moon ide codelens returned malformed JSON")
   }
@@ -281,7 +281,8 @@ fn parse_moonide_codelens_output(
     guard parse_moonide_codelens_range(raw_range) is Some(range) else {
       continue
     }
-    let action : MoonIdeCodeLensAction = match (command_id, arguments) {
+    let action : @protocol.MoonIdeCodeLensAction = match
+      (command_id, arguments) {
       (
         "moonbit.action.goToLocations",
         [String(_), raw_position, Array(raw_locations)],
@@ -289,7 +290,7 @@ fn parse_moonide_codelens_output(
         guard parse_moonide_codelens_position(raw_position) is Some(position) else {
           continue
         }
-        let locations : Array[MoonIdeLocation] = []
+        let locations : Array[@protocol.MoonIdeLocation] = []
         for raw_location in raw_locations {
           if parse_moonide_codelens_location(raw_location) is Some(location) {
             locations.push(location)
@@ -332,11 +333,11 @@ fn moonide_client_path(
 /// to the lexical attached root before crossing the wire. Unreadable/stale
 /// paths are dropped, while line and column numbers pass through unchanged.
 async fn canonical_moonide_locations(
-  reply : MoonIdeLocationsReply,
+  reply : @protocol.MoonIdeLocationsReply,
   lexical_workspace : @pathx.Absolute,
   physical_workspace : @pathx.Absolute,
-) -> MoonIdeLocationsReply {
-  let locations : Array[MoonIdeLocation] = []
+) -> @protocol.MoonIdeLocationsReply {
+  let locations : Array[@protocol.MoonIdeLocation] = []
   for location in reply.locations {
     let canonical = @fs.realpath(location.path) catch { _ => continue }
     guard moonide_client_path(lexical_workspace, physical_workspace, canonical)
@@ -357,13 +358,13 @@ async fn canonical_moonide_locations(
 
 ///|
 async fn canonical_moonide_codelenses(
-  reply : MoonIdeCodeLensReply,
+  reply : @protocol.MoonIdeCodeLensReply,
   lexical_workspace : @pathx.Absolute,
   physical_workspace : @pathx.Absolute,
-) -> MoonIdeCodeLensReply {
+) -> @protocol.MoonIdeCodeLensReply {
   let lenses : Array[@protocol.MoonIdeCodeLens] = []
   for lens in reply.lenses {
-    let action : MoonIdeCodeLensAction = match lens.action {
+    let action : @protocol.MoonIdeCodeLensAction = match lens.action {
       Outside(position~) => Outside(position~)
       Local(position~, locations~) => {
         let canonical = canonical_moonide_locations(
@@ -383,8 +384,8 @@ async fn canonical_moonide_codelenses(
 async fn moonide_navigation_op(
   state : HostState,
   query : MoonIdeQuery,
-  payload : MoonIdeNavigationPayload,
-) -> MoonIdeLocationsReply {
+  payload : @protocol.MoonIdeNavigationPayload,
+) -> @protocol.MoonIdeLocationsReply {
   let request = resolve_moonide_request(payload)
   let config = moonide_spawn_config(state)
   let args = query.args(request.relative_path, request.line, request.column)
@@ -423,7 +424,7 @@ async fn moonide_navigation_op(
 async fn moonide_navigation_reply(
   state : HostState,
   query : MoonIdeQuery,
-  payload : MoonIdeNavigationPayload,
+  payload : @protocol.MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeNavigationReply {
   let reply = moonide_navigation_op(state, query, payload) catch {
     error => return NavigationError("\{error}")
@@ -434,7 +435,7 @@ async fn moonide_navigation_reply(
 ///|
 async fn moonide_definition_op(
   state : HostState,
-  payload : MoonIdeNavigationPayload,
+  payload : @protocol.MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeNavigationReply {
   moonide_navigation_reply(state, Definition, payload)
 }
@@ -442,7 +443,7 @@ async fn moonide_definition_op(
 ///|
 async fn moonide_references_op(
   state : HostState,
-  payload : MoonIdeNavigationPayload,
+  payload : @protocol.MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeNavigationReply {
   moonide_navigation_reply(state, References, payload)
 }
@@ -464,8 +465,8 @@ fn moonide_codelens_failure_text(
 ///|
 async fn moonide_codelens_op(
   state : HostState,
-  payload : MoonIdeCodeLensPayload,
-) -> MoonIdeCodeLensReply {
+  payload : @protocol.MoonIdeCodeLensPayload,
+) -> @protocol.MoonIdeCodeLensReply {
   let location = LanguagePath::resolve(
     payload.session,
     payload.root,
@@ -780,7 +781,7 @@ async test "Moon IDE CodeLens canonicalization drops symlink targets outside the
     @pathx.Path(physical_root).to_absolute() is Some(physical_workspace) else {
     fail("temporary root was not absolute")
   }
-  let reply : MoonIdeCodeLensReply = {
+  let reply : @protocol.MoonIdeCodeLensReply = {
     lenses: [
       {
         range: {

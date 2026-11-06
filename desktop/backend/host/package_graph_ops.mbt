@@ -14,7 +14,7 @@ fn moon_package_graph_args() -> Array[String] {
 /// containment boundary used by language operations, then return its parent
 /// directory as Moon's cwd.
 async fn moon_package_graph_cwd(
-  payload : MoonPackageGraphPayload,
+  payload : @protocol.MoonPackageGraphPayload,
 ) -> @pathx.Absolute {
   let location = LanguagePath::resolve(
     payload.session,
@@ -109,7 +109,7 @@ fn moon_package_graph_process_reply(
   code : Int32,
   stdout : String,
   stderr : String,
-) -> MoonPackageGraphReply {
+) -> @protocol.MoonPackageGraphReply {
   let stdout_detail = stdout.trim().to_owned()
   let stderr_detail = stderr.trim().to_owned()
   if code != 0 {
@@ -149,8 +149,8 @@ fn moon_package_graph_process_reply(
 /// view while explaining why the graph is unavailable.
 async fn moon_package_graph_op(
   state : MoonCliState,
-  payload : MoonPackageGraphPayload,
-) -> MoonPackageGraphReply {
+  payload : @protocol.MoonPackageGraphPayload,
+) -> @protocol.MoonPackageGraphReply {
   let cwd = moon_package_graph_cwd(payload)
   guard state.run_moon(moon_package_graph_args(), cwd)
     is Some((code, stdout, stderr)) else {

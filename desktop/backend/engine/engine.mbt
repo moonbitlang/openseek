@@ -2952,7 +2952,7 @@ test "submission ids are non-blank and bounded by UTF-8 bytes" {
 
 ///|
 test "started payload omits a missing submission id" {
-  let payload : StartedPayload = {
+  let payload : @protocol.StartedPayload = {
     run_id: "r1",
     submission_id: None,
     engine: Some("openseek"),
