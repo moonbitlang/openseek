@@ -1473,6 +1473,7 @@ fn git_commit_row(
       on_click=dispatch(GitCommitSelected(commit.id)),
       attrs=@html.Attrs::build()
         .id(git_commit_row_id(index))
+        .data_set("commit", commit.id)
         .role("treeitem")
         .aria_label(
           "\{commit.subject}, \{commit.author}, \{commit.authored_at}, \{commit.id}",
@@ -2112,6 +2113,7 @@ fn crumb_link(
     title=dynamic_text(locale, DShowFiles(label.to_string())),
     on_click=dispatch(RevealDirectory(path)),
     attrs=@html.Attrs::build()
+      .data_set("path", path.0)
       .aria_controls(BreadcrumbPickerId)
       .aria_expanded(open.to_string())
       .on_keydown(event => {
@@ -2538,7 +2540,15 @@ fn mbti_view_button(
     } else {
       dispatch(MbtiViewModeSelected(mode))
     },
-    attrs=@html.Attrs::build().aria_pressed(active.to_string()),
+    attrs=@html.Attrs::build()
+      .id(
+        if mode == MbtiDiagram {
+          "mbti-view-diagram"
+        } else {
+          "mbti-view-source"
+        },
+      )
+      .aria_pressed(active.to_string()),
     label,
   )
 }
@@ -2618,7 +2628,15 @@ fn moon_mod_view_button(
     // An already-selected failed dependency view treats another click as an
     // explicit retry; the update loop leaves every other same-mode click inert.
     on_click=dispatch(MoonModViewModeSelected(mode)),
-    attrs=@html.Attrs::build().aria_pressed(active.to_string()),
+    attrs=@html.Attrs::build()
+      .id(
+        if mode == MoonModDependencies {
+          "moon-mod-view-dependencies"
+        } else {
+          "moon-mod-view-source"
+        },
+      )
+      .aria_pressed(active.to_string()),
     label,
   )
 }
@@ -2901,6 +2919,7 @@ fn review_mode_toolbar(
     },
     attrs=@html.Attrs::build()
       .role("toolbar")
+      .id("review-mode-toolbar")
       .aria_label(ui(locale, ReviewMode)),
     children,
   )
@@ -3196,6 +3215,7 @@ fn review_hunk_toggle_button(
     disabled~,
     on_click=dispatch(ToggleActiveReviewHunk),
     attrs=@html.Attrs::build()
+      .id("review-hunk-toggle")
       .aria_label(
         if disabled {
           ui(locale, HunkViewed)
@@ -3491,6 +3511,7 @@ fn review_progress(
     },
     on_click=dispatch(ToggleReviewProgress),
     attrs=@html.Attrs::build()
+      .id("review-file-toggle")
       .aria_label(
         if reviewed {
           ui(locale, MarkFileUnreviewed)
@@ -3831,7 +3852,9 @@ fn review_filter_controls(
           dispatch(ChangeFiltersCleared),
           focus_change_filter_after_render(),
         ]),
-        attrs=@html.Attrs::build().aria_label(ui(locale, ClearFilters)),
+        attrs=@html.Attrs::build()
+          .id("review-clear-filters")
+          .aria_label(ui(locale, ClearFilters)),
         ui(locale, ClearLabel),
       ),
     ]),
@@ -3929,9 +3952,9 @@ fn change_extension_filter(
                   selected.contains(option.0)
                 ),
               on_change=dispatch.map(_ => ChangeExtensionToggled(option.0)),
-              attrs=@html.Attrs::build().aria_label(
-                extension_label(locale~, option.0),
-              ),
+              attrs=@html.Attrs::build()
+                .data_set("extension", option.0.unwrap_or(""))
+                .aria_label(extension_label(locale~, option.0)),
             ),
             @html.span(extension_label(locale~, option.0)),
             @html.span(class="review-type-count", option.1.to_string()),

@@ -525,6 +525,7 @@ pub fn[T : Eq] selection_component(
                 type_="button",
                 title=ui(locale, CopySelected),
                 disabled=open.stage is Copying,
+                id="selection-copy",
                 on_click=emit(CopyStarted),
                 ui(locale, CopyLabel),
               ),
@@ -536,6 +537,7 @@ pub fn[T : Eq] selection_component(
               @html.button(
                 class="action-menu-item",
                 type_="button",
+                id="selection-reply",
                 title=ui(locale, ReplyHint),
                 attrs=@html.Attrs::build().on_click(_ => emit(ReplyStarted)),
                 ui(locale, ReplyLabel),

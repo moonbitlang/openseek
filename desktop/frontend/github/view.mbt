@@ -70,6 +70,7 @@ fn list_view(
           class="github-item" +
             (if item.draft { " draft" } else { "" }) +
             (if selected { " selected" } else { "" }),
+          attrs=@html.Attrs::build().data_set("url", item.url),
           [
             @html.button(
               class="github-item-open",
@@ -268,14 +269,25 @@ fn inventory(
       ] {
       let group = state.group(kind)
       groups.push(
-        @html.div(class="github-group", [
-          disclosure(label, group.expanded, emit(Toggle(kind))),
-          if group.expanded {
-            list_view(locale~, state, kind, emit, open_link)
-          } else {
-            @html.nothing
-          },
-        ]),
+        @html.div(
+          class="github-group",
+          attrs=@html.Attrs::build().data_set(
+            "group",
+            match kind {
+              CreatedByMe => "created"
+              AllOpen => "all"
+              Issues => "issues"
+            },
+          ),
+          [
+            disclosure(label, group.expanded, emit(Toggle(kind))),
+            if group.expanded {
+              list_view(locale~, state, kind, emit, open_link)
+            } else {
+              @html.nothing
+            },
+          ],
+        ),
       )
     }
     pulls.push(@html.div(class="github-section-body", groups))

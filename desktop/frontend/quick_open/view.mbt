@@ -129,7 +129,10 @@ fn empty_view(open : Open, locale : @i18n.Locale) -> @html.Html {
   }
   @html.div(
     class~,
-    attrs=@html.Attrs::build().role("status").aria_live("polite"),
+    attrs=@html.Attrs::build()
+      .id("quick-open-empty")
+      .role("status")
+      .aria_live("polite"),
     message,
   )
 }
@@ -197,6 +200,7 @@ fn dialog_view(
         },
         attrs=@html.Attrs::build()
           .id(row_id(index))
+          .data_set("path", item.accepted().path)
           .role("option")
           .aria_selected(if selected { "true" } else { "false" })
           .on_mouseenter(_ => emit(Select(index)))
