@@ -3,7 +3,8 @@
 :root {
   --light-bg-canvas: #ffffff;
   --light-bg-surface: #fafafa;
-  /* button hover background, user-bubble background, etc.  */
+  --light-bg-content: #f2f2f2;
+  /* Shared hover and subtle control backgrounds. */
   --light-bg-subtle: color-mix(in srgb, var(--light-bg-surface) 94.8%, black);
   --light-conversation-selected: color-mix(in srgb, var(--light-bg-subtle) 94.5%, black);
   --light-text-primary: #191919;
