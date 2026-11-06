@@ -395,10 +395,6 @@ html.is-resizing-row {
 html.is-resizing-col {
   cursor: col-resize;
 }
-html.is-resizing-row *,
-html.is-resizing-col * {
-  user-select: none !important;
-}
 .file-panel-error.empty {
   display: none;
 }
@@ -426,13 +422,10 @@ html.is-resizing .editor-resize-handle {
 .content.panel-expanded .editor-resize-handle {
   display: none;
 }
-/* While dragging, keep the resize cursor everywhere and stop the drag from
-   selecting text under the pointer. */
+/* Resize handlers prevent selection at mousedown. Global user-select changes
+   make long transcripts expensive to resize even with offscreen rows skipped. */
 html.is-resizing {
   cursor: col-resize;
-}
-html.is-resizing * {
-  user-select: none !important;
 }
 
 /* Like VS Code's SplitView, keep divider drags out of the editor's mouse
@@ -1443,7 +1436,6 @@ html.is-resizing-review .review-split-handle {
 html.is-resizing-review,
 html.is-resizing-review * {
   cursor: row-resize;
-  user-select: none !important;
 }
 
 .git-graph-header {

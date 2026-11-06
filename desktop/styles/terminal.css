@@ -58,9 +58,6 @@ html.is-resizing-terminal .terminal-resize-handle {
 html.is-resizing-terminal {
   cursor: row-resize;
 }
-html.is-resizing-terminal * {
-  user-select: none !important;
-}
 
 .terminal-titlebar {
   display: flex;

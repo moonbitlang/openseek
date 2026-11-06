@@ -674,17 +674,3 @@
 }
 .session-import-status { min-height: 24px; margin-top: var(--space-5); color: var(--color-text-muted); overflow-wrap: anywhere; }
 .session-import-status:empty { display: none; }
-
-[id="conversation-transfer:actions"] {
-  min-width: 140px;
-}
-[id="conversation-transfer:actions"] .action-menu-item {
-  grid-template-columns: 16px minmax(0, 1fr);
-}
-[id="conversation-transfer:actions"] .action-menu-item:hover,
-[id="conversation-transfer:actions"] .action-menu-item:focus-visible {
-  color: var(--color-text-primary);
-}
-[id="conversation-transfer:actions"] .action-menu-item:focus-visible {
-  background: var(--color-bg-subtle);
-}

@@ -69,6 +69,8 @@ fn conversation_transfer_button(locale : @i18n.Locale) -> @html.Html {
   @rui.popover_trigger(
     id=ConversationTransferTarget + ":actions-trigger",
     target_id=ConversationTransferTarget + ":actions-content",
+    variant=Ghost,
+    size=IconXs,
     class="panel-toggle",
     title=shell_text(locale, ConversationTransfer),
     attrs=@action_menu.button_attrs(
