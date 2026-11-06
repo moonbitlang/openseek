@@ -68,6 +68,8 @@ pub async fn remote_server_base(EngineManager) -> String?
 
 pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Unit
 
+pub async fn run_settings(EngineManager, String) -> RunSettings?
+
 pub async fn search_sessions(@protocol.SessionSearchPayload) -> @protocol.SessionSearchReply
 
 pub async fn session_artifacts_list(EngineManager, String) -> @protocol.SessionArtifacts
@@ -151,6 +153,14 @@ pub enum PatternRepairEnvironment {
   Unavailable
 }
 pub fn PatternRepairEnvironment::to_repr(Self) -> @debug.Repr
+
+pub struct RunSettings {
+  session_root : String?
+  system_prompt : String?
+  model : String
+  thinking : @protocol.OpenSeekThinking
+  approval : @protocol.OpenSeekApproval
+}
 
 pub struct Schedules {
   manager : EngineManager

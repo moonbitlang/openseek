@@ -105,7 +105,7 @@ there is no SSE stream and no server-initiated request.
 
 The backend registers `session` alongside the window's browser tools. Include
 `session` in `X-SeekMoon-Tool-Groups` if a configured client filters groups.
-Its actions are `list`, `read`, `send`, `status`, and `cancel`. These operate on
+Its actions are `list`, `read`, `send`, `start`, `status`, and `cancel`. These operate on
 OpenSeek conversations attached to this host, not Codex threads or independent
 CLI processes.
 
@@ -145,6 +145,38 @@ failure stays visible in status and is reported to the frontend.
 Each delivery is submitted once. A dropped steer, an unwritten command, or a
 conversation that is compacting reports failure; the host does not resubmit
 the message. Reusing the same `request_id` returns that recorded outcome.
+
+### Starting a conversation
+
+`start` takes a short `title`, the complete brief as `text`, and a
+caller-generated `request_id`. It proposes a new OpenSeek chat in a new git
+worktree of the caller's workspace, with the brief as its first prompt and the
+system prompt, model, thinking level and approval mode the caller has when it
+proposes. The host mints the new chat's id when the proposal is made, so the
+result's `target` already names it; identical retries recover the same
+proposal and the same id.
+
+A proposal never waits: `start` returns `proposed` at once and the caller's
+turn goes on. The caller's chat shows the proposal as a collapsed row above
+the composer, which the user can start or dismiss at any time while the host
+runs, however many turns later. The row goes away once the new chat exists. The proposal and the chat it starts share one token:
+`msg-<token>` starts `desktop-<token>`. Starting it creates the worktree and
+submits the first turn. The start succeeds once the new chat's first event is
+saved, when the host also gives it the requested title; a run that ends before
+then fails the start, and a failed start removes the worktree it created. A
+host that closes while a start is in flight stops the new chat like any other
+running chat and keeps its worktree.
+
+Once the new chat has started, the host delivers a `<session_message_result>`
+with `status="started"` and the new chat's `target` to the caller, steering
+its current turn or starting a new one. From then on the caller follows the
+chat like any other, with `read` and `send`. The caller is not told when the
+user dismisses a proposal; `status` reports `proposed`, `starting`,
+`started`, `dismissed`, `cancelled` or `failed`, and `cancel` withdraws a
+proposal that is still open.
+
+A caller that is not saved in a workspace, or whose workspace is not a git
+repository, cannot start a chat.
 
 Host message approvals survive tool cancellation, turn completion and frontend
 reconnection. They are process-lifetime state: closing the host discards

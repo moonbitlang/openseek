@@ -63,6 +63,7 @@ pub(all) enum Action {
   ModelSelected(identity~ : Identity, value~ : String, draft~ : Draft)
   ReasoningSelected(identity~ : Identity, value~ : String)
   ApprovalAnswered(identity~ : Identity, allow~ : Bool)
+  ProposalAnswered(identity~ : Identity, id~ : String, allow~ : Bool)
   CodexRequestToggled(identity~ : Identity, request_key~ : String)
   CodexRequestAnswerChanged(identity~ : Identity, request_key~ : String, question_id~ : String, answer~ : String)
   CodexQuestionChanged(identity~ : Identity, request_key~ : String, action~ : @question_card.Action)
@@ -124,6 +125,7 @@ pub(all) enum ContextComponent {
   SubrunDock(lanes~ : Array[@subrun.Lane])
   ApiSetupNotice(text~ : String)
   ApprovalRequest(ApprovalNotice)
+  SessionProposals(proposals~ : Array[SessionProposal])
   CodexRequests(requests~ : Array[CodexRequestInput])
   PendingSteerPanel(items~ : Array[PendingSteerInput])
   ShellCommandsRunning(commands~ : Array[String])
@@ -430,6 +432,16 @@ pub(all) enum RunningSubmit {
 pub fn RunningSubmit::equal(Self, Self) -> Bool
 pub fn RunningSubmit::not_equal(Self, Self) -> Bool
 pub fn RunningSubmit::to_repr(Self) -> @debug.Repr
+
+#derive(Eq)
+pub(all) struct SessionProposal {
+  id : String
+  title : String
+  brief : String
+  starting : Bool
+}
+pub fn SessionProposal::equal(Self, Self) -> Bool
+pub fn SessionProposal::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct ShellCommand {

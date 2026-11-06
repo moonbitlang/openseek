@@ -451,6 +451,70 @@ fn ContextComponent::render(
       )
     ApprovalRequest(approval) =>
       Some(approval.render(locale~, identity, action_emit))
+    SessionProposals(proposals~) => {
+      // One collapsed row per proposal: the title at rest, the brief on
+      // opening. The agent has gone on, so nothing here is a turn's question.
+      let rows : Map[String, @html.Html] = Map([])
+      for proposal in proposals {
+        let actions : Array[@html.Html] = if proposal.starting {
+          [
+            @html.span(
+              class="composer-approval-state",
+              attrs=@html.Attrs::build().role("status"),
+              ui(locale, StartingProposal),
+            ),
+          ]
+        } else {
+          [
+            @html.button(
+              class="composer-approval-action composer-approval-deny",
+              type_="button",
+              on_click=action_emit(
+                ProposalAnswered(identity~, id=proposal.id, allow=false),
+              ),
+              ui(locale, DismissProposal),
+            ),
+            @html.button(
+              class="composer-approval-action composer-approval-allow",
+              type_="button",
+              on_click=action_emit(
+                ProposalAnswered(identity~, id=proposal.id, allow=true),
+              ),
+              ui(locale, StartProposal),
+            ),
+          ]
+        }
+        rows[proposal.id] = @html.details(
+          class="composer-context-row composer-approval composer-context-disclosure",
+          [
+            @html.summary(class="composer-context-summary", [
+              @html.div(
+                class="composer-approval-question",
+                [
+                  @html.span(
+                    class="composer-notice-icon",
+                    @icons.icon(@icons.icon_worktree),
+                  ),
+                  @html.span(class="composer-notice-text", proposal.title),
+                  ..actions,
+                ],
+              ),
+            ]),
+            @html.div(class="composer-context-detail", [
+              @html.div(
+                class="composer-approval-body composer-approval-message",
+                proposal.brief,
+              ),
+            ]),
+          ],
+        )
+      }
+      if rows.is_empty() {
+        None
+      } else {
+        Some(@html.div(class="session-proposals", rows))
+      }
+    }
     CodexRequests(requests~) => {
       // A resolved sibling must not replace a surviving request's focused
       // control. The response token identifies one request lifetime, even
