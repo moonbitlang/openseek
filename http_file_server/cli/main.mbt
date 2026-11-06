@@ -6,7 +6,12 @@ let command : @argparse.Command = Command(
     PositionArg("directory", default_values=["."], about="Directory to serve."),
   ],
   options=[
-    OptionArg("port", long="port", default_values=["0"], about="TCP port; 0 asks the OS for a free port."),
+    OptionArg(
+      "port",
+      long="port",
+      default_values=["0"],
+      about="TCP port; 0 asks the OS for a free port.",
+    ),
   ],
 )
 
@@ -27,14 +32,18 @@ async fn run() -> Unit {
   server.run_forever((request, _, conn) => {
     defer conn.close()
     guard request.headers.get("host") == Some(authority) else {
-      conn.send_response(403, "Forbidden", extra_headers={ "Content-Length": "0" })
+      conn.send_response(403, "Forbidden", extra_headers={
+        "Content-Length": "0",
+      })
       conn.end_response()
       return
     }
     directory.serve(request, conn, index=true) catch {
       error => {
         @stdio.stderr.write("http-file-server: \{error}\n")
-        conn.send_response(500, "Internal Server Error", extra_headers={ "Content-Length": "0" })
+        conn.send_response(500, "Internal Server Error", extra_headers={
+          "Content-Length": "0",
+        })
         conn.end_response()
       }
     }
