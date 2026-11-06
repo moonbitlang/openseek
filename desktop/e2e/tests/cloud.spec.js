@@ -315,7 +315,7 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   const finalRead = await followUp;
   const recovered = await finalRead.response();
   expect(recovered.status()).toBe(200);
-  await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
+  await expect(page.locator('#transcript .msg.assistant .message-copy')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(result).toHaveCount(1);
   expect(cloud.device.pageErrors).toEqual([]);
@@ -378,7 +378,7 @@ test('browser returns from Cloud to Work project new chat', async ({ page }) => 
   await cloud.open();
   await page.locator('#task').fill('Retain Cloud draft');
   await page.locator('#sidebar-work-mode').click();
-  await cloud.device.projectControl('/workspace', 'toggle').hover();
+  await cloud.device.projectControl('/workspace', 'disclosure').hover();
   await page.locator('[id$=":new-conversation"]').click();
   await expect(page.locator('main h1')).toHaveText('New chat');
   await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeEnabled();
@@ -398,7 +398,7 @@ for (const destination of ['settings', 'not-a-page']) {
     let complete;
     cloud.pauseCreate = new Promise(resolve => { complete = resolve; });
     try {
-      await page.locator('aside button[aria-label="New chat"]').click();
+      await page.locator('[id^="section:cloud.chats:"][id$=":action"]').click();
       await page.locator('#task').fill('First Cloud message');
       await page.locator('#task').press('Enter');
       await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);

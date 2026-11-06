@@ -65,7 +65,7 @@ test('first Cloud creation locks duplicate submissions and sends the captured me
   await page.locator('#task').press('Enter');
   await expect.poll(() => creations(cloud).length).toBe(1);
   await expect(page.locator('#task')).toBeDisabled();
-  await expect(page.locator('aside button[aria-label="New chat"]')).toBeDisabled();
+  await expect(page.locator('[id^="section:cloud.chats:"][id$=":action"]')).toBeDisabled();
   expect(cloud.postCount).toBe(0);
   finish();
   await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
@@ -129,7 +129,7 @@ test('Cloud blank stays selected across sidebar browsing, shortcuts and Settings
   const shortcut = await page.evaluate(() => navigator.platform.includes('Mac') ? 'Meta+N' : 'Control+N');
   await cloud.install(); await cloud.goto();
   await page.locator('#sidebar-work-mode').click();
-  await cloud.device.projectControl('/workspace', 'toggle').hover();
+  await cloud.device.projectControl('/workspace', 'disclosure').hover();
   await page.locator('[id$=":new-conversation"]').click();
   await expect(page.locator('main > .topbar .topbar-workspace-label')).toHaveText('workspace');
   await page.locator('#sidebar-chat-mode').click(); await cloud.open();
@@ -156,7 +156,7 @@ test('Cloud blank stays selected across sidebar browsing, shortcuts and Settings
   await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
   expect(creations(cloud)).toHaveLength(0);
   await page.locator('#sidebar-work-mode').click();
-  await cloud.device.projectControl('/workspace', 'toggle').hover();
+  await cloud.device.projectControl('/workspace', 'disclosure').hover();
   await page.locator('[id$=":new-conversation"]').click();
   await expect(model).toBeEnabled();
   await expect(page.locator('#task')).toHaveValue('');

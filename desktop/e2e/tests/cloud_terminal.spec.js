@@ -346,7 +346,7 @@ test('a delayed Host worktree command stays on its owning Host after switching t
   await terminal.install();
   await cloud.goto();
   await page.locator('#sidebar-work-mode').click();
-  await cloud.device.projectControl('/workspace', 'toggle').hover();
+  await cloud.device.projectControl('/workspace', 'disclosure').hover();
   await page.locator('[id$=":new-conversation"]').click();
   await page.locator('button.composer-worktree').click();
   await expect(page.locator('button.composer-worktree')).toHaveText('Worktree');

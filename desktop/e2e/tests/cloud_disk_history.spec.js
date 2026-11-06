@@ -56,10 +56,10 @@ test('desktop reopens cached Cloud turns offline and revalidates them after rest
   expect(unchanged.status()).toBe(304);
   expect(files.get(sessionA).etag).toBe(etag);
 
-  await expect(page.locator('#conversation-load-retry')).toBeVisible();
+  await expect(page.locator('[id="placeholder:cloud-list-status:action"]')).toBeVisible();
   cloud.listStatus = 200;
   await page.unroute(offlineHistory, offlineRead);
-  await page.locator('#conversation-load-retry').click();
+  await page.locator('[id="placeholder:cloud-list-status:action"]').click();
   await expect(cloud.row(sessionA)).toHaveText('Cloud fixture A');
   await cloud.open(sessionA);
   await expect(transcript.getByText('Saved reply A')).toBeVisible();

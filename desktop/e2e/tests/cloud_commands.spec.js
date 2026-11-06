@@ -218,7 +218,7 @@ test('Cloud idle compaction settles without an assistant or a task and reports f
   await app.emitSessionEvent(sessionA, 'compaction_started', { from_sequence: 1, to_sequence: 2 }, { task: null });
   await app.emitSessionEvent(sessionA, 'compaction_failed', { error: 'Fixture compaction failed' }, { task: null });
   await expect(page.locator('.composer-notice-text')).toHaveCount(0);
-  await expect(page.locator('.transcript-error-message')).toHaveText('Fixture compaction failed');
+  await expect(page.locator('.notification')).toHaveText('Fixture compaction failed');
   expect(app.postCount).toBe(0);
 });
 

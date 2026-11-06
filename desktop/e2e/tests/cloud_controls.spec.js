@@ -59,7 +59,7 @@ test('Cloud native command errors use Local error reporting without failing a ta
   await expect(page.locator('.pending-steer-row')).toContainText('A pending steer');
   await page.locator('#task').fill('Keep editing this draft');
   await app.emitSessionEvent(sessionA, 'command_error', { error: 'Command was not understood' });
-  await expect(page.locator('.transcript-error-message')).toHaveText('Command was not understood');
+  await expect(page.locator('.notification')).toHaveText('Command was not understood');
   await expect(page.locator('#stop')).toBeEnabled();
   await expect(page.locator('.pending-steer-row')).toContainText('A pending steer');
   await expect(page.locator('#task')).toHaveValue('Keep editing this draft');
