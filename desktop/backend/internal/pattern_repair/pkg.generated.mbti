@@ -2,12 +2,13 @@
 package "openseek_desktop/backend/internal/pattern_repair"
 
 import {
+  "openseek_desktop/backend/engine",
   "openseek_desktop/backend/internal/search",
   "openseek_desktop/protocol",
 }
 
 // Values
-pub async fn repair(String, @search.SemanticProvider, Map[String, String], @protocol.PatternRepairPayload) -> @protocol.PatternRepairReply
+pub async fn repair(String, @search.SemanticProvider, @engine.PatternRepairEnvironment, @protocol.PatternRepairPayload) -> @protocol.PatternRepairReply
 
 // Errors
 

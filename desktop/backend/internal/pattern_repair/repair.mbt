@@ -346,14 +346,20 @@ fn pattern_repair_failure(
 
 ///|
 /// Run a one-shot Pattern Repair Agent and validate its candidate before
-/// returning it. The caller supplies the engine's credential environment;
+/// returning it. The caller supplies the engine's configuration result;
 /// provider preparation and the child's lifetime belong to this operation.
 pub async fn repair(
   engine : String,
   provider : @search.SemanticProvider,
-  agent_env : Map[String, String],
+  environment : @engine.PatternRepairEnvironment,
   payload : @protocol.PatternRepairPayload,
 ) -> @protocol.PatternRepairReply {
+  let agent_env = match environment {
+    Ready(env) => env
+    Configuration(message)
+    | (Unavailable with message = "Pattern Repair settings are unavailable.") =>
+      return pattern_repair_failure(payload, Unavailable, None, message, [])
+  }
   guard engine != "" else {
     return pattern_repair_failure(
       payload,
