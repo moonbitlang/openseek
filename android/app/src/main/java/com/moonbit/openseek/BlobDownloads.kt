@@ -90,8 +90,8 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
         val origins = setOf(ConsoleOrigin.ORIGIN)
         WebViewCompat.addDocumentStartJavaScript(webView, SCRIPT, origins)
-        WebViewCompat.addWebMessageListener(webView, CHANNEL, origins) { _, message, _, isMainFrame, _ ->
-            if (isMainFrame) message.data?.let(::received)
+        WebViewCompat.addWebMessageListener(webView, CHANNEL, origins) { _, message, _, isMainFrame, reply ->
+            if (isMainFrame) message.data?.let { received(it) { id -> reply.postMessage(id) } }
         }
         webView.setDownloadListener { url, _, _, _, _ ->
             if (url.startsWith("blob:") && ConsoleOrigin.contains(webView.url)) {
@@ -114,9 +114,11 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
     /**
      * The page sends a download as base64 chunks, then an end message with its
      * name and type, so no whole-file copy is held in memory: Cloud files are
-     * downloaded without a size limit.
+     * downloaded without a size limit. The page sends the next chunk only once
+     * the previous one is written and acknowledged, so a slow disk or a save
+     * still copying cannot let chunks pile up here.
      */
-    private fun received(raw: String) {
+    private fun received(raw: String, acknowledge: (String) -> Unit) {
         val message = JSONObject(raw)
         val id = message.getString("id")
         when {
@@ -124,11 +126,13 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
                 val download = receiving.getOrPut(id) { Receiving(File(directory, UUID.randomUUID().toString())) }
                 val data = message.getString("data")
                 staging.execute {
-                    if (download.failed) return@execute
-                    download.failed = runCatching {
-                        directory.mkdirs()
-                        download.file.appendBytes(Base64.getDecoder().decode(data))
-                    }.isFailure
+                    if (!download.failed) {
+                        download.failed = runCatching {
+                            directory.mkdirs()
+                            download.file.appendBytes(Base64.getDecoder().decode(data))
+                        }.isFailure
+                    }
+                    activity.runOnUiThread { if (!activity.isDestroyed) acknowledge(id) }
                 }
             }
             message.optBoolean("end") -> {
@@ -224,6 +228,8 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
                 if (anchor) remember(anchor);
               }, true);
               const CHUNK = 768 * 1024;
+              // The shell acknowledges each chunk by its download's id.
+              const acks = new Map();
               const encode = blob => new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
@@ -236,10 +242,16 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
                   reads.delete(url);
                   const id = crypto.randomUUID();
                   const post = message => $CHANNEL.postMessage(JSON.stringify({ id, ...message }));
+                  $CHANNEL.onmessage = event => {
+                    acks.get(event.data)?.();
+                    acks.delete(event.data);
+                  };
                   read.blob
                     .then(async blob => {
                       for (let start = 0; start < blob.size; start += CHUNK) {
+                        const written = new Promise(resolve => acks.set(id, resolve));
                         post({ data: await encode(blob.slice(start, start + CHUNK)) });
+                        await written;
                       }
                       post({ end: true, url, name: read.name, type: blob.type });
                     })
