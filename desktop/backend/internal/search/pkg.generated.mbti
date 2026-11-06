@@ -37,7 +37,6 @@ pub suberror SearchError {
   CacheRootMismatch
   IndexingFailed(String)
   RankingFailed(String)
-  Internal(String)
 }
 pub fn SearchError::to_repr(Self) -> @debug.Repr
 

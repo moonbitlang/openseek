@@ -173,16 +173,14 @@ priv enum FileRankOutcome {
 ///|
 priv struct FileSearchCache {
   root_key : String
-  snapshot : FileIndexSnapshot?
   scan_generation : Int32
+  state : FileSearchCacheState
 }
 
 ///|
-priv struct RunningFileScan {
-  root_key : String
-  generation : Int32
-  waiters : Array[PendingFileSearch]
-  task : @async.Task[Unit]
+priv enum FileSearchCacheState {
+  Scanning(waiters~ : Array[PendingFileSearch], task~ : @async.Task[Unit])
+  Indexed(FileIndexSnapshot)
 }
 
 ///|
@@ -214,7 +212,6 @@ priv enum FileSearchRequest {
   Clear(cache_key~ : String, reply~ : @async.Queue[Unit])
   ScanFinished(
     cache_key~ : String,
-    root_key~ : String,
     generation~ : Int32,
     outcome~ : FileScanOutcome
   )
@@ -368,7 +365,6 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
     // a client cannot multiply directory IO by opening overlapping sessions.
     let scan_permit : @semaphore.Semaphore = Semaphore(1, initial_value=1)
     let caches : Map[String, FileSearchCache] = Map([])
-    let running_scans : Map[String, RunningFileScan] = Map([])
     let running_ranks : Map[Int32, RunningFileRank] = Map([])
     // The bridge exposes cancellation as a second RPC. Remember its exact
     // monotonic request frontier so cancel-before-search reordering remains
@@ -379,15 +375,10 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
 
     async fn launch_rank(
       cache_key : String,
+      scan_generation : Int32,
+      snapshot : FileIndexSnapshot,
       waiter : PendingFileSearch,
     ) -> Unit {
-      guard caches.get(cache_key) is Some(cache) &&
-        cache.snapshot is Some(snapshot) else {
-        waiter.reply.put(
-          SearchFailed(Internal("file search cache is not ready")),
-        )
-        return
-      }
       let prepared = @file_search_score.PathQuery(waiter.query)
       if prepared.is_empty() {
         let computed : FileSearchComputation = {
@@ -403,7 +394,7 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
       let mut joined : Int32? = None
       for generation, running in running_ranks {
         if running.cache_key == cache_key &&
-          running.scan_generation == cache.scan_generation &&
+          running.scan_generation == scan_generation &&
           running.query_key == prepared.key() &&
           running.max_results == waiter.max_results {
           joined = Some(generation)
@@ -419,7 +410,6 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
       }
       next_rank_generation += 1
       let generation = next_rank_generation
-      let scan_generation = cache.scan_generation
       let task = group.spawn(no_wait=true, allow_failure=true, () => {
         let outcome = RankSucceeded(
           compute_file_search(snapshot, waiter.query, waiter.max_results),
@@ -473,26 +463,21 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
             Some(cache) =>
               if cache.root_key != root_key {
                 reply.put(SearchFailed(CacheRootMismatch))
-              } else if cache.snapshot is Some(_) {
-                launch_rank(cache_key, waiter)
-              } else if running_scans.get(cache_key) is Some(running) {
-                let waiters = running.waiters.copy()
-                waiters.push(waiter)
-                running_scans[cache_key] = { ..running, waiters, }
               } else {
-                caches.remove(cache_key)
-                reply.put(
-                  SearchFailed(Internal("file search cache lost its scan")),
-                )
+                match cache.state {
+                  Indexed(snapshot) =>
+                    launch_rank(
+                      cache_key,
+                      cache.scan_generation,
+                      snapshot,
+                      waiter,
+                    )
+                  Scanning(waiters~, ..) => waiters.push(waiter)
+                }
               }
             None => {
               next_scan_generation += 1
               let generation = next_scan_generation
-              caches[cache_key] = {
-                root_key,
-                snapshot: None,
-                scan_generation: generation,
-              }
               let task = group.spawn(no_wait=true, allow_failure=true, () => {
                 let outcome = try {
                   scan_permit.acquire()
@@ -503,14 +488,13 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
                   error => ScanFailed(IndexingFailed("\{error}"))
                 }
                 self.requests.put(
-                  ScanFinished(cache_key~, root_key~, generation~, outcome~),
+                  ScanFinished(cache_key~, generation~, outcome~),
                 )
               })
-              running_scans[cache_key] = {
+              caches[cache_key] = {
                 root_key,
-                generation,
-                waiters: [waiter],
-                task,
+                scan_generation: generation,
+                state: Scanning(waiters=[waiter], task~),
               }
             }
           }
@@ -520,9 +504,10 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
             .get(cache_key)
             .unwrap_or(-1)
             .max(request_generation)
-          if running_scans.get(cache_key) is Some(running) {
+          if caches.get(cache_key) is Some(cache) &&
+            cache.state is Scanning(waiters~, task~) {
             let kept : Array[PendingFileSearch] = []
-            for waiter in running.waiters {
+            for waiter in waiters {
               if waiter.request_generation == request_generation {
                 waiter.reply.put(SearchCancelled)
               } else {
@@ -531,7 +516,10 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
             }
             // A cache-populating scan deliberately survives cancellation of
             // one query, matching VS Code's preventCancellation cache row.
-            running_scans[cache_key] = { ..running, waiters: kept, }
+            caches[cache_key] = {
+              ..cache,
+              state: Scanning(waiters=kept, task~),
+            }
           }
           let affected : Array[Int32] = []
           for generation, running in running_ranks {
@@ -560,15 +548,15 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
           reply.put(())
         }
         Clear(cache_key~, reply~) => {
-          caches.remove(cache_key)
-          cancelled_through.remove(cache_key)
-          if running_scans.get(cache_key) is Some(running) {
-            running.task.cancel()
-            for waiter in running.waiters {
+          if caches.get(cache_key) is Some(cache) &&
+            cache.state is Scanning(waiters~, task~) {
+            task.cancel()
+            for waiter in waiters {
               waiter.reply.put(SearchCancelled)
             }
-            running_scans.remove(cache_key)
           }
+          caches.remove(cache_key)
+          cancelled_through.remove(cache_key)
           let affected : Array[Int32] = []
           for generation, running in running_ranks {
             if running.cache_key == cache_key {
@@ -586,27 +574,17 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
           }
           reply.put(())
         }
-        ScanFinished(cache_key~, root_key~, generation~, outcome~) => {
-          guard running_scans.get(cache_key) is Some(running) &&
-            running.root_key == root_key &&
-            running.generation == generation else {
-            continue
-          }
-          running_scans.remove(cache_key)
-          let waiters = running.waiters
+        ScanFinished(cache_key~, generation~, outcome~) => {
           guard caches.get(cache_key) is Some(cache) &&
-            cache.root_key == root_key &&
-            cache.scan_generation == generation else {
-            for waiter in waiters {
-              waiter.reply.put(SearchCancelled)
-            }
+            cache.scan_generation == generation &&
+            cache.state is Scanning(waiters~, ..) else {
             continue
           }
           match outcome {
             ScanSucceeded(snapshot) => {
-              caches[cache_key] = { ..cache, snapshot: Some(snapshot), }
+              caches[cache_key] = { ..cache, state: Indexed(snapshot), }
               for waiter in waiters {
-                launch_rank(cache_key, waiter)
+                launch_rank(cache_key, generation, snapshot, waiter)
               }
             }
             ScanFailed(error) => {
@@ -623,8 +601,7 @@ pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
           guard running.cache_key == cache_key &&
             running.scan_generation == scan_generation &&
             caches.get(cache_key) is Some(cache) &&
-            cache.scan_generation == scan_generation &&
-            cache.snapshot is Some(_) else {
+            cache.scan_generation == scan_generation else {
             for waiter in running.waiters {
               waiter.reply.put(SearchCancelled)
             }
