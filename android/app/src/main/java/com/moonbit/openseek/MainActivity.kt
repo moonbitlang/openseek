@@ -173,7 +173,17 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(ConsoleOrigin.ENTRY_URL)
         }
-        if (savedInstanceState == null) updater.start() else updater.restoreState(savedInstanceState)
+        updater.restoreState(savedInstanceState)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        updater.onStart()
+    }
+
+    override fun onStop() {
+        updater.onStop()
+        super.onStop()
     }
 
     override fun onResume() {
