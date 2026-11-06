@@ -253,12 +253,7 @@ fn CodexWorkspaceBinding::decode_reply(value : Json) -> CodexWorkspaceBinding? {
 async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit {
   match self.workspace {
     Some(workspace) => {
-      let path = @pathx.Absolute::parse_resource_path(workspace) catch {
-        InvalidResourcePath =>
-          raise @host.HostError(
-            "invalid Codex workspace resource path: " + workspace,
-          )
-      }
+      let path = @pathx.Absolute::parse_resource_path(workspace)
       @work_dir.authorize_host_workspace(self.session, path.to_string())
     }
     _ => @work_dir.revoke_host_workspace(self.session)
@@ -1026,18 +1021,14 @@ async fn ApiState::open_codex_draft(
   payload : @protocol.CodexDraftOpenPayload,
 ) -> @protocol.CodexDraftOpenReply {
   let draft_id = payload.draft_id.trim().to_owned()
-  let registered = if (Some(
-      @pathx.Absolute::parse_resource_path(payload.cwd.trim().to_owned()),
-    ) catch {
-      InvalidResourcePath => None
-    })
-    is Some(requested) {
-    // Resource URIs lowercase Windows drive letters; the registry owns the
-    // canonical filesystem spelling, including drive case and symlinks.
-    @workspaces.registered_dir(requested).map(root => root.to_string())
-  } else {
-    None
-  }
+  let requested = @pathx.Absolute::parse_resource_path(
+    payload.cwd.trim().to_owned(),
+  )
+  // Resource URIs lowercase Windows drive letters; the registry owns the
+  // canonical filesystem spelling, including drive case and symlinks.
+  let registered = @workspaces.registered_dir(requested).map(root => {
+    root.to_string()
+  })
   let project_root = match self.codex_projects.main_project(payload.cwd) {
     Some(project) => Some(project)
     None => registered

@@ -16,10 +16,7 @@ async fn checkout_pull_request(
   guard payload.number > 0 && payload.repository_url.has_prefix("https://") else {
     raise InvalidRequest("Select a pull request from a GitHub repository.")
   }
-  let dir = @pathx.Absolute::parse_resource_path(payload.cwd) catch {
-    InvalidResourcePath =>
-      raise InvalidRequest("Select a workspace with an absolute checkout path.")
-  }
+  let dir = @pathx.Absolute::parse_resource_path(payload.cwd)
   guard resolve_gh() is Some(gh) else {
     raise Unavailable(
       "Install GitHub CLI (gh) and run gh auth login to check out pull requests.",
@@ -167,10 +164,7 @@ fn github_checkout_failure(details : String) -> @protocol.GithubCheckoutReply {
 pub async fn checkout_status(
   payload : @protocol.GithubWorkspacePayload,
 ) -> @protocol.GithubCheckoutStatus {
-  let dir = @pathx.Absolute::parse_resource_path(payload.cwd) catch {
-    InvalidResourcePath =>
-      raise InvalidRequest("Select a workspace with an absolute checkout path.")
-  }
+  let dir = @pathx.Absolute::parse_resource_path(payload.cwd)
   let result = @async.with_timeout_opt(GithubRequestTimeoutMs, () => {
     github_checkout_status(dir, args => {
       guard resolve_gh() is Some(gh) else {

@@ -694,11 +694,8 @@ pub async fn rename_session(
     raise EngineError("session id must not be empty")
   }
   guard !title.is_empty() else { raise EngineError("title must not be empty") }
-  guard (Some(@pathx.Absolute::parse_resource_path(payload.workspace)) catch {
-      InvalidResourcePath => None
-    })
-    is Some(requested) &&
-    @workspaces.registered_dir(requested) is Some(workspace) else {
+  let requested = @pathx.Absolute::parse_resource_path(payload.workspace)
+  guard @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }
   manager.workspace_lifecycle_lock.acquire()
@@ -733,11 +730,8 @@ pub async fn load_session(
   // detached workspace is rejected instead of silently probing another
   // store, which could return a different history for the same session id.
   let root = if payload.workspace is Some(hint) && !hint.is_blank() {
-    guard (Some(@pathx.Absolute::parse_resource_path(hint)) catch {
-        InvalidResourcePath => None
-      })
-      is Some(absolute) &&
-      @workspaces.registered_dir(absolute) is Some(workspace) else {
+    let absolute = @pathx.Absolute::parse_resource_path(hint)
+    guard @workspaces.registered_dir(absolute) is Some(workspace) else {
       raise EngineError("\{hint} is not a registered workspace")
     }
     Some(@workspaces.store_root(workspace))
@@ -817,11 +811,8 @@ pub async fn load_archived_session(
   // one, find the archived record across all attached stores and the global
   // store, matching the placement rules of the archived index.
   let root = if payload.workspace is Some(hint) && !hint.is_blank() {
-    guard (Some(@pathx.Absolute::parse_resource_path(hint)) catch {
-        InvalidResourcePath => None
-      })
-      is Some(absolute) &&
-      @workspaces.registered_dir(absolute) is Some(workspace) else {
+    let absolute = @pathx.Absolute::parse_resource_path(hint)
+    guard @workspaces.registered_dir(absolute) is Some(workspace) else {
       raise EngineError("\{hint} is not a registered workspace")
     }
     Some(@session_store.archived_root(@workspaces.store_root(workspace)))
@@ -898,10 +889,7 @@ pub async fn attach_workspace(
   path : String,
   on_committed : (Array[String]) -> Unit,
 ) -> @protocol.WorkspacesReply {
-  let absolute = @pathx.Absolute::parse_resource_path(path) catch {
-    InvalidResourcePath =>
-      raise EngineError("workspace is not a supported absolute resource path")
-  }
+  let absolute = @pathx.Absolute::parse_resource_path(path)
   let paths = @workspaces.add(absolute.0, paths => {
     on_committed(paths.map(path => path.resource_path()))
   })
@@ -914,10 +902,7 @@ pub async fn detach_workspace(
   path : String,
   on_committed : (Array[String]) -> Unit,
 ) -> @protocol.WorkspacesReply {
-  let absolute = @pathx.Absolute::parse_resource_path(path) catch {
-    InvalidResourcePath =>
-      raise EngineError("workspace is not a supported absolute resource path")
-  }
+  let absolute = @pathx.Absolute::parse_resource_path(path)
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
   let workspace = @workspaces.expanded_path(absolute.0)

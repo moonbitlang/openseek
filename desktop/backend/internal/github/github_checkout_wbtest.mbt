@@ -121,7 +121,7 @@ async test "checkout failures travel as data instead of redacted Proton errors" 
   })
   assert_true(
     reply is CheckoutFailure(message, _) &&
-    message.contains("absolute checkout path"),
+    message.contains("path is not absolute"),
   )
 }
 

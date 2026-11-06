@@ -1017,11 +1017,8 @@ async fn require_main_worktree(dir : @pathx.Absolute) -> Unit {
 /// directory was deleted outside the app reports `present: false` here and
 /// is cleaned up by `remove_worktree`, never by listing.
 pub async fn list(workspace : String) -> @protocol.WorktreesReply {
-  guard (Some(@pathx.Absolute::parse_resource_path(workspace)) catch {
-      InvalidResourcePath => None
-    })
-    is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   worktree_registry_lock.acquire()
@@ -1138,11 +1135,8 @@ pub async fn create(
   // Registration is checked under the lifecycle lock, which detachment also
   // holds: a workspace can no longer slip out of the registry between this
   // check and the registry commit below.
-  guard (Some(@pathx.Absolute::parse_resource_path(workspace)) catch {
-      InvalidResourcePath => None
-    })
-    is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   require_main_worktree(dir)
@@ -1441,11 +1435,8 @@ pub async fn remove(
   // a checkout from an already-detached workspace.
   host.lifecycle_lock.acquire()
   defer host.lifecycle_lock.release()
-  guard (Some(@pathx.Absolute::parse_resource_path(workspace)) catch {
-      InvalidResourcePath => None
-    })
-    is Some(absolute) &&
-    @workspaces.registered_dir(absolute) is Some(dir) else {
+  let absolute = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(absolute) is Some(dir) else {
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   let entry = {

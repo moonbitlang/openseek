@@ -101,10 +101,7 @@ async fn create_directory_listing(
   guard name != "." && name != ".." && !name.contains_any(chars="/\\") else {
     raise InvalidRequest("folder name must be a single name")
   }
-  let parent = @pathx.Absolute::parse_resource_path(payload.parent) catch {
-    InvalidResourcePath =>
-      raise InvalidRequest("invalid parent directory: \{payload.parent}")
-  }
+  let parent = @pathx.Absolute::parse_resource_path(payload.parent)
   let kind = @fs.kind(parent.to_string()) catch {
     _ => raise InvalidRequest("no such directory: \{parent}")
   }

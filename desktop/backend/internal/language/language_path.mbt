@@ -36,9 +36,7 @@ async fn LanguageRoot::authorize(
   session : String,
   root : String,
 ) -> LanguageRoot {
-  let lexical = @pathx.Absolute::parse_resource_path(root) catch {
-    InvalidResourcePath => raise InvalidRequest("root must be absolute")
-  }
+  let lexical = @pathx.Absolute::parse_resource_path(root)
   let authorized = match
     @work_dir.resolve_in_workspace(session, "", workspace=root) {
     Some(root) => Some(root)

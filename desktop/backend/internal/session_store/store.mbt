@@ -129,11 +129,8 @@ pub struct ArchivedStore {
 
 ///|
 pub async fn ArchivedStore::for_workspace(workspace : String) -> ArchivedStore {
-  guard (Some(@pathx.Absolute::parse_resource_path(workspace)) catch {
-      InvalidResourcePath => None
-    })
-    is Some(path) &&
-    @workspaces.registered_dir(path) is Some(registered) else {
+  let path = @pathx.Absolute::parse_resource_path(workspace)
+  guard @workspaces.registered_dir(path) is Some(registered) else {
     raise StoreError("\{workspace} is not a registered workspace")
   }
   {

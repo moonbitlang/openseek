@@ -20,11 +20,8 @@ async fn SessionExport::SessionExport(
   guard @session_store.safe_session_id(session) else {
     raise EngineError("session id is not safe for export")
   }
-  guard (Some(@pathx.Absolute::parse_resource_path(payload.workspace)) catch {
-      InvalidResourcePath => None
-    })
-    is Some(requested) &&
-    @workspaces.registered_dir(requested) is Some(workspace) else {
+  let requested = @pathx.Absolute::parse_resource_path(payload.workspace)
+  guard @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("\{payload.workspace} is not a registered workspace")
   }
   let live = @workspaces.store_root(workspace)
