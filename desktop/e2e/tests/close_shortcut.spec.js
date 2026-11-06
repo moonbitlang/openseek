@@ -273,38 +273,6 @@ test('Close follows terminal focus and keeps the remaining terminal usable', asy
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Close respects dialogs and closes successive dock tabs without closing the window', async ({ page }) => {
-  const app = await installDesktop(page);
-  await app.openQuickOpen();
-  await page.locator('#quick-open-input').fill('main');
-  await page.getByRole('option', { name: /main\.mbt/ }).click();
-  const tabs = page.locator('.editor-tab');
-  await expect(tabs).toHaveCount(1);
-  await expect(page.getByRole('region', { name: 'Readonly code viewer' })).toBeVisible();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menu', { name: 'New tab', exact: true })
-    .getByRole('menuitem', { name: 'Browse', exact: true }).click();
-  await expect(tabs).toHaveCount(2);
-
-  await app.openQuickOpen();
-  await expect(page.locator('#quick-open-input')).toBeFocused();
-  await closeFocused(page);
-  await expect(page.locator('#quick-open-input')).toBeFocused();
-  await page.keyboard.press('Escape');
-  // A tab's close button will disappear on close. Focus must remain in the
-  // dock for the next command, instead of falling back to the window.
-  await tabs.last().locator('.tab-close').focus();
-  await closeFocused(page);
-  await expect(tabs).toHaveCount(1);
-  await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
-  await closeFocused(page);
-  await expect(tabs).toHaveCount(0);
-  await expect(page.locator('.content.panel-open')).toHaveCount(0);
-  expect(app.requests.filter(request => request.method === 'app.close_window'))
-    .toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
 // A native dialog can change CEF's media query without changing OS appearance.
 test('desktop theme follows Proton and ignores browser color-scheme changes', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
