@@ -37,7 +37,7 @@ test('schedule form, running controls, and completed session navigation', async 
   await app.install();
   await app.goto();
   await page.locator('#sidebar-schedules').click();
-  await expect(page.locator('#management-dialog').getByRole('heading').first()).toBeVisible();
+  await expect(page.locator('#management-dialog-title')).toBeVisible();
   await page.getByTestId('schedule-new').click();
   await page.locator('#schedule-name').fill('Inspect project');
   await page.locator('#schedule-workspace').selectOption('/workspace');
@@ -46,7 +46,7 @@ test('schedule form, running controls, and completed session navigation', async 
   await page.locator('#schedule-minutes').fill('10');
   await page.getByTestId('schedule-save').click();
   await expect(page.locator('.schedule-form')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Inspect project', exact: true })).toBeVisible();
+  await expect(page.locator('[data-schedule-id="plan-1"] h2')).toHaveText('Inspect project');
   expect(app.requests.find(r => r.method === 'schedules.save').params.spec.timing.kind).toBe('once');
   await page.getByTestId('schedule-toggle').click();
   await expect(page.getByTestId('schedule-toggle')).toHaveAttribute('aria-pressed', 'false');
@@ -141,10 +141,10 @@ for (const broadcastDirectory of [true, false]) {
     await expect(page.getByTestId('schedule-open-session')).toBeVisible();
     await page.getByTestId('schedule-open-session').click();
     await expect.poll(() => app.requests.some(r => r.method === 'worktree.list' && r.params.workspace === workspace)).toBe(true);
-    await expect(page.getByText('Waiting for workspace placement…', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.composer-notice-text')).toHaveCount(0);
     await expect(page.locator('#transcript')).toBeVisible();
     await expect(page.locator('#transcript')).toContainText('Browser result');
-    await expect(page.getByText('Scheduled task · Read only while running', { exact: true })).toBeVisible();
+    await expect(page.locator('.archived-read-only-text')).toBeVisible();
     await expect(page.locator('textarea#task')).toHaveCount(0);
     const submissionsBefore = app.requests.filter(r => ['agent.start', 'agent.command'].includes(r.method)).length;
     await page.locator('#transcript').click();
@@ -163,7 +163,7 @@ for (const broadcastDirectory of [true, false]) {
     app.schedules.runs[0].finished_at = Date.now();
     app.notify('session.changed', { change: 'created', session: 'session-1', workspace });
     await expect(page.locator('textarea#task')).toBeVisible();
-    await expect(page.getByText('Scheduled task · Read only while running', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.archived-read-only-text')).toHaveCount(0);
     app.schedules.runs[0].status = { kind: 'running' };
     await page.locator('#sidebar-schedules').click();
     await expect(page.locator('#schedule-running').getByTestId('schedule-open-session')).toBeVisible();

@@ -59,7 +59,7 @@ test('Cloud native command errors use Local error reporting without failing a ta
   await expect(page.locator('.pending-steer-row')).toContainText('A pending steer');
   await page.locator('#task').fill('Keep editing this draft');
   await app.emitSessionEvent(sessionA, 'command_error', { error: 'Command was not understood' });
-  await expect(page.getByText('Command was not understood', { exact: true })).toBeVisible();
+  await expect(page.locator('.transcript-error-message')).toHaveText('Command was not understood');
   await expect(page.locator('#stop')).toBeEnabled();
   await expect(page.locator('.pending-steer-row')).toContainText('A pending steer');
   await expect(page.locator('#task')).toHaveValue('Keep editing this draft');
@@ -155,7 +155,7 @@ test('Cloud uses the shared queue editor, withdrawal and conversion to Steer', a
   await followup(page, 'Withdraw this input', 'queue');
   await expect(rows).toHaveCount(2);
   await expect(page.locator('#task')).toHaveValue('');
-  await rows.filter({ hasText: 'Withdraw this input' }).getByTestId('queued-input-delete').click();
+  await page.locator(`[data-queued-input-id=${JSON.stringify(controls(app, 'queue').at(-1).id)}]`).getByTestId('queued-input-delete').click();
   await expect(rows).toHaveCount(1);
   await rows.getByTestId('queued-input-steer').click();
   await expect(rows).toHaveCount(0);
@@ -267,8 +267,10 @@ for (const stopped of [false, true]) {
   test(`Cloud paused queue can be edited and withdrawn after ${stopped ? 'Stop' : 'failure'}`, async ({ page }) => {
     const app = await running(page);
     await followup(page, 'Keep this queued input', 'queue');
+    const keepId = controls(app, 'queue').at(-1).id;
     await expect(page.locator('#task')).toHaveValue('');
     await followup(page, 'Withdraw while paused', 'queue');
+    const withdrawId = controls(app, 'queue').at(-1).id;
     await expect(page.locator('.queued-input-row')).toHaveCount(2);
     const previous = app.controlState(sessionA).task_id;
     if (stopped) {
@@ -279,16 +281,16 @@ for (const stopped of [false, true]) {
     await expect(page.locator('#stop')).toHaveCount(0);
     const rows = page.locator('.queued-input-row');
     await expect(rows.getByTestId('queued-input-steer').first()).toBeDisabled();
-    await rows.filter({ hasText: 'Keep this queued input' }).getByTestId('queued-input-edit').click();
+    await page.locator(`[data-queued-input-id=${JSON.stringify(keepId)}]`).getByTestId('queued-input-edit').click();
     await expect(page.locator('#task')).toHaveValue('Keep this queued input');
     await page.locator('#task').fill('Edited while paused');
     await expect(page.locator('#send')).toBeEnabled();
     await expect(page.locator('#stop')).toHaveCount(0);
     await page.locator('#send').click();
-    await expect(rows.filter({ hasText: 'Edited while paused' })).toHaveCount(1);
+    await expect(page.locator(`[data-queued-input-id=${JSON.stringify(keepId)}]`)).toContainText('Edited while paused');
     await expect(page.locator('#task')).toHaveValue('');
     expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: previous, action: 'edit', content: 'Edited while paused' });
-    await rows.filter({ hasText: 'Withdraw while paused' }).getByTestId('queued-input-delete').click();
+    await page.locator(`[data-queued-input-id=${JSON.stringify(withdrawId)}]`).getByTestId('queued-input-delete').click();
     await expect(rows).toHaveCount(1);
     expect(controls(app, 'queue').at(-1)).toMatchObject({ task_id: previous, action: 'withdraw' });
     expect(app.postCount).toBe(1);

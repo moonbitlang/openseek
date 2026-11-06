@@ -101,7 +101,7 @@ test('large semantic selection retries and sends its original draft while later 
 
   // Preparing disables text input, but search selection remains interactive.
   await page.locator('[data-testid=search-select-match][aria-pressed=true]').first().click();
-  await expect(chips.filter({ hasText: '100 matches' })).toHaveCount(1);
+  await expect(chips).toContainText(['100 matches']);
   expect(app.requests.filter(request => request.method === 'agent.start')).toHaveLength(0);
   materialization.resolve({ path, match_count: 101, file_count: 1 });
   await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task)

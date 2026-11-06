@@ -2,8 +2,8 @@ import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 import { CloudTerminalHarness } from './support/cloud_terminal_harness.js';
 
-const show = page => page.getByRole('button', { name: 'Show terminal (Ctrl+`)', exact: true });
-const hide = page => page.getByRole('button', { name: 'Hide terminal (Ctrl+`)', exact: true });
+const show = page => page.locator('#terminal-toggle[aria-pressed=false]');
+const hide = page => page.locator('#terminal-toggle[aria-pressed=true]');
 const screen = page => page.locator('.terminal-instance:visible .xterm-rows');
 const input = page => page.locator('.terminal-instance:visible .xterm-helper-textarea');
 const creations = cloud => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions');
@@ -43,7 +43,7 @@ test('Cloud terminal authenticates before RPC and reuses xterm input, resize and
   expect(terminal.requests('terminal.ack')[0].params).toEqual({ id: 'terminal-1', sequence: 1 });
   await page.setViewportSize({ width: 1100, height: 800 });
   await expect.poll(() => terminal.requests('terminal.resize').length).toBeGreaterThan(0);
-  await page.getByTitle('Close terminal', { exact: true }).click();
+  await page.locator('.terminal-tab-close').click();
   await expect.poll(() => terminal.requests('terminal.close').length).toBe(1);
   expect(cloud.hostRequests.filter(request => request.method.startsWith('terminal.'))).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);
@@ -106,7 +106,7 @@ test('Cloud disconnect ends terminals and discards queued input without automati
   await expect(page.locator('.terminal-status')).toHaveText('Terminal connection closed. Open a new terminal to continue.');
   await expect(page.locator('.terminal-tab')).toHaveCount(0);
   expect(terminal.connections).toHaveLength(1);
-  await page.getByTitle('New terminal in this workspace', { exact: true }).click();
+  await page.locator('#terminal-new').click();
   await expect.poll(() => terminal.connections.length).toBe(2);
   await expect.poll(() => terminal.requests('terminal.open').length).toBe(2);
   expect(terminal.requests('terminal.input').map(request => request.params.data)).toEqual(['maybe-delivered']);
@@ -127,7 +127,7 @@ test('account replacement closes this client sockets and cannot display the old 
   await account.locator('#settings-sign-in').click();
   await expect(account.locator('#settings-sign-out')).toBeVisible();
   const settings = page.locator('#management-dialog');
-  await settings.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await settings.locator('[data-slot=dialog-close]').click();
   await expect(settings).not.toBeVisible();
   await page.locator('#sidebar-chat-mode').click();
   await cloud.open();
@@ -144,7 +144,7 @@ test('failed session creation leaves the Cloud draft intact and never starts a t
   await cloud.create();
   await page.locator('#task').fill('Unsent text');
   await show(page).click();
-  await expect(page.getByText('Cloud answered HTTP 500. Try again.', { exact: true }).last()).toBeVisible();
+  await expect(page.locator('.transcript-error-message, .terminal-error').last()).toHaveText('Cloud answered HTTP 500. Try again.');
   await expect(page.locator('#task')).toHaveValue('Unsent text');
   await expect(page.locator('#task')).toBeEnabled();
   expect(terminal.connections).toHaveLength(0);
@@ -183,7 +183,7 @@ test('two clients keep independent terminals for the same Cloud workspace', asyn
   await expect(screen(page)).toContainText('CLIENT_A');
   await expect(screen(other)).toContainText('CLIENT_B');
   await expect(screen(other)).not.toContainText('CLIENT_A');
-  await page.getByTitle('Close terminal', { exact: true }).click();
+  await page.locator('.terminal-tab-close').click();
   await expect.poll(() => a.terminal.requests('terminal.close').length).toBe(1);
   expect(b.terminal.requests('terminal.close')).toHaveLength(0);
   b.terminal.output(b.terminal.connections[0], 'STILL_RUNNING\r\n', 2);
@@ -298,7 +298,7 @@ test('Cloud ! authentication failure restores the command and never submits a mo
   await expect.poll(() => terminal.connections.length).toBe(1);
   terminal.connections[0].socket.send(JSON.stringify({ type: 'error', message: 'Shell access is not enabled for this account' }));
   await expect(page.locator('#task')).toHaveValue('!ls');
-  await expect(page.getByText('Shell access is not enabled for this account', { exact: true })).toBeVisible();
+  await expect(page.locator('.notification')).toHaveText('Shell access is not enabled for this account');
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
   expect(cloud.postCount).toBe(0);
   expect(terminal.requests('terminal.open')).toHaveLength(0);
@@ -328,7 +328,7 @@ test('signing out while Cloud ! runs clears the operation without submitting it 
   await cloud.open();
   const tab = await shell(page, terminal, 'ls');
   await page.locator('#sidebar-settings').click();
-  await page.locator('#management-dialog').getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('#settings-sign-out').click();
   await expect.poll(() => tab.connection.closed).toBe(true);
   expect(cloud.postCount).toBe(0);
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
@@ -346,8 +346,8 @@ test('a delayed Host worktree command stays on its owning Host after switching t
   await terminal.install();
   await cloud.goto();
   await page.locator('#sidebar-work-mode').click();
-  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
+  await cloud.device.projectControl('/workspace', 'toggle').hover();
+  await page.locator('[id$=":new-conversation"]').click();
   await page.locator('button.composer-worktree').click();
   await expect(page.locator('button.composer-worktree')).toHaveText('Worktree');
   await page.locator('#task').pressSequentially('!pwd');
@@ -387,7 +387,7 @@ test('Cloud terminal reports a connection failure when the socket closes before 
   await terminal.connections[0].socket.close({ code: 1006 });
   await expect(page.locator('.terminal-status')).toHaveText('Unable to establish a terminal connection. Open a new terminal to retry.');
   expect(terminal.requests('terminal.open')).toHaveLength(0);
-  await page.getByTitle('New terminal in this workspace', { exact: true }).click();
+  await page.locator('#terminal-new').click();
   await expect.poll(() => terminal.connections.length).toBe(2);
   terminal.connections[1].socket.send(JSON.stringify({ type: 'authenticated' }));
   await expect.poll(() => terminal.requests('terminal.open').length).toBe(1);

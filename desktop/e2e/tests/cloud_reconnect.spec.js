@@ -182,7 +182,7 @@ for (const operation of ['archive', 'delete']) {
     await expect(page.locator('.composer-banner')).toContainText('reconnecting');
     await app.rowContainer(sessionA).hover();
     await app.rowContainer(sessionA).locator('[id$=":actions-trigger"]').click();
-    await page.locator(`[role=menuitem][data-action=${operation}]`).click();
+    await page.locator(`[role=menuitem][data-action=${operation}]:visible`).click();
     if (operation === 'delete') await page.locator('#delete-chat-confirm').click();
     await expect(page.locator('main .topbar-title')).toHaveText('New chat');
     await page.clock.runFor(5000);

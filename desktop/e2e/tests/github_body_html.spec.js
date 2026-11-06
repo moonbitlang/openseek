@@ -38,14 +38,14 @@ test('unchanged bodyHTML preserves native disclosure nodes and changed HTML repl
     handles.push(await outer.elementHandle());
   }
   await page.locator('#task').fill('Unrelated render');
-  await page.getByRole('button', { name: 'Refresh pull request', exact: true }).click();
+  await page.locator('#github-detail-refresh').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'github.pull_request').length).toBe(2);
   for (const handle of handles) await expect.poll(() => handle.evaluate(el => el.isConnected && el.open)).toBe(true);
   await page.clock.fastForward(90_000);
   for (const root of bodies) await expect.poll(() => root.locator('relative-time').evaluate(el => el.shadowRoot?.textContent)).toContain('2 minutes ago');
   app.githubBodyHTML = app.githubBodyHTML.replaceAll('2026-09-20T08:00:00Z', '2026-09-20T07:00:00Z');
   app.githubCommentsHTML = [app.githubBodyHTML];
-  await page.getByRole('button', { name: 'Refresh pull request', exact: true }).click();
+  await page.locator('#github-detail-refresh').click();
   for (const [i, root] of bodies.entries()) {
     await expect(root.locator('relative-time')).toHaveAttribute('datetime', '2026-09-20T07:00:00Z');
     await expect.poll(() => handles[i].evaluate(el => el.isConnected)).toBe(false);
@@ -100,7 +100,7 @@ test('GitHub media keeps proxy URLs, native playback and responsive sizing', asy
   await expect.poll(() => video.evaluate(el => el.paused)).toBe(true);
   const handle = await video.elementHandle();
   const position = await video.evaluate(el => el.currentTime);
-  await page.getByRole('button', { name: 'Refresh pull request', exact: true }).click();
+  await page.locator('#github-detail-refresh').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'github.pull_request').length).toBe(2);
   await expect.poll(() => handle.evaluate(el => el.isConnected)).toBe(true);
   expect(await video.evaluate(el => el.currentTime)).toBe(position);
@@ -124,9 +124,9 @@ test('GitHub HTML links normalize source URLs, copy correctly and route each cli
   await expect(guide).toHaveAttribute('href', guideURL);
   await expect(discussion).toHaveAttribute('href', `${prURL}#discussion`);
   await discussion.click({ button: 'right' });
-  const menu = page.getByRole('menu', { name: 'Context menu' });
+  const menu = page.locator('[role=menu]:visible');
   await expect(menu.getByRole('menuitem')).toHaveText(['Open in New Tab', 'Copy Link']);
-  await menu.getByRole('menuitem', { name: 'Copy Link', exact: true }).click();
+  await menu.locator('[data-action=copy-link]:visible').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`${prURL}#discussion`);
   const originalURL = page.url();
   const opened = [];

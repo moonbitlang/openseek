@@ -7,12 +7,12 @@ test('Excel selection owns annotation shortcuts without stealing them from other
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('book1.xlsx');
-  await page.getByRole('option', { name: /book1\.xlsx/ }).click();
+  await page.locator('[role=option][data-path="docs/book1.xlsx"]').click();
   const cell = page.locator('.sheet-document:visible td[data-cell]').first();
   const input = page.locator('#office-feedback-input textarea');
   const task = page.locator('#task');

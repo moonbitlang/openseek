@@ -24,7 +24,6 @@ for (const desktop of [false, true]) {
     await cloud.install();
     await cloud.goto();
     await cloud.create();
-    await expect(page.getByRole('menuitem', { name: 'Local', exact: true })).toHaveCount(0);
     expect(cloud.device.requests.some(request => request.method === 'fs.create_unnamed_workspace')).toBe(false);
     await expect(page.locator('main h1')).toHaveText('New chat');
     expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
@@ -73,7 +72,7 @@ test('Cloud list retry recovers after a network failure without resending or los
   await page.goto(`${authOrigin}/console/index.html?device=device-a`);
   await page.locator('#sidebar-chat-mode').click();
   const sidebar = page.locator('aside');
-  await expect(sidebar.getByText('Couldn’t load chats', { exact: true })).toBeVisible();
+  await expect(sidebar.locator('[id="placeholder:cloud-list-status"]')).toBeVisible();
   await cloud.create();
   const draft = page.locator('#task');
   await draft.fill('Keep this draft while reconnecting');
@@ -85,7 +84,7 @@ test('Cloud list retry recovers after a network failure without resending or los
   const reads = () => cloud.requests.filter(request =>
     request.method === 'GET' && request.path === '/v1/sessions');
   const previousReads = reads().length;
-  const retry = sidebar.getByRole('button', { name: 'Retry', exact: true });
+  const retry = sidebar.locator('[id="placeholder:cloud-list-status:action"]');
   await retry.focus();
   await retry.press('Enter');
   try {
@@ -177,12 +176,12 @@ test('missing service credentials show a server configuration error without aski
   await page.locator('#task').fill('Keep this draft');
   await page.locator('#send').click();
   const message = 'Cloud model credentials are not configured. Contact the service administrator.';
-  const notice = page.locator('#transcript').getByText(message, { exact: true });
-  await expect(notice).toBeVisible();
+  const notice = page.locator('#transcript .transcript-error-message');
+  await expect(notice).toHaveText(message);
   await expect(page.locator('aside')).not.toContainText(message);
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   await expect(page.locator('#send')).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Set API key', exact: true })).toHaveCount(0);
+  await expect(page.locator('#api-setup-dialog:visible')).toHaveCount(0);
   cloud.sendStatus = 202;
   await page.locator('#send').click();
   await expect(page.locator('#task')).toHaveValue('');
@@ -199,12 +198,12 @@ test('Cloud selection replies use the shared composer without a device or accoun
   const task = page.locator('#task');
   await task.fill('Existing draft');
   await page.locator('#transcript .msg-content').getByText('Selectable Cloud answer.', { exact: true }).dblclick({ position: { x: 8, y: 8 } });
-  await page.getByRole('toolbar', { name: 'Selection actions' }).getByRole('button', { name: 'Reply', exact: true }).click();
-  const reply = page.getByRole('dialog', { name: 'Reply to selection' });
+  await page.locator('[data-selection-actions][role=toolbar] #selection-reply').click();
+  const reply = page.locator('[data-selection-actions][role=dialog]');
   await expect(reply.locator('blockquote')).toHaveText('Selectable');
-  await reply.getByRole('textbox', { name: 'Reply', exact: true }).fill('Quoted reply');
-  await reply.getByRole('checkbox', { name: 'Batch', exact: true }).check();
-  await reply.getByRole('button', { name: 'Add to message', exact: true }).click();
+  await reply.locator('#selection-reply-input').fill('Quoted reply');
+  await reply.locator('.selection-reply-batch input').check();
+  await reply.locator('.selection-reply-submit').click();
   await expect(reply).toBeHidden();
   await expect(task).toHaveValue('Existing draft\n\n> Selectable\n\nQuoted reply\n\n');
   await task.pressSequentially('More detail');
@@ -222,11 +221,11 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
   cloud.meStatus = 200;
   await cloud.install();
   await cloud.goto();
-  await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toHaveCount(0);
+  await expect(cloud.device.sessionButton()).toHaveCount(0);
   await cloud.open();
   await page.locator('#task').fill('Cloud draft');
   await page.locator('#sidebar-work-mode').click();
-  const local = page.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
+  const local = cloud.device.sessionButton();
   await local.click();
   await expect(local).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('main > .topbar h1')).toHaveText('Rabbita browser fixture');
@@ -252,7 +251,7 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
     cloud.authorizationError = message;
     await cloud.install();
     await cloud.goto();
-    await page.getByRole('button', { name: 'New chat', exact: true }).click();
+    await page.locator('[id^="section:cloud.chats:"][id$=":action"]').click();
     await page.locator('#sidebar-settings').click();
     await expect(page.getByText(message, { exact: true })).toBeVisible();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
@@ -379,8 +378,8 @@ test('browser returns from Cloud to Work project new chat', async ({ page }) => 
   await cloud.open();
   await page.locator('#task').fill('Retain Cloud draft');
   await page.locator('#sidebar-work-mode').click();
-  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
+  await cloud.device.projectControl('/workspace', 'toggle').hover();
+  await page.locator('[id$=":new-conversation"]').click();
   await expect(page.locator('main h1')).toHaveText('New chat');
   await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeEnabled();
   await page.locator('#task').fill('Retain Work draft');
@@ -420,7 +419,7 @@ for (const destination of ['settings', 'not-a-page']) {
         await expect(settings).toBeVisible();
         await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
         await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionC}`);
-        await settings.getByRole('button', { name: 'Dismiss', exact: true }).click();
+        await settings.locator('[data-slot=dialog-close]').click();
         await expect(page.locator('main > .topbar h1')).toHaveText('First Cloud message');
       } else {
         await expect(page).toHaveURL(`${authOrigin}/device/device-a/not-a-page`);

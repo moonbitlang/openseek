@@ -30,7 +30,7 @@ async function showOverview(page) {
 // Show the overview and unfold its connectors card.
 async function openConnectors(page) {
   const panel = await showOverview(page);
-  await panel.locator('[data-overview-card=connectors]').getByTestId('overview-card-toggle').click();
+  await panel.locator('[data-section=connectors]').getByTestId('overview-card-toggle').click();
   return panel;
 }
 
@@ -82,9 +82,9 @@ test('the overview shows what the conversation\'s engine is connected to', async
   await app.openSession();
   // Folded, the card is one line; unfolded, it lists every server.
   const panel = await showOverview(page);
-  await expect(panel.locator('[data-overview-card=connectors] .conv-overview-summary')).toHaveText('2 connected · 2 failed');
-  await panel.locator('[data-overview-card=connectors]').getByTestId('overview-card-toggle').click();
-  await expect(panel.locator('[data-overview-card=connectors] .conv-overview-summary')).toBeHidden();
+  await expect(panel.locator('[data-section=connectors] .conv-overview-summary')).toHaveText('2 connected · 2 failed');
+  await panel.locator('[data-section=connectors]').getByTestId('overview-card-toggle').click();
+  await expect(panel.locator('[data-section=connectors] .conv-overview-summary')).toBeHidden();
   const seekmoon = panel.locator('[data-connector-id="server:seekmoon"]');
   await expect(seekmoon.locator('.connectors-state')).toContainText('3 tools');
   // How a server is reached and its tools are on hover.
@@ -284,9 +284,9 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
     const box = await panel.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(width);
-    await panel.locator('[data-overview-card=connectors]').getByTestId('overview-card-toggle').click();
+    await panel.locator('[data-section=connectors]').getByTestId('overview-card-toggle').click();
     await expect(panel.locator('#connectors-refresh')).toBeVisible();
-    await panel.locator('[data-overview-card=connectors]').getByTestId('overview-card-toggle').click();
+    await panel.locator('[data-section=connectors]').getByTestId('overview-card-toggle').click();
   }
   await page.locator('#conversation-overview-toggle').click();
   await expect(panel).toBeHidden();

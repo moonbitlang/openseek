@@ -15,7 +15,7 @@ async function annotateSelection(preview) {
 async function openFile(app, name) {
   await app.openQuickOpen();
   await app.page.locator('#quick-open-input').fill(name);
-  await app.page.getByRole('option', { name: new RegExp(name.replaceAll('.', '\\.')) }).click();
+  await app.page.locator(`[role=option][data-path="docs/${name}"]`).click();
 }
 
 async function setup(page, { codex = false, openTree = true } = {}) {
@@ -96,9 +96,9 @@ test('opening a PDF defaults to a hidden tree and preserves manual reopening acr
   await openFile(app, 'report.pdf');
   await expectPdf(page);
   await expect(page.locator('.file-tree-pane')).toBeVisible();
-  await page.locator('.editor-tab').filter({ hasText: 'report.docx' }).click();
+  await page.locator('.editor-tab[data-path="/workspace/docs/report.docx"]').click();
   await expect(page.locator('.word-page').first()).toBeVisible();
-  await page.locator('.editor-tab').filter({ hasText: 'report.pdf' }).click();
+  await page.locator('.editor-tab[data-path="/workspace/docs/report.pdf"]').click();
   await expectPdf(page);
   await expect(page.locator('.file-tree-pane')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
@@ -227,8 +227,9 @@ test('PDF fit width follows panel animations while manual zoom stays fixed', asy
       return Math.abs(viewer.getPageView(0).width - (viewer.container.clientWidth - 40));
     })).toBeLessThanOrEqual(2);
   };
-  for (const name of ['Expand panel', 'Restore panel']) {
-    await page.getByRole('button', { name, exact: true }).click();
+  for (const expanded of [true, false]) {
+    await page.locator('#panel-expand').click();
+    await expect(page.locator('#panel-expand')).toHaveAttribute('aria-pressed', String(expanded));
     await expect.poll(() => page.locator('.content').evaluate(element => element.getAnimations().length)).toBe(0);
     await expectFits();
   }
@@ -526,7 +527,7 @@ test('PDF annotation closes on an outside click before the input is focused', as
 
 async function enableImages(page) {
   await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
-  await page.locator('[role=option][data-value="openseek:deepseek-v4-flash"]').click();
+  await page.locator('[role=option][data-value="openseek:deepseek-flash"]').click();
 }
 
 async function captureRegion(page, rect, { reverse = false, confirm = true } = {}) {
@@ -602,7 +603,7 @@ test.describe('PDF region screenshots', () => {
     const rect = { x: Math.ceil(Math.max(bounds.x, viewport.x) + 30), y: Math.ceil(Math.max(bounds.y, viewport.y) + 40), width: 150, height: 100 };
     await captureRegion(page, rect, { reverse: true });
     await expect(page.locator('.composer-image img')).toHaveAttribute('src', /^data:image\/png;base64,/);
-    await page.getByRole('button', { name: 'Remove report.pdf-capture.png', exact: true }).click();
+    await page.locator('.composer-image-remove').click();
     await expect(page.locator('.composer-image')).toHaveCount(0);
     expect(app.pageErrors).toEqual([]);
   });
@@ -727,7 +728,7 @@ test('PDF capture rejects HTML-only form text without producing an incomplete im
   await expect(field).toHaveText('Stored field value');
   const bounds = await field.boundingBox();
   await captureRegion(page, bounds, { confirm: false });
-  await expect(page.getByText('This form or annotation cannot be captured. Select another region.', { exact: true })).toBeVisible();
+  await expect(page.locator('.notification')).toHaveText('This form or annotation cannot be captured. Select another region.');
   await expect(page.locator('.composer-image')).toHaveCount(0);
   await expect(page.locator('.pdf-capture-feedback')).toBeHidden();
   const pageBounds = await page.locator('.pdfViewer canvas').first().boundingBox();
@@ -1212,7 +1213,7 @@ test('PDF capture rejects a DOM-only push button border', async ({ page }) => {
   })).toBe(0);
   const bounds = await field.boundingBox();
   await captureRegion(page, bounds, { confirm: false });
-  await expect(page.getByText('This form or annotation cannot be captured. Select another region.', { exact: true })).toBeVisible();
+  await expect(page.locator('.notification')).toHaveText('This form or annotation cannot be captured. Select another region.');
   await expect(page.locator('.composer-image')).toHaveCount(0);
   await expect(page.locator('.pdf-capture-feedback')).toBeHidden();
   const pageBounds = await page.locator('.pdfViewer .canvasWrapper canvas').first().boundingBox();

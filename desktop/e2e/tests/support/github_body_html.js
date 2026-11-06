@@ -29,9 +29,9 @@ export async function openHTMLPR(page, bodyHTML, { comments = [] } = {}) {
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menu', { name: 'New tab', exact: true }).getByRole('menuitem', { name: 'GitHub', exact: true }).click();
-  await page.locator('.github-pulls').getByRole('button', { name: /^HTML rendering fixture,/ }).click();
+  await page.locator('#dock-new-tab').click();
+  await page.locator('.dock-menu [data-dock-action=github]').click();
+  await page.locator(`.github-pulls .github-item[data-url=${JSON.stringify(prURL)}]`).click();
   const body = page.locator('.github-description .markdown');
   await body.waitFor();
   return { app, body };

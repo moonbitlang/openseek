@@ -15,7 +15,7 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   const app = await open(page);
   const task = page.locator('#task');
   await task.fill('/goal');
-  await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
+  await expect(page.locator('.completion-item[data-completion-value=goal]')).toBeVisible();
   await task.press('Enter');
   await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Ship the feature');
@@ -27,7 +27,7 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   await expect(page.locator('.composer-goal')).toContainText('Goal: Ship the feature');
   await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
   await task.fill('Keep this prompt');
-  await page.locator('.composer-goal').getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.locator('#goal-edit').click();
   await expect(task).toHaveValue('Ship the feature');
   await task.fill('A revised goal');
   await page.locator('#goal-cancel').click();
@@ -54,7 +54,7 @@ for (const [name, workflow, fresh] of [['simplify', 'simplify.mbtx', false], ['u
     if (fresh) await app.create();
     const task = page.locator('#task');
     await task.fill(`/${name}`);
-    await expect(page.locator('.completion-item').filter({ hasText: `/${name}` })).toBeVisible();
+    await expect(page.locator(`.completion-item[data-completion-value=${JSON.stringify(name)}]`)).toBeVisible();
     if (!fresh && name === 'simplify') {
       await task.fill('/');
       await expect(page.locator('.completion-item')).toHaveCount(4);
@@ -89,7 +89,7 @@ for (const name of ['goal', 'compact']) {
     app.pauseSessionEvents = new Promise(resolve => { observe = resolve; });
     const task = page.locator('#task');
     await task.fill(`/${name}`);
-    await expect(page.locator('.completion-item').filter({ hasText: `/${name}` })).toBeVisible();
+    await expect(page.locator(`.completion-item[data-completion-value=${JSON.stringify(name)}]`)).toBeVisible();
     await task.press('Enter');
     if (name === 'goal') {
       expect(app.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
@@ -137,7 +137,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
   app.createStatus = 503;
   const task = page.locator('#task');
   await task.fill('/goal');
-  await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
+  await expect(page.locator('.completion-item[data-completion-value=goal]')).toBeVisible();
   await task.press('Enter');
   await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Retain this goal');
@@ -168,7 +168,7 @@ test('first Cloud goal creation failure retains its editor and command rejection
 
 async function compact(page) {
   await page.locator('#task').fill('/compact');
-  await expect(page.locator('.completion-item').filter({ hasText: '/compact' })).toBeVisible();
+  await expect(page.locator('.completion-item[data-completion-value=compact]')).toBeVisible();
   await page.locator('#task').press('Enter');
 }
 
@@ -218,7 +218,7 @@ test('Cloud idle compaction settles without an assistant or a task and reports f
   await app.emitSessionEvent(sessionA, 'compaction_started', { from_sequence: 1, to_sequence: 2 }, { task: null });
   await app.emitSessionEvent(sessionA, 'compaction_failed', { error: 'Fixture compaction failed' }, { task: null });
   await expect(page.locator('.composer-notice-text')).toHaveCount(0);
-  await expect(page.getByText('Fixture compaction failed', { exact: true })).toBeVisible();
+  await expect(page.locator('.transcript-error-message')).toHaveText('Fixture compaction failed');
   expect(app.postCount).toBe(0);
 });
 
@@ -301,7 +301,7 @@ for (const { status, body, notice, label, command } of [
       await expect(page.locator('#send')).toBeEnabled();
     } else {
       await page.locator('#task').fill('/goal');
-      await expect(page.locator('.completion-item').filter({ hasText: '/goal' })).toBeVisible();
+      await expect(page.locator('.completion-item[data-completion-value=goal]')).toBeVisible();
       await page.locator('#task').press('Enter');
       await expect(page.locator('#goal-cancel')).toBeVisible();
       await page.locator('#task').fill('Keep this goal');
@@ -380,7 +380,7 @@ for (const command of ['goal', 'compact']) {
     if (command === 'compact') await compact(page);
     else {
       await page.locator('#task').fill('/goal');
-      await expect(page.locator('.completion-item').filter({hasText: '/goal'})).toBeVisible();
+      await expect(page.locator('.completion-item[data-completion-value=goal]')).toBeVisible();
       await page.locator('#task').press('Enter');
       await expect(page.locator('#goal-cancel')).toBeVisible();
       await page.locator('#task').fill('Recover this goal');

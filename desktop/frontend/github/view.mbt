@@ -300,6 +300,7 @@ fn inventory(
         repository.map(reply => reply.repository).unwrap_or("GitHub"),
       ),
       @html.button(
+        id="github-refresh",
         class="tab-action",
         title=ui(locale, RefreshGithub),
         attrs=@html.Attrs::build().aria_label(ui(locale, RefreshGithub)),

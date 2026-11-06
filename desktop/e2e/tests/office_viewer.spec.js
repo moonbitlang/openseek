@@ -87,13 +87,13 @@ test('the sales demonstration workbook opens both sheets and quotes calculated c
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   const outsideStyles = await applicationStyles(page);
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('季度销售演示.xlsx');
-  await page.getByRole('option', { name: /季度销售演示\.xlsx/ }).click();
+  await page.locator('[role=option][data-path="docs/季度销售演示.xlsx"]').click();
 
   const detail = page.locator('section[data-sheet="销售明细"]');
   const summary = page.locator('section[data-sheet="季度汇总"]');
@@ -106,7 +106,7 @@ test('the sales demonstration workbook opens both sheets and quotes calculated c
   expect(await applicationStyles(page)).toEqual(outsideStyles);
   await expect(page.locator('td[data-formula]')).toHaveCount(20);
   await expect(page.locator('td.formula-pending')).toHaveCount(0);
-  await page.getByRole('tab', { name: '季度汇总', exact: true }).click();
+  await page.locator('[role=tab][data-excel-sheet-tab="季度汇总"]').click();
   await expect(summary).toBeVisible();
   await expect(detail).toBeHidden();
   await expect(summary.locator('td[data-cell="C8"]')).toHaveText('¥195,855.00');
@@ -118,7 +118,7 @@ test('the sales demonstration workbook opens both sheets and quotes calculated c
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toContainText('季度汇总!C5');
-  await page.getByRole('tab', { name: '销售明细', exact: true }).click();
+  await page.locator('[role=tab][data-excel-sheet-tab="销售明细"]').click();
   await expect(detail).toBeVisible();
   await expect(detail.locator('td[data-cell="E5"]')).toHaveText('¥23,880.00');
   expect(await applicationStyles(page)).toEqual(outsideStyles);
@@ -137,32 +137,32 @@ test('file tabs render real DOCX and XLSX packages through the Office surface', 
   await app.goto();
   await app.openSession();
 
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
 
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('report.docx');
-  await page.getByRole('option', { name: /report\.docx/ }).click();
+  await page.locator('[role=option][data-path="docs/report.docx"]').click();
   await expect(page.locator('.office-viewer-surface.word-surface')).toBeVisible();
   await expect(page.locator('.word-page')).toContainText('Walking on imported air');
   await expect(page.locator('.viewer-notice')).toHaveClass(/hidden/);
   await expect(page.locator('.office-viewer-toolbar')).toBeVisible();
   await expect(page.locator('.office-viewer-zoom-value')).toHaveText('100%');
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.locator('#office-zoom-in').click();
   await expect(page.locator('.office-viewer-zoom-value')).toHaveText('110%');
   await expect(page.locator('#openseek-office-surface')).toHaveCSS('--office-zoom', '1.1');
   await expect(page.locator('.word-page').first()).toHaveCSS('zoom', '1.1');
   await pinchZoom(page, page.locator('.word-page svg text').first());
   await expect(page.locator('.word-page').first()).toHaveCSS('zoom', '1.22');
-  await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('Walking');
+  await page.locator('#office-find').fill('Walking');
   await expect(page.locator('.word-page svg text.office-search-hit')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Document fonts', exact: true }).click();
+  await page.locator('#office-font-source').click();
   await expect(page.locator('#openseek-office-surface')).toHaveClass(/prefer-system-fonts/);
 
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('book1.xlsx');
-  await page.getByRole('option', { name: /book1\.xlsx/ }).click();
+  await page.locator('[role=option][data-path="docs/book1.xlsx"]').click();
   await expect(page.locator('.office-viewer-surface.sheet-surface')).toBeVisible();
   await expect(page.locator('.sheet-document table').first()).toBeVisible();
   // E11 is an uncached formula in the fixture (B2+B3). The Office surface
@@ -181,12 +181,12 @@ test('Word selections preview, cancel and accumulate only after confirmation', a
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('report.docx');
-  await page.getByRole('option', { name: /report\.docx/ }).click();
+  await page.locator('[role=option][data-path="docs/report.docx"]').click();
   await expect(page.locator('.word-page svg text').first()).toBeVisible();
   await pinchZoom(page, page.locator('.word-page svg text').first());
 
@@ -241,7 +241,7 @@ test('Word selections preview, cancel and accumulate only after confirmation', a
   await expect(page.locator('.mention-chip')).toHaveCount(2);
 
   await page.locator('#task').fill('Explain the selected Office text');
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task)
     .toContain('<office_selection>');
   const task = app.requests.find(request => request.method === 'agent.start').params.task;
@@ -261,12 +261,12 @@ test('Excel ranges preview cell contents and retain separately confirmed context
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('book1.xlsx');
-  await page.getByRole('option', { name: /book1\.xlsx/ }).click();
+  await page.locator('[role=option][data-path="docs/book1.xlsx"]').click();
   const cells = page.locator('.sheet-document td[data-cell]');
   await expect(cells.first()).toBeVisible();
   await pinchZoom(page, cells.first());
@@ -300,7 +300,7 @@ test('Excel ranges preview cell contents and retain separately confirmed context
   await expect(page.locator('.mention-chip')).toHaveCount(2);
 
   await page.locator('#task').fill('Inspect the selected cells');
-  await page.getByTitle('Send', { exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task)
     .toContain('<office_selection>');
   const task = app.requests.find(request => request.method === 'agent.start').params.task;
@@ -329,12 +329,12 @@ test('Word comments stay beside their source paragraphs and quote only after con
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('comments.docx');
-  await page.getByRole('option', { name: /comments\.docx/ }).click();
+  await page.locator('[role=option][data-path="docs/comments.docx"]').click();
 
   const rail = page.locator('.office-context-rail');
   await expect(rail).toBeVisible();
@@ -351,19 +351,19 @@ test('Word comments stay beside their source paragraphs and quote only after con
   const sidebar = await rail.boundingBox();
   expect(sidebar.x).toBeGreaterThanOrEqual(documentColumn.x + documentColumn.width);
 
-  await cards.nth(1).getByRole('button', { name: 'Show source', exact: true }).click();
+  await cards.nth(1).locator('.office-context-header .office-context-select').click();
   // The highlighted source must match this comment, regardless of SVG text splitting.
   await expect.poll(async () => (await page.locator('.office-annotation-focus').allTextContents()).join(''))
     .toContain('复杂问题可能需要引用不同段落');
   await expect(page.locator('.office-selection-preview')).toBeHidden();
-  await cards.first().getByRole('button', { name: 'Quote comment', exact: true }).click();
+  await cards.first().locator('.office-context-quote-action').click();
   const preview = page.locator('.office-selection-preview');
   await expect(preview).toBeVisible();
   await expect.poll(() => preview.getAttribute('title')).toContain('建议保留明确的');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await preview.locator('textarea').press('Escape');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
-  await cards.first().getByRole('button', { name: 'Quote comment', exact: true }).click();
+  await cards.first().locator('.office-context-quote-action').click();
   await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toHaveCount(1);
   await expect(page.locator('.mention-chip')).toContainText('建议保留明确的');
@@ -383,12 +383,12 @@ test('Excel annotation hides outside either horizontal edge and restores its dra
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('book1.xlsx');
-  await page.getByRole('option', { name: /book1\.xlsx/ }).click();
+  await page.locator('[role=option][data-path="docs/book1.xlsx"]').click();
   const table = page.locator('.sheet-document:visible table').first();
   await expect(table).toBeVisible();
   // Exercise native horizontal scrolling without a large binary fixture.
@@ -453,12 +453,12 @@ test('PowerPoint opens every slide with searchable text, cropped images and page
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.locator("#sidebar-toggle[aria-expanded=\"true\"]").click();
   await app.openReview({ waitForHistory: false });
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await page.locator('#explorer-files-tab').click();
   await app.openQuickOpen();
   await page.locator('#quick-open-input').fill('slides.pptx');
-  await expect(page.getByRole('option', { name: /slides\.pptx/ })).toBeVisible();
+  await expect(page.locator('[role=option][data-path="docs/slides.pptx"]')).toBeVisible();
   await page.locator('#quick-open-input').press('Enter');
   const surface = page.locator('#openseek-office-surface');
   const slides = surface.locator('.pptx-slide');
@@ -468,23 +468,23 @@ test('PowerPoint opens every slide with searchable text, cropped images and page
   await expect(surface.locator('.office-font-substitutions')).toContainText('Arial');
   await expect(slides.locator('svg image')).toHaveCount(2);
   expect(await slides.locator('clipPath').evaluateAll(nodes => nodes.map(node => node.id))).toEqual(['page1-c1', 'page2-c1']);
-  await expect(page.getByRole('button', { name: 'Document fonts', exact: true })).toHaveCount(0);
+  await expect(page.locator('#office-font-source')).toHaveCount(0);
   const thumbnails = page.locator('#openseek-office-slide-list button');
   await expect(thumbnails).toHaveCount(2);
-  await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('Second');
+  await page.locator('#office-find').fill('Second');
   await expect(slides.nth(1).locator('text.office-search-hit')).toHaveCount(1);
   await thumbnails.nth(1).click();
   await expect(thumbnails.nth(1)).toHaveAttribute('aria-current', 'page');
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.locator('#office-zoom-in').click();
   await expect(slides.nth(1)).toHaveCSS('zoom', '1.1');
   await pinchZoom(page, slides.nth(1).locator('svg text').first());
   await expect(slides.nth(1)).toHaveCSS('zoom', '1.22');
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: /^DS Flash(?: ✓)?$/ }).click();
-  await page.getByRole('searchbox', { name: 'Find in document', exact: true }).fill('');
+  await page.locator("#openseek-model-picker, #codex-model-picker, #model").click();
+  await page.locator('[role=option][data-value="openseek:deepseek-flash"]:visible').click();
+  await page.locator('#office-find').fill('');
   await thumbnails.nth(1).click();
   const box = await slides.nth(1).boundingBox();
-  await page.getByRole('button', { name: 'Annotate region', exact: true }).click();
+  await page.locator('#office-annotate-region').click();
   await expect(page.locator('.office-region-capture')).toBeVisible();
   await page.mouse.move(box.x+40,box.y+45);
   await page.mouse.down();

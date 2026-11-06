@@ -145,7 +145,16 @@ pub fn composer(
   }
   @html.div(
     class="github-review-composer",
-    attrs=@html.Attrs::build().data_set("draft", target.key()),
+    attrs=@html.Attrs::build()
+      .data_set("draft", target.key())
+      .data_set(
+        "draft-kind",
+        if target is Line(..) {
+          "line"
+        } else {
+          "thread"
+        },
+      ),
     [
       @html.textarea(
         id="github-review-input:" + target.key(),
@@ -182,6 +191,9 @@ pub fn composer(
         @html.div(class="github-review-composer-actions", [
           @html.button(
             disabled=state.busy,
+            attrs=@html.Attrs::build().data_set(
+              "testid", "github-review-cancel",
+            ),
             on_click=emit(Cancel(target)),
             ui(locale, CancelLabel),
           ),

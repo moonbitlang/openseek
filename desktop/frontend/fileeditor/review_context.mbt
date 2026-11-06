@@ -314,6 +314,14 @@ fn append_review_context_action(
     let item = @dom.document().create_element("button")
     item.set_attribute("type", "button")
     item.set_attribute("role", "menuitem")
+    item.set_attribute(
+      "data-action",
+      if adding {
+        "add-remaining-changes"
+      } else {
+        "remove-included-changes"
+      },
+    )
     item.append_child(@dom.document().create_text_node(label).as_node())
     item.add_event_listener("click", event => {
       event.stop_propagation()

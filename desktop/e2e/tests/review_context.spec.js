@@ -285,10 +285,10 @@ test('review context survives regrouping and a partial group changes only on exp
   await expect(popup).toBeHidden();
   await expect(page.locator('.composer-changes .changes-chip .mention-jump')).toBeFocused();
   await clickHunkContext(page, contextButtons(page));
-  await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeVisible();
+  await expect(page.locator('[role=menuitem][data-action=add-remaining-changes]:visible')).toBeVisible();
   await waitForGitRefresh(app);
   await expect(contextButtons(page)).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeVisible();
+  await expect(page.locator('[role=menuitem][data-action=add-remaining-changes]:visible')).toBeVisible();
   const menu = page.getByRole('menu');
   const editorBounds = await contextButtons(page).evaluate(button =>
     button.closest('.moonbit-diff-editor').getBoundingClientRect().toJSON());
@@ -297,15 +297,15 @@ test('review context survives regrouping and a partial group changes only on exp
   expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(editorBounds.right);
   // The left-anchored menu overlays source text. Its actions must remain real
   // pointer targets throughout the menu, without relying on sash overlap.
-  const removeItem = menu.getByRole('menuitem', { name: 'Remove included changes' });
+  const removeItem = menu.locator('[role=menuitem][data-action=remove-included-changes]:visible');
   const itemBounds = await removeItem.boundingBox();
   const point = { x: itemBounds.x + itemBounds.width - 8, y: itemBounds.y + itemBounds.height / 2 };
   expect(await removeItem.evaluate((node, point) => node.contains(document.elementFromPoint(point.x, point.y)), point))
     .toBe(true);
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeFocused();
+  await expect(page.locator('[role=menuitem][data-action=add-remaining-changes]:visible')).toBeFocused();
   await waitForGitRefresh(app);
-  await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeFocused();
+  await expect(page.locator('[role=menuitem][data-action=add-remaining-changes]:visible')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(contextButtons(page)).toHaveText('In context');
   await expect(contextButtons(page)).toBeFocused();
@@ -319,13 +319,13 @@ test('review context survives regrouping and a partial group changes only on exp
   await clickHunkContext(page, contextButtons(page));
   await page.locator('#task').focus();
   await expect(contextButtons(page)).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('menuitem', { name: 'Remove included changes' })).toBeHidden();
+  await expect(page.locator('[role=menuitem][data-action=remove-included-changes]:visible')).toBeHidden();
   await clickHunkContext(page, contextButtons(page));
   await page.locator('#task').dispatchEvent('pointerdown');
   await expect(contextButtons(page)).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('menuitem', { name: 'Remove included changes' })).toBeHidden();
+  await expect(page.locator('[role=menuitem][data-action=remove-included-changes]:visible')).toBeHidden();
   await clickHunkContext(page, contextButtons(page));
-  await page.getByRole('menuitem', { name: 'Remove included changes' }).click();
+  await page.locator('[role=menuitem][data-action=remove-included-changes]:visible').click();
   await expect(page.locator('.composer-changes .changes-chip')).toHaveCount(0);
   await expect(contextButtons(page)).toHaveText('Add to context');
   expect(app.pageErrors).toEqual([]);
@@ -352,7 +352,7 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await expect(chip).toContainText('Changes · 2 files');
   await chip.click();
   const popup = page.getByTestId('selected-changes');
-  const deleted = popup.locator('.changes-file').filter({ hasText: 'lib.mbt' });
+  const deleted = popup.locator('.changes-file').filter({ has: page.locator('[data-change-path="src/lib.mbt"]') });
   await expect(deleted.locator('.editor-diff-row.removed').first()).toBeVisible();
   await expect(deleted.locator('.editor-diff-row.added')).toHaveCount(0);
   await popup.locator('[data-change-path="src/lib.mbt"]').click();
@@ -384,7 +384,7 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await expect(sentChip).toHaveText('Changes · 2 files');
   await sentChip.click();
   await expect(popup.locator('.changes-file')).toHaveCount(2);
-  await expect(popup.locator('.changes-file').filter({ hasText: 'lib.mbt' })
+  await expect(popup.locator('.changes-file').filter({ has: page.locator('[data-change-path="src/lib.mbt"]') })
     .locator('.editor-diff-row.added')).toHaveCount(0);
   await expect(popup.locator('[data-testid=changes-remove], [data-testid=changes-remove-group]')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);

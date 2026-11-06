@@ -2174,6 +2174,7 @@ fn office_viewer_toolbar(
           } else {
             "office-viewer-control"
           },
+          id="office-pages-toggle",
           title=ui(locale, OfficePages),
           disabled=pdf &&
             active_pdf_document(state, ctx)
@@ -2279,6 +2280,7 @@ fn office_viewer_toolbar(
           } else {
             ui(locale, OfficeInstalledFonts)
           },
+          id="office-font-source",
           on_click=dispatch(OfficeSystemFontsToggled),
           attrs=@html.Attrs::build()
             .aria_label(ui(locale, OfficeFontSource))

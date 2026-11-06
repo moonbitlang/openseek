@@ -8,7 +8,7 @@ async function menu(page, cloud, id = sessionA) {
 
 async function rename(page, cloud, title) {
   await menu(page, cloud);
-  await page.locator('[role=menuitem][data-action=rename]').click();
+  await page.locator('[role=menuitem][data-action=rename]:visible').click();
   const field = page.locator('.conversation-rename-input');
   await field.fill(title);
   return field;
@@ -99,7 +99,7 @@ for (const status of [401, 404]) {
     await cloud.open();
     await page.locator('#task').fill('Unsent Cloud draft');
     await menu(page, cloud);
-    await page.locator('[role=menuitem][data-action=archive]').click();
+    await page.locator('[role=menuitem][data-action=archive]:visible').click();
     await expect(cloud.row(sessionC)).toHaveCount(0);
     await expect(page.locator('main h1')).toHaveText('New chat');
     await expect(page.locator('#task')).toHaveValue('');
@@ -136,7 +136,7 @@ for (const status of [401, 404]) {
     await cloud.open();
     await page.locator('#task').fill('Keep the draft');
     await menu(page, cloud);
-    await page.locator('[role=menuitem][data-action=archive]').click();
+    await page.locator('[role=menuitem][data-action=archive]:visible').click();
     await expect(page.locator('aside')).toContainText(failure === 'network' ? 'unreachable' : `HTTP ${failure}`);
     await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.live:/);
     await expect(cloud.row(sessionA)).toHaveAttribute('aria-current', 'true');
@@ -144,7 +144,7 @@ for (const status of [401, 404]) {
     expect(creations(cloud)).toHaveLength(0);
     expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
     await menu(page, cloud);
-    await expect(page.locator('[role=menuitem][data-action=archive]')).toBeEnabled();
+    await expect(page.locator('[role=menuitem][data-action=archive]:visible')).toBeEnabled();
   });
 }
 

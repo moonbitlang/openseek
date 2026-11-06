@@ -90,7 +90,7 @@ for (const status of [404, 503]) {
     } else {
       await expect(page.locator('.conversation-load-state')).toContainText(`HTTP ${status}`);
       cloud.historyStatus = 200;
-      await page.getByRole('button', { name: 'Retry', exact: true }).click();
+      await page.locator('#conversation-load-retry').click();
       await expect(page.locator('#task')).toBeVisible();
     }
     await expect(page).toHaveURL(sessionURL(sessionA));
@@ -348,7 +348,7 @@ test('Cloud direct link keeps history readable but editing disabled after catalo
   await page.goto(sessionURL(sessionA));
   await expect(page.locator('#transcript')).toContainText('Readable despite metadata failure');
   await expect(page.locator('#task')).toBeDisabled();
-  await expect(page.locator('aside').getByText('Couldn’t load chats', { exact: true })).toBeVisible();
+  await expect(page.locator('[id="placeholder:cloud-list-status"]')).toBeVisible();
   expect(creations(cloud)).toEqual([]);
 });
 
@@ -370,7 +370,7 @@ test('Cloud keeps displayed history when a background read fails during a send',
   cloud.historyStatus = 503;
   await page.locator('#task').fill('Start a new turn');
   await page.locator('#send').click();
-  await expect(page.getByText(/HTTP 503/).first()).toBeVisible();
+  await expect(page.locator('.transcript-error-message')).toContainText('HTTP 503');
   await expect(transcript.getByText('Earlier Cloud message', { exact: true })).toBeVisible();
 
   cloud.historyStatus = 200;

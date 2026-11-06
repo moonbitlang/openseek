@@ -105,7 +105,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   const firstTag = (await first).headers().etag;
   const transcript = page.locator('#transcript');
   const bubbles = transcript.locator('.msg.user .msg-content');
-  const loadingOlder = transcript.getByRole('status').filter({ hasText: 'Loading more…' });
+  const loadingOlder = transcript.locator('.transcript-loading-older');
   const rowSpinner = cloud.rowContainer(sessionA).locator('.conversation-load-spinner');
   await expect(bubbles).toHaveText(['Third question']);
   await expect(loadingOlder).toHaveCount(0);
@@ -210,7 +210,8 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
     await transcript.hover();
     await page.mouse.wheel(0, -200);
     await expect.poll(() => queries.length).toBe(2);
-    await expect(transcript.getByRole('status').filter({ hasText: '正在加载更早的消息…' })).toBeInViewport();
+    await expect(transcript.locator('.transcript-loading-older')).toBeInViewport();
+    await expect(transcript.locator('.transcript-loading-older')).toHaveText('正在加载更早的消息…');
     await cloud.row(sessionB).click();
     await expect(cloud.row(sessionB)).toHaveAttribute('aria-current', 'true');
   } finally {

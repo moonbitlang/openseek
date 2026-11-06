@@ -8,7 +8,7 @@ async function menu(page, cloud, id) {
 
 async function askDelete(page, cloud, id) {
   await menu(page, cloud, id);
-  await page.locator('[role=menuitem][data-action=delete]').click();
+  await page.locator('[role=menuitem][data-action=delete]:visible').click();
   await expect(page.locator('#delete-chat-confirm')).toBeVisible();
 }
 
@@ -24,9 +24,9 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
     await cloud.open();
     await page.locator('#task').fill('Draft that belongs to deleted A');
     await menu(page, cloud, sessionA);
-    await expect(page.locator('[role=menuitem][data-action=rename]')).toBeEnabled();
-    await expect(page.locator('[role=menuitem][data-action=archive]')).toBeEnabled();
-    await page.locator('[role=menuitem][data-action=delete]').click();
+    await expect(page.locator('[role=menuitem][data-action=rename]:visible')).toBeEnabled();
+    await expect(page.locator('[role=menuitem][data-action=archive]:visible')).toBeEnabled();
+    await page.locator('[role=menuitem][data-action=delete]:visible').click();
     await expect(page.locator('#delete-chat-dialog')).toContainText('Cloud fixture A');
     await expect(page.locator('#delete-chat-dialog')).not.toContainText('worktree');
     await page.locator('#delete-chat-cancel').click();

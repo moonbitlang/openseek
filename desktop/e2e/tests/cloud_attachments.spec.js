@@ -55,7 +55,7 @@ test('blank Cloud keeps confirmed files and image bytes in memory until first Se
   await cloud.install(); await cloud.goto(); await cloud.create();
   await select(page, [document, image]);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-  await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+  await page.getByTestId('attachment-upload').click();
   await expect(page.locator('.composer .mention-chip')).toContainText('report.pdf');
   expect(creations(cloud)).toHaveLength(0);
   expect(cloud.imports).toEqual([]);
@@ -114,12 +114,12 @@ test('existing Cloud documents use Upload confirmation and retain bytes after a 
   await select(page, document);
   expect(creations(cloud)).toHaveLength(0);
   expect(cloud.imports).toHaveLength(0);
-  await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+  await page.getByTestId('attachment-upload').click();
   await expect(page.locator('.composer-image-notice.error')).toContainText('Cloud answered HTTP 503');
-  await expect(page.getByRole('button', { name: 'Upload to workspace', exact: true })).toBeVisible();
+  await expect(page.getByTestId('attachment-upload')).toBeVisible();
   expect(cloud.imports).toHaveLength(1);
   cloud.importStatus = 200;
-  await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+  await page.getByTestId('attachment-upload').click();
   await expect(page.locator('.composer .mention-chip')).toContainText('report.pdf');
   expect(cloud.imports).toHaveLength(2);
   expect(cloud.imports[0].source).toEqual(cloud.imports[1].source);
@@ -180,11 +180,11 @@ for (const command of ['goal', 'compact']) {
     const cloud = new AttachmentHarness(page);
     await cloud.install(); await cloud.goto(); await cloud.create();
     await select(page, [document, image]);
-    await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+    await page.getByTestId('attachment-upload').click();
     await expect(page.locator('.composer .mention-chip')).toContainText('report.pdf');
     const task = page.locator('#task');
     await task.fill(`/${command}`);
-    await expect(page.locator('.completion-item').filter({ hasText: `/${command}` })).toBeVisible();
+    await expect(page.locator(`.completion-item[data-completion-value=${JSON.stringify(command)}]`)).toBeVisible();
     await task.press('Enter');
     if (command === 'goal') {
       await task.fill('Inspect these files');

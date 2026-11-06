@@ -295,6 +295,9 @@ fn Entry::attachment_confirmations(
               @html.button(
                 type_="button",
                 class="composer-goal-action",
+                attrs=@html.Attrs::build().data_set(
+                  "testid", "attachment-upload",
+                ),
                 on_click=emit(
                   AttachmentConfirmed(self.identity(), request.root, request.id),
                 ),
@@ -303,6 +306,9 @@ fn Entry::attachment_confirmations(
               @html.button(
                 type_="button",
                 class="composer-goal-action",
+                attrs=@html.Attrs::build().data_set(
+                  "testid", "attachment-cancel",
+                ),
                 on_click=emit(
                   AttachmentCancelled(self.identity(), request.root, request.id),
                 ),
