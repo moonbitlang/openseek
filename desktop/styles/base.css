@@ -118,6 +118,18 @@ samp,
   outline: none;
 }
 
+[data-slot="context-menu-trigger"][tabindex="-1"],
+dialog[data-slot="dialog"],
+dialog[data-slot="alert-dialog"],
+.dialog-scroll-body,
+.editor[tabindex="-1"],
+.office-viewer-surface[tabindex="-1"],
+.review-hunk-actions[tabindex="-1"],
+#workspace-file-tree[tabindex="-1"],
+#review-file-tree[tabindex="-1"] {
+  outline: none;
+}
+
 /* Every app-owned select uses the same popup surface and option semantics.
    Reusing one scoped anchor name gives each select a private positioning seam;
    its top-layer menu escapes pane clipping without exposing unique CSS names
