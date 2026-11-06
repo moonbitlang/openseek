@@ -134,6 +134,7 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
     platform,
     open_web_links_in_app,
     reveal_files,
+    preview_files: self.is_desktop && ctx.owner is Host({ channel: Local, .. }),
     share_files: ctx.root() is Some(_),
     download_files: ctx.owner is @interop.Cloud(..) && ctx.root() is Some(_),
     downloading: self.file_panel.download is Some(_),
@@ -747,6 +748,7 @@ fn main {
         browser_open_external: emit(BrowserOpenExternal),
         reveal_file: path => emit(RevealFile(path)),
         share_file: path => emit(ShareFile(path)),
+        preview_file: path => emit(PreviewLocalFile(path)),
         toggle_menu: emit(ToggleRightPanelMenu),
         toggle_expanded: emit(ToggleRightPanelExpanded),
         close_tabs: emit.map(selection => CloseDockTabs(selection)),
@@ -1130,6 +1132,7 @@ fn main {
         reveal_file: path => emit(RevealFile(path)),
         share_file: path => emit(ShareFile(path)),
         download_file: path => emit(DownloadFile(path)),
+        preview_file: path => emit(PreviewLocalFile(path)),
       },
       shell,
     )

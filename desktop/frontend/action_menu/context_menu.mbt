@@ -20,6 +20,7 @@ pub(all) struct ContextInput {
   // Reveal is intentionally local-window-only. A browser or a Desktop viewing
   // a remote host must not unexpectedly open a file manager on another device.
   reveal_files : Bool
+  preview_files : Bool
   share_files : Bool
   download_files : Bool
   downloading : Bool
@@ -32,6 +33,7 @@ pub(all) struct ContextActions {
   open_file : (String) -> @cmd.Cmd
   reveal_file : (String) -> @cmd.Cmd
   share_file : (String) -> @cmd.Cmd
+  preview_file : (String) -> @cmd.Cmd
   download_file : (String) -> @cmd.Cmd
 }
 
@@ -280,6 +282,19 @@ fn context_definition(
           (actions.open_file)(path),
         ),
       )
+      let lower = path.to_lower()
+      if input.preview_files &&
+        workspace_file is Some(file) &&
+        (lower.has_suffix(".html") || lower.has_suffix(".htm")) {
+        navigation.push(
+          context_item(
+            ui(locale, PreviewFile),
+            ui(locale, PreviewFile),
+            @icons.icon_link_external(),
+            (actions.preview_file)(file),
+          ),
+        )
+      }
       if input.reveal_files &&
         reveal_label(locale~, input.platform) is Some(label) {
         navigation.push(

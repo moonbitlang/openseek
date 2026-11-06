@@ -171,6 +171,22 @@ does not — a narrow window, a wide sidebar, an open file panel — the same
 overview is a panel over the transcript's right edge that stops above the
 composer. The stylesheet decides between the two from the main pane's width.
 
+## Local HTML previews
+
+In the Desktop window, use **Preview** in an HTML/HTM file's context menu or
+editor toolbar to open its saved contents in a Browser tab. This is available
+only for Local files. Each preview retains its workspace root; a file opened
+without a workspace uses its parent directory. Relative CSS, scripts, modules,
+images, fonts and static fetches load directly from disk through an ephemeral
+loopback HTTP listener. Refresh reads the current files.
+
+The listener serves only reads, validates Host and confines resolved paths to
+the preview root, including symlink targets. Its random URL mapping is revoked
+when the tab closes, and the listener closes with the app. Preview documents
+have no native bridge or command access. Site-root paths beginning with `/` and
+pages requiring a backend service are outside this static preview feature.
+Chat's embedded artifact previews keep their existing behavior.
+
 ## Skills
 
 The sidebar's **Skills** button opens a browser over the
