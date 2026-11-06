@@ -16,11 +16,19 @@ import java.util.concurrent.Executors
 /** Keeps the browser flow separate from the conversation WebView and its Back stack. */
 class SignInActivity : ComponentActivity() {
     private var flow: BrowserSignIn? = null
+    private lateinit var status: TextView
+
+    /** The browser's answer: an authorization code, or why there is none. */
     @Volatile private var outcome: Result<String>? = null
+
+    /** Set once the code is being redeemed; later returns change nothing. */
+    private var redeeming = false
     private val executor = Executors.newSingleThreadExecutor()
     private val browser = AuthTabIntent.registerActivityResultLauncher(this) { result ->
         val uri = result.resultUri
-        if (result.resultCode == AuthTabIntent.RESULT_OK && uri != null &&
+        if (redeeming) {
+            // The fallback Custom Tab closes after its redirect already returned.
+        } else if (result.resultCode == AuthTabIntent.RESULT_OK && uri != null &&
             flow?.acceptsReturn(uri.toString()) == true) {
             deliver()
         } else if (outcome != null) {
@@ -34,10 +42,11 @@ class SignInActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(TextView(this).apply {
+        status = TextView(this).apply {
             text = "Complete sign-in in your browser."
             setPadding(32, 64, 32, 32)
-        })
+        }
+        setContentView(status)
         if (savedInstanceState != null || intent.data != null) {
             // The process no longer owns the old loopback listener/verifier.
             fail("Sign-in was interrupted. Please try again.")
@@ -56,7 +65,7 @@ class SignInActivity : ComponentActivity() {
                         }
                     }
                 }
-                pending.receive(::exchange) { result, returning ->
+                pending.receive { result, returning ->
                     outcome = result
                     // A callback response redirects the Auth Tab first. Keep this
                     // activity alive until that redirect delivers its result.
@@ -97,10 +106,25 @@ class SignInActivity : ComponentActivity() {
         } finally { connection.disconnect() }
     }
 
+    /** Runs once the browser has returned, with this activity in the foreground. */
     private fun deliver() {
+        if (redeeming) return
         val result = outcome ?: return
+        val pending = flow ?: return
         result.fold(
-            onSuccess = { setResult(Activity.RESULT_OK, Intent().putExtra("account", it)); finish() },
+            onSuccess = { code ->
+                redeeming = true
+                status.text = "Signing in…"
+                executor.execute {
+                    val account = runCatching { exchange(code, pending.verifier) }
+                    runOnUiThread {
+                        if (!isFinishing) account.fold(
+                            onSuccess = { setResult(Activity.RESULT_OK, Intent().putExtra("account", it)); finish() },
+                            onFailure = { fail(it.message ?: "Sign-in failed.") },
+                        )
+                    }
+                }
+            },
             onFailure = { fail(it.message ?: "Sign-in failed.") },
         )
     }
