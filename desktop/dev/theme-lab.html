@@ -457,14 +457,15 @@
         font-size: 11px;
       }
       .samples .strong-sample {
-        background: var(--accent);
-        color: var(--on-accent);
+        /* The accent is application-wide (tokens.css), not part of a palette. */
+        background: #5686fe;
+        color: #ffffff;
         padding: 6px 10px;
         border-radius: 5px;
       }
       .samples .soft-sample {
         background: var(--accent-soft);
-        color: var(--accent);
+        color: #5686fe;
         border: 1px solid var(--accent-border);
         padding: 6px 10px;
         border-radius: 5px;
@@ -590,7 +591,6 @@
             "text-muted": "#8792b5",
             border: "#44475a",
             "seam": "#44475a",
-            accent: "#bd93f9",
             "accent-soft": "#44475a",
             "accent-border": "#44475a",
             "text-selection": "#44475a",
@@ -599,7 +599,6 @@
             "danger-soft": "#422f3a",
             "danger-border": "#733941",
             warning: "#f1fa8c",
-            "on-accent": "#15151b",
           },
           source: "https://draculatheme.com/spec",
         },
@@ -616,7 +615,6 @@
             "text-muted": "#7f8899",
             border: "#3e4451",
             "seam": "#3e4451",
-            accent: "#61afef",
             "accent-soft": "#323d4e",
             "accent-border": "#3e4451",
             "text-selection": "#323d4e",
@@ -625,7 +623,6 @@
             "danger-soft": "#3e343c",
             "danger-border": "#68424b",
             warning: "#e5c07b",
-            "on-accent": "#15151b",
           },
           source:
             "https://github.com/Binaryify/OneDark-Pro/blob/master/themes/OneDark-Pro.json",
@@ -643,7 +640,6 @@
             "text-muted": "#858585",
             border: "#2c2c2c",
             "seam": "#2c2c2c",
-            accent: "#80aaff",
             "accent-soft": "#2a3548",
             "accent-border": "#2c2c2c",
             "text-selection": "#2a3548",
@@ -652,7 +648,6 @@
             "danger-soft": "#372c2c",
             "danger-border": "#674747",
             warning: "#d8ba7d",
-            "on-accent": "#15151b",
           },
           source: null,
         },
@@ -669,7 +664,6 @@
             "text-muted": "#7d8590",
             border: "#30363d",
             "seam": "#30363d",
-            accent: "#58a6ff",
             "accent-soft": "#162b46",
             "accent-border": "#30363d",
             "text-selection": "#162b46",
@@ -678,7 +672,6 @@
             "danger-soft": "#29191d",
             "danger-border": "#5f2728",
             warning: "#d29922",
-            "on-accent": "#15151b",
           },
           source: "https://github.com/primer/github-vscode-theme",
         },
@@ -696,7 +689,6 @@
             "text-muted": "#80888f",
             border: "#4b4d4f",
             "seam": "#4b4d4f",
-            accent: "#6897bb",
             "accent-soft": "#364451",
             "accent-border": "#4b4d4f",
             "text-selection": "#364451",
@@ -705,7 +697,6 @@
             "danger-soft": "#423736",
             "danger-border": "#6d4d4a",
             warning: "#cc9c6c",
-            "on-accent": "#15151b",
           },
           source: null,
         },
@@ -722,7 +713,6 @@
             "text-muted": "#858585",
             border: "#343434",
             "seam": "#343434",
-            accent: "#7fa9ff",
             "accent-soft": "#25334b",
             "accent-border": "#343434",
             "text-selection": "#25334b",
@@ -731,7 +721,6 @@
             "danger-soft": "#2f2324",
             "danger-border": "#623f40",
             warning: "#dcb877",
-            "on-accent": "#15151b",
           },
           source: null,
         },
@@ -748,7 +737,6 @@
             "text-muted": "#808080",
             border: "#292929",
             "seam": "#292929",
-            accent: "#7fa9ff",
             "accent-soft": "#25334b",
             "accent-border": "#292929",
             "text-selection": "#25334b",
@@ -757,7 +745,6 @@
             "danger-soft": "#241818",
             "danger-border": "#593638",
             warning: "#dcb877",
-            "on-accent": "#15151b",
           },
           source: null,
         },
@@ -789,8 +776,6 @@
               "text-muted": "#59636e",
               border: "#d1d9e0",
               "seam": "#eaeef2",
-              accent: "#0969da",
-              "on-accent": "#ffffff",
               "accent-soft": "#ddf4ff",
               "accent-border": "#54aeff",
               "text-selection": "#b6e3ff",
@@ -817,8 +802,6 @@
               "text-muted": "#696c77",
               border: "#d4d4d5",
               "seam": "#e5e5e6",
-              accent: "#4078f2",
-              "on-accent": "#ffffff",
               "accent-soft": "#e8eefb",
               "accent-border": "#a7bff8",
               "text-selection": "#d3e1fa",
@@ -845,8 +828,6 @@
               "text-muted": "#6c6f85",
               border: "#bcc0cc",
               "seam": "#ccd0da",
-              accent: "#1e66f5",
-              "on-accent": "#ffffff",
               "accent-soft": "#dce6fc",
               "accent-border": "#9dbaf9",
               "text-selection": "#c2d5fc",
@@ -873,8 +854,6 @@
               "text-muted": "#797593",
               border: "#cecacd",
               "seam": "#dfdad9",
-              accent: "#286983",
-              "on-accent": "#fffaf3",
               "accent-soft": "#e4edf0",
               "accent-border": "#a9c5cf",
               "text-selection": "#c9dce3",
@@ -901,8 +880,6 @@
               "text-muted": "#657b83",
               border: "#c9c5b5",
               "seam": "#ded8c6",
-              accent: "#268bd2",
-              "on-accent": "#fdf6e3",
               "accent-soft": "#e2eef1",
               "accent-border": "#91bdd0",
               "text-selection": "#b8d8e7",
@@ -936,10 +913,8 @@
           ],
         ],
         [
-          "Accents and selection",
+          "Selection",
           [
-            ["accent", "Accent"],
-            ["on-accent", "Button text"],
             ["accent-soft", "Selection background"],
             ["accent-border", "Accent border"],
             ["text-selection", "Text selection"],
@@ -963,31 +938,69 @@
         compare = false,
         storageOK = true;
       const validHex = (x) => typeof x === "string" && /^#[\da-f]{6}$/i.test(x);
+      const fieldKeys = FIELDS.flatMap((group) => group[1]).map(
+        ([key]) => key,
+      );
+      // Palette files may derive a color with color-mix(); the editor needs a
+      // concrete value, so let the browser resolve it to hex.
+      const probe = document.createElement("span");
+      probe.hidden = true;
+      document.body.append(probe);
+      function resolveColor(raw) {
+        if (validHex(raw)) return raw;
+        // An invalid declaration leaves the initial transparent value behind,
+        // so a typo cannot silently inherit the page color.
+        probe.style.backgroundColor = "";
+        probe.style.backgroundColor = raw;
+        const computed = getComputedStyle(probe).backgroundColor;
+        probe.style.backgroundColor = "";
+        if (!raw || computed === "rgba(0, 0, 0, 0)") return null;
+        const channels = (computed.match(/[\d.]+/g) || []).map(Number);
+        if (channels.length < 3) return null;
+        const scale = computed.startsWith("color(") ? 255 : 1;
+        return (
+          "#" +
+          channels
+            .slice(0, 3)
+            .map((n) =>
+              Math.max(0, Math.min(255, Math.round(n * scale)))
+                .toString(16)
+                .padStart(2, "0"),
+            )
+            .join("")
+        );
+      }
       const paletteStyle = getComputedStyle(document.documentElement);
       for (const mode of ["light", "dark"]) {
         const target = PRESETS.find(
           (p) => p.id === (mode === "dark" ? "current" : "light-current"),
         );
-        for (const [key] of FIELDS.flatMap((group) => group[1])) {
-          const value = paletteStyle
-            .getPropertyValue(`--${mode}-${key}`)
-            .trim();
-          if (!validHex(value))
+        for (const key of fieldKeys) {
+          const value = resolveColor(
+            paletteStyle.getPropertyValue(`--${mode}-${key}`).trim(),
+          );
+          if (!value)
             throw new Error(
               `Missing or invalid palette color: --${mode}-${key}`,
             );
           target.colors[key] = value;
         }
       }
-      const validColors = (c) =>
-        c && FIELDS.flatMap((g) => g[1]).every(([k]) => validHex(c[k]));
+      const validColors = (c) => c && fieldKeys.every((k) => validHex(c[k]));
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
         if (saved && PRESETS.some((p) => p.id === saved.selected)) {
           selected = saved.selected;
           for (const p of PRESETS)
             if (validColors(saved.drafts?.[p.id]))
-              drafts[p.id] = { ...p.colors, ...saved.drafts[p.id] };
+              // Keep only current fields so drafts saved before a palette
+              // field was removed cannot reintroduce it.
+              drafts[p.id] = {
+                ...p.colors,
+                ...Object.fromEntries(
+                  fieldKeys.map((k) => [k, saved.drafts[p.id][k]]),
+                ),
+              };
         }
       } catch {
         storageOK = false;
@@ -1035,7 +1048,7 @@
             "bg-canvas",
             "bg-surface",
             "text-primary",
-            "accent",
+            "text-selection",
             "success",
           ];
           button.innerHTML =
@@ -1162,7 +1175,6 @@
         const pairs = [
           ["Body text / canvas", "text-primary", "bg-canvas"],
           ["Secondary text / cards", "text-secondary", "bg-surface"],
-          ["Button text / accent", "on-accent", "accent"],
         ];
         $("#metrics").replaceChildren();
         for (const [label, fg, bg] of pairs) {
@@ -1185,7 +1197,7 @@
           a.textContent = " View preset source ↗";
           source.append(a);
         }
-        source.append(" Contrast ratios cover only the three color pairs above.");
+        source.append(" Contrast ratios cover only the two color pairs above.");
       }
       let previewMode;
       function syncPreview() {
