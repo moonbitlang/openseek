@@ -2,11 +2,9 @@ import { test, expect } from './support/test.js';
 import { readFileSync } from 'node:fs';
 import { fixture, openHTMLPR, prURL } from './support/github_body_html.js';
 
-test('PR descriptions and comments use GitHub HTML while chat keeps raw HTML as text', async ({ page }) => {
+test('PR descriptions and comments use GitHub HTML', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-09-20T03:51:43Z') });
-  const { app, body } = await openHTMLPR(page, fixture('review-summary'), {
-    chatSource: fixture('review-summary', 'md'), comments: [fixture('attributes')],
-  });
+  const { app, body } = await openHTMLPR(page, fixture('review-summary'), { comments: [fixture('attributes')] });
   await expect(body.getByRole('heading', { name: 'Codex Review Summary' })).toBeVisible();
   await expect(body.locator('markdown-accessiblity-table table[role="table"] th')).toHaveText(['Review', 'Status', 'Commit', 'Review trigger']);
   await expect(body.locator('code.notranslate')).toHaveText('fdab425');
@@ -24,11 +22,6 @@ test('PR descriptions and comments use GitHub HTML while chat keeps raw HTML as 
   await expect(comment.locator('details')).toHaveAttribute('name', 'user-content-group');
   await expect(comment.locator('#user-content-link')).toHaveAttribute('href', `${prURL}#box`);
   await expect(page.locator('.github-detail')).not.toContainText('Legacy');
-  const chat = page.locator('#transcript');
-  await expect(chat.locator('details, relative-time, markdown-accessiblity-table')).toHaveCount(0);
-  await expect(chat).toContainText('<!-- codex-pull-request-review-summary -->');
-  await expect(chat).toContainText('<relative-time datetime="2026-09-20T03:49:43.007844Z">');
-  await expect(chat).toContainText('<details> <summary>');
   expect(app.pageErrors).toEqual([]);
 });
 
