@@ -22,8 +22,18 @@ pub fn State::open(
   input : Input,
   provider : Provider,
 ) -> (@cmd.Cmd, State) {
-  if self.open is Some(current) && current.owner == input.owner {
-    let value = value_for_provider(current.value, provider)
+  if provider is Symbols && input.owner is @interop.Cloud(..) {
+    return (@cmd.none, self)
+  }
+  if self.open is Some(current) &&
+    current.owner == input.owner &&
+    current.cloud_access == input.cloud_access &&
+    current.root == input.root {
+    let value = if input.owner is @interop.Cloud(..) {
+      current.value
+    } else {
+      value_for_provider(current.value, provider)
+    }
     if value == current.value {
       return (focus_after_render(), self)
     }
@@ -32,6 +42,12 @@ pub fn State::open(
   let generation = self.generation + 1
   let open : Open = {
     owner: input.owner,
+    cloud_access: input.cloud_access,
+    cloud_index: if input.owner is @interop.Cloud(..) {
+      Some(Loading(generation))
+    } else {
+      None
+    },
     root: input.root,
     value: provider.prefix(),
     items: [],
@@ -40,6 +56,16 @@ pub fn State::open(
     generation,
   }
   let started = { ..self, open: Some(open), generation, }
+  if input.owner is @interop.Cloud(..) {
+    let projected = with_file_candidates(input, open, [], Loading)
+    return (
+      @cmd.batch([
+        cloud_file_request(emit, input, generation),
+        focus_after_render(),
+      ]),
+      { ..started, open: Some(projected), },
+    )
+  }
   match provider {
     Files => {
       let projected = with_file_candidates(input, open, [], Loading)
@@ -52,7 +78,7 @@ pub fn State::open(
     Symbols =>
       (
         @cmd.batch([
-          symbol_request(emit, input.root, input.owner, "", generation),
+          symbol_request(emit, input, "", generation),
           focus_after_render(),
         ]),
         started,
@@ -72,6 +98,14 @@ pub fn State::handle(
   input : Input,
 ) -> (@cmd.Cmd, State, Accepted?) {
   match msg {
+    CloudFilesLoaded(owner~, generation~, files~) =>
+      (
+        @cmd.none,
+        self.apply_cloud_files(input, owner, generation, Some(files)),
+        None,
+      )
+    CloudFilesFailed(owner~, generation~) =>
+      (@cmd.none, self.apply_cloud_files(input, owner, generation, None), None)
     ValueChanged(value) => {
       let (cmd, next) = self.change_value(emit, input, value)
       (cmd, next, None)
@@ -157,7 +191,7 @@ pub fn State::reconcile(
   guard self.open is Some(open) else { return (@cmd.none, self) }
   // The run belongs to the conversation focused when it opened. A switch
   // retires it rather than repointing it at data the user did not ask for.
-  guard open.owner == input.owner else {
+  guard open.owner == input.owner && open.cloud_access == input.cloud_access else {
     return (self.cancel_file_request(open), { ..self, open: None, })
   }
   guard open.root != input.root else { return (@cmd.none, self) }
@@ -167,12 +201,26 @@ pub fn State::reconcile(
   let restarted : Open = {
     ..open,
     root: input.root,
+    cloud_index: if input.owner is @interop.Cloud(..) {
+      Some(Loading(generation))
+    } else {
+      None
+    },
     items: [],
     selected: 0,
     phase: Loading,
     generation,
   }
   let next = { ..self, open: Some(restarted), generation, }
+  if input.owner is @interop.Cloud(..) {
+    return (
+      cloud_file_request(emit, input, generation),
+      {
+        ..next,
+        open: Some(with_file_candidates(input, restarted, [], Loading)),
+      },
+    )
+  }
   match restarted.provider() {
     Files => {
       // Keep only currently open relative paths as provisional rows; Host
@@ -185,16 +233,7 @@ pub fn State::reconcile(
       (@cmd.batch([self.cancel_file_request(open), cache_cmd]), next)
     }
     Symbols =>
-      (
-        symbol_request(
-          emit,
-          input.root,
-          restarted.owner,
-          restarted.query(),
-          generation,
-        ),
-        next,
-      )
+      (symbol_request(emit, input, restarted.query(), generation), next)
   }
 }
 
@@ -212,6 +251,22 @@ fn State::change_value(
   if value == open.value {
     return (@cmd.none, self)
   }
+  if open.owner is @interop.Cloud(..) {
+    let next_open = { ..open, value, selected: 0, }
+    let (files, phase) = match open.cloud_index {
+      Some(Loaded(files)) => (files, Phase::Ready)
+      Some(Failed) => ([], Phase::Failed)
+      _ => ([], Phase::Loading)
+    }
+    return (
+      @cmd.none,
+      {
+        ..self,
+        open: Some(with_file_candidates(input, next_open, files, phase)),
+      },
+    )
+  }
+  guard open.owner is @interop.Host(owner) else { return (@cmd.none, self) }
   let cancel = self.cancel_file_request(open)
   let generation = self.generation + 1
   let keeps_file_rows = open.provider() is Files && !value.has_prefix("#")
@@ -244,9 +299,7 @@ fn State::change_value(
           cancel,
           cache_cmd,
           @cmd.delay(
-            emit(
-              FilesDue(owner=open.owner, query=next_open.query(), generation~),
-            ),
+            emit(FilesDue(owner~, query=next_open.query(), generation~)),
             FileDebounceMs,
           ),
         ]),
@@ -260,7 +313,7 @@ fn State::change_value(
         @cmd.batch([
           cancel,
           @cmd.delay(
-            emit(SymbolsDue(owner=open.owner, query~, generation~)),
+            emit(SymbolsDue(owner~, query~, generation~)),
             SymbolDebounceMs,
           ),
         ]),
@@ -282,7 +335,7 @@ fn State::begin_file_request(
   generation : Int32,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
-    open.owner == owner &&
+    open.owner == @interop.Host(owner) &&
     open.provider() is Files &&
     open.query() == query &&
     open.generation == generation &&
@@ -324,7 +377,7 @@ fn State::apply_cache_loaded(
   // issue the current query. During a debounce, let the already-scheduled due
   // message retain VS Code's typing delay.
   if next.open is Some(open) &&
-    open.owner == owner &&
+    open.owner == @interop.Host(owner) &&
     open.provider() is Files &&
     !(open.phase is Debouncing) {
     next = { ..next, open: Some({ ..open, phase: Loading, }), }
@@ -351,7 +404,7 @@ fn State::fail_cache_load(
   let clear = clear_file_cache(owner, cache_key)
   guard cache.active_key is None &&
     next.open is Some(open) &&
-    open.owner == owner &&
+    open.owner == @interop.Host(owner) &&
     open.provider() is Files else {
     return (clear, next)
   }
@@ -370,7 +423,7 @@ fn State::apply_file_result(
   files : Array[@pathx.Relative],
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == owner &&
+    open.owner == @interop.Host(owner) &&
     open.provider() is Files &&
     self.cache.active_key is Some(active_key) &&
     active_key == cache_key &&
@@ -390,7 +443,7 @@ fn State::fail_file_request(
   generation : Int32,
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == owner &&
+    open.owner == @interop.Host(owner) &&
     open.provider() is Files &&
     self.cache.active_key is Some(active_key) &&
     active_key == cache_key &&
@@ -413,7 +466,7 @@ fn State::begin_symbol_request(
   generation : Int32,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
-    open.owner == owner &&
+    open.owner == @interop.Host(owner) &&
     open.provider() is Symbols &&
     open.query() == query &&
     open.generation == generation &&
@@ -421,7 +474,7 @@ fn State::begin_symbol_request(
     return (@cmd.none, self)
   }
   (
-    symbol_request(emit, input.root, owner, query, generation),
+    symbol_request(emit, input, query, generation),
     { ..self, open: Some({ ..open, phase: Loading, }), },
   )
 }
@@ -438,7 +491,7 @@ fn State::apply_symbol_result(
   items : Array[@symbols.Symbol],
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == owner &&
+    open.owner == @interop.Host(owner) &&
     open.provider() is Symbols &&
     open.query() == query &&
     open.generation == generation &&
@@ -465,7 +518,7 @@ fn State::fail_symbol_request(
   generation : Int32,
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == owner &&
+    open.owner == @interop.Host(owner) &&
     open.provider() is Symbols &&
     open.query() == query &&
     open.generation == generation &&
@@ -565,9 +618,10 @@ fn State::ensure_cache(
   replace_loaded : Bool,
   query_now : Bool,
 ) -> (@cmd.Cmd, State) {
+  guard open.owner is @interop.Host(owner) else { return (@cmd.none, self) }
   let previous = self.cache
   let compatible = previous.owner is Some(cached_owner) &&
-    cached_owner == open.owner &&
+    cached_owner == owner &&
     previous.root == input.root
   let cmds : Array[@cmd.Cmd] = []
   let mut cache = if compatible {
@@ -585,19 +639,19 @@ fn State::ensure_cache(
       }
     }
     {
-      owner: Some(open.owner),
+      owner: Some(owner),
       root: input.root,
       active_key: None,
       loading_key: None,
     }
   }
   if cache.loading_key is None && (cache.active_key is None || replace_loaded) {
-    let cache_key = file_cache_key(open.owner, open.generation)
+    let cache_key = file_cache_key(owner, open.generation)
     cache = { ..cache, loading_key: Some(cache_key), }
     cmds.push(
       file_request(
         emit,
-        open.owner,
+        owner,
         root=input.root,
         cache_key,
         "",
@@ -620,10 +674,13 @@ fn State::query_active_cache(
   input : Input,
   open : Open,
 ) -> @cmd.Cmd {
-  guard self.cache.active_key is Some(cache_key) else { return @cmd.none }
+  guard open.owner is @interop.Host(owner) &&
+    self.cache.active_key is Some(cache_key) else {
+    return @cmd.none
+  }
   file_request(
     emit,
-    open.owner,
+    owner,
     root=input.root,
     cache_key,
     open.query(),
@@ -634,8 +691,45 @@ fn State::query_active_cache(
 
 ///|
 fn State::cancel_file_request(self : State, open : Open) -> @cmd.Cmd {
-  guard open.provider() is Files && self.cache.active_key is Some(cache_key) else {
+  guard open.owner is @interop.Host(owner) &&
+    open.provider() is Files &&
+    self.cache.active_key is Some(cache_key) else {
     return @cmd.none
   }
-  cancel_file_search(open.owner, cache_key, open.generation)
+  cancel_file_search(owner, cache_key, open.generation)
+}
+
+///|
+/// An index load remains useful while the reader types, but only for the
+/// account/session and opening generation that requested the complete index.
+fn State::apply_cloud_files(
+  self : State,
+  input : Input,
+  owner : @interop.ConversationIdentity,
+  generation : Int32,
+  files : Array[@pathx.Relative]?,
+) -> State {
+  guard self.open is Some(open) &&
+    open.owner == owner &&
+    input.owner == owner &&
+    open.cloud_access == input.cloud_access &&
+    open.cloud_index is Some(Loading(request)) &&
+    request == generation else {
+    return self
+  }
+  let (index, files, phase) = match files {
+    Some(files) => (CloudIndex::Loaded(files), files, Phase::Ready)
+    None => (CloudIndex::Failed, [], Phase::Failed)
+  }
+  {
+    ..self,
+    open: Some(
+      with_file_candidates(
+        input,
+        { ..open, cloud_index: Some(index), },
+        files,
+        phase,
+      ),
+    ),
+  }
 }
