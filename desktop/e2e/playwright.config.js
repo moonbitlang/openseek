@@ -29,15 +29,6 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
     { name: 'webkit-mobile', testMatch: '**/mobile_browser.spec.js', use: { browserName: 'webkit' } },
-    // Safari's grid sizing can hide question cards even when Chromium passes.
-    {
-      name: 'webkit-questions',
-      testMatch: '**/user_questions.spec.js',
-      // Keep WebKit coverage at the engine-specific layout boundary. Shared
-      // question state and protocol behavior are covered in Chromium and model tests.
-      grep: /@webkit-layout/,
-      use: { browserName: 'webkit' },
-    },
   ],
   reporter: [
     ['list'],

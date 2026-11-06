@@ -2,7 +2,7 @@
 
 This Playwright suite builds and mounts the real Desktop browser-console bundle
 in Chromium. It replaces only its HTTP and WebSocket data sources; Rabbita
-rendering, DOM patching, focus, keyboard, layout, and event handling run in the
+rendering, DOM patching, focus, keyboard, and event handling run in the
 browser. The stateful transport fixture also exercises composer send/stop,
 conversation creation/archive/restore, host settings, skill installation, and
 Codex account login plus first-turn start/stop through their real JSON-RPC
@@ -10,14 +10,9 @@ client paths. Its repository snapshot also covers changed-file review,
 review progress and navigation, Git Graph keyboard interaction, commit
 expansion, and immutable historical diffs.
 
-Two question-card layout flows also run in WebKit to cover Safari's grid
-sizing, clipping, and narrow-viewport interaction. Shared question state and
-protocol cases run in Chromium and model tests.
-
-`mobile_browser.spec.js` runs in Chromium and WebKit and covers the phone
-layout that browsers and the Android client share; it needs no Android build.
-Its reduced viewport heights simulate layout only, not a real phone's soft
-keyboard or browser toolbar.
+`mobile_browser.spec.js` runs in Chromium and WebKit to exercise mobile user
+workflows and the browser integration shared with the Android client. It needs
+no Android build and does not simulate a real phone's soft keyboard or toolbar.
 
 ## Setup
 
@@ -60,14 +55,13 @@ positions and wording that includes descriptions, counts, or shortcuts.
 Check visibility independently of content. When a scenario tests rendered
 content, translations, or an accessible name, locate the target first and
 assert that content explicitly. Keep fixture values such as paths and session
-IDs separate from product copy. Use classes for presentation contracts. Mock
+IDs separate from product copy. Mock
 network traffic with Playwright routes and use retrying assertions instead of
 fixed sleeps.
 
 Import `test` and `expect` from `tests/support/test.js`. Its pages run with CSS
 transitions and animations disabled, so clicks do not wait for moving targets.
-Tag a test `{ tag: '@motion' }` when it checks motion itself, such as a running
-spinner, reduced-motion handling, or geometry during or after a transition.
+Use `{ tag: '@motion' }` only when a workflow needs animations enabled.
 
 ## Suite scope
 
@@ -80,9 +74,13 @@ Use representative combinations when theme, viewport, renderer, or error
 variants share the same implementation. Keep extra variants when they exercise
 a distinct integration path or reproduce a browser-specific regression.
 
-Avoid checks that only memorialize a removed control or feature, or pin icon
-paths, decorative pixel dimensions, alignment, and theme colors. Keep layout
-checks tied to observable behavior such as clipping, reachability, or scrolling.
+Do not add layout E2E cases or layout assertions: alignment, spacing, dimensions,
+overflow, responsive breakpoints, and theme styling are outside this suite.
+Do not test RUI's generic menu, popover, keyboard wrapping, dismissal, or focus
+return behavior here. Keep application workflows and their observable results.
+Coordinates needed to perform dragging or text selection are interaction inputs;
+scroll-position preservation and selected content remain workflow behavior.
+Avoid assertions that only memorialize a removed control or feature.
 
 ## Offline interactive answers
 

@@ -315,7 +315,7 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   const finalRead = await followUp;
   const recovered = await finalRead.response();
   expect(recovered.status()).toBe(200);
-  await expect(page.locator('#transcript .msg.assistant .message-copy')).toHaveCount(1);
+  await expect(page.locator('#transcript [data-copy-kind="assistant-message"]')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(result).toHaveCount(1);
   expect(cloud.device.pageErrors).toEqual([]);
