@@ -27,11 +27,13 @@ export class StaticPreviewHarness {
     };`);
     await writeFile(join(this.root, 'assets/dynamic.mjs'), 'export const label = "Dynamic import + fetch";');
     await writeFile(join(this.root, 'assets/data.json'), '{"value":"loaded"}');
-    this.child = spawn('moon', ['run', '--target', 'native', 'desktop/backend/static_preview/test_server'], { cwd: repository, stdio: ['pipe', 'pipe', 'pipe'] });
+    const executable = process.env.OPENSEEK_DESKTOP_PREVIEW_SERVER;
+    this.child = spawn(executable || 'moon', executable ? [] : ['run', '--target', 'native', 'desktop/backend/static_preview/test_server'], { cwd: repository, stdio: ['pipe', 'pipe', 'pipe'] });
     this.errors = '';
     this.child.stderr.on('data', chunk => { this.errors += chunk; });
     this.pending = [];
     const ready = Promise.withResolvers();
+    this.child.once('error', error => ready.reject(error));
     this.child.once('exit', code => {
       const error = new Error(`Preview fixture exited ${code}: ${this.errors}`);
       ready.reject(error);
@@ -43,7 +45,12 @@ export class StaticPreviewHarness {
       if (reply.ready) ready.resolve();
       else this.pending.shift()?.resolve(reply);
     });
-    await ready.promise;
+    try {
+      await ready.promise;
+    } catch (error) {
+      await rm(this.root, { recursive: true, force: true });
+      throw error;
+    }
     return this;
   }
 
