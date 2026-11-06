@@ -55,9 +55,9 @@ struct HostState {
 /// cannot leak into another client.
 struct HostConnection {
   fs_watch : FsWatchActor
-  file_search : FileSearchService
-  text_search : TextSearchService
-  semantic_search : SemanticSearchService
+  file_search : @search.FileSearchService
+  text_search : @search.TextSearchService
+  semantic_search : @search.SemanticSearchService
   terminal : @terminal.TerminalState
 }
 
@@ -233,26 +233,36 @@ pub fn endpoints(
     }),
     Endpoint(@commands.fs_read_directory, payload => read_directory_op(payload)),
     Endpoint(@commands.fs_search_files, payload => {
-      search_files_op(connection.file_search, payload)
+      @search.search_files(
+        connection.file_search,
+        WirePath::parse(payload.path).absolute,
+        payload,
+      )
     }),
     Endpoint(@commands.fs_cancel_search_files, payload => {
-      cancel_search_files_op(connection.file_search, payload)
+      @search.cancel_search_files(connection.file_search, payload)
     }),
     Endpoint(@commands.fs_search_text, payload => {
-      search_text_op(state.resources.ripgrep, connection.text_search, payload)
+      @search.search_text(
+        state.resources.ripgrep,
+        connection.text_search,
+        WirePath::parse(payload.root).absolute,
+        payload,
+      )
     }),
     Endpoint(@commands.fs_cancel_search_text, payload => {
-      cancel_search_text_op(connection.text_search, payload)
+      @search.cancel_search_text(connection.text_search, payload)
     }),
     Endpoint(@commands.fs_search_semantic, payload => {
-      search_semantic_op(
+      @search.search_semantic(
         connection.semantic_search,
+        WirePath::parse(payload.root).absolute,
         payload,
         state.semantic_provider(),
       )
     }),
     Endpoint(@commands.fs_cancel_search_semantic, payload => {
-      cancel_search_semantic_op(connection.semantic_search, payload)
+      @search.cancel_search_semantic(connection.semantic_search, payload)
     }),
     Endpoint(@commands.pattern_repair, payload => {
       match @engine.pattern_repair_environment(manager, model=payload.model) {
@@ -270,7 +280,7 @@ pub fn endpoints(
       }
     }),
     Endpoint(@commands.fs_clear_file_search_cache, payload => {
-      clear_file_search_cache_op(connection.file_search, payload)
+      @search.clear_file_search_cache(connection.file_search, payload)
     }),
     Endpoint(@commands.fs_stat_files, payload => stat_files_op(payload)),
     Endpoint(@commands.fs_watch, payload => {

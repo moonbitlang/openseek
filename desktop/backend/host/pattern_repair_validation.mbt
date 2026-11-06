@@ -16,14 +16,17 @@ fn pattern_repair_provider_args(
   command : String,
   pattern : String,
 ) -> Array[String] {
-  let args = semantic_provider_prefix_args(command)
+  let args = @search.semantic_provider_prefix_args(command)
   args.append(["dump", "--expr", pattern, "--strict-check", "--exit-code"])
   args
 }
 
 ///|
 fn pattern_repair_validator_config(command : String) -> Json {
-  { "command": command, "prefix_args": semantic_provider_prefix_args(command) }
+  {
+    "command": command,
+    "prefix_args": @search.semantic_provider_prefix_args(command),
+  }
 }
 
 ///|
@@ -37,7 +40,7 @@ priv enum PatternRepairValidation {
 async fn validate_pattern_repair_candidate(
   root : @pathx.Absolute,
   pattern : String,
-  provider : ResolvedSemanticProvider?,
+  provider : @search.ResolvedSemanticProvider?,
 ) -> PatternRepairValidation {
   if !PatternRepairValidationEnabled {
     PatternRepairUnavailable
@@ -91,7 +94,7 @@ test "pattern repair validation preserves the dump command" {
     pattern_repair_provider_args("moonx", "foo()"),
   )
   assert_eq(pattern_repair_provider_args("moonx", "foo()"), [
-    MoongrepPackageCoordinate,
+    @search.MoongrepPackageCoordinate,
     "--",
     "dump",
     "--expr",
@@ -105,7 +108,7 @@ test "pattern repair validation preserves the dump command" {
 test "pattern repair validator configuration keeps provider ownership in the Host" {
   assert_eq(pattern_repair_validator_config("moonx"), {
     "command": "moonx",
-    "prefix_args": [MoongrepPackageCoordinate, "--"],
+    "prefix_args": [@search.MoongrepPackageCoordinate, "--"],
   })
 }
 

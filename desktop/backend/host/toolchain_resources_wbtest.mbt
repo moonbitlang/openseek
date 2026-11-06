@@ -72,7 +72,7 @@ async test "language and semantic tools execute the explicit host toolchain" {
   assert_eq(selected.environment["MOON_HOME"], "registry-home")
   let (code, stdout, _) = @processx.collect_output_no_stdin(
     selected.command,
-    semantic_provider_prefix_args(selected.command),
+    @search.semantic_provider_prefix_args(selected.command),
     inherit_env=false,
     extra_env=selected.environment,
   )
