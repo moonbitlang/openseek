@@ -1,9 +1,5 @@
 package com.moonbit.openseek
 
-import java.io.Closeable
-import java.net.InetAddress
-import java.net.ServerSocket
-import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets.UTF_8
@@ -11,93 +7,41 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 
-/** The same S256 account flow used by Desktop; listens only on loopback. */
-internal class BrowserSignIn(
-    private val origin: String,
-    private val returnScheme: String,
-    private val timeoutMs: Int = 300_000,
-) : Closeable {
-    private val listener = ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"))
+/**
+ * The same S256 account flow used by Desktop, except that the browser returns
+ * to the app's own scheme rather than a loopback port. Android freezes the
+ * app's process while the browser covers it, and a frozen process cannot
+ * answer a loopback redirect; the system delivers a scheme URL regardless.
+ */
+internal class BrowserSignIn(origin: String, private val returnScheme: String) {
     private val state = randomHex(16)
 
-    /** Redeems the code [receive] delivers, with this flow's challenge. */
+    /** Redeems the code [answer] returns, with this flow's challenge. */
     val verifier = randomHex(32)
-    val returnUri: String = "$returnScheme://oauth/complete?state=$state"
     val startUri: String = "$origin/v2/auth/account/start?state=$state&code_challenge=" +
         Base64.getUrlEncoder().withoutPadding().encodeToString(
             MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(UTF_8))
-        ) + "&code_challenge_method=S256&port=${listener.localPort}"
-
-    fun acceptsReturn(raw: String?): Boolean = runCatching {
-        val uri = URI(requireNotNull(raw))
-        uri.scheme == returnScheme && uri.host == "oauth" &&
-            uri.path == "/complete" && query(uri)["state"] == state
-    }.getOrDefault(false)
+        ) + "&code_challenge_method=S256&scheme=$returnScheme"
 
     /**
-     * Delivers the authorization code, then redirects the browser back into the
-     * app. The code is redeemed after that return, not here: the browser covers
-     * the app meanwhile, and Android 15 and later fail a backgrounded app's
-     * network requests with UnknownHostException.
+     * The browser's answer in the return URL [raw]: the authorization code, or
+     * why there is none. Null when [raw] is not this flow's return, for
+     * instance one carrying another flow's state.
      */
-    fun receive(complete: (Result<String>, Boolean) -> Unit) {
-        val deadline = System.nanoTime() + timeoutMs * 1_000_000L
-        try {
-            while (!listener.isClosed) {
-                val remaining = ((deadline - System.nanoTime()) / 1_000_000).toInt()
-                if (remaining <= 0) throw SocketTimeoutException()
-                listener.soTimeout = remaining
-                listener.accept().use { socket ->
-                    socket.soTimeout = minOf(3000, remaining)
-                    val line = try {
-                        buildString {
-                            val input = socket.getInputStream()
-                            while (length < 8192) {
-                                val byte = input.read()
-                                if (byte == -1 || byte == 10) break
-                                append(byte.toChar())
-                            }
-                        }.trimEnd('\r')
-                    } catch (_: java.io.IOException) {
-                        // A stray or stalled connection cannot cancel the login.
-                        return@use
-                    }
-                    val parts = line.split(' ')
-                    val uri = runCatching { URI(parts.getOrNull(1) ?: "") }.getOrNull()
-                    val params = uri?.let { runCatching { query(it) }.getOrNull() }
-                    val code = params?.get("code")?.takeIf { it.isNotEmpty() }
-                    val error = params?.get("error")
-                    if (parts.firstOrNull() != "GET" || uri?.path != "/cb" ||
-                        params?.get("state") != state || (code == null && error == null)) {
-                        runCatching {
-                            socket.getOutputStream().write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray(UTF_8))
-                        }
-                        return@use
-                    }
-                    complete(
-                        if (error != null) Result.failure(IllegalStateException("Sign-in was declined."))
-                        else Result.success(requireNotNull(code)),
-                        true,
-                    )
-                    // The browser carries only a state-bound completion signal; the
-                    // code and the account token stay native.
-                    runCatching {
-                        socket.getOutputStream().write(("HTTP/1.1 303 See Other\r\nLocation: $returnUri\r\n" +
-                            "Cache-Control: no-store\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").toByteArray(UTF_8))
-                    }
-                    return
-                }
-            }
-        } catch (_: SocketTimeoutException) {
-            complete(Result.failure(IllegalStateException("Sign-in timed out. Please try again.")), false)
-        } catch (error: Exception) {
-            if (!listener.isClosed) complete(Result.failure(error), false)
-        } finally {
-            close()
+    fun answer(raw: String?): Result<String>? {
+        val params = runCatching {
+            val uri = URI(requireNotNull(raw))
+            check(uri.scheme == returnScheme && uri.host == "oauth" && uri.path == "/complete")
+            query(uri)
+        }.getOrNull()
+        if (params == null || params["state"] != state) return null
+        val code = params["code"]?.takeIf { it.isNotEmpty() }
+        return when {
+            code != null -> Result.success(code)
+            params.containsKey("error") -> Result.failure(IllegalStateException("Sign-in was declined."))
+            else -> null
         }
     }
-
-    override fun close() { listener.close() }
 
     companion object {
         private fun randomHex(bytes: Int): String = ByteArray(bytes).also { SecureRandom().nextBytes(it) }
