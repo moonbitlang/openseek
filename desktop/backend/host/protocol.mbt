@@ -1,22 +1,3 @@
-// Host-only wire helpers: path parsing for the host ops. The request and reply
-// types themselves live in `@protocol`, per docs/remote-protocol.md.
-
-///|
-/// A wire resource path parsed into the host's native absolute path type.
-/// This validates the protocol's path spelling only; it does not derive or
-/// authorize a conversation workspace.
-priv struct WirePath {
-  absolute : @pathx.Absolute
-}
-
-///|
-fn WirePath::parse(path : String) -> WirePath raise HostError {
-  guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
-    raise HostError("path is not absolute")
-  }
-  { absolute: absolute.normalize(), }
-}
-
 ///|
 test "language requests carry roots and lsp_open distinguishes no data" {
   assert_eq(

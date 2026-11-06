@@ -100,7 +100,10 @@ pub async fn resolve_host_workspace_authorization(
   session : String,
   workspace : String,
 ) -> @pathx.Absolute? {
-  guard @pathx.Absolute::from_uri_path(workspace) is Some(requested) &&
+  guard (Some(@pathx.Absolute::parse_resource_path(workspace)) catch {
+      InvalidResourcePath => None
+    })
+    is Some(requested) &&
     host_workspace_authorizations.resolve(session, requested)
     is Some(authorized) else {
     return None
@@ -152,7 +155,10 @@ pub async fn session_review_base(
   workspace? : String,
 ) -> String? {
   let workspace = if workspace is Some(hint) &&
-    @pathx.Absolute::from_uri_path(hint) is Some(hint) &&
+    (Some(@pathx.Absolute::parse_resource_path(hint)) catch {
+      InvalidResourcePath => None
+    })
+    is Some(hint) &&
     @workspaces.registered_dir(hint) is Some(workspace) {
     Some(workspace)
   } else {
@@ -177,7 +183,10 @@ pub async fn resolve_in_workspace(
   workspace? : String,
 ) -> @pathx.Absolute? {
   let root = match workspace {
-    Some(hint) if @pathx.Absolute::from_uri_path(hint) is Some(hint) =>
+    Some(hint) if (Some(@pathx.Absolute::parse_resource_path(hint)) catch {
+        InvalidResourcePath => None
+      })
+      is Some(hint) =>
       match @workspaces.registered_dir(hint) {
         // The hint names the workspace; a session bound to one of its
         // worktrees still roots in that checkout. A Codex thread instead

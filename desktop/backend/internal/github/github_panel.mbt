@@ -180,8 +180,9 @@ pub async fn list(
   guard payload.limit > 0 && payload.limit <= 1000 else {
     raise InvalidRequest("GitHub list size must be between 1 and 1000.")
   }
-  guard @pathx.Absolute::from_uri_path(payload.cwd) is Some(dir) else {
-    raise InvalidRequest("Select a workspace with an absolute checkout path.")
+  let dir = @pathx.Absolute::parse_resource_path(payload.cwd) catch {
+    InvalidResourcePath =>
+      raise InvalidRequest("Select a workspace with an absolute checkout path.")
   }
   guard resolve_gh() is Some(gh) else {
     raise Unavailable(

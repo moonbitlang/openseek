@@ -21,8 +21,8 @@ async fn resolve_host_reference(
   // to the directory the session's engine runs in.
   let base = match payload.cwd {
     Some(cwd) => {
-      guard @pathx.Absolute::from_uri_path(cwd) is Some(cwd) else {
-        return Err("Invalid working directory")
+      let cwd = @pathx.Absolute::parse_resource_path(cwd) catch {
+        InvalidResourcePath => return Err("Invalid working directory")
       }
       Some(cwd)
     }

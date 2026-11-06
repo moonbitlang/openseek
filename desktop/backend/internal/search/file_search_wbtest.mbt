@@ -141,5 +141,5 @@ async test "file scan uses one ordered coordinator" {
 
 ///|
 async fn git_test_run(dir : String, args : Array[String]) -> Unit {
-  ignore(@gitx.output(@pathx.Absolute::from_uri_path(dir).unwrap(), args))
+  ignore(@gitx.output(@pathx.Absolute::parse_resource_path(dir), args))
 }

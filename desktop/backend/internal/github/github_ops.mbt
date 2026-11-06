@@ -46,7 +46,10 @@ pub async fn current_pull_request(
   // Addressed exactly like `git.branch`, so the two chips can never end up
   // describing different branches.
   let base = match payload.cwd {
-    Some(cwd) => @pathx.Absolute::from_uri_path(cwd)
+    Some(cwd) =>
+      Some(@pathx.Absolute::parse_resource_path(cwd)) catch {
+        InvalidResourcePath => None
+      }
     None => @work_dir.session_cwd(payload.session)
   }
   guard base is Some(base) else { return nothing }

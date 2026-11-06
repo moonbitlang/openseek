@@ -8,7 +8,10 @@ pub async fn import_session(
   let records = @session_import.prepare(payload.source)
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
-  guard @pathx.Absolute::from_uri_path(payload.workspace) is Some(requested) &&
+  guard (Some(@pathx.Absolute::parse_resource_path(payload.workspace)) catch {
+      InvalidResourcePath => None
+    })
+    is Some(requested) &&
     @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }

@@ -34,7 +34,7 @@ pub async fn materialize_semantic_selection(
   guard source_units <= MaxSemanticSelectionArtifactUnits else {
     raise InvalidRequest("semantic selection is too large to materialize")
   }
-  let root = wire_path(payload.root)
+  let root = @pathx.Absolute::parse_resource_path(payload.root)
   let relative_dir = ".openseek/agent-context/semantic-search"
   let dir = root.join(relative_dir)
   @fs.mkdir(dir.to_string(), recursive=true) catch {
@@ -250,7 +250,7 @@ async test "semantic selection materialization never replaces an old snapshot" {
 pub async fn read_directory(
   payload : @protocol.ReadDirPayload,
 ) -> @protocol.ReadDirReply {
-  let dir = wire_path(payload.path)
+  let dir = @pathx.Absolute::parse_resource_path(payload.path)
   // A requested root can be created lazily by the engine. Treat a missing
   // directory as empty so the panel can keep its ordinary loading behavior.
   if !@fs.exists(dir.to_string()) {
@@ -279,9 +279,9 @@ pub async fn read_file(
   payload : @protocol.ReadFilePayload,
 ) -> @protocol.ReadFileReply {
   let file = if payload.root is Some(root) {
-    resolve_wire_path(wire_path(root), payload.path)
+    resolve_wire_path(@pathx.Absolute::parse_resource_path(root), payload.path)
   } else {
-    wire_path(payload.path)
+    @pathx.Absolute::parse_resource_path(payload.path)
   }
   let source = @fs.open(file.to_string(), mode=ReadOnly)
   defer source.close()
@@ -487,7 +487,7 @@ pub async fn stat_files(
 ) -> @protocol.StatFilesReply {
   let stats : Array[@protocol.FileStat] = []
   for path in payload.paths {
-    let file = wire_path(path)
+    let file = @pathx.Absolute::parse_resource_path(path)
     stats.push({ path, signature: file_signature(file.to_string()), })
   }
   { stats, }
@@ -534,7 +534,7 @@ pub async fn capture(payload : @protocol.ReadFilePayload) -> (String, Bytes) {
   guard payload.root is Some(root) else {
     raise InvalidRequest("Sharing requires a workspace root.")
   }
-  let root = wire_path(root)
+  let root = @pathx.Absolute::parse_resource_path(root)
   let file = resolve_wire_path(root, payload.path)
   guard root.contains(file) else {
     raise InvalidRequest("The file is outside the workspace.")

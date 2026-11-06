@@ -11,10 +11,13 @@ fn codex_resource_path(path : String) -> String raise @host.HostError {
 
 ///|
 fn codex_same_workspace(left : String, right : String) -> Bool {
-  @pathx.Absolute::from_uri_path(left) is Some(path) &&
-  @pathx.Absolute::from_uri_path(right) is Some(root) &&
-  path.relative_to(root~) is Some(relative) &&
-  relative.is_root()
+  let path = @pathx.Absolute::parse_resource_path(left) catch {
+    InvalidResourcePath => return false
+  }
+  let root = @pathx.Absolute::parse_resource_path(right) catch {
+    InvalidResourcePath => return false
+  }
+  path.relative_to(root~) is Some(relative) && relative.is_root()
 }
 
 ///|

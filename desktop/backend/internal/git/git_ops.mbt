@@ -11,7 +11,10 @@ pub async fn branch(
   // back to the directory the session's engine runs in (mirrors
   // `host.open_path`).
   let base = match payload.cwd {
-    Some(cwd) => @pathx.Absolute::from_uri_path(cwd)
+    Some(cwd) =>
+      Some(@pathx.Absolute::parse_resource_path(cwd)) catch {
+        InvalidResourcePath => None
+      }
     None => @work_dir.session_cwd(payload.session)
   }
   guard base is Some(base) else { return { branch: None, diffstat: None, } }

@@ -39,7 +39,7 @@ async fn load_attachment(
 ) -> LoadedAttachment {
   let loaded = match source {
     AttachmentPath(path) => {
-      let path = wire_path(path)
+      let path = @pathx.Absolute::parse_resource_path(path)
       let path = @pathx.Path(@fs.realpath(path.to_string())).resolve()
       guard @fs.kind(path.to_string()) is Regular else {
         raise InvalidRequest("attachment must be a file")
@@ -171,7 +171,7 @@ pub async fn stage_attachments(
   payload : @protocol.StageAttachmentsPayload,
 ) -> @protocol.EmptyReply {
   let root = attachment_workspace(payload.session, payload.workspace)
-  let source_root = wire_path(payload.source_root)
+  let source_root = @pathx.Absolute::parse_resource_path(payload.source_root)
   let source_root = @pathx.Path(@fs.realpath(source_root.to_string())).resolve()
   for relative in payload.paths {
     guard relative.split("/").collect()

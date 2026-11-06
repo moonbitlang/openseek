@@ -253,10 +253,11 @@ fn CodexWorkspaceBinding::decode_reply(value : Json) -> CodexWorkspaceBinding? {
 async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit {
   match self.workspace {
     Some(workspace) => {
-      guard @pathx.Absolute::from_uri_path(workspace) is Some(path) else {
-        raise @host.HostError(
-          "invalid Codex workspace resource path: " + workspace,
-        )
+      let path = @pathx.Absolute::parse_resource_path(workspace) catch {
+        InvalidResourcePath =>
+          raise @host.HostError(
+            "invalid Codex workspace resource path: " + workspace,
+          )
       }
       @work_dir.authorize_host_workspace(self.session, path.to_string())
     }
@@ -1025,9 +1026,11 @@ async fn ApiState::open_codex_draft(
   payload : @protocol.CodexDraftOpenPayload,
 ) -> @protocol.CodexDraftOpenReply {
   let draft_id = payload.draft_id.trim().to_owned()
-  let registered = if @pathx.Absolute::from_uri_path(
-      payload.cwd.trim().to_owned(),
-    )
+  let registered = if (Some(
+      @pathx.Absolute::parse_resource_path(payload.cwd.trim().to_owned()),
+    ) catch {
+      InvalidResourcePath => None
+    })
     is Some(requested) {
     // Resource URIs lowercase Windows drive letters; the registry owns the
     // canonical filesystem spelling, including drive case and symlinks.

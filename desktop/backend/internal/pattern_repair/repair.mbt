@@ -369,10 +369,7 @@ pub async fn repair(
       [],
     )
   }
-  guard @pathx.Absolute::from_uri_path(payload.root) is Some(root) else {
-    raise InvalidRoot
-  }
-  let root = root.normalize()
+  let root = @pathx.Absolute::parse_resource_path(payload.root)
   let provider = provider.resolve(env=agent_env) catch {
     error =>
       return pattern_repair_failure(

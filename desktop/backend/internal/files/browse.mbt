@@ -33,15 +33,15 @@ async fn browse_directory_listing(
   let target : @pathx.Absolute = if requested.is_empty() {
     guard @home.dir() is Some(home) else { raise NoHomeDirectory }
     home.resolve()
-  } else if @pathx.Absolute::from_uri_path(requested) is Some(absolute) {
+  } else {
     // Breadcrumb and directory-row clicks return the URI path from the
     // preceding reply, including `/C:/...` on Windows.
-    absolute
-  } else {
-    // A pasted path is an operating-system boundary: accept the host's
-    // ordinary spelling (`C:\...` on Windows), `~`, and the same relative
-    // spellings the picker accepted before frontend resources were typed.
-    @home.expand(Path(requested)).resolve()
+    @pathx.Absolute::parse_resource_path(requested) catch {
+      InvalidResourcePath =>
+        // Pasted paths also accept native Windows spelling, `~`, and relative
+        // paths. Only this input-format mismatch selects the native parser.
+        @home.expand(Path(requested)).resolve()
+    }
   }
   let dir = target.normalize()
   // Fail before reading a directory we cannot name back to the frontend.
@@ -101,10 +101,10 @@ async fn create_directory_listing(
   guard name != "." && name != ".." && !name.contains_any(chars="/\\") else {
     raise InvalidRequest("folder name must be a single name")
   }
-  guard @pathx.Absolute::from_uri_path(payload.parent) is Some(parent) else {
-    raise InvalidRequest("invalid parent directory: \{payload.parent}")
+  let parent = @pathx.Absolute::parse_resource_path(payload.parent) catch {
+    InvalidResourcePath =>
+      raise InvalidRequest("invalid parent directory: \{payload.parent}")
   }
-  let parent = parent.normalize()
   let kind = @fs.kind(parent.to_string()) catch {
     _ => raise InvalidRequest("no such directory: \{parent}")
   }
