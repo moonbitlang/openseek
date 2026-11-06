@@ -162,21 +162,12 @@ async fn Schedules::commit(
   self : Schedules,
   state : @protocol.SchedulesReply,
 ) -> Unit {
-  let dir = self.directory()
-  let temp = dir.join("schedules.tmp")
   let json : Json = { "version": 1, "state": state.to_json() }
-  @fs.write_file(
-    temp.to_string(),
+  @fsx.write_text_atomic(
+    self.directory().join("schedules.json"),
     json.stringify(),
-    create_mode=CreateOrTruncate,
     permission=0o600,
   )
-  {
-    let file = @fs.open(temp.to_string(), mode=ReadWrite)
-    defer file.close()
-    file.sync()
-  }
-  @fs.rename(temp.to_string(), dir.join("schedules.json").to_string())
   self.state = Some(state)
 }
 
