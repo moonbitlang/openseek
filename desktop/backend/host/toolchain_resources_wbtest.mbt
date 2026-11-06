@@ -4,8 +4,6 @@ async test "desktop resource selection preserves missing tools and lazy export v
   defer @fs.rmdir(root.to_string(), recursive=true)
   let resources = desktop_resources({ dir: root, packaged: true, })
   assert_true(resources.moonbit is DesktopBundle)
-  assert_true(resources.ripgrep is None)
-  assert_true(resources.bin_dir is None)
   let state = new_host_state("unused", resources~)
   try state.viz_assets() catch {
     _ => ()

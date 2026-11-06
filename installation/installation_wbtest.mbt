@@ -14,7 +14,6 @@ async fn fixture_toolchain(destination : String) -> Unit {
 ///|
 async fn fixture_bundle(destination : String) -> Unit {
   @fs.mkdir(destination + "/bin", recursive=true, allow_exist=true)
-  executable(destination + "/bin/rg", "fixture-rg")
   for directory in ["doc/moonbit/language", "doc/moonbit/toolchain", "workflow"] {
     @fs.mkdir(
       destination + "/share/" + directory,
@@ -63,7 +62,6 @@ async test "setup installs missing dependencies and reuses them offline" {
   )
   assert_true(usable(home + "/.moon/bin/moon", ["version"]))
   assert_true(usable(home + "/.openseek/bin/openseek", ["--help"]))
-  assert_true(usable(home + "/.openseek/bin/rg", ["--version"]))
   assert_eq(
     @fs.read_file(home + "/.openseek/share/licenses/LICENSE").text(),
     "fixture license",
@@ -75,7 +73,6 @@ async test "setup installs missing dependencies and reuses them offline" {
     available=isolated_available,
     toolchain=_ => fail("must not reinstall SDK"),
   )
-  assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
   assert_eq(
     @fs.read_file(
       home + "/.openseek/share/doc/moonbit/language/fundamentals.md",
@@ -109,7 +106,6 @@ async test "setup resolves a launcher symlink outside the extracted distribution
     command(home + "/.openseek/bin/openseek", ["--help"]),
     "bootstrap-cli\n",
   )
-  assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
   assert_eq(
     @fs.read_file(home + "/.openseek/share/doc/moonbit/index.md").text(),
     "resource",
@@ -117,7 +113,7 @@ async test "setup resolves a launcher symlink outside the extracted distribution
 }
 
 ///|
-async test "setup reuses PATH MoonBit but replaces rg and the complete resource tree" {
+async test "setup reuses PATH MoonBit but replaces the complete resource tree" {
   if @async.platform is Windows {
     return
   }
@@ -135,7 +131,7 @@ async test "setup reuses PATH MoonBit but replaces rg and the complete resource 
     home,
     source_cli,
     available=(program, args) => {
-      if ["moon", "moonc", "moonrun", "moonx", "rg"].contains(program) {
+      if ["moon", "moonc", "moonrun", "moonx"].contains(program) {
         true
       } else {
         isolated_available(program, args)
@@ -144,7 +140,6 @@ async test "setup reuses PATH MoonBit but replaces rg and the complete resource 
     toolchain=_ => fail("working SDK must be reused"),
   )
   assert_false(@fs.exists(home + "/.moon"))
-  assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
   assert_eq(
     command(home + "/.openseek/bin/openseek", ["--help"]),
     "bootstrap-cli\n",
@@ -163,7 +158,7 @@ async test "setup reuses PATH MoonBit but replaces rg and the complete resource 
 }
 
 ///|
-async test "setup replaces working rg without replacing MoonBit or CLI" {
+async test "setup keeps a working MoonBit and CLI" {
   if @async.platform is Windows {
     return
   }
@@ -173,12 +168,10 @@ async test "setup replaces working rg without replacing MoonBit or CLI" {
   fixture_toolchain(home + "/.moon")
   fixture_bundle(home + "/.openseek")
   executable(home + "/.openseek/bin/openseek", "keep-cli")
-  executable(home + "/.openseek/bin/rg", "old-rg")
   @fs.write_file(home + "/.moon/credentials", "keep")
   install(home, source_cli, available=isolated_available, toolchain=_ => {
     fail("SDK must not be replaced")
   })
-  assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
   assert_eq(command(home + "/.openseek/bin/openseek", ["--help"]), "keep-cli\n")
   assert_eq(@fs.read_file(home + "/.moon/credentials").text(), "keep")
 }

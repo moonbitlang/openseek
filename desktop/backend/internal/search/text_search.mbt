@@ -1,5 +1,6 @@
 // Connection-owned workspace text search. One actor serializes session state
-// while each generation runs its own ripgrep process in a cancellable task.
+// while each generation runs its own cli/rg process (the MoonBit ripgrep port,
+// started through moonx) in a cancellable task.
 
 ///|
 const MaxTextSearchResults : Int32 = 20000
@@ -97,7 +98,7 @@ fn TextSearchCancellationFrontiers::record(
 ///|
 priv enum TextSearchRequest {
   Search(
-    command~ : String?,
+    command~ : MoonxProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchTextPayload,
     reply~ : @async.Queue[@protocol.SearchTextReply]
@@ -146,7 +147,7 @@ fn empty_text_search_reply(
 ///|
 async fn TextSearchService::search(
   self : TextSearchService,
-  command : String?,
+  command : MoonxProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchTextPayload,
 ) -> @protocol.SearchTextReply {
@@ -971,7 +972,7 @@ fn text_search_error(stderr : String) -> (String, String) {
     _ =>
       text_search_first_diagnostic_line(detail)
       .map(text_search_display_line)
-      .unwrap_or("ripgrep could not complete the search.")
+      .unwrap_or("Text search could not complete.")
   }
   (code, bounded_text_search_error_message(message))
 }
@@ -987,7 +988,7 @@ fn text_search_exit_is_fatal(
 
 ///|
 async fn run_text_search(
-  command : String?,
+  command : MoonxProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchTextPayload,
 ) -> @protocol.SearchTextReply {
@@ -1003,11 +1004,12 @@ async fn run_text_search(
       message: "Search paths outside the selected workspace are not supported; use ./ for a root-relative pattern.",
     })
   }
-  guard command is Some(command) else {
-    return empty_text_search_reply(reply_root, payload.generation, error={
-      code: "rg_unavailable",
-      message: "This SeekMoon installation does not include ripgrep.",
-    })
+  let provider = command.resolve() catch {
+    error =>
+      return empty_text_search_reply(reply_root, payload.generation, error={
+        code: "rg_unavailable",
+        message: "Cannot resolve the MoonBit toolchain for text search: \{error}",
+      })
   }
   let directory = @fs.opendir(native_root) catch {
     error =>
@@ -1033,9 +1035,10 @@ async fn run_text_search(
   @async.with_task_group(group => {
     let process = @process.spawn(
       group,
-      command,
-      text_search_args(payload),
-      inherit_env=true,
+      provider.command,
+      rg_args(text_search_args(payload)),
+      inherit_env=false,
+      extra_env=provider.environment,
       stdin=stdin_reader,
       stdout=child_stdout,
       stderr=child_stderr,
@@ -1049,7 +1052,7 @@ async fn run_text_search(
         stderr_reader.close()
         return empty_text_search_reply(reply_root, payload.generation, error={
           code: "rg_unavailable",
-          message: "Cannot start ripgrep: \{error}",
+          message: "Cannot start text search: \{error}",
         })
       }
     }
@@ -1129,7 +1132,7 @@ async fn run_text_search(
 
 ///|
 pub async fn search_text(
-  command : String?,
+  command : MoonxProvider,
   service : TextSearchService,
   root : @pathx.Absolute,
   payload : @protocol.SearchTextPayload,
@@ -1498,7 +1501,7 @@ async test "text search replies echo resource-form workspace roots" {
     generation: 3,
     max_results: 20000,
   }
-  let reply = run_text_search(None, root, payload)
+  let reply = run_text_search(test_provider(), root, payload)
   assert_eq(reply.root, resource_root)
 }
 
@@ -1522,7 +1525,7 @@ async test "cancel-before-search frontier rejects the stale generation" {
       generation: 7,
       max_results: 20000,
     }
-    let reply = service.search(None, root, payload)
+    let reply = service.search(test_provider(), root, payload)
     assert_true(reply.cancelled)
     assert_eq(reply.generation, 7)
     assert_eq(reply.root, resource_root)

@@ -2,7 +2,7 @@
 // request scans its absolute root once, later queries filter that cached
 // snapshot, and clearCache is the only operation that retires the session.
 // Discovery intentionally has one coordinator instead of a per-connection
-// worker pool; a future bundled ripgrep provider can replace this scanner
+// worker pool; a future `rg --files` provider can replace this scanner
 // without changing the cache/session state machine.
 
 ///|
@@ -361,7 +361,7 @@ async fn compute_file_search(
 pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
   @async.with_task_group(group => {
     // VS Code delegates discovery to one ripgrep process. Until OpenSeek
-    // bundles that provider, serialize the fallback walker per connection so
+    // has that provider, serialize the fallback walker per connection so
     // a client cannot multiply directory IO by opening overlapping sessions.
     let scan_permit : @semaphore.Semaphore = Semaphore(1, initial_value=1)
     let caches : Map[String, FileSearchCache] = Map([])

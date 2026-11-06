@@ -6,34 +6,6 @@
 /// unused. They are exported on purpose, not accidentally.
 
 ///|
-/// Resolve the packaged tools from the platform-independent resource
-/// directory. Development deliberately uses PATH even if a previous package
-/// build left generated `seekmoon/` files in the checkout, and so does a host
-/// that was told of no resource directory at all.
-///
-/// Exported for the Desktop window host, which installs them before it starts
-/// the engine (`desktop/app/main.mbt`).
-pub async fn PackagedTools::resolve(
-  resources : @resources.Resources?,
-) -> PackagedTools? {
-  guard resources is Some(resources) && resources.packaged else { return None }
-  PackagedTools::resolve_from_resource_dir(resources.dir.to_string())
-}
-
-///|
-/// Put the packaged tools first in this process's PATH. Desktop child
-/// processes inherit this environment: OpenSeek's engine passes it to agent
-/// mbtx snippets, while Codex app-server passes it to its own tool processes.
-/// Keep an already-leading entry unchanged so embedding launchers cannot
-/// duplicate it.
-///
-/// Exported for the Desktop window host, which calls it on the tools
-/// `PackagedTools::resolve` returned (`desktop/app/main.mbt`).
-pub fn PackagedTools::apply_to_process_env(self : PackagedTools) -> Unit {
-  @sys.set_env_var("PATH", self.path_with_precedence(@sys.get_env_var("PATH")))
-}
-
-///|
 /// Locate the frontend from the resource directory. The supported
 /// development launcher exposes `desktop/` as that directory, while every
 /// installed app exposes the package root containing canonical `seekmoon/`.
@@ -89,9 +61,7 @@ pub fn app_bundle_path(executable : String) -> String? {
 ///
 /// Exported for the Desktop window host, which is the only caller that knows
 /// Proton's resource directory and packaging state (`desktop/app/main.mbt`).
-pub async fn desktop_resources(
-  resources : @resources.Resources,
-) -> HostResources {
+pub fn desktop_resources(resources : @resources.Resources) -> HostResources {
   let assets : VizAssets = if resources.packaged {
     let viz = resources.dir.join(PackagedVizDir)
     {
@@ -105,12 +75,7 @@ pub async fn desktop_resources(
       bundle: checkout.join(DevelopmentVizBundlePath).normalize().to_string(),
     }
   }
-  {
-    moonbit: DesktopBundle,
-    viz: Some(assets),
-    bin_dir: PackagedTools::resolve(Some(resources)).map(tools => tools.bin_dir),
-    ripgrep: ripgrep_command(Some(resources)),
-  }
+  { moonbit: DesktopBundle, viz: Some(assets), }
 }
 
 ///|

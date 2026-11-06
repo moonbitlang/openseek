@@ -1767,10 +1767,11 @@ fn description(
     #|  `["src/main.mbt:120:200", "moon.mod"]`. Selectors are `path`,
     #|  `path:start` or `path:start:end` (inclusive, 1-based). Output is bounded:
     #|  follow truncated or skipped files with narrower reads. A failing file fails the call; the others still return.
-    #|- `@builtin/rg.mbtx` searches text. `args` go to ripgrep unchanged, so they
-    #|  are rg flags and regex, not POSIX grep (`-E` is `--encoding`; alternation
-    #|  is `a|b`), e.g. args `["fn parse", "-g", "*.mbt"]`. Output is
-    #|  `path:line:text`; no match exits 0 with a note.
+    #|- `@builtin/rg.mbtx` searches text. `args` go to cli/rg (ripgrep ported to
+    #|  MoonBit) unchanged, so they are rg flags and regex, not POSIX grep (`-E`
+    #|  is `--encoding`; alternation is `a|b`), and a PATH is required, e.g. args
+    #|  `["fn parse", "-g", "*.mbt", "."]`. Output is `path:line:text`; no match
+    #|  exits 0 with a note.
     #|- `@builtin/check.mbtx` (moon check; `args` are passed on), `@builtin/test.mbtx`
     #|  (moon test), `@builtin/check-test.mbtx` (check, then test),
     #|  `@builtin/info-fmt.mbtx` (moon info, then moon fmt) and

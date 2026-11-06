@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub async fn repair(String, @search.SemanticProvider, @engine.PatternRepairEnvironment, @protocol.PatternRepairPayload) -> @protocol.PatternRepairReply
+pub async fn repair(String, @search.MoonxProvider, @engine.PatternRepairEnvironment, @protocol.PatternRepairPayload) -> @protocol.PatternRepairReply
 
 // Errors
 

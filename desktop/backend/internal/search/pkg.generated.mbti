@@ -23,9 +23,9 @@ pub fn moongrep_args(Array[String]) -> Array[String]
 
 pub async fn search_files(FileSearchService, @pathx.Absolute, @protocol.SearchFilesPayload) -> @protocol.SearchFilesReply
 
-pub async fn search_semantic(SemanticSearchService, @pathx.Absolute, @protocol.SearchSemanticPayload, SemanticProvider) -> @protocol.SearchSemanticReply
+pub async fn search_semantic(SemanticSearchService, @pathx.Absolute, @protocol.SearchSemanticPayload, MoonxProvider) -> @protocol.SearchSemanticReply
 
-pub async fn search_text(String?, TextSearchService, @pathx.Absolute, @protocol.SearchTextPayload) -> @protocol.SearchTextReply
+pub async fn search_text(MoonxProvider, TextSearchService, @pathx.Absolute, @protocol.SearchTextPayload) -> @protocol.SearchTextReply
 
 // Errors
 #derive(@debug.Debug)
@@ -42,14 +42,14 @@ type FileSearchService
 pub fn FileSearchService::FileSearchService() -> Self
 pub async fn FileSearchService::run(Self) -> Unit
 
-pub struct ResolvedSemanticProvider {
+type MoonxProvider
+pub fn MoonxProvider::MoonxProvider(engine~ : String, runtime_dir~ : @pathx.Path?, source~ : @moonbit.ToolchainSource) -> Self
+pub async fn MoonxProvider::resolve(Self, env? : Map[String, String]) -> ResolvedMoonxProvider
+
+pub struct ResolvedMoonxProvider {
   command : String
   environment : Map[String, String]
 }
-
-type SemanticProvider
-pub fn SemanticProvider::SemanticProvider(engine~ : String, runtime_dir~ : @pathx.Path?, source~ : @moonbit.ToolchainSource) -> Self
-pub async fn SemanticProvider::resolve(Self, env? : Map[String, String]) -> ResolvedSemanticProvider
 
 type SemanticSearchService
 pub fn SemanticSearchService::SemanticSearchService() -> Self

@@ -494,7 +494,7 @@ fn search_message(
         "invalid_regex" => ui(locale, InvalidRegex)
         "invalid_glob" => ui(locale, InvalidGlob)
         "permission_denied" => ui(locale, UnreadableWorkspace)
-        "rg_unavailable" => ui(locale, RipgrepUnavailable)
+        "rg_unavailable" => ui(locale, TextSearchUnavailable)
         "invalid_pattern" => ui(locale, InvalidPattern)
         "moongrep_unavailable" => ui(locale, SemanticUnavailable)
         "invalid_request" => ui(locale, NothingToSearch)
