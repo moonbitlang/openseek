@@ -115,12 +115,12 @@ priv enum TextSearchRequest {
 }
 
 ///|
-priv struct TextSearchService {
+struct TextSearchService {
   requests : @async.Queue[TextSearchRequest]
 }
 
 ///|
-fn TextSearchService::TextSearchService() -> TextSearchService {
+pub fn TextSearchService::TextSearchService() -> TextSearchService {
   { requests: Queue(kind=Blocking(64)), }
 }
 
@@ -180,7 +180,7 @@ async fn cancel_running_text_search(
 }
 
 ///|
-async fn TextSearchService::run(self : TextSearchService) -> Unit {
+pub async fn TextSearchService::run(self : TextSearchService) -> Unit {
   @async.with_task_group(group => {
     let running : Map[String, RunningTextSearch] = Map([])
     let cancelled_through = TextSearchCancellationFrontiers::TextSearchCancellationFrontiers()
@@ -1128,17 +1128,17 @@ async fn run_text_search(
 }
 
 ///|
-async fn search_text_op(
+pub async fn search_text(
   command : String?,
   service : TextSearchService,
+  root : @pathx.Absolute,
   payload : @protocol.SearchTextPayload,
 ) -> @protocol.SearchTextReply {
-  let root = WirePath::parse(payload.root).absolute
   service.search(command, root, payload)
 }
 
 ///|
-async fn cancel_search_text_op(
+pub async fn cancel_search_text(
   service : TextSearchService,
   payload : @protocol.CancelSearchTextPayload,
 ) -> @protocol.EmptyReply {

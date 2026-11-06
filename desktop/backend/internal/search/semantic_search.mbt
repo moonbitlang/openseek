@@ -120,12 +120,12 @@ priv enum SemanticSearchRequest {
 }
 
 ///|
-priv struct SemanticSearchService {
+struct SemanticSearchService {
   requests : @async.Queue[SemanticSearchRequest]
 }
 
 ///|
-fn SemanticSearchService::SemanticSearchService() -> SemanticSearchService {
+pub fn SemanticSearchService::SemanticSearchService() -> SemanticSearchService {
   { requests: Queue(kind=Blocking(64)), }
 }
 
@@ -189,7 +189,7 @@ async fn cancel_running_semantic_search(
 }
 
 ///|
-async fn SemanticSearchService::run(
+pub async fn SemanticSearchService::run(
   self : SemanticSearchService,
   emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
@@ -794,17 +794,17 @@ async fn run_semantic_search(
 }
 
 ///|
-async fn search_semantic_op(
+pub async fn search_semantic(
   service : SemanticSearchService,
+  root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
   command : SemanticProvider?,
 ) -> @protocol.SearchSemanticReply {
-  let root = WirePath::parse(payload.root).absolute
   service.search(command, root, payload)
 }
 
 ///|
-async fn cancel_search_semantic_op(
+pub async fn cancel_search_semantic(
   service : SemanticSearchService,
   payload : @protocol.CancelSearchSemanticPayload,
 ) -> @protocol.EmptyReply {

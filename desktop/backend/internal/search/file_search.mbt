@@ -123,7 +123,7 @@ async fn workspace_git_ignored_paths(
     "--", ".",
   ]) catch {
     @gitx.GitError(detail) =>
-      raise HostError("failed to read Git ignore rules: \{detail}")
+      raise IndexingFailed("failed to read Git ignore rules: \{detail}")
     error => raise error
   }
   let ignored : Map[String, Unit] = Map([])
@@ -139,13 +139,13 @@ async fn workspace_git_ignored_paths(
 priv enum FileSearchResponse {
   SearchSucceeded(@protocol.SearchFilesReply)
   SearchCancelled
-  SearchFailed(String)
+  SearchFailed(SearchError)
 }
 
 ///|
 priv enum FileScanOutcome {
   ScanSucceeded(FileIndexSnapshot)
-  ScanFailed(String)
+  ScanFailed(SearchError)
 }
 
 ///|
@@ -167,7 +167,7 @@ priv struct FileSearchComputation {
 ///|
 priv enum FileRankOutcome {
   RankSucceeded(FileSearchComputation)
-  RankFailed(String)
+  RankFailed(SearchError)
 }
 
 ///|
@@ -227,13 +227,13 @@ priv enum FileSearchRequest {
 }
 
 ///|
-priv struct FileSearchService {
+struct FileSearchService {
   requests : @async.Queue[FileSearchRequest]
   scan : async (@pathx.Absolute) -> FileIndexSnapshot
 }
 
 ///|
-fn FileSearchService::FileSearchService() -> FileSearchService {
+pub fn FileSearchService::FileSearchService() -> FileSearchService {
   FileSearchService::new_with_scan(root => scan_workspace_files(root))
 }
 
@@ -269,7 +269,7 @@ async fn FileSearchService::search(
     SearchSucceeded(result) => result
     SearchCancelled =>
       { files: [], from_cache: true, limit_hit: false, cancelled: true, }
-    SearchFailed(message) => raise HostError(message)
+    SearchFailed(error) => raise error
   }
 }
 
@@ -361,7 +361,7 @@ async fn compute_file_search(
 }
 
 ///|
-async fn FileSearchService::run(self : FileSearchService) -> Unit {
+pub async fn FileSearchService::run(self : FileSearchService) -> Unit {
   @async.with_task_group(group => {
     // VS Code delegates discovery to one ripgrep process. Until OpenSeek
     // bundles that provider, serialize the fallback walker per connection so
@@ -383,7 +383,9 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
     ) -> Unit {
       guard caches.get(cache_key) is Some(cache) &&
         cache.snapshot is Some(snapshot) else {
-        waiter.reply.put(SearchFailed("file search cache is not ready"))
+        waiter.reply.put(
+          SearchFailed(Internal("file search cache is not ready")),
+        )
         return
       }
       let prepared = @file_search_score.PathQuery(waiter.query)
@@ -422,7 +424,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
         let outcome = RankSucceeded(
           compute_file_search(snapshot, waiter.query, waiter.max_results),
         ) catch {
-          error => RankFailed("failed to rank workspace files: \{error}")
+          error => RankFailed(RankingFailed("\{error}"))
         }
         self.requests.put(
           RankFinished(cache_key~, scan_generation~, generation~, outcome~),
@@ -450,7 +452,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
           reply~
         ) => {
           if cache_key.is_empty() {
-            reply.put(SearchFailed("file search cache key is empty"))
+            reply.put(SearchFailed(EmptyCacheKey))
             continue
           }
           if cancelled_through.get(cache_key).unwrap_or(-1) >=
@@ -470,9 +472,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
           match caches.get(cache_key) {
             Some(cache) =>
               if cache.root_key != root_key {
-                reply.put(
-                  SearchFailed("file search cache belongs to another workspace"),
-                )
+                reply.put(SearchFailed(CacheRootMismatch))
               } else if cache.snapshot is Some(_) {
                 launch_rank(cache_key, waiter)
               } else if running_scans.get(cache_key) is Some(running) {
@@ -481,7 +481,9 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                 running_scans[cache_key] = { ..running, waiters, }
               } else {
                 caches.remove(cache_key)
-                reply.put(SearchFailed("file search cache lost its scan"))
+                reply.put(
+                  SearchFailed(Internal("file search cache lost its scan")),
+                )
               }
             None => {
               next_scan_generation += 1
@@ -497,7 +499,8 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                   defer scan_permit.release()
                   ScanSucceeded((self.scan)(root))
                 } catch {
-                  error => ScanFailed("failed to index workspace: \{error}")
+                  IndexingFailed(detail) => ScanFailed(IndexingFailed(detail))
+                  error => ScanFailed(IndexingFailed("\{error}"))
                 }
                 self.requests.put(
                   ScanFinished(cache_key~, root_key~, generation~, outcome~),
@@ -606,10 +609,10 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                 launch_rank(cache_key, waiter)
               }
             }
-            ScanFailed(message) => {
+            ScanFailed(error) => {
               caches.remove(cache_key)
               for waiter in waiters {
-                waiter.reply.put(SearchFailed(message))
+                waiter.reply.put(SearchFailed(error))
               }
             }
           }
@@ -636,9 +639,9 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                   ),
                 )
               }
-            RankFailed(message) =>
+            RankFailed(error) =>
               for waiter in running.waiters {
-                waiter.reply.put(SearchFailed(message))
+                waiter.reply.put(SearchFailed(error))
               }
           }
         }
@@ -648,11 +651,11 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
 }
 
 ///|
-async fn search_files_op(
+pub async fn search_files(
   service : FileSearchService,
+  root : @pathx.Absolute,
   payload : @protocol.SearchFilesPayload,
 ) -> @protocol.SearchFilesReply {
-  let root = WirePath::parse(payload.path).absolute
   service.search(
     root,
     payload.cache_key,
@@ -663,7 +666,7 @@ async fn search_files_op(
 }
 
 ///|
-async fn cancel_search_files_op(
+pub async fn cancel_search_files(
   service : FileSearchService,
   payload : @protocol.CancelSearchFilesPayload,
 ) -> @protocol.EmptyReply {
@@ -672,7 +675,7 @@ async fn cancel_search_files_op(
 }
 
 ///|
-async fn clear_file_search_cache_op(
+pub async fn clear_file_search_cache(
   service : FileSearchService,
   payload : @protocol.ClearFileSearchCachePayload,
 ) -> @protocol.EmptyReply {
@@ -799,7 +802,7 @@ async test "a failed cache population is not installed and can retry" {
     let service = FileSearchService::new_with_scan(_ => {
       attempts += 1
       if attempts == 1 {
-        raise HostError("injected discovery failure")
+        fail("injected discovery failure")
       }
       { files: ["recovered.mbt"], }
     })
@@ -807,7 +810,7 @@ async test "a failed cache population is not installed and can retry" {
     let root = @pathx.Path("/workspace-retry").resolve()
     let mut failed = false
     ignore(service.search(root, "cache-a", "", 0, 1)) catch {
-      HostError(_) => failed = true
+      IndexingFailed(_) => failed = true
       error => raise error
     }
     assert_true(failed)
@@ -829,7 +832,7 @@ async test "a cache key cannot cross workspace roots" {
     ignore(service.search(first, "cache-a", "", 0, 1))
     let mut failed = false
     ignore(service.search(second, "cache-a", "", 0, 2)) catch {
-      HostError(_) => failed = true
+      CacheRootMismatch => failed = true
       error => raise error
     }
     assert_true(failed)

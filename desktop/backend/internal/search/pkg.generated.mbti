@@ -1,0 +1,67 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/search"
+
+import {
+  "moonbitlang/core/debug",
+  "openseek_desktop/backend/moonbit",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.5"
+
+pub async fn cancel_search_files(FileSearchService, @protocol.CancelSearchFilesPayload) -> @protocol.EmptyReply
+
+pub async fn cancel_search_semantic(SemanticSearchService, @protocol.CancelSearchSemanticPayload) -> @protocol.EmptyReply
+
+pub async fn cancel_search_text(TextSearchService, @protocol.CancelSearchTextPayload) -> @protocol.EmptyReply
+
+pub async fn clear_file_search_cache(FileSearchService, @protocol.ClearFileSearchCachePayload) -> @protocol.EmptyReply
+
+pub async fn search_files(FileSearchService, @pathx.Absolute, @protocol.SearchFilesPayload) -> @protocol.SearchFilesReply
+
+pub async fn search_semantic(SemanticSearchService, @pathx.Absolute, @protocol.SearchSemanticPayload, SemanticProvider?) -> @protocol.SearchSemanticReply
+
+pub async fn search_text(String?, TextSearchService, @pathx.Absolute, @protocol.SearchTextPayload) -> @protocol.SearchTextReply
+
+pub fn semantic_provider(String, engine~ : String, runtime_dir~ : @pathx.Path?, source~ : @moonbit.ToolchainSource) -> SemanticProvider
+
+pub fn semantic_provider_prefix_args(String) -> Array[String]
+
+// Errors
+#derive(@debug.Debug)
+pub suberror SearchError {
+  UnsupportedRoot
+  EmptyCacheKey
+  CacheRootMismatch
+  IndexingFailed(String)
+  RankingFailed(String)
+  Internal(String)
+}
+pub fn SearchError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type FileSearchService
+pub fn FileSearchService::FileSearchService() -> Self
+pub async fn FileSearchService::run(Self) -> Unit
+
+pub struct ResolvedSemanticProvider {
+  command : String
+  environment : Map[String, String]
+}
+
+type SemanticProvider
+pub async fn SemanticProvider::resolve(Self, env? : Map[String, String]) -> ResolvedSemanticProvider
+
+type SemanticSearchService
+pub fn SemanticSearchService::SemanticSearchService() -> Self
+pub async fn SemanticSearchService::run(Self, async (@protocol.Notification) -> Unit) -> Unit
+
+type TextSearchService
+pub fn TextSearchService::TextSearchService() -> Self
+pub async fn TextSearchService::run(Self) -> Unit
+
+// Type aliases
+
+// Traits

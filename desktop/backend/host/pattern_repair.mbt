@@ -237,7 +237,7 @@ test "pattern repair trace remains bounded and retains recent events" {
 async fn request_pattern_repair_candidate(
   state : HostState,
   agent_env : Map[String, String],
-  provider : ResolvedSemanticProvider?,
+  provider : @search.ResolvedSemanticProvider?,
   root : @pathx.Absolute,
   pattern : String,
   instruction : String,
