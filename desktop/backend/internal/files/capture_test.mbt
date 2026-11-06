@@ -10,16 +10,16 @@ async test "file share capture preserves bytes and has no text preview limit" {
     root: @pathx.Path(root).to_absolute().unwrap().to_uri_path(),
     path: "报告.bin",
   }
-  let (name, captured) = @host.capture_file(source)
+  let (name, captured) = @files.capture(source)
   @fs.write_file(path, b"replacement")
   assert_eq(name, "报告.bin")
   assert_eq(captured, original)
   let large = Bytes::make(2 * 1024 * 1024, b'\xff')
   @fs.write_file(path, large)
-  let (_, captured) = @host.capture_file(source)
+  let (_, captured) = @files.capture(source)
   assert_eq(captured, large)
   for path in [".", "../outside.bin"] {
-    try @host.capture_file({ ..source, path, }) catch {
+    try @files.capture({ ..source, path, }) catch {
       _ => ()
     } noraise {
       _ => fail("directories and paths outside the workspace cannot be shared")
