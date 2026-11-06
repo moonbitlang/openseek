@@ -281,7 +281,7 @@ pub fn endpoints(
       create_directory_op(payload)
     }),
     Endpoint(@commands.terminal_open, payload => {
-      @terminal.terminal_open(
+      @terminal.open(
         connection.terminal,
         payload,
         engine=state.engine,
@@ -291,7 +291,7 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.terminal_input, payload => {
-      @terminal.terminal_input(connection.terminal, payload)
+      @terminal.input(connection.terminal, payload)
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_resize, payload => {

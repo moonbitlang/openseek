@@ -17,7 +17,7 @@ fn @protocol.TerminalInputPayload::bytes(
 }
 
 ///|
-pub async fn terminal_open(
+pub async fn open(
   terminals : TerminalState,
   payload : @protocol.TerminalOpenPayload,
   engine~ : String,
@@ -180,7 +180,7 @@ test "a ! command runs under the user's shell with the toolchain first on PATH" 
 }
 
 ///|
-pub async fn terminal_input(
+pub async fn input(
   terminals : TerminalState,
   payload : @protocol.TerminalInputPayload,
 ) -> Unit {
