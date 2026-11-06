@@ -864,6 +864,54 @@ fn codex_account_rows(
 }
 
 ///|
+fn account_sign_in_controls(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  label : String,
+) -> @html.Html {
+  let controls : Array[@html.Html] = []
+  if model.remote_connecting {
+    controls.push(
+      @html.span(
+        class="conversation-load-spinner",
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        "",
+      ),
+    )
+    controls.push(
+      @html.span(
+        class="setting-desc",
+        attrs=@html.Attrs::build().role("status"),
+        if model.account_login is Some(Cancelling(..)) {
+          shell_text(model.locale, StatusCancelling)
+        } else {
+          @settings.text(model.locale, WaitingBrowser)
+        },
+      ),
+    )
+    if model.is_desktop && model.account_login is Some(_) {
+      controls.push(
+        @html.button(
+          class="button secondary",
+          disabled=model.account_login is Some(Cancelling(..)),
+          on_click=dispatch(RemoteCancelClicked),
+          @settings.text(model.locale, Cancel),
+        ),
+      )
+    }
+  } else {
+    controls.push(
+      @html.button(
+        class="button primary",
+        on_click=dispatch(RemoteConnectClicked),
+        label,
+      ),
+    )
+  }
+  @html.div(class="account-sign-in", controls)
+}
+
+///|
 /// The Remote access group's rows: sign-in state against the SeekMoon
 /// relay. The relay no longer depends on the chat provider — only the
 /// hosted chat proxy was retired — so it is always available.
@@ -909,31 +957,14 @@ fn remote_access_rows(
         @settings.text(model.locale, SignOut),
       ),
     ]
-  } else if model.remote_connecting {
-    [
-      @html.span(
-        class="setting-desc",
-        attrs=@html.Attrs::build().role("status"),
-        @settings.text(model.locale, WaitingBrowser),
-      ),
-    ]
   } else {
     [
-      @html.button(
-        class="button primary",
-        on_click=dispatch(RemoteConnectClicked),
+      account_sign_in_controls(
+        dispatch,
+        model,
         @settings.text(model.locale, SignIn),
       ),
     ]
-  }
-  if model.remote_connecting && model.is_desktop {
-    controls.push(
-      @html.button(
-        class="button secondary",
-        on_click=dispatch(RemoteCancelClicked),
-        @settings.text(model.locale, Cancel),
-      ),
-    )
   }
   rows.push(@settings.row(@settings.text(model.locale, Account), controls))
   if model.account is Some(_) {
@@ -2898,14 +2929,33 @@ fn Model::chat_sidebar_sections(
   if self.account is None {
     entries.push(
       @section.Placeholder({
-        id: "cloud-sign-in",
-        label: @sidebar_messages.text(self.locale, CloudSignInHint),
+        id: if self.is_desktop && self.account_login is Some(_) {
+          "cloud-sign-in-cancel"
+        } else {
+          "cloud-sign-in"
+        },
+        label: match self.account_login {
+          Some(Cancelling(..)) => shell_text(self.locale, StatusCancelling)
+          Some(Waiting) => @settings.text(self.locale, WaitingBrowser)
+          None => @sidebar_messages.text(self.locale, CloudSignInHint)
+        },
         class_name: "cloud-sign-in",
         nested: false,
         openable: false,
         action: Some({
-          title: @settings.text(self.locale, SignIn),
-          disabled: self.remote_connecting,
+          title: @settings.text(
+            self.locale,
+            if self.is_desktop && self.account_login is Some(_) {
+              Cancel
+            } else {
+              SignIn
+            },
+          ),
+          disabled: if self.is_desktop && self.account_login is Some(_) {
+            self.account_login is Some(Cancelling(..))
+          } else {
+            self.remote_connecting
+          },
         }),
       }),
     )
@@ -2981,11 +3031,18 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         },
       ])
     } else {
-      @html.button(
-        class="button primary",
-        on_click=dispatch(RemoteConnectClicked),
-        shell_text(model.locale, SignInGitHub),
-      )
+      @html.div([
+        if model.remote_error is Some(message) {
+          @html.p(class="setting-desc", message)
+        } else {
+          @html.nothing
+        },
+        account_sign_in_controls(
+          dispatch,
+          model,
+          shell_text(model.locale, SignInGitHub),
+        ),
+      ])
     },
   ])
 }
