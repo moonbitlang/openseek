@@ -32,7 +32,7 @@ const EngineIdleScanMs = 60000
 /// time on purpose: a machine that slept for the night comes back with engines
 /// that really were idle that long.
 fn ServeEngine::touch(self : ServeEngine) -> Unit {
-  self.last_activity_ms = @sys.now().reinterpret_as_int64()
+  self.last_activity_ms = @async.now()
 }
 
 ///|
@@ -181,10 +181,7 @@ async fn EngineManager::reap_idle_engines_forever(self : EngineManager) -> Unit 
   for ;; {
     @async.sleep(EngineIdleScanMs)
     ignore(
-      self.reap_idle_engines(
-        now=@sys.now().reinterpret_as_int64(),
-        idle_ms=EngineIdleTimeoutMs,
-      ),
+      self.reap_idle_engines(now=@async.now(), idle_ms=EngineIdleTimeoutMs),
     )
   }
 }
