@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/http_file_server" @static_files,
   "openseek_desktop/backend/internal/browser_signin",
   "openseek_desktop/backend/uuid",
   "openseek_desktop/routes",

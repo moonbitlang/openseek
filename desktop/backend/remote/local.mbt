@@ -90,7 +90,7 @@ async fn LocalConsole::handle(
   self : LocalConsole,
   state : @api.ApiState,
   conn : @http.ServerConnection,
-  root~ : String,
+  root~ : @static_files.Directory,
   entry~ : String,
 ) -> Unit {
   defer conn.close()
@@ -198,11 +198,12 @@ async fn LocalConsole::handle(
       serve_static(
         root,
         relative,
+        request,
         conn,
         local_console_document=relative == entry,
       )
     ApplicationPage =>
-      serve_static(root, entry, conn, local_console_document=true)
+      serve_static(root, entry, request, conn, local_console_document=true)
     Unknown => respond_status(conn, 404, "Not Found")
     MethodNotAllowed => respond_status(conn, 405, "Method Not Allowed")
   }
@@ -245,14 +246,29 @@ async fn serve_ws(
 ///|
 /// One bundled file, including the application document.
 async fn serve_static(
-  root : String,
+  root : @static_files.Directory,
   relative : String,
+  request : @http.Request,
   conn : @http.ServerConnection,
   local_console_document~ : Bool = false,
 ) -> Unit {
+  if !local_console_document {
+    root.serve(request, conn, path="/" + relative, cache_control="no-cache") catch {
+      error => {
+        @xlog.error(category="transport") <?
+          {
+            "event": "console_asset_unreadable",
+            "path": relative,
+            "error": "\{error}",
+          }
+        respond_status(conn, 500, "Internal Server Error")
+      }
+    }
+    return
+  }
   // Only an absent file is 404; an unreadable one is the bundle being broken,
   // which the log names and the browser sees as a server failure.
-  let body = @fs.read_file("\{root}/\{relative}").binary() catch {
+  let body = @fs.read_file("\{root.path()}/\{relative}").binary() catch {
     @os_error.OSError(_) as os_error if os_error.is_ENOENT() => {
       respond_status(conn, 404, "Not Found")
       return
@@ -282,7 +298,7 @@ async fn serve_static(
     body
   }
   conn.send_response(200, "OK", extra_headers={
-    "Content-Type": content_type(relative),
+    "Content-Type": @static_files.content_type(relative),
     "Content-Length": body.length().to_string(),
     // A development bundle changes in place between launches; make every
     // load revalidate rather than trust a stale browser cache.
@@ -361,29 +377,6 @@ fn static_asset_route(path : String, entry~ : String) -> String? {
 }
 
 ///|
-fn content_type(name : String) -> String {
-  let extension = match name.rev_split_once(".") {
-    Some((_, extension)) => extension.to_owned()
-    None => ""
-  }
-  match extension {
-    "html" => "text/html; charset=utf-8"
-    "js" | "mjs" => "text/javascript; charset=utf-8"
-    "css" => "text/css; charset=utf-8"
-    "json" | "map" => "application/json"
-    "svg" => "image/svg+xml"
-    "png" => "image/png"
-    "ico" => "image/x-icon"
-    "ttf" => "font/ttf"
-    "woff" => "font/woff"
-    "woff2" => "font/woff2"
-    "wasm" => "application/wasm"
-    "txt" => "text/plain; charset=utf-8"
-    _ => "application/octet-stream"
-  }
-}
-
-///|
 fn split_path_query(path : String) -> (String, String) {
   match path.split_once("?") {
     Some((path, query)) => (path.to_owned(), query.to_owned())
@@ -455,15 +448,24 @@ test "static routes reject traversal and hidden names" {
 
 ///|
 test "content types cover the bundled asset set" {
-  assert_eq(content_type("index.html"), "text/html; charset=utf-8")
-  assert_eq(content_type("frontend.js"), "text/javascript; charset=utf-8")
   assert_eq(
-    content_type("mermaid/mermaid.esm.min.mjs"),
+    @static_files.content_type("index.html"),
+    "text/html; charset=utf-8",
+  )
+  assert_eq(
+    @static_files.content_type("frontend.js"),
     "text/javascript; charset=utf-8",
   )
-  assert_eq(content_type("viewer.css"), "text/css; charset=utf-8")
-  assert_eq(content_type("codicon.ttf"), "font/ttf")
-  assert_eq(content_type("unknown.bin"), "application/octet-stream")
+  assert_eq(
+    @static_files.content_type("mermaid/mermaid.esm.min.mjs"),
+    "text/javascript; charset=utf-8",
+  )
+  assert_eq(@static_files.content_type("viewer.css"), "text/css; charset=utf-8")
+  assert_eq(@static_files.content_type("codicon.ttf"), "font/ttf")
+  assert_eq(
+    @static_files.content_type("unknown.bin"),
+    "application/octet-stream",
+  )
 }
 
 ///|
