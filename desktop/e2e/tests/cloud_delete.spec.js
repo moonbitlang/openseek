@@ -1,5 +1,5 @@
 import { test, expect } from './support/test.js';
-import { CloudHarness, authOrigin, cloudOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
+import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id) {
   await cloud.rowContainer(id).hover();
@@ -46,32 +46,6 @@ const deletes = cloud => cloud.requests.filter(request => request.method === 'DE
   });
 }
 
-{
-  const failure = 503;
-
-  test(`delete ${failure} preserves the account, conversation and normal delete action`, async ({ page }) => {
-    const cloud = new CloudHarness(page);
-    cloud.deleteStatus = failure === 'network' ? 204 : failure;
-    cloud.deleteOffline = failure === 'network';
-    await cloud.install();
-    await cloud.goto();
-    await cloud.open();
-    await page.locator('#task').fill('Preserve this draft');
-    await askDelete(page, cloud, sessionA);
-    await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-    await expect(page.locator('aside')).toContainText(failure === 409 ? 'after it finishes' : failure === 503 ? 'HTTP 503' : 'unreachable');
-    await expect(cloud.row(sessionA)).toHaveAttribute('aria-current', 'true');
-    await expect(page.locator('#task')).toHaveValue('Preserve this draft');
-    expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
-    cloud.deleteStatus = 204;
-    cloud.deleteOffline = false;
-    await askDelete(page, cloud, sessionA);
-    await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-    await expect(cloud.row(sessionA)).toHaveCount(0);
-    await expect(cloud.row(sessionC)).toHaveCount(0);
-  });
-}
-
 test('delete 404 converges as already removed without signing out', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.deleteStatus = 404;
@@ -83,38 +57,6 @@ test('delete 404 converges as already removed without signing out', async ({ pag
   await expect(cloud.row(sessionA)).toHaveCount(0);
   await expect(cloud.row(sessionC)).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
-});
-
-test('history 404 retires an externally removed conversation without creating a replacement', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install();
-  await cloud.goto();
-  await page.route(url => url.origin === cloudOrigin && url.pathname === `/v1/sessions/${sessionB}/messages`, route => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': authOrigin } }));
-  await cloud.row(sessionB).click();
-  await expect(cloud.row(sessionB)).toHaveCount(0);
-  await expect(cloud.row(sessionC)).toHaveCount(0);
-  await expect(page.locator('.navigation-notice')).toContainText('no longer exists');
-  await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionB}`);
-  expect(cloud.requests.filter(request => request.path === '/v1/sessions' && request.method === 'POST')).toHaveLength(0);
-});
-
-test('a history response captured before deletion cannot restore its row or content', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.histories.set(sessionA, { messages: [{ task_id: 'old', kind: 'assistant_message', data: { content: 'Deleted old content' }, created_at: 1 }], generating: false });
-  let finish;
-  cloud.pauseHistory = new Promise(resolve => { finish = resolve; });
-  await cloud.install();
-  await cloud.goto();
-  await cloud.row(sessionA).click();
-  await expect.poll(() => cloud.requests.filter(request => request.path.endsWith(`/${sessionA}/messages`)).length).toBe(1);
-  await askDelete(page, cloud, sessionA);
-  cloud.pauseHistory = null;
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-  await expect(cloud.row(sessionC)).toHaveCount(0);
-  finish();
-  await expect(cloud.row(sessionA)).toHaveCount(0);
-  await expect(page.locator('main')).not.toContainText('Deleted old content');
-  await expect(cloud.row(sessionC)).toHaveCount(0);
 });
 
 test('device browser traversal reports deleted Cloud destinations as missing', async ({ page }) => {

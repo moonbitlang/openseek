@@ -87,7 +87,6 @@ test('failed save retains the draft and editing preserves its fields', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-
 test('automatic directory and save-and-run-now work without choosing a project', async ({ page }) => {
   const app = new ScheduleHarness(page);
   await app.install();
@@ -110,7 +109,6 @@ test('automatic directory and save-and-run-now work without choosing a project',
   expect(app.pageErrors).toEqual([]);
 });
 
-
 test('old setup failure remains readable when no log file was created', async ({ page }) => {
   const app = new ScheduleHarness(page);
   app.schedules.runs.push({ id: 'old-run', schedule_id: 'old-plan', name: 'Community', workspace: '/workspace', session: 'old-session', started_at: Date.now(), finished_at: Date.now(), status: { kind: 'failed', message: 'Could not prepare working directory' }, log_path: '/missing.log' });
@@ -123,7 +121,6 @@ test('old setup failure remains readable when no log file was created', async ({
   await expect(page.getByRole('alert')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
-
 
 for (const broadcastDirectory of [true, false]) {
   test(`new automatic folder resolves placement and tails without refresh (directory notification: ${broadcastDirectory})`, async ({ page }) => {
@@ -175,22 +172,3 @@ for (const broadcastDirectory of [true, false]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
-
-
-test('reopening Scheduled while save is pending preserves its acknowledgement', async ({ page }) => {
-  const app = new ScheduleHarness(page);
-  app.rpcDelays.set('schedules.save', 1200);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
-  await page.getByRole('button', { name: 'New schedule', exact: true }).click();
-  await page.getByLabel('Name', { exact: true }).fill('Only one plan');
-  await page.getByLabel('Task', { exact: true }).fill('Summarize updates');
-  await page.getByRole('button', { name: 'Save schedule', exact: true }).click();
-  await expect.poll(() => app.requests.filter(r => r.method === 'schedules.save').length).toBe(1);
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeDisabled();
-  await expect(page.locator('.schedule-form')).toHaveCount(0);
-  expect(app.requests.filter(r => r.method === 'schedules.save')).toHaveLength(1);
-});

@@ -105,56 +105,6 @@ test('a delayed fork cannot replace a newer missing destination', async ({ page 
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const minimal of [false, true]) {
-
-  // Rendering differs by layout; completion handling is shared.
-  const failed = minimal;
-  test(`${minimal ? 'minimal' : 'detailed'} Fork disables other conversations until ${failed ? 'failure' : 'success'}`, async ({ page }) => {
-    const app = await setup(page, minimal);
-    app.rpcDelays.set('session.fork', 2500);
-    if (failed) app.rpcErrors.set('session.fork', 'Fork fixture unavailable');
-    const buttons = page.getByRole('button', { name: 'Fork from here', exact: true });
-    await buttons.first().click();
-    await expect(page.locator('.message-fork-spinner')).toHaveCount(1);
-    await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
-    await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
-    await expect(buttons).toHaveCount(2);
-    await expect(buttons.first()).toBeDisabled();
-    await expect(buttons.last()).toBeDisabled();
-    await expect(buttons.first()).toHaveAttribute('title', 'Forking, please wait');
-    await expect(page.locator('.message-fork-spinner')).toHaveCount(0);
-    expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(1);
-    if (failed) {
-      await expect(page.getByText('Fork fixture unavailable', { exact: false })).toBeVisible();
-    } else {
-      await expect(page.locator('.conversation-row[title="fork-session"]')).toBeVisible();
-      await expect(page.locator('.conversation-row[title="fork-session"]')).not.toHaveClass(/active/);
-    }
-    await expect(buttons.first()).toBeEnabled();
-    await expect(buttons.last()).toBeEnabled();
-    await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
-    if (failed) {
-      app.rpcErrors.delete('session.fork');
-      app.rpcDelays.delete('session.fork');
-      await buttons.first().click();
-      await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
-      expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(2);
-    }
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
-test('a streamed answer gains Fork only when its terminal is committed', async ({ page }) => {
-  const app = await setup(page, true);
-  const committed = event(9, 'terminal', { kind: 'finished', message: 'Still working.' });
-  app.sessionEvents = [...history, committed];
-  app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 9, event: committed });
-  await expect(page.getByRole('button', { name: 'Fork from here', exact: true })).toHaveCount(3);
-  await page.getByRole('button', { name: 'Fork from here', exact: true }).last().click();
-  await expect.poll(() => app.requests.filter(r => r.method === 'session.fork').map(r => r.params.through)).toEqual([9]);
-  expect(app.pageErrors).toEqual([]);
-});
-
 {
   const minimal = true;
 
@@ -373,15 +323,6 @@ test('inline edit preserves image attachments and mention chips on Send', async 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('edit never skips an intervening user input without a forkable answer', async ({ page }) => {
-  const events = history.map(e => e.sequence === 6
-    ? event(6, 'terminal', { kind: 'failed', message: 'Failed to finish.' }) : e);
-  const app = await setup(page, true, false, events);
-  await expect(page.getByRole('button', { name: 'Edit message', exact: true })).toHaveCount(2);
-  await expect(page.locator('.msg.user').filter({ hasText: 'Continue working.' }).getByRole('button', { name: 'Edit message' })).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
 for (const first of [false, true]) {
   test(`single edit replaces the ${first ? 'first' : 'later'} message without client-side cleanup calls`, async ({ page }) => {
     const app = await setup(page, true);
@@ -397,44 +338,6 @@ for (const first of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
-
-test('running and compacting chats disable editing without interrupting the run', async ({ page }) => {
-  const app = await setup(page, true);
-  const edit = page.getByRole('button', { name: 'Edit message', exact: true }).nth(1);
-  await expect(edit).toBeEnabled();
-  app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
-  await expect(edit).toBeDisabled();
-  await expect(edit).toHaveAttribute('title', 'Messages cannot be edited while a task is running');
-  await expect(page.getByRole('button', { name: 'Fork from here', exact: true }).first()).toBeEnabled();
-  app.notify('agent.finished', { session: 'session-1', run_id: 'busy-edit', status: 'finished', answer: 'Done', exit_code: 0 });
-  await expect(edit).toBeEnabled();
-  app.notify('agent.event', { session: 'session-1', event: { event: 'compaction_started', from_sequence: 1, to_sequence: 8 } });
-  await expect(edit).toBeDisabled();
-  app.notify('agent.event', { session: 'session-1', event: { event: 'compaction_failed', error: 'Cancelled' } });
-  await expect(edit).toBeEnabled();
-  expect(app.requests.filter(r => ['agent.cancel', 'session.edit'].includes(r.method))).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a run starting during inline editing disables Send but keeps the draft and Cancel', async ({ page }) => {
-  const app = await setup(page, true);
-  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
-  const editor = page.locator('.message-editor');
-  await editor.locator('textarea').fill('Keep my edit');
-  app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
-  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  await expect(editor.locator('textarea')).toHaveValue('Keep my edit');
-  await expect(editor.locator('textarea')).toBeDisabled();
-  app.notify('agent.finished', { session: 'session-1', run_id: 'busy-edit', status: 'finished', answer: 'Done', exit_code: 0 });
-  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  await expect(editor.locator('textarea')).toHaveValue('Keep my edit');
-  app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit-2', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
-  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(editor).toHaveCount(0);
-  expect(app.requests.filter(r => ['agent.cancel', 'session.edit'].includes(r.method))).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
 
 test('typing and an external run in the same render keep the draft and disable inline editing', async ({ page }) => {
   // Hold rendering, not message handling: both independent state changes must

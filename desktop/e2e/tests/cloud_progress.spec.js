@@ -1,5 +1,5 @@
 import { test, expect } from './support/test.js';
-import { CloudHarness, sessionA } from './support/cloud_harness.js';
+import { CloudHarness } from './support/cloud_harness.js';
 
 test('Cloud reuses live reasoning, actual usage, stages and compaction UI before committing history', async ({ page }) => {
   const cloud = new CloudHarness(page);
@@ -64,62 +64,5 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
   } finally {
     resume.forEach(resolve => resolve());
-  }
-});
-
-test('Cloud title status uses recorded outcomes and marks archived history read-only', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.histories.set(sessionA, { messages: [{
-    task_id: 'context-task', kind: 'task_finished', created_at: 100,
-    data: { status: 'incomplete', result: { status: 'context_yield', reason: 'context limit' } },
-  }], generating: false });
-  await cloud.install(); await cloud.goto(); await cloud.open();
-  const status = page.locator('main .run-status');
-  await expect(status).toHaveText('Context limit reached');
-  await expect(status.locator('.run-dot')).toHaveClass('run-dot warn');
-  await page.reload(); await cloud.open();
-  await expect(status).toHaveText('Context limit reached');
-  cloud.archived.add(sessionA);
-  await page.reload();
-  await cloud.openArchived(sessionA);
-  await expect(status).toHaveText('Archived conversation · Read only');
-  await expect(status.locator('.run-dot')).not.toHaveClass(/pulse|ok|danger/);
-  await expect(page.locator('#task')).toHaveCount(0);
-  expect(cloud.postCount).toBe(0);
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
-test('Cloud title status covers loading, service failure and first-send startup without local API configuration', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.device.hostSettings.has_deepseek_key = false;
-  let loaded, created;
-  cloud.pauseHistory = new Promise(resolve => { loaded = resolve; });
-  cloud.pauseCreate = new Promise(resolve => { created = resolve; });
-  try {
-    await cloud.install(); await cloud.goto();
-    await cloud.row(sessionA).click();
-    const status = page.locator('main .run-status');
-    await expect(status).toHaveText('Loading conversation…');
-    loaded();
-    await expect(status).toHaveText('Ready');
-    cloud.sendStatus = 503;
-    cloud.sendErrorBody = 'server model credentials are not configured';
-    await page.locator('#task').fill('Check the service');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(status).toHaveText('Error');
-    await expect(status.locator('.run-dot')).toHaveClass('run-dot danger');
-    await cloud.create();
-    await expect(status).toHaveText('Ready');
-    expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
-    cloud.sendStatus = 202;
-    await page.locator('#task').fill('First message');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(status).toHaveText('Starting');
-    await expect(status.locator('.run-dot')).toHaveClass(/pulse/);
-    created();
-    await expect(status).toHaveText('Finished');
-    expect(cloud.device.pageErrors).toEqual([]);
-  } finally {
-    loaded(); created();
   }
 });

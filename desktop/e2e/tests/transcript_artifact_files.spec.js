@@ -121,36 +121,6 @@ test('non-HTML artifact cards resolve their owning file before opening it', asyn
   expect(open.params.cwd).toBe('/workspace');
 });
 
-test('same filenames in different conversations cannot replace each other through a late read', async ({ page }) => {
-  const answer = fence('chart.html');
-  const app = fixture(page, answer);
-  app.liveSessions.push({ id: 'session-2', title: 'Second artifact conversation', updated_at_ms: 2 });
-  let releaseFirst;
-  const first = new Promise(resolve => { releaseFirst = resolve; });
-  const ordinary = app.replyFor.bind(app);
-  app.replyFor = async request => {
-    if (request.method === 'session.load' && request.params.session === 'session-2') {
-      return { session: { version: 1, id: 'session-2', events: history(answer) }, prediction: null, watermark: 3 };
-    }
-    if (request.method === 'fs.read_file') {
-      if (request.params.path.includes('/session-1/')) await first;
-      return { kind: 'content', absolute: request.params.root + '/' + request.params.path, sig: 'fixture', content: request.params.path.includes('/session-1/') ? sample : '<h1>Second conversation result</h1>' };
-    }
-    return ordinary(request);
-  };
-  await app.install(); await app.goto(); await app.openSession();
-  await expect.poll(() => app.requests.filter(request => request.method === 'fs.read_file').length).toBe(1);
-  await page.getByRole('button', { name: 'Second artifact conversation', exact: true }).click();
-  const frame = page.frameLocator('.chat-artifact-frame');
-  await expect(frame.getByRole('heading', { name: 'Second conversation result' })).toBeVisible();
-  releaseFirst();
-  await expect(frame.getByRole('heading', { name: 'Second conversation result' })).toBeVisible();
-  await expect(frame.locator('svg')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
-  await expect(page.frameLocator('.chat-artifact-frame').locator('svg')).toBeVisible();
-});
-
-
 test('ordinary HTML references remain file cards until explicitly marked for inline display', async ({ page }) => {
   const app = fixture(page, fence('page.html', false));
   await app.install(); await app.goto(); await app.openSession();

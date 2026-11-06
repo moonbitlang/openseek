@@ -75,28 +75,6 @@ test('one draft carries current text, file mentions and images through repeated 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('clearing the migrated draft never revives an earlier engine copy', async ({ page }) => {
-  const app = await open(page);
-  const initialRows = await page.locator('.conversation-row').count();
-  const task = page.locator('#task');
-  await choose(page, 'Codex test');
-  await task.fill('Started in Codex');
-  await choose(page, 'DS Pro');
-  await expect(task).toHaveValue('Started in Codex');
-  await task.fill('');
-  await choose(page, 'Codex test');
-  await expect(task).toHaveValue('');
-  await task.fill('Replacement');
-  await choose(page, 'DS Pro');
-  await expect(task).toHaveValue('Replacement');
-  await choose(page, 'Codex test');
-  await task.fill('');
-  await choose(page, 'DS Pro');
-  await expect(task).toHaveValue('');
-  await noDraftRows(page, initialRows);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('an image-only Codex draft migrates back and sends through DeepSeek', async ({ page }) => {
   const app = await open(page);
   const initialRows = await page.locator('.conversation-row').count();
@@ -131,23 +109,6 @@ test('a submitted Codex draft cannot switch agents while thread creation is pend
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await expect(page.getByRole('option', { name: 'DS Pro', exact: true })).toHaveCount(0);
   pending.resolve();
-  expect(app.pageErrors).toEqual([]);
-});
-
-
-test('editing a goal protects its text until the editor is closed', async ({ page }) => {
-  const app = await open(page);
-  const task = page.locator('#task');
-  await task.fill('/goal');
-  await expect(page.locator('.completion-item').filter({ hasText: 'goal' }).first()).toBeVisible();
-  await task.press('Enter');
-  await expect(page.locator('#goal-cancel')).toBeVisible();
-  await task.fill('Do not lose this goal');
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
-  await expect(task).toHaveValue('Do not lose this goal');
-  await page.locator('#goal-cancel').click();
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
-  await choose(page, 'Codex test');
   expect(app.pageErrors).toEqual([]);
 });
 

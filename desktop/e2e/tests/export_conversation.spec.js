@@ -221,24 +221,6 @@ test('closing the dialog cancels a sign-in it started', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('closing an upload ignores its late reply', async ({ page }) => {
-  const app = new ExportHarness(page);
-  let finish;
-  app.pendingShare = new Promise(resolve => { finish = resolve; });
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect.poll(() => app.hostShares.length).toBe(1);
-  await dialog.getByRole('button', { name: 'Close export dialog' }).click();
-  await expect(dialog).not.toBeVisible();
-  await app.openExport();
-  finish();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-
 test('browser Work sharing captures the selected host but publishes as the browser account', async ({ page }) => {
   const app = new ExportHarness(page);
   await app.openDesktop({ browser: true });

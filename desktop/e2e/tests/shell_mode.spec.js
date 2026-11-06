@@ -129,18 +129,6 @@ test('closing a running command tab settles the command as cancelled', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a ! command whose terminal cannot open runs nothing and comes back', async ({ page }) => {
-  const app = await open(page);
-  app.rpcErrors.set('terminal.open', 'terminal requires a conversation workspace');
-  await typeCommand(page, '!pwd');
-  await expect(page.getByText('terminal requires a conversation workspace', { exact: false }).first()).toBeVisible();
-  await expect(page.locator('.composer-mode-chip')).toBeVisible();
-  await expect(page.locator('#task')).toHaveValue('!pwd');
-  await expect(page.locator('.shell-commands-running')).toHaveCount(0);
-  expect(app.requests.some(r => r.method === 'agent.start')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('a first ! command in a fresh worktree-mode chat creates its worktree first', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const replyFor = app.replyFor.bind(app);

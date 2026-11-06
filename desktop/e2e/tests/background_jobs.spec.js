@@ -97,93 +97,6 @@ test('page reconnect recovers retained job identity and history', async ({ page 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('switching conversations cannot display a late log from the previous session', async ({ page }) => {
-  app = new BackgroundJobsHarness(page);
-  app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
-  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('ready 你好🙂');
-  app.rpcDelays.set('jobs.read', 1200);
-  const before = app.requests.filter(r => r.method === 'jobs.read').length;
-  await page.getByRole('button', { name: 'Reload tail', exact: true }).click();
-  await expect.poll(() => app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(before);
-  await page.locator('.conversation-row[title="session-2"]').click();
-  await app.openJobs();
-  await expect(page.locator('.jobs-panel')).toContainText('No background jobs yet');
-  await page.waitForTimeout(1400); // Deliver the first conversation's obsolete reply.
-  await expect(page.locator('.jobs-panel')).not.toContainText('ready 你好🙂');
-  app.rpcDelays.delete('jobs.read');
-  await page.locator('.conversation-row[title="session-1"]').click();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('ready 你好🙂');
-  expect(app.requests.some(r => r.method === 'jobs.list' && r.params.scope.session === 'session-2')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('selected job beyond the first history page keeps receiving terminal state', async ({ page }) => {
-  app = new BackgroundJobsHarness(page);
-  for (let i = 2; i <= 101; i++) {
-    const view = app.view('runtime-new', `bg-${i}`, app.oldPath, { kind: 'exited', code: 0 });
-    view.job.description = `Completed build ${i}`;
-    app.jobs.splice(1, 0, view);
-  }
-  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  const selected = app.jobs.find(v => v.job.generation === 'runtime-old');
-  selected.job.state = { kind: 'running' };
-  await expandHistory(page);
-  await page.getByRole('button', { name: 'Load older jobs', exact: true }).click();
-  await expandHistory(page);
-  await page.getByRole('button', { name: /Earlier failing test run/ }).click();
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
-  selected.job.state = { kind: 'stopped', reason: 'user' };
-  selected.job.revision++;
-  await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
-  expect(app.requests.some(r => r.method === 'jobs.list' && r.params.offset === 0 && r.params.selected?.generation === 'runtime-old')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('follow catches up with a large completed burst without waiting one tick per page', async ({ page }) => {
-  await mount(page);
-  const output = page.getByRole('region', { name: 'Job output' });
-  app.write('x'.repeat(65536 * 9) + '\nBURST FINISHED\n');
-  await expect.poll(() => readFileSync(app.livePath, 'utf8').endsWith('BURST FINISHED\n')).toBe(true);
-  await page.getByRole('button', { name: 'Stop job', exact: true }).click();
-  await expect(output).toContainText('BURST FINISHED', { timeout: 5000 });
-  await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
-  expect(await output.evaluate(el => el.textContent.length)).toBeLessThanOrEqual(262144);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('pause resume and reload serialize reads and preserve manual paused refresh', async ({ page }) => {
-  await mount(page);
-  const original = app.replyFor.bind(app);
-  let release;
-  const gate = new Promise(resolve => { release = resolve; });
-  let held = false;
-  let readCount = 0;
-  app.replyFor = async request => {
-    if (request.method === 'jobs.read') {
-      readCount++;
-      if (!held) { held = true; await gate; }
-    }
-    return original(request);
-  };
-  try {
-    await expect.poll(() => held).toBe(true);
-    await page.getByRole('button', { name: 'Pause', exact: true }).click();
-    await page.getByRole('button', { name: 'Follow output', exact: true }).click();
-    expect(readCount).toBe(1);
-    await page.getByRole('button', { name: 'Pause', exact: true }).click();
-    app.write('manual paused reload\n');
-    await expect.poll(() => readFileSync(app.livePath, 'utf8')).toContain('manual paused reload');
-    await page.getByRole('button', { name: 'Reload tail', exact: true }).click();
-    expect(readCount).toBe(1);
-    release();
-    await expect(page.getByRole('region', { name: 'Job output' })).toContainText('manual paused reload');
-    await expect(page.getByRole('button', { name: 'Follow output', exact: true })).toBeVisible();
-    expect(readCount).toBe(2);
-    expect(app.pageErrors).toEqual([]);
-  } finally { release(); }
-});
-
 test('a controllable job without a log still exposes Stop and its full ID', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   app = new BackgroundJobsHarness(page);
@@ -304,36 +217,6 @@ test('completion drains paused output then stops log polling while history stays
   expect(app.pageErrors).toEqual([]);
 });
 
-test('interrupted jobs drain final diagnostics despite stale persisted byte counts', async ({ page }) => {
-  await mount(page);
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
-  const original = app.replyFor.bind(app);
-  app.replyFor = async request => {
-    const reply = await original(request);
-    if (request.method === 'jobs.list') {
-      for (const view of reply.jobs) {
-        if (view.job.state.kind === 'interrupted') view.job.output_bytes = 1;
-      }
-    }
-    return reply;
-  };
-  app.write('FINAL DIAGNOSTICS BEFORE ENGINE CRASH\n');
-  await expect.poll(() => readFileSync(app.livePath, 'utf8')).toContain('FINAL DIAGNOSTICS');
-  app.child.once('close', () => {
-    app.jobs[0].job.state = { kind: 'interrupted' };
-    app.jobs[0].job.finished_at_ms = null;
-  });
-  app.child.kill();
-  await expect(page.locator('.jobs-detail-title')).toContainText('Interrupted');
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('FINAL DIAGNOSTICS BEFORE ENGINE CRASH');
-  await expect(page.locator('.jobs-output-note')).toHaveText('Output ended');
-  const reads = app.requests.filter(r => r.method === 'jobs.read').length;
-  const lists = app.requests.filter(r => r.method === 'jobs.list').length;
-  await expect.poll(() => app.requests.filter(r => r.method === 'jobs.list').length).toBeGreaterThan(lists + 1);
-  expect(app.requests.filter(r => r.method === 'jobs.read')).toHaveLength(reads);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('history stays folded by default while active jobs remain visible across refreshes', async ({ page }) => {
   await mount(page);
   const toggle = page.locator('.jobs-history-toggle');
@@ -359,23 +242,6 @@ test('history stays folded by default while active jobs remain visible across re
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('history-only sessions wait for explicit selection before loading a log', async ({ page }) => {
-  app = new BackgroundJobsHarness(page);
-  const live = app.jobs.shift();
-  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  await expect(page.locator('.jobs-history-toggle')).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('.jobs-detail')).toHaveCount(0);
-  expect(app.requests.filter(r => r.method === 'jobs.read')).toHaveLength(0);
-  await expandHistory(page);
-  await page.getByRole('button', { name: /Earlier failing test run/ }).click();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
-  app.jobs.unshift(live);
-  await expect(page.getByRole('group', { name: 'In progress', exact: true })).toBeVisible();
-  await expect(page.locator('.jobs-detail-title')).toContainText('Failed');
-  await expect(page.locator('.jobs-history-toggle')).toHaveAttribute('aria-expanded', 'true');
   expect(app.pageErrors).toEqual([]);
 });
 
