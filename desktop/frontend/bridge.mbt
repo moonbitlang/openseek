@@ -1676,7 +1676,7 @@ fn recover_approvals(
       run_id: item.run_id,
       tool_name: item.tool_name,
       detail: item.detail,
-      body: approval_display_body(item.tool_name, item.body),
+      body: @engine_session.approval_display_body(item.tool_name, item.body),
       answered: item.answered,
     },
   })

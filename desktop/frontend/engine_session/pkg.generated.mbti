@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub fn approval_display_body(String, String?) -> String?
+
 pub fn composer_action(@composer.Action) -> Action?
 
 pub fn is_idle_event(@openseek_protocol.Event) -> Bool

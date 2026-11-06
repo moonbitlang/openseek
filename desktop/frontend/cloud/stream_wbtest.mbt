@@ -60,6 +60,7 @@ test "Cloud subscription uses its first snapshot as baseline and fences replaced
     steers: [],
     compact_queued: false,
     compacting: false,
+    approval: None,
   }
   let before = watch_event(state, stream, "task", 3, "assistant_delta", {
     "content": "before baseline",
@@ -164,6 +165,7 @@ test "Cloud observer failure retains the confirmed queue as read-only" {
     steers: [],
     compact_queued: false,
     compacting: false,
+    approval: None,
   }
   let state = watch_snapshot(state, stream, Some("task"), 2, control)
   let disconnected = metadata_update(

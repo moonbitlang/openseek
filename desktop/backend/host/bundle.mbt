@@ -5,9 +5,6 @@ const PackagedFrontendEntryPath = "seekmoon/web/index.html"
 const PackagedRipgrepPath = "seekmoon/bin/rg"
 
 ///|
-const PackagedMoongrepPath = "seekmoon/bin/moongrep"
-
-///|
 const PackagedVizDir = "seekmoon/web/viz"
 
 ///|
@@ -106,11 +103,6 @@ fn PackagedTools::path_with_precedence(
 }
 
 ///|
-/// The pinned mooncakes coordinate used when the host resolves moongrep through
-/// `moonx`. Search and Pattern Repair must validate with the same provider.
-const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.5"
-
-///|
 /// Locate ripgrep in the canonical resource tree. An installed bundle
 /// with a missing asset fails closed instead of silently
 /// running a machine-global ripgrep of an unknown version.
@@ -123,33 +115,6 @@ async fn ripgrep_command(resources : @resources.Resources?) -> String? {
   } else {
     Some("rg")
   }
-}
-
-///|
-/// Locate the semantic-search provider beside the installed Host. A packaged
-/// `moongrep` binary serves installed bundles, mirroring the ripgrep layout;
-/// otherwise the provider resolves through the selected toolchain's `moonx` with a pinned
-/// mooncakes registry coordinate.
-///
-/// This is deliberately not fail-closed like ripgrep: moongrep ships no
-/// upstream release binaries, so a trial build has no asset to fail back on. A
-/// real bundle with a staged `moongrep` binary always wins; `moonx` remains
-/// the interim provider until the package vendors a
-/// moongrep binary (or a bundled `moongrep.wasm` run through the packaged
-/// moonrun). The pinned coordinate keeps the version deterministic instead of
-/// silently running an arbitrary machine binary.
-async fn moongrep_command(resources : @resources.Resources?) -> String? {
-  guard resources is Some(resources) && resources.packaged else {
-    return Some("moonx")
-  }
-  let path = resources.dir
-    .join(PackagedMoongrepPath + PackagedExecutableSuffix)
-    .normalize()
-    .to_string()
-  if @fs.exists(path) {
-    return Some(path)
-  }
-  Some("moonx")
 }
 
 ///|
@@ -184,10 +149,8 @@ async test "packaged tools use only the canonical resource directory" {
 async test "unpackaged search commands use documented development providers" {
   let development : @resources.Resources = { dir: "desktop", packaged: false, }
   assert_eq(ripgrep_command(Some(development)), Some("rg"))
-  assert_eq(moongrep_command(Some(development)), Some("moonx"))
   // A host told of no resource directory resolves its tools the same way.
   assert_eq(ripgrep_command(None), Some("rg"))
-  assert_eq(moongrep_command(None), Some("moonx"))
 }
 
 ///|

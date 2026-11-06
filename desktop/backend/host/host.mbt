@@ -43,7 +43,7 @@ impl Show for PayloadError with fn output(self, logger) {
 struct HostState {
   engine : String
   runtime_dir : @pathx.Path?
-  moon : MoonCliState
+  moon : @language.MoonCliState
   updates : SelfUpdate
   resources : HostResources
   skills : @skillmarket.BuiltinSkills
@@ -55,9 +55,9 @@ struct HostState {
 /// cannot leak into another client.
 struct HostConnection {
   fs_watch : FsWatchActor
-  file_search : FileSearchService
-  text_search : TextSearchService
-  semantic_search : SemanticSearchService
+  file_search : @search.FileSearchService
+  text_search : @search.TextSearchService
+  semantic_search : @search.SemanticSearchService
   terminal : @terminal.TerminalState
 }
 
@@ -233,26 +233,36 @@ pub fn endpoints(
     }),
     Endpoint(@commands.fs_read_directory, payload => read_directory_op(payload)),
     Endpoint(@commands.fs_search_files, payload => {
-      search_files_op(connection.file_search, payload)
+      @search.search_files(
+        connection.file_search,
+        WirePath::parse(payload.path).absolute,
+        payload,
+      )
     }),
     Endpoint(@commands.fs_cancel_search_files, payload => {
-      cancel_search_files_op(connection.file_search, payload)
+      @search.cancel_search_files(connection.file_search, payload)
     }),
     Endpoint(@commands.fs_search_text, payload => {
-      search_text_op(state.resources.ripgrep, connection.text_search, payload)
+      @search.search_text(
+        state.resources.ripgrep,
+        connection.text_search,
+        WirePath::parse(payload.root).absolute,
+        payload,
+      )
     }),
     Endpoint(@commands.fs_cancel_search_text, payload => {
-      cancel_search_text_op(connection.text_search, payload)
+      @search.cancel_search_text(connection.text_search, payload)
     }),
     Endpoint(@commands.fs_search_semantic, payload => {
-      search_semantic_op(
+      @search.search_semantic(
         connection.semantic_search,
+        WirePath::parse(payload.root).absolute,
         payload,
         state.semantic_provider(),
       )
     }),
     Endpoint(@commands.fs_cancel_search_semantic, payload => {
-      cancel_search_semantic_op(connection.semantic_search, payload)
+      @search.cancel_search_semantic(connection.semantic_search, payload)
     }),
     Endpoint(@commands.pattern_repair, payload => {
       match @engine.pattern_repair_environment(manager, model=payload.model) {
@@ -270,7 +280,7 @@ pub fn endpoints(
       }
     }),
     Endpoint(@commands.fs_clear_file_search_cache, payload => {
-      clear_file_search_cache_op(connection.file_search, payload)
+      @search.clear_file_search_cache(connection.file_search, payload)
     }),
     Endpoint(@commands.fs_stat_files, payload => stat_files_op(payload)),
     Endpoint(@commands.fs_watch, payload => {
@@ -305,21 +315,25 @@ pub fn endpoints(
       Acknowledged
     }),
     Endpoint(@commands.moon_package_graph, payload => {
-      moon_package_graph_op(state.moon, payload)
+      @language.moon_package_graph(state.moon, payload)
     }),
-    Endpoint(@commands.lsp_open, payload => lsp_open_op(state.moon, payload)),
-    Endpoint(@commands.lsp_hover, payload => lsp_hover_op(state.moon, payload)),
+    Endpoint(@commands.lsp_open, payload => {
+      @language.lsp_open(state.moon, payload)
+    }),
+    Endpoint(@commands.lsp_hover, payload => {
+      @language.lsp_hover(state.moon, payload)
+    }),
     Endpoint(@commands.lsp_workspace_symbols, payload => {
-      workspace_symbols_op(state.moon, payload)
+      @language.workspace_symbols(state.moon, payload)
     }),
     Endpoint(@commands.moonide_definition, payload => {
-      moonide_definition_op(state, payload)
+      @language.moonide_definition(state.moon, payload)
     }),
     Endpoint(@commands.moonide_references, payload => {
-      moonide_references_op(state, payload)
+      @language.moonide_references(state.moon, payload)
     }),
     Endpoint(@commands.moonide_codelens, payload => {
-      moonide_codelens_op(state, payload)
+      @language.moonide_codelens(state.moon, payload)
     }),
     Endpoint(@commands.skills_catalog, _ => skills_catalog_op()),
     Endpoint(@commands.skills_content, payload => skills_content_op(payload)),

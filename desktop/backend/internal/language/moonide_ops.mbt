@@ -79,7 +79,7 @@ async fn resolve_moonide_request(
   payload : @protocol.MoonIdeNavigationPayload,
 ) -> MoonIdeRequest {
   guard payload.line > 0 && payload.column > 0 else {
-    raise PayloadError("line and column must be positive one-based integers")
+    raise InvalidRequest("line and column must be positive one-based integers")
   }
   let location = LanguagePath::resolve(
     payload.session,
@@ -87,8 +87,8 @@ async fn resolve_moonide_request(
     payload.path,
   )
   {
-    lexical_workspace: location.lexical_root,
-    physical_workspace: location.physical_root,
+    lexical_workspace: location.root.lexical,
+    physical_workspace: location.root.physical,
     relative_path: location.physical_relative.0,
     line: payload.line,
     column: payload.column,
@@ -96,20 +96,15 @@ async fn resolve_moonide_request(
 }
 
 ///|
-/// Diagnostics win over fallback: every anomaly — a resolution error, no
-/// toolchain anywhere, or a toolchain without a usable `moon` — surfaces to
-/// the caller as a [HostError] naming the cause, instead of spawning
-/// whatever `moon` the ambient environment happens to serve.
-async fn moonide_spawn_config(state : HostState) -> MoonIdeSpawnConfig {
+/// Diagnostics win over fallback: a resolution error or no toolchain anywhere
+/// surfaces to the caller instead of spawning whatever `moon` the ambient
+/// environment happens to serve.
+async fn moonide_spawn_config(state : MoonCliState) -> MoonIdeSpawnConfig {
   let toolchain = @moonbit.resolve_toolchain(
     state.engine,
     runtime_dir?=state.runtime_dir,
-    source=state.resources.moonbit,
-  ) catch {
-    @moonbit.ToolchainUnavailable as unavailable =>
-      raise HostError("\{unavailable}")
-    error => raise HostError("could not resolve a MoonBit toolchain: \{error}")
-  }
+    source=state.source,
+  )
   {
     executable: toolchain.moon.to_string(),
     extra_env: Some(toolchain.tool_env()),
@@ -168,14 +163,12 @@ fn moonide_result_path(
 fn parse_moonide_output(
   output : String,
   physical_workspace : @pathx.Absolute,
-) -> @protocol.MoonIdeLocationsReply raise HostError {
-  let json = @json.parse(output) catch {
-    _ => raise HostError("moon ide returned malformed JSON")
-  }
+) -> @protocol.MoonIdeLocationsReply raise {
+  let json = @json.parse(output)
   let items = match json {
     Null => return { locations: [], }
     Array(items) => items
-    _ => raise HostError("moon ide returned an unexpected JSON value")
+    _ => raise MoonIdeFailed("moon ide returned an unexpected JSON value")
   }
   let locations : Array[@protocol.MoonIdeLocation] = []
   for item in items {
@@ -260,12 +253,10 @@ fn parse_moonide_codelens_position(json : Json) -> @protocol.LspPosition? {
 /// request owns that identity.
 fn parse_moonide_codelens_output(
   output : String,
-) -> @protocol.MoonIdeCodeLensReply raise HostError {
-  let json = @json.parse(output) catch {
-    _ => raise HostError("moon ide codelens returned malformed JSON")
-  }
+) -> @protocol.MoonIdeCodeLensReply raise {
+  let json = @json.parse(output)
   guard json is Array(items) else {
-    raise HostError("moon ide codelens returned an unexpected JSON value")
+    raise MoonIdeFailed("moon ide codelens returned an unexpected JSON value")
   }
   let lenses : Array[@protocol.MoonIdeCodeLens] = []
   for item in items {
@@ -319,7 +310,7 @@ fn moonide_client_path(
   lexical_workspace : @pathx.Absolute,
   physical_workspace : @pathx.Absolute,
   physical_result : String,
-) -> String? raise HostError {
+) -> String? raise LanguageError {
   guard moonide_relative_path(physical_workspace, physical_result)
     is Some(relative) else {
     return None
@@ -382,7 +373,7 @@ async fn canonical_moonide_codelenses(
 
 ///|
 async fn moonide_navigation_op(
-  state : HostState,
+  state : MoonCliState,
   query : MoonIdeQuery,
   payload : @protocol.MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeLocationsReply {
@@ -395,14 +386,12 @@ async fn moonide_navigation_op(
     extra_env?=config.extra_env,
     inherit_env=config.extra_env is None,
     cwd=request.physical_workspace.to_string(),
-  ) catch {
-    error => raise HostError("could not run moon ide: \{error}")
-  }
+  )
   if code != 0 {
-    let stderr = (stderr.text() catch { _ => "" }).trim().to_owned()
-    let stdout = (stdout.text() catch { _ => "" }).trim().to_owned()
+    let stderr = stderr.text().trim().to_owned()
+    let stdout = stdout.text().trim().to_owned()
     let detail = if !stderr.is_empty() { stderr } else { stdout }
-    raise HostError(
+    raise MoonIdeFailed(
       if detail.is_empty() {
         "moon ide \{query.subcommand()} exited with code \{code}"
       } else {
@@ -410,9 +399,7 @@ async fn moonide_navigation_op(
       },
     )
   }
-  let output = stdout.text() catch {
-    _ => raise HostError("moon ide returned non-text output")
-  }
+  let output = stdout.text()
   canonical_moonide_locations(
     parse_moonide_output(output, request.physical_workspace),
     request.lexical_workspace,
@@ -422,7 +409,7 @@ async fn moonide_navigation_op(
 
 ///|
 async fn moonide_navigation_reply(
-  state : HostState,
+  state : MoonCliState,
   query : MoonIdeQuery,
   payload : @protocol.MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeNavigationReply {
@@ -433,38 +420,24 @@ async fn moonide_navigation_reply(
 }
 
 ///|
-async fn moonide_definition_op(
-  state : HostState,
+pub async fn moonide_definition(
+  state : MoonCliState,
   payload : @protocol.MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeNavigationReply {
   moonide_navigation_reply(state, Definition, payload)
 }
 
 ///|
-async fn moonide_references_op(
-  state : HostState,
+pub async fn moonide_references(
+  state : MoonCliState,
   payload : @protocol.MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeNavigationReply {
   moonide_navigation_reply(state, References, payload)
 }
 
 ///|
-fn moonide_codelens_failure_text(
-  code : Int32,
-  stream : String,
-  data : &@io.Data,
-) -> String raise HostError {
-  data.text() catch {
-    error =>
-      raise HostError(
-        "moon ide codelens exited with code \{code}, but \{stream} was not valid UTF-8: \{error}",
-      )
-  }
-}
-
-///|
-async fn moonide_codelens_op(
-  state : HostState,
+pub async fn moonide_codelens(
+  state : MoonCliState,
   payload : @protocol.MoonIdeCodeLensPayload,
 ) -> @protocol.MoonIdeCodeLensReply {
   let location = LanguagePath::resolve(
@@ -478,19 +451,13 @@ async fn moonide_codelens_op(
     moonide_codelens_args(location.physical_relative.0),
     extra_env?=config.extra_env,
     inherit_env=config.extra_env is None,
-    cwd=location.physical_root.to_string(),
-  ) catch {
-    error => raise HostError("could not run moon ide codelens: \{error}")
-  }
+    cwd=location.root.physical.to_string(),
+  )
   if code != 0 {
-    let stderr = moonide_codelens_failure_text(code, "stderr", stderr)
-      .trim()
-      .to_owned()
-    let stdout = moonide_codelens_failure_text(code, "stdout", stdout)
-      .trim()
-      .to_owned()
+    let stderr = stderr.text().trim().to_owned()
+    let stdout = stdout.text().trim().to_owned()
     let detail = if !stderr.is_empty() { stderr } else { stdout }
-    raise HostError(
+    raise MoonIdeFailed(
       if detail.is_empty() {
         "moon ide codelens exited with code \{code}"
       } else {
@@ -498,13 +465,11 @@ async fn moonide_codelens_op(
       },
     )
   }
-  let output = stdout.text() catch {
-    _ => raise HostError("moon ide codelens returned non-text output")
-  }
+  let output = stdout.text()
   canonical_moonide_codelenses(
     parse_moonide_codelens_output(output),
-    location.lexical_root,
-    location.physical_root,
+    location.root.lexical,
+    location.root.physical,
   )
 }
 
@@ -519,30 +484,6 @@ test "Moon IDE commands use relative one-based locations without a shell" {
   assert_eq(moonide_codelens_args("src/main.mbt"), [
     "ide", "codelens", "src/main.mbt", "--json",
   ])
-}
-
-///|
-test "Moon IDE CodeLens failure keeps output decoding errors distinct" {
-  let mut stdout_failure : String? = None
-  ignore(moonide_codelens_failure_text(17, "stdout", b"\xff")) catch {
-    HostError(detail) => stdout_failure = Some(detail)
-  }
-  guard stdout_failure is Some(stdout_message) else {
-    fail("invalid stdout did not raise HostError")
-  }
-  assert_true(stdout_message.contains("exited with code 17"))
-  assert_true(stdout_message.contains("stdout"))
-  assert_true(stdout_message.contains("UTF-8"))
-  let mut stderr_failure : String? = None
-  ignore(moonide_codelens_failure_text(17, "stderr", b"\xff")) catch {
-    HostError(detail) => stderr_failure = Some(detail)
-  }
-  guard stderr_failure is Some(stderr_message) else {
-    fail("invalid stderr did not raise HostError")
-  }
-  assert_true(stderr_message.contains("exited with code 17"))
-  assert_true(stderr_message.contains("stderr"))
-  assert_true(stderr_message.contains("UTF-8"))
 }
 
 ///|

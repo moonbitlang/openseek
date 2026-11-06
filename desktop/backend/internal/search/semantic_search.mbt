@@ -27,11 +27,6 @@ const SemanticSearchProgressBatch : Int32 = 50
 const MoongrepErrorJsonParseEnabled : Bool = true
 
 ///|
-/// The mooncakes coordinate pinned for the interim `moonx` provider. moongrep
-/// publishes no upstream release binaries, so a trial bundle resolves the
-/// provider through `moonx <coordinate> --`; pinning the version keeps the
-/// search deterministic instead of silently running whatever the local
-/// registry index knows as "latest".
 priv struct ParsedSemanticContextLine {
   line : Int32
   text : String
@@ -102,7 +97,7 @@ fn SemanticSearchCancellationFrontiers::record(
 ///|
 priv enum SemanticSearchRequest {
   Search(
-    command~ : SemanticProvider?,
+    command~ : SemanticProvider,
     root~ : @pathx.Absolute,
     payload~ : @protocol.SearchSemanticPayload,
     reply~ : @async.Queue[@protocol.SearchSemanticReply]
@@ -120,12 +115,12 @@ priv enum SemanticSearchRequest {
 }
 
 ///|
-priv struct SemanticSearchService {
+struct SemanticSearchService {
   requests : @async.Queue[SemanticSearchRequest]
 }
 
 ///|
-fn SemanticSearchService::SemanticSearchService() -> SemanticSearchService {
+pub fn SemanticSearchService::SemanticSearchService() -> SemanticSearchService {
   { requests: Queue(kind=Blocking(64)), }
 }
 
@@ -153,7 +148,7 @@ fn empty_semantic_search_reply(
 ///|
 async fn SemanticSearchService::search(
   self : SemanticSearchService,
-  command : SemanticProvider?,
+  command : SemanticProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
 ) -> @protocol.SearchSemanticReply {
@@ -189,7 +184,7 @@ async fn cancel_running_semantic_search(
 }
 
 ///|
-async fn SemanticSearchService::run(
+pub async fn SemanticSearchService::run(
   self : SemanticSearchService,
   emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
@@ -307,11 +302,9 @@ fn normalize_semantic_source(text : String) -> String {
 
 ///|
 fn semantic_search_args(
-  command : String,
   payload : @protocol.SearchSemanticPayload,
 ) -> Array[String] {
-  let args = semantic_provider_prefix_args(command)
-  args.push("scan")
+  let args = moongrep_args(["scan"])
   for pattern in payload.patterns {
     if !pattern.is_empty() {
       args.append(["--pattern", pattern])
@@ -614,7 +607,7 @@ async fn publish_semantic_progress(
 
 ///|
 async fn run_semantic_search(
-  command : SemanticProvider?,
+  command : SemanticProvider,
   root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
   emit : async (@protocol.Notification) -> Unit,
@@ -625,12 +618,6 @@ async fn run_semantic_search(
     return empty_semantic_search_reply(reply_root, payload.generation, error={
       code: "invalid_request",
       message: "Provide a structural code pattern, a rule file, or select built-in rules.",
-    })
-  }
-  guard command is Some(command) else {
-    return empty_semantic_search_reply(reply_root, payload.generation, error={
-      code: "moongrep_unavailable",
-      message: "This SeekMoon installation does not include a semantic-search provider.",
     })
   }
   let provider = command.resolve()
@@ -659,7 +646,7 @@ async fn run_semantic_search(
     let process = @process.spawn(
       group,
       command,
-      semantic_search_args(command, payload),
+      semantic_search_args(payload),
       inherit_env=false,
       extra_env=provider.environment,
       stdin=stdin_reader,
@@ -794,17 +781,17 @@ async fn run_semantic_search(
 }
 
 ///|
-async fn search_semantic_op(
+pub async fn search_semantic(
   service : SemanticSearchService,
+  root : @pathx.Absolute,
   payload : @protocol.SearchSemanticPayload,
-  command : SemanticProvider?,
+  command : SemanticProvider,
 ) -> @protocol.SearchSemanticReply {
-  let root = WirePath::parse(payload.root).absolute
   service.search(command, root, payload)
 }
 
 ///|
-async fn cancel_search_semantic_op(
+pub async fn cancel_search_semantic(
   service : SemanticSearchService,
   payload : @protocol.CancelSearchSemanticPayload,
 ) -> @protocol.EmptyReply {
@@ -823,24 +810,13 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     generation: 1,
     max_results: 20000,
   }
-  assert_eq(semantic_search_args("moonx", pattern), [
+  assert_eq(semantic_search_args(pattern), [
     MoongrepPackageCoordinate,
     "--",
     "scan",
     "--pattern",
     "inspect($(x:arg))",
     "--json",
-  ])
-  assert_eq(
-    semantic_search_args("C:\\tools\\moonx.exe", pattern),
-    semantic_search_args("moonx", pattern),
-  )
-  let second_pattern : @protocol.SearchSemanticPayload = {
-    ..pattern,
-    patterns: ["match($x)"],
-  }
-  assert_eq(semantic_search_args("/opt/bin/moongrep", second_pattern), [
-    "scan", "--pattern", "match($x)", "--json",
   ])
 }
 
@@ -906,9 +882,8 @@ async test "semantic search argument validation requires a rule source" {
     generation: 1,
     max_results: 20000,
   }
-  // The no-command path returns the same validation refusal before probing the
-  // provider, so this does not require a moongrep installation on PATH.
-  let reply = run_semantic_search(None, root, payload, _ => ())
+  // Validation refuses before resolving the provider, so no toolchain is needed.
+  let reply = run_semantic_search(test_provider(), root, payload, _ => ())
   guard reply.error is Some(error) else { fail("expected validation error") }
   assert_eq(error.code, "invalid_request")
 }
@@ -930,10 +905,15 @@ async test "cancel-before-semantic-search frontier rejects the stale generation"
       generation: 7,
       max_results: 20000,
     }
-    let reply = service.search(None, root, payload)
+    let reply = service.search(test_provider(), root, payload)
     assert_true(reply.cancelled)
     assert_eq(reply.generation, 7)
     assert_eq(reply.root, resource_root)
     group.return_immediately(())
   })
+}
+
+///|
+fn test_provider() -> SemanticProvider {
+  SemanticProvider(engine="unused", runtime_dir=None, source=External)
 }

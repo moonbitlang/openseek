@@ -11,6 +11,7 @@ fn integrated_cloud_model() -> Model {
         updated_at: Some(100),
         generating: false,
         archived: false,
+        approval: ApprovalAsk,
       },
     ],
   }
@@ -274,6 +275,7 @@ test "Chats use the shared section with existing ordering and create action" {
           updated_at: Some(100),
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
         {
           id: "cloud-b",
@@ -281,6 +283,7 @@ test "Chats use the shared section with existing ordering and create action" {
           updated_at: Some(300),
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
       ],
     },

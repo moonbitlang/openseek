@@ -237,7 +237,7 @@ test "pattern repair trace remains bounded and retains recent events" {
 async fn request_pattern_repair_candidate(
   state : HostState,
   agent_env : Map[String, String],
-  provider : ResolvedSemanticProvider?,
+  provider : @search.ResolvedSemanticProvider,
   root : @pathx.Absolute,
   pattern : String,
   instruction : String,
@@ -246,11 +246,9 @@ async fn request_pattern_repair_candidate(
 ) -> PatternRepairCandidateOutcome {
   // The Agent receives only a closed validator configuration. It cannot
   // select another executable or alter the dump arguments.
-  if provider is Some(provider) {
-    agent_env[PatternRepairValidatorEnvironment] = pattern_repair_validator_config(
-      provider.command,
-    ).stringify()
-  }
+  agent_env[PatternRepairValidatorEnvironment] = pattern_repair_validator_config(
+    provider.command,
+  ).stringify()
   // A private directory for the child's result and session, removed when
   // the repair is done: nothing of a repair outlives it but its reply.
   let dir = @fs.tmpdir(prefix="openseek-pattern-repair-") catch {
@@ -369,10 +367,7 @@ async fn pattern_repair_op(
       source=state.resources.moonbit,
     )
     toolchain.apply_to_env(agent_env)
-    match state.semantic_provider() {
-      Some(provider) => Some(provider.resolve(env=agent_env))
-      None => None
-    }
+    state.semantic_provider().resolve(env=agent_env)
   } catch {
     error =>
       return pattern_repair_failure(

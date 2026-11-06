@@ -134,8 +134,49 @@ jobs:
           fi
           moon test $packages --target native
 
+  # The browser E2E suite builds only the frontend bundle and replaces HTTP and
+  # WebSocket with fixtures, so a pull request that leaves the bundle and the
+  # suite alone (a backend-only change, say) skips it. Pushes to main always
+  # run it.
+  changes:
+    name: desktop changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.e2e == 'true' }}
+    steps:
+      # The frontend package, its assets and build script, and the suite.
+      # Packages the bundle shares with other consumers (desktop protocol and
+      # helpers, editor, root packages) and dependency or toolchain pins rely
+      # on their own tests, the workspace `moon check` in ci.yml, and the
+      # push run on main.
+      - name: Detect E2E inputs
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            e2e:
+              - ".github/workflows/desktop.yml"
+              - "desktop/frontend/**"
+              - "desktop/app.css"
+              - "desktop/styles/**"
+              - "desktop/viewer_theme.css"
+              - "desktop/index.html"
+              - "desktop/pwa/**"
+              - "desktop/package/build.mjs"
+              - "desktop/package/office_fonts.mjs"
+              - "desktop/package/office_pdf.mjs"
+              - "desktop/dev/theme-lab.*"
+              - "desktop/e2e/**"
+
   desktop-e2e:
     name: desktop e2e
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

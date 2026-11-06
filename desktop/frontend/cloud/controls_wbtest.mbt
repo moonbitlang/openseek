@@ -11,6 +11,7 @@ fn controls_fixture() -> State {
         updated_at: None,
         generating: true,
         archived: false,
+        approval: ApprovalAsk,
       },
     ],
     conversations: {
@@ -30,6 +31,7 @@ fn controls_fixture() -> State {
           steers: [],
           compact_queued: false,
           compacting: false,
+          approval: None,
         }),
       },
     },
@@ -204,6 +206,7 @@ test "Cloud paused queue permits edit and withdrawal but not addition or steerin
       steers: [],
       compact_queued: false,
       compacting: false,
+      approval: None,
     }),
   }
   let state = state.replace("session", conversation)
@@ -313,6 +316,7 @@ test "Cloud HTTP reconciliation settles inputs without replacing SSE state" {
       steers: [],
       compact_queued: false,
       compacting: false,
+      approval: None,
     },
   }
   let emit : @cmd.Emit[Msg] = _ => @cmd.none
@@ -482,4 +486,229 @@ test "Cloud disconnected control snapshots retain a read-only queue" {
   let state = state.replace("session", conversation)
   let unchanged = controls_submit(state, @composer.SteerNow)
   assert_true(unchanged == state)
+}
+
+///|
+fn approval_snapshot(
+  state : State,
+  seq : Int32,
+  approval : ControlApproval?,
+) -> State {
+  let conversation = state.conversations["session"]
+  let (next, _, _) = update(
+    state,
+    WatchEvent(
+      state.epoch,
+      "session",
+      conversation.stream.unwrap(),
+      Snapshot({
+        session_id: "session",
+        task_id: Some("task"),
+        seq,
+        data: { ..conversation.control.unwrap(), approval, },
+      }),
+    ),
+    _ => @cmd.none,
+    token="token",
+    navigation=0,
+  )
+  next
+}
+
+///|
+fn approval_answer(state : State, allow : Bool) -> State {
+  let owner : @interop.ConversationIdentity = Cloud(
+    account="account",
+    session="session",
+  )
+  state
+  .update_control(
+    ControlAction(
+      owner,
+      @composer.ApprovalAnswered(
+        identity={ owner, archive_generation: 0, },
+        allow~,
+      ),
+    ),
+    _ => @cmd.none,
+    Some("token"),
+  )
+  .unwrap().0
+}
+
+///|
+fn approval_card(conversation : Conversation) -> @composer.ApprovalNotice? {
+  match conversation.control_context() {
+    [@composer.ApprovalRequest(notice), ..] => Some(notice)
+    _ => None
+  }
+}
+
+///|
+let approval_question : ControlApproval = {
+  id: "approval-1",
+  tool_name: "shell",
+  detail: "run rm -rf build",
+  body: None,
+}
+
+///|
+test "Cloud approval cards come from the control snapshot ahead of other notices" {
+  let state = controls_fixture()
+  assert_true(approval_card(state.conversations["session"]) is None)
+  let asked = approval_snapshot(
+    controls_submit(state, @composer.QueueNext),
+    3,
+    Some(approval_question),
+  )
+  let conversation = asked.conversations["session"]
+  assert_true(conversation.awaits_approval())
+  assert_true(
+    approval_card(conversation) ==
+    Some({
+      tool_name: "shell",
+      detail: "run rm -rf build",
+      target_label: None,
+      body: None,
+      answered: false,
+    }),
+  )
+  // The queued follow-up still shows, after the question the turn waits on.
+  assert_true(
+    conversation.control_context() is [_, @composer.QueuedInputPanel(..), ..],
+  )
+  // Settling the question in the snapshot removes the card.
+  let settled = approval_snapshot(asked, 4, None)
+  assert_true(approval_card(settled.conversations["session"]) is None)
+  assert_false(settled.conversations["session"].awaits_approval())
+}
+
+///|
+test "answering a Cloud approval sends one command and keeps the card answered until the snapshot settles it" {
+  let asked = approval_snapshot(controls_fixture(), 3, Some(approval_question))
+  let answered = approval_answer(asked, false)
+  let conversation = answered.conversations["session"]
+  guard conversation.control_inputs is [input] else {
+    fail("expected one approval command")
+  }
+  assert_true(input.task_id == "task")
+  assert_true(input.operation == Approve(id="approval-1", allow=false))
+  assert_true(approval_card(conversation) is Some({ answered: true, .. }))
+  assert_false(conversation.awaits_approval())
+  // A second click on an answered card sends nothing.
+  assert_true(approval_answer(answered, true) == answered)
+  assert_true(approval_answer(answered, false) == answered)
+  let (accepted, _) = answered
+    .update_control(
+      ControlFinished(1, "session", "task", input.key, Accepted),
+      _ => @cmd.none,
+      Some("token"),
+    )
+    .unwrap()
+  let conversation = accepted.conversations["session"]
+  assert_true(conversation.control_inputs.is_empty())
+  assert_true(approval_card(conversation) is Some({ answered: true, .. }))
+  assert_true(approval_answer(accepted, true) == accepted)
+  // A snapshot published before the answer arrived keeps the card answered.
+  let replayed = approval_snapshot(accepted, 4, Some(approval_question))
+  assert_true(
+    approval_card(replayed.conversations["session"])
+    is Some({ answered: true, .. }),
+  )
+  let settled = approval_snapshot(replayed, 5, None)
+  assert_true(approval_card(settled.conversations["session"]) is None)
+  assert_true(settled.conversations["session"].approval_answered is None)
+  // The engine's next question is a new card, open to answer.
+  let next = approval_snapshot(
+    settled,
+    6,
+    Some({ ..approval_question, id: "approval-2", }),
+  )
+  assert_true(next.conversations["session"].awaits_approval())
+  assert_true(
+    approval_answer(next, true).conversations["session"].control_inputs
+    is [{ operation: Approve(id="approval-2", allow=true), .. }],
+  )
+}
+
+///|
+test "a refused or undelivered Cloud approval answer returns the card to the person" {
+  let asked = approval_snapshot(controls_fixture(), 3, Some(approval_question))
+  let answered = approval_answer(asked, true)
+  let key = answered.conversations["session"].control_inputs[0].key
+  let replies : Array[Msg] = [
+    ControlFinished(1, "session", "task", key, Rejected("task_not_running")),
+    ControlFailed(1, "session", "task", key, Unreachable),
+    ControlFailed(1, "session", "task", key, Unauthorized),
+  ]
+  for reply in replies {
+    let (returned, _) = answered
+      .update_control(reply, _ => @cmd.none, Some("token"))
+      .unwrap()
+    let conversation = returned.conversations["session"]
+    assert_true(conversation.control_inputs.is_empty())
+    assert_true(conversation.awaits_approval())
+    assert_true(approval_card(conversation) is Some({ answered: false, .. }))
+    assert_true(conversation.notice is Some(_))
+    assert_eq(
+      returned.needs_sign_in,
+      reply is ControlFailed(_, _, _, _, Unauthorized),
+    )
+  }
+  let (refused, _) = answered
+    .update_control(replies[0], _ => @cmd.none, Some("token"))
+    .unwrap()
+  assert_eq(
+    refused.conversations["session"].notice,
+    Some("Cloud did not accept the answer: task_not_running."),
+  )
+  // The person may answer again; the server fences it to the question.
+  assert_true(
+    approval_answer(refused, false).conversations["session"].control_inputs
+    is [{ operation: Approve(id="approval-1", allow=false), .. }],
+  )
+  // A late reply for another task or epoch changes nothing.
+  for
+    stale in [
+      ControlFinished(1, "session", "other", key, Rejected("late")),
+      ControlFinished(0, "session", "task", key, Rejected("late")),
+    ] {
+    let (unchanged, _) = answered
+      .update_control(stale, _ => @cmd.none, Some("token"))
+      .unwrap()
+    assert_true(unchanged == answered)
+  }
+}
+
+///|
+test "Cloud approval answers need the question's task to be running" {
+  let state = controls_fixture()
+  // No question is pending.
+  assert_true(approval_answer(state, true) == state)
+  let asked = approval_snapshot(state, 3, Some(approval_question))
+  let conversation = asked.conversations["session"]
+  let stopping = asked.replace("session", {
+    ..conversation,
+    control: conversation.control.map(control => {
+      ..control,
+      status: Stopping,
+    }),
+  })
+  assert_true(approval_answer(stopping, true) == stopping)
+  let other = asked.replace("session", { ..conversation, task: Some("other"), })
+  assert_true(approval_answer(other, true) == other)
+}
+
+///|
+test "only a question a live snapshot newly publishes is reported" {
+  let state = controls_fixture()
+  let before = state.conversations["session"]
+  let asked = approval_snapshot(state, 3, Some(approval_question))
+  let after = asked.conversations["session"]
+  assert_true(after.published_approval(before) == Some(approval_question))
+  assert_true(after.published_approval(after) is None)
+  // A baseline snapshot recovers a question asked while this client was away.
+  assert_true(after.published_approval({ ..before, last_seq: None, }) is None)
+  let answered = approval_answer(asked, true).conversations["session"]
+  assert_true(answered.published_approval(before) is None)
 }

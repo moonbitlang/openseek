@@ -52,11 +52,22 @@ priv enum ToolSpawnResolution {
 }
 
 ///|
+/// A `diagnostics` event pushed to the webview: absolute `root`, its relative
+/// `path`, and the LSP-shaped `diagnostics` array — the same
+/// shape `lsp_open` replies with, so the editor decodes both through one
+/// path. An empty array clears the file's markers.
+pub struct DiagnosticsPush {
+  root : String
+  path : String
+  diagnostics : Array[@protocol.LspDiagnostic]
+}
+
+///|
 /// Process-wide state behind the CLI-served ops: how to launch `moon`
 /// (resolved once), which files each module root last had diagnostics on
 /// (so a fixed file gets an explicit clear), and the bounded lane that
 /// carries diagnostic pushes to the transports.
-priv struct MoonCliState {
+struct MoonCliState {
   engine : String
   source : @moonbit.ToolchainSource
   runtime_dir : @pathx.Path?
@@ -72,7 +83,7 @@ priv struct MoonCliState {
 }
 
 ///|
-fn MoonCliState::MoonCliState(
+pub fn MoonCliState::MoonCliState(
   engine : String,
   runtime_dir? : @pathx.Path,
   source~ : @moonbit.ToolchainSource,
@@ -89,7 +100,7 @@ fn MoonCliState::MoonCliState(
 
 ///|
 /// Forward the bounded diagnostics output for the app lifetime.
-async fn MoonCliState::forward_diagnostics(
+pub async fn MoonCliState::forward_diagnostics(
   self : MoonCliState,
   emit : async (DiagnosticsPush) -> Unit,
 ) -> Unit {
@@ -279,14 +290,13 @@ async fn manifest_mtime(dir : @pathx.Absolute) -> Int64? {
 ///|
 /// Route hover by an explicit absolute root plus a root-relative file path,
 /// then answer it with one `moon ide hover` run at the requested position.
-async fn lsp_hover_op(
+pub async fn lsp_hover(
   state : MoonCliState,
   payload : @protocol.LspHoverPayload,
 ) -> @protocol.LspHoverReply {
-  ignore(LanguagePath::authorized_root(payload.session, payload.root))
-  let request_root = WirePath::parse(payload.root)
-  let file = request_root.resolve(payload.path)
-  guard moon_cli_scope(request_root.absolute, file) is Some(scope) else {
+  let request_root = LanguageRoot::authorize(payload.session, payload.root).lexical
+  let file = root_relative_file(request_root, payload.path)
+  guard moon_cli_scope(request_root, file) is Some(scope) else {
     return no_hover()
   }
   let root = scope.cwd()
@@ -308,14 +318,13 @@ async fn lsp_hover_op(
 /// every module has no diagnostics, while a run that could not produce
 /// results (a failed spawn, a broken manifest) answers with the field absent
 /// so the client keeps its markers and earlier push state stays untouched.
-async fn lsp_open_op(
+pub async fn lsp_open(
   state : MoonCliState,
   payload : @protocol.LspOpenPayload,
 ) -> @protocol.LspDiagnosticsReply {
-  ignore(LanguagePath::authorized_root(payload.session, payload.root))
-  let request_root = WirePath::parse(payload.root)
-  let file = request_root.resolve(payload.path)
-  guard moon_cli_scope(request_root.absolute, file) is Some(scope) else {
+  let request_root = LanguageRoot::authorize(payload.session, payload.root).lexical
+  let file = root_relative_file(request_root, payload.path)
+  guard moon_cli_scope(request_root, file) is Some(scope) else {
     return { diagnostics: Some([]), }
   }
   let root = scope.cwd()
@@ -335,7 +344,7 @@ async fn lsp_open_op(
     return { diagnostics: None, }
   }
   let previous = state.published.get(scope).unwrap_or([])
-  for push in diagnostics_pushes(request_root.absolute, previous, current) {
+  for push in diagnostics_pushes(request_root, previous, current) {
     ignore(state.diagnostics.try_put(push) catch { _ => false })
   }
   state.published.set(scope, current.keys().to_array())
@@ -350,7 +359,7 @@ fn diagnostics_pushes(
   request_root : @pathx.Absolute,
   previous : Array[@pathx.Absolute],
   current : Map[@pathx.Absolute, Array[@protocol.LspDiagnostic]],
-) -> Array[DiagnosticsPush] raise HostError {
+) -> Array[DiagnosticsPush] raise LanguageError {
   let pushes : Array[DiagnosticsPush] = []
   let root = request_root.resource_path()
   for path, items in current {
@@ -697,11 +706,11 @@ test "diagnostics_pushes uses root-relative paths and clears dropped files" {
 /// usual one or two roots. Best-effort: a missing root, a failed run, or
 /// nothing matching all yield no symbols; an empty query is valid — it lists
 /// every symbol, which backs the bare `#` menu (capped like any other result).
-async fn workspace_symbols_op(
+pub async fn workspace_symbols(
   state : MoonCliState,
   payload : @protocol.WorkspaceSymbolsPayload,
 ) -> @protocol.WorkspaceSymbolsReply {
-  let workspace = LanguagePath::authorized_root(payload.session, payload.root)
+  let workspace = LanguageRoot::authorize(payload.session, payload.root).lexical
   let symbols : Array[@protocol.SymbolItem] = []
   for root in workspace_module_roots(workspace) {
     if symbols.length() >= MaxSymbolResults {

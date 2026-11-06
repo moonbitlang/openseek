@@ -1,9 +1,8 @@
 // Host-only wire helpers: path parsing for the host ops and the payloads of
-// the pushes only the host emits (fs events, diagnostics). The request and
-// reply types themselves live in `@protocol`, per docs/remote-protocol.md.
-// Filesystem operations name absolute targets, except read_file may pair a
-// relative path with an explicit absolute root. LSP operations likewise name
-// one absolute root and relative paths.
+// the pushes only the host emits (fs events). The request and reply types
+// themselves live in `@protocol`, per docs/remote-protocol.md. Filesystem
+// operations name absolute targets, except read_file may pair a relative path
+// with an explicit absolute root.
 
 ///|
 /// A wire resource path parsed into the host's native absolute path type.
@@ -195,15 +194,4 @@ test "language requests carry roots and lsp_open distinguishes no data" {
     Json::empty_object(),
   )
   assert_eq(no_data.diagnostics, None)
-}
-
-///|
-/// A `diagnostics` event pushed to the webview: absolute `root`, its relative
-/// `path`, and the LSP-shaped `diagnostics` array — the same
-/// shape `lsp_open` replies with, so the editor decodes both through one
-/// path. An empty array clears the file's markers.
-priv struct DiagnosticsPush {
-  root : String
-  path : String
-  diagnostics : Array[@protocol.LspDiagnostic]
 }
