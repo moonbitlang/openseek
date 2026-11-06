@@ -161,6 +161,7 @@ class MainActivity : ComponentActivity() {
                 return true
             }
         }
+        BlobDownloads(this, webView).install()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (ConsoleOrigin.contains(webView.url)) {
