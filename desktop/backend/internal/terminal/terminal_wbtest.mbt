@@ -9,18 +9,17 @@ fn new_push_queue() -> @async.Queue[TerminalPush] {
 }
 
 ///|
-/// The `TerminalError` message an open in the current directory refuses with;
-/// `None` when it opened, or when it failed some other way.
+/// The error an open in the current directory refuses with; `None` when it
+/// opened.
 async fn open_refusal(
   state : TerminalState,
   command? : Array[String],
-) -> String? {
+) -> Error? {
   try {
     let _ = state.spawn(cwd=".", cols=80, rows=24, command?)
     None
   } catch {
-    TerminalError(message) => Some(message)
-    _ => None
+    error => Some(error)
   }
 }
 
@@ -101,7 +100,7 @@ async test "a missing program fails while opening the session" {
       state.run_pump(push => pushes.put(push))
     })
     let missing = ["openseek-terminal-test-program-that-does-not-exist"]
-    let failed = open_refusal(state, command=missing) is Some(_)
+    let failed = open_refusal(state, command=missing) is Some(SpawnFailed(_))
     assert_true(failed)
   })
 }
@@ -109,7 +108,7 @@ async test "a missing program fails while opening the session" {
 ///|
 async test "an empty command is rejected before spawning" {
   let state = TerminalState()
-  let failed = open_refusal(state, command=[]) is Some(_)
+  let failed = open_refusal(state, command=[]) is Some(EmptyCommand)
   assert_true(failed)
 }
 
@@ -138,14 +137,13 @@ async test "shutdown rejects pending and later terminal opens" {
     let state = TerminalState()
     let pending_rejected : @async.Queue[Bool] = Queue(kind=Blocking(1))
     group.spawn_bg(allow_failure=true, () => {
-      let rejected = open_refusal(state) is Some("terminal service is closed")
+      let rejected = open_refusal(state) is Some(ServiceClosed)
       pending_rejected.put(rejected)
     })
     @async.pause()
     state.shutdown()
     assert_true(@async.with_timeout(5000, () => pending_rejected.get()))
-    let later_rejected = open_refusal(state)
-      is Some("terminal service is closed")
+    let later_rejected = open_refusal(state) is Some(ServiceClosed)
     assert_true(later_rejected)
   })
 }
@@ -191,8 +189,7 @@ async test "close_all cancels queued opens from an older page" {
     let pushes = new_push_queue()
     let cancelled : @async.Queue[Bool] = Queue(kind=Blocking(1))
     group.spawn_bg(allow_failure=true, () => {
-      let was_cancelled = open_refusal(state)
-        is Some("terminal open was cancelled by reconnect")
+      let was_cancelled = open_refusal(state) is Some(CancelledByReconnect)
       cancelled.put(was_cancelled)
     })
     // Let the opener enqueue its request and block on the reply before the
@@ -282,7 +279,7 @@ test "ops on unknown terminal ids degrade cleanly" {
     state.resize(id="missing-terminal", cols=80, rows=24)
     false
   } catch {
-    TerminalError(_) => true
+    NotOpen(_) => true
     _ => false
   }
   assert_true(failed)

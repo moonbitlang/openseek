@@ -11,7 +11,16 @@ import {
 
 // Errors
 pub suberror TerminalError {
-  TerminalError(String)
+  InvalidBase64Input
+  AmbiguousInput
+  NoWorkspace
+  EmptyCommand
+  ServiceClosed
+  CancelledByReconnect
+  SpawnFailed(String)
+  NotOpen(String)
+  WriteFailed(String)
+  ResizeFailed(String)
 }
 pub fn TerminalError::output(Self, &Logger) -> Unit
 pub fn TerminalError::to_string(Self) -> String

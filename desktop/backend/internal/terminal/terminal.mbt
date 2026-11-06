@@ -7,14 +7,33 @@
 /// A host-side failure with a user-facing message; the IPC boundary
 /// translates it into the error the webview displays.
 pub suberror TerminalError {
-  TerminalError(String)
+  InvalidBase64Input
+  AmbiguousInput
+  NoWorkspace
+  EmptyCommand
+  ServiceClosed
+  CancelledByReconnect
+  SpawnFailed(String)
+  NotOpen(String)
+  WriteFailed(String)
+  ResizeFailed(String)
 }
 
 ///|
 pub impl Show for TerminalError with fn output(self, logger) {
-  match self {
-    TerminalError(message) => logger.write_string(message)
+  let message = match self {
+    InvalidBase64Input => "terminal input contains invalid base64"
+    AmbiguousInput => "terminal input must contain exactly one data field"
+    NoWorkspace => "terminal requires a conversation workspace"
+    EmptyCommand => "terminal command must not be empty"
+    ServiceClosed => "terminal service is closed"
+    CancelledByReconnect => "terminal open was cancelled by reconnect"
+    SpawnFailed(detail) => "terminal spawn failed: \{detail}"
+    NotOpen(id) => "terminal \{id} is not open"
+    WriteFailed(detail) => "terminal write failed: \{detail}"
+    ResizeFailed(detail) => "terminal resize failed: \{detail}"
   }
+  logger.write_string(message)
 }
 
 ///|
@@ -144,7 +163,7 @@ priv struct OpenRequest {
   cols : Int32
   rows : Int32
   /// Spawn outcome for the waiting `spawn` call.
-  reply : @async.Queue[Result[Unit, String]]
+  reply : @async.Queue[Result[Unit, TerminalError]]
 }
 
 ///|
@@ -185,10 +204,12 @@ async fn TerminalState::spawn(
   rows~ : Int32,
   command? : Array[String],
 ) -> String {
-  guard !self.closed else { raise TerminalError("terminal service is closed") }
+  guard !self.closed else { raise ServiceClosed }
   let argv = session_argv(command?)
   let id = @uuid.mint()
-  let reply : @async.Queue[Result[Unit, String]] = Queue(kind=Blocking(1))
+  let reply : @async.Queue[Result[Unit, TerminalError]] = Queue(
+    kind=Blocking(1),
+  )
   self.requests.put({
     id,
     connection_generation: self.connection_generation,
@@ -198,12 +219,12 @@ async fn TerminalState::spawn(
     rows,
     reply,
   }) catch {
-    TerminalPumpClosed => raise TerminalError("terminal service is closed")
+    TerminalPumpClosed => raise ServiceClosed
     error => raise error
   }
   match reply.get() {
     Ok(_) => id
-    Err(message) => raise TerminalError(message)
+    Err(error) => raise error
   }
 }
 
@@ -214,11 +235,9 @@ async fn TerminalState::write(
   id~ : String,
   data : Bytes,
 ) -> Unit {
-  guard self.sessions.get(id) is Some(session) else {
-    raise TerminalError("terminal \{id} is not open")
-  }
+  guard self.sessions.get(id) is Some(session) else { raise NotOpen(id) }
   session.pty.write(data) catch {
-    error => raise TerminalError(@debug.render(Repr(error)))
+    error => raise WriteFailed(@debug.render(Repr(error)))
   }
 }
 
@@ -230,11 +249,9 @@ pub fn TerminalState::resize(
   cols~ : Int32,
   rows~ : Int32,
 ) -> Unit raise {
-  guard self.sessions.get(id) is Some(session) else {
-    raise TerminalError("terminal \{id} is not open")
-  }
+  guard self.sessions.get(id) is Some(session) else { raise NotOpen(id) }
   session.pty.resize(cols~, rows~) catch {
-    error => raise TerminalError("terminal resize failed: \{error}")
+    error => raise ResizeFailed("\{error}")
   }
 }
 
@@ -293,10 +310,7 @@ pub fn TerminalState::shutdown(self : TerminalState) -> Unit {
   // A request still in this queue has an opener blocked on its private reply.
   // Close that reply explicitly before removing the pump's only route to it.
   while (self.requests.try_get() catch { _ => None }) is Some(request) {
-    request.reply.close(
-      error=TerminalError("terminal service is closed"),
-      clear=true,
-    )
+    request.reply.close(error=ServiceClosed, clear=true)
   }
   self.requests.close(error=TerminalPumpClosed, clear=true)
 }

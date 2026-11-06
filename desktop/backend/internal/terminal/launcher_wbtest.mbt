@@ -67,7 +67,7 @@ async test "a session whose cwd does not exist fails while opening" {
       )
       false
     } catch {
-      TerminalError(_) => true
+      SpawnFailed(_) => true
       _ => false
     }
     assert_true(failed)

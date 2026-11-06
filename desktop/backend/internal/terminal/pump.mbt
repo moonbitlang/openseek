@@ -51,16 +51,13 @@ async fn run_session(
   let mut opened_pty : @pty.Pty? = None
   @async.with_task_group(group => {
     if request.connection_generation != state.connection_generation {
-      let message = if state.closed {
-        "terminal service is closed"
-      } else {
-        "terminal open was cancelled by reconnect"
-      }
-      request.reply.put(Err(message))
+      request.reply.put(
+        Err(if state.closed { ServiceClosed } else { CancelledByReconnect }),
+      )
       return
     }
     guard request.argv.get(0) is Some(file) else {
-      request.reply.put(Err("terminal command must not be empty"))
+      request.reply.put(Err(EmptyCommand))
       return
     }
     let args = request.argv[1:].map(arg => arg.clamped_view())
@@ -75,7 +72,7 @@ async fn run_session(
       rows=request.rows,
     ) catch {
       error => {
-        request.reply.put(Err(@debug.render(Repr(error))))
+        request.reply.put(Err(SpawnFailed(@debug.render(Repr(error)))))
         return
       }
     }
@@ -84,21 +81,16 @@ async fn run_session(
     // created for this session.
     let pid = pty.pid()
     if pid <= 0 {
-      request.reply.put(
-        Err("terminal spawn returned a non-positive process id"),
-      )
+      request.reply.put(Err(SpawnFailed("non-positive process id")))
       group.return_immediately(())
       return
     }
     // Spawning suspends, so a reconnect can invalidate the request while the
     // child is being created. Close it before publishing a stale session.
     if request.connection_generation != state.connection_generation {
-      let message = if state.closed {
-        "terminal service is closed"
-      } else {
-        "terminal open was cancelled by reconnect"
-      }
-      request.reply.put(Err(message))
+      request.reply.put(
+        Err(if state.closed { ServiceClosed } else { CancelledByReconnect }),
+      )
       group.return_immediately(())
       return
     }
@@ -168,9 +160,7 @@ async fn run_session(
 #cfg(platform="windows")
 fn session_argv(command? : Array[String]) -> Array[String] raise TerminalError {
   if command is Some(argv) {
-    guard !argv.is_empty() else {
-      raise TerminalError("terminal command must not be empty")
-    }
+    guard !argv.is_empty() else { raise EmptyCommand }
     return argv
   }
   [@env.get("COMSPEC").unwrap_or("cmd.exe")]
@@ -183,9 +173,7 @@ fn session_argv(command? : Array[String]) -> Array[String] raise TerminalError {
 #cfg(not(platform="windows"))
 fn session_argv(command? : Array[String]) -> Array[String] raise TerminalError {
   if command is Some(argv) {
-    guard !argv.is_empty() else {
-      raise TerminalError("terminal command must not be empty")
-    }
+    guard !argv.is_empty() else { raise EmptyCommand }
     return argv
   }
   let shell = @env.get("SHELL").unwrap_or("/bin/sh")

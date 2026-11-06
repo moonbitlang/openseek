@@ -9,10 +9,9 @@ fn @protocol.TerminalInputPayload::bytes(
     (Some(data), None) => @utf8.encode(data)
     (None, Some(data)) =>
       @base64.decode(data) catch {
-        _ => raise TerminalError("terminal input contains invalid base64")
+        _ => raise InvalidBase64Input
       }
-    _ =>
-      raise TerminalError("terminal input must contain exactly one data field")
+    _ => raise AmbiguousInput
   }
 }
 
@@ -31,7 +30,7 @@ pub async fn TerminalState::open(
       workspace?=payload.workspace,
     )
     is Some(root) else {
-    raise TerminalError("terminal requires a conversation workspace")
+    raise NoWorkspace
   }
   // Match the engine and language services: packaged command-line tools and a
   // packaged MoonBit seed win when present. Queue one combined path update
@@ -53,9 +52,7 @@ pub async fn TerminalState::open(
   // A `!` command is the session's only process: no login shell starts, so
   // there is no prompt to activate and the path rides the command's own argv.
   if payload.command is Some(command) {
-    guard !command.is_blank() else {
-      raise TerminalError("terminal command must not be empty")
-    }
+    guard !command.is_blank() else { raise EmptyCommand }
     let id = self.spawn(
       cwd=root.to_string(),
       cols=payload.cols,
@@ -75,18 +72,8 @@ pub async fn TerminalState::open(
     rows=payload.rows,
   )
   if activation_command is Some(command) {
-    self.write(id~, @utf8.encode(command)) catch {
-      TerminalError(message) => {
-        self.close(id~)
-        raise TerminalError(
-          "could not activate terminal command-line tools: \{message}",
-        )
-      }
-      error => {
-        self.close(id~)
-        raise error
-      }
-    }
+    errdefer self.close(id~)
+    self.write(id~, @utf8.encode(command))
   }
   { id, }
 }
