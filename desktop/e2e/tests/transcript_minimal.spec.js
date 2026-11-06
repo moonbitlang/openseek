@@ -318,6 +318,77 @@ for (const replayed of [false, true]) test(`minimal transcript clears jump to la
   expect(app.pageErrors).toEqual([]);
 });
 
+test('minimal edit previews render unified lines and preserve call state', async ({ page }) => {
+  const app = new MinimalTranscriptHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture requested edits' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
+      { id: 'edit-one', name: 'edit', arguments: JSON.stringify({
+        path: 'src/main.mbt', start_line: 12, old_string: 'first\nold\nlast', new_string: 'first\nnew\nlast',
+        description: 'Update the entry point', internal: 'PARAMETER_SENTINEL',
+      }) },
+      { id: 'edit-many', name: 'multi_edit', arguments: JSON.stringify({
+        description: 'Update supporting files', edits_file: 'PARAMETER_SENTINEL',
+        edits: [
+          { file: 'src/add.mbt', old_string: '', new_string: 'added <script>', internal: 'PARAMETER_SENTINEL' },
+          { file: 'src/remove.mbt', old_string: 'deleted', new_string: '' },
+        ],
+      }) },
+    ] } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.enableMinimal();
+  const stream = page.locator('#stream');
+  const tools = stream.locator('.minimal-tools-live');
+  await expect(tools.locator('.editor-diff-preview').first()).toBeVisible();
+  const calls = tools.locator('.minimal-call');
+  await expect(calls.locator('.tool-status.pending')).toHaveCount(2);
+  await expect(calls.nth(0).locator('.editor-diff-source')).toHaveText(['first', 'old', 'new', 'last']);
+  await expect(calls.nth(0).locator('.editor-diff-sign')).toHaveText(['', '−', '+', '']);
+  await expect(calls.nth(0).locator('.edit-path')).toHaveText('src/main.mbt');
+  await expect(calls.nth(0).locator('.editor-diff-number')).toHaveText(['12', '13', '13', '14']);
+  await expect(calls.locator('.tool-card-chip')).toHaveCount(0);
+  await expect(calls.nth(1).locator('.edit-path')).toHaveText(['src/add.mbt', 'src/remove.mbt']);
+  await expect(calls.nth(1).locator('.added .editor-diff-source')).toHaveText('added <script>');
+  await expect(calls.nth(1).locator('.removed .editor-diff-source')).toHaveText('deleted');
+  await expect(calls.locator('.editor-diff-preview script')).toHaveCount(0);
+  await expect(tools.locator('summary')).toHaveCount(0);
+  for (const [id, name, failed] of [['edit-one', 'edit', false], ['edit-many', 'multi_edit', true]]) {
+    app.append('tool_result', { tool_call_id: id, tool_name: name, content: 'OUTPUT_SENTINEL',
+      is_error: failed, brief: failed ? 'Batch rejected' : 'Updated entry point' });
+  }
+  await expect(calls.last().locator('.minimal-call-caption')).toHaveText('Batch rejected');
+  await expect(calls.locator('.editor-diff-preview').first()).toBeVisible();
+  await expect(calls.nth(1).locator('.tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
+  await expect(calls.locator('.editor-diff-preview')).toHaveCount(3);
+  await expect(stream).not.toContainText('PARAMETER_SENTINEL');
+  await expect(stream).not.toContainText('OUTPUT_SENTINEL');
+  await expect(stream.locator('.tool-call-tabs')).toHaveCount(0);
+  await page.setViewportSize({ width: 640, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  for (const block of await calls.locator('.minimal-edit-block').all()) {
+    await expect(block.getByRole('button', { name: 'Copy diff', exact: true })).toBeVisible();
+    const box = await block.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(640);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  const minimalDiffs = await calls.locator('.editor-diff-source').allTextContents();
+  app.append('assistant', { content: 'Finished reviewing the edits.' });
+  app.append('terminal', { kind: 'finished', message: 'Finished reviewing the edits.' });
+  await expect(stream.locator('.editor-diff-preview').first()).toBeHidden();
+  await expect(stream.getByText('Finished reviewing the edits.', { exact: true })).toBeVisible();
+  const completed = stream.locator('.minimal-process');
+  await expect(completed.locator('.minimal-tools')).toHaveCount(0);
+  await completed.locator(':scope > summary').click();
+  await expect(completed.locator('.editor-diff-preview').first()).toBeVisible();
+  await expect(completed.locator('.editor-diff-preview')).toHaveCount(3);
+  await expect(completed.locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
+
+
+});
+
 test('minimal diff pins line numbers and markers while source scrolls', async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 900 });
   const app = new MinimalTranscriptHarness(page);
@@ -376,3 +447,63 @@ test('minimal diff pins line numbers and markers while source scrolls', async ({
   }
   expect(app.pageErrors).toEqual([]);
 });
+
+test('minimal job waits name their targets while pending and disappear after success', async ({ page }) => {
+  const app = new MinimalTranscriptHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture job waits' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
+      { id: 'start', name: 'mbtx', arguments: JSON.stringify({ description: 'Run the pr tests', script: 'SCRIPT_SENTINEL' }) },
+    ] } } },
+    { sequence: 3, item: { kind: 'tool_result', payload: {
+      tool_call_id: 'start', tool_name: 'mbtx', brief: 'mbtx → bg bg-2', content: 'OUTPUT_SENTINEL', is_error: false,
+    } } },
+    { sequence: 4, item: { kind: 'assistant', payload: { content: '', tool_calls: [
+      { id: 'wait', name: 'job_wait', arguments: JSON.stringify({ job_ids: ['bg-2', 'bg-2'] }) },
+    ] } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.enableMinimal();
+  const stream = page.locator('#stream');
+  const tools = stream.locator('.minimal-tools-live');
+  const caption = 'Wait for job "Run the pr tests" to complete';
+  await expect(tools.locator('.minimal-call-caption').last()).toHaveText(caption);
+
+  await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests', caption]);
+  await expect(tools.locator('.minimal-call .tool-status.pending')).toHaveAttribute('aria-label', 'Tool in progress');
+  const notice = 'background job bg-2 finished (exit=0): Run the pr tests';
+  app.append('runtime_notice', { content: notice });
+  app.append('tool_result', { tool_call_id: 'wait', tool_name: 'job_wait', content: 'WAIT_RESULT_SENTINEL', is_error: false });
+  await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests']);
+  await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Run the pr tests');
+  await expect(tools.getByText(notice, { exact: true })).toBeVisible();
+  await expect(stream).not.toContainText('WAIT_RESULT_SENTINEL');
+
+  app.append('assistant', { content: '', tool_calls: [
+    { id: 'wait-many', name: 'job_wait', arguments: JSON.stringify({ job_ids: ['bg-2', 'bg-unknown'] }) },
+  ] });
+  await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Wait for any of these jobs to complete: "Run the pr tests", bg-unknown');
+  app.append('tool_result', { tool_call_id: 'wait-many', tool_name: 'job_wait', content: 'unknown job', brief: 'Unknown job bg-unknown', is_error: true });
+  await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests', 'Unknown job bg-unknown']);
+  await expect(tools.locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
+  await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Unknown job bg-unknown');
+
+  // A wait-only group disappears without leaving an empty activity disclosure.
+  app.append('assistant', { content: 'Waiting for another job.', tool_calls: [
+    { id: 'wait-only', name: 'job_wait', arguments: JSON.stringify({ job_ids: ['bg-3'] }) },
+  ] });
+  await expect(stream.locator('.minimal-tools')).toHaveCount(1);
+  const singleWait = stream.locator(':scope > .minimal-messages > .minimal-single-call');
+  await expect(singleWait.locator('.minimal-call-caption')).toHaveText('Wait for job bg-3 to complete');
+  app.append('tool_result', { tool_call_id: 'wait-only', tool_name: 'job_wait', content: 'Woken by user input', is_error: false });
+  await expect(stream.locator('.minimal-tools')).toHaveCount(1);
+  await expect(stream).not.toContainText('Wait for job bg-3 to complete');
+  await expect(singleWait).toHaveCount(0);
+
+  expect(app.pageErrors).toEqual([]);
+});
+
+// Keep both tool payload shapes. Git inventory variants cannot affect this
+// path-only action; each case asserts that no Git original is requested.
+// Append/copy payload variants are covered by edit_diff_wbtest.mbt.
