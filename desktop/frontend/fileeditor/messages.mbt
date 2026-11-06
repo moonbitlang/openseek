@@ -2,6 +2,7 @@
 
 ///|
 priv enum UiMessage {
+  PreviewHtml
   ShareFile
   DownloadToLocal
   DownloadingFile
@@ -210,6 +211,11 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, PreviewHtml) => "Preview"
+    (Spanish, PreviewHtml) => "Vista previa"
+    (SimplifiedChinese, PreviewHtml) => "预览"
+    (TraditionalChinese, PreviewHtml) => "預覽"
+    (Japanese, PreviewHtml) => "プレビュー"
     (English, ShareFile) => "Share"
     (Spanish, ShareFile) => "Compartir"
     (SimplifiedChinese, ShareFile) => "分享"

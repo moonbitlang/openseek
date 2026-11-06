@@ -38,7 +38,7 @@ pub fn basename(@pathx.Relative) -> String
 
 pub fn body_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, semantic_review? : @html.Html) -> @html.Html
 
-pub fn breadcrumb_view(desktop? : Bool, locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?, share? : @cmd.Cmd?) -> @html.Html
+pub fn breadcrumb_view(desktop? : Bool, locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?, share? : @cmd.Cmd?, preview? : @cmd.Cmd?) -> @html.Html
 
 pub fn browser_download(@cmd.Emit[Msg], @interop.ConversationIdentity, Int32, Int32, @common.Uri, Bytes) -> @cmd.Cmd
 
@@ -55,6 +55,8 @@ pub fn close_history_diff(State, @dock.GitHistoryDiff) -> State
 pub fn editor_classes(State, Ctx) -> String
 
 pub fn forget_cloud_files(State, String, session? : String) -> (State, @cmd.Cmd)
+
+pub fn is_html_file(String) -> Bool
 
 pub fn mount_cmds(@cmd.Emit[Msg]) -> @cmd.Cmd
 

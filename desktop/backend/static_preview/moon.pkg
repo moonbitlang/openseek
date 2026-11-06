@@ -1,0 +1,16 @@
+import {
+  "moonbitlang/http_file_server" @static_files,
+  "openseek_desktop/backend/entropy",
+  "openseek_desktop/backend/pathx",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/encoding/percent",
+}
+
+supported_targets = "+native"
+
+import {
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
+} for "test"
