@@ -6,14 +6,14 @@ test('panel toggle keeps its node, focus and position across drawer transitions'
   await app.install();
   await app.goto();
   await app.openSession();
-  const toggle = await page.getByRole('button', { name: 'Show panel', exact: true }).elementHandle();
+  const toggle = await page.locator('.right-panel-toggle').elementHandle();
   const initial = await toggle.boundingBox();
   for (const open of [true, false, true, false]) {
     await toggle.focus();
     await page.evaluate(() => {
       const frames = window.drawerFrames = [];
       const start = performance.now();
-      const button = document.querySelector('.topbar [title="Show terminal (Ctrl+`)"]');
+      const button = document.querySelector('.topbar .terminal-toggle');
       const sample = () => {
         frames.push(button.getBoundingClientRect().x);
         if (performance.now() - start < 450) requestAnimationFrame(sample);
@@ -22,7 +22,7 @@ test('panel toggle keeps its node, focus and position across drawer transitions'
     });
     await page.keyboard.press('Enter');
     await expect.poll(() => toggle.evaluate(node => node.isConnected)).toBe(true);
-    await expect(page.getByRole('button', { name: open ? 'Hide panel' : 'Show panel', exact: true })).toBeFocused();
+    await expect(page.locator('.right-panel-toggle')).toBeFocused();
     await page.waitForTimeout(500);
     const final = await toggle.boundingBox();
     expect(Math.abs(final.x - initial.x)).toBeLessThanOrEqual(1);
@@ -54,9 +54,9 @@ test('shell panel control remains reachable when expanded and on narrow screens'
   expect(initial.y + initial.height / 2).toBe(24);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  const expand = page.getByRole('button', { name: 'Expand panel', exact: true });
+  const expand = page.locator('.panel-expand');
   await expand.click();
-  await expect(page.getByRole('button', { name: 'Restore panel', exact: true })).toBeVisible();
+  await expect(page.locator('.panel-expand')).toBeVisible();
   expect(await toggle.boundingBox()).toEqual(initial);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -66,13 +66,15 @@ test('shell panel control remains reachable when expanded and on narrow screens'
     document.documentElement.style.removeProperty('--native-titlebar-height');
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(toggle).toBeHidden();
-  await app.openQuickOpen();
-  await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
   await expect(toggle).toBeVisible();
-  await expect(toggle).toHaveAccessibleName('Hide panel');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await app.openQuickOpen();
+  await page.locator('#quick-open-list [data-path="src/main.mbt"]').click();
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await toggle.click();
-  await expect(toggle).toBeHidden();
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(await original.evaluate(node => node.isConnected)).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });

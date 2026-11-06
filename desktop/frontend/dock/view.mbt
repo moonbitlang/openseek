@@ -64,6 +64,15 @@ pub(all) struct LauncherActions {
 }
 
 ///|
+priv struct LauncherEntry {
+  action : String
+  label : String
+  hint : String
+  icon : () -> @html.Html
+  command : @cmd.Cmd
+}
+
+///|
 /// The launcher rows shared by the empty-strip pane and the `+` popup: the
 /// kinds of tab the dock can open.
 fn LauncherActions::rows(
@@ -71,65 +80,62 @@ fn LauncherActions::rows(
   self : LauncherActions,
   popup~ : Bool = false,
 ) -> Array[@html.Html] {
-  let entries : Array[(String, String, () -> @html.Html, @cmd.Cmd)] = []
+  let entries : Array[LauncherEntry] = []
   if self.browser is Some(open_browser) && self.host_tools {
-    entries.push(
-      (
-        ui(locale, BrowseLabel),
-        ui(locale, BrowseHint),
-        @icons.icon_globe,
-        open_browser,
-      ),
-    )
+    entries.push({
+      action: "browser",
+      label: ui(locale, BrowseLabel),
+      hint: ui(locale, BrowseHint),
+      icon: @icons.icon_globe,
+      command: open_browser,
+    })
   }
-  entries.push(
-    (
-      ui(locale, SearchLabel),
-      ui(locale, SearchHint),
-      @icons.icon_search,
-      self.search,
-    ),
-  )
-  entries.push(
-    (
-      ui(locale, FilesLabel),
-      ui(locale, FilesHint),
-      @icons.icon_folder,
-      self.files,
-    ),
-  )
+  entries.push({
+    action: "search",
+    label: ui(locale, SearchLabel),
+    hint: ui(locale, SearchHint),
+    icon: @icons.icon_search,
+    command: self.search,
+  })
+  entries.push({
+    action: "files",
+    label: ui(locale, FilesLabel),
+    hint: ui(locale, FilesHint),
+    icon: @icons.icon_folder,
+    command: self.files,
+  })
   if self.host_tools {
-    entries.push(
-      (
-        ui(locale, ReviewLabel),
-        ui(locale, ReviewHint),
-        @icons.icon_diff_multiple,
-        self.review,
-      ),
-    )
-    entries.push(
-      ("GitHub", ui(locale, GithubHint), @icons.icon_github, self.github),
-    )
-    entries.push(
-      (
-        ui(locale, WorkflowsLabel),
-        ui(locale, WorkflowsHint),
-        @icons.icon_organization,
-        self.workflows,
-      ),
-    )
-    entries.push(
-      (
-        ui(locale, JobsLabel),
-        ui(locale, JobsHint),
-        @icons.icon_tasklist,
-        self.jobs,
-      ),
-    )
+    entries.push({
+      action: "review",
+      label: ui(locale, ReviewLabel),
+      hint: ui(locale, ReviewHint),
+      icon: @icons.icon_diff_multiple,
+      command: self.review,
+    })
+    entries.push({
+      action: "github",
+      label: "GitHub",
+      hint: ui(locale, GithubHint),
+      icon: @icons.icon_github,
+      command: self.github,
+    })
+    entries.push({
+      action: "workflows",
+      label: ui(locale, WorkflowsLabel),
+      hint: ui(locale, WorkflowsHint),
+      icon: @icons.icon_organization,
+      command: self.workflows,
+    })
+    entries.push({
+      action: "jobs",
+      label: ui(locale, JobsLabel),
+      hint: ui(locale, JobsHint),
+      icon: @icons.icon_tasklist,
+      command: self.jobs,
+    })
   }
   let rows : Array[@html.Html] = []
   for entry in entries {
-    let (label, hint, image, choose) = entry
     rows.push(
       @html.button(
         class=if popup {
@@ -137,16 +143,19 @@ fn LauncherActions::rows(
         } else {
           "dock-launcher-row"
         },
-        on_click=choose,
+        on_click=entry.command,
         attrs=if popup {
-          @html.Attrs::build().role("menuitem").aria_label(label)
-        } else {
           @html.Attrs::build()
+          .role("menuitem")
+          .aria_label(entry.label)
+          .data_set("dock-action", entry.action)
+        } else {
+          @html.Attrs::build().data_set("dock-action", entry.action)
         },
         [
-          @icons.icon(image),
-          @html.span(class="dock-launcher-name", label),
-          @html.span(class="dock-launcher-hint", hint),
+          @icons.icon(entry.icon),
+          @html.span(class="dock-launcher-name", entry.label),
+          @html.span(class="dock-launcher-hint", entry.hint),
         ],
       ),
     )

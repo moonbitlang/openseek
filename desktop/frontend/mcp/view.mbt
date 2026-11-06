@@ -50,6 +50,7 @@ pub fn rows(
     CheckFailed(error) =>
       rows.push(
         item(
+          key="status-error",
           tone="danger",
           name=text(locale, CheckFailed),
           note=None,
@@ -79,6 +80,7 @@ fn status_rows(
     if config.state is Failed(error) {
       rows.push(
         item(
+          key="config:" + config.path,
           tone="danger",
           name=config.path,
           note=Some(text(locale, Failed)),
@@ -110,6 +112,7 @@ fn note(message : String) -> @html.Html {
 /// its name with an optional detail line under it, a short note on the
 /// right, and everything else on hover.
 fn item(
+  key~ : String,
   tone~ : String,
   name~ : String,
   note~ : String?,
@@ -129,7 +132,12 @@ fn item(
   if note is Some(note) {
     children.push(@html.span(class="connectors-state", note))
   }
-  @html.div(class="connectors-row", title~, children)
+  @html.div(
+    class="connectors-row",
+    attrs=@html.Attrs::build().data_set("connector-id", key),
+    title~,
+    children,
+  )
 }
 
 ///|
@@ -147,6 +155,7 @@ fn server_row(
   match server.state {
     Connected(tools) =>
       item(
+        key="server:" + server.name,
         tone="ok",
         name=server.name,
         note=Some(text(locale, ToolCount(tools.length()))),
@@ -156,6 +165,7 @@ fn server_row(
     // The tools are still registered: these are the calls that now fail.
     Lost(tools) =>
       item(
+        key="server:" + server.name,
         tone="warn",
         name=server.name,
         note=Some(text(locale, Lost)),
@@ -164,6 +174,7 @@ fn server_row(
       )
     NoTools =>
       item(
+        key="server:" + server.name,
         tone="",
         name=server.name,
         note=Some(text(locale, NoTools)),
@@ -172,6 +183,7 @@ fn server_row(
       )
     Failed(error) =>
       item(
+        key="server:" + server.name,
         tone="danger",
         name=server.name,
         note=Some(text(locale, Failed)),
@@ -180,6 +192,7 @@ fn server_row(
       )
     Skipped =>
       item(
+        key="server:" + server.name,
         tone="",
         name=server.name,
         note=Some(text(locale, Skipped)),
