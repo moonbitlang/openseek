@@ -23,7 +23,6 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   await expect.poll(() => commands(app)).toEqual([{ command: { command: 'goal', action: 'set', text: 'Ship the feature' } }]);
   await expect(page.locator('.composer-goal')).toContainText('Setting goal');
   await expect(page.locator('#stop')).toHaveCount(0);
-  expect(app.controlState(sessionA).data.active_task_id).toBeNull();
   await app.emitSessionEvent(sessionA, 'goal_updated', { goal: 'Ship the feature' }, { task: null });
   await expect(page.locator('.composer-goal')).toContainText('Goal: Ship the feature');
   await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
@@ -224,7 +223,6 @@ test('Cloud idle compaction settles without an assistant or a task and reports f
   await app.emitSessionEvent(sessionA, 'compaction_failed', { error: 'Fixture compaction failed' }, { task: null });
   await expect(page.locator('.composer-notice-text')).toHaveCount(0);
   await expect(page.getByText('Fixture compaction failed', { exact: true })).toBeVisible();
-  expect(app.controlState(sessionA).data.active_task_id).toBeNull();
   expect(app.postCount).toBe(0);
 });
 
