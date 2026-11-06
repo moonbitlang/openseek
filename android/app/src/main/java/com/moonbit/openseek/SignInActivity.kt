@@ -18,22 +18,16 @@ class SignInActivity : ComponentActivity() {
     private var flow: BrowserSignIn? = null
     private lateinit var status: TextView
 
-    /** The browser's answer: an authorization code, or why there is none. */
-    @Volatile private var outcome: Result<String>? = null
-
     /** Set once the code is being redeemed; later returns change nothing. */
     private var redeeming = false
     private val executor = Executors.newSingleThreadExecutor()
     private val browser = AuthTabIntent.registerActivityResultLauncher(this) { result ->
-        val uri = result.resultUri
+        val answer = if (result.resultCode == AuthTabIntent.RESULT_OK) flow?.answer(result.resultUri?.toString()) else null
         if (redeeming) {
-            // The fallback Custom Tab closes after its redirect already returned.
-        } else if (result.resultCode == AuthTabIntent.RESULT_OK && uri != null &&
-            flow?.acceptsReturn(uri.toString()) == true) {
-            deliver()
-        } else if (outcome != null) {
-            // Older browsers return CANCELED when their fallback Custom Tab closes.
-            deliver()
+            // The fallback Custom Tab closes after its return reached onNewIntent,
+            // which runs first: this result waits for the activity's start.
+        } else if (answer != null) {
+            deliver(answer)
         } else {
             setResult(Activity.RESULT_CANCELED)
             finish()
@@ -48,41 +42,22 @@ class SignInActivity : ComponentActivity() {
         }
         setContentView(status)
         if (savedInstanceState != null || intent.data != null) {
-            // The process no longer owns the old loopback listener/verifier.
+            // The process no longer holds the old flow's state and verifier.
             fail("Sign-in was interrupted. Please try again.")
             return
         }
-        executor.execute {
-            try {
-                val pending = BrowserSignIn(ConsoleOrigin.ORIGIN, packageName)
-                flow = pending
-                runOnUiThread {
-                    if (!isFinishing) {
-                        try {
-                            AuthTabIntent.Builder().build().launch(browser, pending.startUri.toUri(), packageName)
-                        } catch (_: ActivityNotFoundException) {
-                            fail("Install or enable a browser to sign in.")
-                        }
-                    }
-                }
-                pending.receive { result, returning ->
-                    outcome = result
-                    // A callback response redirects the Auth Tab first. Keep this
-                    // activity alive until that redirect delivers its result.
-                    if (!returning) runOnUiThread {
-                        if (!isFinishing) fail(result.exceptionOrNull()?.message ?: "Sign-in failed.")
-                    }
-                }
-            } catch (_: Exception) {
-                runOnUiThread { if (!isFinishing) fail("Unable to start sign-in. Please try again.") }
-            }
+        val pending = BrowserSignIn(ConsoleOrigin.ORIGIN, packageName)
+        flow = pending
+        try {
+            AuthTabIntent.Builder().build().launch(browser, pending.startUri.toUri(), packageName)
+        } catch (_: ActivityNotFoundException) {
+            fail("Install or enable a browser to sign in.")
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        val uri = intent.data ?: return
-        if (flow?.acceptsReturn(uri.toString()) == true) deliver()
+        flow?.answer(intent.data?.toString())?.let(::deliver)
     }
 
     private fun exchange(code: String, verifier: String): String {
@@ -107,11 +82,10 @@ class SignInActivity : ComponentActivity() {
     }
 
     /** Runs once the browser has returned, with this activity in the foreground. */
-    private fun deliver() {
+    private fun deliver(answer: Result<String>) {
         if (redeeming) return
-        val result = outcome ?: return
         val pending = flow ?: return
-        result.fold(
+        answer.fold(
             onSuccess = { code ->
                 redeeming = true
                 status.text = "Signing in…"
@@ -135,7 +109,6 @@ class SignInActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        flow?.close()
         executor.shutdownNow()
         super.onDestroy()
     }

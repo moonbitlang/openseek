@@ -126,12 +126,14 @@ WebViewAssetLoader reserves `https://seekmoon.moonbitlang.com/console/android/`
 for the APK bundle. The real Connect HTTP/WebSocket routes use that origin and
 the shared v2 account token; WebSocket connections use single-use Connect tickets.
 Browser login uses the existing `/v2/auth/account/start` and account exchange
-with S256 PKCE and a state-checked, short-lived loopback listener. The browser
-returns a completion signal through an app link; the account token never enters
-a URL. Android transfers the exchanged session into the WebView's existing account
+with S256 PKCE. Instead of a loopback port it passes the application ID as
+`scheme`, so the browser returns the state-checked code to
+`<application id>://oauth/complete`: Android freezes the app's process while
+the user is away from it, and a frozen process cannot answer a loopback
+redirect. The code is useless without the app's verifier, and the account token
+never enters a URL. Android transfers the exchanged session into the WebView's existing account
 store and reloads the current document. It does not parse the login `return_to`
-parameter, select Chat/Work or rebuild the frontend's current URL. Cancellation
-closes the listener; an interrupted process requires a fresh login attempt. WebView cookies and browser cookies stay separate.
+parameter, select Chat/Work or rebuild the frontend's current URL. An interrupted process requires a fresh login attempt. WebView cookies and browser cookies stay separate.
 
 Native ownership checks use the HTTPS origin, not an application route. The
 `/console/android/` mount identifies APK assets only; it does not determine
@@ -165,8 +167,8 @@ After building the APK:
 ./android/gradlew -p android testDebugUnitTest lintDebug
 ```
 
-The native tests exercise the actual loopback listener, PKCE verifier binding,
-stray callback rejection, denial, cancellation and timeout. The code is
+The native tests cover the start URL's scheme and PKCE challenge, and the
+return URL's state check, denial and rejection of other returns. The code is
 redeemed only after the browser has returned to the app, since Android 15 and
 later fail a backgrounded app's network requests.
 Origin tests cover arbitrary frontend paths and reject other origins.
