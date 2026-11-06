@@ -527,7 +527,8 @@ async fn sandbox_enforcement_available() -> Bool {
   let dir = @fs.tmpdir(prefix="openseek-mbtx-gate-") catch { _ => return false }
   let available = @sandbox.SandboxedCommand::create_if_available(
       dir,
-      Shell(":"),
+      "true",
+      [],
       profile_path="\{dir}/profile.sb",
     )
     is Some(_)

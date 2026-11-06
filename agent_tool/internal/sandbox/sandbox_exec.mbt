@@ -12,16 +12,10 @@ let sandbox_exec_available_cache : Ref[Bool?] = { val: None, }
 /// testable on every platform, including the Linux CI targets.
 fn sandbox_exec_file_args(
   profile_path : String,
-  command : Command,
+  program : String,
+  args : Array[String],
 ) -> Array[String] {
-  [
-    "-f",
-    profile_path,
-    ..match command {
-      Shell(cmd) => [@platform_shell.program, ..@platform_shell.args(cmd)]
-      Exec(program, args) => [program, ..args]
-    },
-  ]
+  ["-f", profile_path, program, ..args]
 }
 
 ///|
@@ -37,19 +31,6 @@ async fn write_profile_file(profile : String, path : String) -> String {
     "\n(deny file-write* (literal \"\{sbpl_string_escape(real_path)}\"))\n",
   )
   real_path
-}
-
-///|
-/// Build the argument vector passed to `SandboxExecPath` to interpret `cmd`
-/// under an inline SBPL `profile`.
-///
-/// The returned vector has the shape
-/// `[-p, profile, @platform_shell.program, ..@platform_shell.args(cmd)]`.
-/// Therefore `cmd` is shell text, not an executable path or a pre-tokenized
-/// argument vector. This function does not validate the profile or probe
-/// availability.
-fn sandbox_exec_args(profile : String, cmd : String) -> Array[String] {
-  ["-p", profile, @platform_shell.program, ..@platform_shell.args(cmd)]
 }
 
 ///|
@@ -106,17 +87,14 @@ async fn probe_sandbox_exec_available() -> Bool {
   }
   let noop_exit = run_probe_exit(
     SandboxExecPath,
-    sandbox_exec_file_args(profile_path, Shell(PlatformNoopCommand)),
+    sandbox_exec_file_args(profile_path, "/usr/bin/true", []),
   )
   if noop_exit != Some(0) {
     return false
   }
   let write_exit = run_probe_exit(
     SandboxExecPath,
-    sandbox_exec_file_args(
-      profile_path,
-      Shell("printf probe > \{shell_quote(blocked_path)}"),
-    ),
+    sandbox_exec_file_args(profile_path, "/usr/bin/touch", [blocked_path]),
   )
   write_exit != Some(0) && !@fs.exists(blocked_path)
 }
@@ -133,17 +111,4 @@ async fn run_probe_exit(program : String, args : Array[String]) -> Int32? {
     _ => return None
   }
   Some(exit_code)
-}
-
-///|
-#cfg(platform="windows")
-const PlatformNoopCommand : String = "exit 0"
-
-///|
-#cfg(not(platform="windows"))
-const PlatformNoopCommand : String = ":"
-
-///|
-fn shell_quote(text : String) -> String {
-  "'\{text.replace_all(old="'", new="'\\''")}'"
 }

@@ -732,7 +732,8 @@ async fn execute(
       // of denying source writes as such.
       Some(scope) =>
         @sandbox.SandboxedCommand::create_worker_if_available(
-          Exec(program, command_argv),
+          program,
+          command_argv,
           deny_roots=scope.deny_roots,
           worker_root=scope.worker_root,
           worker_admin_dir?=scope.worker_admin_dir,
@@ -751,7 +752,8 @@ async fn execute(
       None if read_only =>
         @sandbox.SandboxedCommand::create_if_available(
           workspace_root,
-          Exec(program, command_argv),
+          program,
+          command_argv,
           // Per-call storage outlives both compilation and any background run.
           profile_path="\{build_dir}/source-write.sb",
           writable_subtree~,

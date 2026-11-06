@@ -1,14 +1,4 @@
 ///|
-/// The command to prepare for source-write-sandboxed execution.
-///
-/// `Shell` runs command text through the platform shell. `Exec` runs a program
-/// with an already-tokenized argument vector and introduces no shell.
-pub(all) enum Command {
-  Shell(String)
-  Exec(String, Array[String])
-}
-
-///|
 /// One prepared source-write-sandboxed invocation. Its process command and
 /// denial subjects stay together so output is always classified against the
 /// profile that produced it.
@@ -18,10 +8,10 @@ struct SandboxedCommand {
   /// enforcement is available, this is the platform's `sandbox-exec` binary.
   program : String
   /// Companion argument vector for `program`: the generated profile followed
-  /// by either the platform-shell invocation or the requested `Exec`
-  /// program/argv. For example, `Shell("moon check")` prepares approximately
+  /// by the requested program and its argv, with no shell in between. For
+  /// example, preparing `"moon", ["check"]` yields approximately
   /// `program = "/usr/bin/sandbox-exec"` with
-  /// `args = ["-f", "<profile path>", "sh", "-c", "moon check"]` on macOS.
+  /// `args = ["-f", "<profile path>", "moon", "check"]`.
   args : Array[String]
   /// The paths a denial from this profile may name — protected directories and
   /// basenames — which is how one is told apart from a permission error this
@@ -36,7 +26,7 @@ struct SandboxedCommand {
 }
 
 ///|
-/// Prepare `command` under the source-write sandbox for `workspace_root`, or
+/// Prepare `program args` under the source-write sandbox for `workspace_root`, or
 /// return `None` when this process cannot enforce one — `sandbox-exec` missing,
 /// the availability probe failing, or a nested sandbox that forbids
 /// re-sandboxing. `None` means exactly "enforcement unavailable"; the fallback
@@ -64,7 +54,8 @@ struct SandboxedCommand {
 /// A write failure raises rather than disabling protection.
 pub async fn SandboxedCommand::create_if_available(
   workspace_root : String,
-  command : Command,
+  program : String,
+  args : Array[String],
   profile_path~ : String,
   writable_subtree? : String,
 ) -> SandboxedCommand? {
@@ -94,10 +85,9 @@ pub async fn SandboxedCommand::create_if_available(
     writable_lab?=subtree,
   )
   let profile_path = write_profile_file(data.profile, profile_path)
-  let args = sandbox_exec_file_args(profile_path, command)
   Some({
     program: SandboxExecPath,
-    args,
+    args: sandbox_exec_file_args(profile_path, program, args),
     // Copied: the profile cache hands out its own array, and this command must
     // keep classifying with the subjects of the profile it actually runs under.
     denial_subjects: data.denial_subjects.copy(),

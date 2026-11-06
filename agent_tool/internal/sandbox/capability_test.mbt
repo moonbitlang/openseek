@@ -36,7 +36,8 @@ async test "sandbox denies a source write and the command reports it" {
   @vfs.with_tmpdir(prefix="openseek-sandbox-capability-", dir => {
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
-        Shell("printf x > \{dir}/new.mbt"),
+        "sh",
+        ["-c", "printf x > \{dir}/new.mbt"],
         profile_path="\{dir}/denied.sb",
       )
       is Some(command) else {
@@ -58,7 +59,8 @@ async test "a writable subtree is re-allowed; the rest stays denied" {
     @fs.mkdir("\{dir}/lab")
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
-        Shell("printf x > \{dir}/lab/draft.mbt"),
+        "sh",
+        ["-c", "printf x > \{dir}/lab/draft.mbt"],
         profile_path="\{dir}/allowed.sb",
         writable_subtree="\{dir}/lab",
       )
@@ -70,7 +72,8 @@ async test "a writable subtree is re-allowed; the rest stays denied" {
     assert_true(@fs.exists("\{dir}/lab/draft.mbt"))
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
-        Shell("printf x > \{dir}/new.mbt"),
+        "sh",
+        ["-c", "printf x > \{dir}/new.mbt"],
         profile_path="\{dir}/denied.sb",
         writable_subtree="\{dir}/lab",
       )
@@ -88,7 +91,8 @@ async test "exec command produces the argv shape without a shell" {
   @vfs.with_tmpdir(prefix="openseek-sandbox-capability-argv-", dir => {
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
-        Exec("moon", ["check", "--target", "native"]),
+        "moon",
+        ["check", "--target", "native"],
         profile_path="\{dir}/profile.sb",
       )
       is Some(command) else {
@@ -127,7 +131,8 @@ async fn create_raises(root : String, writable_subtree~ : String) -> Bool {
     ignore(
       @sandbox.SandboxedCommand::create_if_available(
         root,
-        Shell(":"),
+        "sh",
+        ["-c", ":"],
         profile_path="\{root}/profile.sb",
         writable_subtree~,
       ),
@@ -153,7 +158,8 @@ async test "profile subjects flow into denial reporting" {
     )
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
-        Shell(":"),
+        "sh",
+        ["-c", ":"],
         profile_path="\{dir}/profile.sb",
       )
       is Some(command) else {
@@ -180,7 +186,8 @@ async test "a writable lab cannot overwrite or remove its sandbox profile" {
       ] {
       guard @sandbox.SandboxedCommand::create_if_available(
           workspace,
-          Shell(operation),
+          "sh",
+          ["-c", operation],
           profile_path~,
           writable_subtree=lab,
         )
@@ -194,7 +201,8 @@ async test "a writable lab cannot overwrite or remove its sandbox profile" {
     }
     guard @sandbox.SandboxedCommand::create_if_available(
         workspace,
-        Shell("printf scratch > '\{lab}/scratch.mbt'"),
+        "sh",
+        ["-c", "printf scratch > '\{lab}/scratch.mbt'"],
         profile_path~,
         writable_subtree=lab,
       )
@@ -219,7 +227,8 @@ async test "source directory cannot be moved outside the protected workspace" {
     )
     guard @sandbox.SandboxedCommand::create_if_available(
         workspace,
-        Shell("mv '\{workspace}/src' '\{dir}/escaped'"),
+        "sh",
+        ["-c", "mv '\{workspace}/src' '\{dir}/escaped'"],
         profile_path="\{dir}/profile.sb",
       )
       is Some(command) else {
@@ -242,7 +251,8 @@ async test "directory writes are denied in the workspace; files and _build are n
     @fs.mkdir("\{workspace}/assets", recursive=true)
     guard @sandbox.SandboxedCommand::create_if_available(
         workspace,
-        Shell("mkdir '\{workspace}/fresh'"),
+        "sh",
+        ["-c", "mkdir '\{workspace}/fresh'"],
         profile_path="\{dir}/profile.sb",
       )
       is Some(command) else {
@@ -254,9 +264,11 @@ async test "directory writes are denied in the workspace; files and _build are n
     assert_true(command.output_reports_denial(text), msg=text)
     guard @sandbox.SandboxedCommand::create_if_available(
         workspace,
-        Shell(
+        "sh",
+        [
+          "-c",
           "printf data > '\{workspace}/assets/report.txt' && mkdir -p '\{workspace}/_build/wasm' && printf gen > '\{workspace}/_build/wasm/gen.mbt'",
-        ),
+        ],
         profile_path="\{dir}/profile.sb",
       )
       is Some(command) else {
