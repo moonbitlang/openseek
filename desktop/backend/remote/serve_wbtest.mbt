@@ -152,3 +152,47 @@ test "remote lifecycle frames keep state without transcript text" {
     })
   }
 }
+
+///|
+/// `fs.watch` failing with `error` once its payload has decoded.
+fn failing_watch(error : Error) -> @endpoint.Endpoint {
+  Endpoint(@commands.fs_watch, _ => raise error)
+}
+
+///|
+let watch_params : Json = {
+  "path": "/workspace",
+  "files": [],
+  "directories": [],
+  "generation": "g-1",
+}
+
+///|
+async test "a failed method reports its own message under one code" {
+  let reply = run_request(
+    [failing_watch(@host.HostError("path is not absolute"))],
+    1,
+    @commands.fs_watch.name(),
+    watch_params,
+  )
+  assert_eq(reply, {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": { "code": -32000, "message": "path is not absolute" },
+  })
+}
+
+///|
+async test "a malformed request is reported as invalid params" {
+  let endpoints = [failing_watch(@host.PayloadError("invalid Codex draft id"))]
+  let name = @commands.fs_watch.name()
+  assert_eq(run_request(endpoints, 2, name, watch_params), {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "error": { "code": -32602, "message": "invalid Codex draft id" },
+  })
+  let undecodable = run_request(endpoints, 3, name, { "path": 7 })
+  guard undecodable is { "error": { "code": Number(-32602, ..), .. }, .. } else {
+    fail("an undecodable payload was not reported as invalid params")
+  }
+}
