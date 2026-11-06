@@ -1,0 +1,10 @@
+import {
+  "openseek_desktop/backend/static_preview",
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/json",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "+native"
