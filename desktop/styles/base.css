@@ -158,6 +158,10 @@ samp,
   box-shadow: var(--shadow-surface);
 }
 
+[id="conversation-transfer:actions"] {
+  min-width: 140px;
+}
+
 .custom-select-menu:popover-open {
   display: grid;
 }
@@ -179,7 +183,6 @@ samp,
 .menu-option,
 [id="conversation-transfer:actions"] .action-menu-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 16px;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -196,9 +199,18 @@ samp,
   cursor: pointer;
 }
 
+.menu-option {
+  grid-template-columns: minmax(0, 1fr) 16px;
+}
+
+[id="conversation-transfer:actions"] .action-menu-item {
+  grid-template-columns: 16px minmax(0, 1fr);
+}
+
 .menu-option:hover,
 .menu-option.selected,
-[id="conversation-transfer:actions"] .action-menu-item:hover {
+[id="conversation-transfer:actions"] .action-menu-item:hover,
+[id="conversation-transfer:actions"] .action-menu-item:focus-visible {
   background: var(--color-bg-subtle);
 }
 
