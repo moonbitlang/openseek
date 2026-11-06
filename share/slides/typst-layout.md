@@ -32,5 +32,5 @@ When page numbers are needed, use Typst's automatic page numbering instead of ha
 When you need to set a specific font in a Typst document, you can list the fonts available on the device in a way like the following (using Simplified Chinese SC as an example):
 
 ```
-@shell.Pipeline([@shell.Cmd("typst", ["fonts"]), @shell.Cmd("rg", ["SC"])]).output()
+@shell.Pipeline([@shell.Cmd("moonx", ["cli/typst", "fonts"]), @shell.Cmd("rg", ["SC"])]).output()
 ```
