@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/os_error",
+  "moonbitlang/x/path",
+  "moonbitlang/core/encoding/percent",
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/socket",
+} for "test"
