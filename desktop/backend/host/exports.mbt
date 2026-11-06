@@ -110,7 +110,6 @@ pub async fn desktop_resources(
     viz: Some(assets),
     bin_dir: PackagedTools::resolve(Some(resources)).map(tools => tools.bin_dir),
     ripgrep: ripgrep_command(Some(resources)),
-    moongrep: moongrep_command(Some(resources)),
   }
 }
 

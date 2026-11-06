@@ -19,15 +19,13 @@ pub async fn cancel_search_text(TextSearchService, @protocol.CancelSearchTextPay
 
 pub async fn clear_file_search_cache(FileSearchService, @protocol.ClearFileSearchCachePayload) -> @protocol.EmptyReply
 
+pub fn moongrep_args(Array[String]) -> Array[String]
+
 pub async fn search_files(FileSearchService, @pathx.Absolute, @protocol.SearchFilesPayload) -> @protocol.SearchFilesReply
 
-pub async fn search_semantic(SemanticSearchService, @pathx.Absolute, @protocol.SearchSemanticPayload, SemanticProvider?) -> @protocol.SearchSemanticReply
+pub async fn search_semantic(SemanticSearchService, @pathx.Absolute, @protocol.SearchSemanticPayload, SemanticProvider) -> @protocol.SearchSemanticReply
 
 pub async fn search_text(String?, TextSearchService, @pathx.Absolute, @protocol.SearchTextPayload) -> @protocol.SearchTextReply
-
-pub fn semantic_provider(String, engine~ : String, runtime_dir~ : @pathx.Path?, source~ : @moonbit.ToolchainSource) -> SemanticProvider
-
-pub fn semantic_provider_prefix_args(String) -> Array[String]
 
 // Errors
 #derive(@debug.Debug)
@@ -51,6 +49,7 @@ pub struct ResolvedSemanticProvider {
 }
 
 type SemanticProvider
+pub fn SemanticProvider::SemanticProvider(engine~ : String, runtime_dir~ : @pathx.Path?, source~ : @moonbit.ToolchainSource) -> Self
 pub async fn SemanticProvider::resolve(Self, env? : Map[String, String]) -> ResolvedSemanticProvider
 
 type SemanticSearchService

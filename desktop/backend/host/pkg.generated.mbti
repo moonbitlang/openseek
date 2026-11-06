@@ -61,7 +61,6 @@ pub struct HostResources {
   viz : VizAssets?
   bin_dir : String?
   ripgrep : String?
-  moongrep : String?
 }
 pub fn HostResources::from_path() -> Self
 
