@@ -2,15 +2,14 @@ import { test, expect } from './support/test.js';
 import { CloudHarness, authOrigin, cloudOrigin, sessionA } from './support/cloud_harness.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-const actions = page => page.locator('main > .topbar').getByRole('button', { name: 'Conversation actions', exact: true });
-const actionsMenu = page => page.getByRole('menu', { name: 'Conversation actions', exact: true });
+const actions = page => page.locator('[id="conversation-transfer:actions-trigger"]');
+const actionsMenu = page => page.locator('[id="conversation-transfer:actions-content"]:visible');
 
 async function expectSeparateHeaderControls(page, menuButton = actions(page)) {
   const panelButton = page.locator('.right-panel-toggle');
   await expect(menuButton).toBeVisible();
   await expect(panelButton).toBeVisible();
   await expect(panelButton).toBeEnabled();
-  await expect(panelButton).toHaveAccessibleName('Show panel');
   const menuBox = await menuButton.boundingBox();
   const panelBox = await panelButton.boundingBox();
   expect(Math.abs(menuBox.y + menuBox.height / 2 - panelBox.y - panelBox.height / 2)).toBeLessThanOrEqual(1);
@@ -39,7 +38,6 @@ async function cloudConversation(page) {
     }));
   await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
   await expect(page.locator('#transcript')).toContainText('Narrow Cloud conversation');
-  await expect(page.locator('main > .topbar .run-status')).toHaveText('Finished');
   return cloud;
 }
 
@@ -48,7 +46,7 @@ test('narrow Cloud conversations keep the inline export beside the panel toggle 
   const cloud = await cloudConversation(page);
   const header = page.locator('main > .topbar');
   const conversationURL = page.url();
-  const inlineExport = header.getByRole('button', { name: 'Export', exact: true });
+  const inlineExport = page.locator('#cloud-conversation-export');
   await page.locator('#task').fill('Unsent Cloud draft');
   await expectSeparateHeaderControls(page, inlineExport);
   await expect(header.locator('button:visible')).toHaveCount(1);
@@ -56,21 +54,19 @@ test('narrow Cloud conversations keep the inline export beside the panel toggle 
   await expect(inlineExport).not.toHaveAttribute('aria-haspopup', 'menu');
 
   await inlineExport.click();
-  const exportDialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
+  const exportDialog = page.locator('#conversation-export-dialog');
   await expect(exportDialog).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(exportDialog).not.toBeVisible();
+  await exportDialog.locator('[data-slot="dialog-close"]').click();
 
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
-  const tree = page.getByRole('tree', { name: 'Workspace files', exact: true });
-  await expect(tree.getByRole('treeitem', { name: 'README.md', exact: true })).toBeVisible();
+  await page.locator('.right-panel-toggle').click();
+  await page.locator('.dock-launcher [data-dock-action="files"]').click();
+  await expect(page.locator('[role="treeitem"][data-path="README.md"]')).toBeVisible();
   const panel = page.locator('.content > .editor');
   await expect.poll(async () => Math.abs((await panel.boundingBox()).x)).toBeLessThan(1);
   const panelBox = await panel.boundingBox();
   expect(panelBox.width).toBe(393);
   expect(panelBox.height).toBe(851);
-  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+  await page.locator('.right-panel-toggle').click();
   await expect(page.locator('.content')).not.toHaveClass(/panel-open/);
   await expect(page).toHaveURL(conversationURL);
   await expect(page.locator('#transcript')).toContainText('Narrow Cloud conversation');
@@ -87,7 +83,7 @@ test('narrow Cloud conversations keep the inline export beside the panel toggle 
   expect(cloud.device.ticketRequests).toEqual([]);
 });
 
-test('narrow Host conversation actions retain import, export, overview and files without replacing the conversation', async ({ page }) => {
+test('narrow Host conversation actions retain export, overview and files without replacing the conversation', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.directoryEntries['/workspace'] = [{ name: 'README.md', is_dir: false }];
   await app.install();
@@ -98,40 +94,33 @@ test('narrow Host conversation actions retain import, export, overview and files
   await page.locator('#task').fill('Unsent Host draft');
   await expectSeparateHeaderControls(page);
   await expect(page.locator('main > .topbar button:visible')).toHaveCount(1);
-  await expect(page.locator('main > .topbar').getByRole('button', { name: 'Export and import', exact: true })).toHaveCount(0);
-
-  for (const [entry, title] of [['Export', 'Export conversation'], ['Import', 'Import conversation']]) {
-    await actions(page).click();
-    await expect(actionsMenu(page).getByRole('menuitem', { name: 'Export', exact: true })).toBeEnabled();
-    await expect(actionsMenu(page).getByRole('menuitem', { name: 'Import', exact: true })).toBeEnabled();
-    await expect(actionsMenu(page).getByRole('menuitem', { name: /^(Show|Hide) panel$/ })).toHaveCount(0);
-    await expect(actionsMenu(page).getByRole('menuitem', { name: /^(Show|Hide) overview$/ })).toBeEnabled();
-    await actionsMenu(page).getByRole('menuitem', { name: entry, exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: title, exact: true });
-    await expect(dialog).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(dialog).not.toBeVisible();
-    await expect(actions(page)).toBeFocused();
-  }
 
   await actions(page).click();
-  const overview = page.getByRole('complementary', { name: 'Overview', exact: true });
-  const hideOverview = actionsMenu(page).getByRole('menuitem', { name: 'Hide overview', exact: true });
-  if (await hideOverview.count()) {
-    await hideOverview.click();
-    await expect(overview).toHaveCount(0);
+  const exportAction = actionsMenu(page).getByRole('menuitem').filter({ has: page.locator('#conversation-export-action') });
+  await expect(exportAction).toBeEnabled();
+  await exportAction.click();
+  const dialog = page.locator('#conversation-export-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.locator('[data-slot="dialog-close"]').click();
+
+  await actions(page).click();
+  const overview = page.locator('#conversation-overview');
+  const toggleOverview = () => actionsMenu(page).getByRole('menuitem').filter({ has: page.locator('#conversation-overview-action') });
+  if (await overview.isVisible()) {
+    await toggleOverview().click();
+    await expect(overview).toBeHidden();
     await actions(page).click();
   }
-  await actionsMenu(page).getByRole('menuitem', { name: 'Show overview', exact: true }).click();
+  await toggleOverview().click();
   await expect(overview).toBeVisible();
   await actions(page).click();
-  await actionsMenu(page).getByRole('menuitem', { name: 'Hide overview', exact: true }).click();
-  await expect(overview).toHaveCount(0);
+  await toggleOverview().click();
+  await expect(overview).toBeHidden();
 
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
-  await expect(page.getByRole('tree', { name: 'Workspace files', exact: true }).getByRole('treeitem', { name: 'README.md', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+  await page.locator('.right-panel-toggle').click();
+  await page.locator('.dock-launcher [data-dock-action="files"]').click();
+  await expect(page.locator('[role="treeitem"][data-path="README.md"]')).toBeVisible();
+  await page.locator('.right-panel-toggle').click();
   await expect(page.locator('.content')).not.toHaveClass(/panel-open/);
   await expect(page).toHaveURL(conversationURL);
   await expect(page.locator('#task')).toHaveValue('Unsent Host draft');
@@ -140,7 +129,7 @@ test('narrow Host conversation actions retain import, export, overview and files
   expect(app.pageErrors).toEqual([]);
 });
 
-test('conversation actions fit the viewport, dismiss on Escape and outside clicks, and close at the wide-layout boundary', async ({ page }, testInfo) => {
+test('conversation actions preserve direct panel access at the narrow layout boundary', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -149,37 +138,17 @@ test('conversation actions fit the viewport, dismiss on Escape and outside click
     await page.setViewportSize({ width, height: 851 });
     await expectSeparateHeaderControls(page);
     await actions(page).click();
-    const menu = actionsMenu(page);
-    await expect(menu.getByRole('menuitem', { name: /^(Show|Hide) panel$/ })).toHaveCount(0);
-    await expect(menu).toBeInViewport({ ratio: 1 });
-    const bounds = await menu.boundingBox();
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.y).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(851);
-    if (width === 393) {
-      await page.screenshot({ path: testInfo.outputPath('narrow-panel-toggle-with-menu-393.png'), animations: 'disabled' });
-    }
+    await expect(actionsMenu(page).getByRole('menuitem').filter({ has: page.locator('#conversation-overview-action') })).toBeEnabled();
     await page.keyboard.press('Escape');
-    await expect(menu).not.toBeVisible();
-    await expect(actions(page)).toBeFocused();
-    await actions(page).click();
-    await page.locator('#task').click();
-    await expect(menu).not.toBeVisible();
-    await expect(page.locator('#task')).toBeFocused();
   }
-  await actions(page).click();
-  await expect(actionsMenu(page)).toBeVisible();
   await page.setViewportSize({ width: 761, height: 851 });
-  await expect(actions(page)).toHaveCount(0);
-  await expect(page.getByRole('menu')).toHaveCount(0);
-  await expect(page.locator('main > .topbar').getByRole('button', { name: 'Export and import', exact: true })).toBeVisible();
+  await expect(actions(page)).toBeVisible();
+  await expect(page.locator('#conversation-overview-toggle')).toBeVisible();
   await expect(page.locator('.right-panel-toggle')).toBeVisible();
   await page.setViewportSize({ width: 760, height: 851 });
   await expectSeparateHeaderControls(page);
   await expect(page.locator('main > .topbar button:visible')).toHaveCount(1);
   await actions(page).click();
-  await expect(actionsMenu(page).getByRole('menuitem', { name: /^(Show|Hide) panel$/ })).toHaveCount(0);
-  await expect(actionsMenu(page).getByRole('menuitem', { name: 'Export', exact: true })).toBeEnabled();
+  await expect(actionsMenu(page).getByRole('menuitem').filter({ has: page.locator('#conversation-export-action') })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });

@@ -197,6 +197,7 @@ fn dialog_view(
         },
         attrs=@html.Attrs::build()
           .id(row_id(index))
+          .data_set("path", item.accepted().path)
           .role("option")
           .aria_selected(if selected { "true" } else { "false" })
           .on_mouseenter(_ => emit(Select(index)))

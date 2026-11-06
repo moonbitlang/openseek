@@ -70,7 +70,10 @@ fn Model::conversation_transfer_input(
 }
 
 ///|
-fn conversation_transfer_button(locale : @i18n.Locale, narrow~ : Bool = false) -> @html.Html {
+fn conversation_transfer_button(
+  locale : @i18n.Locale,
+  narrow~ : Bool = false,
+) -> @html.Html {
   @rui.popover_trigger(
     id=ConversationTransferTarget + ":actions-trigger",
     target_id=ConversationTransferTarget + ":actions-content",
@@ -115,7 +118,14 @@ fn conversation_transfer_menu(
     Action({
       label: shell_text(locale, ExportConversation),
       title: "",
-      icon: Some(icon(icon_chat_export)),
+      icon: Some(
+        @html.span(
+          id="conversation-export-action",
+          class="icon",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          icon_chat_export(),
+        ),
+      ),
       enabled: export_source is Some(_),
       destructive: false,
       command: match export_source {
@@ -131,7 +141,14 @@ fn conversation_transfer_menu(
       Action({
         label: @conversation_overview.toggle_label(locale~, input.overview_open),
         title: "",
-        icon: Some(icon(@icons.icon_preview)),
+        icon: Some(
+          @html.span(
+            id="conversation-overview-action",
+            class="icon",
+            attrs=@html.Attrs::build().aria_hidden("true"),
+            @icons.icon_preview(),
+          ),
+        ),
         enabled: true,
         destructive: false,
         command: open_conversation_transfer(emit(ToggleOverview)),

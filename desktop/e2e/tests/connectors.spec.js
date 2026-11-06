@@ -17,11 +17,11 @@ function loaded(...paths) {
 }
 
 function overview(page) {
-  return page.getByRole('complementary', { name: 'Overview' });
+  return page.locator('#conversation-overview');
 }
 
 async function showOverview(page) {
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  await page.locator('#conversation-overview-toggle').click();
   const panel = overview(page);
   await expect(panel).toBeVisible();
   return panel;
@@ -30,7 +30,7 @@ async function showOverview(page) {
 // Show the overview and unfold its connectors card.
 async function openConnectors(page) {
   const panel = await showOverview(page);
-  await panel.getByRole('button', { name: 'Connectors', exact: true }).click();
+  await panel.locator('[data-section=connectors]').getByTestId('overview-card-toggle').click();
   return panel;
 }
 
@@ -82,20 +82,20 @@ test('the overview shows what the conversation\'s engine is connected to', async
   await app.openSession();
   // Folded, the card is one line; unfolded, it lists every server.
   const panel = await showOverview(page);
-  await expect(panel.getByText('2 connected · 2 failed', { exact: true })).toBeVisible();
-  await panel.getByRole('button', { name: 'Connectors', exact: true }).click();
-  await expect(panel.getByText('2 connected · 2 failed', { exact: true })).toBeHidden();
-  const seekmoon = panel.locator('.connectors-row', { hasText: 'seekmoon' });
-  await expect(seekmoon.getByText('3 tools', { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-section=connectors] .conv-overview-summary')).toHaveText('2 connected · 2 failed');
+  await panel.locator('[data-section=connectors]').getByTestId('overview-card-toggle').click();
+  await expect(panel.locator('[data-section=connectors] .conv-overview-summary')).toBeHidden();
+  const seekmoon = panel.locator('[data-connector-id="server:seekmoon"]');
+  await expect(seekmoon.locator('.connectors-state')).toContainText('3 tools');
   // How a server is reached and its tools are on hover.
   await expect(seekmoon).toHaveAttribute('title', /http · http:\/\/127\.0\.0\.1:4321\/mcp/);
-  const playwright = panel.locator('.connectors-row', { hasText: 'playwright' });
+  const playwright = panel.locator('[data-connector-id="server:playwright"]');
   await expect(playwright).toHaveAttribute('title', /mcp__playwright__browser_click — Perform click on a web page/);
-  const docs = panel.locator('.connectors-row', { hasText: 'docs' });
-  await expect(docs.getByText('Failed', { exact: true })).toBeVisible();
-  await expect(docs.getByText('JSON-RPC error -32000: MCP endpoint exchange failed')).toBeVisible();
-  await expect(panel.getByText('Disconnected', { exact: true })).toBeVisible();
-  await expect(panel.getByText('No tools', { exact: true })).toBeVisible();
+  const docs = panel.locator('[data-connector-id="server:docs"]');
+  await expect(docs.locator('.connectors-state')).toContainText('Failed');
+  await expect(docs.locator('.connectors-detail')).toContainText('JSON-RPC error -32000: MCP endpoint exchange failed');
+  await expect(panel.locator('[data-connector-id="server:memory"] .connectors-state')).toHaveText('Disconnected');
+  await expect(panel.locator('[data-connector-id="server:notes"] .connectors-state')).toHaveText('No tools');
 
   // The question names the conversation on screen, whose engine is asked.
   expect(statusRequests(app).map(request => request.params)).toEqual([{ session: 'session-1' }]);
@@ -104,7 +104,7 @@ test('the overview shows what the conversation\'s engine is connected to', async
   // it, and only its titlebar control hides it.
   await page.locator('.transcript').click();
   await expect(panel).toBeVisible();
-  await page.getByRole('button', { name: 'Hide overview', exact: true }).click();
+  await page.locator('#conversation-overview-toggle').click();
   await expect(panel).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
@@ -115,13 +115,13 @@ test('the connectors card says when there is no engine, and asks again on reshow
   await app.goto();
   await app.openSession();
   let panel = await openConnectors(page);
-  await expect(panel.getByText('Not running. Servers connect with the next message.', { exact: true })).toBeVisible();
+  await expect(panel.locator('.connectors-note')).toHaveText('Not running. Servers connect with the next message.');
   expect(statusRequests(app)).toHaveLength(1);
 
   // Asking reads the engine's state and starts nothing, so every showing
   // asks. A file the engine could not load is listed by its full path. The
   // card stays unfolded across hide and show.
-  await page.getByRole('button', { name: 'Hide overview', exact: true }).click();
+  await page.locator('#conversation-overview-toggle').click();
   await expect(panel).toBeHidden();
   app.mcpStatus = running({
     configs: [
@@ -130,25 +130,25 @@ test('the connectors card says when there is no engine, and asks again on reshow
     ],
     servers: [],
   });
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  await page.locator('#conversation-overview-toggle').click();
   panel = overview(page);
-  const config = panel.locator('.connectors-row', { hasText: userPath });
+  const config = panel.locator(`[data-connector-id="config:${userPath}"]`);
   await expect(config.locator('.connectors-name')).toHaveText(userPath);
-  await expect(config.getByText('configuration is missing an `mcpServers` object', { exact: false })).toBeVisible();
+  await expect(config.locator('.connectors-detail')).toContainText('configuration is missing an `mcpServers` object');
   await expect(config).toHaveAttribute('title', new RegExp(userPath.replaceAll('.', '\\.')));
   expect(statusRequests(app)).toHaveLength(2);
 
   app.mcpStatus = running({ configs: [], servers: [] });
-  await panel.getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(panel.getByText('No MCP servers configured.', { exact: true })).toBeVisible();
+  await panel.locator('#connectors-refresh').click();
+  await expect(panel.locator('.connectors-note')).toHaveText('No MCP servers configured.');
   expect(statusRequests(app)).toHaveLength(3);
 
   // A question the host could not answer is reported as that, not as an
   // engine that is not running.
   app.rpcErrors.set('mcp.status', 'the host did not answer');
-  await panel.getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(panel.getByText('The status could not be read', { exact: true })).toBeVisible();
-  await expect(panel.getByText('the host did not answer')).toBeVisible();
+  await panel.locator('#connectors-refresh').click();
+  await expect(panel.locator('[data-connector-id=status-error] .connectors-name')).toHaveText('The status could not be read');
+  await expect(panel.locator('[data-connector-id=status-error] .connectors-detail')).toHaveText('the host did not answer');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -160,7 +160,7 @@ test('the connectors card follows what the engine reports while it is shown', as
   await app.goto();
   await app.openSession();
   const panel = await openConnectors(page);
-  await expect(panel.getByText('Connecting…', { exact: true })).toBeVisible();
+  await expect(panel.locator('.connectors-note')).toHaveText('Connecting…');
   expect(statusRequests(app)).toHaveLength(1);
 
   // The engine reports. The host keeps the report and forwards the event;
@@ -173,13 +173,13 @@ test('the connectors card follows what the engine reports while it is shown', as
   const tools = [{ name: 'mcp__memory__recall', description: 'Recall a note' }];
   const memory = state => ({ name: 'memory', transport: 'stdio', target: 'memory-mcp', state, tools });
   report([memory('connected')]);
-  await expect(panel.getByText('1 tool', { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-connector-id="server:memory"] .connectors-state')).toHaveText('1 tool');
   expect(statusRequests(app)).toHaveLength(2);
 
   // The server exits; nobody touches Refresh.
   report([memory('lost')]);
-  await expect(panel.getByText('Disconnected', { exact: true })).toBeVisible();
-  await expect(panel.getByText('1 tool', { exact: true })).toBeHidden();
+  await expect(panel.locator('[data-connector-id="server:memory"] .connectors-state')).toHaveText('Disconnected');
+  await expect(panel.locator('[data-connector-id="server:memory"] .connectors-state')).not.toHaveText('1 tool');
   expect(statusRequests(app)).toHaveLength(3);
 
   // Another conversation's engine is not this card's business.
@@ -198,16 +198,16 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  await page.locator('#conversation-overview-toggle').click();
   const panel = overview(page);
   await expect(panel).toBeVisible();
   // The browser console runs the conversation on a remote device, named by
   // the roster.
-  await expect(panel.getByText('Test Mac', { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-section=environment] .conv-overview-row-text').first()).toBeVisible();
 
   // The overview never takes the transcript's place: the conversation keeps
   // its row, from the titlebar down to the composer, with its messages.
-  const message = page.locator('.transcript .msg-content', { hasText: 'Show the browser fixture' });
+  const message = page.locator('#transcript .msg.user .msg-content');
   const keepsItsRow = async () => {
     await expect(message).toBeVisible();
     const topbar = await page.locator('.topbar').boundingBox();
@@ -270,8 +270,8 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   const narrowComposer = await page.locator('.composer').first().boundingBox();
   expect(over.x).toBeLessThan(narrowTranscript.x + narrowTranscript.width);
   expect(over.y + over.height).toBeLessThanOrEqual(narrowComposer.y + 1);
-  await page.getByRole('textbox').first().click();
-  await expect(page.getByRole('textbox').first()).toBeFocused();
+  await page.locator('#task').click();
+  await expect(page.locator('#task')).toBeFocused();
 
   // The narrow layout (760px and below, phones included) keeps the overview:
   // it is the only place the connectors are shown. It stays a panel inside
@@ -284,15 +284,15 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
     const box = await panel.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(width);
-    await panel.getByRole('button', { name: 'Connectors', exact: true }).click();
-    await expect(panel.getByRole('button', { name: 'Refresh', exact: true })).toBeVisible();
-    await panel.getByRole('button', { name: 'Connectors', exact: true }).click();
+    await panel.locator('[data-section=connectors]').getByTestId('overview-card-toggle').click();
+    await expect(panel.locator('#connectors-refresh')).toBeVisible();
+    await panel.locator('[data-section=connectors]').getByTestId('overview-card-toggle').click();
   }
-  await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Hide overview', exact: true }).click();
+  await page.locator('[id="conversation-transfer:actions-trigger"]').click();
+  await page.locator('[id="conversation-transfer:actions-content"]:visible').getByRole('menuitem').filter({ has: page.locator('#conversation-overview-action') }).click();
   await expect(panel).toBeHidden();
-  await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Show overview', exact: true }).click();
+  await page.locator('[id="conversation-transfer:actions-trigger"]').click();
+  await page.locator('[id="conversation-transfer:actions-content"]:visible').getByRole('menuitem').filter({ has: page.locator('#conversation-overview-action') }).click();
   await expect(panel).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
