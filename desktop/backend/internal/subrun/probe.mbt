@@ -90,7 +90,8 @@ async fn SubrunProbeState::poll(self : SubrunProbeState) -> Bool {
   // A record that shrank, or whose bytes at the offset are no longer the
   // ones that were read there, was rewritten under us. Restart from its head
   // rather than reading from a stale offset into the middle of a line.
-  if size < self.offset || !anchored_at(file, self.offset, self.anchor) {
+  if size < self.offset ||
+    !@session_record.anchored_at(file, self.offset, self.anchor) {
     self.offset = 0
     self.carry = b""
     self.anchor = b""
@@ -214,24 +215,6 @@ fn anchor_of(chunk : Bytes) -> Bytes {
   } else {
     chunk[chunk.length() - SubrunAnchorBytes:].to_owned()
   }
-}
-
-///|
-/// Whether the bytes ending at `offset` are still the ones read there. An
-/// empty anchor (nothing consumed yet) is vacuously true; a read that fails
-/// reports false, which costs one re-read from the head.
-async fn anchored_at(file : @fs.File, offset : Int64, anchor : Bytes) -> Bool {
-  if anchor.length() == 0 {
-    return true
-  }
-  let start = offset - anchor.length().to_int64()
-  if start < 0 {
-    return false
-  }
-  let seen = file.read_exactly_at(anchor.length(), position=start) catch {
-    _ => return false
-  }
-  seen == anchor
 }
 
 ///|

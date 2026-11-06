@@ -260,7 +260,7 @@ async test "a command to the engine and an event from it both reset its clock" {
       "s-touched",
       sink~,
     )
-    let before = engine_clock_ms()
+    let before = @sys.now().reinterpret_as_int64()
     assert_true(engine.submit(GoalClear, failure_reason="test"))
     assert_true(engine.last_activity_ms >= before)
     // Forget the submission, so only the engine's answer can move the stamp.
@@ -276,7 +276,7 @@ async test "a command to the engine and an event from it both reset its clock" {
     assert_true(engine.last_activity_ms >= before)
     assert_eq(
       manager.reap_idle_engines(
-        now=engine_clock_ms(),
+        now=@sys.now().reinterpret_as_int64(),
         idle_ms=EngineIdleTimeoutMs,
       ),
       [],
@@ -341,7 +341,7 @@ async test "a command sent while the reaper asks about jobs keeps its engine" {
     )
     // A clock far enough ahead that the freshly stamped engine still reads
     // as past the deadline: only the changed stamp can save it.
-    let now = engine_clock_ms() + 2L * TestIdleMs
+    let now = @sys.now().reinterpret_as_int64() + 2L * TestIdleMs
     let reaper = group.spawn(() => {
       manager.reap_idle_engines(now~, idle_ms=TestIdleMs)
     })
@@ -438,7 +438,7 @@ async test "a conversation resumes on a fresh engine after an idle stop" {
     // Just used: nowhere near the deadline.
     assert_eq(
       manager.reap_idle_engines(
-        now=engine_clock_ms(),
+        now=@sys.now().reinterpret_as_int64(),
         idle_ms=EngineIdleTimeoutMs,
       ),
       [],
@@ -447,7 +447,7 @@ async test "a conversation resumes on a fresh engine after an idle stop" {
     let said = emitted.length()
     assert_eq(
       manager.reap_idle_engines(
-        now=engine_clock_ms() + EngineIdleTimeoutMs,
+        now=@sys.now().reinterpret_as_int64() + EngineIdleTimeoutMs,
         idle_ms=EngineIdleTimeoutMs,
       ),
       [session],

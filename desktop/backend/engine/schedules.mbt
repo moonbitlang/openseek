@@ -47,11 +47,6 @@ pub fn Schedules::Schedules(
 }
 
 ///|
-fn schedule_now() -> Int64 {
-  @sys.now().reinterpret_as_int64()
-}
-
-///|
 fn schedule_next(timing : @protocol.ScheduleTiming, now : Int64) -> Int64? {
   match timing {
     Once(at) => if at > now { Some(at) } else { None }
@@ -152,7 +147,10 @@ async fn Schedules::load(self : Schedules) -> @protocol.SchedulesReply {
   if self.state is Some(state) {
     return state
   }
-  let recovered = recover_schedules(self.read(), schedule_now())
+  let recovered = recover_schedules(
+    self.read(),
+    @sys.now().reinterpret_as_int64(),
+  )
   self.commit(recovered)
   recovered
 }
@@ -202,7 +200,7 @@ pub async fn Schedules::save(
         raise EngineError("Choose an attached project for this schedule")
       }
     }
-    let next_at = schedule_next(spec.timing, schedule_now())
+    let next_at = schedule_next(spec.timing, @sys.now().reinterpret_as_int64())
     guard next_at is Some(_) else {
       raise EngineError("Choose a time in the future")
     }
@@ -267,7 +265,10 @@ pub async fn Schedules::action(
           next_at: None,
         }
       "resume" => {
-        let next_at = schedule_next(entry.spec.timing, schedule_now())
+        let next_at = schedule_next(
+          entry.spec.timing,
+          @sys.now().reinterpret_as_int64(),
+        )
         guard next_at is Some(_) else {
           raise EngineError(
             "This one-time schedule has passed; edit its time or run it now",
@@ -352,7 +353,7 @@ async fn Schedules::take_due(
     // until the store is free.
     guard self.owns() else { return [] }
     let state = self.load()
-    let now = at.unwrap_or_else(schedule_now)
+    let now = at.unwrap_or_else(() => @sys.now().reinterpret_as_int64())
     let entries = state.entries.copy()
     let runs = state.runs.copy()
     let launches : Array[(@protocol.ScheduleEntry, @protocol.ScheduleRun)] = []
