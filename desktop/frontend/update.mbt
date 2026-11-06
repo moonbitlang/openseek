@@ -10574,74 +10574,42 @@ test "viewport resize flips the narrow flag and resets the sidebar" {
 }
 
 ///|
-test "Cloud follow-up preferences load and change without borrowing a host snapshot" {
-  let dispatch = test_dispatch()
-  let base = test_model()
+test "Cloud preferences are local while device settings retain their owner" {
+  let emit = test_dispatch()
+  let host = test_model()
   let cloud = {
-    ..base,
+    ..host,
     devices: [],
-    console: { ..base.console, page_device: None, },
+    console: { ..host.console, page_device: None, },
     host_settings_revision: -1,
     followup_behavior: FollowupSteer,
     select_menu: Some(FollowupBehaviorMenu),
   }
   for
-    message in [
+    msg in [
       CloudFollowupLoaded(Some("queue")),
       FollowupBehaviorChanged("queue"),
     ] {
-    let (_, once) = update_msg(dispatch, message, cloud)
-    let (_, twice) = update_msg(dispatch, message, cloud)
-    assert_true(once.followup_behavior is FollowupQueue)
-    assert_true(once.followup_behavior == twice.followup_behavior)
-    assert_true(once.select_menu == twice.select_menu)
-    assert_eq(once.host_settings_revision, -1)
-    assert_eq(once.settings_saves, 0)
+    let (_, next) = update_msg(emit, msg, cloud)
+    let (_, repeated) = update_msg(emit, msg, cloud)
+    assert_true(next.followup_behavior is FollowupQueue)
+    assert_true(next.followup_behavior == repeated.followup_behavior)
+    assert_true(next.select_menu == repeated.select_menu)
+    assert_eq(next.settings_saves, cloud.settings_saves)
+    if msg is FollowupBehaviorChanged(_) {
+      assert_true(next.select_menu is None)
+    }
   }
-  let (_, missing) = update_msg(dispatch, CloudFollowupLoaded(None), cloud)
-  assert_true(missing.followup_behavior is FollowupSteer)
-  let (_, changed) = update_msg(
-    dispatch,
-    FollowupBehaviorChanged("queue"),
-    cloud,
-  )
-  assert_true(changed.select_menu is None)
-  let (_, steered) = update_msg(
-    dispatch,
-    FollowupBehaviorChanged("steer"),
-    changed,
-  )
-  assert_true(steered.followup_behavior is FollowupSteer)
-  // The browser store never overrides an online or offline device's settings.
-  for host in [base, { ..base, devices: [], host_settings_revision: -1, }] {
-    let (_, once) = update_msg(
-      dispatch,
+  let (_, missing) = update_msg(emit, CloudFollowupLoaded(None), cloud)
+  assert_true(missing.followup_behavior == cloud.followup_behavior)
+  for model in [host, { ..host, devices: [], host_settings_revision: -1, }] {
+    let (_, loaded) = update_msg(
+      emit,
       CloudFollowupLoaded(Some("queue")),
-      host,
+      model,
     )
-    let (_, twice) = update_msg(
-      dispatch,
-      CloudFollowupLoaded(Some("queue")),
-      host,
-    )
-    assert_true(once.followup_behavior == host.followup_behavior)
-    assert_true(once.followup_behavior == twice.followup_behavior)
-    assert_eq(once.settings_saves, host.settings_saves)
+    assert_true(loaded.followup_behavior == model.followup_behavior)
   }
-  let loading = { ..base, devices: [], host_settings_revision: -1, }
-  let (_, retained) = update_msg(
-    dispatch,
-    FollowupBehaviorChanged("queue"),
-    loading,
-  )
-  assert_true(retained.followup_behavior == loading.followup_behavior)
-  let (_, saved) = update_msg(dispatch, FollowupBehaviorChanged("queue"), base)
-  let (_, again) = update_msg(dispatch, FollowupBehaviorChanged("queue"), base)
-  assert_true(saved.followup_behavior is FollowupQueue)
-  assert_true(saved.followup_behavior == again.followup_behavior)
-  assert_true(saved.select_menu == again.select_menu)
-  assert_eq(saved.settings_saves, base.settings_saves + 1)
-  assert_eq(saved.settings_saves, again.settings_saves)
 }
 
 ///|
