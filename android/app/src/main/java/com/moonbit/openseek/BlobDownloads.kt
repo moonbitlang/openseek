@@ -112,6 +112,26 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
     private val receiving = HashMap<String, Receiving>()
 
     /**
+     * The page's document is being replaced, for instance by a reload or a
+     * device switch, so the downloads it was still sending will never end.
+     * A download already sent and waiting for its save dialog is kept.
+     */
+    fun documentReplaced() {
+        abandoned += receiving.keys
+        val files = receiving.values.map { it.file }
+        receiving.clear()
+        // After the chunks already queued for them, which are written first.
+        staging.execute { files.forEach(File::delete) }
+    }
+
+    /**
+     * Downloads dropped with their document. A message the old document sent
+     * may still arrive after the replacement began; it is ignored, so a late
+     * end cannot offer a partial file.
+     */
+    private val abandoned = HashSet<String>()
+
+    /**
      * The page sends a download as base64 chunks, then an end message with its
      * name and type, so no whole-file copy is held in memory: Cloud files are
      * downloaded without a size limit. The page sends the next chunk only once
@@ -121,6 +141,7 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
     private fun received(raw: String, acknowledge: (String) -> Unit) {
         val message = JSONObject(raw)
         val id = message.getString("id")
+        if (id in abandoned) return
         when {
             message.has("data") -> {
                 val download = receiving.getOrPut(id) { Receiving(File(directory, UUID.randomUUID().toString())) }
