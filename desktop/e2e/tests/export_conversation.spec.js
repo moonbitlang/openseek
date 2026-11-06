@@ -106,9 +106,9 @@ class ExportHarness extends DesktopBrowserHarness {
   count(method) { return this.requests.filter(request => request.method === method).length; }
 
   async openExport() {
-    await this.page.getByRole('main').getByRole('button', { name: 'Conversation actions', exact: true }).click();
-    await this.page.getByRole('menuitem', { name: 'Export', exact: true }).click();
-    const dialog = this.page.getByRole('dialog', { name: 'Export conversation', exact: true });
+    await this.page.locator('[id="conversation-transfer:actions-trigger"]').click();
+    await this.page.locator('[id="conversation-transfer:actions-content"]').getByRole('menuitem').click();
+    const dialog = this.page.locator('#conversation-export-dialog');
     await expect(dialog).toBeVisible();
     return dialog;
   }
