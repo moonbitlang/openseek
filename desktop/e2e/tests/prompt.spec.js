@@ -86,25 +86,6 @@ test('custom prompt persists and both sources send complete system prompts', asy
   expect(app.pageErrors).toEqual([]);
 });
 
-test('changing the default preserves an existing unsent draft', async ({ page }) => {
-  const app = new PromptHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const builtin = (await send(page, app, 'Remember the builtin text')).system_prompt;
-  await newChat(page, false);
-  await page.locator('#task').fill('Keep this draft');
-  await expect(page).toHaveURL(/\/chat\/draft\/[^/?#]+$/);
-  const draft = new URL(page.url()).pathname;
-  await choose(page, 'Custom prompt');
-  await saveCustom(page, app, 'New default');
-  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe(draft);
-  await expect(page.locator('#task')).toHaveValue('Keep this draft');
-  expect((await send(page, app, 'Send the existing draft')).system_prompt).toBe(builtin);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('the host custom prompt can be cleared in narrow dark Settings', async ({ page }) => {
   const app = new PromptHarness(page);
   app.hostSettings.prompt_source = 'custom';

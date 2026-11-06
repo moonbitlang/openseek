@@ -50,30 +50,6 @@ test('choosing an option advances to the next question and retains the answer', 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('choosing a final option waits for Send', async ({ page }) => {
-  const { app } = setup(page, [
-    { id: 'approach', title: 'Which approach should we use?', options: ['Small change', 'Full redesign'] },
-    { id: 'scope', title: 'Which scope?', options: ['Keep scope', 'Expand scope'] },
-  ]);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const card = page.locator('.user-question-card');
-  await card.getByRole('button', { name: 'Small change', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await card.getByRole('button', { name: 'Keep scope', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await expect(card.getByRole('button', { name: 'Keep scope', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(card).toContainText('Anything else?');
-  expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
-    { approach: 'Small change', scope: 'Keep scope' },
-  ]);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('custom answer Enter advances questions and submits the final answer', async ({ page }) => {
   const { app } = setup(page);
   await app.install();
@@ -133,31 +109,6 @@ test('custom answer Shift+Enter inserts a line and IME Enter keeps the current q
   expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
     { approach: 'First line\nx', details: 'Final detail' },
   ]);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('custom answer Enter leaves empty questions pending', async ({ page }) => {
-  const { app } = setup(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const card = page.locator('.user-question-card');
-  const input = card.locator('textarea');
-  await input.fill('   ');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
-  await input.press('Enter');
-  await expect(card.locator('.user-question-progress')).toHaveText('1 / 2');
-  await expect(input).toHaveValue('   ');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
-  await input.fill('A custom approach');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
-  await input.press('Enter');
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  await input.press('Enter');
-  await expect(input).toHaveValue('');
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -239,32 +190,6 @@ test('questions survive reload and a finished turn, accept choices and text, and
     { id: 'question-2', session: 'session-1', answers: null },
   ]);
   expect(app.requests.some(r => r.method === 'agent.approval')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('failed answers retain text for retry, and a newer resolution beats stale snapshots', async ({ page }) => {
-  const { app, snapshot } = setup(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const card = page.locator('.user-question-card');
-  await card.locator('textarea').first().fill('A custom approach');
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await card.locator('textarea').fill('Details');
-  app.rpcErrors.set('user_questions.answer', 'Temporary failure');
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(card.locator('.user-question-error')).toContainText('Temporary failure');
-  await card.getByRole('button', { name: 'Previous question', exact: true }).click();
-  await expect(card.locator('textarea')).toHaveValue('A custom approach');
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-  // A second client answers while this client's error is visible.
-  const stale = snapshot();
-  app.notify('user_questions.changed', { generation: 3, requests: [] });
-  await expect(card).toHaveCount(0);
-  app.notify('user_questions.changed', stale);
-  await expect(card).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

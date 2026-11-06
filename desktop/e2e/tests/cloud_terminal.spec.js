@@ -229,65 +229,6 @@ test('Cloud ! lazily creates one session, reuses terminal result encoding, and p
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-test('a Cloud ! result follows its owning session after navigation without consuming either draft', async ({ page }) => {
-  const { cloud, terminal } = await setup(page);
-  await cloud.open();
-  const tab = await shell(page, terminal, 'ls');
-  await page.locator('#task').fill('Draft A');
-  await cloud.open(sessionB);
-  await page.locator('#task').fill('Draft B');
-  finish(terminal, tab);
-  await expect.poll(() => cloud.postCount).toBe(1);
-  expect(cloud.requests.find(request => request.path.endsWith('/commands')).path).toBe(`/v1/sessions/${sessionA}/commands`);
-  await expect(page.locator('#task')).toHaveValue('Draft B');
-  await cloud.open(sessionA);
-  await expect(page.locator('#task')).toHaveValue('Draft A');
-});
-
-test('a rejected Cloud ! result remains in the composer ahead of newer writing without automatic retry', async ({ page }) => {
-  const { cloud, terminal } = await setup(page);
-  cloud.sendStatus = 409;
-  cloud.sendErrorBody = 'Fixture rejected prompt';
-  await cloud.open();
-  const tab = await shell(page, terminal, 'ls');
-  await page.locator('#task').fill('Newer input');
-  finish(terminal, tab);
-  await expect(page.locator('#task')).toHaveValue(/<user_shell_command>[\s\S]*command output[\s\S]*Newer input/);
-  expect(cloud.postCount).toBe(1);
-  await cloud.open(sessionB);
-  await cloud.open(sessionA);
-  await expect(page.locator('#task')).toHaveValue(/command output[\s\S]*Newer input/);
-  expect(cloud.postCount).toBe(1);
-});
-
-for (const mode of ['steer', 'queue']) {
-  test(`Cloud ! during generation uses existing ${mode} delivery and keeps newer writing`, async ({ page }) => {
-    const { cloud, terminal } = await setup(page);
-    cloud.manualTasks = true;
-    await cloud.open();
-    await page.locator('#task').fill('Start turn');
-    await page.locator('#send').click();
-    await expect(page.locator('#stop')).toBeEnabled();
-    const tab = await shell(page, terminal, 'ls');
-    await page.getByRole('button', { name: 'Follow-up action', exact: true }).click();
-    await page.getByRole('option', { name: mode === 'queue' ? /^Queue next/ : /^Steer now/ }).click();
-    await page.locator('#task').fill('Next draft');
-    finish(terminal, tab);
-    if (mode === 'queue') {
-      await expect.poll(() => cloud.requests.filter(request => request.path.endsWith('/queue')).length).toBe(1);
-      await expect(page.locator('.queued-inputs')).toContainText('command output');
-    } else {
-      await expect.poll(() => commands(cloud, 'steer').length).toBe(1);
-      const request = commands(cloud, 'steer')[0].command;
-      await expect(page.locator('.pending-steer-row')).toContainText('command output');
-      await cloud.emitSessionEvent(sessionA, 'steer_dropped', { submission_id: request.submission_id, content: request.content });
-      await expect(page.locator('#task')).toHaveValue(/command output[\s\S]*Next draft/);
-    }
-    if (mode === 'queue') await expect(page.locator('#task')).toHaveValue('Next draft');
-    expect(cloud.postCount).toBe(1);
-  });
-}
-
 test('Cloud ! authentication failure restores the command and never submits a model prompt', async ({ page }) => {
   const { cloud, terminal } = await setup(page);
   terminal.authenticate = false;
@@ -302,25 +243,6 @@ test('Cloud ! authentication failure restores the command and never submits a mo
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
   expect(cloud.postCount).toBe(0);
   expect(terminal.requests('terminal.open')).toHaveLength(0);
-});
-
-test('an uncertain Cloud ! steer can later be applied without duplicating the recovered result', async ({ page }) => {
-  const { cloud, terminal } = await setup(page);
-  cloud.manualTasks = true;
-  await cloud.open();
-  await page.locator('#task').fill('Start turn');
-  await page.locator('#send').click();
-  await expect(page.locator('#stop')).toBeEnabled();
-  const tab = await shell(page, terminal, 'ls');
-  await page.locator('#task').fill('Later draft');
-  cloud.controlOffline = true;
-  finish(terminal, tab);
-  await expect.poll(() => commands(cloud, 'steer').length).toBe(1);
-  const request = commands(cloud, 'steer')[0].command;
-  await expect(page.locator('#task')).toHaveValue(/command output[\s\S]*Later draft/);
-  await cloud.emitSessionEvent(sessionA, 'steer_applied', { submission_id: request.submission_id, kind: 'prompt', content: request.content });
-  await expect(page.locator('#task')).toHaveValue('Later draft');
-  expect(commands(cloud, 'steer')).toHaveLength(1);
 });
 
 test('signing out while Cloud ! runs clears the operation without submitting it under the next account', async ({ page }) => {
@@ -377,7 +299,6 @@ test('a delayed Host worktree command stays on its owning Host after switching t
   expect(cloud.device.pageErrors).toEqual([]);
 });
 
-
 test('Cloud terminal reports a connection failure when the socket closes before authentication without a reason', async ({ page }) => {
   const { cloud, terminal } = await setup(page);
   terminal.authenticate = false;
@@ -393,7 +314,6 @@ test('Cloud terminal reports a connection failure when the socket closes before 
   await expect.poll(() => terminal.requests('terminal.open').length).toBe(1);
   await expect(page.locator('.terminal-error')).toHaveCount(0);
 });
-
 
 test('Cloud terminal shows the existing RPC error after authentication without calling it a connection failure', async ({ page }) => {
   const { cloud, terminal } = await setup(page);

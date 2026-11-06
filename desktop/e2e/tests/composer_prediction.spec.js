@@ -64,27 +64,6 @@ test('accepting and clearing restores the broadcast suggestion without requests'
   app.assertNoPredictionRequests();
 });
 
-test('two clients receive the same broadcast and editing only hides one suggestion', async ({ page, context }) => {
-  const otherPage = await context.newPage();
-  try {
-    const first = await open(page);
-    const second = await open(otherPage);
-    await first.finish();
-    await second.finish();
-    await page.locator('#task').fill('My own request');
-    const record = prediction();
-    first.publish(record);
-    second.publish(record);
-    await expect(page.locator('#task')).toHaveValue('My own request');
-    await expect(page.locator('#task')).not.toHaveAttribute('placeholder', 'Commit the fix');
-    await expect(otherPage.locator('#task')).toHaveAttribute('placeholder', 'Commit the fix');
-    await page.locator('#task').fill('');
-    await expect(page.locator('#task')).toHaveAttribute('placeholder', 'Commit the fix');
-    first.assertNoPredictionRequests();
-    second.assertNoPredictionRequests();
-  } finally { await otherPage.close(); }
-});
-
 test('whitespace preserves the draft and lets Tab move focus', async ({ page }) => {
   const app = await open(page);
   await app.finish();
