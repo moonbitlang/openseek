@@ -22,7 +22,7 @@ pub async fn revoke_host_workspace(String) -> Unit
 
 pub async fn session_cwd(String) -> @pathx.Absolute?
 
-pub async fn session_review_base(String, workspace? : String) -> String?
+pub async fn session_review_base(String, @pathx.Absolute) -> String?
 
 // Errors
 

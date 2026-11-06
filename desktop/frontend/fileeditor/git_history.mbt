@@ -29,17 +29,17 @@ fn request_git_history(
   skip : Int32,
   workspace~ : @common.Uri?,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      return dispatch(
-        GitHistoryFailed(
-          owner~,
-          generation~,
-          append~,
-          message="workspace moved to another host before Git history refresh",
-        ),
-      )
-    _ => ()
+  guard workspace is Some(workspace) &&
+    @resource.belongs_to(workspace, owner.channel) else {
+    // Settle the in-flight request even when its workspace is unavailable.
+    return dispatch(
+      GitHistoryFailed(
+        owner~,
+        generation~,
+        append~,
+        message="conversation workspace is unavailable on this host",
+      ),
+    )
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -48,7 +48,7 @@ fn request_git_history(
         @commands.git_history,
         {
           session: owner.session,
-          workspace: workspace.map(value => value.path),
+          workspace: workspace.path,
           snapshot,
           skip,
           limit: GitHistoryPageSize,

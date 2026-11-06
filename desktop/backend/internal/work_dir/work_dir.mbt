@@ -143,27 +143,14 @@ pub async fn session_cwd(session : String) -> @pathx.Absolute? {
 }
 
 ///|
-/// The recorded task base for a conversation-bound worktree. The optional
-/// workspace hint follows `resolve_in_workspace`'s trust boundary: only an
-/// attached workspace is considered, while a resumed conversation can recover
-/// its owner from the durable session record. `None` is a conversation working
-/// in the workspace root, which has no recorded base; the Git host may derive
-/// its branch fork point when committed work exists.
+/// The recorded task base for a conversation in an explicit workspace.
+/// Host-authorized directories outside the project registry and conversations
+/// without a recorded worktree base return `None`.
 pub async fn session_review_base(
   session : String,
-  workspace? : String,
+  workspace : @pathx.Absolute,
 ) -> String? {
-  if workspace is Some(path) {
-    let registered = try @pathx.Absolute::parse_resource_path(path) catch {
-      InvalidResourcePath => None
-    } noraise {
-      path => @workspaces.registered_dir(path)
-    }
-    if registered is Some(workspace) {
-      return @worktree.tree_base(workspace, session)
-    }
-  }
-  guard @session_store.workspace_of(session) is Some(workspace) else {
+  guard @workspaces.registered_dir(workspace) is Some(workspace) else {
     return None
   }
   @worktree.tree_base(workspace, session)

@@ -486,14 +486,13 @@ pub impl ToJson for GitPullRequestPayload with fn to_json(self) {
 /// `git.changes` addresses the same session/workspace checkout as the file
 /// panel and returns its current `HEAD`-to-working-tree inventory.
 ///
-/// Address the Git working tree belonging to one conversation. The optional
-/// workspace hint follows the filesystem operations' trust boundary: the host
-/// accepts it only when it names a registered workspace and still routes a
-/// worktree-bound conversation into its own checkout.
+/// Address the Git working tree in the explicitly supplied workspace. The host
+/// requires a registered workspace or an exact host-authorized directory and
+/// routes a worktree-bound conversation into its own checkout.
 #derive(Debug, Eq)
 pub(all) struct GitChangesPayload {
   session : String
-  workspace : String?
+  workspace : String
 }
 
 ///|
@@ -504,7 +503,7 @@ pub(all) struct GitChangesPayload {
 #derive(Debug, Eq)
 pub(all) struct GitHistoryPayload {
   session : String
-  workspace : String?
+  workspace : String
   snapshot : GitHistorySnapshot?
   skip : Int32
   limit : Int32
@@ -3248,26 +3247,14 @@ pub impl ToJson for GitBranchPayload with fn to_json(self) {
 pub impl FromJson for GitChangesPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "GitChangesPayload")
   {
-    session: @json.from_json(
-      object.required_json("session"),
-      path=path.add_key("session"),
-    ),
-    workspace: match object.optional_json("workspace") {
-      None => None
-      Some(value) =>
-        Some(@json.from_json(value, path=path.add_key("workspace")))
-    },
+    session: object.required_string("session"),
+    workspace: object.required_string("workspace"),
   }
 }
 
 ///|
 pub impl ToJson for GitChangesPayload with fn to_json(self) {
-  let fields : Map[String, Json] = Map([])
-  fields["session"] = Json(self.session)
-  if self.workspace is Some(value) {
-    fields["workspace"] = Json(value)
-  }
-  Json(fields)
+  { "session": self.session, "workspace": self.workspace }
 }
 
 ///|
