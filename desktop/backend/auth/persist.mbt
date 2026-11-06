@@ -1,8 +1,8 @@
 // auth.json: the account credential and optional device permission, with
 // their issuer and the identity labels the Settings page shows
 // without a network round-trip. Lives in the host runtime dir next to
-// engine-settings.json, same atomicity and permission rules (0600 temp +
-// rename; the file holds a credential).
+// engine-settings.json, same atomicity and permission rules (an atomic 0600
+// save; the file holds a credential).
 
 ///|
 const AuthFileVersion = 2
@@ -83,32 +83,14 @@ async fn load_session_file(runtime_dir : @pathx.Path) -> AuthSession? {
 }
 
 ///|
-/// Atomic 0600 save, mirroring the engine settings store: temp + rename,
-/// with the Windows remove-then-rename fallback.
+/// Atomic 0600 save, like the engine settings store.
 async fn save_session_file(
   runtime_dir : @pathx.Path,
   session : AuthSession,
 ) -> Unit {
-  let target = auth_file(runtime_dir)
-  let temp = runtime_dir.join(AuthFileName + ".tmp")
   let text = session_to_json(session).stringify(indent=2)
-  @fs.write_file(
-    temp.to_string(),
-    text,
-    create_mode=CreateOrTruncate,
-    permission=0o600,
-  ) catch {
-    error => raise AuthError("could not write the sign-in file: \{error}")
-  }
-  @fs.rename(temp.to_string(), target.to_string()) catch {
-    _ => {
-      @fsx.remove_if_exists(target) catch {
-        error => raise AuthError("could not replace the sign-in file: \{error}")
-      }
-      @fs.rename(temp.to_string(), target.to_string()) catch {
-        error => raise AuthError("could not save the sign-in file: \{error}")
-      }
-    }
+  @fsx.write_text_atomic(auth_file(runtime_dir), text, permission=0o600) catch {
+    error => raise AuthError("could not save the sign-in file: \{error}")
   }
 }
 
