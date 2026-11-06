@@ -864,54 +864,6 @@ fn codex_account_rows(
 }
 
 ///|
-fn account_sign_in_controls(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  label : String,
-) -> @html.Html {
-  let controls : Array[@html.Html] = []
-  if model.remote_connecting {
-    controls.push(
-      @html.span(
-        class="conversation-load-spinner",
-        attrs=@html.Attrs::build().aria_hidden("true"),
-        "",
-      ),
-    )
-    controls.push(
-      @html.span(
-        class="setting-desc",
-        attrs=@html.Attrs::build().role("status"),
-        if model.account_login is Some(Cancelling(..)) {
-          shell_text(model.locale, StatusCancelling)
-        } else {
-          @settings.text(model.locale, WaitingBrowser)
-        },
-      ),
-    )
-    if model.is_desktop && model.account_login is Some(_) {
-      controls.push(
-        @html.button(
-          class="button secondary",
-          disabled=model.account_login is Some(Cancelling(..)),
-          on_click=dispatch(RemoteCancelClicked),
-          @settings.text(model.locale, Cancel),
-        ),
-      )
-    }
-  } else {
-    controls.push(
-      @html.button(
-        class="button primary",
-        on_click=dispatch(RemoteConnectClicked),
-        label,
-      ),
-    )
-  }
-  @html.div(class="account-sign-in", controls)
-}
-
-///|
 /// The Remote access group's rows: sign-in state against the SeekMoon
 /// relay. The relay no longer depends on the chat provider — only the
 /// hosted chat proxy was retired — so it is always available.
@@ -957,14 +909,41 @@ fn remote_access_rows(
         @settings.text(model.locale, SignOut),
       ),
     ]
+  } else if model.remote_connecting {
+    [
+      @html.span(
+        class="conversation-load-spinner",
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        "",
+      ),
+      @html.span(
+        class="setting-desc",
+        attrs=@html.Attrs::build().role("status"),
+        if model.account_login is Some(Cancelling(..)) {
+          shell_text(model.locale, StatusCancelling)
+        } else {
+          @settings.text(model.locale, WaitingBrowser)
+        },
+      ),
+    ]
   } else {
     [
-      account_sign_in_controls(
-        dispatch,
-        model,
+      @html.button(
+        class="button primary",
+        on_click=dispatch(RemoteConnectClicked),
         @settings.text(model.locale, SignIn),
       ),
     ]
+  }
+  if model.is_desktop && model.account_login is Some(_) {
+    controls.push(
+      @html.button(
+        class="button secondary",
+        disabled=model.account_login is Some(Cancelling(..)),
+        on_click=dispatch(RemoteCancelClicked),
+        @settings.text(model.locale, Cancel),
+      ),
+    )
   }
   rows.push(@settings.row(@settings.text(model.locale, Account), controls))
   if model.account is Some(_) {
@@ -3031,18 +3010,11 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         },
       ])
     } else {
-      @html.div([
-        if model.remote_error is Some(message) {
-          @html.p(class="setting-desc", message)
-        } else {
-          @html.nothing
-        },
-        account_sign_in_controls(
-          dispatch,
-          model,
-          shell_text(model.locale, SignInGitHub),
-        ),
-      ])
+      @html.button(
+        class="button primary",
+        on_click=dispatch(RemoteConnectClicked),
+        shell_text(model.locale, SignInGitHub),
+      )
     },
   ])
 }
