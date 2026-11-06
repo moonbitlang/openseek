@@ -8,12 +8,9 @@ async fn github_pull_request_merge_base(
   base : String,
   head : String,
 ) -> String {
-  let (code, stdout, _) = git_collect(dir.0, ["merge-base", base, head])
-  if code == 0 {
-    let local_base = stdout.text().trim().to_owned()
-    if valid_commit_identity(local_base) {
-      return local_base
-    }
+  if @gitx.probe(dir, ["merge-base", base, head]) is Some(local_base) &&
+    valid_commit_identity(local_base) {
+    return local_base
   }
   // A newly pushed revision might not have been fetched locally yet. Resolve
   // its comparison boundary from GitHub without changing the checkout.

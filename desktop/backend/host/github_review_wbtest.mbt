@@ -113,6 +113,7 @@ test "review pagination cannot mistake a missing cursor for a complete discussio
 ///|
 async test "review file snapshots use pinned local commits across renames additions and deletions" {
   let dir = @fs.tmpdir(prefix="openseek-review-files-")
+  let repo = git_test_repo(dir)
   let _ = {
     defer @async.protect_from_cancel(() => git_test_cleanup(dir))
     git_test_run(dir, ["init", "--quiet"])
@@ -128,7 +129,7 @@ async test "review file snapshots use pinned local commits across renames additi
     )
     git_test_run(dir, ["add", "."])
     git_test_commit(dir, "base")
-    let base = github_checkout_git(dir, ["rev-parse", "HEAD"]).trim().to_owned()
+    let base = @gitx.output(repo, ["rev-parse", "HEAD"]).trim().to_owned()
     git_test_run(dir, ["mv", "old name.mbt", "new name.mbt"])
     @fs.write_file(
       "\{dir}/new name.mbt",
@@ -139,7 +140,7 @@ async test "review file snapshots use pinned local commits across renames additi
     @fs.write_file("\{dir}/added.mbt", "added\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "."])
     git_test_commit(dir, "head")
-    let head = github_checkout_git(dir, ["rev-parse", "HEAD"]).trim().to_owned()
+    let head = @gitx.output(repo, ["rev-parse", "HEAD"]).trim().to_owned()
     @fs.write_file(
       "\{dir}/new name.mbt",
       "uncommitted\n",
@@ -185,6 +186,7 @@ async test "review file snapshots use pinned local commits across renames additi
 async test "review snapshots distinguish an absent side from an empty blob" {
   for added in [true, false] {
     let dir = @fs.tmpdir(prefix="openseek-review-empty-")
+    let repo = git_test_repo(dir)
     let _ = {
       defer @async.protect_from_cancel(() => git_test_cleanup(dir))
       git_test_run(dir, ["init", "--quiet"])
@@ -194,9 +196,7 @@ async test "review snapshots distinguish an absent side from an empty blob" {
       }
       git_test_run(dir, ["add", "."])
       git_test_commit(dir, "base")
-      let base = github_checkout_git(dir, ["rev-parse", "HEAD"])
-        .trim()
-        .to_owned()
+      let base = @gitx.output(repo, ["rev-parse", "HEAD"]).trim().to_owned()
       if added {
         @fs.write_file("\{dir}/empty.mbt", "", create_mode=CreateOrTruncate)
       } else {
@@ -204,9 +204,7 @@ async test "review snapshots distinguish an absent side from an empty blob" {
       }
       git_test_run(dir, ["add", "."])
       git_test_commit(dir, "head")
-      let head = github_checkout_git(dir, ["rev-parse", "HEAD"])
-        .trim()
-        .to_owned()
+      let head = @gitx.output(repo, ["rev-parse", "HEAD"]).trim().to_owned()
       let reply = github_review_file_op({
         cwd: dir,
         path: "empty.mbt",

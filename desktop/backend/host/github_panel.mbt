@@ -11,7 +11,7 @@ async fn github_command(
     gh.0,
     args,
     cwd=dir.0,
-    extra_env=env.unwrap_or_else(git_environment),
+    extra_env=env.unwrap_or_else(@gitx.environment),
     inherit_env=false,
   ) catch {
     error => raise HostError("Could not run GitHub CLI: \{error}")

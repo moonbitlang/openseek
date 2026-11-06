@@ -38,7 +38,7 @@ async fn checkout_pull_request(
     } else {
       None
     }
-    if !github_prepare_checkout(dir.0, payload.number, payload.changes) {
+    if !github_prepare_checkout(dir, payload.number, payload.changes) {
       return CheckoutNeedsConfirmation
     }
     let association = github_checkout_association(gh, dir, payload)
@@ -54,7 +54,7 @@ async fn checkout_pull_request(
       payload.repository_url,
     ]
     if branch is Some(branch) {
-      guard github_checkout_branch(dir.0) == Some(branch) else {
+      guard github_checkout_branch(dir) == Some(branch) else {
         raise HostError(
           "The branch changed before updating. Refresh GitHub to retry.",
         )
@@ -64,7 +64,7 @@ async fn checkout_pull_request(
       args.append(["--branch", branch])
     }
     let _ = github_command(gh, dir, args)
-    guard github_checkout_branch(dir.0) is Some(branch) else {
+    guard github_checkout_branch(dir) is Some(branch) else {
       raise HostError(
         "Checkout completed, but the current branch could not be read. Refresh the repository to check its state.",
       )
@@ -73,14 +73,14 @@ async fn checkout_pull_request(
     // association on this branch, like VS Code does, so Review survives a
     // restart and does not inherit the task's previous comparison boundary.
     try {
-      let _ = github_checkout_git(dir.0, [
+      let _ = @gitx.output(dir, [
         "merge-base",
         "--is-ancestor",
         association.base,
         "HEAD",
       ])
       let metadata : Json = { "url": association.url, "base": association.base }
-      let _ = github_checkout_git(dir.0, [
+      let _ = @gitx.output(dir, [
         "config",
         "--local",
         "branch.\{branch}.openseek-pr",
@@ -107,11 +107,11 @@ async fn checkout_pull_request(
 /// Only the explicit dialog choice can stash or discard. Ordinary checkout
 /// lets Git keep non-conflicting edits and refuse overwrites; it never forces.
 async fn github_prepare_checkout(
-  dir : String,
+  dir : @pathx.Absolute,
   number : Int32,
   changes : @protocol.GithubCheckoutChanges,
 ) -> Bool {
-  let status = github_checkout_git(dir, [
+  let status = @gitx.output(dir, [
     "status", "--porcelain", "--untracked-files=no",
   ])
   if status.is_empty() {
@@ -121,7 +121,7 @@ async fn github_prepare_checkout(
     Ask => false
     Carry => true
     Stash => {
-      let _ = github_checkout_git(dir, [
+      let _ = @gitx.output(dir, [
         "stash",
         "push",
         "--message",
@@ -130,28 +130,12 @@ async fn github_prepare_checkout(
       true
     }
     Discard => {
-      let _ = github_checkout_git(dir, [
+      let _ = @gitx.output(dir, [
         "restore", "--source=HEAD", "--staged", "--worktree", "--", ":/",
       ])
       true
     }
   }
-}
-
-///|
-async fn github_checkout_git(dir : String, args : Array[String]) -> String {
-  let (code, stdout, stderr) = git_collect(dir, args)
-  guard code == 0 else {
-    let message = stderr.text().trim().to_owned()
-    raise HostError(
-      if message.is_empty() {
-        "Git failed (exit \{code})."
-      } else {
-        message
-      },
-    )
-  }
-  stdout.text()
 }
 
 ///|
@@ -225,19 +209,19 @@ async fn github_checkout_status(
   // pr status resolves the current local branch (including fork tracking) and
   // represents a branch with no PR by omitting currentBranch. CLI failures
   // remain errors rather than being mistaken for a successful empty lookup.
-  let branch = github_checkout_branch(dir.0)
+  let branch = github_checkout_branch(dir)
   guard branch is Some(_) else {
     return { branch, pull_request_url: None, has_open_pull_request: false, }
   }
   // Local metadata identifies the PR even after a branch rename. Its lifecycle
   // still belongs to GitHub: a saved association may have closed or merged.
-  let pr = if github_local_checkout_association(dir.0) is Some(association) {
+  let pr = if github_local_checkout_association(dir) is Some(association) {
     let result = query(["pr", "view", association.url, "--json", "url,state"])
     guard result is Object(_) else {
       raise HostError("GitHub returned an invalid current pull request.")
     }
     Some(result)
-  } else if github_checkout_git(dir.0, ["remote"]).trim().is_empty() {
+  } else if @gitx.run(dir, ["remote"]).is_empty() {
     // A local-only checkout has no repository for gh to discover. This is an
     // ordinary absence, while Git failures and GitHub query failures remain
     // errors. A saved PR URL above can still be checked without a remote.
@@ -258,7 +242,7 @@ async fn github_checkout_status(
       (Some(url), state == "OPEN")
     _ => raise HostError("GitHub returned an invalid current pull request.")
   }
-  guard github_checkout_branch(dir.0) == branch else {
+  guard github_checkout_branch(dir) == branch else {
     raise HostError(
       "The branch changed while reading its pull request. Refresh GitHub to retry.",
     )
@@ -309,10 +293,10 @@ async fn github_checkout_association(
 
 ///|
 async fn github_local_checkout_association(
-  dir : String,
+  dir : @pathx.Absolute,
 ) -> GithubCheckoutAssociation? {
   guard github_checkout_branch(dir) is Some(branch) else { return None }
-  let (code, stdout, stderr) = git_collect(dir, [
+  let (code, stdout) = @gitx.output_with_status(dir, [
     "config",
     "--local",
     "--get",
@@ -321,20 +305,18 @@ async fn github_local_checkout_association(
   if code == 1 {
     return None
   }
-  guard code == 0 else { raise HostError(stderr.text()) }
-  let raw = @json.parse(stdout.text())
+  let raw = @json.parse(stdout)
   guard raw is { "url": String(url), "base": String(base), .. } &&
     url.has_prefix("https://") &&
     valid_commit_identity(base) else {
     raise HostError("The current branch has invalid pull request metadata.")
   }
-  let (code, _, stderr) = git_collect(dir, [
+  let (code, _) = @gitx.output_with_status(dir, [
     "merge-base", "--is-ancestor", base, "HEAD",
   ])
   if code == 1 {
     return None
   }
-  guard code == 0 else { raise HostError(stderr.text()) }
   guard github_checkout_branch(dir) == Some(branch) else {
     raise HostError(
       "The branch changed while reading its pull request. Refresh GitHub to retry.",
@@ -344,15 +326,14 @@ async fn github_local_checkout_association(
 }
 
 ///|
-async fn github_checkout_branch(dir : String) -> String? {
-  let (code, stdout, stderr) = git_collect(dir, [
+async fn github_checkout_branch(dir : @pathx.Absolute) -> String? {
+  let (code, stdout) = @gitx.output_with_status(dir, [
     "symbolic-ref", "--quiet", "--short", "HEAD",
   ])
   if code == 1 {
     return None
   }
-  guard code == 0 else { raise HostError(stderr.text()) }
-  let branch = git_single_line(stdout.text())
+  let branch = git_single_line(stdout)
   guard !branch.is_empty() else {
     raise HostError("Git returned an empty branch name.")
   }

@@ -1,5 +1,6 @@
-// Running git as a subprocess: the four call shapes the host needs, and the
-// repository question every caller asks first.
+// Running git as a subprocess: the call shapes the backend needs, and the
+// repository questions callers ask first. This is the backend's one git
+// runner, so its environment policy applies to every git it starts.
 //
 // A git call fails in exactly two useful ways — the command could not run, or
 // it ran and refused — and the refusal text is written for a person. Every
@@ -22,30 +23,102 @@ impl Show for GitError with fn output(self, logger) {
 }
 
 ///|
+/// Remove Git subprocess overrides while retaining PATH, identity, locale, and
+/// the user's ordinary Git configuration through HOME/XDG_CONFIG_HOME. Hooks
+/// and nested Git commands export repository-local variables, and explicit
+/// config/quarantine overrides can redirect object and hook lookup too. The
+/// backend must instead discover everything from the validated `cwd` it runs
+/// git in. Matching is case-insensitive because Windows preserves arbitrary
+/// key casing; removing the whole namespace also covers future Git overrides.
+fn sanitize_environment(env : Map[String, String]) -> Unit {
+  let remove = [
+    for name, _ in env if name.to_upper().has_prefix("GIT_") => name
+  ]
+  for name in remove {
+    env.remove(name)
+  }
+}
+
+///|
+/// The complete environment every git child runs with: this process's
+/// environment minus the `GIT_*` namespace. Exposed for tools that run git on
+/// their own (gh), which must not be redirected either; pass it with
+/// `inherit_env=false`.
+pub fn environment() -> Map[String, String] {
+  let env = @sys.get_env_vars()
+  sanitize_environment(env)
+  env
+}
+
+///|
+/// Start git in `dir` with the sanitized environment and collect its exit
+/// status and both streams. Only a failure to run git raises.
+async fn collect(
+  dir : @pathx.Absolute,
+  args : Array[String],
+) -> (Int32, &@io.Data, &@io.Data) {
+  @processx.collect_output_no_stdin(
+    "git",
+    args,
+    cwd=dir.to_string(),
+    extra_env=environment(),
+    inherit_env=false,
+  ) catch {
+    error => raise GitError("failed to run git: \{error}")
+  }
+}
+
+///|
+/// The refusal for a git command that exited with `code`: git's own stderr,
+/// or the command and status when git said nothing.
+fn refusal(args : Array[String], code : Int32, stderr : &@io.Data) -> GitError {
+  let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+  GitError(
+    if detail.is_empty() {
+      "git \{args.join(" ")} exited with code \{code}"
+    } else {
+      detail
+    },
+  )
+}
+
+///|
+/// Run git in `dir` and return its stdout bytes exactly, for object content
+/// (`cat-file -p`) that need not be text.
+pub async fn output_bytes(dir : @pathx.Absolute, args : Array[String]) -> Bytes {
+  let (code, stdout, stderr) = collect(dir, args)
+  guard code == 0 else { raise refusal(args, code, stderr) }
+  stdout.binary()
+}
+
+///|
 /// Run git in `dir` and return its stdout exactly. Porcelain `-z` callers need
 /// the leading status-space and NUL separators intact; ordinary callers trim
 /// this value in `run` below.
 pub async fn output(dir : @pathx.Absolute, args : Array[String]) -> String {
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
-    "git",
-    args,
-    cwd=dir.to_string(),
-  ) catch {
-    error => raise GitError("failed to run git: \{error}")
-  }
-  guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise GitError(
-      if detail.is_empty() {
-        "git \{args.join(" ")} exited with code \{code}"
-      } else {
-        detail
-      },
-    )
-  }
+  let (code, stdout, stderr) = collect(dir, args)
+  guard code == 0 else { raise refusal(args, code, stderr) }
   stdout.text() catch {
     _ => raise GitError("git produced non-text output")
   }
+}
+
+///|
+/// Run git for a command whose exit status 1 is an answer rather than a
+/// failure — `config --get` with no such key, `merge-base --is-ancestor`
+/// saying no, `symbolic-ref --quiet` on a detached HEAD, `diff --no-index`
+/// finding differences — and return that status with the exact stdout. Any
+/// other nonzero status raises with git's own message, like `output`.
+pub async fn output_with_status(
+  dir : @pathx.Absolute,
+  args : Array[String],
+) -> (Int32, String) {
+  let (code, stdout, stderr) = collect(dir, args)
+  guard code == 0 || code == 1 else { raise refusal(args, code, stderr) }
+  let text = stdout.text() catch {
+    _ => raise GitError("git produced non-text output")
+  }
+  (code, text)
 }
 
 ///|
@@ -61,13 +134,7 @@ pub async fn run(dir : @pathx.Absolute, args : Array[String]) -> String {
 /// fails, for questions where failure itself is the answer (is this a
 /// repository? does this branch exist?).
 pub async fn probe(dir : @pathx.Absolute, args : Array[String]) -> String? {
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
-    "git",
-    args,
-    cwd=dir.to_string(),
-  ) catch {
-    _ => return None
-  }
+  let (code, stdout, _) = collect(dir, args) catch { _ => return None }
   guard code == 0 else { return None }
   let text = stdout.text() catch { _ => return None }
   Some(text.trim().to_owned())
@@ -79,9 +146,14 @@ pub async fn probe(dir : @pathx.Absolute, args : Array[String]) -> String? {
 /// `@async.protect_from_cancel` — no cancellation error can surface there —
 /// and are already propagating the failure that triggered the rollback.
 pub async fn rollback(dir : @pathx.Absolute, args : Array[String]) -> Unit {
-  let _ = @processx.collect_output_no_stdin("git", args, cwd=dir.to_string()) catch {
-    _ => return
-  }
+  let _ = collect(dir, args) catch { _ => return }
+}
+
+///|
+/// Whether `dir` is inside a git working tree. A plain directory, a `.git`
+/// directory itself, and a machine without git all answer false.
+pub async fn is_work_tree(dir : @pathx.Absolute) -> Bool {
+  probe(dir, ["rev-parse", "--is-inside-work-tree"]) is Some("true")
 }
 
 ///|
