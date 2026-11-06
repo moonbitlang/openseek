@@ -11,9 +11,21 @@ dependency rules that are intentionally not encoded in public signatures.
 
 ## Diagram embedding
 
-Consumers with their own Markdown parser can use `render_diago_diagram_svg`
-for D2/Diago and `render_uml_diagram_svg` for UML/PlantUML. Both return `None`
-for invalid input so the consumer can retain the source as code.
+D2/Diago, UML/PlantUML, MBTI, and package-dependency diagrams render through
+`viewer/diagrams`. Their renderers live in `viewer/diagrams/svg`, which is
+large, so a host chooses how to reach them once at startup:
+
+- `@diagrams.use_bundled_renderer(@svg.render)` links them into the host
+  bundle; or
+- `@diagrams.use_module(url)` loads the ES module built from
+  `viewer/diagrams/module` on the first diagram, keeping the host bundle
+  small.
+
+Without either, diagrams keep their escaped source. `MarkdownViewer` and
+consumers with their own Markdown parser call `@diagrams.render`, which reports
+`None` for invalid input so the consumer can retain the source as code. The
+result may arrive after the module loads, so a consumer whose target can be
+replaced meanwhile must drop a stale result.
 `MermaidDiagram` owns a single diagram inside a caller-owned, childless DOM
 container. It uses the same local Mermaid assets, strict rendering policy,
 escaped source fallback, and stale-result protection as `MarkdownViewer`.

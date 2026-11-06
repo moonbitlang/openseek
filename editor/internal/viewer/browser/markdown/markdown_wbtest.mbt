@@ -1169,3 +1169,44 @@ test "theme rerender keeps the last SVG until the newest epoch succeeds" {
   assert_eq(markdown_test_mermaid_render_count(), 4)
   assert_eq(markdown_test_count(target, "svg"), 1)
 }
+
+///|
+test "Diago and UML fallbacks render through the installed renderer and link policy" {
+  install_markdown_test_dom()
+  let requests : Array[(@diagrams.DiagramKind, String)] = []
+  @diagrams.use_bundled_renderer((kind, source) => {
+    requests.push((kind, source))
+    if kind is Diago {
+      Some(
+        "<svg><a href=\"javascript:alert(1)\"><text>diagram</text></a></svg>",
+      )
+    } else {
+      None
+    }
+  })
+  let size_changes = Ref(0)
+  let target = markdown_test_target()
+  ignore(
+    render_markdown(
+      "```d2\na -> b\n```\n\n```uml\n@startuml\n@@@\n@enduml\n```",
+      options=MarkdownRenderOptions(on_size_changed=() => size_changes.val += 1),
+      target~,
+    ),
+  )
+  debug_inspect(
+    requests,
+    content=(
+      #|[(Diago, "a -> b\n"), (Uml, "@startuml\n@@@\n@enduml\n")]
+    ),
+  )
+  assert_eq(markdown_test_count(target, "svg"), 1)
+  let diago = markdown_test_at(target, "div", 0)
+  assert_eq(markdown_test_attribute(diago, "data-diagram-state"), "rendered")
+  let link = markdown_test_at(target, "a", 0)
+  assert_eq(markdown_test_attribute(link, "href"), "")
+  // A failed compile keeps the source fallback.
+  let uml = markdown_test_at(target, "div", 1)
+  assert_eq(markdown_test_attribute(uml, "data-diagram-state"), "fallback")
+  assert_eq(markdown_test_count(uml, "code"), 1)
+  assert_eq(size_changes.val, 1)
+}

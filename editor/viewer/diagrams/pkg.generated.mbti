@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/viewer/diagrams"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn render(DiagramKind, String, (String?) -> Unit) -> Unit
+
+pub fn use_bundled_renderer((DiagramKind, String) -> String?) -> Unit
+
+pub fn use_module(String) -> Unit
+
+// Errors
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) enum DiagramKind {
+  Diago
+  Uml
+  Mbti
+  PackageDependencies
+}
+pub fn DiagramKind::equal(Self, Self) -> Bool
+pub fn DiagramKind::from_name(String) -> Self?
+pub fn DiagramKind::name(Self) -> String
+pub fn DiagramKind::not_equal(Self, Self) -> Bool
+pub fn DiagramKind::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

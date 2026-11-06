@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/viewer/diagrams/module"
+
+// Values
+pub fn render_diagram(String, String) -> DiagramSvg
+
+// Errors
+
+// Types and methods
+#external
+pub type DiagramSvg
+
+// Type aliases
+
+// Traits

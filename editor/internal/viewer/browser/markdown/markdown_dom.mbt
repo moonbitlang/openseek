@@ -6,6 +6,9 @@ priv struct MarkdownDomLifetime {
   listeners : Array[@base_common.Disposable]
   mermaid_diagrams : Array[MermaidDiagram]
   mermaid_module_loader : MermaidModuleLoader
+  /// Diago and UML wrappers still showing their source fallback.
+  pending_diagrams : Array[(@rdom.Element, @diagrams.DiagramKind)]
+  options : MarkdownRenderOptions
   on_size_changed : (() -> Unit)?
   mermaid_enabled : Bool
   mut target_token : MarkdownTargetToken?
@@ -30,8 +33,12 @@ priv struct MarkdownDomLifetime {
 /// html -> parse
 /// parse -> policy
 /// policy -> target: replace once
+/// diagrams: diagram renderer
+///
 /// target -> mermaid: enqueue wrappers
 /// mermaid -> target: fresh SVG commit
+/// target -> diagrams: Diago and UML wrappers
+/// diagrams -> policy: generated SVG
 /// ```
 fn install_markdown_dom(
   target : @rdom.Element,
@@ -46,6 +53,8 @@ fn install_markdown_dom(
     listeners: [],
     mermaid_diagrams: [],
     mermaid_module_loader,
+    pending_diagrams: [],
+    options,
     on_size_changed: options.on_size_changed,
     mermaid_enabled: options.mermaid_theme is Some(_),
     target_token: None,
@@ -71,6 +80,7 @@ fn install_markdown_dom(
   )
   lifetime.postprocess_diagrams(content)
   replace_target_with_markdown_content(target, content)
+  lifetime.render_diagrams()
   match options.mermaid_theme {
     Some(theme) => lifetime.rerender_mermaid(mermaid_theme_name(theme))
     None => ()
@@ -192,9 +202,16 @@ fn MarkdownDomLifetime::postprocess_diagrams(
       markdown_attribute_or_empty(diagram, "data-diagram-language") == "mermaid" {
       self.mermaid_diagrams.push({
         wrapper: diagram,
-        source: markdown_mermaid_source(diagram),
+        source: markdown_diagram_source(diagram),
         epoch: 0,
       })
+    }
+    if markdown_attribute_or_empty(diagram, "data-diagram-state") == "fallback" {
+      match markdown_attribute_or_empty(diagram, "data-diagram-language") {
+        "diago" => self.pending_diagrams.push((diagram, Diago))
+        "uml" => self.pending_diagrams.push((diagram, Uml))
+        _ => ()
+      }
     }
     self.listen(diagram, "wheel", event => {
       if !self.active ||
@@ -233,6 +250,37 @@ fn MarkdownDomLifetime::postprocess_diagrams(
       }
     })
   }
+}
+
+///|
+/// Replaces each attached Diago/UML fallback with its compiled SVG. The SVG
+/// passes the same input, image and link policy as converted Markdown before
+/// it reaches the live DOM. A failed or missing renderer keeps the fallback.
+fn MarkdownDomLifetime::render_diagrams(self : MarkdownDomLifetime) -> Unit {
+  for pending in self.pending_diagrams {
+    let (wrapper, kind) = pending
+    @diagrams.render(kind, markdown_diagram_source(wrapper), svg => {
+      guard self.is_current() && svg is Some(svg) else { return }
+      let content = parse_markdown_content(self.owner_document, svg)
+      postprocess_markdown_inputs(content)
+      self.postprocess_images(
+        content,
+        self.options.base_uri,
+        self.options.allow_remote_images,
+      )
+      self.postprocess_anchors(
+        content,
+        self.options.base_uri,
+        self.options.action_handler,
+      )
+      replace_target_with_markdown_content(wrapper, content)
+      wrapper.set_attribute("data-diagram-state", "rendered")
+      if self.on_size_changed is Some(on_size_changed) {
+        on_size_changed()
+      }
+    })
+  }
+  self.pending_diagrams.clear()
 }
 
 ///|
@@ -378,7 +426,7 @@ fn markdown_element_has_class(
 }
 
 ///|
-fn markdown_mermaid_source(wrapper : @rdom.Element) -> String {
+fn markdown_diagram_source(wrapper : @rdom.Element) -> String {
   let root = for candidate in wrapper.query_selector_all("div") {
     if markdown_element_has_class(candidate, "monaco-tokenized-source") {
       break candidate

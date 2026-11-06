@@ -1123,9 +1123,11 @@ fn mount_generated_svg_viewport(
 
 ///|
 /// Render a generated interface into the stable MBTI host at most once per
-/// resource/content pair. The UML module returns generated SVG at this trusted
-/// insertion boundary; a malformed interface gets an explicit error surface
-/// with the source toggle still available in the breadcrumb.
+/// resource/content pair. The diagram renderer returns generated SVG at this
+/// trusted insertion boundary; a malformed interface gets an explicit error
+/// surface with the source toggle still available in the breadcrumb. The
+/// renderer may answer after its module loads, so a result for a pair that is
+/// no longer shown is dropped.
 fn show_mbti_diagram(resource : @common.Uri, source : String) -> Unit {
   let resource_key = resource.to_string()
   if viewer_state.mbti_resource is Some(resource_shown) &&
@@ -1144,7 +1146,21 @@ fn show_mbti_diagram(resource : @common.Uri, source : String) -> Unit {
     viewports.dispose()
   }
   viewer_state.mbti_diagram_viewports = None
-  match @viewer.render_mbti_diagram_svg(source) {
+  host.set_inner_html("")
+  @diagrams.render(Mbti, source, svg => {
+    guard viewer_state.mbti_resource is Some(resource_shown) &&
+      resource_shown == resource_key &&
+      viewer_state.mbti_source is Some(source_shown) &&
+      source_shown == source else {
+      return
+    }
+    show_mbti_diagram_result(host, svg)
+  })
+}
+
+///|
+fn show_mbti_diagram_result(host : @dom.Element, svg : String?) -> Unit {
+  match svg {
     Some(svg) =>
       viewer_state.mbti_diagram_viewports = Some(
         mount_generated_svg_viewport(host, svg),
@@ -1228,32 +1244,40 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
           },
         )
       PackageGraphReady(_, source) =>
-        match @viewer.render_package_dep_diagram_svg(source) {
-          Some(svg) => {
-            if viewer_state.package_diagram_viewports is Some(viewports) {
-              viewports.dispose()
-            }
-            viewer_state.package_diagram_viewports = Some(
-              mount_generated_svg_viewport(host, svg),
-            )
+        @diagrams.render(PackageDependencies, source, svg => {
+          // The renderer may answer after its module loads; by then another
+          // graph state may own the host.
+          guard viewer_state.package_graph is Some(graph_shown) &&
+            graph_shown == state else {
+            return
           }
-          None =>
-            show_package_diagram_status(
-              host,
-              match viewer_locale() {
-                SimplifiedChinese =>
-                  "无法渲染此依赖图，请查看源码了解详情。"
-                TraditionalChinese =>
-                  "無法渲染此依賴圖，請檢視原始碼瞭解詳情。"
-                Japanese =>
-                  "この依存関係グラフを表示できません。詳細はソースを確認してください。"
-                English =>
-                  "This dependency graph could not be rendered. View the source for details."
-                Spanish =>
-                  "No se pudo representar este grafo de dependencias. Consulta el código fuente para más detalles."
-              },
-            )
-        }
+          match svg {
+            Some(svg) => {
+              if viewer_state.package_diagram_viewports is Some(viewports) {
+                viewports.dispose()
+              }
+              viewer_state.package_diagram_viewports = Some(
+                mount_generated_svg_viewport(host, svg),
+              )
+            }
+            None =>
+              show_package_diagram_status(
+                host,
+                match viewer_locale() {
+                  SimplifiedChinese =>
+                    "无法渲染此依赖图，请查看源码了解详情。"
+                  TraditionalChinese =>
+                    "無法渲染此依賴圖，請檢視原始碼瞭解詳情。"
+                  Japanese =>
+                    "この依存関係グラフを表示できません。詳細はソースを確認してください。"
+                  English =>
+                    "This dependency graph could not be rendered. View the source for details."
+                  Spanish =>
+                    "No se pudo representar este grafo de dependencias. Consulta el código fuente para más detalles."
+                },
+              )
+          }
+        })
       PackageGraphFailed(_, message) =>
         show_package_diagram_status(
           host,

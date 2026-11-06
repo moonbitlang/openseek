@@ -1004,6 +1004,7 @@ fn main {
   // executing it in the example. The discarded function value keeps every
   // supported root/common signature checked by the real embedding package.
   let _ = compile_external_viewer_api_contract
+  @diagrams.use_bundled_renderer(@svg.render)
   @languages.languages.register_markdown_comment_provider(
     LanguageId("moonbit"),
     EmbeddedAlignmentMarkdownProvider::{ },

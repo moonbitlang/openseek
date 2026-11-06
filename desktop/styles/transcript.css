@@ -787,7 +787,7 @@
   border: none;
   background: transparent;
 }
-.msg-content.markdown :is(.chat-mermaid, .chat-diago) > pre {
+.msg-content.markdown :is(.chat-mermaid, .chat-diago, .chat-uml) > pre {
   margin: 0;
   min-height: 38px;
   padding-right: 42px;

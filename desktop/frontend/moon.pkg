@@ -7,6 +7,7 @@ import {
   "openseek_desktop/routes",
   "openseek_desktop/frontend/office_location",
   "moonbitlang/editor/viewer" @editor_viewer,
+  "moonbitlang/editor/viewer/diagrams",
   "openseek_desktop/frontend/session_search",
   "openseek_desktop/frontend/cloud",
   "moonbitlang/openseek/workspace_file_ref",
