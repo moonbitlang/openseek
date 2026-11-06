@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/static_preview"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Server {
+  // private fields
+}
+pub fn Server::Server() -> Self
+pub fn Server::clear(Self) -> Unit
+pub fn Server::close(Self, Int32) -> Unit
+pub async fn Server::open(Self, Int32, String, root? : String) -> String
+pub async fn Server::run(Self) -> Unit
+
+// Type aliases
+
+// Traits
