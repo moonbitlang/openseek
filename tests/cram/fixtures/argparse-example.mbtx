@@ -1,0 +1,17 @@
+---
+import { "moonbitlang/core/argparse" }
+---
+
+///|
+fn main raise {
+  let matches = @argparse.Command(
+    "echoargs",
+    flags=[@argparse.FlagArg("stdin", long="stdin")],
+    positionals=[@argparse.PositionArg("input", default_values=["-"])],
+  ).parse()
+  guard matches.values is { "input": [input, ..], .. } else {
+    fail("missing input")
+  }
+  println("input=\{input}")
+  println("stdin=\{matches.flags.get("stdin").unwrap_or(false)}")
+}

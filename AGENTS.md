@@ -78,18 +78,18 @@ Commands below run from the repository root.
 
 | Change | Targeted checks |
 | --- | --- |
-| Documentation only | Diff and referenced paths/commands; affected cram document if executable examples change. |
+| Documentation only | Diff and referenced paths/commands; affected CLI test document if executable examples change. |
 | Pure CSS or static presentation assets | Rebuild/serve the frontend and inspect affected UI or run focused browser scenarios, including relevant themes, viewports, and interactions. No automatic MoonBit, backend/CLI, or root gates. |
 | MoonBit source | `moon check` and relevant `moon test` cases for affected packages/targets; update interfaces and formatting as above. |
 | CLI arguments, output, exit status, or requests | Owning package tests and matching document under `tests/cram/` or `openseek_tui/tests/cram/`. |
 | Background jobs, turn completion, or serve controls | Owning package tests and `just test-turn-finish`. |
 | Subagents, review, or workers | Owning package tests and the matching integration script from `test-subagents` in [justfile](justfile). |
-| Bundled workflows | Relevant cram document, `just check-workflows` for compilation, or `just test-workflows` for hosted behavior. |
+| Bundled workflows | Relevant CLI test document, `just check-workflows` for compilation, or `just test-workflows` for hosted behavior. |
 | Service startup or engine resolution | Owning native package tests and `just test-app-server`. |
 | Editor, Desktop, or session-viewer UI/host integration | [Editor guidance](editor/AGENTS.md), [Desktop guidance](desktop/AGENTS.md), or [session-viewer browser tests](cmd/viz_app/e2e/README.md). |
 
 Command details: `moon test --help`,
-[cram](tests/cram/README.md), and [integration tests](tests/integration/README.md).
+[CLI documentation tests](tests/cram/README.md), and [integration tests](tests/integration/README.md).
 Select packages/files/test names for MoonBit tests and individual scripts for
 CLI integration; script assertions in `main` require `moon run`, not `moon test`.
 

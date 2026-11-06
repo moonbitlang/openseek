@@ -1,0 +1,58 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
+  let json = [..base, "--input-format", "json"]
+  let result_args = ["--result-file", "\{dir}/result.json"]
+  let echo =
+    #|{"version":1,"kind":"echo","input":0}
+    #|
+  let result = @shell.Cmd(
+    "moon",
+    [..run, ..json, ..result_args],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(
+      (
+        #|{"version":1,"request_id":"r-3","kind":"explore","input":{}}
+      ),
+    ),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr())
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/result.json"))
+  println("workspace_exists=\{@fs.exists("\{dir}/ws")}")
+
+  let result = @shell.Cmd(
+    "moon",
+    [
+      ..run,
+      "run",
+      "--input-format",
+      "json",
+      "--session",
+      "s-echo",
+      "--session-root",
+      "\{dir}/sessions",
+      "--dir",
+      "\{dir}/ws",
+      ..result_args,
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+    stdin=Text(echo),
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/result.json"))
+}

@@ -1,0 +1,76 @@
+---
+import {
+  "moonbitlang/core/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let scratch = "\{dir}/session/scratch"
+  @fs.mkdir(scratch, recursive=true)
+  let work = "\{scratch}/component-work/authored"
+  let init = "\{root}/share/artifact/init.mbtx"
+  let write = "\{root}/share/artifact/write.mbtx"
+  let init_args = [scratch, "\{root}/share/artifact/rabbita", "authored"]
+  let result = @shell.Cmd(
+    "moon",
+    ["run", "--quiet", "--target", "wasm", init, "--", ..init_args],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{result.exit_code()}")
+  println("template_copied=\{@fs.exists("\{work}/bridge.mbt")}")
+  println("build_cache_copied=\{@fs.exists("\{work}/_build")}")
+  println("dependency_cache_copied=\{@fs.exists("\{work}/.mooncakes")}")
+
+  @fs.mkdir("\{scratch}/staged-sources")
+  let staged = "\{scratch}/staged-sources/data.json"
+  let data =
+    #|{"value": 2}
+  @fs.write_text(staged, data, create_mode=CreateOrTruncate)
+  let written = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", write, "--", scratch, work, "data/input.json",
+      staged,
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{written.exit_code()}")
+  println(
+    "staged_data_preserved=\{@fs.read_text("\{work}/data/input.json") == data}",
+  )
+
+  let result = @shell.Cmd(
+    "moon",
+    ["run", "--quiet", "--target", "wasm", init, "--", ..init_args],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{result.exit_code()}")
+  println(
+    "staged_data_preserved=\{@fs.read_text("\{work}/data/input.json") == data}",
+  )
+
+  let outside_project = "\{dir}/outside-scratch"
+  @fs.mkdir(outside_project)
+  let outside = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", write, "--", scratch, outside_project,
+      "main.mbt", staged,
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{outside.exit_code()}")
+  @stdio.stdout.text.write(outside.stdout())
+  @stdio.stdout.text.write(outside.stderr())
+}

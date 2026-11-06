@@ -1,0 +1,73 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let env = {
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  @fs.mkdir("\{dir}/sessions/demo", recursive=true)
+  @fs.write_text(
+    "\{dir}/sessions/demo/openseek_session-demo.jsonl",
+    (
+      #|{"version":1,"id":"demo","system_prompt":"system"}
+      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+      #|{"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
+      #|
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_text(
+    "\{dir}/mcp.json",
+    (
+      #|{"mcpServers":{"tracker":{"command":"tracker-mcp"},"host":{"url":"${OPENSEEK_CRAM_UNSET_URL}"}}}
+    ),
+    create_mode=CreateOrTruncate,
+  )
+  let result = @shell.Cmd(
+    "moon",
+    [
+      ..run,
+      "sessions",
+      "fork",
+      "demo",
+      "--as",
+      "with-mcp",
+      "--session-root",
+      dir,
+      "--mcp-config",
+      "\{dir}/mcp.json",
+    ],
+    cwd=dir,
+    env~,
+  ).output()
+  println("exit=\{result.exit_code()}")
+  let result = @shell.Cmd(
+    "moon",
+    [..run, "sessions", "show", "with-mcp", "--session-root", dir],
+    cwd=dir,
+    env~,
+  ).output()
+  println("exit=\{result.exit_code()}")
+  let session = @json.parse(result.stdout())
+  guard session is { "system_prompt": String(prompt), .. } else {
+    fail("missing system prompt")
+  }
+  for line in prompt.split("\n") {
+    if line.has_prefix("Configured MCP servers:") {
+      println(line.split(".").next().unwrap_or(""))
+    }
+  }
+}

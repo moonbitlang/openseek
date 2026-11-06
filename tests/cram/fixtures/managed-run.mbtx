@@ -1,0 +1,85 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let engine = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let args = [
+    "run",
+    "--quiet",
+    "--target",
+    "wasm",
+    engine,
+    "--",
+    "run",
+    "--no-session",
+    "--dir",
+    "\{dir}/ws",
+    "--input-format",
+    "json",
+    "--cancel-on-stdin-eof",
+  ]
+  let requests = [
+    (
+      #|{"version":1,"kind":"echo","input":[1,2]}
+    ),
+    (
+      #|{"version":1,"kind":"echo","input":"inherited"}
+    ),
+  ]
+  for index, request in requests {
+    let environment = { "MOON_WORK": "off" }
+    if index == 1 {
+      environment["OPENSEEK_APPROVAL"] = "ask"
+    }
+    @async.with_task_group(group => {
+      let child = @process.spawn(
+        group,
+        "moon",
+        [..args, "--result-file", "\{dir}/result.json"],
+        cwd=dir,
+        stdin=FeedFromParent,
+        stdout=Discard,
+        stderr=Discard,
+        extra_env=environment,
+      )
+      child.stdin.text.write(request + "\n")
+      // Echo must finish while its parent still holds stdin open.
+      let code = child.wait()
+      child.stdin.close()
+      println("exit=\{code}")
+    })
+    @stdio.stdout.text.write(@fs.read_text("\{dir}/result.json"))
+  }
+  let refused = @shell.Cmd(
+    "moon",
+    [..args, "--approval", "always"],
+    cwd=dir,
+    stdin=Text(
+      (
+        #|{"version":1,"kind":"echo","input":0}
+        #|
+      ),
+    ),
+  ).output()
+  println("exit=\{refused.exit_code()}")
+  @stdio.stdout.text.write(refused.stderr())
+
+  let empty = @shell.Cmd(
+    "moon",
+    [..args, "--result-file", "\{dir}/result.json"],
+    cwd=dir,
+  ).output()
+  @stdio.stdout.text.write(empty.stderr())
+  println("exit \{empty.exit_code()}")
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/result.json"))
+}

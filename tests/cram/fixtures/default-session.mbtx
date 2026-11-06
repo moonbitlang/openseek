@@ -1,0 +1,60 @@
+---
+import {
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let result = @shell.Cmd(
+    "moon",
+    [..run, "run", "--api-url", ClosedEndpoint, "say hi"],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_RETRY_ATTEMPTS": "1",
+      "MOON_WORK": "off",
+    },
+  ).output()
+  println("exit=\{result.exit_code()}")
+
+  println(
+    result
+    .stderr()
+    .split("\n")
+    .filter(line => line.has_prefix("session cli-"))
+    .count(),
+  )
+  println(@utf8.encode(result.stdout()).length())
+  let result = @shell.Cmd("moon", [..run, "sessions", "list"], cwd=dir, env={
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }).output()
+  println("exit=\{result.exit_code()}")
+  let ids = result
+    .stdout()
+    .split("\n")
+    .filter_map(line => {
+      if line.is_empty() {
+        None
+      } else {
+        Some(line.split("\t").next().unwrap_or("").to_owned())
+      }
+    })
+    .collect()
+  ids.sort()
+  for id in ids {
+    println(if id.has_prefix("cli-") { "cli-<stamp>" } else { id })
+  }
+}
+
+///|
+const ClosedEndpoint = "http://127.0.0.1:9/chat/completions"

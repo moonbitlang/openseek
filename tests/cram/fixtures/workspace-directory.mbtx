@@ -1,0 +1,87 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let env = {
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  @fs.mkdir("\{dir}/parent")
+  let result = @shell.Cmd(
+    "moon",
+    [
+      ..run,
+      "run",
+      "--dir",
+      "\{dir}/parent/new",
+      "--api-url",
+      ClosedEndpoint,
+      "say hi",
+    ],
+    cwd=dir,
+    env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_RETRY_ATTEMPTS": "1",
+      "MOON_WORK": "off",
+    },
+  ).output()
+  println("exit=\{result.exit_code()}")
+
+  println("workspace_created=\{@fs.kind("\{dir}/parent/new") is Directory}")
+
+  println(
+    result
+    .stderr()
+    .split("\n")
+    .filter(line => line.has_prefix("created "))
+    .count(),
+  )
+  let result = @shell.Cmd(
+    "moon",
+    [..run, "sessions", "list", "--dir", "\{dir}/parent/new"],
+    cwd=dir,
+    env~,
+  ).output()
+  println("exit=\{result.exit_code()}")
+  let ids = result
+    .stdout()
+    .split("\n")
+    .filter_map(line => {
+      if line.is_empty() {
+        None
+      } else {
+        Some(line.split("\t").next().unwrap_or("").to_owned())
+      }
+    })
+    .collect()
+  ids.sort()
+  for id in ids {
+    println(if id.has_prefix("cli-") { "cli-<stamp>" } else { id })
+  }
+  let list = @shell.Cmd(
+    "moon",
+    [..run, "sessions", "list", "--dir", "\{dir}/parent/fresh"],
+    cwd=dir,
+    env~,
+  ).output()
+  println("exit=\{list.exit_code()}")
+  println(
+    "session_workspace_created=\{@fs.kind("\{dir}/parent/fresh") is Directory}",
+  )
+
+  println(list.stdout().split("\n").filter(line => !line.is_empty()).count())
+}
+
+///|
+const ClosedEndpoint = "http://127.0.0.1:9/chat/completions"

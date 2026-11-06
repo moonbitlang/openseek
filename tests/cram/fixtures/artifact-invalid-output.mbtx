@@ -1,0 +1,47 @@
+---
+import {
+  "moonbitlang/core/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let project = @fs.realpath("fixtures/artifact-app")
+  let output = "\{dir}/session/scratch/artifact"
+  let builder = "\{root}/share/artifact/build.mbtx"
+
+  let empty_directory = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, "", "chart.html",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{empty_directory.exit_code()}")
+  @stdio.stdout.text.write(empty_directory.stdout())
+  @stdio.stdout.text.write(empty_directory.stderr())
+  println("html_exists=\{@fs.exists("\{output}/chart.html")}")
+  println("source_exists=\{@fs.exists("\{output}/chart.html.source")}")
+
+  let failure = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, output, "../outside.html",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{failure.exit_code()}")
+  @stdio.stdout.text.write(failure.stdout())
+  @stdio.stdout.text.write(failure.stderr())
+  println(
+    "outside_html_exists=\{@fs.exists("\{dir}/session/scratch/outside.html")}",
+  )
+}

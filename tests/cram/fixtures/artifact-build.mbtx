@@ -1,0 +1,55 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let project = @fs.realpath("fixtures/artifact-app")
+  let output = "\{dir}/session/scratch/artifact"
+  let builder = "\{root}/share/artifact/build.mbtx"
+
+  let original_source = @fs.read_text("\{project}/main.mbt")
+  let result = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, output, "chart-v1.html",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stdout())
+  let page = @fs.read_text("\{output}/chart-v1.html")
+  println("has_script=\{page.contains("<script>")}")
+  println("has_application=\{page.contains("The application has loaded")}")
+
+  let saved_source = "\{output}/chart-v1.html.source"
+  println(
+    "source_preserved=\{@fs.read_text("\{saved_source}/main.mbt") == original_source}",
+  )
+  println("saved_build_cache=\{@fs.exists("\{saved_source}/_build")}")
+  println("saved_dependency_cache=\{@fs.exists("\{saved_source}/.mooncakes")}")
+
+  let failure = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, output, "chart-v1.html",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{failure.exit_code()}")
+  @stdio.stdout.text.write(failure.stdout())
+  @stdio.stdout.text.write(failure.stderr())
+  println(
+    "original_page_preserved=\{@fs.read_text("\{output}/chart-v1.html") == page}",
+  )
+}

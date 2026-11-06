@@ -1,0 +1,67 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/process",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let run = ["run", "--quiet", "--target", "wasm", @fs.realpath("../.."), "--"]
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let path = "\{dir}/result.json"
+  @fs.write_text(path, "stale\n", create_mode=CreateNew)
+  let environment = {
+    "DEEPSEEK": "",
+    "KIMI": "",
+    "OPENSEEK_MODEL": "deepseek-flash",
+    "MOON_WORK": "off",
+  }
+  let result = @shell.Cmd(
+    "moon",
+    [
+      ..run,
+      "run",
+      "--no-session",
+      "--dir",
+      "\{dir}/ws",
+      "--result-file",
+      path,
+      "task",
+    ],
+    cwd=dir,
+    env=environment,
+  ).output()
+  println("exit \{result.exit_code()}")
+  @stdio.stdout.text.write(@fs.read_text(path))
+  @fs.remove(path)
+
+  // The result must still be written when reporting the error to stderr fails.
+  let (reader, broken_stderr) = @process.pipe()
+  reader.close()
+  defer broken_stderr.close()
+  let result = @process.run(
+    "moon",
+    [
+      ..run,
+      "run",
+      "--no-session",
+      "--dir",
+      "\{dir}/ws2",
+      "--result-file",
+      path,
+      "task",
+    ],
+    cwd=dir,
+    extra_env=environment,
+    stdin=Empty,
+    stdout=Discard,
+    stderr=Shared(broken_stderr),
+  )
+  println("exit \{result.exit_code}")
+  @stdio.stdout.text.write(@fs.read_text(path))
+}

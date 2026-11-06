@@ -1,75 +1,91 @@
-# Writing cram documentation
+# Writing CLI documentation tests
 
-Cram tests are Markdown usage guides with executable command transcripts.
-Use them for a script's arguments, printed output, and exit status. Start with
-[Reading files with `read.mbtx`](read-workflow.md) for a complete `.mbtx` example.
-For scripts that run Moon commands, see
-[Checking, testing, and formatting](validation-workflows.md).
-For ordinary HTML packaging and session file references, see
-[Creating interactive file artifacts](file-artifacts.md).
+These Markdown usage guides run with `moon testcli`, the MoonBit toolchain's
+CLI test runner. Fences still use the language name `mooncram`. Start with
+[Reading files](read-workflow.md), [Validation workflows](validation-workflows.md),
+or [File artifacts](file-artifacts.md) for existing scenarios.
 
 ## Run the examples
 
+Use a MoonBit toolchain with `moon testcli` (`moon testcli --help` checks it).
 From the repository root:
 
 ```sh
-# One document while editing.
-moon cram test tests/cram/read-workflow.md --shell bash
+# Validate syntax and target resolution without executing commands.
+moon testcli check tests/cram
+moon -C openseek_tui testcli check tests/cram
 
-# All offline documentation tests; also included in just test and native CI.
-just test-cram
+# One document while editing.
+moon testcli test tests/cram/read-workflow.md
+
+# All offline CLI documentation tests; also included in just test and native CI.
+just test-cli
 ```
 
-On Windows, `just test-cram` selects Git Bash from the standard Git installation;
-the transcript commands are shell commands, not PowerShell syntax. This selects
-the shell only: individual examples may still assume Unix filenames or OS error
-messages, as noted in the read guide. The cram CI job currently runs on Linux.
+Local executable cases and `.mbtx` scripts use testcli's default Wasm backend.
+The TUI suite starts in its own module because fence module declarations
+must match the `moon.mod` in testcli's startup directory. First builds may download
+package dependencies. Tests make no external model API calls.
 
-`moon cram test` builds the project's native executables and adds them to
-`PATH`. Standalone `.mbtx` examples invoke `moonx` themselves. They can also
-run with `moon-cram test tests/cram/read-workflow.md --shell bash` to skip the
-project executable build. The script's declared dependencies must be available;
-Moon may download them on the first run. The read examples need no model or
-credentials.
+`testcli` starts each case in the Markdown file's directory unless its fence has
+`#cwd(relative/path)`; all declared directories must already exist. It provides
+no temporary directory and does not expand shell variables, run heredocs, or
+accept arbitrary binaries. Every command/pipeline segment starts with `moonx`
+and names a local script, a full local executable package in a module-declared
+fence, or an exact remote package version. Commands occupy one source line.
 
-## Add a script's guide
+## Add a case
 
-1. Create `tests/cram/<script>.md`. Explain a useful behavior before showing
-   the command that demonstrates it.
-2. Put executable transcripts in fenced blocks labeled `mooncram`.
-   `$ ` starts a command, `> ` continues it (for example, a heredoc), and the
-   following lines are expected standard output. End with `[1]` for an expected
-   exit status of 1; omit the marker for success. Use `2>&1` when stderr is part
-   of the example's contract.
-3. Create small fixtures in the test's temporary working directory. Files
-   persist between blocks in a document. Use `$TESTDIR` to locate the script
-   relative to the Markdown file.
-4. Assign the script path to a variable once, for example
-   `READ="$TESTDIR/../../share/workflow/read.mbtx"`. Cram preserves the variable
-   between blocks. Each example can then use `moonx "$READ" file.mbt:12`.
-   The `$` expands the variable; quotes preserve spaces in the script path.
-   Keep setup separate from the expected output.
-5. Run the document and review its output. Link it from the relevant usage
-   docs. New Markdown files under this directory are picked up by the existing
-   test recipe and CI.
+1. Create `tests/cram/<behavior>.md`, explaining the behavior before the example.
+2. Prefer direct `moonx ../../share/examples/example.mbtx` calls for scripts. For
+   the engine, declare `mooncram moonbitlang/openseek` and invoke
+   `moonx moonbitlang/openseek <args>`; testcli builds the selected package.
+3. Write expected stdout below the command. End with `[1]` for exit status 1;
+   omit it for success. To assert stderr, include both `@STDOUT` and `@STDERR`
+   markers, using `(empty)` or `(ignore)` where appropriate. Direct cases do
+   not accept `2>&1`. Use exact output for stable values and narrow `(glob)` or
+   `(regex)` patterns for variable fields.
+4. Keep read-only input files under `fixtures/` and use `#cwd` when needed.
+   Feed literal stdin through `fixtures/stdin.mbtx`, for example
+   `moonx fixtures/stdin.mbtx '{"command":"cancel"}' | DEEPSEEK=test-key moonx moonbitlang/openseek serve`.
+   The runner owns building, pipefail, and stdout/stderr/exit-status comparison.
+   For cases that actually create or modify files or need process control, add one standalone
+   `.mbtx` under `fixtures/`, named after the behavior being tested. Invoke it
+   directly, for example `moonx fixtures/cancel-on-stdin-eof.mbtx`.
+   Put setup and commands together in that script, and clean up temporary
+   directories with `defer`. Use `@shell.Cmd("moon", ["run", "--quiet", ...])`
+   to build and run the real program; no artifact-path helper is needed. Print
+   the observed exit codes, relevant output, and file properties so expectations
+   stay in the Markdown snapshot. Use `@process` pipes when stdin timing is
+   the behavior under test.
+   Keep simple commands and pipelines directly in the document.
+5. Run `check`, then `test`, review the output, and link the guide from usage docs.
+   New Markdown files under this directory are discovered by the recipe and CI.
 
-Use ordinary `sh` fences for instructions to the reader that should not run
-as test cases. Keep output deterministic and small enough to read in full.
-These transcripts complement package tests for tool dispatch, sandbox rules,
-and other behavior outside the standalone script.
+The scripts use MoonBit's standard library and need no Bash or sh interpreter.
+Each script can be built on its own. The TUI suite invokes its package directly
+and includes its session data in the standalone release.
+Unix filenames and OS error text still make some cases platform-specific; CI
+runs this suite on Linux.
+
+Use ordinary `sh` fences for commands the reader should run. Read the toolchain's
+embedded reference with `moon testcli docs commands`, `moon testcli docs expectations`,
+and `moon testcli docs execution` when adding a new kind of case.
 
 ## Update expected output
 
-For an intentional script-output change, generate a candidate transcript:
+For an intentional output change, preview the update, then apply and review it:
 
 ```sh
-moon cram update tests/cram/read-workflow.md --shell bash --assume-yes
-git diff --no-index tests/cram/read-workflow.md tests/cram/read-workflow.md.new
+moon testcli update --timeout-ms 300000 tests/cram/read-workflow.md --dry-run
+moon testcli update --timeout-ms 300000 tests/cram/read-workflow.md
+git diff -- tests/cram/read-workflow.md
+moon testcli test tests/cram/read-workflow.md
 ```
 
-When expectations change, the update command writes a `.new` file without
-`--replace`; unchanged documents produce no new file. Review the diff
-(the diff command exits 1 when files differ), then copy the accepted output
-back into the guide, remove the `.new` file, and rerun the test. Revise the
-surrounding explanation too if the behavior changed. `moon test --update`
-updates MoonBit snapshots, not these cram transcripts.
+`update` writes the original Markdown files directly and may normalize passing
+cases too. `--dry-run` previews edits but still executes programs. Use `check`
+for validation without execution and `test` for the pass/fail gate; an update
+preview can exit successfully despite output mismatches. Revise the prose too
+when the behavior changes. `moon test --update` updates MoonBit snapshots rather
+than these CLI transcripts.

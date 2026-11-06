@@ -113,7 +113,7 @@ moon test --target wasm $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 d
 moon build --target wasm openseek_tui/cmd/openseek_tui
 moon check --target native --deny-warn $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 moon test --target native $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
-moon cram test openseek_tui/tests/cram   # verified CLI docs: tests/cram/tui.md
+moon -C openseek_tui testcli test tests/cram   # verified CLI docs: tests/cram/tui.md
 moon info $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 moon fmt $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 ```

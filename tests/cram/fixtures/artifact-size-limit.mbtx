@@ -1,0 +1,52 @@
+---
+import {
+  "moonbitlang/core/async/stdio",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+}
+---
+
+///|
+async fn main {
+  let root = @fs.realpath("../..")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let project = "\{dir}/session/scratch/app"
+  @fs.mkdir(project, recursive=true)
+  let output = "\{dir}/session/scratch/artifact"
+  for name in ["moon.mod", "moon.pkg", "main.mbt"] {
+    @fs.write_text(
+      "\{project}/\{name}",
+      @fs.read_text("fixtures/artifact-app/\{name}"),
+      create_mode=CreateNew,
+    )
+  }
+  let builder = "\{root}/share/artifact/build.mbtx"
+
+  let page = StringBuilder()
+  page.write_string("<!doctype html><p>")
+  for _ in 0..<3_000_000 {
+    page.write_string("界")
+  }
+  page.write_string("</p><!-- openseek:script -->")
+  @fs.write_text(
+    "\{project}/index.html",
+    page.to_string(),
+    create_mode=CreateOrTruncate,
+  )
+
+  let failure = @shell.Cmd(
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, output, "oversized.html",
+    ],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  println("exit=\{failure.exit_code()}")
+  @stdio.stdout.text.write(failure.stdout())
+  @stdio.stdout.text.write(failure.stderr())
+  println("html_exists=\{@fs.exists("\{output}/oversized.html")}")
+  println("source_exists=\{@fs.exists("\{output}/oversized.html.source")}")
+}

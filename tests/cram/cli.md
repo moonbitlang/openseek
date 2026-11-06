@@ -1,8 +1,10 @@
 # Verified OpenSeek CLI Documentation
 
-These examples are executed by `moon cram test tests/cram`. The Moon wrapper
-builds the native executable packages first, then exposes their executables
-on `PATH` as `openseek.exe`.
+Run `moon testcli test tests/cram/cli.md` from the repository root.
+Simple cases name the local package directly. [Standalone MoonBit scripts](fixtures/) handle cases that need temporary
+files or process control. They invoke `moon run` to build and run the real
+local engine for Wasm, print observations for the snapshots, and clean up
+their temporary directories.
 
 `openseek` is the headless automation CLI: a subcommand tree under `run`,
 `serve`, `mcp`, and `sessions` (the interactive terminal UI
@@ -18,8 +20,8 @@ network calls. The live, API-backed examples live in
 so the top level lists the subcommands and the engine-shared options. It exits
 successfully.
 
-```mooncram
-$ openseek.exe --help
+```mooncram moonbitlang/openseek
+$ moonx moonbitlang/openseek --help
 Usage: openseek [options] <command>
 
 DeepSeek-backed MoonBit coding agent (headless automation CLI).
@@ -53,19 +55,40 @@ binary (its own repository, `moonbitlang/openseek_tui`).
 
 There is no free-form top-level prompt: a bare word that is not a subcommand is
 rejected by argparse rather than silently opening the UI with that word as a
-prompt. (argparse does not yet suggest a near-miss subcommand the way it does for
-options — tracked upstream in moonbitlang/core — so the message is a plain
-rejection for now.)
+prompt. The diagnostic suggests `serve` for this misspelling.
 
-```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if env -u DEEPSEEK openseek.exe serv 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek serv
+@STDOUT (empty)
+@STDERR
 error: unexpected value 'serv' found; no more were expected
+
+  tip: a similar subcommand exists: 'serve'
+
+Usage: openseek [options] <command>
+
+DeepSeek-backed MoonBit coding agent (headless automation CLI).
+
+Commands:
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp       List configured MCP servers and the tools they expose.
+  sessions  Manage durable sessions.
+
+Options:
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
+"" (escaped)
+[1]
 ```
 
 ## UI Options Are Not Top-Level Flags
@@ -76,29 +99,71 @@ an engine subcommand. So `openseek --prompt x run …` is an error; use
 `openseek_tui --prompt "…"` for the UI, and `openseek run "…"` for a headless
 task.
 
-```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if env DEEPSEEK=test-key openseek.exe --prompt x run TASK 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek --prompt x run TASK
+@STDOUT (empty)
+@STDERR
 error: unexpected argument '--prompt' found
+
+Usage: openseek [options] <command>
+
+DeepSeek-backed MoonBit coding agent (headless automation CLI).
+
+Commands:
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp       List configured MCP servers and the tools they expose.
+  sessions  Manage durable sessions.
+
+Options:
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
+"" (escaped)
+[1]
 ```
 
 With no free-form positional, `--` cannot smuggle a prompt: a value after it is
 rejected by the parser.
 
-```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if env DEEPSEEK=test-key openseek.exe -- something 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek -- something
+@STDOUT (empty)
+@STDERR
 error: unexpected value 'something' found; no more were expected
+
+Usage: openseek [options] <command>
+
+DeepSeek-backed MoonBit coding agent (headless automation CLI).
+
+Commands:
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp       List configured MCP servers and the tools they expose.
+  sessions  Manage durable sessions.
+
+Options:
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
+"" (escaped)
+[1]
 ```
 
 ## Bare `openseek` Is Rejected
@@ -106,15 +171,36 @@ error: unexpected value 'something' found; no more were expected
 `openseek` is automation-only: there is no default subcommand, so a bare
 invocation is an error (launch the interactive UI with `openseek_tui`).
 
-```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if openseek.exe 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek
+@STDOUT (empty)
+@STDERR
 error: the following required argument was not provided: 'subcommand'
+
+Usage: openseek [options] <command>
+
+DeepSeek-backed MoonBit coding agent (headless automation CLI).
+
+Commands:
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp       List configured MCP servers and the tools they expose.
+  sessions  Manage durable sessions.
+
+Options:
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
+"" (escaped)
+[1]
 ```
 
 ## `openseek run` Runs One Task Headlessly
@@ -122,8 +208,8 @@ error: the following required argument was not provided: 'subcommand'
 `openseek run --help` prints the options, environment variables, and defaults
 behind a headless run.
 
-```mooncram
-$ openseek.exe run --help
+```mooncram moonbitlang/openseek
+$ moonx moonbitlang/openseek run --help
 Usage: openseek run [options] [task...]
 
 Run one task headlessly; print its answer on stdout and its progress on stderr.
@@ -165,8 +251,10 @@ a headless `run` reads no commands, so there is nobody the engine could ask,
 and the alternative is a turn that stops for five minutes to wait out a
 deadline no one was ever going to beat.
 
-```mooncram
-$ env DEEPSEEK=test-key openseek.exe run --approval ask "probe" 2>&1
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key moonx moonbitlang/openseek run --approval ask "probe"
+@STDOUT (empty)
+@STDERR
 error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation), always (grant it unasked), or review (a reviewer decides; what it cannot settle is refused)
 [1]
 ```
@@ -177,8 +265,10 @@ one piece of `main` that argparse cannot pick up on its own: `parse` reads the
 process arguments itself but defaults the environment to empty, so the binary
 must hand it `@env.get_env_vars()` — and this case fails if it ever stops.
 
-```mooncram
-$ env DEEPSEEK=test-key OPENSEEK_APPROVAL=ask openseek.exe run "probe" 2>&1
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key OPENSEEK_APPROVAL=ask moonx moonbitlang/openseek run "probe"
+@STDOUT (empty)
+@STDERR
 error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation), always (grant it unasked), or review (a reviewer decides; what it cannot settle is refused)
 [1]
 ```
@@ -191,18 +281,12 @@ not the variable that would have supplied one — `DEEPSEEK` here, `KIMI` for a
 Kimi model. Those options are hidden from `--help`, so this is where they are
 written down.
 
-```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run "summarize this project" > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> cat "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek run "summarize this project"
+@STDOUT (empty)
+@STDERR
 error: an API key is required for deepseek-flash: pass --api-key
-stdout-empty
+[1]
 ```
 
 ## A Result File Says How the Run Ended
@@ -214,18 +298,7 @@ succeeded or not; `docs/run-result.md` is the full contract. A stale file at
 parent reads the file, not the streams.
 
 ```mooncram
-$ sh <<'EOF'
-> dir=$(mktemp -d)
-> echo stale > "$dir/result.json"
-> env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --no-session --dir "$dir/ws" --result-file "$dir/result.json" task > /dev/null 2>&1
-> echo "exit $?"
-> cat "$dir/result.json"
-> rm "$dir/result.json"
-> env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --no-session --dir "$dir/ws2" --result-file "$dir/result.json" task > /dev/null 2< /dev/null
-> echo "exit $?"
-> cat "$dir/result.json"
-> rm -rf "$dir"
-> EOF
+$ moonx fixtures/result-file.mbtx
 exit 1
 {"version":1,"status":"failed","reason":"an API key is required for deepseek-flash: pass --api-key"}
 exit 1
@@ -238,35 +311,59 @@ The task is free-form after option parsing has stopped, but a leading
 option-looking token is still an option. This catches stale or misspelled flags
 instead of silently turning them into prompt text.
 
-```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env -u DEEPSEEK openseek.exe run --xxy he > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek run --xxy he
+@STDOUT (empty)
+@STDERR
 error: unexpected argument '--xxy' found
-stdout-empty
+
+Usage: openseek run [options] [task...]
+
+Run one task headlessly; print its answer on stdout and its progress on stderr.
+
+Arguments:
+  task...  Task description.
+
+Options:
+  -h, --help                                                   Show help information.
+  --api-key <api-key>                                          API key for the selected chat provider. [default: ]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                                      Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                                        Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                                          Create or resume this durable session id.
+  --session-root <session-root>                                Directory containing durable OpenSeek sessions. [default: .openseek]
+  --no-session                                                 Run ephemerally: do not record this run to a durable session.
+  --inspect                                                    Watch this run live in the browser: start (or reuse) the session viewer, `moonx moonbitlang/inspect --ensure --watch`, print its link and open it in your default browser before the agent starts. Needs a recorded session.
+  --review-gate                                                On goal(met), audit the worktree against the goal with a review subagent and inject the findings as an advisory notice.
+  --cancel-on-stdin-eof                                        For a parent that launches this run: read the JSON request as one line, keep reading stdin, and cancel the run when it closes. Needs --input-format json. The run delegates no further work.
+  --dir <dir>                                                  Workspace directory for relative paths; creates only the final path component if its parent exists. [default: .]
+  --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
+  --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
+  --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
+  --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package, and a new session's system prompt names the servers. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
+  --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
+  --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run). [env: OPENSEEK_APPROVAL] [default: never]
+  --result-file <result-file>                                  Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.
+  --result-root <result-root>                                  The directory --result-file must be written in: the result must be a new file inside it. A launcher pins it to decide where a run it starts may write.
+  --kind <kind>                                                Run a preset instead of the general agent: explore, review, approval, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.
+  --claim <claim>                                              Start the --kind run in the --session its launcher claimed for it, presenting the claim's token. Without it, a --kind run refuses a session that already exists.
+  --input-format <input-format>                                text: the task is the command-line words. json: read one JSON request from stdin instead (see docs/run-result.md). [default: text]
+"" (escaped)
+[1]
 ```
 
 When the task itself must start with `-`, use the normal option delimiter.
 Here parsing succeeds and the run reaches the later API-key validation.
 
-```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run -- '--xxy he' > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> cat "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek run -- "--xxy he"
+@STDOUT (empty)
+@STDERR
 error: an API key is required for deepseek-flash: pass --api-key
-stdout-empty
+[1]
 ```
 
 ## `openseek sessions` Is Offline
@@ -277,21 +374,7 @@ the summary event the compaction *appends* is stamped with the wall clock, so
 both `sessions show` calls strip `ts` to stay deterministic.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/sessions/demo"
-> cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
-> {"version":1,"id":"demo","system_prompt":"system"}
-> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
-> {"sequence":2,"ts":0,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
-> JSONL
-> printf 'hello and answer' > "$tmp/summary.txt"
-> env -u DEEPSEEK openseek.exe sessions list --session-root "$tmp" | cut -f1
-> env -u DEEPSEEK openseek.exe sessions show demo --session-root "$tmp" | sed -E 's/"ts":[0-9]+,//g'
-> env -u DEEPSEEK openseek.exe sessions compact demo --session-root "$tmp" --file "$tmp/summary.txt" --from 1 --to 2
-> env -u DEEPSEEK openseek.exe sessions show demo --session-root "$tmp" | sed -E 's/"ts":[0-9]+,//g'
-> rm -rf "$tmp"
-> EOF
+$ moonx fixtures/sessions-offline.mbtx
 demo
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
 compacted session demo events 1..2; last_sequence=3
@@ -311,32 +394,19 @@ model that the files were not copied with it.
 terminal event; an id that already exists is never replaced.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/sessions/demo"
-> cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
-> {"version":1,"id":"demo","system_prompt":"system"}
-> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
-> {"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
-> {"sequence":3,"ts":0,"item":{"kind":"user","payload":{"content":"go on"}}}
-> JSONL
-> env -u DEEPSEEK openseek.exe sessions fork demo --as retry --session-root "$tmp"
-> env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -o '"item":{"kind":"[a-z_]*"' | cut -d'"' -f6
-> env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -o 'sessions/[a-z]*/scratch'
-> env -u DEEPSEEK openseek.exe sessions fork demo --as retry --session-root "$tmp" 2>&1 || echo exit-non-zero
-> env -u DEEPSEEK openseek.exe sessions fork demo --as early --through 1 --session-root "$tmp" 2>&1 || echo exit-non-zero
-> env -u DEEPSEEK openseek.exe sessions list --session-root "$tmp" | cut -f1 | sort
-> rm -rf "$tmp"
-> EOF
+$ moonx fixtures/session-fork.mbtx
+exit=0
 retry
+exit=0
 user
 terminal
 runtime_notice
-sessions/retry/scratch
+fork_scratch_in_prompt=true
+exit=1
 error: session retry already exists
-exit-non-zero
+exit=1
 error: no turn of session demo ends at sequence 1
-exit-non-zero
+exit=0
 demo
 retry
 ```
@@ -347,21 +417,9 @@ of. Only the names are read: a server whose URL needs a variable this process
 does not have is still named.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/sessions/demo"
-> cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
-> {"version":1,"id":"demo","system_prompt":"system"}
-> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
-> {"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
-> JSONL
-> cat > "$tmp/mcp.json" <<'JSON'
-> {"mcpServers": {"tracker": {"command": "tracker-mcp"}, "host": {"url": "${OPENSEEK_CRAM_UNSET_URL}"}}}
-> JSON
-> env -u DEEPSEEK openseek.exe sessions fork demo --as with-mcp --session-root "$tmp" --mcp-config "$tmp/mcp.json" >/dev/null
-> env -u DEEPSEEK openseek.exe sessions show with-mcp --session-root "$tmp" | grep -o 'Configured MCP servers: [^.]*'
-> rm -rf "$tmp"
-> EOF
+$ moonx fixtures/session-fork-mcp.mbtx
+exit=0
+exit=0
 Configured MCP servers: `tracker`, `host`
 ```
 
@@ -385,18 +443,11 @@ closed port pins `OPENSEEK_RETRY_ATTEMPTS=1`: none of them is testing the retry
 budget, and the suite's runtime should not track its default.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> cd "$tmp"
-> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" "say hi" > out.txt 2> err.txt; then echo exit-zero; else echo exit-non-zero; fi
-> grep -c '^session cli-' err.txt
-> wc -c < out.txt | tr -d ' '
-> env -u DEEPSEEK openseek.exe sessions list | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'
-> rm -rf "$tmp"
-> EOF
-exit-non-zero
+$ moonx fixtures/default-session.mbtx
+exit=1
 1
 0
+exit=0
 cli-<stamp>
 ```
 
@@ -409,16 +460,10 @@ ever being routed back through one: once, events went through `@xlog`, and
 rendered nothing with no error to explain it.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> cd "$tmp"
-> for level in warn error; do
->   env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 MOON_XLOG=$level openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" --dir "$tmp/$level" "say hi" > /dev/null 2> "err-$level.txt"
->   echo "$level: $(grep -c '^session cli-' "err-$level.txt")"
-> done
-> rm -rf "$tmp"
-> EOF
+$ moonx fixtures/session-log-levels.mbtx
+exit=1
 warn: 1
+exit=1
 error: 1
 ```
 
@@ -426,14 +471,9 @@ error: 1
 behind.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> cd "$tmp"
-> env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --no-session --api-url "http://127.0.0.1:9/chat/completions" "say hi" >/dev/null 2>&1
-> if test -d .openseek; then echo recorded; else echo ephemeral; fi
-> rm -rf "$tmp"
-> EOF
-ephemeral
+$ moonx fixtures/no-session.mbtx
+exit=1
+session_root_exists=false
 ```
 
 ## `--dir` Selects The Workspace Root
@@ -444,30 +484,23 @@ directory, reports it on stderr, and resolves the default session root under
 it.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/parent"
-> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --dir "$tmp/parent/new" --api-url "http://127.0.0.1:9/chat/completions" "say hi" > /dev/null 2> "$tmp/err.txt"; then echo exit-zero; else echo exit-non-zero; fi
-> if test -d "$tmp/parent/new"; then echo dir-created; else echo dir-missing; fi
-> grep -c '^created ' "$tmp/err.txt"
-> env -u DEEPSEEK openseek.exe sessions list --dir "$tmp/parent/new" | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'
-> env -u DEEPSEEK openseek.exe sessions list --dir "$tmp/parent/fresh" > "$tmp/session-list.out"
-> if test -d "$tmp/parent/fresh"; then echo session-dir-created; else echo session-dir-missing; fi
-> wc -l < "$tmp/session-list.out" | tr -d ' '
-> rm -rf "$tmp"
-> EOF
-exit-non-zero
-dir-created
+$ moonx fixtures/workspace-directory.mbtx
+exit=1
+workspace_created=true
 1
+exit=0
 cli-<stamp>
-session-dir-created
+exit=0
+session_workspace_created=true
 0
 ```
 
 Asking for both recording behaviors at once is rejected before any work happens.
 
-```mooncram
-$ env DEEPSEEK=test-key openseek.exe run --session demo --no-session "say hi" 2>&1
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key moonx moonbitlang/openseek run --session demo --no-session "say hi"
+@STDOUT (empty)
+@STDERR
 error: --no-session contradicts --session; pick one behavior
 [1]
 ```
@@ -479,12 +512,13 @@ cancels arrive as JSONL commands on stdin, and the usual event stream leaves on
 stdout. The command surface is testable offline — a malformed command is
 reported as a `command_error` event rather than killing the server, an idle
 `cancel` is a no-op, and stdin EOF shuts the server down cleanly (exit 0)
-without ever touching the network. The `grep -o` keeps only the stable event
-tag, since a line also carries the event's payload fields.
+without ever touching the network. The snapshot records the startup MCP status
+and the resulting command error.
 
-```mooncram
-$ printf '{"command":"reboot"}\n{"command":"cancel"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep -o '"event":"command_error"'
-"event":"command_error"
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"command":"reboot"}' '{"command":"cancel"}' | DEEPSEEK=test-key moonx moonbitlang/openseek serve
+{"event":"mcp_status","status":{"configs":[],"servers":[]}}
+{"event":"command_error","error":"unknown command: reboot"}
 ```
 
 A steer with no turn to land in is rejected rather than converted into a prompt:
@@ -493,15 +527,17 @@ an engine must never start a turn the controller did not ask for. The rejection
 carries a `steer_dropped` event so the controller can ask the user to resubmit —
 and, usefully for this offline test, no turn means no network.
 
-```mooncram
-$ printf '{"command":"steer","text":"too late"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep -o '"event":"steer_dropped"'
-"event":"steer_dropped"
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"command":"steer","text":"too late"}' | DEEPSEEK=test-key moonx moonbitlang/openseek serve
+{"event":"mcp_status","status":{"configs":[],"servers":[]}}
+{"event":"steer_dropped","content":"too late"}
 ```
 
 Tagged steering keeps its submission id in the rejection receipt:
 
-```mooncram
-$ printf '{"command":"steer","text":"too late","submission_id":"late-steer"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep '"event":"steer_dropped"'
+```mooncram moonbitlang/openseek
+$ moonx fixtures/stdin.mbtx '{"command":"steer","text":"too late","submission_id":"late-steer"}' | DEEPSEEK=test-key moonx moonbitlang/openseek serve
+{"event":"mcp_status","status":{"configs":[],"servers":[]}}
 {"event":"steer_dropped","content":"too late","submission_id":"late-steer"}
 ```
 
@@ -510,88 +546,68 @@ The engine reports what it holds of its MCP servers without being asked: an
 changes. Every one carries the whole state, so a controller keeps the latest.
 With nothing configured there are no configs and no servers:
 
-```mooncram
-$ env DEEPSEEK=test-key openseek.exe serve </dev/null 2>/dev/null | grep '"event":"mcp_status"'
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key moonx moonbitlang/openseek serve
 {"event":"mcp_status","status":{"configs":[],"servers":[]}}
 ```
 
-A server that cannot start is listed with its failure rather than left out (the `grep -o` stops before the error text, which
-is the operating system's):
+A server that cannot start is listed with its failure rather than left out.
+The diagnostic text varies by operating system; the server identity and failed
+state remain part of the snapshot:
 
-```mooncram
-$ sh <<'EOF'
-> printf '{"mcpServers":{"notes":{"command":"openseek-no-such-mcp-server"}}}' > mcp.json
-> env DEEPSEEK=test-key openseek.exe serve --mcp-config mcp.json </dev/null 2>/dev/null | grep -o '"event":"mcp_status".*"state":"failed"'
-> rm -f mcp.json
-> EOF
-"event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
+```mooncram moonbitlang/openseek
+$ DEEPSEEK=test-key moonx moonbitlang/openseek serve --mcp-config fixtures/mcp/failed.json
+{"event":"mcp_connect_failed","server":"notes","error":"*"} (glob)
+{"event":"mcp_tools_registered","servers":1,"tools":0,"names":[]}
+{"event":"mcp_status","status":{"configs":\[{"path":"fixtures/mcp/failed.json","state":"loaded"}\],"servers":\[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed","error":"*"}\]}} (glob)
 ```
 
 `serve` takes no positional; a stray task is rejected by the parser before
 anything runs.
 
-```mooncram
-$ sh <<'EOF'
-> stderr=$(mktemp)
-> if env DEEPSEEK=test-key openseek.exe serve "do something" 2> "$stderr" >/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> sed -n '1p' "$stderr"
-> rm -f "$stderr"
-> EOF
-exit-non-zero
+```mooncram moonbitlang/openseek
+$ DEEPSEEK= KIMI= OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek serve "do something"
+@STDOUT (empty)
+@STDERR
 error: unexpected value 'do something' found; no more were expected
+
+Usage: openseek serve [options]
+
+Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+
+Options:
+  -h, --help                                                   Show help information.
+  --api-key <api-key>                                          API key for the selected chat provider. [default: ]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                                      Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                                        Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                                          Create or resume this durable session id.
+  --session-root <session-root>                                Directory containing durable OpenSeek sessions. [default: .openseek]
+  --no-session                                                 Run ephemerally: do not record this server's conversation to a durable session.
+  --review-gate                                                On goal(met), audit the worktree against the goal with a review subagent and inject the findings as an advisory notice.
+  --dir <dir>                                                  Workspace directory for relative paths; creates only the final path component if its parent exists. [default: .]
+  --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
+  --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
+  --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
+  --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package, and a new session's system prompt names the servers. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
+  --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
+  --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run). [env: OPENSEEK_APPROVAL] [default: never]
+"" (escaped)
+[1]
 ```
 
 ## MoonBit CLI Argument Parsing Pattern
 
 Native MoonBit CLIs should use `moonbitlang/core/argparse` and call
 `@argparse.parse(...)` on a `Command` instead of hand-rolling argument parsing
-with `@env.args()`. This tiny package verifies the current `FlagArg`,
+with `@env.args()`. This standalone script verifies the current `FlagArg`,
 `PositionArg`, and `Matches` shape.
 
 ```mooncram
-$ sh <<'EOF'
-> tmp=$(mktemp -d)
-> mkdir -p "$tmp/cmd/echoargs"
-> cat > "$tmp/moon.mod" <<'MOD'
-> name = "example/cli"
-> version = "0.1.0"
-> MOD
-> cat > "$tmp/cmd/echoargs/moon.pkg" <<'PKG'
-> import {
->   "moonbitlang/core/argparse"
-> }
-> warnings = "+unnecessary_annotation"
-> supported_targets = "+native"
-> options(
->   "is-main": true,
-> )
-> PKG
-> cat > "$tmp/cmd/echoargs/main.mbt" <<'MBT'
-> ///|
-> fn main raise {
->   let matches = @argparse.parse(
->     Command(
->       "echoargs",
->       about="Tiny argparse example.",
->       flags=[FlagArg("stdin", long="stdin", about="Read stdin.")],
->       positionals=[PositionArg("input", default_values=["-"])],
->     ),
->   )
->   let input = match matches.values.get("input") {
->     Some([value, ..]) => value
->     _ => fail("missing input")
->   }
->   let stdin = match matches.flags.get("stdin") {
->     Some(value) => value
->     None => false
->   }
->   println("input=\{input}")
->   println("stdin=\{stdin}")
-> }
-> MBT
-> (cd "$tmp" && moon run --target native cmd/echoargs -- --stdin sample.toml)
-> rm -rf "$tmp"
-> EOF
+$ moonx fixtures/argparse-example.mbtx --stdin sample.toml
 input=sample.toml
 stdin=true
 ```
@@ -601,15 +617,7 @@ stdin=true
 The validation command accepts repeated paths. Explicit arguments replace the
 environment fallback, and empty arguments do not name a file.
 
-```mooncram
-$ sh <<'EOF'
-> d=$(mktemp -d)
-> cd "$d"
-> printf '{"mcpServers":{}}' > first.json
-> printf '{"mcpServers":{}}' > second.json
-> OPENSEEK_MCP_CONFIG=missing.json openseek.exe mcp --mcp-config first.json --mcp-config= --mcp-config=second.json
-> cd /
-> rm -rf "$d"
-> EOF
-first.json, second.json: no servers configured
+```mooncram moonbitlang/openseek
+$ OPENSEEK_MCP_CONFIG=missing.json moonx moonbitlang/openseek mcp --mcp-config fixtures/mcp/first.json --mcp-config= --mcp-config=fixtures/mcp/second.json
+fixtures/mcp/first.json, fixtures/mcp/second.json: no servers configured
 ```

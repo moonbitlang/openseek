@@ -1,0 +1,25 @@
+---
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/stdio",
+}
+---
+
+///|
+async fn main {
+  let read = @fs.realpath("../../share/workflow/read.mbtx")
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-testcli-"))
+  defer @fs.rmdir(dir, recursive=true)
+  @fs.write_text("\{dir}/log:12", "kept", create_mode=CreateNew)
+  let result = @shell.Cmd(
+    "moon",
+    ["run", "--quiet", read, "--", "--literal", "log:12"],
+    cwd=dir,
+    env={ "MOON_WORK": "off" },
+  ).output()
+  @stdio.stdout.text.write(result.stdout())
+  @stdio.stderr.text.write(result.stderr())
+  println("exit=\{result.exit_code()}")
+}
