@@ -2,8 +2,6 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/json",
-  "moonbitlang/core/path",
   "moonbitlang/core/async/shell",
   "moonbitlang/core/async/stdio",
 }
@@ -11,11 +9,10 @@ import {
 
 ///|
 async fn main {
-  let root = @fs.realpath("../..")
+  let engine = @fs.realpath("../..")
   let temporary = @fs.tmpdir(prefix="openseek-testcli-")
   defer @fs.rmdir(temporary, recursive=true)
   let dir = @fs.realpath(temporary)
-  let engine = build(root)
   let base = ["run", "--no-session", "--dir", "\{dir}/ws"]
   let json = [..base, "--input-format", "json"]
   let echo =
@@ -23,38 +20,58 @@ async fn main {
     #|
   @fs.mkdir("\{dir}/out")
   @fs.mkdir("\{dir}/ws")
-  put("\{dir}/out/existing.json", "keep\n")
+  @fs.write_text(
+    "\{dir}/out/existing.json",
+    "keep\n",
+    create_mode=CreateOrTruncate,
+  )
   let managed = [..json, "--cancel-on-stdin-eof"]
   let result = @shell.Cmd(
-    "moonrun",
-    [engine, "--", ..managed, "--dir", "/"],
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", engine, "--", ..managed, "--dir", "/",
+    ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
     stdin=Text(echo),
   ).output()
-  assert_eq(result.exit_code(), 1)
-  println(first_line(result.stderr()))
+  println("exit=\{result.exit_code()}")
+  println(result.stderr().split("\n").next().unwrap_or(""))
   let result = @shell.Cmd(
-    "moonrun",
-    [engine, "--", ..managed, "--mcp-config", "\{dir}/mcp.json"],
+    "moon",
+    [
+      "run",
+      "--quiet",
+      "--target",
+      "wasm",
+      engine,
+      "--",
+      ..managed,
+      "--mcp-config",
+      "\{dir}/mcp.json",
+    ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
     stdin=Text(echo),
   ).output()
-  assert_eq(result.exit_code(), 1)
-  emit(result.stderr())
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr())
   let result = @shell.Cmd(
-    "moonrun",
-    [engine, "--", ..managed],
+    "moon",
+    ["run", "--quiet", "--target", "wasm", engine, "--", ..managed],
     cwd=dir,
     env={ "OPENSEEK_MCP_CONFIG": "\{dir}/mcp.json", "MOON_WORK": "off" },
     stdin=Text(echo),
   ).output()
-  assert_eq(result.exit_code(), 0)
-  emit(result.stderr())
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr())
   let result = @shell.Cmd(
-    "moonrun",
+    "moon",
     [
+      "run",
+      "--quiet",
+      "--target",
+      "wasm",
       engine,
       "--",
       ..managed,
@@ -67,13 +84,17 @@ async fn main {
     env={ "MOON_WORK": "off" },
     stdin=Text(echo),
   ).output()
-  assert_eq(result.exit_code(), 1)
-  emit(result.stderr().replace_all(old=dir, new="DIR"))
-  assert_false(@fs.exists("\{dir}/elsewhere.json"))
-  println("nothing written elsewhere")
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr().replace_all(old=dir, new="DIR"))
+  println("outside_result_exists=\{@fs.exists("\{dir}/elsewhere.json")}")
+
   let result = @shell.Cmd(
-    "moonrun",
+    "moon",
     [
+      "run",
+      "--quiet",
+      "--target",
+      "wasm",
       engine,
       "--",
       ..managed,
@@ -86,12 +107,16 @@ async fn main {
     env={ "MOON_WORK": "off" },
     stdin=Text(echo),
   ).output()
-  assert_eq(result.exit_code(), 1)
-  emit(result.stderr().replace_all(old=dir, new="DIR"))
-  emit(@fs.read_text("\{dir}/out/existing.json"))
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stderr().replace_all(old=dir, new="DIR"))
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/out/existing.json"))
   let result = @shell.Cmd(
-    "moonrun",
+    "moon",
     [
+      "run",
+      "--quiet",
+      "--target",
+      "wasm",
       engine,
       "--",
       ..managed,
@@ -104,49 +129,6 @@ async fn main {
     env={ "MOON_WORK": "off" },
     stdin=Text(echo),
   ).output()
-  assert_eq(result.exit_code(), 0)
-  emit(@fs.read_text("\{dir}/out/result.json"))
-}
-
-///|
-async fn emit(text : String) -> Unit {
-  @stdio.stdout.text.write(text)
-}
-
-///|
-async fn put(path : String, text : String) -> Unit {
-  @fs.mkdir(
-    @path.Path(path).dirname().to_string(),
-    recursive=true,
-    allow_exist=true,
-  )
-  @fs.write_text(path, text, create_mode=CreateOrTruncate)
-}
-
-///|
-fn first_line(text : String) -> String {
-  text.split("\n").next().unwrap_or("").to_owned()
-}
-
-///|
-async fn build(path : String) -> String {
-  let cwd = if @fs.kind(path) is Directory {
-    path
-  } else {
-    @path.Path(path).dirname().to_string()
-  }
-  let result = @shell.Cmd(
-    "moon",
-    ["build", "--target", "wasm", "--output-json", path],
-    cwd~,
-  ).output()
-  result.check()
-  for line in result.stdout().split("\n") {
-    if !line.is_empty() &&
-      @json.parse(line)
-      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
-      return wasm
-    }
-  }
-  fail("moon build returned no executable artifact")
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(@fs.read_text("\{dir}/out/result.json"))
 }

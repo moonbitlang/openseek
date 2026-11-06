@@ -72,9 +72,11 @@ A preset names its session only once it records something, so the modelless
 
 ```mooncram
 $ moonx fixtures/refused-request-result.mbtx
+exit=1
 error: explore requires a non-empty query
 {"version":1,"request_id":"r-3","status":"failed","reason":"explore requires a non-empty query"}
-no ws
+workspace_exists=false
+exit=0
 {"version":1,"kind":"echo","status":"completed","output":0}
 ```
 
@@ -100,6 +102,7 @@ error: session p-sr-1 holds no claim; it was accepted already
 exit 1
 error: --claim names a claimed session, so it needs --session
 exit 1
+exit=1
 error: --claim is for a --kind run: the general agent starts its own session
 ```
 
@@ -113,9 +116,11 @@ failed run.
 
 ```mooncram
 $ moonx fixtures/managed-run.mbtx
-exit 0
+exit=0
 {"version":1,"kind":"echo","status":"completed","output":[1,2]}
+exit=0
 {"version":1,"kind":"echo","status":"completed","output":"inherited"}
+exit=1
 error: a delegated run (--cancel-on-stdin-eof) refuses every escalation: --approval must be never
 error: stdin closed before a request arrived
 exit 1
@@ -135,13 +140,19 @@ refused and left untouched.
 
 ```mooncram
 $ moonx fixtures/delegated-capabilities.mbtx
+exit=1
 error: argument '--dir' cannot be used multiple times
+exit=1
 error: a delegated run (--cancel-on-stdin-eof) does not take --mcp-config: it gets only what its parent's launch grants
+exit=0
 MCP config ignored: a delegated run starts no MCP servers its parent did not grant
+exit=1
 error: --result-file must be inside --result-root DIR/out
-nothing written elsewhere
+outside_result_exists=false
+exit=1
 error: --result-file must name a new file: DIR/out/existing.json already exists
 keep
+exit=0
 {"version":1,"kind":"echo","status":"completed","output":0}
 ```
 
@@ -150,17 +161,19 @@ step ceiling: the environment is parsed only when it would apply.
 
 ```mooncram
 $ moonx fixtures/request-step-limit.mbtx
+exit=1
 error: an API key is required for deepseek-flash: pass --api-key
 ```
 
 ## Closing stdin Cancels a Managed Run, Which Still Reports
 
-The model endpoint is a closed local port, so the run is still retrying when
-the parent closes stdin after a second. The run is cancelled and its result
+The model endpoint is a closed local port. The parent waits for the first
+retry diagnostic before closing stdin. The run is cancelled and its result
 says `interrupted`, with the usage it recorded (none).
 
 ```mooncram
 $ moonx fixtures/cancel-on-stdin-eof.mbtx
+retry_started=true
 exit 1
 {"version":1,"request_id":"r-9","status":"interrupted","reason":"cancelled","usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":0},"steps":0}
 ```
@@ -170,11 +183,14 @@ exit 1
 A delegated general run holds the workspace's lease until it ends; a second
 one in the same workspace is refused at once. A parallel writer should be a
 `worker`, which gets its own worktree. The MoonBit fixture starts the two child
-processes concurrently and holds the first child's stdin open while the second
-attempts to acquire the lease.
+processes concurrently. It waits for the first child's retry diagnostic and
+holds that child's stdin open while the second attempts to acquire the lease.
 
 ```mooncram
 $ moonx fixtures/workspace-lease.mbtx
+retry_started=true
+second_exit=1
 error: another delegated general run is already working in WORKSPACE; run a worker for parallel writes
+first_exit=1
 {"version":1,"status":"failed","reason":"another delegated general run is already working in WORKSPACE; run a worker for parallel writes"}
 ```

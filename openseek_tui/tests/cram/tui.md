@@ -3,7 +3,7 @@
 Run these examples from the repository root with
 `moon -C openseek_tui testcli test tests/cram`. Simple cases invoke the local
 `cmd/openseek_tui` package directly. The [MoonBit fixtures](fixtures/)
-create temporary sessions and launch the UI through `moonrun`, using the default
+create temporary sessions and launch the UI through `moon run`, using the default
 Wasm backend. They remove their temporary directories after each case.
 
 `openseek_tui` is the dedicated interactive terminal UI; an initial prompt is
@@ -115,8 +115,8 @@ version matches the module and its engine dependency.
 
 Without `moonx` on `PATH` (no MoonBit toolchain), the preflight says so.
 
-```mooncram
-$ moonx fixtures/missing-engine.mbtx
+```mooncram moonbitlang/openseek_tui
+$ PATH= DEEPSEEK=test-key OPENSEEK_MODEL=deepseek-flash moonx moonbitlang/openseek_tui/cmd/openseek_tui
 error: engine 'moonx moonbitlang/openseek@0.7.5' is not usable: `moonx` was not found on PATH.
 The default engine runs through moonx, part of the MoonBit toolchain; its first launch downloads the pinned openseek release, so it needs network access to mooncakes.io.
 Install MoonBit, or pass --engine <path> to an openseek binary.

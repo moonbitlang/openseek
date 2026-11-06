@@ -2,22 +2,31 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/json",
-  "moonbitlang/core/path",
   "moonbitlang/core/async/shell",
 }
 ---
 
 ///|
 async fn main {
-  let root = @fs.realpath("../..")
+  let engine = @fs.realpath("../..")
   let temporary = @fs.tmpdir(prefix="openseek-testcli-")
   defer @fs.rmdir(temporary, recursive=true)
   let dir = @fs.realpath(temporary)
-  let engine = build(root)
   let result = @shell.Cmd(
-    "moonrun",
-    [engine, "--", "run", "--no-session", "--api-url", ClosedEndpoint, "say hi"],
+    "moon",
+    [
+      "run",
+      "--quiet",
+      "--target",
+      "wasm",
+      engine,
+      "--",
+      "run",
+      "--no-session",
+      "--api-url",
+      ClosedEndpoint,
+      "say hi",
+    ],
     cwd=dir,
     env={
       "DEEPSEEK": "test-key",
@@ -26,33 +35,9 @@ async fn main {
     },
     stdin=Text(""),
   ).output()
-  assert_true(result.exit_code() != 0)
-  assert_false(@fs.exists("\{dir}/.openseek"))
-  println("ephemeral")
+  println("exit=\{result.exit_code()}")
+  println("session_root_exists=\{@fs.exists("\{dir}/.openseek")}")
 }
 
 ///|
 const ClosedEndpoint = "http://127.0.0.1:9/chat/completions"
-
-///|
-async fn build(path : String) -> String {
-  let cwd = if @fs.kind(path) is Directory {
-    path
-  } else {
-    @path.Path(path).dirname().to_string()
-  }
-  let result = @shell.Cmd(
-    "moon",
-    ["build", "--target", "wasm", "--output-json", path],
-    cwd~,
-  ).output()
-  result.check()
-  for line in result.stdout().split("\n") {
-    if !line.is_empty() &&
-      @json.parse(line)
-      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
-      return wasm
-    }
-  }
-  fail("moon build returned no executable artifact")
-}

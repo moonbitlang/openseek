@@ -48,6 +48,7 @@ count, and a `=~ re"…"` regex match for the answer text.
 
 ```mooncram
 $ moonx fixtures/round-trip.mbtx
+exit=0
 real_api_round_trip=true
 finished_with_DONE=true
 ```
@@ -66,6 +67,7 @@ event kind.
 
 ```mooncram
 $ moonx fixtures/lifecycle.mbtx
+exit=0
 events={agent_step, usage, agent_finished}
 ```
 
@@ -77,6 +79,7 @@ of the log — here it is exactly what we asked the model to finish with.
 
 ```mooncram
 $ moonx fixtures/final-answer.mbtx
+exit=0
 final_answer=DONE
 ```
 
@@ -90,6 +93,7 @@ ran and its output flowed back.
 
 ```mooncram
 $ moonx fixtures/tool-result.mbtx
+exit=0
 used_mbtx=true
 mbtx_output_seen=true
 ```

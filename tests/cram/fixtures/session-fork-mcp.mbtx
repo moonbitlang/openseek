@@ -3,19 +3,18 @@ import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/json",
-  "moonbitlang/core/path",
   "moonbitlang/core/async/shell",
 }
 ---
 
 ///|
 async fn main {
-  let root = @fs.realpath("../..")
+  let engine = @fs.realpath("../..")
   let temporary = @fs.tmpdir(prefix="openseek-testcli-")
   defer @fs.rmdir(temporary, recursive=true)
   let dir = @fs.realpath(temporary)
-  let engine = build(root)
-  put(
+  @fs.mkdir("\{dir}/sessions/demo", recursive=true)
+  @fs.write_text(
     "\{dir}/sessions/demo/openseek_session-demo.jsonl",
     (
       #|{"version":1,"id":"demo","system_prompt":"system"}
@@ -23,16 +22,22 @@ async fn main {
       #|{"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
       #|
     ),
+    create_mode=CreateOrTruncate,
   )
-  put(
+  @fs.write_text(
     "\{dir}/mcp.json",
     (
       #|{"mcpServers":{"tracker":{"command":"tracker-mcp"},"host":{"url":"${OPENSEEK_CRAM_UNSET_URL}"}}}
     ),
+    create_mode=CreateOrTruncate,
   )
   let result = @shell.Cmd(
-    "moonrun",
+    "moon",
     [
+      "run",
+      "--quiet",
+      "--target",
+      "wasm",
       engine,
       "--",
       "sessions",
@@ -54,31 +59,13 @@ async fn main {
     },
     stdin=Text(""),
   ).output()
-  assert_eq(result.exit_code(), 0)
-  let session = show_session(engine, dir, "with-mcp")
-  guard session is { "system_prompt": String(prompt), .. } else {
-    fail("missing system prompt")
-  }
-  let wanted = "Configured MCP servers: `tracker`, `host`"
-  assert_true(prompt.contains(wanted))
-  println(wanted)
-}
-
-///|
-async fn put(path : String, text : String) -> Unit {
-  @fs.mkdir(
-    @path.Path(path).dirname().to_string(),
-    recursive=true,
-    allow_exist=true,
-  )
-  @fs.write_text(path, text, create_mode=CreateOrTruncate)
-}
-
-///|
-async fn show_session(engine : String, dir : String, id : String) -> Json {
+  println("exit=\{result.exit_code()}")
   let result = @shell.Cmd(
-    "moonrun",
-    [engine, "--", "sessions", "show", id, "--session-root", dir],
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", engine, "--", "sessions", "show", "with-mcp",
+      "--session-root", dir,
+    ],
     cwd=dir,
     env={
       "DEEPSEEK": "",
@@ -88,29 +75,14 @@ async fn show_session(engine : String, dir : String, id : String) -> Json {
     },
     stdin=Text(""),
   ).output()
-  assert_eq(result.exit_code(), 0)
-  @json.parse(result.stdout())
-}
-
-///|
-async fn build(path : String) -> String {
-  let cwd = if @fs.kind(path) is Directory {
-    path
-  } else {
-    @path.Path(path).dirname().to_string()
+  println("exit=\{result.exit_code()}")
+  let session = @json.parse(result.stdout())
+  guard session is { "system_prompt": String(prompt), .. } else {
+    fail("missing system prompt")
   }
-  let result = @shell.Cmd(
-    "moon",
-    ["build", "--target", "wasm", "--output-json", path],
-    cwd~,
-  ).output()
-  result.check()
-  for line in result.stdout().split("\n") {
-    if !line.is_empty() &&
-      @json.parse(line)
-      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
-      return wasm
+  for line in prompt.split("\n") {
+    if line.has_prefix("Configured MCP servers:") {
+      println(line.split(".").next().unwrap_or(""))
     }
   }
-  fail("moon build returned no executable artifact")
 }

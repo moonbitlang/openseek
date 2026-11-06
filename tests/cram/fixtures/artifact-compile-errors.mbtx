@@ -2,8 +2,6 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/json",
-  "moonbitlang/core/path",
   "moonbitlang/core/async/shell",
 }
 ---
@@ -15,6 +13,7 @@ async fn main {
   defer @fs.rmdir(temporary, recursive=true)
   let dir = @fs.realpath(temporary)
   let project = "\{dir}/session/scratch/app"
+  @fs.mkdir(project, recursive=true)
   let output = "\{dir}/session/scratch/artifact"
   let manifest =
     #|name = "example/artifact"
@@ -24,79 +23,60 @@ async fn main {
     #|options(link: { "js": { "format": "iife" } })
   let source =
     #|fn main { println("The application has loaded") }
-  put("\{project}/moon.mod", manifest)
-  put("\{project}/moon.pkg", package_config)
-  put("\{project}/main.mbt", source)
-  let builder = build("\{root}/share/artifact/build.mbtx")
+  @fs.write_text("\{project}/moon.mod", manifest, create_mode=CreateOrTruncate)
+  @fs.write_text(
+    "\{project}/moon.pkg",
+    package_config,
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_text("\{project}/main.mbt", source, create_mode=CreateOrTruncate)
+  let builder = "\{root}/share/artifact/build.mbtx"
 
-  put("\{project}/main.mbt", "fn main { missing_function() }")
+  @fs.write_text(
+    "\{project}/main.mbt",
+    "fn main { missing_function() }",
+    create_mode=CreateOrTruncate,
+  )
   let broken = @shell.Cmd(
-    "moonrun",
-    [builder, "--", project, output, "broken.html"],
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, output, "broken.html",
+    ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
     stdin=Text(""),
   ).output()
-  assert_eq(broken.exit_code(), 1)
-  assert_true(broken.stderr().contains("missing_function"))
-  assert_true(broken.stderr().contains("\{project}/main.mbt"))
-  assert_unpublished(output, "broken.html")
-  println("compiler error: no artifact published")
+  println("exit=\{broken.exit_code()}")
+  println(
+    "undefined_function_reported=\{broken.stderr().contains("missing_function")}",
+  )
+  println(
+    "diagnostic_names_source=\{broken.stderr().contains("\{project}/main.mbt")}",
+  )
+  println("html_exists=\{@fs.exists("\{output}/broken.html")}")
+  println("source_exists=\{@fs.exists("\{output}/broken.html.source")}")
 
   let warning_source =
     #|fn main {
     #|  let unused = 42
     #|  println("Would otherwise build")
     #|}
-  put("\{project}/main.mbt", warning_source)
+  @fs.write_text(
+    "\{project}/main.mbt",
+    warning_source,
+    create_mode=CreateOrTruncate,
+  )
   let warning = @shell.Cmd(
-    "moonrun",
-    [builder, "--", project, output, "warning.html"],
+    "moon",
+    [
+      "run", "--quiet", "--target", "wasm", builder, "--", project, output, "warning.html",
+    ],
     cwd=dir,
     env={ "MOON_WORK": "off" },
     stdin=Text(""),
   ).output()
-  assert_eq(warning.exit_code(), 1)
-  assert_true(warning.stderr().contains("unused_value"))
-  assert_unpublished(output, "warning.html")
-  println("compiler warning: no artifact published")
-}
-
-///|
-async fn put(path : String, text : String) -> Unit {
-  @fs.mkdir(
-    @path.Path(path).dirname().to_string(),
-    recursive=true,
-    allow_exist=true,
-  )
-  @fs.write_text(path, text, create_mode=CreateOrTruncate)
-}
-
-///|
-async fn assert_unpublished(output : String, name : String) -> Unit {
-  assert_false(@fs.exists("\{output}/\{name}"))
-  assert_false(@fs.exists("\{output}/\{name}.source"))
-}
-
-///|
-async fn build(path : String) -> String {
-  let cwd = if @fs.kind(path) is Directory {
-    path
-  } else {
-    @path.Path(path).dirname().to_string()
-  }
-  let result = @shell.Cmd(
-    "moon",
-    ["build", "--target", "wasm", "--output-json", path],
-    cwd~,
-  ).output()
-  result.check()
-  for line in result.stdout().split("\n") {
-    if !line.is_empty() &&
-      @json.parse(line)
-      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
-      return wasm
-    }
-  }
-  fail("moon build returned no executable artifact")
+  println("exit=\{warning.exit_code()}")
+  println("unused_value_reported=\{warning.stderr().contains("unused_value")}")
+  println("html_exists=\{@fs.exists("\{output}/warning.html")}")
+  println("source_exists=\{@fs.exists("\{output}/warning.html.source")}")
 }

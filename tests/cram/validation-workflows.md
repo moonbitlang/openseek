@@ -36,13 +36,20 @@ The glob matches only the runtime source location and compiler exit code.
 
 ```mooncram
 $ moonx fixtures/validation-workflows.mbtx
+exit=0
+exit=0
 Total tests: 1, passed: 1, failed: 0.
+exit=0
 Total tests: 1, passed: 1, failed: 0.
+exit=0
 pub fn answer() -> Int32
 ///|
 pub fn answer() -> Int32 {
   42
 }
+exit=0
+exit=1
 Failure(* FAILED: moon check failed (exit=*)) (glob)
+exit=1
 Failure(* FAILED: moon check failed (exit=*)) (glob)
 ```

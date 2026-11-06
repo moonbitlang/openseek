@@ -2,8 +2,9 @@
 
 Run `moon testcli test tests/cram/cli.md` from the repository root.
 Simple cases name the local package directly. [Standalone MoonBit scripts](fixtures/) handle cases that need temporary
-files or process control. Each script builds and runs the real local engine for
-Wasm and cleans up its temporary directory.
+files or process control. They invoke `moon run` to build and run the real
+local engine for Wasm, print observations for the snapshots, and clean up
+their temporary directories.
 
 `openseek` is the headless automation CLI: a subcommand tree under `run`,
 `serve`, `mcp`, and `sessions` (the interactive terminal UI
@@ -374,9 +375,13 @@ both `sessions show` calls strip `ts` to stay deterministic.
 
 ```mooncram
 $ moonx fixtures/sessions-offline.mbtx
+exit=0
 demo
+exit=0
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
+exit=0
 compacted session demo events 1..2; last_sequence=3
+exit=0
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},{"sequence":3,"item":{"kind":"summary","payload":{"content":"hello and answer","from_sequence":1,"to_sequence":2}}}]}
 ```
 
@@ -394,15 +399,18 @@ terminal event; an id that already exists is never replaced.
 
 ```mooncram
 $ moonx fixtures/session-fork.mbtx
+exit=0
 retry
+exit=0
 user
 terminal
 runtime_notice
-sessions/retry/scratch
+fork_scratch_in_prompt=true
+exit=1
 error: session retry already exists
-exit-non-zero
+exit=1
 error: no turn of session demo ends at sequence 1
-exit-non-zero
+exit=0
 demo
 retry
 ```
@@ -414,6 +422,8 @@ does not have is still named.
 
 ```mooncram
 $ moonx fixtures/session-fork-mcp.mbtx
+exit=0
+exit=0
 Configured MCP servers: `tracker`, `host`
 ```
 
@@ -438,9 +448,10 @@ budget, and the suite's runtime should not track its default.
 
 ```mooncram
 $ moonx fixtures/default-session.mbtx
-exit-non-zero
+exit=1
 1
 0
+exit=0
 cli-<stamp>
 ```
 
@@ -454,7 +465,9 @@ rendered nothing with no error to explain it.
 
 ```mooncram
 $ moonx fixtures/session-log-levels.mbtx
+exit=1
 warn: 1
+exit=1
 error: 1
 ```
 
@@ -463,7 +476,8 @@ behind.
 
 ```mooncram
 $ moonx fixtures/no-session.mbtx
-ephemeral
+exit=1
+session_root_exists=false
 ```
 
 ## `--dir` Selects The Workspace Root
@@ -475,11 +489,13 @@ it.
 
 ```mooncram
 $ moonx fixtures/workspace-directory.mbtx
-exit-non-zero
-dir-created
+exit=1
+workspace_created=true
 1
+exit=0
 cli-<stamp>
-session-dir-created
+exit=0
+session_workspace_created=true
 0
 ```
 
@@ -505,6 +521,7 @@ tag, since a line also carries the event's payload fields.
 
 ```mooncram
 $ moonx fixtures/serve-unknown-command.mbtx
+exit=0
 "event":"command_error"
 ```
 
@@ -516,6 +533,7 @@ and, usefully for this offline test, no turn means no network.
 
 ```mooncram
 $ moonx fixtures/serve-late-steer.mbtx
+exit=0
 "event":"steer_dropped"
 ```
 
@@ -523,6 +541,7 @@ Tagged steering keeps its submission id in the rejection receipt:
 
 ```mooncram
 $ moonx fixtures/serve-tagged-late-steer.mbtx
+exit=0
 {"event":"steer_dropped","content":"too late","submission_id":"late-steer"}
 ```
 
@@ -533,6 +552,7 @@ With nothing configured there are no configs and no servers:
 
 ```mooncram
 $ moonx fixtures/serve-mcp-status.mbtx
+exit=0
 {"event":"mcp_status","status":{"configs":[],"servers":[]}}
 ```
 
@@ -541,6 +561,7 @@ is the operating system's):
 
 ```mooncram
 $ moonx fixtures/serve-failed-mcp-status.mbtx
+exit=0
 "event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
 ```
 
@@ -590,6 +611,7 @@ with `@env.args()`. This tiny package verifies the current `FlagArg`,
 
 ```mooncram
 $ moonx fixtures/argparse-example.mbtx
+exit=0
 input=sample.toml
 stdin=true
 ```
@@ -601,5 +623,6 @@ environment fallback, and empty arguments do not name a file.
 
 ```mooncram
 $ moonx fixtures/multiple-mcp-configs.mbtx
+exit=0
 first.json, second.json: no servers configured
 ```

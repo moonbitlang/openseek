@@ -48,9 +48,12 @@ fence, or an exact remote package version. Commands occupy one source line.
 4. For cases needing temporary files or process control, add one standalone
    `.mbtx` under `fixtures/`, named after the behavior being tested. Invoke it
    directly, for example `moonx fixtures/cancel-on-stdin-eof.mbtx`.
-   Put setup, the command, and assertions together in that script, and clean up
-   temporary directories with `defer`. Use `@shell.Cmd` for ordinary process
-   calls; use `@process` pipes when stdin timing is the behavior under test.
+   Put setup and commands together in that script, and clean up temporary
+   directories with `defer`. Use `@shell.Cmd("moon", ["run", "--quiet", ...])`
+   to build and run the real program; no artifact-path helper is needed. Print
+   the observed exit codes, relevant output, and file properties so expectations
+   stay in the Markdown snapshot. Use `@process` pipes when stdin timing is
+   the behavior under test.
    Keep simple commands and pipelines directly in the document.
 5. Run `check`, then `test`, review the output, and link the guide from usage docs.
    New Markdown files under this directory are discovered by the recipe and CI.

@@ -1,9 +1,8 @@
 ---
 import {
+  "moonbitlang/core/async/stdio",
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/json",
-  "moonbitlang/core/path",
   "moonbitlang/core/async/shell",
 }
 ---
@@ -15,6 +14,7 @@ async fn main {
   defer @fs.rmdir(temporary, recursive=true)
   let dir = @fs.realpath(temporary)
   let project = "\{dir}/session/scratch/app"
+  @fs.mkdir(project, recursive=true)
   let output = "\{dir}/session/scratch/artifact"
   let manifest =
     #|name = "example/artifact"
@@ -24,73 +24,37 @@ async fn main {
     #|options(link: { "js": { "format": "iife" } })
   let source =
     #|fn main { println("The application has loaded") }
-  put("\{project}/moon.mod", manifest)
-  put("\{project}/moon.pkg", package_config)
-  put("\{project}/main.mbt", source)
-  let builder = build("\{root}/share/artifact/build.mbtx")
+  @fs.write_text("\{project}/moon.mod", manifest, create_mode=CreateOrTruncate)
+  @fs.write_text(
+    "\{project}/moon.pkg",
+    package_config,
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_text("\{project}/main.mbt", source, create_mode=CreateOrTruncate)
+  let builder = "\{root}/share/artifact/build.mbtx"
 
   for
     template in [
       "<div id=\"app\"></div>", "<!-- openseek:script --><!-- openseek:script -->",
     ] {
-    put("\{project}/index.html", template)
-    expected_failure(
-      @shell.Cmd(
-        "moonrun",
-        [builder, "--", project, output, "invalid.html"],
-        cwd=dir,
-        env={ "MOON_WORK": "off" },
-        stdin=Text(""),
-      ).output(),
-      "index.html must contain exactly one <!-- openseek:script --> marker",
+    @fs.write_text(
+      "\{project}/index.html",
+      template,
+      create_mode=CreateOrTruncate,
     )
-    assert_unpublished(output, "invalid.html")
+    let failure = @shell.Cmd(
+      "moon",
+      [
+        "run", "--quiet", "--target", "wasm", builder, "--", project, output, "invalid.html",
+      ],
+      cwd=dir,
+      env={ "MOON_WORK": "off" },
+      stdin=Text(""),
+    ).output()
+    println("exit=\{failure.exit_code()}")
+    @stdio.stdout.text.write(failure.stdout())
+    @stdio.stdout.text.write(failure.stderr())
+    println("html_exists=\{@fs.exists("\{output}/invalid.html")}")
+    println("source_exists=\{@fs.exists("\{output}/invalid.html.source")}")
   }
-}
-
-///|
-async fn put(path : String, text : String) -> Unit {
-  @fs.mkdir(
-    @path.Path(path).dirname().to_string(),
-    recursive=true,
-    allow_exist=true,
-  )
-  @fs.write_text(path, text, create_mode=CreateOrTruncate)
-}
-
-///|
-fn expected_failure(result : @shell.Output, message : String) -> Unit raise {
-  assert_eq(result.exit_code(), 1)
-  assert_eq(result.stdout(), "")
-  assert_true(result.stderr().contains(message))
-  println(message)
-}
-
-///|
-async fn assert_unpublished(output : String, name : String) -> Unit {
-  assert_false(@fs.exists("\{output}/\{name}"))
-  assert_false(@fs.exists("\{output}/\{name}.source"))
-}
-
-///|
-async fn build(path : String) -> String {
-  let cwd = if @fs.kind(path) is Directory {
-    path
-  } else {
-    @path.Path(path).dirname().to_string()
-  }
-  let result = @shell.Cmd(
-    "moon",
-    ["build", "--target", "wasm", "--output-json", path],
-    cwd~,
-  ).output()
-  result.check()
-  for line in result.stdout().split("\n") {
-    if !line.is_empty() &&
-      @json.parse(line)
-      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
-      return wasm
-    }
-  }
-  fail("moon build returned no executable artifact")
 }

@@ -2,8 +2,9 @@
 
 These cases exercise the public artifact scripts on real temporary MoonBit
 projects. Each command selects one [standalone MoonBit script](fixtures/)
-with its own directory, removed on success or failure. The scenario checks exit
-statuses and generated files; testcli checks the output shown here.
+with its own directory, removed on success or failure. Each scenario prints observed exit
+statuses, diagnostics, and generated-file properties; testcli compares them
+with the snapshots below.
 
 Run this document from the repository root:
 
@@ -21,10 +22,18 @@ the original page unchanged.
 
 ````mooncram
 $ moonx fixtures/artifact-build.mbtx
+exit=0
 ```openseek-file artifact
 scratch/artifact/chart-v1.html
 ```
-artifact already exists; choose a new filename
+has_script=true
+has_application=true
+source_preserved=true
+saved_build_cache=false
+saved_dependency_cache=false
+exit=1
+Failure(build.mbtx:* FAILED: artifact already exists; choose a new filename) (glob)
+original_page_preserved=true
 ````
 
 ## Reject invalid output paths
@@ -34,8 +43,13 @@ rejected before anything is published.
 
 ```mooncram
 $ moonx fixtures/artifact-invalid-output.mbtx
-output directory must not be empty
-choose one new .html filename, without a directory
+exit=1
+Failure(build.mbtx:* FAILED: output directory must not be empty) (glob)
+html_exists=false
+source_exists=false
+exit=1
+Failure(build.mbtx:* FAILED: choose one new .html filename, without a directory) (glob)
+outside_html_exists=false
 ```
 
 ## Preserve a custom template and restore its source
@@ -48,15 +62,24 @@ The first page must remain byte-for-byte unchanged.
 
 ````mooncram
 $ moonx fixtures/artifact-restore.mbtx
+exit=0
 ```openseek-file artifact
 scratch/artifact/chart-v1.html
 ```
+exit=0
 ```openseek-file artifact
 scratch/artifact/answer-v2.html
 ```
+has_mount=true
+has_styles=true
+script_tag_escaped=true
+marker_remaining=false
+exit=0
 ```openseek-file artifact
 scratch/artifact/answer-v3.html
 ```
+restored_page_exists=true
+original_page_preserved=true
 ````
 
 ## Require exactly one template marker
@@ -66,20 +89,33 @@ source directory.
 
 ```mooncram
 $ moonx fixtures/artifact-invalid-markers.mbtx
-index.html must contain exactly one <!-- openseek:script --> marker
-index.html must contain exactly one <!-- openseek:script --> marker
+exit=1
+Failure(build.mbtx:* FAILED: index.html must contain exactly one <!-- openseek:script --> marker) (glob)
+html_exists=false
+source_exists=false
+exit=1
+Failure(build.mbtx:* FAILED: index.html must contain exactly one <!-- openseek:script --> marker) (glob)
+html_exists=false
+source_exists=false
 ```
 
 ## Do not publish after compiler errors or warnings
 
 The scenario compiles an undefined function and then an unused variable. It
-checks the compiler diagnostics and verifies that neither attempt publishes
-an HTML/source pair. These summaries are printed only after those assertions.
+prints whether the diagnostics name the invalid source and whether either
+attempt leaves an HTML/source pair. The expected values are recorded below.
 
 ```mooncram
 $ moonx fixtures/artifact-compile-errors.mbtx
-compiler error: no artifact published
-compiler warning: no artifact published
+exit=1
+undefined_function_reported=true
+diagnostic_names_source=true
+html_exists=false
+source_exists=false
+exit=1
+unused_value_reported=true
+html_exists=false
+source_exists=false
 ```
 
 ## Respect an existing source directory
@@ -89,7 +125,10 @@ is absent. A failed build must preserve that directory.
 
 ```mooncram
 $ moonx fixtures/artifact-reserved-source.mbtx
-artifact already exists; choose a new filename
+exit=1
+Failure(build.mbtx:* FAILED: artifact already exists; choose a new filename) (glob)
+html_exists=false
+source_directory_preserved=true
 ```
 
 ## Enforce the UTF-8 size limit
@@ -99,7 +138,10 @@ page without publishing an HTML/source pair.
 
 ```mooncram
 $ moonx fixtures/artifact-size-limit.mbtx
-component HTML exceeds the 8 MiB inline preview limit
+exit=1
+Failure(build.mbtx:* FAILED: component HTML exceeds the 8 MiB inline preview limit) (glob)
+html_exists=false
+source_exists=false
 ```
 
 ## Initialize and edit a working project
@@ -112,7 +154,14 @@ outside session scratch is refused.
 
 ```mooncram
 $ moonx fixtures/artifact-author.mbtx
-initialized project and wrote staged data
-reinitialization refused; existing data preserved
-project must be a working directory inside session scratch
+exit=0
+template_copied=true
+build_cache_copied=false
+dependency_cache_copied=false
+exit=0
+staged_data_preserved=true
+exit=1
+staged_data_preserved=true
+exit=1
+Failure(write.mbtx:* FAILED: project must be a working directory inside session scratch) (glob)
 ```

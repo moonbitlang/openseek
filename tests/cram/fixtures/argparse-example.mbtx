@@ -2,8 +2,6 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/json",
-  "moonbitlang/core/path",
   "moonbitlang/core/async/shell",
   "moonbitlang/core/async/stdio",
 }
@@ -14,23 +12,26 @@ async fn main {
   let temporary = @fs.tmpdir(prefix="openseek-testcli-")
   defer @fs.rmdir(temporary, recursive=true)
   let dir = @fs.realpath(temporary)
-  put(
+  @fs.mkdir("\{dir}/cmd/echoargs", recursive=true)
+  @fs.write_text(
     "\{dir}/moon.mod",
     (
       #|name = "example/cli"
       #|version = "0.1.0"
       #|
     ),
+    create_mode=CreateOrTruncate,
   )
-  put(
+  @fs.write_text(
     "\{dir}/cmd/echoargs/moon.pkg",
     (
       #|import { "moonbitlang/core/argparse" }
       #|pkgtype(kind: "executable")
       #|
     ),
+    create_mode=CreateOrTruncate,
   )
-  put(
+  @fs.write_text(
     "\{dir}/cmd/echoargs/main.mbt",
     (
       #|fn main raise {
@@ -40,53 +41,16 @@ async fn main {
       #|  println("stdin=\{matches.flags.get("stdin").unwrap_or(false)}")
       #|}
     ),
+    create_mode=CreateOrTruncate,
   )
-  let cmd = build("\{dir}/cmd/echoargs")
+  let cmd = "\{dir}/cmd/echoargs"
   let result = @shell.Cmd(
-    "moonrun",
-    [cmd, "--", "--stdin", "sample.toml"],
+    "moon",
+    ["run", "--quiet", "--target", "wasm", cmd, "--", "--stdin", "sample.toml"],
     cwd=dir,
     env={ "MOON_WORK": "off" },
     stdin=Text(""),
   ).output()
-  assert_eq(result.exit_code(), 0)
-  emit(result.stdout())
-}
-
-///|
-async fn emit(text : String) -> Unit {
-  @stdio.stdout.text.write(text)
-}
-
-///|
-async fn put(path : String, text : String) -> Unit {
-  @fs.mkdir(
-    @path.Path(path).dirname().to_string(),
-    recursive=true,
-    allow_exist=true,
-  )
-  @fs.write_text(path, text, create_mode=CreateOrTruncate)
-}
-
-///|
-async fn build(path : String) -> String {
-  let cwd = if @fs.kind(path) is Directory {
-    path
-  } else {
-    @path.Path(path).dirname().to_string()
-  }
-  let result = @shell.Cmd(
-    "moon",
-    ["build", "--target", "wasm", "--output-json", path],
-    cwd~,
-  ).output()
-  result.check()
-  for line in result.stdout().split("\n") {
-    if !line.is_empty() &&
-      @json.parse(line)
-      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
-      return wasm
-    }
-  }
-  fail("moon build returned no executable artifact")
+  println("exit=\{result.exit_code()}")
+  @stdio.stdout.text.write(result.stdout())
 }

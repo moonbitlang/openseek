@@ -3,8 +3,6 @@ import {
   "moonbitlang/core/async",
   "moonbitlang/core/env",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/json",
-  "moonbitlang/core/path",
   "moonbitlang/core/async/shell",
   "moonbitlang/core/async/stdio",
 }
@@ -23,61 +21,27 @@ async fn run_case() -> Int32 {
   defer @fs.rmdir(temporary, recursive=true)
   let dir = @fs.realpath(temporary)
   let args = @env.args()[1:].to_owned()
-  put("\{dir}/sample.mbt", "first\nselected\nlast\n")
-  put("\{dir}/note.txt", "whole file")
-  put("\{dir}/empty.txt", "")
+  @fs.write_text(
+    "\{dir}/sample.mbt",
+    "first\nselected\nlast\n",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_text("\{dir}/note.txt", "whole file", create_mode=CreateOrTruncate)
+  @fs.write_text("\{dir}/empty.txt", "", create_mode=CreateOrTruncate)
   @fs.mkdir("\{dir}/dir")
   if args.contains("log:12") {
-    put("\{dir}/log:12", "kept")
+    @fs.write_text("\{dir}/log:12", "kept", create_mode=CreateOrTruncate)
   }
-  put("\{dir}/--weird", "dash")
-  let read = build("\{root}/share/workflow/read.mbtx")
+  @fs.write_text("\{dir}/--weird", "dash", create_mode=CreateOrTruncate)
+  let read = "\{root}/share/workflow/read.mbtx"
   let result = @shell.Cmd(
-    "moonrun",
-    [read, "--", ..args],
+    "moon",
+    ["run", "--quiet", "--target", "wasm", read, "--", ..args],
     cwd=dir,
     env={ "MOON_WORK": "off" },
     stdin=Text(""),
   ).output()
-  emit(result.stdout())
+  @stdio.stdout.text.write(result.stdout())
   @stdio.stderr.text.write(result.stderr())
   result.exit_code()
-}
-
-///|
-async fn emit(text : String) -> Unit {
-  @stdio.stdout.text.write(text)
-}
-
-///|
-async fn put(path : String, text : String) -> Unit {
-  @fs.mkdir(
-    @path.Path(path).dirname().to_string(),
-    recursive=true,
-    allow_exist=true,
-  )
-  @fs.write_text(path, text, create_mode=CreateOrTruncate)
-}
-
-///|
-async fn build(path : String) -> String {
-  let cwd = if @fs.kind(path) is Directory {
-    path
-  } else {
-    @path.Path(path).dirname().to_string()
-  }
-  let result = @shell.Cmd(
-    "moon",
-    ["build", "--target", "wasm", "--output-json", path],
-    cwd~,
-  ).output()
-  result.check()
-  for line in result.stdout().split("\n") {
-    if !line.is_empty() &&
-      @json.parse(line)
-      is { "$message_type": String("artifact"), "path": String(wasm), .. } {
-      return wasm
-    }
-  }
-  fail("moon build returned no executable artifact")
 }
