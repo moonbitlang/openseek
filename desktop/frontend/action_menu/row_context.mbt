@@ -25,7 +25,20 @@ pub fn row_context(
       guard input.definition is Some(definition) else {
         return @rabbita.Val::constant(input.content)
       }
-      @rui.context_menu(id=input.target + ":context", scope => {
+      let (_, emit) = @rabbita.create_state_with_init(
+        init=_ => (false, @cmd.none),
+        update=(_, visible : Bool, _) => (visible, @cmd.none),
+        subscriptions=(visible, _) => {
+          if visible {
+            @dismiss.on_back("row-context-back", level=TopLayer, _ => {
+              @rui.popover_close(input.target + ":context-content")
+            })
+          } else {
+            @sub.none
+          }
+        },
+      )
+      @rui.context_menu(id=input.target + ":context", on_open_change=emit, scope => {
         @html.fragment([
           @rui.context_menu_trigger(
             scope,

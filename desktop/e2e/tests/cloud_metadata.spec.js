@@ -2,8 +2,8 @@ import { test, expect } from './support/test.js';
 import { CloudHarness, sessionA, sessionC } from './support/cloud_harness.js';
 
 async function menu(page, cloud, id = sessionA) {
-  await cloud.row(id).locator('..').hover();
-  await cloud.row(id).locator('..').getByRole('button', { name: 'Conversation actions', exact: true }).click();
+  await cloud.rowContainer(id).hover();
+  await cloud.rowContainer(id).getByRole('button', { name: 'Conversation actions', exact: true }).click();
 }
 
 async function rename(page, cloud, title) {

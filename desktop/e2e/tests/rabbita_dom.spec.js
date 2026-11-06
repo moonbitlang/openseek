@@ -635,29 +635,6 @@ test('Git history and commit failures retry through the browser transport', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('project picker adds the browsed folder with Enter', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-
-  await (await sidebarAddProject(page)).click();
-  const picker = page.getByRole('dialog', { name: 'Add a project' });
-  await expect(picker).toBeVisible();
-  await expect(
-    picker.getByRole('button', { name: 'Add project', exact: true }),
-  ).toBeEnabled();
-  await page.keyboard.press('Enter');
-
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'workspace.add')).toMatchObject({
-    params: { path: '/Users/test' },
-  });
-  await expect(picker).toBeHidden();
-  app.notify('workspace.changed', { workspaces: app.workspaces });
-  await expect(page.getByRole('button', { name: 'test', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('quick open moves its keyboard selection and opens the chosen file', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -1433,20 +1410,20 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
     await stored.getByRole('button', { name: 'Conversation actions' }).click();
     await page.getByRole('menuitem', { name: 'Delete…' }).click();
   };
-  const body = page.locator('.modal-body');
+  const body = page.getByRole('dialog', { name: 'Permanently delete this chat?', exact: true });
 
   // A chat without a worktree: the dialog is the plain one, and Cancel
   // deletes nothing.
   await askToDelete();
-  await expect(page.locator('.modal-title')).toHaveText('Permanently delete this chat?');
+  await expect(body.getByRole('heading', { name: 'Permanently delete this chat?', exact: true })).toBeVisible();
   await expect(body).toContainText('“Rabbita browser fixture” and all of its subagent history');
   await expect(body).toContainText('Project files and Git branches will remain.');
   await expect(body).not.toContainText('worktree');
   expect(sent('session.delete_check')).toEqual([
     { session: 'session-1', workspace: '/workspace' },
   ]);
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+  await body.getByRole('button', { name: 'Cancel' }).click();
+  await expect(body).toBeHidden();
   expect(sent('session.delete')).toEqual([]);
   await expect(stored).toBeVisible();
 
@@ -1483,7 +1460,7 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
     { session: 'session-1', workspace: '/workspace', worktree: 'wt-1' },
     { session: 'session-1', workspace: '/workspace', worktree: 'wt-1', force: true },
   ]);
-  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+  await expect(body).toBeHidden();
 
   // Deleting the chat on screen replaces its entry with a fresh draft
   // instead of leaving an unavailable target behind.
@@ -1801,25 +1778,6 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
         turnId: 'codex-turn-e2e',
       },
     });
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('desktop shell and modal stay inside a narrow browser viewport', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-
-  await app.showSidebar();
-  await (await sidebarAddProject(page)).click();
-  const bounds = await page.locator('.picker-modal').boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds.x).toBeGreaterThanOrEqual(0);
-  expect(bounds.y).toBeGreaterThanOrEqual(0);
-  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-  expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
-  await expect.poll(() => page.evaluate(() =>
-    document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
 

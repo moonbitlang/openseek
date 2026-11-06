@@ -297,6 +297,22 @@ fn Definition::has_actions(self : Definition) -> Bool {
 }
 
 ///|
+fn Definition::revision(self : Definition) -> String {
+  Repr::Repr(
+    (
+      self.label,
+      self.entries.map(entry => {
+        match entry {
+          Separator => None
+          Action(item) =>
+            Some((item.label, item.title, item.enabled, item.destructive))
+        }
+      }),
+    ),
+  ).to_string()
+}
+
+///|
 fn Open::key(self : Open) -> String {
   let anchor = match self.anchor {
     Button => self.target + ":button"
@@ -306,9 +322,26 @@ fn Open::key(self : Open) -> String {
 }
 
 ///|
-fn surface_attrs(open : Open) -> @html.Attrs {
+fn surface_attrs(open : Open, close : @cmd.Cmd) -> @html.Attrs {
   let attrs = @html.Attrs::build()
     .data_set("action-menu-surface", open.target)
+    .on_keydown(event => {
+      guard event.key() == "Escape" &&
+        !event.repeat() &&
+        !event.is_composing() &&
+        !event.ctrl_key() &&
+        !event.meta_key() &&
+        !event.alt_key() &&
+        !event.shift_key() else {
+        return @cmd.none
+      }
+      event.prevent_default()
+      event.stop_propagation()
+      @cmd.batch([
+        close,
+        open.restore_focus_id.map_or(@cmd.none, id => focus_element(id, true)),
+      ])
+    })
     .on_click(event => {
       event.stop_propagation()
       @cmd.none
@@ -436,7 +469,7 @@ fn[Input : Eq] menu_component(
                     align~,
                     aria_label=definition.label,
                     class="action-menu",
-                    attrs=surface_attrs(open),
+                    attrs=surface_attrs(open, close),
                     definition.entries.map(entry => {
                       match entry {
                         Separator => @rui.dropdown_menu_separator()
@@ -456,7 +489,11 @@ fn[Input : Eq] menu_component(
                 },
               )
             },
-            by=_ => "menu",
+            by=input => {
+              resolve(input).map_or("closed", definition => {
+                definition.revision()
+              })
+            },
           )
         }
         Pointer(x, y) =>
@@ -484,7 +521,7 @@ fn[Input : Eq] menu_component(
                       side_offset=0,
                       aria_label=definition.label,
                       class="action-menu",
-                      attrs=surface_attrs(open),
+                      attrs=surface_attrs(open, close),
                       definition.entries.map(entry => {
                         match entry {
                           Separator => @rui.dropdown_menu_separator()
@@ -505,7 +542,11 @@ fn[Input : Eq] menu_component(
                 },
               )
             },
-            by=_ => "menu",
+            by=input => {
+              resolve(input).map_or("closed", definition => {
+                definition.revision()
+              })
+            },
           )
       }
     },
@@ -557,8 +598,20 @@ pub fn[Input : Eq] component(
         }
       }
     },
-    subscriptions=(_, _, emit) => {
-      open_subscription(emit.map(open => Msg::Open(open)))
+    subscriptions=(state, _, emit) => {
+      @sub.batch(
+        [
+          open_subscription(emit.map(open => Msg::Open(open))),
+          ..state.menu.map_or([], open => {
+            [
+              @dismiss.on_back("action-menu-back", level=TopLayer, _ => {
+                emit(Close(open))
+              }),
+              @sub.on_resize(_ => emit(Close(open))),
+            ]
+          }),
+        ],
+      )
     },
   )
   state

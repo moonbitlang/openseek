@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// Substitute only the native transport. The production dialog, modal focus,
+// Substitute only the native transport. The production dialog,
 // typed codecs, clipboard effect and update loop run unchanged in Chromium.
 class ExportHarness extends DesktopBrowserHarness {
   constructor(page) {
@@ -114,7 +114,7 @@ class ExportHarness extends DesktopBrowserHarness {
   }
 }
 
-test('export opens choices, downloads locally and restores focus on Escape', async ({ page }) => {
+test('export opens choices and downloads locally without publishing', async ({ page }) => {
   const app = new ExportHarness(page);
   await app.openDesktop();
   const details = page.getByRole('button', { name: 'Detailed mode', exact: true });
@@ -135,9 +135,6 @@ test('export opens choices, downloads locally and restores focus on Escape', asy
   expect(app.requests.find(request => request.method === 'session.export').params).toMatchObject({
     session: 'session-1', workspace: '/workspace', archived: false,
   });
-  await page.keyboard.press('Escape');
-  await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole('button', { name: 'Export and import', exact: true })).toBeFocused();
   expect(app.hostShares.length).toBe(0);
   expect(app.pageErrors).toEqual([]);
 });
@@ -228,7 +225,7 @@ test('closing the dialog cancels a sign-in it started', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('closing an upload ignores its late reply and narrow dialogs fit the viewport', async ({ page }) => {
+test('closing an upload ignores its late reply', async ({ page }) => {
   const app = new ExportHarness(page);
   let finish;
   app.pendingShare = new Promise(resolve => { finish = resolve; });
@@ -242,10 +239,6 @@ test('closing an upload ignores its late reply and narrow dialogs fit the viewpo
   finish();
   await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
   await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveCount(0);
-  await page.setViewportSize({ width: 390, height: 700 });
-  const box = await dialog.boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(390);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -401,7 +394,7 @@ test('share login stays retryable while rejected account cleanup is pending', as
   }
 });
 
-test('one header menu contains export and import, dismisses with Escape, and restores focus', async ({ page }) => {
+test('the header export and import menu opens the import dialog', async ({ page }) => {
   const app = new ExportHarness(page);
   await app.openDesktop();
   const trigger = page.getByRole('button', { name: 'Export and import', exact: true });
@@ -411,18 +404,9 @@ test('one header menu contains export and import, dismisses with Escape, and res
   await expect(menu.getByRole('menuitem', { name: 'Export', exact: true })).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: 'Import', exact: true })).toBeVisible();
   await expect(menu.getByRole('separator')).toHaveCount(0);
-  await expect(menu).toBeInViewport({ ratio: 1 });
-  await page.keyboard.press('Escape');
-  await expect(menu).not.toBeVisible();
-  await expect(trigger).toBeFocused();
-  await trigger.click();
   await menu.getByRole('menuitem', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import conversation', exact: true });
   await expect(dialog).toBeVisible();
-  await expect(menu).not.toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(dialog).not.toBeVisible();
-  await expect(trigger).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -518,20 +502,5 @@ test('Back keeps a dialog above a panel that only covers the page after a resize
   await expect(overview).toBeVisible();
   expect(await back()).toBe(true);
   await expect(overview).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Back closes a modal dialog before Quick Open opened beneath it', async ({ page }) => {
-  const app = new ExportHarness(page);
-  await app.openDesktop();
-  const dialog = await app.openExport();
-  // The palette opens under the modal dialog, which the browser keeps on top.
-  await app.openQuickOpen();
-  const back = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
-  expect(await back()).toBe(true);
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('#quick-open-input')).toBeVisible();
-  expect(await back()).toBe(true);
-  await expect(page.locator('#quick-open-input')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

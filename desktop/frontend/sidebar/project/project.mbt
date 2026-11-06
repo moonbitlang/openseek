@@ -291,7 +291,9 @@ pub fn component(
           @icons.icon(@icons.icon_more),
         )
       },
-      by=pair => pair.0.id.key(),
+      by=pair => {
+        Repr::Repr((pair.0.id, pair.0.managed, pair.0.host, pair.1)).to_string()
+      },
     )
   let input = input.map2(menu, (input, menu) => (input, menu))
   let rendered = state.map5(input, conversation_rows, locale, search, (

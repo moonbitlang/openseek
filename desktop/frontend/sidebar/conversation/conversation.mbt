@@ -506,7 +506,9 @@ pub fn component(
           @icons.icon(@icons.icon_more),
         )
       },
-      by=pair => pair.0.id.key(),
+      by=pair => {
+        Repr::Repr((pair.0.id, pair.0.label, pair.0.trailing, pair.1)).to_string()
+      },
     )
   let input = input.map2(menu, (input, menu) => (input, menu))
   let rendered = state.map5(input, child_rows, locale, search, (
@@ -759,6 +761,7 @@ pub fn component(
           input.title,
           input.rename,
           input.openable,
+          input.active,
           input.children.length(),
           children_open,
           input.trailing,

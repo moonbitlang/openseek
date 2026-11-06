@@ -1844,6 +1844,7 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
     } else {
       "panel-toggle active"
     },
+    disabled=false,
     title=if self.minimal_transcript {
       shell_text(self.locale, ShowDetailed)
     } else {
@@ -1865,6 +1866,7 @@ fn Model::terminal_toggle(self : Model, toggle : @cmd.Cmd) -> @html.Html {
     } else {
       "panel-toggle terminal-toggle"
     },
+    disabled=false,
     title=shell_text(
       self.locale,
       if self.terminal.is_open() {

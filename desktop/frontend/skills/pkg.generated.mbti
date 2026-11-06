@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -35,7 +36,7 @@ pub(all) struct Input {
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
-#derive(Eq)
+#derive(Eq, @debug.Debug)
 pub(all) struct InstalledItem {
   id : String
   name : String
@@ -47,8 +48,9 @@ pub(all) struct InstalledItem {
 }
 pub fn InstalledItem::equal(Self, Self) -> Bool
 pub fn InstalledItem::not_equal(Self, Self) -> Bool
+pub fn InstalledItem::to_repr(Self) -> @debug.Repr
 
-#derive(Eq)
+#derive(Eq, @debug.Debug)
 pub(all) struct MarketItem {
   name : String
   module_name : String
@@ -60,6 +62,7 @@ pub(all) struct MarketItem {
 }
 pub fn MarketItem::equal(Self, Self) -> Bool
 pub fn MarketItem::not_equal(Self, Self) -> Bool
+pub fn MarketItem::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Msg {
   QueryChanged(String)

@@ -642,6 +642,10 @@ export class CloudHarness {
     return this.page.locator(`[id="conversation:cloud.live:${this.userId}:${id}::open"], [id="conversation:cloud.archived:${this.userId}:${id}::open"]`);
   }
 
+  rowContainer(id) {
+    return this.page.locator('.conversation-row').filter({ has: this.row(id) });
+  }
+
   // Archived conversations are managed within the Settings dialog.
   async openArchivedChats() {
     await this.page.getByRole('button', { name: 'Settings', exact: true }).click();

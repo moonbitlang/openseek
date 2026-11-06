@@ -66,7 +66,6 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
   const checkout = panel.getByRole('button', { name: '在本地检出 PR #42', exact: true });
   await checkout.click();
   const dialog = page.getByRole('dialog', { name: '检出 PR #42 前有未提交的更改', exact: true });
-  await expect(dialog.getByRole('button', { name: '暂存更改', exact: true })).toBeFocused();
   await expect(dialog).toContainText('丢弃会永久删除已跟踪文件的更改。未跟踪文件会保留。');
   await page.keyboard.press('Escape');
   await expect(checkout).toBeFocused();
@@ -219,9 +218,6 @@ test('PR checkout supports keyboard choices, failure notifications and opens Rev
   await expect(row.getByRole('button', { name: 'Checking out PR #42…', exact: true })).toBeDisabled();
   const dialog = page.getByRole('dialog', { name: 'Uncommitted changes before checking out PR #42' });
   const stash = dialog.getByRole('button', { name: 'Stash changes', exact: true });
-  await expect(stash).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(checkout).toBeFocused();

@@ -180,8 +180,8 @@ for (const operation of ['Archive', 'Delete…']) {
     await page.clock.install();
     await app.disconnectSession(sessionA);
     await expect(page.locator('.composer-banner')).toContainText('reconnecting');
-    await app.row(sessionA).locator('..').hover();
-    await app.row(sessionA).locator('..').getByRole('button', { name: 'Conversation actions', exact: true }).click();
+    await app.rowContainer(sessionA).hover();
+    await app.rowContainer(sessionA).getByRole('button', { name: 'Conversation actions', exact: true }).click();
     await page.getByRole('menuitem', { name: operation, exact: true }).click();
     if (operation === 'Delete…') await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
     await expect(page.locator('main .topbar-title')).toHaveText('New chat');

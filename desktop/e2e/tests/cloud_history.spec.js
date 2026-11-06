@@ -106,7 +106,7 @@ test('Cloud reads one turn at a time, preserves the viewport, and revalidates on
   const transcript = page.locator('#transcript');
   const bubbles = transcript.locator('.msg.user .msg-content');
   const loadingOlder = transcript.getByRole('status').filter({ hasText: 'Loading more…' });
-  const rowSpinner = cloud.row(sessionA).locator('..').locator('.conversation-load-spinner');
+  const rowSpinner = cloud.rowContainer(sessionA).locator('.conversation-load-spinner');
   await expect(bubbles).toHaveText(['Third question']);
   await expect(loadingOlder).toHaveCount(0);
   await expect(rowSpinner).toHaveCount(0);

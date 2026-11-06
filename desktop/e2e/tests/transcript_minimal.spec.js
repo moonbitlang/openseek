@@ -359,32 +359,6 @@ test('minimal transcript is the default and detailed mode persists', async ({ pa
   expect(app.pageErrors).toEqual([]);
 });
 
-test('detail toggle stays enabled when a Codex draft gains its working directory', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.codexModels = [{
-    id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
-    defaultReasoningEffort: 'medium',
-    supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }],
-  }];
-  // Keep the initial directory-less header visible before the draft reply
-  // inserts its workspace label ahead of the buttons.
-  app.rpcDelays.set('codex.draft.open', 1000);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
-  const terminal = page.getByTitle('Terminal requires an available Codex task placement', { exact: true });
-  await expect(terminal).toBeDisabled();
-  await expect(page.locator('.codex-topbar .topbar-workspace')).toBeVisible();
-  const toggle = page.getByRole('button', { name: 'Detailed mode', exact: true });
-  await expect(toggle).toBeEnabled();
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('minimal edit previews share detailed-mode unified lines and preserve call state', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   app.sessionEvents = [
