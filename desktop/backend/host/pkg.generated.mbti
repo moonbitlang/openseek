@@ -33,8 +33,6 @@ pub async fn prepared_runtime_dir(String) -> @pathx.Path?
 
 pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
 
-pub async fn stage_attachments_op(@protocol.StageAttachmentsPayload) -> @protocol.EmptyReply
-
 // Errors
 #derive(@debug.Debug)
 pub(all) suberror HostError {

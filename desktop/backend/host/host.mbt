@@ -184,13 +184,13 @@ pub fn endpoints(
     }),
     Endpoint(@commands.fs_read_file, payload => @files.read_file(payload)),
     Endpoint(@commands.fs_prepare_attachment, payload => {
-      prepare_attachment_op(payload)
+      @files.prepare_attachment(payload)
     }),
     Endpoint(@commands.fs_import_attachment, payload => {
-      import_attachment_op(payload)
+      @files.import_attachment(payload)
     }),
     Endpoint(@commands.fs_stage_attachments, payload => {
-      stage_attachments_op(payload)
+      @files.stage_attachments(payload)
     }),
     Endpoint(@commands.fs_materialize_semantic_selection, payload => {
       @files.materialize_semantic_selection(payload)

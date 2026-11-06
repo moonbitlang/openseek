@@ -12,11 +12,17 @@ pub async fn capture(@protocol.ReadFilePayload) -> (String, Bytes)
 
 pub async fn create_directory(@protocol.CreateDirectoryPayload) -> @protocol.BrowseDirectoryReply
 
+pub async fn import_attachment(@protocol.PrepareAttachmentPayload) -> @protocol.ImportAttachmentReply
+
 pub async fn materialize_semantic_selection(@protocol.MaterializeSemanticSelectionPayload) -> @protocol.MaterializeSemanticSelectionReply
+
+pub async fn prepare_attachment(@protocol.PrepareAttachmentPayload) -> @protocol.PrepareAttachmentReply
 
 pub async fn read_directory(@protocol.ReadDirPayload) -> @protocol.ReadDirReply
 
 pub async fn read_file(@protocol.ReadFilePayload) -> @protocol.ReadFileReply
+
+pub async fn stage_attachments(@protocol.StageAttachmentsPayload) -> @protocol.EmptyReply
 
 pub async fn stat_files(@protocol.StatFilesPayload) -> @protocol.StatFilesReply
 
