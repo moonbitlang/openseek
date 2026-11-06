@@ -4686,7 +4686,17 @@ fn update_msg(
           },
         },
       )
-    DeviceChosen(id) => (@nav.load(@routes.device_entry_path(id)), model)
+    DeviceChosen(device) =>
+      (
+        @nav.load(
+          if device is Some(id) {
+            @routes.device_entry_path(id)
+          } else {
+            "/cloud"
+          },
+        ),
+        model,
+      )
     // A conversation already on screen has claimed the list, and a Cloud
     // destination shows the Chat list; the stored pick only decides what any
     // other empty page shows.

@@ -13,10 +13,18 @@ pub(all) struct Account {
   avatar : String
   busy : Bool
   notice : String?
-  // The page's device, when it has one; a Cloud page has none.
-  device : DeviceChoice?
+  page : Page
   // The account's online devices, in roster order; the selector offers these.
   online_devices : Array[DeviceChoice]
+}
+
+///|
+/// Where the page works. A page keeps it for its lifetime.
+#derive(Debug, Eq)
+pub(all) enum Page {
+  CloudPage
+  // `name` is None while the roster does not list the device.
+  DevicePage(id~ : String, name~ : String?)
 }
 
 ///|
@@ -66,8 +74,8 @@ pub(all) struct Actions {
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
-  // Switch the page to the device with this id.
-  select_device : (String) -> @cmd.Cmd
+  // Switch the page to the device with this id, or to Cloud with None.
+  select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
 }
@@ -85,18 +93,17 @@ fn Input::menu_definition(
 }
 
 ///|
-/// The selector's menu: online devices only, the page's own one checked and
-/// inert. With none online, one inert row says so.
+/// The selector's menu: Cloud, then online devices only, the page's own place
+/// checked and inert. With no device online, one inert row says so.
 fn Account::device_menu(
   self : Account,
-  select_device : (String) -> @cmd.Cmd,
+  select_device : (String?) -> @cmd.Cmd,
   locale~ : @i18n.Locale,
 ) -> @action_menu.Definition {
-  let entries : Array[@action_menu.Entry] = self.online_devices.map(choice => {
-    let current = self.device.map(device => device.id) == Some(choice.id)
-    Action({
-      label: choice.name,
-      title: choice.name,
+  fn choice(label : String, current : Bool, command : @cmd.Cmd) {
+    @action_menu.Entry::Action({
+      label,
+      title: label,
       icon: if current {
         Some(@icons.icon(@icons.icon_check))
       } else {
@@ -104,10 +111,19 @@ fn Account::device_menu(
       },
       enabled: !current,
       destructive: false,
-      command: select_device(choice.id),
+      command,
     })
-  })
-  if entries.is_empty() {
+  }
+  let cloud = @messages.text(locale, Cloud)
+  let entries = [
+    choice(cloud, self.page is CloudPage, select_device(None)),
+    Separator,
+  ]
+  for device in self.online_devices {
+    let current = self.page is DevicePage(id~, ..) && id == device.id
+    entries.push(choice(device.name, current, select_device(Some(device.id))))
+  }
+  if self.online_devices.is_empty() {
     let label = @messages.text(locale, NoDevicesOnline)
     entries.push(
       Action({
@@ -343,9 +359,10 @@ pub fn component(
             @html.span(class="sidebar-icon", @icons.icon(@icons.icon_vm)),
             @html.span(
               class="sidebar-label",
-              match account.device {
-                Some(device) => device.name
-                None => choose
+              match account.page {
+                CloudPage => @messages.text(input.locale, Cloud)
+                DevicePage(name=Some(name), ..) => name
+                DevicePage(name=None, ..) => choose
               },
             ),
             @html.span(
@@ -428,3 +445,9 @@ pub extend DeviceChoice with Debug::{to_repr}
 
 ///|
 pub extend DeviceChoice with Eq::{equal, not_equal}
+
+///|
+pub extend Page with Debug::{to_repr}
+
+///|
+pub extend Page with Eq::{equal, not_equal}

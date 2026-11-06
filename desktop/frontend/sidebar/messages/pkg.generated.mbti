@@ -39,6 +39,7 @@ pub(all) enum Message {
   Settings
   RefreshDevices
   ChooseDevice
+  Cloud
   NoDevicesOnline
   Refresh
   SignOut

@@ -670,12 +670,17 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     avatar: identity.1,
     busy: self.console.busy,
     notice: self.console.notice,
-    device: self.console.page_device.bind(id => {
-      self.console.roster
-      .iter()
-      .find_first(meta => meta.id == id)
-      .map(meta => meta.device_choice())
-    }),
+    page: if self.console.page_device is Some(id) {
+      DevicePage(
+        id~,
+        name=self.console.roster
+          .iter()
+          .find_first(meta => meta.id == id)
+          .map(meta => meta.name),
+      )
+    } else {
+      CloudPage
+    },
     online_devices: self.console.roster
     .filter(meta => meta.online)
     .map(meta => meta.device_choice()),

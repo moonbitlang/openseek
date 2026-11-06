@@ -30,6 +30,7 @@ pub(all) enum Message {
   Settings
   RefreshDevices
   ChooseDevice
+  Cloud
   NoDevicesOnline
   Refresh
   SignOut
@@ -182,6 +183,7 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, ChooseDevice) => "选择设备"
     (TraditionalChinese, ChooseDevice) => "選擇裝置"
     (Japanese, ChooseDevice) => "デバイスを選択"
+    (_, Cloud) => "Cloud"
     (English, NoDevicesOnline) => "No devices online"
     (Spanish, NoDevicesOnline) => "No hay dispositivos en línea"
     (SimplifiedChinese, NoDevicesOnline) => "没有在线设备"
