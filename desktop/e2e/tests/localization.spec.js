@@ -22,7 +22,6 @@ test('Chinese covers feature pages, composer and dock after live switching', asy
   const dismiss = skills.getByRole('button', { name: '关闭', exact: true });
   await expect(dismiss).toBeVisible();
   await expect(dismiss).toHaveText('');
-  await skills.locator('.management-dialog-header').screenshot({ path: test.info().outputPath('chinese-management-header.png') });
   await expect(page.getByPlaceholder('搜索技能…')).toBeVisible();
   await dismiss.click();
   await page.getByRole('button', { name: '定时任务', exact: true }).click();

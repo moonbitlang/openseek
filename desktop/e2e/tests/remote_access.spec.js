@@ -81,7 +81,7 @@ async function installDesktop(page, { managed = false } = {}) {
   return auth;
 }
 
-test('account sign-in remains independent of the remote access toggle and signs out cleanly', async ({ page }, testInfo) => {
+test('account sign-in remains independent of the remote access toggle and signs out cleanly', async ({ page }) => {
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
@@ -95,7 +95,6 @@ test('account sign-in remains independent of the remote access toggle and signs 
   const accountRow = section.locator('.setting-row', { has: page.getByRole('status') });
   await expect(accountRow.locator('.setting-name')).toHaveText('Account');
   await expect(accountRow.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
-  await section.screenshot({ path: testInfo.outputPath('account-sign-in-waiting.png') });
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
 
   auth.finishConnect();
@@ -119,7 +118,7 @@ test('account sign-in remains independent of the remote access toggle and signs 
   expect(auth.app.pageErrors).toEqual([]);
 });
 
-test('FPS overlay switch toggles with the keyboard and restores the saved preference', async ({ page }, testInfo) => {
+test('FPS overlay switch toggles with the keyboard and restores the saved preference', async ({ page }) => {
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const toggle = page.getByRole('switch', { name: 'FPS overlay', exact: true });
@@ -129,7 +128,6 @@ test('FPS overlay switch toggles with the keyboard and restores the saved prefer
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.fps_overlay'))).toBe('true');
   await toggle.scrollIntoViewIfNeeded();
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('settings-switches.png') });
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');

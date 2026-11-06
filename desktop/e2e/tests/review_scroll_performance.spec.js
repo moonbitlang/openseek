@@ -2,9 +2,9 @@ import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // Exercise the real scroll -> active-hunk message -> after-render path. Node
-// identity is the deterministic regression gate; timings are diagnostic data.
+// identity and layout counts are the deterministic regression gates.
 for (const mode of ['Token', 'Tree']) {
-  test(`${mode} review scrolling retains hunk controls`, async ({ page }, testInfo) => {
+  test(`${mode} review scrolling retains hunk controls`, async ({ page }) => {
     test.setTimeout(90_000);
     const app = new DesktopBrowserHarness(page);
     const source = version => Array.from({ length: 32 }, (_, i) =>
@@ -37,7 +37,6 @@ for (const mode of ['Token', 'Tree']) {
     const result = await host.evaluate(async node => {
       const buttons = [...node.querySelectorAll('.review-hunk-marker')];
       const entries = [...node.querySelectorAll('.semantic-diff-editor-host')];
-      const settleDurationsMs = [];
       const positions = [];
       let addedActions = 0;
       const observer = new MutationObserver(records => {
@@ -47,31 +46,25 @@ for (const mode of ['Token', 'Tree']) {
       });
       observer.observe(node, { childList: true, subtree: true });
       for (const index of [4, 12, 24, 8, 20, 0]) {
-        const start = performance.now();
         node.scrollTop += entries[index].getBoundingClientRect().top - node.getBoundingClientRect().top;
         await new Promise(resolve => {
           let remaining = 4;
           const tick = () => --remaining ? requestAnimationFrame(tick) : resolve();
           requestAnimationFrame(tick);
         });
-        settleDurationsMs.push(performance.now() - start);
         positions.push(document.querySelector('.review-hunk-position').textContent);
       }
       observer.disconnect();
       return {
         retained: buttons.filter(button => button.isConnected).length,
-        count: buttons.length, addedActions, settleDurationsMs, positions,
+        count: buttons.length, addedActions, positions,
       };
     });
     const after = await metrics();
     const report = { mode, ...result, metrics: Object.fromEntries(
-      ['LayoutCount', 'LayoutDuration', 'RecalcStyleCount', 'RecalcStyleDuration', 'TaskDuration']
+      ['LayoutCount']
         .map(name => [name, after[name] - before[name]]),
     ) };
-    console.log(JSON.stringify(report));
-    await testInfo.attach('scroll-performance.json', {
-      body: JSON.stringify(report, null, 2), contentType: 'application/json',
-    });
     expect(new Set(result.positions).size).toBeGreaterThan(3);
     expect(result.retained).toBe(result.count);
     expect(result.addedActions).toBe(0);

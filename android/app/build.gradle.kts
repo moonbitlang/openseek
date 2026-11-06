@@ -79,4 +79,6 @@ dependencies {
     implementation("androidx.webkit:webkit:1.15.0")
     implementation("androidx.browser:browser:1.10.0")
     testImplementation("junit:junit:4.13.2")
+    // Android's org.json is a stub in local unit tests.
+    testImplementation("org.json:json:20240303")
 }

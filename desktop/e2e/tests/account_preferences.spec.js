@@ -11,7 +11,7 @@ async function openSettings(page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
 }
 
-test('account preferences load on opening Settings and save only the confirmed server value', async ({ page }, testInfo) => {
+test('account preferences load on opening Settings and save only the confirmed server value', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
   const requests = [];
@@ -29,7 +29,6 @@ test('account preferences load on opening Settings and save only the confirmed s
   await expect(toggle(page)).toBeChecked();
   expect(requests).toEqual([{ method: 'GET', body: null, token: 'Bearer ts_fixture-123' }]);
   await expect(accountPanel(page)).toContainText('including existing history');
-  await page.screenshot({ path: testInfo.outputPath('account-preferences.png') });
   await toggle(page).click();
   await expect(toggle(page)).toBeDisabled();
   await expect(toggle(page)).toBeChecked();

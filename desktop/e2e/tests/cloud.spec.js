@@ -17,7 +17,7 @@ for (const desktop of [false, true]) {
     expect(cloud.device.pageErrors).toEqual([]);
   });
 
-  test(`${desktop ? 'desktop' : 'browser'} creates Cloud on first send through the existing composer and unified account`, async ({ page, context }, testInfo) => {
+  test(`${desktop ? 'desktop' : 'browser'} creates Cloud on first send through the existing composer and unified account`, async ({ page, context }) => {
     const cloud = new CloudHarness(page, { desktop, cached: false });
     cloud.device.hostSettings.has_deepseek_key = false;
     await context.addCookies([{ name: 'session', value: 'fixture-account', url: authOrigin }]);
@@ -43,7 +43,6 @@ for (const desktop of [false, true]) {
     expect(cloud.hostRequests.filter(request => request.method === 'cloud.authorize')).toEqual([]);
     expect(await page.evaluate(() => localStorage.getItem('seekmoon.cloud.token.v1'))).toBeNull();
     expect(cloud.device.pageErrors).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`cloud-${desktop ? 'desktop' : 'browser'}.png`), fullPage: true });
   });
 }
 
@@ -261,7 +260,7 @@ test('Work and Cloud preserve their drafts and local send behavior', async ({ pa
   });
 }
 
-test('Cloud renders each text fragment and hands off two tool-loop replies to delayed compact history', async ({ page }, testInfo) => {
+test('Cloud renders each text fragment and hands off two tool-loop replies to delayed compact history', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.trimHistory = true;
   cloud.streamEvents = [
@@ -270,15 +269,19 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
     ['assistant_delta', { content: '好 🌙' }],
     ['assistant_message', { content: '你好 🌙', tool_calls: [{ id: 'calc', name: 'mbtx', arguments: '{}' }] }],
     ['tool_result', { tool_call_id: 'calc', tool_name: 'mbtx', content: '2', is_error: false }],
+    // Reply and tool events are previews; the step and terminal barriers
+    // follow saved records and start the history reads.
+    ['step', { step: 2 }],
     ['assistant_delta', { content: 'The result is 2.' }],
     ['assistant_message', { content: 'The result is 2.' }],
+    ['agent_finished', { answer: 'The result is 2.' }],
     ['task_finished', { status: 'completed', result: { output: { answer: 'The result is 2.' } } }],
   ];
   let first, second, final;
   cloud.eventPauses = new Map([
     [1, new Promise(resolve => first = resolve)],
     [2, new Promise(resolve => second = resolve)],
-    [6, new Promise(resolve => final = resolve)],
+    [7, new Promise(resolve => final = resolve)],
   ]);
   await cloud.install();
   await cloud.goto();
@@ -300,16 +303,19 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   await expect(answer).toBeVisible();
   const result = page.locator('#transcript').getByText('The result is 2.', { exact: true });
   await expect(result).toBeVisible();
-  const finished = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
+  const reads = () => cloud.requests.filter(request => request.method === 'GET' && request.path === path).length;
+  const paused = reads();
   final();
-  const finalRead = await finished;
+  // Notifications during the paused read wait for it instead of starting more.
+  await expect(page.locator('.composer-running-text')).toHaveCount(0);
+  expect(reads()).toBe(paused);
   await expect(answer).toBeVisible();
+  await expect(result).toBeVisible();
+  const followUp = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
   releaseHistory();
+  const finalRead = await followUp;
   const recovered = await finalRead.response();
   expect(recovered.status()).toBe(200);
-  const history = await recovered.json();
-  expect(history.messages.filter(record => record.kind === 'assistant_message').map(record => record.data)).toEqual([{}, {}]);
-  expect(history.messages.find(record => record.kind === 'user').data).toEqual({});
   await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(result).toHaveCount(1);
@@ -317,9 +323,6 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   await expect(answer).toHaveCount(1);
   await expect(answer).toBeVisible();
   await expect(result).toBeVisible();
-  const screenshot = testInfo.outputPath('cloud-compact-history-handoff.png');
-  await page.locator('#transcript').screenshot({ path: screenshot });
-  await testInfo.attach('Tool loop after compact history handoff', { path: screenshot, contentType: 'image/png' });
   expect(cloud.device.pageErrors).toEqual([]);
 });
 

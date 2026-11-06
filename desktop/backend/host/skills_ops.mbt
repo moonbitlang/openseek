@@ -15,7 +15,7 @@ pub async fn HostState::sync_builtin_skills(
 }
 
 ///|
-async fn skills_catalog_op() -> SkillsCatalogReply {
+async fn skills_catalog_op() -> @protocol.SkillsCatalogReply {
   let skills = @skillmarket.fetch_catalog() catch {
     @skillmarket.SkillMarketError(message) => return SkillsCatalogError(message)
     error => return SkillsCatalogError("\{error}")
@@ -39,7 +39,7 @@ async fn skills_catalog_op() -> SkillsCatalogReply {
 
 ///|
 async fn skills_content_op(
-  payload : InstallSkillPayload,
+  payload : @protocol.InstallSkillPayload,
 ) -> @protocol.SkillContentReply {
   let content = @skillmarket.fetch_skill_content(
     module_name=payload.module_name,
@@ -54,7 +54,7 @@ async fn skills_content_op(
 
 ///|
 async fn installed_skill_content_op(
-  payload : UninstallSkillPayload,
+  payload : @protocol.UninstallSkillPayload,
 ) -> @protocol.SkillContentReply {
   let content = @skillmarket.read_skill_content(payload.id) catch {
     @skillmarket.SkillMarketError(message) => return SkillContentError(message)
@@ -66,10 +66,10 @@ async fn installed_skill_content_op(
 ///|
 async fn install_skill_op(
   state : HostState,
-  payload : InstallSkillPayload,
+  payload : @protocol.InstallSkillPayload,
   on_committed : () -> Unit,
   registry? : String,
-) -> InstallSkillReply {
+) -> @protocol.InstallSkillReply {
   let installed = @skillmarket.install_skill(
     module_name=payload.module_name,
     version=payload.version,
@@ -109,7 +109,9 @@ fn @skillmarket.InstalledSkill::to_protocol(
 }
 
 ///|
-async fn installed_skills_op(state : HostState) -> InstalledSkillsReply {
+async fn installed_skills_op(
+  state : HostState,
+) -> @protocol.InstalledSkillsReply {
   let skills = @skillmarket.installed_skills() catch {
     @skillmarket.SkillMarketError(message) =>
       return InstalledSkillsError(message)
@@ -133,9 +135,9 @@ async fn installed_skills_op(state : HostState) -> InstalledSkillsReply {
 
 ///|
 async fn uninstall_skill_op(
-  payload : UninstallSkillPayload,
+  payload : @protocol.UninstallSkillPayload,
   on_committed : () -> Unit,
-) -> UninstallSkillReply {
+) -> @protocol.UninstallSkillReply {
   @skillmarket.uninstall_skill(payload.id, on_committed~) catch {
     @skillmarket.SkillMarketError(message) =>
       return SkillUninstallError(message)

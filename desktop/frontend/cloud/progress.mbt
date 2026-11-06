@@ -4,6 +4,31 @@ fn Conversation::clear_streams(self : Conversation) -> Conversation {
 }
 
 ///|
+/// The highest native sequence this conversation has read.
+fn Conversation::durable_frontier(self : Conversation) -> Int32 {
+  self.document.events
+  .unwrap_or([])
+  .fold(init=0, (frontier, event) => {
+    if event.sequence > frontier {
+      event.sequence
+    } else {
+      frontier
+    }
+  })
+}
+
+///|
+/// The provisional reasoning to render beside `items`, the transcript built
+/// by `Conversation::items`. Hides only a sealed preview whose durable record
+/// this step already read, as Local does.
+pub fn Conversation::visible_reasoning(
+  self : Conversation,
+  items : Array[@transcript.TranscriptItem],
+) -> (String?, Bool) {
+  self.live.visible_reasoning(items, frontier=self.reasoning_frontier)
+}
+
+///|
 fn Conversation::clear_progress(self : Conversation) -> Conversation {
   { ..self.clear_streams(), heartbeat: None, retrying: None, }
 }
@@ -32,7 +57,7 @@ pub fn Conversation::run_heartbeat(
 fn Conversation::live_progress(
   self : Conversation,
   wire : @wire.Event,
-  history_request : Int32,
+  history_request : Int32?,
 ) -> Conversation {
   let progress = @transcript.decode_engine_event(wire)
   let self = if progress.map_or(false, event => event.ends_retry()) ||
@@ -68,10 +93,17 @@ fn Conversation::live_progress(
     } else {
       self.pending_assistants
     }
-    return {
+    let next = {
       ..self.clear_streams(),
       notification_answer: Some(content),
       pending_assistants,
+    }
+    // A read can land before the notification it covers. Hand the preview
+    // off at once when its record is already here.
+    return if history_request is None {
+      next.acknowledge_assistants(0, next.document, next.records)
+    } else {
+      next
     }
   }
   if wire is @wire.ToolResult(..) {
@@ -83,6 +115,7 @@ fn Conversation::live_progress(
     AgentStep(step) =>
       {
         ..self.clear_streams(),
+        reasoning_frontier: self.durable_frontier(),
         heartbeat: self.heartbeat.map(heartbeat => {
           ..heartbeat,
           stage: match step {

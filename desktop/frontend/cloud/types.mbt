@@ -70,7 +70,11 @@ pub extend WatchStatus with Eq::{equal, not_equal}
 #derive(Eq)
 pub struct PendingAssistant {
   task : String
-  history_request : Int32
+  // The first history read that may retire this preview. `None` when this
+  // connection observed the task from its start: every reply of the task then
+  // has its own preview, created in order, so any read holding the next
+  // unclaimed matching record owns it.
+  history_request : Int32?
   item : @transcript.TranscriptItem
 }
 
@@ -85,9 +89,11 @@ pub(all) struct Conversation {
   history_etag : String?
   history_reading : Bool
   history_disk_request : Int32?
-  history_pages : Map[Int32, History]
+  history_window : HistoryWindow
   // Request, requested offset, and the navigation that owns the prepend.
   history_older_request : (Int32, Int32, Int32)?
+  // Request and offset rereading a turn cached while it was running.
+  history_turn_request : (Int32, Int32)?
   // Compare the first snapshot after a revisit that shares an earlier read.
   history_resume_baseline : (String?, Int32?)?
   history_refresh_after_read : Bool
@@ -129,8 +135,13 @@ pub(all) struct Conversation {
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
   live : @engine_session.Stream
+  // Highest native sequence read when the current model step began. Only
+  // reasoning committed after it can hide this step's sealed preview.
+  reasoning_frontier : Int32
   // Committed replies waiting for the history read triggered by their SSE.
   pending_assistants : Array[PendingAssistant]
+  // The task whose start this observation connection delivered.
+  live_task : String?
   assistant_handoffs : Map[String, Int32]
   heartbeat : @composer.RunHeartbeat?
   retrying : @composer.RunStage?
@@ -146,8 +157,9 @@ fn Conversation::empty() -> Conversation {
     history_etag: None,
     history_reading: false,
     history_disk_request: None,
-    history_pages: Map([]),
+    history_window: HistoryWindow::empty(),
     history_older_request: None,
+    history_turn_request: None,
     history_resume_baseline: None,
     history_refresh_after_read: false,
     events: [],
@@ -184,7 +196,9 @@ fn Conversation::empty() -> Conversation {
     task: None,
     last_seq: None,
     live: @engine_session.Stream::empty(),
+    reasoning_frontier: 0,
     pending_assistants: [],
+    live_task: None,
     assistant_handoffs: Map([]),
     heartbeat: None,
     retrying: None,
@@ -336,6 +350,8 @@ pub(all) enum Msg {
   LoadOlder(String)
   OlderLoaded(Int32, String, Int32, History)
   OlderFailed(Int32, String, Int32, Failure)
+  TurnLoaded(Int32, String, Int32, History)
+  TurnFailed(Int32, String, Int32, Failure)
   HistoryUnchanged(Int32, String, Int32, String)
   LoadFailed(Int32, String, Int32, Failure)
   WatchOpened(Int32, String, StreamLease)

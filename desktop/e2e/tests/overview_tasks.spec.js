@@ -32,7 +32,7 @@ function overview(page) {
   return page.getByRole('complementary', { name: 'Overview' });
 }
 
-test('the overview lists what the conversation runs in the background', async ({ page }, testInfo) => {
+test('the overview lists what the conversation runs in the background', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.jobs = [
     job('bg-3', { command, state: running }),
@@ -64,7 +64,6 @@ test('the overview lists what the conversation runs in the background', async ({
   await expect(row.locator('.conv-overview-row-sub')).toHaveText(/^1m \d+s$/);
   await expect(panel.getByText('explore: map the jobs package', { exact: true })).toBeVisible();
   await expect(panel.getByText('1 finished', { exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('overview-tasks.png') });
   // The summary lists the jobs; reading their output is the Jobs panel's.
   expect(app.requests.some(request => request.method === 'jobs.read')).toBe(false);
   const scope = app.requests.find(request => request.method === 'jobs.list').params.scope;

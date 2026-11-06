@@ -25,7 +25,7 @@ async function noDraftRows(page, initialRows) {
   await expect(page.locator('.conversation-row').filter({ hasText: /^New chat$/ })).toHaveCount(0);
 }
 
-test('one draft carries current text, file mentions and images through repeated agent switches', async ({ page }, testInfo) => {
+test('one draft carries current text, file mentions and images through repeated agent switches', async ({ page }) => {
   const app = await open(page);
   const initialRows = await page.locator('.conversation-row').count();
   const task = page.locator('#task');
@@ -49,7 +49,6 @@ test('one draft carries current text, file mentions and images through repeated 
   await expect(task).toHaveValue(initialText);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
   await noDraftRows(page, initialRows);
-  await page.screenshot({ path: testInfo.outputPath('draft-in-codex.png') });
   await task.press('End');
   await task.pressSequentially(' Edited in Codex');
   const codexText = await task.inputValue();
@@ -59,7 +58,6 @@ test('one draft carries current text, file mentions and images through repeated 
   await expect(task).toHaveValue(codexText);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
   await noDraftRows(page, initialRows);
-  await page.screenshot({ path: testInfo.outputPath('draft-back-in-deepseek.png') });
 
   await task.press('End');
   await task.pressSequentially(' Edited in DeepSeek');
@@ -265,7 +263,7 @@ test('reusing a draft waits for its pending open and close before reopening', as
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Local native goal and compact commands share input and wait for engine confirmation', async ({ page }, testInfo) => {
+test('Local native goal and compact commands share input and wait for engine confirmation', async ({ page }) => {
   const app = await open(page);
   await app.openSession();
   await expect(page.locator('.composer-goal')).toContainText('Ship Rabbita 0.15 browser tests');
@@ -297,6 +295,5 @@ test('Local native goal and compact commands share input and wait for engine con
   app.notify('agent.event', {session: 'session-1', event: {event: 'compaction_finished', from_sequence: 1, to_sequence: sequence, summary: 'Shared command work'}});
   await expect(page.locator('.composer-notice-text')).toHaveCount(0);
   await task.fill('Keep this draft');
-  await page.screenshot({path: testInfo.outputPath('local-native-commands.png')});
   expect(app.pageErrors).toEqual([]);
 });

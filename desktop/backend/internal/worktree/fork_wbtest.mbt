@@ -19,7 +19,7 @@ async test "a fork gets its own checkout at the source's HEAD, without its uncom
     guard read_worktrees_unlocked(repo) is [source_row] else {
       fail("expected the source row")
     }
-    let published : Array[Array[WorktreeInfo]] = []
+    let published : Array[Array[@protocol.WorktreeInfo]] = []
     let seen : Array[ForkCheckout] = []
     let members_at_creation : Array[Array[String]] = []
     add_session_to_new_worktree(
@@ -94,7 +94,7 @@ async test "a fork whose record was not written leaves no worktree behind" {
       WorktreeOwner::openseek("first"),
       _ => (),
     )
-    let published : Array[Array[WorktreeInfo]] = []
+    let published : Array[Array[@protocol.WorktreeInfo]] = []
     let made : Array[@pathx.Absolute] = []
     let failed = try {
       add_session_to_new_worktree(

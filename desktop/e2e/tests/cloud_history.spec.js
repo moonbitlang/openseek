@@ -226,7 +226,7 @@ test('Cloud can page upward when the latest turn fits without a scrollbar', asyn
   expect(queries).toEqual(['?limit=1', '?limit=1&offset=0', '?limit=1', '?limit=1&offset=0']);
 });
 
-test('Cloud skips older reads when the cached turn is complete even during generation', async ({ page }, testInfo) => {
+test('Cloud skips older reads when the cached turn is complete even during generation', async ({ page }) => {
   const cloud = new CloudHarness(page);
   const task = 'first-task';
   const turns = [{
@@ -258,7 +258,43 @@ test('Cloud skips older reads when the cached turn is complete even during gener
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   expect(cloud.requests.filter(request => request.method === 'GET' && request.path === `/v1/sessions/${sessionA}/messages`)).toHaveLength(olderReads);
   await expect(transcript.locator('.transcript-loading-older')).toHaveCount(0);
-  const path = testInfo.outputPath('cloud-history-already-complete.png');
-  await transcript.screenshot({ path });
-  await testInfo.attach('Complete history at the top boundary', { path, contentType: 'image/png' });
+});
+
+test('Cloud renders only turns contiguous with the latest when another device adds turns', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  const turn = (text, index) => ({ messages: [user(`task-${index}`, text, index + 1)], events: [] });
+  const turns = ['First question', 'Second question', 'Third question'].map(turn);
+  cloud.historyTurns.set(sessionA, turns);
+  await cloud.install();
+  const queries = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (request.method() === 'GET' && url.pathname === `/v1/sessions/${sessionA}/messages`) {
+      queries.push(url.search);
+    }
+  });
+  await page.goto(sessionURL);
+  const transcript = page.locator('#transcript');
+  const bubbles = transcript.locator('.msg.user .msg-content');
+  const pageUp = async () => {
+    await transcript.hover();
+    await page.mouse.wheel(0, -200);
+  };
+  await expect(bubbles).toHaveText(['Third question']);
+  await pageUp();
+  await expect(bubbles).toHaveText(['Second question', 'Third question']);
+  await pageUp();
+  await expect(bubbles).toHaveText(['First question', 'Second question', 'Third question']);
+
+  await cloud.open(sessionB);
+  turns.push(turn('Fourth question', 3), turn('Fifth question', 4));
+  await cloud.open(sessionA);
+  await expect(bubbles).toHaveText(['Fifth question']);
+  await pageUp();
+  await expect(bubbles).toHaveText([
+    'First question', 'Second question', 'Third question', 'Fourth question', 'Fifth question',
+  ]);
+  expect(queries).toEqual([
+    '?limit=1', '?limit=1&offset=1', '?limit=1&offset=0', '?limit=1', '?limit=1&offset=3',
+  ]);
 });

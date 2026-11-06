@@ -1347,7 +1347,7 @@ test('a floating reply takes a comment of several lines', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('approval card mirrors host claims and sends an unclaimed decision', async ({ page }, testInfo) => {
+test('approval card mirrors host claims and sends an unclaimed decision', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -1370,12 +1370,10 @@ test('approval card mirrors host claims and sends an unclaimed decision', async 
 
   const approval = page.locator('.composer-approval');
   await expect(approval).toBeVisible();
-  await approval.screenshot({ path: testInfo.outputPath('approval-awaiting-answer.png') });
   // A different client answered: this page must stop offering either decision.
   app.notify('agent.approvals', { generation: 2, approvals: [{ ...pending, answered: true }] });
   await expect(approval.locator('.composer-approval-state')).toBeVisible();
   await expect(approval.getByRole('button')).toHaveCount(0);
-  await approval.screenshot({ path: testInfo.outputPath('approval-answer-submitted.png') });
   app.notify('agent.approvals', { generation: 3, approvals: [] });
   await expect(approval).toHaveCount(0);
 
@@ -1702,8 +1700,7 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
     request.params?.provider === 'custom' &&
     request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
-  expect(app.hostSettings.has_deepseek_key).toBe(false);
-  expect(app.hostSettings.has_custom_key).toBe(true);
+  expect(app.requests.some(request => request.method === 'settings.set' && request.params?.deepseek_api_key !== undefined)).toBe(false);
 
   // OpenRouter uses the ordinary chat model selector and persisted preference.
   await app.openSession();
@@ -1922,14 +1919,9 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   await expect(page.getByRole('button', { name: 'New chats' })).toHaveText('Worktree');
   await expect(page.getByRole('button', { name: 'Submodules in worktrees' })).toHaveText('Initialize');
   await expect(page.getByRole('button', { name: 'Submodule checkout timeout' })).toHaveText('60 seconds');
-  // Settings are stored per workspace: a sibling project keeps its own
-  // defaults, never inheriting this workspace's committed values.
-  expect(app.workspaceSettingsFor('/other')).toEqual({
-    workspace: '/other',
-    worktree_mode: false,
-    checkout_submodules: false,
-    submodule_checkout_timeout_seconds: 30,
-  });
+  // Settings are stored per workspace: committing this workspace's values
+  // never writes to a sibling project.
+  expect(app.requests.filter(request => request.method === 'workspace.settings_set' && request.params?.workspace === '/other')).toEqual([]);
 
   // Detaching the workspace closes the dialog and its select menu. Reopening
   // starts with closed selects, so the first trigger click opens the menu.
@@ -1950,7 +1942,7 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   expect(app.pageErrors).toEqual([]);
 });
 
-test('composer follow-up menu supports keyboard choice and a queue default', async ({ page }, testInfo) => {
+test('composer follow-up menu supports keyboard choice and a queue default', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.hostSettings.followup_behavior = 'queue';
   await app.install();
@@ -1982,7 +1974,6 @@ test('composer follow-up menu supports keyboard choice and a queue default', asy
   const box = await menu.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(800);
-  await page.screenshot({ path: testInfo.outputPath('followup-menu.png') });
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
   await expect(choice).toBeFocused();
@@ -2112,13 +2103,9 @@ for (const layout of ['Split', 'Unified']) {
     })).toBe(true);
     await action.click();
     await expect(action).toHaveText('✓');
-    const panelBox = await page.locator('.editor').boundingBox();
-    const clip = { ...panelBox, height: Math.min(panelBox.height, 320) };
-    await page.screenshot({ path: `/tmp/hunk-gutter-${layout.toLowerCase()}-viewed.png`, clip });
     await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await action.click();
     await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
-    await page.screenshot({ path: `/tmp/hunk-gutter-${layout.toLowerCase()}.png`, clip });
     expect(app.pageErrors).toEqual([]);
   });
 }

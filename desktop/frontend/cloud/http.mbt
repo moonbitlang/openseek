@@ -26,42 +26,69 @@ async fn delete_session(token : String, session : String) -> Unit {
 }
 
 ///|
+/// A page is one turn; `HistoryWindow` indexes pages by turn offset.
 const HistoryPageSize = 1
+
+///|
+/// A latest-page read validated by its cached ETag.
+priv enum LatestHistory {
+  Changed(History)
+  Unchanged(String)
+}
 
 ///|
 async fn load_history(
   token : String,
   session : String,
   etag : String?,
-  epoch : Int32,
-  request : Int32,
   offset? : Int32,
-  limit~ : Int32 = HistoryPageSize,
-) -> Msg {
+) -> LatestHistory {
   let headers : @http.Headers = { "Authorization": "Bearer " + token }
   if etag is Some(etag) {
     headers["If-None-Match"] = etag
   }
   let path = CloudOrigin +
-    "/v1/sessions/\{@uri.encode_component(session)}/messages?limit=\{limit}"
+    "/v1/sessions/\{@uri.encode_component(session)}/messages?limit=\{HistoryPageSize}"
   let path = offset.map_or(path, offset => path + "&offset=\{offset}")
   let (response, body) = @http.get(path, headers~) catch {
     _ => raise @cloud_client.RequestError(Unreachable)
   }
   let validator = response.headers.get("ETag")
   if response.code == 304 && etag is Some(sent) {
-    return HistoryUnchanged(epoch, session, request, validator.unwrap_or(sent))
+    return Unchanged(validator.unwrap_or(sent))
   }
   check_status(response.code)
   let json = body.json() catch {
     _ => raise @cloud_client.RequestError(Malformed)
   }
-  let history = { ..decode_history(json), etag: validator, }
-  if offset is Some(_) {
-    OlderLoaded(epoch, session, request, history)
-  } else {
-    Loaded(epoch, session, request, history)
+  Changed({ ..decode_history(json), etag: validator, })
+}
+
+///|
+async fn load_latest_history(
+  token : String,
+  session : String,
+  etag : String?,
+  epoch : Int32,
+  request : Int32,
+) -> Msg {
+  match load_history(token, session, etag) {
+    Changed(history) => Loaded(epoch, session, request, history)
+    Unchanged(etag) => HistoryUnchanged(epoch, session, request, etag)
   }
+}
+
+///|
+/// Read one earlier turn. No validator is sent, so the reply is always a page.
+async fn load_turn_history(
+  token : String,
+  session : String,
+  offset : Int32,
+) -> History {
+  guard load_history(token, session, None, offset~) is Changed(history) else {
+    raise @cloud_client.RequestError(Malformed)
+  }
+  history
 }
 
 ///|

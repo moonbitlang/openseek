@@ -55,7 +55,7 @@ async function setup(page, minimal, child = false, events = history) {
 }
 
 for (const minimal of [false, true]) {
-  test(`${minimal ? 'minimal' : 'detailed'} Fork uses the terminal boundary and opens an idle copy`, async ({ page }, testInfo) => {
+  test(`${minimal ? 'minimal' : 'detailed'} Fork uses the terminal boundary and opens an idle copy`, async ({ page }) => {
     const app = await setup(page, minimal);
     const buttons = page.getByRole('button', { name: 'Fork from here', exact: true });
     expect(await buttons.first().textContent()).toBe('');
@@ -75,7 +75,6 @@ for (const minimal of [false, true]) {
     await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toHaveCount(2);
     expect(app.requests.filter(r => r.method === 'agent.start')).toEqual([]);
     expect(app.pageErrors).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`fork-${minimal ? 'minimal' : 'detailed'}.png`) });
   });
 }
 
@@ -159,7 +158,7 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
 {
   const minimal = true;
 
-  test(`${minimal ? 'minimal' : 'detailed'} edit stays inline until Send and preserves the original composer`, async ({ page }, testInfo) => {
+  test(`${minimal ? 'minimal' : 'detailed'} edit stays inline until Send and preserves the original composer`, async ({ page }) => {
     const app = await setup(page, minimal);
     await page.locator('#task').fill('Keep my original draft');
     const original = page.locator('.conversation-row[title="session-1"]');
@@ -182,7 +181,6 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
     await expect(input).toBeFocused();
     await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
     expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
-    await page.screenshot({ path: testInfo.outputPath(`inline-edit-${minimal ? 'minimal' : 'detailed'}.png`) });
     app.rpcDelays.set('session.edit', 500);
     // Use the same Enter-to-send contract as the bottom composer.
     await input.press('Enter');
@@ -400,7 +398,7 @@ for (const first of [false, true]) {
   });
 }
 
-test('running and compacting chats disable editing without interrupting the run', async ({ page }, testInfo) => {
+test('running and compacting chats disable editing without interrupting the run', async ({ page }) => {
   const app = await setup(page, true);
   const edit = page.getByRole('button', { name: 'Edit message', exact: true }).nth(1);
   await expect(edit).toBeEnabled();
@@ -408,7 +406,6 @@ test('running and compacting chats disable editing without interrupting the run'
   await expect(edit).toBeDisabled();
   await expect(edit).toHaveAttribute('title', 'Messages cannot be edited while a task is running');
   await expect(page.getByRole('button', { name: 'Fork from here', exact: true }).first()).toBeEnabled();
-  await page.screenshot({ path: testInfo.outputPath('edit-disabled-running.png') });
   app.notify('agent.finished', { session: 'session-1', run_id: 'busy-edit', status: 'finished', answer: 'Done', exit_code: 0 });
   await expect(edit).toBeEnabled();
   app.notify('agent.event', { session: 'session-1', event: { event: 'compaction_started', from_sequence: 1, to_sequence: 8 } });

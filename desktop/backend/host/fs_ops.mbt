@@ -20,8 +20,8 @@ fn semantic_selection_artifact_id_is_safe(id : String) -> Bool {
 
 ///|
 async fn materialize_semantic_selection_op(
-  payload : MaterializeSemanticSelectionPayload,
-) -> MaterializeSemanticSelectionReply {
+  payload : @protocol.MaterializeSemanticSelectionPayload,
+) -> @protocol.MaterializeSemanticSelectionReply {
   guard semantic_selection_artifact_id_is_safe(payload.artifact_id) else {
     raise HostError("invalid semantic selection artifact id")
   }
@@ -210,7 +210,7 @@ async test "semantic selection materialization never replaces an old snapshot" {
     .unwrap()
     .to_uri_path()
     .unwrap()
-  let payload : MaterializeSemanticSelectionPayload = {
+  let payload : @protocol.MaterializeSemanticSelectionPayload = {
     root,
     artifact_id: "semantic-search-1-1",
     patterns: ["inspect($(x:arg))"],
@@ -249,7 +249,9 @@ async test "semantic selection materialization never replaces an old snapshot" {
 }
 
 ///|
-async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
+async fn read_directory_op(
+  payload : @protocol.ReadDirPayload,
+) -> @protocol.ReadDirReply {
   let dir = WirePath::parse(payload.path).absolute
   // A requested root can be created lazily by the engine. Treat a missing
   // directory as empty so the panel can keep its ordinary loading behavior.
@@ -263,7 +265,7 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
   // String's `Compare`, which is shortlex — length before content — and
   // reads wrong in a file listing ("z.mbt" before "main.mbt").
   names.sort_by((a, b) => a.lexical_compare(b))
-  let entries : Array[DirEntry] = []
+  let entries : Array[@protocol.DirEntry] = []
   for name in names {
     let child = dir.join((name : @pathx.Relative)).to_string()
     let is_dir = (@fs.kind(child) catch { _ => Unknown }) is Directory
@@ -277,7 +279,9 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
 }
 
 ///|
-async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
+async fn read_file_op(
+  payload : @protocol.ReadFilePayload,
+) -> @protocol.ReadFileReply {
   let file = if payload.root is Some(root) {
     WirePath::parse(root).resolve(payload.path)
   } else {
@@ -489,8 +493,10 @@ async test "Office file reads return original package bytes and media type" {
 /// Each path answers for itself: one file the host cannot inspect neither
 /// fails the whole reply nor reads as deleted — it is reported as exactly
 /// that.
-async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
-  let stats : Array[FileStat] = []
+async fn stat_files_op(
+  payload : @protocol.StatFilesPayload,
+) -> @protocol.StatFilesReply {
+  let stats : Array[@protocol.FileStat] = []
   for path in payload.paths {
     let file = WirePath::parse(path).absolute
     stats.push({ path, signature: file_signature(file.to_string()), })
@@ -506,7 +512,7 @@ async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
 /// `Failed` with the OS message: the panel then re-reads the file so the
 /// read's own error (or the content) replaces the guess, and the log keeps
 /// the stat's.
-async fn file_signature(absolute : String) -> FileSignature {
+async fn file_signature(absolute : String) -> @protocol.FileSignature {
   let sig = try {
     // file_size uses lstat in the async library. Resolve first so all three
     // attributes describe the same target as read_file's open handle.

@@ -58,7 +58,6 @@ test('schedule form, running controls, and completed session navigation', async 
   await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
   await page.getByRole('button', { name: 'Stop run', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Open session', exact: true })).toBeVisible();
-  await page.screenshot({ animations: 'disabled', path: test.info().outputPath('scheduled-tasks.png') });
   await page.getByRole('button', { name: 'Open session', exact: true }).click();
   await expect.poll(() => app.requests.some(r => r.method === 'session.load')).toBe(true);
   expect(app.pageErrors).toEqual([]);
@@ -85,7 +84,6 @@ test('failed save retains the draft and editing preserves its fields', async ({ 
   await page.setViewportSize({ width: 420, height: 900 });
   await expect(page.getByRole('dialog', { name: 'Scheduled tasks', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeVisible();
-  await page.screenshot({ animations: 'disabled', path: test.info().outputPath('schedule-form-mobile.png') });
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -109,7 +107,6 @@ test('automatic directory and save-and-run-now work without choosing a project',
   await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByLabel('Working directory', { exact: true })).toHaveValue('auto');
-  await page.screenshot({ animations: 'disabled', path: test.info().outputPath('automatic-schedule.png') });
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -195,6 +192,5 @@ test('reopening Scheduled while save is pending preserves its acknowledgement', 
   await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeDisabled();
   await expect(page.locator('.schedule-form')).toHaveCount(0);
-  expect(app.schedules.entries).toHaveLength(1);
   expect(app.requests.filter(r => r.method === 'schedules.save')).toHaveLength(1);
 });

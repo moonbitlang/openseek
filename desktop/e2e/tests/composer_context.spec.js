@@ -1,12 +1,6 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-async function capture(page, testInfo, name) {
-  const path = testInfo.outputPath(`${name}.png`);
-  await page.locator('.composer').screenshot({ path });
-  await testInfo.attach(name, { path, contentType: 'image/png' });
-}
-
 async function expectAlignedRows(page) {
   const composer = await page.locator('.composer-inner').boundingBox();
   const rows = page.locator('.composer-context-row:visible');
@@ -18,7 +12,7 @@ async function expectAlignedRows(page) {
   }
 }
 
-test('context rows align and approval disclosure preserves draft focus and actions', async ({ page }, testInfo) => {
+test('context rows align and approval disclosure preserves draft focus and actions', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.hostSettings.followup_behavior = 'queue';
   await app.install();
@@ -55,22 +49,18 @@ test('context rows align and approval disclosure preserves draft focus and actio
   await composer.fill('Draft while collapsed');
   await expect(approval.locator('.composer-approval-body')).toBeHidden();
   await expectAlignedRows(page);
-  await capture(page, testInfo, 'context-collapsed');
   await approval.locator('summary').click();
   await expect(approval.locator('.composer-approval-body')).toBeVisible();
   await composer.fill('Keep this draft');
   await expect(composer).toBeFocused();
   // An unrelated composer update must preserve the browser-owned disclosure.
   await expect(approval).toHaveAttribute('open', '');
-  await capture(page, testInfo, 'context-expanded');
   await page.emulateMedia({ colorScheme: 'dark' });
-  await capture(page, testInfo, 'context-dark');
   await page.emulateMedia({ colorScheme: 'light' });
   await page.setViewportSize({ width: 560, height: 960 });
   await expect(page.getByRole('button', { name: 'Show sidebar', exact: true })).toBeVisible();
   await expect.poll(() => page.locator('.app > aside').evaluate(el => el.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
   await expectAlignedRows(page);
-  await capture(page, testInfo, 'context-narrow');
   await approval.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(approval.locator('.composer-approval-body')).toBeHidden();
@@ -145,7 +135,7 @@ for (const [name, content, allow] of [
   });
 }
 
-test('Codex shares the question card while approvals retain their disclosure', async ({ page }, testInfo) => {
+test('Codex shares the question card while approvals retain their disclosure', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
     defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }] }];
@@ -184,7 +174,6 @@ test('Codex shares the question card while approvals retain their disclosure', a
   await approval.locator('summary').first().click();
   await expect(approval.locator('.codex-request-command')).toHaveText('moon test');
   await expectAlignedRows(page);
-  await capture(page, testInfo, 'codex-approval');
   await approval.getByRole('button', { name: 'Approve once', exact: true }).click();
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(2);
   expect(app.pageErrors).toEqual([]);

@@ -17,7 +17,10 @@ export default defineConfig({
   outputDir: 'test-results',
   timeout: 30_000,
   forbidOnly: isCI,
-  retries: isCI ? 1 : 0,
+  // A retry doubles the cost of every broken test: a regression that breaks
+  // a shared helper fails hundreds of tests twice and runs the job past its
+  // timeout before Playwright prints a single error. Fail on the first try.
+  retries: 0,
   // Every test opens its own page and fixture, so schedule tests rather than
   // files: the largest spec files would otherwise each pin one worker.
   fullyParallel: true,
@@ -43,7 +46,6 @@ export default defineConfig({
   use: {
     baseURL,
     screenshot: 'only-on-failure',
-    trace: 'on-first-retry',
     viewport: { width: 1440, height: 900 },
   },
   webServer: {
