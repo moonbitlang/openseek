@@ -22,19 +22,12 @@ class BrowserSignInTest {
         readTimeout = 2000
     }
 
-    @Test fun callbackValidatesStateAndExchangesWithTheOriginalVerifier() {
+    @Test fun callbackValidatesStateAndDeliversTheCodeForTheOriginalVerifier() {
         BrowserSignIn("https://relay.test", "com.example.app", 3000).use { flow ->
             val query = params(flow.startUri)
             val completed = CompletableFuture<Result<String>>()
             val worker = CompletableFuture.runAsync {
-                flow.receive({ code, verifier ->
-                    assertEquals("once", code)
-                    val challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
-                        MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray())
-                    )
-                    assertEquals(query["code_challenge"], challenge)
-                    "private-account-result"
-                }, { result, returning -> assertTrue(returning); completed.complete(result) })
+                flow.receive { result, returning -> assertTrue(returning); completed.complete(result) }
             }
             val callback = "http://127.0.0.1:${query["port"]}/cb"
             get("$callback?state=forged&code=once").also {
@@ -44,10 +37,14 @@ class BrowserSignInTest {
             get("$callback?state=${query["state"]}&code=once").also {
                 assertEquals(303, it.responseCode)
                 assertEquals(flow.returnUri, it.getHeaderField("Location"))
-                assertFalse(it.getHeaderField("Location").contains("private-account-result"))
+                assertFalse(it.getHeaderField("Location").contains("once"))
                 it.disconnect()
             }
-            assertEquals("private-account-result", completed.get(2, TimeUnit.SECONDS).getOrThrow())
+            assertEquals("once", completed.get(2, TimeUnit.SECONDS).getOrThrow())
+            val challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                MessageDigest.getInstance("SHA-256").digest(flow.verifier.toByteArray())
+            )
+            assertEquals(query["code_challenge"], challenge)
             worker.get(2, TimeUnit.SECONDS)
             assertTrue(flow.acceptsReturn(flow.returnUri))
             assertFalse(flow.acceptsReturn("com.example.app://oauth/complete?state=forged"))
@@ -57,12 +54,12 @@ class BrowserSignInTest {
         }
     }
 
-    @Test fun denialDoesNotExchangeAndReturnsToTheApp() {
+    @Test fun denialDeliversNoCodeAndReturnsToTheApp() {
         BrowserSignIn("https://relay.test", "com.example.app", 3000).use { flow ->
             val query = params(flow.startUri)
             val completed = CompletableFuture<Result<String>>()
             val worker = CompletableFuture.runAsync {
-                flow.receive({ _, _ -> throw AssertionError("Denied login must not exchange") }, { result, returning -> assertTrue(returning); completed.complete(result) })
+                flow.receive { result, returning -> assertTrue(returning); completed.complete(result) }
             }
             get("http://127.0.0.1:${query["port"]}/cb?state=${query["state"]}&error=access_denied").also {
                 assertEquals(303, it.responseCode); it.disconnect()
@@ -72,26 +69,11 @@ class BrowserSignInTest {
         }
     }
 
-    @Test fun exchangeFailureStillClosesTheBrowserRoundTrip() {
-        BrowserSignIn("https://relay.test", "com.example.app", 3000).use { flow ->
-            val query = params(flow.startUri)
-            val completed = CompletableFuture<Result<String>>()
-            val worker = CompletableFuture.runAsync {
-                flow.receive({ _, _ -> error("Fixture exchange rejected") }, { result, returning -> assertTrue(returning); completed.complete(result) })
-            }
-            get("http://127.0.0.1:${query["port"]}/cb?state=${query["state"]}&code=once").also {
-                assertEquals(303, it.responseCode); it.disconnect()
-            }
-            assertTrue(completed.get(2, TimeUnit.SECONDS).isFailure)
-            worker.get(2, TimeUnit.SECONDS)
-        }
-    }
-
-    @Test fun cancellationStopsTheListenerWithoutDeliveringAnAccount() {
+    @Test fun cancellationStopsTheListenerWithoutDeliveringACode() {
         val flow = BrowserSignIn("https://relay.test", "com.example.app", 3000)
         val completed = CompletableFuture<Result<String>>()
         val worker = CompletableFuture.runAsync {
-            flow.receive({ _, _ -> error("Cancelled login must not exchange") }, { result, returning -> assertTrue(returning); completed.complete(result) })
+            flow.receive { result, returning -> assertTrue(returning); completed.complete(result) }
         }
         flow.close()
         worker.get(2, TimeUnit.SECONDS)
@@ -101,7 +83,7 @@ class BrowserSignInTest {
     @Test fun timeoutClosesTheListenerAndReportsFailure() {
         BrowserSignIn("https://relay.test", "com.example.app", 50).use { flow ->
             var result: Result<String>? = null
-            flow.receive({ _, _ -> throw AssertionError("No callback") }, { value, returning -> assertFalse(returning); result = value })
+            flow.receive { value, returning -> assertFalse(returning); result = value }
             assertTrue(requireNotNull(result).isFailure)
             assertTrue(requireNotNull(result).exceptionOrNull()?.message?.contains("timed out") == true)
         }

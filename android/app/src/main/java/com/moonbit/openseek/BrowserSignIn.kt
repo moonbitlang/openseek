@@ -19,7 +19,9 @@ internal class BrowserSignIn(
 ) : Closeable {
     private val listener = ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"))
     private val state = randomHex(16)
-    private val verifier = randomHex(32)
+
+    /** Redeems the code [receive] delivers, with this flow's challenge. */
+    val verifier = randomHex(32)
     val returnUri: String = "$returnScheme://oauth/complete?state=$state"
     val startUri: String = "$origin/v2/auth/account/start?state=$state&code_challenge=" +
         Base64.getUrlEncoder().withoutPadding().encodeToString(
@@ -32,8 +34,13 @@ internal class BrowserSignIn(
             uri.path == "/complete" && query(uri)["state"] == state
     }.getOrDefault(false)
 
-    /** Complete is called before redirecting the browser back into the app. */
-    fun receive(exchange: (String, String) -> String, complete: (Result<String>, Boolean) -> Unit) {
+    /**
+     * Delivers the authorization code, then redirects the browser back into the
+     * app. The code is redeemed after that return, not here: the browser covers
+     * the app meanwhile, and Android 15 and later fail a backgrounded app's
+     * network requests with UnknownHostException.
+     */
+    fun receive(complete: (Result<String>, Boolean) -> Unit) {
         val deadline = System.nanoTime() + timeoutMs * 1_000_000L
         try {
             while (!listener.isClosed) {
@@ -67,11 +74,13 @@ internal class BrowserSignIn(
                         }
                         return@use
                     }
-                    val result = if (error != null) Result.failure(IllegalStateException("Sign-in was declined."))
-                        else runCatching { exchange(requireNotNull(code), verifier) }
-                    complete(result, true)
+                    complete(
+                        if (error != null) Result.failure(IllegalStateException("Sign-in was declined."))
+                        else Result.success(requireNotNull(code)),
+                        true,
+                    )
                     // The browser carries only a state-bound completion signal; the
-                    // account token stays on the native HTTPS exchange and WebView.
+                    // code and the account token stay native.
                     runCatching {
                         socket.getOutputStream().write(("HTTP/1.1 303 See Other\r\nLocation: $returnUri\r\n" +
                             "Cache-Control: no-store\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").toByteArray(UTF_8))

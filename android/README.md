@@ -166,7 +166,9 @@ After building the APK:
 ```
 
 The native tests exercise the actual loopback listener, PKCE verifier binding,
-stray callback rejection, denial, exchange failure, cancellation and timeout.
+stray callback rejection, denial, cancellation and timeout. The code is
+redeemed only after the browser has returned to the app, since Android 15 and
+later fail a backgrounded app's network requests.
 Origin tests cover arbitrary frontend paths and reject other origins.
 On a test emulator with the Connect debug APK running:
 
