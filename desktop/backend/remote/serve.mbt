@@ -144,9 +144,6 @@ const CodeMethodNotFound = -32601
 const CodeInvalidParams = -32602
 
 ///|
-/// A method that ran and failed, for whatever reason: the conversation was
-/// busy, a path was refused, git said no, or something broke. Clients show
-/// `message` and do not branch on the code, so one code serves them all.
 const CodeRequestFailed = -32000
 
 ///|
@@ -378,10 +375,7 @@ fn notification_for_client(
 
 ///|
 /// Run one request through the dispatcher and shape the outcome as a
-/// JSON-RPC response. Only a malformed request is told apart; every other
-/// failure is reported in one shape, with the error's own `Show` text as the
-/// message. An error type an endpoint raises therefore needs no case here,
-/// only a `Show` written for the person reading it.
+/// JSON-RPC response.
 async fn run_request(
   endpoints : Array[@endpoint.Endpoint],
   id : Json,
