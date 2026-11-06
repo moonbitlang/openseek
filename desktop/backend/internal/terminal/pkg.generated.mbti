@@ -1,27 +1,30 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/backend/internal/terminal"
 
+import {
+  "openseek_desktop/backend/moonbit",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
+}
+
 // Values
-pub fn ack_terminal(TerminalState, id~ : String, sequence~ : Int32) -> Unit
-
-pub fn close_all_terminals(TerminalState) -> Unit
-
-pub fn close_terminal(TerminalState, id~ : String) -> Unit
-
-pub fn new_terminal_state() -> TerminalState
-
-pub async fn open_terminal(TerminalState, cwd~ : String, cols~ : Int32, rows~ : Int32, command? : Array[String]) -> String
-
-pub fn resize_terminal(TerminalState, id~ : String, cols~ : Int32, rows~ : Int32) -> Unit raise
-
-pub async fn run_terminal_pump(TerminalState, async (TerminalPush) -> Unit) -> Unit
-
-pub async fn write_terminal(TerminalState, id~ : String, Bytes) -> Unit
 
 // Errors
 pub suberror TerminalError {
-  TerminalError(String)
+  InvalidBase64Input
+  AmbiguousInput
+  NoWorkspace
+  EmptyCommand
+  ServiceClosed
+  CancelledByReconnect
+  SpawnFailed(String)
+  NotOpen(String)
+  WriteFailed(String)
+  ResizeFailed(String)
 }
+pub fn TerminalError::output(Self, &Logger) -> Unit
+pub fn TerminalError::to_string(Self) -> String
+pub impl Show for TerminalError
 
 // Types and methods
 pub(all) enum TerminalPush {
@@ -30,6 +33,14 @@ pub(all) enum TerminalPush {
 }
 
 type TerminalState
+pub fn TerminalState::TerminalState() -> Self
+pub fn TerminalState::ack(Self, id~ : String, sequence~ : Int32) -> Unit
+pub fn TerminalState::close(Self, id~ : String) -> Unit
+pub fn TerminalState::close_all(Self) -> Unit
+pub async fn TerminalState::input(Self, @protocol.TerminalInputPayload) -> Unit
+pub async fn TerminalState::open(Self, @protocol.TerminalOpenPayload, engine~ : String, runtime_dir? : @pathx.Path, source~ : @moonbit.ToolchainSource, bin_dir? : String) -> @protocol.TerminalOpenReply
+pub fn TerminalState::resize(Self, id~ : String, cols~ : Int32, rows~ : Int32) -> Unit raise
+pub async fn TerminalState::run_pump(Self, async (TerminalPush) -> Unit) -> Unit
 pub fn TerminalState::shutdown(Self) -> Unit
 
 // Type aliases

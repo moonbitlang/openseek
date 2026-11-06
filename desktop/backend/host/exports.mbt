@@ -121,7 +121,7 @@ pub async fn desktop_resources(
 /// Exported for the Desktop window host, which owns the window's connection
 /// and sweeps it on `host.connect` (`desktop/app/internal/extension`).
 pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
-  @terminal.close_all_terminals(self.terminal)
+  self.terminal.close_all()
 }
 
 ///|
