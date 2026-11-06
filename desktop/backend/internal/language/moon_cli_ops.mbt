@@ -122,7 +122,7 @@ async fn MoonCliState::resolve_command(self : MoonCliState) -> ToolSpawnConfig? 
     source=self.source,
   ) catch {
     @moonbit.ToolchainUnavailable as unavailable => {
-      @xlog.warn() <?
+      @logging.warn() <?
         {
           "event": "desktop_moon_cli_toolchain_unavailable",
           "reason": "\{unavailable}",
@@ -131,7 +131,7 @@ async fn MoonCliState::resolve_command(self : MoonCliState) -> ToolSpawnConfig? 
       return None
     }
     error => {
-      @xlog.warn() <?
+      @logging.warn() <?
         { "event": "desktop_moon_cli_toolchain_error", "error": "\{error}" }
       self.command = ToolUnavailable
       return None

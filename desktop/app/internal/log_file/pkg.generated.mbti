@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/app/internal/log_file"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+pub async fn with_log_file(String, async (LogFile) -> Unit) -> Unit
+
+// Errors
+
+// Types and methods
+type LogFile
+pub fn LogFile::append(Self, @json.Json) -> Unit raise
+
+// Type aliases
+
+// Traits

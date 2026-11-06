@@ -23,7 +23,7 @@ async fn EngineManager::sweep_archived_deletions_in(
   // stores after it.
   let present = @fsx.is_dir(deleting.to_path()) catch {
     error => {
-      @xlog.warn() <?
+      @logging.warn() <?
         {
           "event": "desktop_archived_delete_sweep_failed",
           "path": deleting.to_string(),
@@ -41,7 +41,7 @@ async fn EngineManager::sweep_archived_deletions_in(
     sort=true,
   ) catch {
     error => {
-      @xlog.warn() <?
+      @logging.warn() <?
         {
           "event": "desktop_archived_delete_sweep_failed",
           "path": deleting.to_string(),
@@ -53,7 +53,7 @@ async fn EngineManager::sweep_archived_deletions_in(
   for name in entries {
     @fs.rmdir(deleting.join(name).to_string(), recursive=true) catch {
       error =>
-        @xlog.warn() <?
+        @logging.warn() <?
           {
             "event": "desktop_archived_delete_sweep_failed",
             "path": deleting.join(name).to_string(),

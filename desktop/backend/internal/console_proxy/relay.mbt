@@ -90,7 +90,7 @@ async fn forward(
     body,
   ) catch {
     error => {
-      @xlog.warn(category="console_proxy") <?
+      @logging.warn(category="console_proxy") <?
         {
           "event": "relay_unreachable",
           "path": target(req),
@@ -136,7 +136,7 @@ async fn bridge_socket(
       return
     }
     error => {
-      @xlog.warn(category="console_proxy") <?
+      @logging.warn(category="console_proxy") <?
         {
           "event": "relay_socket_unreachable",
           "path": target(req),

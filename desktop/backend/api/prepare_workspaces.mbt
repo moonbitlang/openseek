@@ -12,7 +12,7 @@ async fn prepare_workspaces() -> Unit {
     error => {
       // An unwritable Documents folder must not stop the app — the user can
       // still attach a project by hand.
-      @xlog.error() <?
+      @logging.error() <?
         {
           "message": "default workspace setup failed",
           "error": @debug.render(Repr(error)),
@@ -21,7 +21,7 @@ async fn prepare_workspaces() -> Unit {
     }
   }
   if default_workspace is Some(dir) {
-    @xlog.info() <?
+    @logging.info() <?
       { "message": "default workspace attached", "path": dir.to_string() }
   }
   // Conversations the desktop used to keep in the global store predate
@@ -29,7 +29,7 @@ async fn prepare_workspaces() -> Unit {
   // they stay listed; a failure leaves them where they are for a later launch.
   let migrated = @engine.migrate_global_store() catch {
     error => {
-      @xlog.error() <?
+      @logging.error() <?
         {
           "message": "global store migration failed",
           "error": @debug.render(Repr(error)),
@@ -38,7 +38,7 @@ async fn prepare_workspaces() -> Unit {
     }
   }
   if migrated > 0 {
-    @xlog.info() <?
+    @logging.info() <?
       {
         "message": "migrated conversations from the global store",
         "count": migrated,

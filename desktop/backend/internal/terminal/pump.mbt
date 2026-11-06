@@ -113,7 +113,7 @@ async fn run_session(
     defer state.sessions.remove(request.id)
     opened_pty = Some(pty)
     request.reply.put(Ok(()))
-    @xlog.debug() <?
+    @logging.debug() <?
       {
         "event": "terminal_spawn",
         "id": request.id,
@@ -158,7 +158,8 @@ async fn run_session(
   // natural or cancellation-driven exit result even though its handles are
   // now closed.
   let code = pty.wait() catch { _ => -1 }
-  @xlog.debug() <? { "event": "terminal_exit", "id": request.id, "code": code }
+  @logging.debug() <?
+    { "event": "terminal_exit", "id": request.id, "code": code }
   emit(Exited(id=request.id, code~))
 }
 

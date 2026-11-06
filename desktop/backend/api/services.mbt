@@ -48,7 +48,7 @@ pub async fn[G] ApiState::start_services(
     server.add_tools(self.session_tools())
     server.add_tools(self.question_tools())
     server.add_tools(self.artifact_tools())
-    @xlog.info() <?
+    @logging.info() <?
       { "event": "desktop_host_tools_serving", "url": server.url() }
     group.spawn_bg(allow_failure=true, () => server.run())
   }

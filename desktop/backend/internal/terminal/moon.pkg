@@ -6,7 +6,7 @@ import {
   "moonbitlang/core/debug",
   "openseek_desktop/backend/internal/env",
   "openseek_desktop/backend/uuid",
-  "tonyfettes/xlog",
+  "openseek_desktop/backend/logging",
 }
 
 import {

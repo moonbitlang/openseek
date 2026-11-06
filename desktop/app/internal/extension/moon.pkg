@@ -26,7 +26,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "openseek_desktop/uri",
-  "tonyfettes/xlog",
+  "openseek_desktop/backend/logging",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

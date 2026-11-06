@@ -100,14 +100,14 @@ async fn initialize_moonbit(
   version : String,
   runtime_dir : @pathx.Path?,
 ) -> Unit {
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_moonbit_initialize",
       "moon_home": moon_home.to_string(),
       "version": version,
     }
   if is_moonbit_bundled(moon_home, version) {
-    @xlog.debug() <?
+    @logging.debug() <?
       {
         "event": "desktop_moonbit_initialize_reuse",
         "moon_home": moon_home.to_string(),
@@ -130,7 +130,7 @@ async fn initialize_moonbit(
     "version=\{version}",
     create_mode=CreateOrTruncate,
   )
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_moonbit_initialize_complete",
       "moon_home": moon_home.to_string(),
@@ -208,7 +208,7 @@ async fn prepare_moonbit_payload(
   version~ : String,
   runtime_dir? : @pathx.Path,
 ) -> Unit {
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_moonbit_prepare_payload",
       "seed_dir": seed_dir.to_string(),
@@ -217,7 +217,7 @@ async fn prepare_moonbit_payload(
       "moonc_exists": @fsx.exists(moonbit_compiler_command(moon_home)),
     }
   if is_moonbit_bundled(moon_home, version) {
-    @xlog.debug() <?
+    @logging.debug() <?
       {
         "event": "desktop_moonbit_prepare_payload_reuse",
         "seed_dir": seed_dir.to_string(),
@@ -227,7 +227,7 @@ async fn prepare_moonbit_payload(
     ensure_moonx_alias(moon_home)
     return
   }
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_moonbit_prepare_payload_refresh",
       "seed_dir": seed_dir.to_string(),
@@ -237,7 +237,7 @@ async fn prepare_moonbit_payload(
   copy_moonbit_seed_dir(seed_dir, moon_home)
   initialize_moonbit(moon_home, version, runtime_dir)
   ensure_moonx_alias(moon_home)
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_moonbit_prepare_payload_complete",
       "seed_dir": seed_dir.to_string(),

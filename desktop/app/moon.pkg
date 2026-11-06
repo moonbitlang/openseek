@@ -9,6 +9,7 @@ import {
   "openseek_desktop/backend/codex",
   "openseek_desktop/backend/engine",
   "openseek_desktop/app/internal/extension",
+  "openseek_desktop/app/internal/log_file",
   "openseek_desktop/backend/host",
   "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/pathx",
@@ -20,7 +21,7 @@ import {
   "moonbitlang/core/argparse",
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
-  "tonyfettes/xlog",
+  "openseek_desktop/backend/logging",
 }
 
 warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

@@ -909,7 +909,7 @@ async fn finish_fork_worktree(
 ) -> Unit {
   finish_worktree_creation(workspace, entry) catch {
     error =>
-      @xlog.warn() <?
+      @logging.warn() <?
         {
           "event": "desktop_fork_worktree_unlock_failed",
           "worktree": entry.name,

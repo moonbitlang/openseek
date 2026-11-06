@@ -169,7 +169,7 @@ async fn Server::call_tool(
   let (content, is_error) = match outcome {
     Ok(content) => (content, false)
     Err(error) => {
-      @xlog.warn(category="mcp") <?
+      @logging.warn(category="mcp") <?
         {
           "event": "mcp_tool_failed",
           "tool": name,

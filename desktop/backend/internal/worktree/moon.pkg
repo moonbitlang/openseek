@@ -11,7 +11,7 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",
   "moonbitlang/core/json",
-  "tonyfettes/xlog",
+  "openseek_desktop/backend/logging",
 }
 
 import {

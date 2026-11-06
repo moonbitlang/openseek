@@ -1,0 +1,55 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/logging"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+#callsite(autofill(loc))
+pub fn debug(category? : String, loc~ : SourceLoc) -> Event?
+
+#callsite(autofill(loc))
+pub fn error(category? : String, loc~ : SourceLoc) -> Event?
+
+#callsite(autofill(loc))
+pub fn info(category? : String, loc~ : SourceLoc) -> Event?
+
+pub fn set_level(Level) -> Unit
+
+pub fn set_sink((@json.Json) -> Unit raise) -> Unit
+
+#callsite(autofill(loc))
+pub fn warn(category? : String, loc~ : SourceLoc) -> Event?
+
+// Errors
+
+// Types and methods
+type Event
+pub fn Event::write_object_begin(Self) -> Unit
+pub fn Event::write_object_end(Self) -> Unit
+pub fn[T : @json.ToJson] Event::write_object_field(Self, String, T) -> Unit
+
+#derive(Compare, Eq)
+pub(all) enum Level {
+  Fatal
+  Error
+  Warn
+  Info
+  Debug
+  Trace
+}
+pub fn Level::compare(Self, Self) -> Int32
+pub fn Level::equal(Self, Self) -> Bool
+pub fn Level::not_equal(Self, Self) -> Bool
+pub fn Level::op_ge(Self, Self) -> Bool
+pub fn Level::op_gt(Self, Self) -> Bool
+pub fn Level::op_le(Self, Self) -> Bool
+pub fn Level::op_lt(Self, Self) -> Bool
+pub fn Level::output(Self, &Logger) -> Unit
+pub fn Level::to_string(Self) -> String
+pub impl Show for Level
+
+// Type aliases
+
+// Traits

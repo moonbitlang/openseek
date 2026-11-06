@@ -25,7 +25,7 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @pathx.Absolute? {
   ]
   for candidate in candidates {
     let version = bundled_moonbit_seed_version(candidate)
-    @xlog.debug() <?
+    @logging.debug() <?
       {
         "event": "desktop_moonbit_seed_candidate",
         "engine_command": engine_command,
@@ -34,7 +34,7 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @pathx.Absolute? {
         "seed_version": version,
       }
     if version is Some(_) {
-      @xlog.debug() <?
+      @logging.debug() <?
         {
           "event": "desktop_moonbit_seed_selected",
           "candidate": candidate.to_string(),
@@ -42,7 +42,7 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @pathx.Absolute? {
       return Some(candidate)
     }
   }
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_moonbit_seed_missing",
       "engine_command": engine_command,
@@ -58,7 +58,7 @@ async fn prepared_moonbit_payload_dir(
   payload_name? : String,
 ) -> @pathx.Path? {
   guard runtime_dir is Some(runtime_dir) else {
-    @xlog.debug() <?
+    @logging.debug() <?
       {
         "event": "desktop_moonbit_payload_dir_missing_runtime",
         "seed_dir": seed_dir.to_string(),
@@ -69,7 +69,7 @@ async fn prepared_moonbit_payload_dir(
     seed_dir.to_path().basename().to_owned()
   })
   if seed_name.is_empty() {
-    @xlog.debug() <?
+    @logging.debug() <?
       {
         "event": "desktop_moonbit_payload_dir_missing_seed_name",
         "seed_dir": seed_dir.to_string(),
@@ -80,7 +80,7 @@ async fn prepared_moonbit_payload_dir(
   let root = runtime_dir.join("toolchains/moonbit")
   @fsx.ensure_dir(root)
   let moon_home = root.join(seed_name)
-  @xlog.debug() <?
+  @logging.debug() <?
     {
       "event": "desktop_moonbit_payload_dir",
       "seed_dir": seed_dir.to_string(),

@@ -36,7 +36,7 @@ async fn SessionShare::publish(
     @shares.EmptyTitle | @shares.Oversized as refusal =>
       Failed(message="\{refusal}")
     error => {
-      @xlog.error(category="shares") <?
+      @logging.error(category="shares") <?
         { "event": "share_failed", "error": "\{error}" }
       Failed(message="Could not share the conversation: \{error}")
     }
