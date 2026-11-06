@@ -60,9 +60,7 @@ async test "language and semantic tools execute the explicit host toolchain" {
   )
   assert_eq(code, 0)
   assert_eq(stdout.text(), "selected-toolchain")
-  guard state.semantic_provider() is Some(provider) else {
-    fail("expected moonx provider")
-  }
+  let provider = state.semantic_provider()
   let env : Map[String, String] = {
     "MOON_HOME": "registry-home",
     "PATH": "/unrelated",
@@ -72,7 +70,7 @@ async test "language and semantic tools execute the explicit host toolchain" {
   assert_eq(selected.environment["MOON_HOME"], "registry-home")
   let (code, stdout, _) = @processx.collect_output_no_stdin(
     selected.command,
-    @search.semantic_provider_prefix_args(selected.command),
+    @search.moongrep_args([]),
     inherit_env=false,
     extra_env=selected.environment,
   )
@@ -109,18 +107,10 @@ async test "desktop resource selection preserves missing tools and lazy export v
   assert_true(resources.moonbit is DesktopBundle)
   assert_true(resources.ripgrep is None)
   assert_true(resources.bin_dir is None)
-  // The registry provider remains an explicit desktop policy when no standalone
-  // moongrep was packaged. An embedder can instead disable it with None.
-  assert_eq(resources.moongrep, Some("moonx"))
   let state = new_host_state("unused", resources~)
   try state.viz_assets() catch {
     _ => ()
   } noraise {
     _ => fail("missing export assets were accepted")
   }
-  let disabled = new_host_state("unused", resources={
-    ..HostResources::from_path(),
-    moongrep: None,
-  })
-  assert_true(disabled.semantic_provider() is None)
 }
