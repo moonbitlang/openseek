@@ -274,7 +274,7 @@ html.is-resizing .sidebar-resize-handle {
 }
 
 .conversation-row.active {
-  background: var(--color-accent-soft);
+  background: var(--color-conversation-selected);
   color: var(--color-accent);
 }
 
@@ -551,11 +551,7 @@ html.is-resizing .sidebar-resize-handle {
   outline-offset: -2px;
   border-radius: var(--radius-sm);
 }
-.workspace-row:hover {
-  background: var(--color-bg-subtle);
-}
 .workspace-row.active {
-  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-weight: 500;
 }

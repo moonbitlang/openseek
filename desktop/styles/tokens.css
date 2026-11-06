@@ -87,6 +87,10 @@
   --color-bg-canvas: light-dark(var(--light-bg-canvas), var(--dark-bg-canvas));
   --color-bg-surface: light-dark(var(--light-bg-surface), var(--dark-bg-surface));
   --color-bg-subtle: light-dark(var(--light-bg-subtle), var(--dark-bg-subtle));
+  --color-conversation-selected: light-dark(
+    var(--light-conversation-selected),
+    var(--dark-conversation-selected)
+  );
   --color-text-primary: light-dark(var(--light-text-primary), var(--dark-text-primary));
   --color-text-secondary: light-dark(
     var(--light-text-secondary),
