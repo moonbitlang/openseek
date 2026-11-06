@@ -68,12 +68,17 @@ Older releases predating Android remain valid rollback targets.
 ## Self-update
 
 Release builds update themselves from the same manifest as Desktop
-(`https://openseek-api.moonbitlang.cn/desktop/releases/latest.json`). On each
-launch the app compares the manifest's `version` with its own `versionName`,
-downloads `platforms.android` into its cache in the background, and checks
-the SHA-256. When the APK is ready, a dialog offers to install it. If no
-newer release exists, or the release has no APK, the app shows nothing, and
-network failures only reach the log.
+(`https://openseek-api.moonbitlang.cn/desktop/releases/latest.json`). Each
+time the app comes to the foreground, at most once every six hours, it
+compares the manifest's `version` with its own `versionName`. When
+`platforms.android` names a newer APK, a dialog offers to update. The system
+`DownloadManager` then fetches the APK into the app's external files
+directory, showing progress in the notification shade and retrying across
+network loss and process death. When the download completes while the app is
+in the foreground, or on the next return to it, the app checks the SHA-256
+and starts the installation. If no newer release exists, or the release has
+no APK, the app shows nothing, and manifest failures only reach the log; a
+failed download shows a message.
 
 Installing goes through `PackageInstaller`. The first time, Android asks the
 user to allow installs from SeekMoon (`REQUEST_INSTALL_PACKAGES`); the app
@@ -81,7 +86,8 @@ then continues the installation when it returns from Settings. Android shows
 its own confirmation unless the device is on Android 12+ and this app
 installed the current version itself (`UPDATE_PACKAGES_WITHOUT_USER_ACTION`).
 If Android destroys the app while the user is in Settings, the pending
-installation is restored from the saved state. Android rejects an APK signed with a
+installation is restored from the saved state. Installing stops the running
+app, and Android does not reopen it. Android rejects an APK signed with a
 different key, which is why every release must keep the same keystore.
 Debug builds (`.debug`) never check for updates.
 
