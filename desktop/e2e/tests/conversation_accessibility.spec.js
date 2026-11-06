@@ -26,7 +26,7 @@ test('conversation titles support keyboard activation and independent row action
   // A live row's actions sit behind one overflow trigger.
   const actions = first.getByRole('button', { name: 'Conversation actions' });
   await expect(first.locator('[data-slot="context-menu-trigger"] .conversation-open')).toBeVisible();
-  expect(await actions.evaluate(node => node.closest('[data-slot="context-menu-trigger"]'))).toBeNull();
+  expect(await actions.evaluate(node => node.closest('.sidebar-context-trigger'))).toBeNull();
   await expect(actions).toBeFocused();
   // The load spinner leaving the row must not take the focused trigger with it.
   await expect(first).toHaveClass(/loading/);

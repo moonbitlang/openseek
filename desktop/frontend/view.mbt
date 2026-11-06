@@ -2638,10 +2638,7 @@ fn view(
     model.bridge_state() is BridgeLost(message) {
     children.push(bridge_lost_overlay(locale=model.locale, message))
   }
-  @rui.theme(
-    style=["display:contents"],
-    @html.div(class=app_shell_class(model.sidebar_open), children),
-  )
+  @html.div(class=app_shell_class(model.sidebar_open), children)
 }
 
 ///|

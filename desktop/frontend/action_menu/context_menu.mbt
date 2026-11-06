@@ -140,6 +140,22 @@ fn element_context(element : @dom.Element) -> ContextTarget {
 }
 
 ///|
+fn context_keyboard_anchor(element : @dom.Element) -> (Int32, Int32) {
+  let rect = if browser_selection().to_option() is Some(selection) &&
+    selection.count() > 0 {
+    let rect = selection.range(0).bounds()
+    if rect.get_width() > 0 || rect.get_height() > 0 {
+      rect
+    } else {
+      element.get_bounding_client_rect()
+    }
+  } else {
+    element.get_bounding_client_rect()
+  }
+  (rect.get_left().round().to_int(), rect.get_bottom().round().to_int())
+}
+
+///|
 fn context_editable(element : @dom.Element) -> Bool {
   element.closest("input, textarea, select, [contenteditable]") is Some(control) &&
   control.get_attribute("contenteditable") != Some("false")
@@ -339,6 +355,7 @@ pub fn context_component(
   )
   let remembered_selection : Ref[(Int32, Int32, String?)?] = Ref(None)
   let next_focus_id = Ref(0)
+  let keyboard_request : Ref[ContextRequest?] = Ref(None)
   let visible = Ref(false)
   let render : Ref[
     (@html.Html, @i18n.Locale, ContextInput, ContextState) -> @html.Html,
@@ -373,6 +390,16 @@ pub fn context_component(
           }
           emit(Requested(request, context_focus_id(next_focus_id)))
         }
+        // The shell is the trigger, but keyboard invocation belongs beside
+        // the focused content, not at the shell's upper-left corner.
+        let keyboard_open = (event : @dom.Event, element) => {
+          event.prevent_default()
+          keyboard_request.val = Some(requested(element, 0, 0, true))
+          let (x, y) = context_keyboard_anchor(element)
+          dispatch_context_at(element, x, y)
+          keyboard_request.val = None
+          @cmd.none
+        }
         let trigger_attrs = @html.Attrs::build()
           .on_mousedown(event => {
             if event.get_button() == 2 &&
@@ -394,9 +421,16 @@ pub fn context_component(
               event.stop_immediate_propagation()
               return @cmd.none
             }
+            if keyboard_request.val is Some(request) {
+              return accept(event.as_event(), request)
+            }
             let x = event.get_client_x().to_int()
             let y = event.get_client_y().to_int()
-            accept(event.as_event(), requested(element, x, y, x == 0 && y == 0))
+            if x == 0 && y == 0 {
+              keyboard_open(event.as_event(), element)
+            } else {
+              accept(event.as_event(), requested(element, x, y, false))
+            }
           })
           .on_keydown(event => {
             guard !event.get_default_prevented() &&
@@ -411,7 +445,7 @@ pub fn context_component(
               event.stop_immediate_propagation()
               return @cmd.none
             }
-            accept(event.as_event(), requested(element, 0, 0, true))
+            keyboard_open(event.as_event(), element)
           })
         let menu_attrs = @html.Attrs::build()
           .data_set("action-menu-surface", GlobalContextTarget)
@@ -477,13 +511,16 @@ pub fn context_component(
     input,
     state,
   ) => {
-    @html.span(
-      id=GlobalContextTarget + "-root",
+    @rui.theme(
       style=["display:contents"],
-      attrs=@html.Attrs::build()
-        .data_set("slot", "context-menu")
-        .data_set("state", if visible.val { "open" } else { "closed" }),
-      (render.val)(content, locale, input, state),
+      @html.span(
+        id=GlobalContextTarget + "-root",
+        style=["display:contents"],
+        attrs=@html.Attrs::build()
+          .data_set("slot", "context-menu")
+          .data_set("state", if visible.val { "open" } else { "closed" }),
+        (render.val)(content, locale, input, state),
+      ),
     )
   })
 }
