@@ -1231,7 +1231,7 @@ fn apply_engine_event(
             run_id: event_run_id,
             tool_name,
             detail,
-            body: approval_display_body(tool_name, body),
+            body: @engine_session.approval_display_body(tool_name, body),
             answered: false,
           }),
         },
@@ -2571,6 +2571,7 @@ fn update_msg(
             )
           }
           @composer.StopRequested(identity~)
+          | @composer.ApprovalAnswered(identity~, ..)
           | @composer.FollowupSubmitted(identity~, ..)
           | @composer.QueuedInputEditRequested(identity~, ..)
           | @composer.QueuedInputSteerRequested(identity~, ..)
@@ -2628,6 +2629,39 @@ fn update_msg(
               FileEditor(@fileeditor.EnsureFileIndex),
               model,
             )
+          }
+          // The session keeps the mode on the server; a running turn keeps
+          // the policy its engine started with, so the menu is locked then.
+          @composer.ApprovalMenuToggled(identity~) => {
+            guard model.screen is Chat &&
+              model.cloud_identity() == Some(identity.owner) &&
+              model.cloud.can_choose_approval(identity.owner.session()) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(
+              dispatch,
+              ToggleSelectMenu(OpenSeekApprovalMenu),
+              model,
+            )
+          }
+          @composer.SelectMenuDismissed(identity~) => {
+            guard model.cloud_identity() == Some(identity.owner) else {
+              return (@cmd.none, model)
+            }
+            return update_msg(dispatch, CloseSelectMenu, model)
+          }
+          @composer.ApprovalSelected(identity~, mode~) => {
+            guard model.cloud_identity() == Some(identity.owner) &&
+              identity.owner is @interop.Cloud(account~, session~) else {
+              return (@cmd.none, model)
+            }
+            let (close, closed) = update_msg(dispatch, CloseSelectMenu, model)
+            let (save, next) = update_cloud(
+              dispatch,
+              @cloud.Edit(account~, session~, edit=SetApproval(mode)),
+              closed,
+            )
+            return (@cmd.batch([close, save]), next)
           }
           _ => return (@cmd.none, model)
         }

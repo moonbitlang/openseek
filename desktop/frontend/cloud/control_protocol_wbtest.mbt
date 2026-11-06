@@ -160,6 +160,85 @@ test "Cloud control snapshots reject absent null and malformed required fields" 
 }
 
 ///|
+test "Cloud control snapshots carry the active task's permission question" {
+  guard control_snapshot_fixture() is Object(fields) &&
+    fields["data"] is Object(data) else {
+    fail("object fixture")
+  }
+  let decode = (approval : Json?) => {
+    let state = data.copy()
+    if approval is Some(value) {
+      state["approval"] = value
+    }
+    let snapshot = fields.copy()
+    snapshot["data"] = Json(state)
+    decode_control_event("control_state", Json(snapshot))
+  }
+  // Servers without approval support omit the field; null means none pending.
+  assert_true(decode(None) is Snapshot({ data: { approval: None, .. }, .. }))
+  assert_true(
+    decode(Some(null)) is Snapshot({ data: { approval: None, .. }, .. }),
+  )
+  guard decode(
+      Some({
+        "id": "approval-1",
+        "tool_name": "shell",
+        "detail": "run rm -rf build",
+        "body": null,
+        "future": 1,
+      }),
+    )
+    is Snapshot({ data: { approval: Some(question), .. }, .. }) else {
+    fail("expected a pending question")
+  }
+  assert_true(
+    question ==
+    {
+      id: "approval-1",
+      tool_name: "shell",
+      detail: "run rm -rf build",
+      body: None,
+    },
+  )
+  assert_true(
+    decode(Some({ "id": "a", "tool_name": "shell", "detail": "d" }))
+    is Snapshot({ data: { approval: Some({ body: None, .. }), .. }, .. }),
+  )
+  // A write question shows the file contents it would write, as Local does.
+  assert_true(
+    decode(
+      Some({
+        "id": "a",
+        "tool_name": "write",
+        "detail": "write notes.md",
+        "body": ({ "path": "notes.md", "content": "hello" } : Json).stringify(),
+      }),
+    )
+    is Snapshot(
+      { data: { approval: Some({ body: Some("hello"), .. }), .. }, .. }
+    ),
+  )
+  for
+    malformed in [
+      Json("approval-1"),
+      ({ "tool_name": "shell", "detail": "d" } : Json),
+      { "id": "a", "detail": "d" },
+      { "id": "a", "tool_name": "shell" },
+      { "id": 1, "tool_name": "shell", "detail": "d" },
+      { "id": "a", "tool_name": "shell", "detail": "d", "body": 1 },
+    ] {
+    let rejected = try {
+      ignore(decode(Some(malformed)))
+      false
+    } catch {
+      @cloud_client.RequestError(Malformed) => true
+      _ => false
+    }
+    assert_true(rejected)
+  }
+}
+
+///|
 extern "js" fn mock_control_http(
   status : Int32,
   response : String,
@@ -171,7 +250,7 @@ extern "js" fn mock_control_http(
   #|     const body = options.body == null ? "" : await new Response(options.body).text();
   #|     record(String(url), options.method, new Headers(options.headers).get("Authorization") || "", body);
   #|     if (status < 0) throw new TypeError("offline");
-  #|     return new Response(response, {status});
+  #|     return new Response(status === 204 ? null : response, {status});
   #|   };
   #|   return () => {globalThis.fetch = previous;};
   #| }
@@ -241,6 +320,20 @@ async fn check_control_requests() -> Unit {
         { "accepted": true, "task_id": "task", "action": "steer", "id": "q" },
         { "task_id": "task", "action": "steer", "id": "q" },
       ),
+      (
+        Approve(id="approval-1", allow=false),
+        "commands",
+        202,
+        { "accepted": true },
+        {
+          "task_id": "task",
+          "command": {
+            "command": "approval",
+            "id": "approval-1",
+            "allow": false,
+          },
+        },
+      ),
     ] {
     let requests = []
     let restore = mock_control_http(status, reply.stringify(), (
@@ -271,6 +364,7 @@ async fn check_native_command_requests() -> Unit {
       @wire.GoalSet(text="Ship the change", auto=false),
       @wire.GoalClear,
       @wire.Compact,
+      @wire.ApprovalDecision(id="approval-1", allow=true),
     ] {
     let requests = []
     let restore = mock_control_http(202, "{\"accepted\":true}", (
@@ -475,4 +569,32 @@ async test "Cloud control HTTP and SSE preserve operation and ownership contract
   check_control_requests()
   check_control_failures()
   check_control_state_requests()
+  check_approval_mode_requests()
+}
+
+///|
+/// The approval mode PATCH carries only the mode and reports a running turn.
+async fn check_approval_mode_requests() -> Unit {
+  let requests = []
+  let restore_saved = mock_control_http(204, "", (url, method_, auth, body) => {
+    requests.push((url, method_, auth, body))
+  })
+  defer restore_saved()
+  edit_session("fixture", "session/?", SetApproval(ApprovalReview))
+  assert_eq(requests.length(), 1)
+  let (url, method_, auth, body) = requests[0]
+  assert_eq(url, CloudOrigin + "/v1/sessions/session%2F%3F")
+  assert_eq(method_, "PATCH")
+  assert_eq(auth, "Bearer fixture")
+  assert_eq(@json.parse(body), { "approval": "review" })
+  let restore = mock_control_http(409, "", (_, _, _, _) => ())
+  defer restore()
+  let busy = try {
+    edit_session("fixture", "session", SetApproval(ApprovalAsk))
+    false
+  } catch {
+    @cloud_client.RequestError(Http(409)) => true
+    _ => false
+  }
+  assert_true(busy)
 }

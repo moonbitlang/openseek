@@ -251,6 +251,38 @@ pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
   match edit {
     Rename(_) => !session.archived
     Archive(archived) => session.archived != archived && self.can_delete(id)
+    SetApproval(mode) =>
+      session.approval != mode && self.can_choose_approval(id)
+  }
+}
+
+///|
+/// A running engine keeps the policy it started with, so the server refuses
+/// a change until the turn ends. A session the server has not created yet
+/// has no mode to change, and a save in flight holds the picker.
+pub fn State::can_choose_approval(self : State, id : String) -> Bool {
+  !self.retired.contains(id) &&
+  !self.deletions.contains(id) &&
+  !self.metadata_saves.contains(id) &&
+  self.sessions.any(session => {
+    session.id == id && !session.archived && !session.generating
+  }) &&
+  self.conversations
+  .get(id)
+  .map_or(true, conversation => {
+    !conversation.sending &&
+    conversation.outgoing is None &&
+    !conversation.generating
+  })
+}
+
+///|
+/// The mode the session's next engine starts with. Before the server creates
+/// the session, and on servers without approval modes, engines ask.
+pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval {
+  match self.sessions.iter().find_first(session => session.id == id) {
+    Some(session) => session.approval
+    None => ApprovalAsk
   }
 }
 
@@ -271,7 +303,10 @@ pub fn State::can_send(self : State, id : String) -> Bool {
   self.conversations.get(id) is Some(conversation) &&
   self.can_compose(id) &&
   !self.deletions.contains(id) &&
-  !(self.metadata_saves.get(id) is Some({ edit: Archive(true), .. })) &&
+  // The next turn's engine starts with the saved approval mode, never one
+  // still on its way to the server.
+  !(self.metadata_saves.get(id)
+  is Some({ edit: Archive(true) | SetApproval(_), .. })) &&
   !conversation.loading &&
   !conversation.sending &&
   conversation.outgoing is None &&
@@ -438,6 +473,7 @@ pub fn update(
             updated_at: None,
             generating: false,
             archived: false,
+            approval: ApprovalAsk,
           })
         }
       })
@@ -505,6 +541,7 @@ pub fn update(
           updated_at: None,
           generating: false,
           archived: false,
+          approval: ApprovalAsk,
         },
         ..state.sessions.filter(session => session.id != id),
       ]
@@ -613,6 +650,7 @@ pub fn update(
                 archived,
                 generating: session.generating && !archived,
               }
+            SetApproval(approval) => { ..session, approval, }
           }
         }
       })
@@ -639,6 +677,19 @@ pub fn update(
       let metadata_saves = state.metadata_saves.copy()
       metadata_saves.remove(id)
       let (next, command) = { ..state, metadata_saves, }.failed(error)
+      // A turn that began before the save reached the server holds the mode.
+      if save.edit is SetApproval(_) && error is Http(409) {
+        return (
+          {
+            ..next,
+            notice: Some(
+              "A turn started before the approval mode was saved. Choose it again after the turn finishes.",
+            ),
+          },
+          command,
+          None,
+        )
+      }
       (next, command, None)
     }
     Delete(id) => {
