@@ -14,7 +14,7 @@ import {
   "openseek_desktop/backend/internal/language",
   "openseek_desktop/backend/internal/search",
   "openseek_desktop/protocol",
-  "openseek_desktop/backend/internal/skillmarket",
+  "openseek_desktop/backend/internal/skills",
   "openseek_desktop/backend/internal/files",
   "openseek_desktop/backend/internal/git",
   "openseek_desktop/backend/internal/github",
@@ -33,13 +33,6 @@ import {
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek_protocol",
 }
-
-import {
-  "moonbit-community/flate/zip",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
-  "moonbitlang/x/crypto",
-} for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

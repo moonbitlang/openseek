@@ -46,7 +46,7 @@ struct HostState {
   moon : @language.MoonCliState
   updates : SelfUpdate
   resources : HostResources
-  skills : @skillmarket.BuiltinSkills
+  skills : @skills.BuiltinSkills
 }
 
 ///|
@@ -92,8 +92,18 @@ pub fn new_host_state(
     moon: MoonCliState(engine, runtime_dir?, source=resources.moonbit),
     updates: SelfUpdate(runtime_dir, executable, app_version~),
     resources,
-    skills: @skillmarket.BuiltinSkills::new(),
+    skills: BuiltinSkills(),
   }
+}
+
+///|
+/// Install or update the built-in skills once for this host, reporting each
+/// library change through `on_changed`.
+pub async fn HostState::sync_builtin_skills(
+  self : HostState,
+  on_changed : () -> Unit,
+) -> Unit {
+  self.skills.sync(on_changed)
 }
 
 ///|
@@ -311,20 +321,20 @@ pub fn endpoints(
     Endpoint(@commands.moonide_codelens, payload => {
       @language.moonide_codelens(state.moon, payload)
     }),
-    Endpoint(@commands.skills_catalog, _ => skills_catalog_op()),
-    Endpoint(@commands.skills_content, payload => skills_content_op(payload)),
+    Endpoint(@commands.skills_catalog, _ => @skills.catalog()),
+    Endpoint(@commands.skills_content, payload => @skills.content(payload)),
     Endpoint(@commands.skills_installed_content, payload => {
-      installed_skill_content_op(payload)
+      @skills.installed_content(payload)
     }),
-    Endpoint(@commands.skills_installed, _ => installed_skills_op(state)),
+    Endpoint(@commands.skills_installed, _ => state.skills.installed()),
     Endpoint(@commands.skills_install, payload => {
-      install_skill_op(state, payload, on_skills_changed)
+      state.skills.install(payload, on_skills_changed)
     }),
     Endpoint(@commands.skills_uninstall, payload => {
-      uninstall_skill_op(payload, on_skills_changed)
+      @skills.uninstall(payload, on_skills_changed)
     }),
     Endpoint(@commands.skills_set_enabled, payload => {
-      set_skill_enabled_op(payload, on_skills_changed)
+      @skills.set_enabled(payload, on_skills_changed)
     }),
     Endpoint(@commands.update_check, _ => state.updates.check()),
     @endpoint.Endpoint::sync(@commands.update_download, _ => {

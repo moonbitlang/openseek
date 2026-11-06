@@ -1,5 +1,5 @@
 ///|
-pub fn builtin_skills() -> Array[RegistrySkillIdentity] {
+fn builtin_skills() -> Array[RegistrySkillIdentity] {
   [
     { module_name: "moonbitlang/typst", package_path: "", },
     { module_name: "moonbitlang/office-cli", package_path: "", },
@@ -31,12 +31,12 @@ fn legacy_builtin_slug(identity : RegistrySkillIdentity) -> String? {
 }
 
 ///|
-pub fn is_builtin(identity : RegistrySkillIdentity) -> Bool {
+fn is_builtin(identity : RegistrySkillIdentity) -> Bool {
   builtin_skills().contains(identity)
 }
 
 ///|
-pub struct BuiltinSkillError {
+priv struct BuiltinSkillError {
   registry : RegistrySkillIdentity
   message : String
 }
@@ -48,19 +48,17 @@ struct BuiltinSkills {
 }
 
 ///|
-pub fn BuiltinSkills::new(
-  entries~ : Array[RegistrySkillIdentity] = builtin_skills(),
-) -> BuiltinSkills {
-  { entries: entries.copy(), errors: [], }
+pub fn BuiltinSkills::BuiltinSkills() -> BuiltinSkills {
+  { entries: builtin_skills(), errors: [], }
 }
 
 ///|
-pub fn BuiltinSkills::errors(self : BuiltinSkills) -> Array[BuiltinSkillError] {
+fn BuiltinSkills::errors(self : BuiltinSkills) -> Array[BuiltinSkillError] {
   self.errors.copy()
 }
 
 ///|
-pub fn BuiltinSkills::clear_error(
+fn BuiltinSkills::clear_error(
   self : BuiltinSkills,
   module_name~ : String,
   package_path~ : String,
@@ -78,10 +76,7 @@ fn BuiltinSkills::record_error(
   error : Error,
   on_changed : () -> Unit,
 ) -> Unit {
-  let message = match error {
-    SkillMarketError(message) => message
-    error => "\{error}"
-  }
+  let message = "\{error}"
   self.clear_error(
     module_name=identity.module_name,
     package_path=identity.package_path,
@@ -153,9 +148,7 @@ pub async fn BuiltinSkills::sync(
           skill.package_path == identity.package_path
         })
         is Some(skill) else {
-        raise SkillMarketError(
-          "built-in skill is missing from the registry catalog",
-        )
+        raise SkillsError("built-in skill is missing from the registry catalog")
       }
       let desired = source_label(
         skill.module_name,

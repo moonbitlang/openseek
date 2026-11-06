@@ -1,6 +1,6 @@
 ///|
 async test "manual installation clears its startup failure before notifying clients" {
-  let root = @fs.tmpdir(prefix="host-builtin-skills-")
+  let root = @fs.tmpdir(prefix="openseek-builtin-skills-")
   defer @fs.rmdir(root, recursive=true)
   let previous = @sys.get_env_var("OPENSEEK_GLOBAL_SKILLS_DIR")
   @sys.set_env_var("OPENSEEK_GLOBAL_SKILLS_DIR", root)
@@ -50,25 +50,23 @@ async test "manual installation clears its startup failure before notifying clie
         }
       })
     })
-    let state = new_host_state("unused-test-engine")
-    state.sync_builtin_skills(registry=base, () => ())
-    guard installed_skills_op(state)
-      is InstalledSkills([], builtin_errors=before) else {
+    let builtins = BuiltinSkills()
+    builtins.sync(registry=base, () => ())
+    guard builtins.installed() is InstalledSkills([], builtin_errors=before) else {
       fail("expected an empty library with startup errors")
     }
     assert_true(
       before.any(error => error.registry.module_name == "moonbitlang/office-cli"),
     )
     let mut cleared_at_commit = false
-    let installed = install_skill_op(
-      state,
+    let installed = builtins.install(
       {
         module_name: "moonbitlang/office-cli",
         package_path: Some(""),
         version: "1.0.0",
       },
       () => {
-        cleared_at_commit = state.skills
+        cleared_at_commit = builtins
           .errors()
           .all(error => error.registry.module_name != "moonbitlang/office-cli")
       },
@@ -79,8 +77,7 @@ async test "manual installation clears its startup failure before notifying clie
     }
     assert_true(cleared_at_commit)
     assert_true(skill.builtin && skill.enabled)
-    guard installed_skills_op(state)
-      is InstalledSkills([_], builtin_errors=remaining) else {
+    guard builtins.installed() is InstalledSkills([_], builtin_errors=remaining) else {
       fail("expected recovered library")
     }
     assert_eq(
@@ -91,15 +88,14 @@ async test "manual installation clears its startup failure before notifying clie
     )
     for enabled in [true, false] {
       assert_true(
-        set_skill_enabled_op({ id: skill.id, enabled, }, () => ())
-        is SkillEnabledSet,
+        set_enabled({ id: skill.id, enabled, }, () => ()) is SkillEnabledSet,
       )
-      guard uninstall_skill_op({ id: skill.id, }, () => ())
+      guard uninstall({ id: skill.id, }, () => ())
         is SkillUninstallError(message) else {
         fail("expected built-in uninstall refusal")
       }
       assert_true(message.contains("disable the skill instead"))
-      guard installed_skills_op(state) is InstalledSkills([retained], ..) else {
+      guard builtins.installed() is InstalledSkills([retained], ..) else {
         fail("expected retained skill")
       }
       assert_eq(retained.enabled, enabled)

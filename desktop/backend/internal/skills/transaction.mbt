@@ -109,14 +109,14 @@ async fn SkillLibrary::recover(self : SkillLibrary) -> Unit {
       if @fsx.exists(target) {
         @fsx.rmdir(backup, recursive=true) catch {
           error =>
-            raise SkillMarketError(
+            raise SkillsError(
               "cannot clean the backup for skill \{id}: \{error}",
             )
         }
       } else {
         @fs.rename(backup.to_string(), target.to_string(), replace=false) catch {
           error =>
-            raise SkillMarketError(
+            raise SkillsError(
               "cannot restore the backup for skill \{id}: \{error}",
             )
         }
@@ -132,7 +132,7 @@ async fn SkillLibrary::recover(self : SkillLibrary) -> Unit {
       }
       @fsx.rmdir(self.staging(id), recursive=true) catch {
         error =>
-          raise SkillMarketError(
+          raise SkillsError(
             "cannot clean the staged files for skill \{id}: \{error}",
           )
       }
@@ -147,7 +147,7 @@ async fn SkillLibrary::recover(self : SkillLibrary) -> Unit {
       }
       @fsx.rmdir(self.trash(id), recursive=true) catch {
         error =>
-          raise SkillMarketError(
+          raise SkillsError(
             "cannot clean the uninstalled skill \{id}: \{error}",
           )
       }
@@ -200,7 +200,7 @@ async fn SkillLibrary::activate(
     if upgrading {
       @fs.rename(target.to_string(), backup.to_string(), replace=false) catch {
         error =>
-          raise SkillMarketError(
+          raise SkillsError(
             "cannot back up the installed skill \{id}: \{error}",
           )
       }
@@ -210,12 +210,12 @@ async fn SkillLibrary::activate(
         if upgrading {
           @fs.rename(backup.to_string(), target.to_string(), replace=false) catch {
             restore_error =>
-              raise SkillMarketError(
+              raise SkillsError(
                 "cannot activate skill \{id}: \{move_error}; restoring its backup also failed: \{restore_error}",
               )
           }
         }
-        raise SkillMarketError("cannot activate skill \{id}: \{move_error}")
+        raise SkillsError("cannot activate skill \{id}: \{move_error}")
       }
     }
     if on_committed is Some(callback) {
@@ -245,8 +245,7 @@ async fn SkillLibrary::move_to_trash(
   @fsx.ensure_dir(self.root.join(TrashDirectory))
   @async.protect_from_cancel(() => {
     @fs.rename(target.to_string(), trash.to_string(), replace=false) catch {
-      error =>
-        raise SkillMarketError("failed to uninstall skill \{id}: \{error}")
+      error => raise SkillsError("failed to uninstall skill \{id}: \{error}")
     }
     if on_committed is Some(callback) {
       callback()
