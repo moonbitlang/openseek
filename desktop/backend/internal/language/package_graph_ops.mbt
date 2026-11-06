@@ -21,20 +21,14 @@ async fn moon_package_graph_cwd(
     payload.root,
     payload.path,
   )
-  let manifest = location.physical_root.join(location.physical_relative)
+  let manifest = location.root.physical.join(location.physical_relative)
   guard manifest.to_path().basename() == "moon.mod" else {
-    raise PayloadError("path must name moon.mod")
+    raise InvalidRequest("path must name moon.mod")
   }
-  let kind = @fs.kind(manifest.to_string()) catch {
-    _ => raise HostError("moon.mod is unavailable")
+  guard @fs.kind(manifest.to_string()) is Regular else {
+    raise InvalidRequest("path must name a moon.mod file")
   }
-  guard kind is Regular else {
-    raise PayloadError("path must name a moon.mod file")
-  }
-  guard manifest.to_path().dirname().to_absolute() is Some(cwd) else {
-    raise HostError("moon.mod parent is not an absolute path")
-  }
-  cwd.normalize()
+  manifest.to_path().dirname().resolve()
 }
 
 ///|
@@ -147,7 +141,7 @@ fn moon_package_graph_process_reply(
 /// resolution, spawn, text decoding, and timeout failures are reported as an
 /// explicit reply variant so the editor can retain and display the source
 /// view while explaining why the graph is unavailable.
-async fn moon_package_graph_op(
+pub async fn moon_package_graph(
   state : MoonCliState,
   payload : @protocol.MoonPackageGraphPayload,
 ) -> @protocol.MoonPackageGraphReply {

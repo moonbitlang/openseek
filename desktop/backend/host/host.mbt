@@ -43,7 +43,7 @@ impl Show for PayloadError with fn output(self, logger) {
 struct HostState {
   engine : String
   runtime_dir : @pathx.Path?
-  moon : MoonCliState
+  moon : @language.MoonCliState
   updates : SelfUpdate
   resources : HostResources
   skills : @skillmarket.BuiltinSkills
@@ -315,21 +315,25 @@ pub fn endpoints(
       Acknowledged
     }),
     Endpoint(@commands.moon_package_graph, payload => {
-      moon_package_graph_op(state.moon, payload)
+      @language.moon_package_graph(state.moon, payload)
     }),
-    Endpoint(@commands.lsp_open, payload => lsp_open_op(state.moon, payload)),
-    Endpoint(@commands.lsp_hover, payload => lsp_hover_op(state.moon, payload)),
+    Endpoint(@commands.lsp_open, payload => {
+      @language.lsp_open(state.moon, payload)
+    }),
+    Endpoint(@commands.lsp_hover, payload => {
+      @language.lsp_hover(state.moon, payload)
+    }),
     Endpoint(@commands.lsp_workspace_symbols, payload => {
-      workspace_symbols_op(state.moon, payload)
+      @language.workspace_symbols(state.moon, payload)
     }),
     Endpoint(@commands.moonide_definition, payload => {
-      moonide_definition_op(state, payload)
+      @language.moonide_definition(state.moon, payload)
     }),
     Endpoint(@commands.moonide_references, payload => {
-      moonide_references_op(state, payload)
+      @language.moonide_references(state.moon, payload)
     }),
     Endpoint(@commands.moonide_codelens, payload => {
-      moonide_codelens_op(state, payload)
+      @language.moonide_codelens(state.moon, payload)
     }),
     Endpoint(@commands.skills_catalog, _ => skills_catalog_op()),
     Endpoint(@commands.skills_content, payload => skills_content_op(payload)),
