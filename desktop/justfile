@@ -48,3 +48,14 @@ console-proxy *args:
 test-browser:
     node package/build.mjs browser --release
     {{ if os() == "windows" { "npm.cmd" } else { "npm" } }} --prefix e2e test
+
+# Build what the real-server browser specs (e2e/real) run against: the
+# release browser bundle, the headless app-server and the engine CLI.
+test-browser-real-build:
+    node package/build.mjs browser --release
+    moon -C .. build desktop/backend/server . --target native
+
+# Browser flows against a real app-server per worker, with a scripted model.
+# Not part of CI yet; build first with `just test-browser-real-build`.
+test-browser-real *args:
+    {{ if os() == "windows" { "npm.cmd" } else { "npm" } }} --prefix e2e run test:real -- {{ args }}

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "playwright test",
+    "test:real": "playwright test -c playwright.real.config.js",
     "test:artifact-offline": "node run-artifact-offline.mjs",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",

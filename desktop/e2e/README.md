@@ -72,6 +72,25 @@ Avoid checks that only memorialize a removed control or feature, or pin icon
 paths, decorative pixel dimensions, alignment, and theme colors. Keep layout
 checks tied to observable behavior such as clipping, reachability, or scrolling.
 
+## Real app-server flows
+
+`real/` runs the same bundle against the real headless `openseek-app-server`
+and `openseek` engine instead of a fake transport. Each worker starts one
+server with an isolated `HOME`; the server serves the bundle itself through
+its loopback console (`OPENSEEK_APP_SERVER_CONSOLE`). An offline scripted
+model (`real/support/scripted_model.js`) answers `/chat/completions`, and
+each test gets its own project directory. Assert only what a user sees.
+
+From `desktop/`:
+
+```sh
+just test-browser-real-build
+just test-browser-real
+```
+
+The Skills catalog and built-in skills still come from mooncakes.io. These
+specs are not part of CI yet.
+
 ## Offline interactive answers
 
 The artifact runner compiles the Rabbita starter and runs four standalone
