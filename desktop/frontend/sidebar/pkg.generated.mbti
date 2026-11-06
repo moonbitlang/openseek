@@ -26,7 +26,7 @@ pub(all) struct Account {
   avatar : String
   busy : Bool
   notice : String?
-  device : DeviceChoice?
+  page : Page
   online_devices : Array[DeviceChoice]
 }
 pub fn Account::equal(Self, Self) -> Bool
@@ -41,7 +41,7 @@ pub(all) struct Actions {
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
-  select_device : (String) -> @cmd.Cmd
+  select_device : (String?) -> @cmd.Cmd
   select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
 }
@@ -84,6 +84,15 @@ pub(all) enum Mode {
 pub fn Mode::equal(Self, Self) -> Bool
 pub fn Mode::not_equal(Self, Self) -> Bool
 pub fn Mode::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Page {
+  CloudPage
+  DevicePage(id~ : String, name~ : String?)
+}
+pub fn Page::equal(Self, Self) -> Bool
+pub fn Page::not_equal(Self, Self) -> Bool
+pub fn Page::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

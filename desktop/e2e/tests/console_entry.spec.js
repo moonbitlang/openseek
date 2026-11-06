@@ -30,20 +30,21 @@ test('a signed-out device page offers login and preserves the page return path',
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the sidebar selector lists only online devices and switches between them', async ({ page }) => {
+test('the sidebar selector lists Cloud and online devices and switches between them', async ({ page }) => {
   const app = await installConsole(page);
   await page.route('**/v2/devices', route => route.fulfill({ json: { devices: [
     { id: 'device-a', name: 'Test Mac', online: true },
     { id: 'offline', name: 'Office computer', online: false },
     { id: 'device-b', name: 'Studio', online: true },
   ] } }));
-  // A Cloud page has no device yet; the selector says so and connects nothing.
+  // A Cloud page has no device; the selector names Cloud and connects nothing.
   await page.goto('/cloud');
   await page.locator('.sidebar-toggle').click();
   const selector = page.getByRole('button', { name: 'Choose a device', exact: true });
-  await expect(selector).toContainText('Choose a device');
+  await expect(selector).toContainText('Cloud');
   expect(app.socket).toBeNull();
   await selector.click();
+  await expect(page.getByRole('menuitem', { name: 'Cloud', exact: true })).toBeDisabled();
   await expect(page.getByRole('menuitem', { name: 'Test Mac', exact: true })).toBeEnabled();
   await expect(page.getByRole('menuitem', { name: 'Studio', exact: true })).toBeEnabled();
   await expect(page.getByRole('menuitem', { name: 'Office computer' })).toHaveCount(0);
@@ -60,6 +61,14 @@ test('the sidebar selector lists only online devices and switches between them',
   await assertFits(page);
   await page.getByRole('menuitem', { name: 'Studio', exact: true }).click();
   await expect(page).toHaveURL(/\/device\/device-b\/chat(\/new)?$/);
+  // A device page returns to Cloud through the same menu.
+  await page.locator('.sidebar-toggle').click();
+  await selector.click();
+  await expect(page.getByRole('menuitem', { name: 'Studio', exact: true })).toBeDisabled();
+  await page.getByRole('menuitem', { name: 'Cloud', exact: true }).click();
+  await expect(page).toHaveURL(/\/cloud$/);
+  await page.locator('.sidebar-toggle').click();
+  await expect(selector).toContainText('Cloud');
   expect(app.pageErrors).toEqual([]);
 });
 
