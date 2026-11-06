@@ -1,15 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
-# A newer PR head supersedes its older checks. Keep main runs complete so every
-# merged commit still receives a full CI result.
+# Validate before merging; a newer PR head supersedes its older checks.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   workflows:

@@ -1,25 +1,8 @@
 name: Desktop
 
+# The browser packager reads Editor packages and assets, shared engine
+# protocols, and tool output views directly from this checkout.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "desktop/**"
-      # The browser packager reads Editor MoonBit packages, styles, fonts, and
-      # Mermaid assets directly from this checkout.
-      - "editor/**"
-      # Desktop's browser frontend renders the shared engine event protocol
-      # and root-module tool output views.
-      - "protocol/**"
-      - "share/artifact/**"
-      - "agent_tool/edit_diff/**"
-      - "agent_tool/mbtx/html/**"
-      - "jsonrpc/**"
-      - "viz_export/**"
-      - "moon.mod"
-      - "moon.work"
-      - ".github/workflows/desktop.yml"
-      - ".github/workflows/desktop-release.yml"
   pull_request:
     paths:
       - "desktop/**"
@@ -35,15 +18,13 @@ on:
       - ".github/workflows/desktop.yml"
       - ".github/workflows/desktop-release.yml"
 
-# A newer PR head supersedes its older run. Keep main runs complete so every
-# relevant merged commit still receives Desktop E2E and packaging results.
+# Validate before merging; a newer PR head supersedes its older run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
-  # The Windows package job lives in desktop-windows.yml, which runs on pull
-  # requests only when they change packaging paths.
+  # The Windows package job lives in desktop-windows.yml.
 
   # The window host is the only module that depends on Proton, so it builds in
   # its own desktop/app/moon.work and is checked here rather than by the root
@@ -79,8 +60,7 @@ jobs:
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # Pull requests may restore the default branch's cache, but their own
-      # merge-ref caches are private to that PR and cannot warm other branches.
+      # Restore an existing default-branch cache or this PR's merge-ref cache.
       - name: Restore Proton runtime
         id: cef-cache
         uses: actions/cache/restore@v4
@@ -106,9 +86,10 @@ jobs:
           moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
           setup
 
-      # Main is the sole Linux writer; PR jobs remain restore-only.
+      # A cache miss is saved for subsequent runs of this PR. Merge-ref caches
+      # are isolated from main and other pull requests.
       - name: Save Proton runtime
-        if: github.event_name == 'push' && steps.cef-cache.outputs.cache-hit != 'true'
+        if: steps.cef-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: |
@@ -134,49 +115,10 @@ jobs:
           fi
           moon test $packages --target native
 
-  # The browser E2E suite builds only the frontend bundle and replaces HTTP and
-  # WebSocket with fixtures, so a pull request that leaves the bundle and the
-  # suite alone (a backend-only change, say) skips it. Pushes to main always
-  # run it.
-  changes:
-    name: desktop changes
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.e2e == 'true' }}
-    steps:
-      # The frontend package, its assets and build script, and the suite.
-      # Packages the bundle shares with other consumers (desktop protocol and
-      # helpers, editor, root packages) and dependency or toolchain pins rely
-      # on their own tests, the workspace `moon check` in ci.yml, and the
-      # push run on main.
-      - name: Detect E2E inputs
-        id: filter
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        with:
-          filters: |
-            e2e:
-              - ".github/workflows/desktop.yml"
-              - "desktop/frontend/**"
-              - "desktop/app.css"
-              - "desktop/styles/**"
-              - "desktop/viewer_theme.css"
-              - "desktop/index.html"
-              - "desktop/pwa/**"
-              - "desktop/package/build.mjs"
-              - "desktop/package/office_fonts.mjs"
-              - "desktop/package/office_pdf.mjs"
-              - "desktop/dev/theme-lab.*"
-              - "desktop/e2e/**"
-
+  # Run E2E for the workflow's full path scope, including shared packages and
+  # dependency pins, so their integration is checked before merging.
   desktop-e2e:
     name: desktop e2e
-    needs: changes
-    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

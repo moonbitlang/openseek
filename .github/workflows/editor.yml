@@ -1,15 +1,6 @@
 name: Editor
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "desktop/.moonbit-version"
-      - "editor/**"
-      - "moon.work"
-      - ".gitmodules"
-      - "justfile"
-      - ".github/workflows/editor.yml"
   pull_request:
     paths:
       - "desktop/.moonbit-version"
@@ -21,7 +12,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   # Root CI checks the integrated native/JS workspace on Linux. This job keeps
