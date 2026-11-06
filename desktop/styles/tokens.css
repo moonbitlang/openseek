@@ -86,7 +86,12 @@
   /* Surfaces and text */
   --color-bg-canvas: light-dark(var(--light-bg-canvas), var(--dark-bg-canvas));
   --color-bg-surface: light-dark(var(--light-bg-surface), var(--dark-bg-surface));
+  --color-bg-content: light-dark(var(--light-bg-content), var(--dark-bg-content));
   --color-bg-subtle: light-dark(var(--light-bg-subtle), var(--dark-bg-subtle));
+  --color-conversation-selected: light-dark(
+    var(--light-conversation-selected),
+    var(--dark-conversation-selected)
+  );
   --color-text-primary: light-dark(var(--light-text-primary), var(--dark-text-primary));
   --color-text-secondary: light-dark(
     var(--light-text-secondary),
@@ -107,7 +112,7 @@
     transparent
   );
 
-  --color-accent: #5686fe;
+  --color-accent: light-dark(var(--light-accent), var(--dark-accent));
   --color-switch-on: #257de0;
   --color-on-accent: #ffffff;
   --color-accent-soft: light-dark(var(--light-accent-soft), var(--dark-accent-soft));

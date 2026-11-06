@@ -502,10 +502,7 @@
   max-width: 85%;
   padding: 13px 17px;
   border-radius: 20px;
-  /* Invariant: the bubble uses --color-bg-subtle, the background inline code
-     paints itself, so a code span inside a bubble has no fill to contrast
-     with and reads through its tone alone. */
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-content);
 }
 .session-message-source {
   margin-bottom: 6px;
@@ -1125,7 +1122,7 @@
 
 .inline-code {
   border-radius: var(--radius-xs);
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-content);
   color: var(--color-text-inline-code);
   /* Tone alone marks code in prose; the transparent edge keeps the geometry
      a file link's accent border recolors. */

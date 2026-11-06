@@ -274,8 +274,7 @@ html.is-resizing .sidebar-resize-handle {
 }
 
 .conversation-row.active {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
+  background: var(--color-conversation-selected);
 }
 
 .conversation-row.load-failed {
@@ -551,11 +550,7 @@ html.is-resizing .sidebar-resize-handle {
   outline-offset: -2px;
   border-radius: var(--radius-sm);
 }
-.workspace-row:hover {
-  background: var(--color-bg-subtle);
-}
 .workspace-row.active {
-  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-weight: 500;
 }
@@ -738,9 +733,6 @@ button.row-twisty:hover {
 }
 .conversation-row.subrun.nested {
   padding-left: 2.5rem;
-}
-.conversation-row.subrun.active {
-  color: var(--color-accent);
 }
 
 #project-picker-dialog {
