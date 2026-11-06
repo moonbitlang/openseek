@@ -74,15 +74,9 @@ fn submodule_timeout_of(fields : Map[String, Json]) -> Int32 {
 fn settings_payload(
   workspace : @pathx.Absolute,
   fields : Map[String, Json],
-) -> @protocol.WorkspaceSettingsPayload raise WorkspaceError {
-  // Resource URIs use their authority for the device, so a UNC path has no
-  // reversible encoding and is rejected explicitly instead of being published
-  // under a new host.
-  guard workspace.to_uri_path() is Some(resource_path) else {
-    raise WorkspaceError("UNC paths are not supported by frontend resources")
-  }
+) -> @protocol.WorkspaceSettingsPayload raise {
   {
-    workspace: resource_path,
+    workspace: workspace.resource_path(),
     worktree_mode: worktree_mode_of(fields),
     // Preserve the historical behavior unless this workspace explicitly
     // disables submodule provisioning.

@@ -30,7 +30,6 @@ pub suberror LanguageError {
   RootNotOwned
   RootMismatch
   PathOutsideRoot
-  UnsupportedRoot
   Unavailable(String)
   MoonIdeFailed(String)
 }

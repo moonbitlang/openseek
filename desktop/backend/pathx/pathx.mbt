@@ -115,6 +115,30 @@ pub fn Absolute::to_uri_path(self : Absolute) -> String? {
 }
 
 ///|
+/// Raised by `Absolute::resource_path` for a path with no reversible resource
+/// URI spelling, such as a UNC path.
+pub suberror UnsupportedResourcePath {
+  UnsupportedResourcePath
+}
+
+///|
+pub impl Show for UnsupportedResourcePath with fn output(_self, logger) {
+  logger.write_string("UNC paths are not supported by frontend resources")
+}
+
+///|
+pub extend UnsupportedResourcePath with Show::{output, to_string}
+
+///|
+/// `to_uri_path` for a path that must cross the frontend resource boundary.
+pub fn Absolute::resource_path(
+  self : Absolute,
+) -> String raise UnsupportedResourcePath {
+  guard self.to_uri_path() is Some(path) else { raise UnsupportedResourcePath }
+  path
+}
+
+///|
 /// Decode a frontend resource URI's slash-rooted path component into an
 /// absolute path for this host. Windows accepts only the reversible drive
 /// form produced by `Absolute::to_uri_path`; POSIX accepts its ordinary

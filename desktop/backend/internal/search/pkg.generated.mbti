@@ -30,7 +30,6 @@ pub async fn search_text(String?, TextSearchService, @pathx.Absolute, @protocol.
 // Errors
 #derive(@debug.Debug)
 pub suberror SearchError {
-  UnsupportedRoot
   EmptyCacheKey
   CacheRootMismatch
   IndexingFailed(String)

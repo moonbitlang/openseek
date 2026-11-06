@@ -714,6 +714,7 @@ pub fn endpoints(
       // empty list it would take for a fresh install.
       let reply = @engine.list_workspaces() catch {
         @workspaces.WorkspaceError(message) => WorkspaceError(message)
+        @pathx.UnsupportedResourcePath as error => WorkspaceError("\{error}")
         error => raise error
       }
       match reply {
@@ -730,6 +731,7 @@ pub fn endpoints(
       }) catch {
         @engine.EngineError(message) => WorkspaceError(message)
         @workspaces.WorkspaceError(message) => WorkspaceError(message)
+        @pathx.UnsupportedResourcePath as error => WorkspaceError("\{error}")
         error => raise error
       }
     }),
@@ -740,6 +742,7 @@ pub fn endpoints(
       }) catch {
         @engine.EngineError(message) => WorkspaceError(message)
         @workspaces.WorkspaceError(message) => WorkspaceError(message)
+        @pathx.UnsupportedResourcePath as error => WorkspaceError("\{error}")
         error => raise error
       }
     }),
@@ -798,6 +801,8 @@ pub fn endpoints(
       ) catch {
         @worktree.WorktreeError(message) => return WorktreeCreateError(message)
         @engine.EngineError(message) => return WorktreeCreateError(message)
+        @pathx.UnsupportedResourcePath as error =>
+          return WorktreeCreateError("\{error}")
         error => raise error
       }
       // A Codex worktree path is safe to authorize because this operation
