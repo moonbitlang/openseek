@@ -9,6 +9,8 @@ import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
@@ -72,6 +74,9 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
     }
 
     init {
+        activity.lifecycle.addObserver(LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) next()
+        })
         activity.savedStateRegistry.registerSavedStateProvider(STATE) {
             Bundle().apply { awaiting?.let { putString(AWAITING, it.path) } }
         }
@@ -191,8 +196,14 @@ internal class BlobDownloads(private val activity: ComponentActivity, private va
         }
     }
 
+    /**
+     * A save dialog opens only while the activity is started. A download that
+     * finishes in the background waits for the activity's return, so the file
+     * it awaits is in the saved state recorded after that, never missing from
+     * one already taken.
+     */
     private fun next() {
-        if (awaiting != null) return
+        if (awaiting != null || !activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
         val download = queue.removeFirstOrNull() ?: return
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
             .addCategory(Intent.CATEGORY_OPENABLE)
