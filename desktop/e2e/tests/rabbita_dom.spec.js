@@ -953,16 +953,10 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
   await expect(external).toHaveAttribute('target', '_blank');
   await expect(external).toHaveAttribute('rel', 'noopener noreferrer');
   await external.focus();
-  await external.evaluate(element => {
-    element.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      clientX: 0,
-      clientY: 0,
-    }));
-  });
+  await page.keyboard.press('Shift+F10');
   let contextMenu = page.getByRole('menu', { name: 'Context menu' });
   await expect(contextMenu).toBeVisible();
+  await expect(contextMenu).toHaveAttribute('data-slot', 'context-menu-content');
   await page.keyboard.press('Escape');
   await expect(external).toBeFocused();
 
@@ -972,11 +966,15 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
     'Open in New Tab',
     'Copy Link',
   ]);
+  await page.keyboard.press('End');
+  await expect(contextMenu.getByRole('menuitem', { name: 'Copy Link', exact: true })).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(contextMenu.getByRole('menuitem', { name: 'Open in New Tab' })).toBeFocused();
   const popupPromise = page.waitForEvent('popup');
   const navigationPromise = page.context().waitForEvent('request', {
     predicate: request => request.url() === 'https://example.test/docs',
   });
-  await contextMenu.getByRole('menuitem', { name: 'Open in New Tab' }).click();
+  await page.keyboard.press('Enter');
   const popup = await popupPromise;
   await navigationPromise;
   await popup.close();

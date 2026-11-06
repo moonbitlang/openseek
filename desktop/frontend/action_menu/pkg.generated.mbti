@@ -15,7 +15,7 @@ pub fn[Input : Eq] component(@rabbita.Val[Input], (Input, String) -> Definition?
 
 pub fn context_attrs(String) -> @html.Attrs
 
-pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextActions) -> @rabbita.Val[@html.Html]
+pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextActions, @rabbita.Val[@html.Html]) -> @rabbita.Val[@html.Html]
 
 pub fn dropdown(String, Definition, class~ : String, @html.Html) -> @rabbita.Val[@html.Html]
 

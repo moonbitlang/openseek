@@ -2205,10 +2205,10 @@ fn view(
   composer_html : @html.Html,
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
-  quick_open_and_context_menu : (@html.Html, @html.Html, @html.Html),
+  shell_overlays : (@html.Html, @html.Html, @html.Html),
   management_pages : ((@html.Html, @html.Html), @html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, context_menu_html, transfer_menu_html) = quick_open_and_context_menu
+  let (quick_open_html, selection_actions_html, transfer_menu_html) = shell_overlays
   let (
     (skills_list_html, skills_detail_html),
     workspace_settings_html,
@@ -2626,7 +2626,7 @@ fn view(
   // Rendered whether or not the palette is open — closed it is an empty
   // placeholder — so opening it never shifts the overlay children around it.
   children.push(quick_open_html)
-  children.push(context_menu_html)
+  children.push(selection_actions_html)
   children.push(transfer_menu_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
