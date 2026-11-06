@@ -270,15 +270,19 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
     ['assistant_delta', { content: '好 🌙' }],
     ['assistant_message', { content: '你好 🌙', tool_calls: [{ id: 'calc', name: 'mbtx', arguments: '{}' }] }],
     ['tool_result', { tool_call_id: 'calc', tool_name: 'mbtx', content: '2', is_error: false }],
+    // Reply and tool events are previews; the step and terminal barriers
+    // follow saved records and start the history reads.
+    ['step', { step: 2 }],
     ['assistant_delta', { content: 'The result is 2.' }],
     ['assistant_message', { content: 'The result is 2.' }],
+    ['agent_finished', { answer: 'The result is 2.' }],
     ['task_finished', { status: 'completed', result: { output: { answer: 'The result is 2.' } } }],
   ];
   let first, second, final;
   cloud.eventPauses = new Map([
     [1, new Promise(resolve => first = resolve)],
     [2, new Promise(resolve => second = resolve)],
-    [6, new Promise(resolve => final = resolve)],
+    [7, new Promise(resolve => final = resolve)],
   ]);
   await cloud.install();
   await cloud.goto();
@@ -300,11 +304,17 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   await expect(answer).toBeVisible();
   const result = page.locator('#transcript').getByText('The result is 2.', { exact: true });
   await expect(result).toBeVisible();
-  const finished = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
+  const reads = () => cloud.requests.filter(request => request.method === 'GET' && request.path === path).length;
+  const paused = reads();
   final();
-  const finalRead = await finished;
+  // Notifications during the paused read wait for it instead of starting more.
+  await expect(page.locator('.composer-running-text')).toHaveCount(0);
+  expect(reads()).toBe(paused);
   await expect(answer).toBeVisible();
+  await expect(result).toBeVisible();
+  const followUp = page.waitForRequest(request => request.method() === 'GET' && new URL(request.url()).pathname === path);
   releaseHistory();
+  const finalRead = await followUp;
   const recovered = await finalRead.response();
   expect(recovered.status()).toBe(200);
   const history = await recovered.json();

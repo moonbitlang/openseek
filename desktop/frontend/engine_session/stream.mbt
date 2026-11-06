@@ -57,6 +57,37 @@ pub fn Stream::event(self : Stream, event : @transcript.EngineEvent) -> Stream {
 }
 
 ///|
+/// The provisional reasoning to render beside the durable `committed`
+/// transcript. A sealed preview equal to reasoning committed after `frontier`,
+/// the durable frontier when this step began, is already shown by its durable
+/// row, so hide only that visual duplicate. Never hide an in-flight prefix and
+/// never change the preview from a commit: commits carry no run or step
+/// identity, and an older delayed commit must not truncate a newer stream.
+pub fn Stream::visible_reasoning(
+  self : Stream,
+  committed : Array[@transcript.TranscriptItem],
+  frontier~ : Int32,
+) -> (String?, Bool) {
+  guard self.reasoning is Some(live) && !live.content.is_empty() else {
+    return (None, false)
+  }
+  let candidate = live.content.trim()
+  if live.complete && !candidate.is_empty() {
+    for item in committed.rev_iter() {
+      if item.kind is Assistant(reasoning=Some(thought), ..) {
+        if item.sequence is Some(sequence) &&
+          sequence > frontier &&
+          thought.trim() == candidate {
+          return (None, live.complete)
+        }
+        break
+      }
+    }
+  }
+  (Some(live.content), live.complete)
+}
+
+///|
 pub extend Reasoning with Eq::{equal, not_equal}
 
 ///|
