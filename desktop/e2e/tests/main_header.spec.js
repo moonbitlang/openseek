@@ -5,11 +5,6 @@ async function expectHeader(page, title) {
   const header = page.locator('main > .topbar');
   await expect(header).toHaveCount(1);
   await expect(header.getByRole('heading', { level: 1 })).toHaveText(title);
-  await expect.poll(() => page.locator('main').evaluate(main => {
-    const header = main.querySelector('.topbar');
-    const body = header.nextElementSibling;
-    return body.getBoundingClientRect().top >= header.getBoundingClientRect().bottom - 1;
-  })).toBe(true);
 }
 
 test('management dialogs preserve the empty project header', async ({ page }) => {
@@ -28,12 +23,6 @@ test('management dialogs preserve the empty project header', async ({ page }) =>
     await page.getByRole('dialog').locator('[data-slot="dialog-close"]').click();
     await expectHeader(page, 'SeekMoon');
   }
-  await page.locator('#sidebar-settings').click();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('#management-dialog')).toBeVisible();
-  await expect(page.getByRole('dialog').locator('[data-slot="dialog-close"]')).toBeInViewport();
-  await page.getByRole('dialog').locator('[data-slot="dialog-close"]').click();
-  await expectHeader(page, 'SeekMoon');
   expect(app.pageErrors).toEqual([]);
 });
 

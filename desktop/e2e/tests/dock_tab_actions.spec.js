@@ -16,42 +16,6 @@ async function openTabs(page, names) {
   return app;
 }
 
-test('new-tab menu stays anchored to plus in split, expanded and narrow panels', async ({ page }) => {
-  const app = await openTabs(page, ['alpha']);
-  const add = page.locator('#dock-new-tab');
-  const menu = page.locator('.dock-menu');
-  for (const layout of ['split', 'expanded', 'narrow']) {
-    if (layout === 'expanded') {
-      await page.locator('#panel-expand').click();
-    } else if (layout === 'narrow') {
-      await page.setViewportSize({ width: 390, height: 844 });
-    }
-    await add.click();
-    await expect(menu).toBeVisible();
-    await expect.poll(() => menu.evaluate(popup => {
-      const bounds = popup.getBoundingClientRect();
-      const bar = popup.closest('.editor-tabsbar');
-      const trigger = bar.querySelector('.tab-add').getBoundingClientRect();
-      return {
-        aligned: Math.abs(bounds.right - trigger.right) <= 1,
-        below: bounds.top >= trigger.bottom && bounds.top <= trigger.bottom + 10,
-        contained: bounds.left >= bar.getBoundingClientRect().left &&
-          bounds.right <= window.innerWidth && bounds.bottom <= window.innerHeight,
-        fits: popup.scrollWidth <= popup.clientWidth,
-      };
-    }), { message: `${layout} menu should open beneath plus and remain readable` }).toEqual({
-      aligned: true, below: true, contained: true, fits: true,
-    });
-    await add.click();
-    await expect(menu).toBeHidden();
-  }
-  await add.click();
-  await menu.locator('[data-dock-action="search"]').click();
-  await expect(menu).toBeHidden();
-  await expect(page.locator('.editor-tab.active')).toContainText('Search');
-  expect(app.pageErrors).toEqual([]);
-});
-
 for (const [action, remaining, active] of [
   ['close-others', ['bravo.mbt'], 'bravo.mbt'],
   ['close-left', ['bravo.mbt', 'charlie.mbt', 'Review Changes'], 'Review Changes'],

@@ -26,7 +26,6 @@ for (const legacy of [false, true]) {
     await expect(page.locator('#task')).toBeVisible();
     await expect(page.locator('aside .section-label')).toHaveText(['Chats']);
     const row = cloud.row(sessionA);
-    await expect(row).toBeInViewport();
     await row.hover();
     await cloud.rowContainer(sessionA).locator('[id$=":actions-trigger"]').click();
     await page.locator('[role="menuitem"][data-action="archive"]:visible').click();

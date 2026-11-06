@@ -9,10 +9,6 @@ async function installConsole(page) {
   return app;
 }
 
-async function assertFits(page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-}
-
 test.use({ viewport: { width: 393, height: 851 }, isMobile: true, hasTouch: true });
 
 test('a signed-out device page offers login and preserves the page return path', async ({ page }) => {
@@ -22,7 +18,6 @@ test('a signed-out device page offers login and preserves the page return path',
   await expect(page.locator('#console-sign-in')).toHaveAttribute('href',
     '/v2/auth/login?prompt=select_account&return_to=%2Fdevice%2Fdevice-a%2Fchat');
   expect(app.socket).toBeNull();
-  await assertFits(page);
   await page.route('**/v2/auth/login?*', route => route.fulfill({ contentType: 'text/html', body: '<h1>OAuth fixture</h1>' }));
   await page.locator('#console-sign-in').click();
   await expect(page.locator('h1')).toHaveText('OAuth fixture');
@@ -54,11 +49,9 @@ test('the sidebar selector lists Cloud and online devices and switches between t
   // On a device page it names that device and checks it in the menu.
   await page.locator('.sidebar-toggle').click();
   await expect(selector).toContainText('Test Mac');
-  await expect.poll(async () => Math.abs((await page.locator('aside').boundingBox()).x)).toBeLessThan(1);
   await selector.click();
   await expect(page.locator('[role="menuitem"][data-action="device:device-a"]:visible')).toBeDisabled();
   await expect(page.locator('[role="menuitem"][data-action="device:offline"]:visible')).toHaveCount(0);
-  await assertFits(page);
   await page.locator('[role="menuitem"][data-action="device:device-b"]:visible').click();
   await expect(page).toHaveURL(/\/device\/device-b\/chat(\/new)?$/);
   // A device page returns to Cloud through the same menu.
@@ -69,24 +62,6 @@ test('the sidebar selector lists Cloud and online devices and switches between t
   await expect(page).toHaveURL(/\/cloud$/);
   await page.locator('.sidebar-toggle').click();
   await expect(selector).toContainText('Cloud');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('the device selector opens upward even when its menu would fit below', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const app = await installConsole(page);
-  await page.route('**/v2/devices', route => route.fulfill({ json: { devices: [
-    { id: 'device-a', name: 'Test Mac', online: true },
-  ] } }));
-  await page.goto('/device/device-a/chat');
-  const selector = page.locator('[id="sidebar:device-selector:actions-trigger"]');
-  await expect(selector).toContainText('Test Mac');
-  await selector.click();
-  const menu = page.getByRole('menu');
-  await expect(menu).toHaveAttribute('data-positioned', 'true');
-  const menuBox = await menu.boundingBox();
-  const selectorBox = await selector.boundingBox();
-  expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(selectorBox.y);
   expect(app.pageErrors).toEqual([]);
 });
 

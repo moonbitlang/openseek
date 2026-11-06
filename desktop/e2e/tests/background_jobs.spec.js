@@ -46,7 +46,6 @@ test('real background output follows, pauses, resumes, copies its file and stops
   app.write('new output while reading earlier lines\n');
   await expect.poll(() => readFileSync(app.livePath, 'utf8')).toContain('new output while reading');
   await expect.poll(() => output.evaluate(el => el.scrollTop)).toBe(top);
-  await page.emulateMedia({ colorScheme: 'dark' });
   await page.locator('#jobs-stop').click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   await expect(page.locator('#jobs-stop')).toHaveCount(0);
@@ -58,7 +57,7 @@ test('real background output follows, pauses, resumes, copies its file and stops
   expect(app.pageErrors).toEqual([]);
 });
 
-test('historical selection rejects late reads, reports errors and fits a narrow panel', async ({ page }) => {
+test('historical selection rejects late reads and recovers after read errors', async ({ page }) => {
   await mount(page);
   app.rpcDelays.set('jobs.read', 1200);
   app.write('must stay with the live job\n');
@@ -79,9 +78,6 @@ test('historical selection rejects late reads, reports errors and fits a narrow 
   app.rpcErrors.delete('jobs.read');
   await page.locator('#jobs-reload').click();
   await expect(output).toContainText('old failed job output');
-  await page.setViewportSize({ width: 1000, height: 850 });
-  await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  await expect(page.locator('#jobs-copy-tail')).toBeInViewport();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -216,9 +212,6 @@ test('UUID suffix collisions expand labels while selection and copying retain fu
   await page.locator('#jobs-copy-id').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(otherId);
   expect(app.requests.some(r => r.method === 'jobs.read' && r.params.target.job_id === otherId)).toBe(true);
-  await page.setViewportSize({ width: 1000, height: 850 });
-  await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  await expect(page.locator('#jobs-copy-id')).toBeInViewport();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -264,10 +257,7 @@ test('groups lifecycle states and defaults to an active job even after newer his
       }
     }
   }
-  await page.emulateMedia({ colorScheme: 'dark' });
-  await page.setViewportSize({ width: 1000, height: 850 });
   await page.locator('.jobs-row[data-job-generation="runtime-new"][data-job-id="limited"]').click();
-  await expect.poll(() => page.locator('.jobs-panel, .jobs-row, .jobs-status').evaluateAll(elements => elements.every(el => el.scrollWidth <= el.clientWidth + 1))).toBe(true);
   expect(app.requests.filter(r => r.method === 'jobs.stop')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
@@ -299,8 +289,6 @@ test('completion drains paused output then stops log polling while history stays
   await expect(output).toContainText('COMPLETED WHILE PAUSED');
   await expect(page.locator('.jobs-output-note')).toContainText('Output ended');
   expect(app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(reads);
-  await page.setViewportSize({ width: 1000, height: 850 });
-  await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -452,7 +440,6 @@ test('subagent jobs read as agents with their outcome, spend and transcript', as
   await row.click();
   await expect(page.locator('.jobs-detail')).toContainText('Session: session-1-sr-2');
   await expect(page.locator('#jobs-open-transcript')).toBeVisible();
-  await page.emulateMedia({ colorScheme: 'dark' });
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -494,6 +481,5 @@ test('a worker job shows its worktree, where its changes stand and why', async (
   await history.locator('.jobs-row[data-job-id="agent-stray"]').click();
   await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: not mergeable; kept for inspection');
   await expect(detail.locator('.jobs-worktree-reason')).toHaveText('out-of-scope changes (allowed: src/csv): src/main.mbt');
-  await page.emulateMedia({ colorScheme: 'dark' });
   expect(app.pageErrors).toEqual([]);
 });

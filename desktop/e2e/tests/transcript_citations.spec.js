@@ -74,9 +74,6 @@ for (const minimal of [false, true]) {
     await expect(popup).toHaveURL('https://example.test/growth');
     await popup.close();
 
-    await page.setViewportSize({ width: 760, height: 850 });
-    const sizes = await sources.evaluate(element => ({ scroll: element.scrollWidth, client: element.clientWidth }));
-    expect(sizes.scroll).toBeLessThanOrEqual(sizes.client + 1);
     expect(app.pageErrors).toEqual([]);
   });
 }

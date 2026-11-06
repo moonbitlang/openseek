@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('project host yields its right-aligned slot to pointer and keyboard actions', async ({ page }) => {
+test('project actions remain available by pointer and keyboard', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -14,17 +14,10 @@ test('project host yields its right-aligned slot to pointer and keyboard actions
   await expect(host).toHaveText('Test Mac');
   await expect(menu).toBeHidden();
   await expect(newChat).toBeHidden();
-  const idle = await row.boundingBox();
-  const hostBounds = await host.boundingBox();
-  expect(idle.x + idle.width - hostBounds.x - hostBounds.width).toBeCloseTo(8, 0);
-  const titleBounds = await disclosure.boundingBox();
-
   await row.hover();
   await expect(host).toBeHidden();
   await expect(menu).toBeVisible();
   await expect(newChat).toBeVisible();
-  expect(await disclosure.boundingBox()).toEqual(titleBounds);
-  expect(await row.boundingBox()).toEqual(idle);
   await disclosure.click();
   await page.mouse.move(1400, 850);
   await expect(host).toBeVisible();

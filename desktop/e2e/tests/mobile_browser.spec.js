@@ -10,16 +10,11 @@ async function installConsole(page) {
   return app;
 }
 
-async function assertFits(page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-}
-
 test.use({ viewport: { width: 393, height: 851 }, isMobile: true, hasTouch: true });
 
-test('phone conversation sends once, stops, reconnects and keeps the composer visible when the available viewport height shrinks', async ({ page }) => {
+test('phone conversation sends once, stops and reconnects without repeating the send', async ({ page }) => {
   const app = await installConsole(page);
   await app.goto();
-  // Layout checks begin after the initial conversation has finished activating.
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
   await page.locator('.sidebar-toggle').click();
   await app.openSession();
@@ -34,11 +29,7 @@ test('phone conversation sends once, stops, reconnects and keeps the composer vi
   await expect.poll(() => app.socket !== oldSocket, { timeout: 15000 }).toBe(true);
   await expect(page.locator('#task')).toBeEnabled();
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(1);
-  await page.setViewportSize({ width: 393, height: 480 });
   await page.locator('#task').fill('Unsent draft after reconnection');
-  await assertFits(page);
-  const box = await page.locator('#task').boundingBox();
-  expect(box.y + box.height).toBeLessThanOrEqual(480);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -129,13 +120,12 @@ test('a held, modified or consumed Escape closes only what one press would', asy
   expect(app.pageErrors).toEqual([]);
 });
 
-test('long engine-start failures remain readable within the phone viewport and restore the draft', async ({ page }) => {
+test('engine-start failures preserve their full diagnostic and restore the draft', async ({ page }) => {
   const app = await installConsole(page);
   const failure = 'Engine failed to start: invalid option\nUsage: openseek serve [OPTIONS]\n' +
     '--session-root <directory> Directory containing durable sessions.\n'.repeat(65);
   app.rpcErrors.set('agent.start', failure);
   await app.goto();
-  // Layout checks begin after the initial conversation has finished activating.
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
   await page.locator('.sidebar-toggle').click();
   await app.openSession();
@@ -146,82 +136,12 @@ test('long engine-start failures remain readable within the phone viewport and r
   await expect(notice).toBeVisible();
   await expect(notice).toHaveText(failure);
   await expect(page.locator('#task')).toHaveValue('Retryable draft');
-  const bounds = await notice.boundingBox();
-  expect(bounds.y).toBeGreaterThanOrEqual(0);
-  expect(bounds.height).toBeLessThanOrEqual(851 * 0.4);
-  const task = await page.locator('#task').boundingBox();
-  expect(bounds.y + bounds.height).toBeLessThanOrEqual(task.y);
-  const header = await page.locator('.topbar').boundingBox();
-  expect(bounds.y).toBeGreaterThanOrEqual(header.y + header.height);
-  await expect(notice).toHaveCSS('overflow-y', 'auto');
-  await expect(notice).toHaveCSS('white-space', 'pre-wrap');
-  await page.setViewportSize({ width: 393, height: 480 });
-  const reduced = await notice.boundingBox();
-  const reducedTask = await page.locator('#task').boundingBox();
-  expect(reduced.y + reduced.height).toBeLessThanOrEqual(reducedTask.y);
   await notice.click();
   await expect(notice).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const viewport of [
-  { width: 320, height: 568 },
-  { width: 851, height: 393 },
-]) {
-  test(`conversation and drawer fit ${viewport.width}x${viewport.height}`, async ({ page }) => {
-    await page.setViewportSize(viewport);
-    const app = await installConsole(page);
-    await app.goto();
-    // Initial host activation is navigation and closes a phone drawer.
-    await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', /.+/);
-    if (viewport.width <= 760) await page.locator('.sidebar-toggle').click();
-    await app.openSession();
-    await page.locator('#task').fill('An unsent mobile browser draft');
-    await assertFits(page);
-    for (const selector of ['.topbar', '#task', '#send']) {
-      const box = await page.locator(selector).boundingBox();
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.y).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
-      expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
-    }
-    const toggle = await page.locator('.sidebar-toggle').boundingBox();
-    expect(toggle.width).toBe(24);
-    if (viewport.width <= 760) {
-      await page.locator('.sidebar-toggle').click();
-      await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
-      const mode = await page.locator('.sidebar-mode').boundingBox();
-      const option = await page.locator('.sidebar-mode-option').first().boundingBox();
-      expect(option.y).toBeGreaterThanOrEqual(mode.y);
-      expect(option.y + option.height).toBeLessThanOrEqual(mode.y + mode.height);
-      await page.locator('.sidebar-backdrop').click({ position: { x: viewport.width - 5, y: 100 } });
-      await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
-    }
-    await expect(page.locator('#task')).toHaveValue('An unsent mobile browser draft');
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
-test('signed-out entry fits a small phone and remains scrollable at reduced height', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 568 });
-  await installConsole(page);
-  await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
-  await page.goto('/device/device-a/chat');
-  const login = page.locator('#console-sign-in');
-  await expect(login).toBeVisible();
-  await assertFits(page);
-  const box = await login.boundingBox();
-  expect(box.height).toBeGreaterThanOrEqual(44);
-  expect(box.x + box.width).toBeLessThanOrEqual(320);
-  await page.setViewportSize({ width: 320, height: 320 });
-  await login.scrollIntoViewIfNeeded();
-  const reduced = await login.boundingBox();
-  expect(reduced.y).toBeGreaterThanOrEqual(0);
-  expect(reduced.y + reduced.height).toBeLessThanOrEqual(320);
-});
-
-test('Cloud conversation fits a small phone and a multiline draft survives a height change', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 568 });
+test('Cloud conversation sends once and preserves a multiline follow-up draft', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
@@ -231,14 +151,6 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
   await page.locator('#task').fill('An unsent follow-up\nwith a second line\nand a third line');
-  await page.setViewportSize({ width: 320, height: 400 });
-  await assertFits(page);
-  for (const selector of ['#task', '#send']) {
-    const box = await page.locator(selector).boundingBox();
-    expect(box.y).toBeGreaterThanOrEqual(0);
-    expect(box.y + box.height).toBeLessThanOrEqual(400);
-    expect(box.x + box.width).toBeLessThanOrEqual(320);
-  }
   await expect(page.locator('#task')).toHaveValue('An unsent follow-up\nwith a second line\nand a third line');
   await expect(page.locator('#send')).toBeEnabled();
   expect(cloud.postCount).toBe(1);

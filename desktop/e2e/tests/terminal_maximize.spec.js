@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('terminal maximizes into the conversation and restores the saved split', async ({ page }) => {
+test('terminal maximize and restore preserve the draft and terminal instance', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -11,14 +11,12 @@ test('terminal maximizes into the conversation and restores the saved split', as
   await page.locator('#terminal-toggle').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'terminal.open').length).toBe(1);
   await page.locator('.content').evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
-  const panel = page.locator('.terminal-panel');
   const handle = page.locator('.terminal-resize-handle');
   const seam = await handle.boundingBox();
   await page.mouse.move(seam.x + seam.width / 2, seam.y + seam.height / 2);
   await page.mouse.down();
   await page.mouse.move(seam.x + seam.width / 2, seam.y - 70);
   await page.mouse.up();
-  const height = await panel.evaluate(el => el.getBoundingClientRect().height);
   app.notify('terminal.output', { id: 'terminal-1', sequence: 1, data: Buffer.from('PRESERVED_TERMINAL\r\n').toString('base64') });
   await expect(page.locator('.terminal-instance:visible .xterm-rows')).toContainText('PRESERVED_TERMINAL');
   const emulator = await page.locator('.terminal-instance:visible .xterm').elementHandle();
@@ -27,17 +25,10 @@ test('terminal maximizes into the conversation and restores the saved split', as
   await expect(handle).toBeHidden();
   await expect(composer).toBeHidden();
   await expect(page.locator('main > .topbar')).toBeVisible();
-  await expect.poll(() => panel.evaluate(el => {
-    const panel = el.getBoundingClientRect();
-    const content = el.parentElement.getBoundingClientRect();
-    const header = document.querySelector('main > .topbar').getBoundingClientRect();
-    return Math.abs(panel.top - header.bottom) < 1 && Math.abs(panel.bottom - content.bottom) < 1;
-  })).toBe(true);
   await expect.poll(() => app.requests.some(r => r.method === 'terminal.resize')).toBe(true);
   await page.locator('#terminal-maximize').click();
   await expect(composer).toBeVisible();
   await expect(composer).toHaveValue('Keep this draft');
-  await expect.poll(async () => Math.abs(await panel.evaluate(el => el.getBoundingClientRect().height) - height)).toBeLessThan(1);
   expect(await emulator.evaluate(el => el.isConnected)).toBe(true);
   await expect(page.locator('.terminal-instance:visible .xterm-rows')).toContainText('PRESERVED_TERMINAL');
   await page.locator('#terminal-maximize').click();

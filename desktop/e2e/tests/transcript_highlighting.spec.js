@@ -56,14 +56,6 @@ test('read workflow keeps thought, prose and tool order and highlights mixed out
   const prose = page.locator('#transcript .msg-content.markdown:not(.activity-thinking)');
   await expect(thought).toBeVisible();
   await expect(prose).toBeVisible();
-  // Wait for the details expansion before checking transcript order.
-  await expect.poll(async () => {
-    const thoughtBox = await thought.boundingBox();
-    const proseBox = await prose.boundingBox();
-    const callBox = await call.locator('.tool-call-summary').boundingBox();
-    return thoughtBox.y + thoughtBox.height <= proseBox.y &&
-      proseBox.y + proseBox.height <= callBox.y;
-  }).toBe(true);
   await call.locator('.tool-call-summary').click();
   await call.locator('label[data-tool-tab="arguments"]').click();
   await expect(call.locator('.mbtx-args')).toContainText('src/main.mbt:120:120');

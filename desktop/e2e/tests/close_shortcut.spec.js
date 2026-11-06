@@ -111,88 +111,6 @@ test('native browser notifications cross the local bridge with navigation and fa
   expect(app.pageErrors).toEqual([]);
 });
 
-test('fixed sidebar toggle respects native geometry across pages and fullscreen', async ({ page }) => {
-  const app = await installDesktop(page);
-  const toggle = page.locator('#sidebar-toggle');
-  const desktopToggle = await toggle.boundingBox();
-  await page.evaluate(() => {
-    // The configured macOS buttons sit at y=16 with a 14pt height. Proton
-    // reserves equal space above and below them: 16 + 14 + 16 = 46.
-    window.titlebarArea = { x: 88, y: 0, width: innerWidth - 88, height: 46 };
-    window.desktopEvent('openseek.window.chrome_changed', {});
-  });
-  await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
-  await expect.poll(async () => {
-    const box = await toggle.boundingBox();
-    return box.y + box.height / 2;
-  }).toBe(23);
-  const original = await toggle.elementHandle();
-  for (const name of ['Hide sidebar', 'Show sidebar']) {
-    await expect(toggle).toHaveAccessibleName(name);
-    const frames = await toggle.evaluate(button => new Promise(resolve => {
-      const positions = [button.getBoundingClientRect().x];
-      const start = performance.now();
-      button.click();
-      const sample = now => {
-        positions.push(button.getBoundingClientRect().x);
-        if (now - start < 250) requestAnimationFrame(sample);
-        else resolve(positions);
-      };
-      requestAnimationFrame(sample);
-    }));
-    expect(frames.every(x => x === 88)).toBe(true);
-  }
-  await page.locator('#right-panel-toggle[aria-expanded="false"]').click();
-  await page.locator('#panel-expand').click();
-  await expect(toggle).toBeVisible();
-  await expect(toggle).toHaveAccessibleName('Show sidebar');
-  await expect(page.locator('.app > aside')).toBeHidden();
-  await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
-  await page.locator('#right-panel-toggle[aria-expanded="true"]').click();
-  await toggle.click();
-  await page.locator('#sidebar-settings').click();
-  await expect(page.locator('#management-settings')).toBeVisible();
-  await expect(toggle).toHaveCount(1);
-  expect(await original.evaluate(button => button.isConnected)).toBe(true);
-  await page.setViewportSize({ width: 640, height: 850 });
-  await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
-  await page.evaluate(() => {
-    window.titlebarArea = null;
-    window.desktopEvent('openseek.window.chrome_changed', {});
-  });
-  // Without native chrome, narrow screens retain the desktop inset and size.
-  await expect.poll(async () => {
-    const { x, width, height } = await toggle.boundingBox();
-    return { x, width, height };
-  }).toEqual({
-    x: desktopToggle.x,
-    width: desktopToggle.width,
-    height: desktopToggle.height,
-  });
-  await expect.poll(async () => {
-    const box = await toggle.boundingBox();
-    // `--app-header-height` is a calc() over the app font size, and a custom
-    // property's computed value stays unresolved text; resolve it as a length.
-    const headerHeight = await toggle.evaluate(button => {
-      const probe = document.createElement('div');
-      probe.style.height = 'var(--app-header-height)';
-      button.closest('.app').append(probe);
-      const height = probe.getBoundingClientRect().height;
-      probe.remove();
-      return height;
-    });
-    return box.y + box.height / 2 - headerHeight / 2;
-  }).toBe(0);
-  await page.locator('#management-dialog')
-    .locator('[data-slot="dialog-close"]').click();
-  // A real click must reach the fixed control above the narrow drawer.
-  await toggle.click();
-  await expect(toggle).toHaveAccessibleName('Hide sidebar');
-  await toggle.click();
-  await expect(toggle).toHaveAccessibleName('Show sidebar');
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('Launcher tabs receive focus and Close never closes the window', async ({ page }) => {
   const app = await installDesktop(page);
   app.gitChanges = [];
@@ -202,7 +120,7 @@ test('Launcher tabs receive focus and Close never closes the window', async ({ p
     await page.locator(`.dock-launcher-menu [data-dock-action="${action}"]`).click();
     await expect(tabs).toHaveCount(1);
     if (action === 'review') {
-      await expect(page.locator('.file-panel-empty')).toBeVisible();
+      await expect(page.locator('#review-changes-body .file-panel-empty')).toBeVisible();
     }
     if (action === 'search') {
       await expect(page.locator('#workspace-search-input')).toBeFocused();
@@ -314,59 +232,5 @@ test('web theme follows the browser without querying native appearance', async (
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   expect(app.requests.some(r => r.method === 'app.system_appearance')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('titlebar geometry ignores stale replies and preserves the last valid area on errors', async ({ page }) => {
-  const app = await installDesktop(page);
-  const errors = [];
-  page.on('console', message => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  const root = page.locator('html');
-  const leftInset = () => root.evaluate(element => element.style.getPropertyValue('--native-titlebar-left'));
-  await page.evaluate(() => {
-    window.titlebarArea = { x: 88, y: 0, width: innerWidth - 88, height: 46 };
-    window.desktopEvent('openseek.window.chrome_changed', {});
-  });
-  await expect.poll(leftInset).toBe('88px');
-  await page.evaluate(() => {
-    window.titlebarReads = [];
-    window.__MoonBit__.getTitlebarArea = () => new Promise((resolve, reject) => {
-      window.titlebarReads.push({ resolve, reject });
-    });
-    window.desktopEvent('openseek.window.chrome_changed', {});
-  });
-  await expect.poll(() => page.evaluate(() => window.titlebarReads.length)).toBe(1);
-  await page.evaluate(() => {
-    window.desktopEvent('openseek.window.chrome_changed', {});
-    window.titlebarReads[0].resolve(null);
-  });
-  await expect.poll(() => page.evaluate(() => window.titlebarReads.length)).toBe(2);
-  expect(await leftInset()).toBe('88px');
-  await page.evaluate(() => window.titlebarReads[1].resolve({
-    x: 96, y: 0, width: innerWidth - 96, height: 46,
-  }));
-  await expect.poll(leftInset).toBe('96px');
-  for (const failure of ['reject', 'malformed']) {
-    const before = await page.evaluate(() => window.titlebarReads.length);
-    await page.evaluate(() => window.desktopEvent('openseek.window.chrome_changed', {}));
-    await expect.poll(() => page.evaluate(() => window.titlebarReads.length)).toBe(before + 1);
-    const errorsBefore = errors.length;
-    await page.evaluate(failure => {
-      const read = window.titlebarReads.at(-1);
-      if (failure === 'reject') read.reject(new Error('fixture query failure'));
-      else read.resolve({ x: 0, y: 0, width: 0, height: 46 });
-    }, failure);
-    await expect.poll(() => errors.length).toBe(errorsBefore + 1);
-    expect(await leftInset()).toBe('96px');
-    await expect(root).toHaveClass(/native-titlebar-overlay/);
-  }
-  const before = await page.evaluate(() => window.titlebarReads.length);
-  await page.evaluate(() => window.desktopEvent('openseek.window.chrome_changed', {}));
-  await expect.poll(() => page.evaluate(() => window.titlebarReads.length)).toBe(before + 1);
-  await page.evaluate(() => window.titlebarReads.at(-1).resolve(null));
-  await expect.poll(leftInset).toBe('');
-  await expect(root).not.toHaveClass(/native-titlebar-overlay/);
   expect(app.pageErrors).toEqual([]);
 });

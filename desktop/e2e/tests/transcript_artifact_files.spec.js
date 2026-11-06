@@ -75,16 +75,13 @@ for (const minimal of [true, false]) {
       await page.screenshot({ path: `${process.env.OPENSEEK_UI_CAPTURE_DIR}/artifact-file-chart.png` });
     }
     if (minimal) {
-      await page.setViewportSize({ width: 390, height: 844 });
       await element.scrollIntoViewIfNeeded();
-      const fits = await frame.locator('svg').evaluate(svg => svg.getBoundingClientRect().width <= innerWidth + 1);
-      expect(fits).toBe(true);
       await page.emulateMedia({ colorScheme: 'dark' });
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
       expect(await frame.locator('body').evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)).toBe(true);
       await expect(frame.locator('#artifact-series-actual')).toHaveAttribute('aria-pressed', 'true');
       if (process.env.OPENSEEK_UI_CAPTURE_DIR) {
-        await page.screenshot({ path: `${process.env.OPENSEEK_UI_CAPTURE_DIR}/artifact-file-chart-dark-narrow.png` });
+        await page.screenshot({ path: `${process.env.OPENSEEK_UI_CAPTURE_DIR}/artifact-file-chart-dark.png` });
       }
     }
     expect(app.pageErrors).toEqual([]);

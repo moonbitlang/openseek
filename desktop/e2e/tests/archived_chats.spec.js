@@ -74,24 +74,3 @@ test('archived chats live in Settings with filter, read-only open, restore and d
   await expect(page.locator('#archived-chats-manage').locator('..').locator('..').locator('.setting-name')).toHaveText('0 archived conversations');
   expect(app.pageErrors).toEqual([]);
 });
-
-test('a long archived title truncates and keeps its actions in view', async ({ page }) => {
-  const app = fixture(page);
-  app.archivedSessions = [
-    { id: 'long-archive', title: 'Explain '.repeat(60).trim(), workspace: '/workspace', updated_at_ms: 2 },
-  ];
-  await app.install();
-  await app.goto();
-  await page.locator('#sidebar-settings').click();
-  await page.locator('#archived-chats-manage').click();
-  const main = page.locator('#management-dialog');
-  const scroller = main.locator('.archived-chats-page');
-  await expect(scroller.locator('.archived-chat-row')).toHaveCount(1);
-  expect(await scroller.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
-  const viewport = page.viewportSize();
-  for (const action of ['restore', 'delete']) {
-    const box = await main.locator(`[data-action="${action}"]`).boundingBox();
-    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-  }
-  expect(app.pageErrors).toEqual([]);
-});

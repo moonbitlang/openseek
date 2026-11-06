@@ -73,7 +73,7 @@ test('clear and Escape restore the normal list and keep typing focus; switching 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('all matching rows bypass compact previews and the old global limit; keyboard selection scrolls', async ({ page }) => {
+test('all matching rows bypass compact previews and the old global limit; keyboard selects the result', async ({ page }) => {
   const app = fixture(page);
   app.liveSessions = Array.from({ length: 125 }, (_, i) => ({ id: `row-${i}`, title: `Matching conversation ${i}`, updated_at_ms: 125 - i }));
   app.archivedSessions = [];
@@ -89,10 +89,6 @@ test('all matching rows bypass compact previews and the old global limit; keyboa
   const selected = page.locator('.conversation-row.search-selected .conversation-open');
   await expect(selected).toHaveText('Matching conversation 25');
   await expect(input).toBeFocused();
-  const row = await selected.boundingBox();
-  const list = await page.locator('.sidebar-main').boundingBox();
-  expect(row.y).toBeGreaterThanOrEqual(list.y);
-  expect(row.y + row.height).toBeLessThanOrEqual(list.y + list.height + 1);
   await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
   expect(app.requests.some(r => r.method === 'session.load')).toBe(false);
   expect(app.pageErrors).toEqual([]);

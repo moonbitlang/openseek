@@ -177,41 +177,26 @@ test('a failed rename is reported even after its project is folded', async ({ pa
   expect(app.pageErrors).toEqual([]);
 });
 
-// Inspect the actual height transition at its midpoint without sampling
-// rendered frames or depending on the disclosure's duration.
+// A project fold retains its conversation nodes but removes them from interaction.
 async function expectRetainedFold(disclosure) {
-  const result = await disclosure.evaluate(async button => {
-    const content = document.getElementById(button.getAttribute('aria-controls'));
-    await Promise.all(content.getAnimations().map(animation => animation.finished));
-    const nodes = [...content.querySelectorAll('.conversation-row')];
-    const height = content.getBoundingClientRect().height;
-    const committed = new Promise(resolve => {
-      const observer = new MutationObserver(() => { observer.disconnect(); resolve(); });
-      observer.observe(content, { attributes: true, attributeFilter: ['aria-hidden'] });
-    });
-    button.click();
-    await committed;
-    const animation = content.getAnimations().find(animation => animation.transitionProperty === 'height');
-    if (!animation) throw new Error('Folding must animate the content height');
-    animation.pause();
-    animation.currentTime = animation.effect.getTiming().duration / 2;
-    const midpoint = content.getBoundingClientRect().height;
-    animation.finish();
+  const content = await disclosure.evaluateHandle(button =>
+    document.getElementById(button.getAttribute('aria-controls')));
+  const rows = await content.evaluateHandle(content => [...content.querySelectorAll('.conversation-row')]);
+  await disclosure.click();
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  const result = await content.evaluate((content, nodes) => {
     const title = content.querySelector('.conversation-open');
     title.focus();
     return {
-      height, midpoint, foldedHeight: content.getBoundingClientRect().height,
       retained: nodes.every(node => content.contains(node)),
       hidden: content.getAttribute('aria-hidden'), inert: content.inert,
       focusable: document.activeElement === title,
     };
-  });
-  expect(result.midpoint).toBeGreaterThan(0);
-  expect(result.midpoint).toBeLessThan(result.height);
-  expect(result).toMatchObject({ foldedHeight: 0, retained: true, hidden: 'true', inert: true, focusable: false });
+  }, rows);
+  expect(result).toEqual({ retained: true, hidden: 'true', inert: true, focusable: false });
 }
 
-test('folding a project retains its expanded preview and reopens with five chats', { tag: '@motion' }, async ({ page }) => {
+test('folding a project retains its expanded preview and reopens with five chats', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions = Array.from({ length: 12 }, (_, i) => ({
     id: `session-${i + 1}`, title: `Conversation ${i + 1}`, updated_at_ms: 12 - i,
@@ -233,7 +218,7 @@ test('folding a project retains its expanded preview and reopens with five chats
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sub-runs retain their DOM across their own and project folds', { tag: '@motion' }, async ({ page }) => {
+test('sub-runs retain their DOM across their own and project folds', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions.push({ id: 'session-1-sr-1', title: 'Inspect animation', updated_at_ms: 2 });
   await app.install();

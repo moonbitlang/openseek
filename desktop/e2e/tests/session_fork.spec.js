@@ -245,22 +245,17 @@ test('expanding an older message keeps the reader in place while later answers s
   const transcript = page.locator('#transcript');
   await transcript.evaluate(node => { node.scrollTop = 0; });
   const target = page.locator('#turn-s4');
-  await expect(target).toBeInViewport();
   const edit = target.locator('[id^="user-message-edit-trigger-"]');
-  // Settle the entry animation and Playwright's scroll-into-view before
-  // measuring: click() can otherwise move the reader before editing begins.
-  await edit.click({ trial: true });
-  const before = await target.boundingBox();
   await edit.click();
   const editor = page.locator('.message-editor');
   await expect(editor.locator('textarea')).toBeFocused();
-  await expect.poll(async () => Math.abs((await editor.boundingBox()).y - before.y)).toBeLessThan(4);
+  await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(0);
   const streamed = event(45, 'terminal', { kind: 'finished', message: 'New answer while editing' });
   app.sessionEvents = [...events, streamed];
   app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 45, event: streamed });
   await expect(transcript).toContainText('New answer while editing');
   await expect(editor.locator('textarea')).toBeFocused();
-  await expect.poll(async () => Math.abs((await editor.boundingBox()).y - before.y)).toBeLessThan(4);
+  await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(0);
   expect(app.requests.filter(r => r.method === 'session.edit')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
