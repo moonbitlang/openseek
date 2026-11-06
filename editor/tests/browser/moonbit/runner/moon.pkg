@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/editor/viewer/diagrams",
+  "moonbitlang/editor/viewer/diagrams/svg",
   "moonbitlang/editor/tests/browser/moonbit/agent_feedback",
   "moonbitlang/editor/tests/browser/moonbit/base_browser" @base_browser_scenario,
   "moonbitlang/editor/tests/browser/moonbit/component",

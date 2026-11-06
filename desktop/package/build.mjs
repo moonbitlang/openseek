@@ -284,6 +284,9 @@ class Build {
     });
     await this.webAssets();
     await this.commandRun("moon", ["build", "cmd/viz_app", "--target", "js", ...release], { cwd: this.repo });
+    // The diagram renderers, loaded on the first diagram rather than with
+    // frontend.js; boot names /assets/diagrams.js.
+    await this.commandRun("moon", ["build", "editor/viewer/diagrams/module", "--target", "js", ...release], { cwd: this.repo });
     if (browser) {
       // The console bundle openseek-api serves: the same document and
       // frontend.js the packaged app loads, so the e2e suite can drive one
@@ -301,6 +304,11 @@ class Build {
     return join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/frontend.js`);
   }
 
+  // The ES module of the diagram renderers.
+  diagramsBundle(profile) {
+    return join(this.repo, `_build/js/${profile}/build/moonbitlang/editor/viewer/diagrams/module/module.js`);
+  }
+
   // Every host serves one frontend: the document at its page routes and its
   // resources under the fixed /assets/ prefix that index.html names.
   async stageFrontend(output, profile, minify = false) {
@@ -313,8 +321,13 @@ class Build {
         this.frontendBundle(profile), "--minify", "--format=iife", "--platform=browser",
         `--outfile=${join(assets, "frontend.js")}`,
       ]);
+      await this.commandRun(this.esbuildBinary, [
+        this.diagramsBundle(profile), "--minify", "--format=esm", "--platform=browser",
+        `--outfile=${join(assets, "diagrams.js")}`,
+      ]);
     } else {
       await cp(this.frontendBundle(profile), join(assets, "frontend.js"));
+      await cp(this.diagramsBundle(profile), join(assets, "diagrams.js"));
     }
     await this.sharedWeb(assets);
     // The web app manifest and its icons; index.html links them.

@@ -1,7 +1,4 @@
 import {
-  "moonbit-community/diago",
-  "moonbit-community/uml/api" @uml,
-  "moonbit-community/uml/style" @uml_style,
   "moonbit-community/cmark/cmark_base",
   "moonbit-community/cmark/cmark",
   "moonbit-community/cmark/cmark_html",

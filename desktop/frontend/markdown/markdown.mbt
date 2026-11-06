@@ -205,12 +205,17 @@ fn code_block_body(
   if diagram && block.layout is Fenced({ closing_fence: None, .. }) {
     return @html.pre(@html.code(class="language-\{language}", source))
   }
-  if language == "mermaid" || language == "d2" || language == "diago" {
+  if diagram {
     // Rabbita owns only this container and its source attribute. The transcript
     // subscription owns its children, including the escaped loading fallback,
     // so asynchronous SVG replacement cannot invalidate Rabbita child nodes.
+    let container_class = match language {
+      "mermaid" => "chat-mermaid"
+      "uml" | "plantuml" => "chat-uml"
+      _ => "chat-diago"
+    }
     return @html.div(
-      class=if language == "mermaid" { "chat-mermaid" } else { "chat-diago" },
+      class=container_class,
       attrs=@html.Attrs::build()
         .data_set("transcript-diagram", language)
         .data_set("transcript-diagram-source", source)
@@ -219,19 +224,6 @@ fn code_block_body(
         ),
       ([] : Array[@html.Html]),
     )
-  }
-  if language == "uml" || language == "plantuml" {
-    match @editor_viewer.render_uml_diagram_svg(source) {
-      Some(svg) =>
-        return @html.div(
-          class="chat-markdown-diagram moonbit-viewer-markdown-diagram",
-          attrs=@html.Attrs::build()
-            .data_set("diagram-language", "uml")
-            .inner_html(svg),
-          ([] : Array[@html.Html]),
-        )
-      None => ()
-    }
   }
   // MoonBit fences in model prose get the same syntax colors as an `mbtx`
   // argument card or a composer approval body: the shared code helper runs the
