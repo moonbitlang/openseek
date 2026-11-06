@@ -2343,6 +2343,15 @@ fn update_msg(
         { ..model, locale, },
       )
     }
+    CloudFollowupLoaded(value) => {
+      guard !model.has_host() && value is Some(value) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        { ..model, followup_behavior: FollowupBehavior::parse(value), },
+      )
+    }
     SettingsLoaded(
       notification_corner~,
       tree_layout~,
@@ -4219,8 +4228,14 @@ fn update_msg(
       )
     }
     FollowupBehaviorChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       let behavior = FollowupBehavior::parse(value)
+      if !model.has_host() {
+        return (
+          save_cloud_followup_behavior(behavior),
+          { ..model, followup_behavior: behavior, select_menu: None, },
+        )
+      }
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       (
         push_host_settings(
           dispatch,
@@ -10675,6 +10690,45 @@ test "viewport resize flips the narrow flag and resets the sidebar" {
   let (_, wide) = update(dispatch, ViewportResized(width=1280), same)
   assert_false(wide.narrow)
   assert_true(wide.sidebar_open)
+}
+
+///|
+test "Cloud preferences are local while device settings retain their owner" {
+  let emit = test_dispatch()
+  let host = test_model()
+  let cloud = {
+    ..host,
+    devices: [],
+    console: { ..host.console, page_device: None, },
+    host_settings_revision: -1,
+    followup_behavior: FollowupSteer,
+    select_menu: Some(FollowupBehaviorMenu),
+  }
+  for
+    msg in [
+      CloudFollowupLoaded(Some("queue")),
+      FollowupBehaviorChanged("queue"),
+    ] {
+    let (_, next) = update_msg(emit, msg, cloud)
+    let (_, repeated) = update_msg(emit, msg, cloud)
+    assert_true(next.followup_behavior is FollowupQueue)
+    assert_true(next.followup_behavior == repeated.followup_behavior)
+    assert_true(next.select_menu == repeated.select_menu)
+    assert_eq(next.settings_saves, cloud.settings_saves)
+    if msg is FollowupBehaviorChanged(_) {
+      assert_true(next.select_menu is None)
+    }
+  }
+  let (_, missing) = update_msg(emit, CloudFollowupLoaded(None), cloud)
+  assert_true(missing.followup_behavior == cloud.followup_behavior)
+  for model in [host, { ..host, devices: [], host_settings_revision: -1, }] {
+    let (_, loaded) = update_msg(
+      emit,
+      CloudFollowupLoaded(Some("queue")),
+      model,
+    )
+    assert_true(loaded.followup_behavior == model.followup_behavior)
+  }
 }
 
 ///|
