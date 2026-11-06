@@ -47,8 +47,8 @@ test('Cloud goals use the shared editor and settle on goal_updated without creat
   expect(app.device.pageErrors).toEqual([]);
 });
 
-// Prompt expansion is shared: one command runs in an existing session and the other in a new one.
-for (const [name, workflow, fresh] of [['simplify', 'simplify.mbtx', false], ['ultrareview', 'review.mbtx', true]]) {
+// Prompt expansion is shared: each command runs in one kind of session, and together they cover an existing and a new one.
+for (const [name, workflow, fresh] of [['simplify', 'simplify.mbtx', false], ['shrink', 'shrink.mbtx', false], ['ultrareview', 'review.mbtx', true]]) {
   test(`Cloud ${name} shares prompt expansion in ${fresh ? 'a new' : 'an existing'} session`, async ({ page }) => {
     const app = await open(page);
     if (fresh) await app.create();
@@ -57,7 +57,7 @@ for (const [name, workflow, fresh] of [['simplify', 'simplify.mbtx', false], ['u
     await expect(page.locator('.completion-item').filter({ hasText: `/${name}` })).toBeVisible();
     if (!fresh && name === 'simplify') {
       await task.fill('/');
-      await expect(page.locator('.completion-item')).toHaveCount(4);
+      await expect(page.locator('.completion-item')).toHaveCount(5);
       await task.fill(`/${name}`);
     }
     await task.press('Enter');

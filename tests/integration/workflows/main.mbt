@@ -4,6 +4,9 @@ async fn main {
     _ =>
       match @env.get_env_var("OPENSEEK_CI_FIXTURE") {
         Some(dir) => ci_child(dir)
+        None if @env.get_env_var("OPENSEEK_MOON_FIXTURE") is Some(dir) &&
+          @env.args() is [exe, ..] &&
+          exe.has_suffix("moon") => moon_child(dir)
         None if @env.get_env_var("OPENSEEK_GH_FIXTURE") is Some(dir) =>
           gh_child(dir)
         None => {
@@ -17,6 +20,7 @@ async fn main {
             verify_review(root, temp)
             verify_ci(root, temp, exe)
             verify_simplify(root, temp, exe)
+            verify_shrink(root, temp, exe)
           })
         }
       }
@@ -81,5 +85,6 @@ fn clean_env() -> Map[String, String] {
   env.remove("OPENSEEK_PTC")
   env.remove("OPENSEEK_CI_FIXTURE")
   env.remove("OPENSEEK_GH_FIXTURE")
+  env.remove("OPENSEEK_MOON_FIXTURE")
   env
 }
