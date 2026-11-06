@@ -310,7 +310,7 @@ fn moonide_client_path(
   lexical_workspace : @pathx.Absolute,
   physical_workspace : @pathx.Absolute,
   physical_result : String,
-) -> String? raise LanguageError {
+) -> String? raise {
   guard moonide_relative_path(physical_workspace, physical_result)
     is Some(relative) else {
     return None

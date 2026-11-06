@@ -133,16 +133,10 @@ pub async fn ArchivedStore::for_workspace(workspace : String) -> ArchivedStore {
     @workspaces.registered_dir(path) is Some(registered) else {
     raise StoreError("\{workspace} is not a registered workspace")
   }
-  // Resource URIs use their authority for the device, so a UNC path has no
-  // reversible encoding and is rejected explicitly instead of being published
-  // under a new host.
-  guard registered.to_uri_path() is Some(workspace_token) else {
-    raise StoreError("UNC paths are not supported by frontend resources")
-  }
   {
     root: @workspaces.store_root(registered),
     workspace: registered,
-    workspace_token,
+    workspace_token: registered.resource_path(),
   }
 }
 

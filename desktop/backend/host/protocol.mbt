@@ -35,19 +35,6 @@ fn WirePath::resolve(
 }
 
 ///|
-/// Encode a host-native absolute path for the frontend resource URI. UNC is
-/// deliberately outside the transport contract because the URI authority is
-/// reserved for the device channel rather than a filesystem server.
-fn @pathx.Absolute::resource_path(
-  self : @pathx.Absolute,
-) -> String raise HostError {
-  guard self.to_uri_path() is Some(path) else {
-    raise HostError("UNC paths are not supported by frontend resources")
-  }
-  path
-}
-
-///|
 /// One concrete event from `Watcher::wait`. Rename uses `path` for the new
 /// name and `old_path` for the old one; the other kinds omit `old_path`.
 #derive(ToJson(fields(kind_(rename="kind"))))

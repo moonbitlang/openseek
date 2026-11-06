@@ -359,7 +359,7 @@ fn diagnostics_pushes(
   request_root : @pathx.Absolute,
   previous : Array[@pathx.Absolute],
   current : Map[@pathx.Absolute, Array[@protocol.LspDiagnostic]],
-) -> Array[DiagnosticsPush] raise LanguageError {
+) -> Array[DiagnosticsPush] raise {
   let pushes : Array[DiagnosticsPush] = []
   let root = request_root.resource_path()
   for path, items in current {

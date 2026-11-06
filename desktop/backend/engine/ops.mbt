@@ -877,19 +877,6 @@ async fn follower_snapshot(
 }
 
 ///|
-/// A host-native absolute path at the protocol boundary. Resource URIs use
-/// their authority for the device, so UNC paths have no reversible encoding
-/// and are rejected explicitly instead of being published under a new host.
-fn @pathx.Absolute::resource_path(
-  self : @pathx.Absolute,
-) -> String raise EngineError {
-  guard self.to_uri_path() is Some(path) else {
-    raise EngineError("UNC paths are not supported by frontend resources")
-  }
-  path
-}
-
-///|
 pub async fn list_workspaces() -> @protocol.WorkspacesReply {
   Workspaces(
     @workspaces.registered().map(path => path.resource_path()),
