@@ -207,7 +207,7 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
 
   // The overview never takes the transcript's place: the conversation keeps
   // its row, from the titlebar down to the composer, with its messages.
-  const message = page.locator('.transcript .msg-content', { hasText: 'Show the browser fixture' });
+  const message = page.locator('.transcript .msg.user .msg-content');
   const keepsItsRow = async () => {
     await expect(message).toBeVisible();
     const topbar = await page.locator('.topbar').boundingBox();

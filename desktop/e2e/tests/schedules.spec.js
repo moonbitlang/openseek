@@ -131,7 +131,7 @@ for (const broadcastDirectory of [true, false]) {
     await app.install();
     await app.goto();
     await page.locator('#sidebar-schedules').click();
-    await expect(page.locator('.schedules-page > .schedule-empty')).toBeVisible();
+    await expect(page.locator('#schedule-empty')).toBeVisible();
     const workspace = '/Users/test/OpenSeek/Scheduled/new-task';
     app.workspaces.push(workspace);
     app.sessionGroups = (sessions) => ({ groups: [{ workspace, name: 'Automatic task', session_root: workspace + '/.openseek', sessions: sessions === app.archivedSessions ? [] : [{ id: 'session-1', title: 'Community watch', updated_at_ms: Date.now() }], error: '' }] });

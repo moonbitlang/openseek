@@ -455,7 +455,7 @@ test('saved message changes keep independent disclosures and immutable previews'
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(860);
   expect(box.y + box.height).toBeLessThanOrEqual(640);
-  await page.locator('#task').click();
+  await page.locator('.topbar-title').click();
   await expect(popup).toBeHidden();
   await page.locator('#task').click();
   await expect(page.locator('#task')).toBeFocused();

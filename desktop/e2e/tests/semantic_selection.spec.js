@@ -43,10 +43,10 @@ test('semantic selection follows match, file, and pattern controls', async ({ pa
   await results.locator('[data-testid=search-select-match][aria-pressed=false]').first().click();
   await expect(chip).toContainText('1 matches');
   // A partially selected file becomes fully selected without collapsing it.
-  await results.getByTestId('search-select-file').first().click();
+  await results.locator('.search-file-header[data-path="src/main.mbt"]').getByTestId('search-select-file').click();
   await expect(results.locator('[data-testid=search-select-match][aria-pressed=true]')).toHaveCount(2);
   await expect(chip).toContainText('2 matches');
-  await results.getByTestId('search-select-file').click();
+  await results.locator('.search-file-header[data-path="src/main.mbt"]').getByTestId('search-select-file').click();
   await expect(chip).toHaveCount(0);
   await results.locator('[data-testid=search-select-match][aria-pressed=false]').first().click();
   await results.getByTestId('search-select-pattern').click();

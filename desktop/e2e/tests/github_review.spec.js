@@ -195,7 +195,7 @@ test('inline discussions work across Line, Token and Tree with shared reply, res
     await expect(editor).toBeVisible();
     await expect(right).toBeVisible();
     await expect(page.locator('.github-review-inline-block [data-thread-id="left"]')).toBeVisible();
-    const changedLine = editor.locator('.moonbit-diff-editor-modified .view-line[data-line="3"]');
+    const changedLine = (mode === 'Line' ? editor : editor.locator('[data-new-start="1"]')).locator('.moonbit-diff-editor-modified .view-line[data-line="3"]');
     await changedLine.hover();
     const pane = changedLine.locator('xpath=ancestor::*[contains(@class,"moonbit-diff-editor-modified")]');
     const feedbackGlyph = pane.locator('.agent-feedback-glyph.line-hover');
@@ -370,7 +370,7 @@ test('semantic comment actions preserve the full-file coordinate allowed by GitH
   for (const mode of ['Token', 'Tree']) {
     await page.locator(`[data-diff-mode=${mode.toLowerCase()}]`).click();
     const surface = page.locator(`.semantic-review[data-mode="${mode.toLowerCase()}"]`);
-    await surface.locator('.moonbit-diff-editor-original .view-line[data-line="8"]').hover();
+    await surface.locator('[data-old-start="6"] .moonbit-diff-editor-original .view-line[data-line="3"]').hover();
     await surface.locator('.moonbit-diff-line-action:visible').click();
     const input = page.locator('.github-review-composer[data-draft-kind=line]').getByTestId('github-review-input');
     await input.fill(`Coordinate QA in ${mode}`);

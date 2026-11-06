@@ -144,7 +144,7 @@ test('failed session creation leaves the Cloud draft intact and never starts a t
   await cloud.create();
   await page.locator('#task').fill('Unsent text');
   await show(page).click();
-  await expect(page.locator('.transcript-error-message, .terminal-error').last()).toHaveText('Cloud answered HTTP 500. Try again.');
+  await expect(page.locator('.notification')).toHaveText('Cloud answered HTTP 500. Try again.');
   await expect(page.locator('#task')).toHaveValue('Unsent text');
   await expect(page.locator('#task')).toBeEnabled();
   expect(terminal.connections).toHaveLength(0);

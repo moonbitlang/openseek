@@ -1469,7 +1469,7 @@ test('Cloud context download reuses a cached file while another preview stays ac
   cloud.directories.get(`${sessionA}:src`).push({ name: 'other.txt', is_dir: false });
   cloud.contents.set(`${sessionA}:src/other.txt`, { kind: 'content', content: 'Other preview', sig: 'other', absolute: '/src/other.txt' });
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
-  await showTree(page); await file(page, 'other.txt').click();
+  await showTree(page); await file(page, 'src/other.txt').click();
   await expect(source(page)).toContainText('Other preview');
   await showTree(page);
   const before = cloud.fileRequests.length;

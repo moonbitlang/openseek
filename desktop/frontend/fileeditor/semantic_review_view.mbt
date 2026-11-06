@@ -252,16 +252,26 @@ fn semantic_section_view(
 ) -> @html.Html {
   let label = semantic_section_label(locale~, section)
   let location = semantic_section_location(section)
+  let mut editor_attrs = @html.Attrs::build()
+    .id(semantic_editor_host_id(section.key))
+    .class("semantic-diff-editor-host")
+    .data_set("semantic-section", section.key)
+  if section.old_range is Some(range) {
+    editor_attrs = editor_attrs.data_set(
+      "old-start",
+      range.start_line_number.to_string(),
+    )
+  }
+  if section.new_range is Some(range) {
+    editor_attrs = editor_attrs.data_set(
+      "new-start",
+      range.start_line_number.to_string(),
+    )
+  }
   let content : Array[@html.Html] = [
     semantic_fallback_notice(locale~, section, requested),
     @html.div(class="semantic-entry-editor-parent", [
-      @html.div(
-        attrs=@html.Attrs::build()
-          .id(semantic_editor_host_id(section.key))
-          .class("semantic-diff-editor-host")
-          .data_set("semantic-section", section.key),
-        ([] : Array[@html.Html]),
-      ),
+      @html.div(attrs=editor_attrs, ([] : Array[@html.Html])),
       github_review_layer(
         locale~,
         dispatch,

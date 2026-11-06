@@ -168,7 +168,13 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   if page.snapshot.entries.is_empty() {
-    content.push(@html.p(class="schedule-empty", ui(locale, EmptySchedules)))
+    content.push(
+      @html.p(
+        id="schedule-empty",
+        class="schedule-empty",
+        ui(locale, EmptySchedules),
+      ),
+    )
   }
   for entry in page.snapshot.entries {
     let running = page.snapshot.runs.any(run => {
