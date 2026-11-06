@@ -83,9 +83,11 @@ try {
   const deviceUrl = page.url();
   const transfer = page.getByRole('button', { name: 'Export and import', exact: true });
   await transfer.click();
-  await page.getByRole('menu', { name: 'Export and import', exact: true }).waitFor();
+  const transferMenu = page.getByRole('menu', { name: 'Export and import', exact: true });
+  await transferMenu.waitFor();
   run('shell', 'input', 'keyevent', '4');
-  await page.waitForFunction(() => !document.querySelector('[data-action-menu-surface]'));
+  // Action menus stay mounted as popovers; a closed one leaves the tree.
+  await transferMenu.waitFor({ state: 'hidden' });
   check(page.url() === deviceUrl, 'Back left the page under the action menu');
   await transfer.click();
   await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
@@ -100,7 +102,7 @@ try {
   await until(() => resumed().includes(pkg), 'cancelling the save dialog left the app');
   await exportDialog.waitFor();
   run('shell', 'input', 'keyevent', '4');
-  await page.waitForFunction(() => !document.querySelector('dialog[open]'));
+  await exportDialog.waitFor({ state: 'hidden' });
   check(page.url() === deviceUrl, 'Back left the page under the export dialog');
   await page.locator('.composer-git-button').click();
   await page.locator('.composer-git-menu').waitFor();
