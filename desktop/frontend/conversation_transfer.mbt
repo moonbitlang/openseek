@@ -120,7 +120,6 @@ fn conversation_transfer_menu(
       title: "",
       icon: Some(
         @html.span(
-          id="conversation-export-action",
           class="icon",
           attrs=@html.Attrs::build().aria_hidden("true"),
           icon_chat_export(),
