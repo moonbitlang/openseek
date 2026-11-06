@@ -26,7 +26,10 @@ just test-browser
 The repository root keeps `just viz-test-browser` as an alias. After the
 bundle has been built, `npm test` in this directory runs Playwright alone.
 
-Prefer accessible roles, labels, and visible text. Use classes only for
-product DOM whose presentation contract is itself under test. Mock network
-traffic with Playwright routes and use retrying assertions instead of fixed
-sleeps.
+Locate controls by stable IDs and log records by their sequence, tool-call,
+or session identity. Do not bind interactions or presence checks to labels,
+translated copy, tooltips, or rendered content. When content itself is under
+test, locate its owning record first and assert its text separately. Use
+classes for the product structure or presentation being exercised. Mock
+network traffic with Playwright routes and use retrying assertions instead
+of fixed sleeps.

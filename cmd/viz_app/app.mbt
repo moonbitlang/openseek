@@ -976,7 +976,7 @@ fn sidebar_pane(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
           on_click=emit(ToggleSidebar),
         ) <| "Hide",
       ],
-      @html.div(class="status") <| model.status,
+      @html.div(id="session-list-status", class="status") <| model.status,
     ],
     sidebar_list(emit, model),
     theme_toggle(emit, model),
@@ -1014,7 +1014,11 @@ fn theme_button(
   label : String,
 ) -> @html.Html {
   let classes = class_with("theme-button", "active", model.theme == theme)
-  @html.button(class=classes, on_click=emit(SetTheme(theme))) <| label
+  @html.button(
+    id="theme-\{theme.value()}",
+    class=classes,
+    on_click=emit(SetTheme(theme)),
+  ) <| label
 }
 
 ///|
@@ -1251,7 +1255,11 @@ fn sidebar_row(
     "selected",
     selected,
   )
-  @html.li(class=classes, on_click=emit(Select(row.key))) <| [
+  @html.li(
+    id="session:\{row.key}",
+    class=classes,
+    on_click=emit(Select(row.key)),
+  ) <| [
     @html.div(class="session-item-label") <| label,
     @html.div(class="session-item-meta") <| [
       @html.span(class="session-item-id") <| session_row_label(
@@ -1428,7 +1436,11 @@ fn args_button(
     "active",
     model.show_original_args == show_original,
   )
-  @html.button(class=classes, on_click=emit(SetArgsView(show_original))) <| label
+  @html.button(
+    id=if show_original { "args-original" } else { "args-rendered" },
+    class=classes,
+    on_click=emit(SetArgsView(show_original)),
+  ) <| label
 }
 
 ///|
@@ -1439,7 +1451,11 @@ fn mode_button(
   label : String,
 ) -> @html.Html {
   let classes = class_with("mode-button", "active", model.view_mode == mode)
-  @html.button(class=classes, on_click=emit(SetMode(mode))) <| label
+  @html.button(
+    id="view-mode-\{view_mode_value(mode)}",
+    class=classes,
+    on_click=emit(SetMode(mode)),
+  ) <| label
 }
 
 ///|
@@ -1600,6 +1616,7 @@ fn filter_bar(
       [@html.span(class="\{kind}-count") <| count_label]
     },
     @html.button(
+      id="filter-\{kind}",
       class=class_with("\{kind}-toggle", "active", active),
       title=toggle_title,
       on_click=emit(toggle),

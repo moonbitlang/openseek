@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { expect } from '@playwright/test';
 
 export class VizBrowserHarness {
   constructor(page) {
@@ -212,13 +213,11 @@ export class VizBrowserHarness {
 
   async goto(hash = '') {
     await this.page.goto(`/web/index.html${hash}`);
-    await this.page.getByRole('heading', { name: 'OpenSeek sessions' }).waitFor();
+    await this.page.locator('.sidebar-head').waitFor();
   }
 
   async openSession() {
-    await this.page.locator('.session-item', {
-      hasText: 'Inspect the session viewer',
-    }).click();
-    await this.page.locator('.header-id', { hasText: this.sessionId }).waitFor();
+    await this.page.locator(`[id=${JSON.stringify(`session:${this.sessionId}`)}]`).click();
+    await expect(this.page.locator('.header-id')).toHaveText(this.sessionId);
   }
 }
