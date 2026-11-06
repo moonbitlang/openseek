@@ -998,10 +998,11 @@ async fn git_change_snapshot(
 pub async fn changes(
   payload : @protocol.GitChangesPayload,
 ) -> @protocol.GitChangesReply {
+  let workspace = @pathx.Absolute::parse_resource_path(payload.workspace)
   guard @work_dir.resolve_in_workspace(
       payload.session,
       "",
-      workspace?=payload.workspace,
+      workspace=payload.workspace,
     )
     is Some(root) else {
     raise InvalidRequest("could not resolve the conversation workspace")
@@ -1019,7 +1020,7 @@ pub async fn changes(
   } else {
     let recorded_base = @work_dir.session_review_base(
       payload.session,
-      workspace?=payload.workspace,
+      workspace,
     )
     if recorded_base is Some(base) {
       guard valid_commit_identity(base) else {
@@ -1286,11 +1287,12 @@ async fn git_history_page(
 pub async fn history(
   payload : @protocol.GitHistoryPayload,
 ) -> @protocol.GitHistoryReply {
+  let workspace = @pathx.Absolute::parse_resource_path(payload.workspace)
   guard payload.skip >= 0 &&
     @work_dir.resolve_in_workspace(
       payload.session,
       "",
-      workspace?=payload.workspace,
+      workspace=payload.workspace,
     )
     is Some(root) else {
     raise InvalidRequest("could not resolve the conversation workspace")
@@ -1304,10 +1306,7 @@ pub async fn history(
   if !@gitx.is_work_tree(root) {
     return { repository: false, snapshot: empty, commits: [], has_more: false, }
   }
-  let recorded_base = @work_dir.session_review_base(
-    payload.session,
-    workspace?=payload.workspace,
-  )
+  let recorded_base = @work_dir.session_review_base(payload.session, workspace)
   let review_base = match recorded_base {
     Some(base) => {
       guard valid_commit_identity(base) &&
