@@ -4,8 +4,8 @@ Recorded on 2026-09-22 with `POST /markdown`, `{ "mode": "gfm", "text": ... }`.
 Each case stores its input and the unmodified GitHub API response. Browser
 fixtures supply those responses directly as the protocol's `body_html`, as
 returned from `bodyHTML` in production. Tests run offline and stub media bytes.
-The Markdown inputs document fixture provenance and provide the chat raw-HTML
-regression; they are not rendered locally for GitHub content.
+The Markdown inputs document fixture provenance; they are not rendered locally
+for GitHub content.
 
 `review-summary.md` reproduces the original reported screenshot's visible
 summary, commit and fractional timestamp. The disclosure's complete boilerplate

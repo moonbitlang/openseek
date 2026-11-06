@@ -4,14 +4,10 @@ import { DesktopBrowserHarness } from './desktop_browser_harness.js';
 export const prURL = 'https://github.com/owner/project/pull/42';
 export const fixture = (name, suffix = 'github.html') => readFileSync(new URL(`../../fixtures/github-markdown/${name}.${suffix}`, import.meta.url), 'utf8');
 
-export async function openHTMLPR(page, bodyHTML, { chatSource, comments = [] } = {}) {
+export async function openHTMLPR(page, bodyHTML, { comments = [] } = {}) {
   const app = new DesktopBrowserHarness(page);
   app.githubBodyHTML = bodyHTML;
   app.githubCommentsHTML = comments;
-  if (chatSource) app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture HTML' } } },
-    { sequence: 2, item: { kind: 'assistant', payload: { content: chatSource } } },
-  ];
   const original = app.replyFor.bind(app);
   const item = { number: 42, title: 'HTML rendering fixture', url: prURL, author: 'contributor', draft: false };
   app.replyFor = request => {
