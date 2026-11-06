@@ -113,7 +113,7 @@ pub fn view(
   }
   @rui.dialog(
     id="project-picker-dialog",
-    class="dialog-size-medium",
+    class="dialog-size-medium dialog-scroll-layout",
     close_label=ui(locale, ClosePicker),
     on_close=_ => emit(Close),
     on_cancel=emit(Close),
@@ -135,7 +135,7 @@ pub fn view(
         ]),
       ]),
       @html.div(
-        class="picker-content",
+        class="picker-content dialog-scroll-body",
         [
           ..match location {
             Some(control) => [control]

@@ -744,7 +744,27 @@ button.row-twisty:hover {
 }
 
 #project-picker-dialog {
-  max-height: min(40rem, calc(100dvh - 2rem));
+  --dialog-max-height: min(40rem, calc(100dvh - 2rem));
+  height: var(--dialog-max-height);
+}
+#project-picker-dialog[open] {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "header close"
+    "body body"
+    "footer footer";
+}
+#project-picker-dialog .picker-content {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+#project-picker-dialog .picker-content > :not(.picker-browser) {
+  flex: none;
+}
+#project-picker-dialog .picker-footer {
+  grid-area: footer;
+  margin: 0 !important;
 }
 .picker-header-leading {
   display: flex;
