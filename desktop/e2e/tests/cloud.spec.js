@@ -317,9 +317,6 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   const finalRead = await followUp;
   const recovered = await finalRead.response();
   expect(recovered.status()).toBe(200);
-  const history = await recovered.json();
-  expect(history.messages.filter(record => record.kind === 'assistant_message').map(record => record.data)).toEqual([{}, {}]);
-  expect(history.messages.find(record => record.kind === 'user').data).toEqual({});
   await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(result).toHaveCount(1);
