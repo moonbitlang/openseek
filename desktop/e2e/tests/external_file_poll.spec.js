@@ -45,8 +45,8 @@ test('external polls reload changed files without checking workspace diagnostics
   await app.goto();
   await app.openSession();
   const transcript = page.locator('.transcript');
-  const external = transcript.getByRole('button', { name: 'External', exact: true });
-  const source = transcript.getByRole('button', { name: 'Source', exact: true });
+  const external = transcript.locator('[data-context-file="/outside/notes.txt"]');
+  const source = transcript.locator('[data-context-file="/workspace/src/main.mbt"]');
   await external.click();
   await expect.poll(() => app.count('fs.read_file', '/outside/notes.txt')).toBe(1);
   await source.click();

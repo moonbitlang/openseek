@@ -13,7 +13,16 @@ fn Completion::view(
   }
   let rows : Array[CompletionRow] = []
   for _, item in self.menu {
-    rows.push({ label: item.label, detail: item.detail, })
+    rows.push({
+      value: if self.kind is SlashCommands {
+        item.command
+      } else {
+        item.insert.trim().to_owned()
+      },
+      path: item.path,
+      label: item.label,
+      detail: item.detail,
+    })
   }
   CompletionView::{
     rows,
@@ -46,6 +55,12 @@ fn Entry::mention_chips(
     let target = @mention_context.target(mention.ref_)
     chips.push(
       MentionChip::{
+        path: target.map(target => target.file),
+        kind: match mention.ref_ {
+          @mention_context.File(..) => "file"
+          @mention_context.OfficeSelection(..) => "office-selection"
+          _ => "context"
+        },
         glyph: @mention_context.glyph(mention.ref_),
         label: @mention_context.label(mention.ref_),
         title: if mention.ref_ is @mention_context.Annotation(comment~, ..) {
@@ -78,6 +93,8 @@ fn Entry::mention_chips(
     if request.phase is AttachmentStaged(name~) {
       chips.push(
         MentionChip::{
+          path: Some(name),
+          kind: "file",
           glyph: @mention_context.glyph(@mention_context.File(path=name)),
           label: name,
           title: name,
@@ -182,6 +199,7 @@ fn GoalInput::view(
       @html.button(
         class="composer-goal-action",
         type_="button",
+        id="goal-edit",
         title=ui(locale, EditGoal),
         on_click=action_emit(GoalEditStarted(identity~)),
         ui(locale, EditLabel),
@@ -203,6 +221,7 @@ fn GoalInput::view(
         @html.button(
           class="composer-goal-action",
           type_="button",
+          id="goal-clear",
           title=ui(locale, ClearGoal),
           on_click=action_emit(GoalCleared(identity~)),
           @icons.icon(@icons.icon_close),
@@ -362,6 +381,7 @@ fn Entry::view(
     if can_attach {
       [
         @html.button(
+          id="composer-attach",
           class="composer-attach",
           type_="button",
           title=ui(locale, AttachHint),

@@ -82,6 +82,7 @@ fn artifact_file_view(
       @html.button(
         type_="button",
         class="chat-artifact-context",
+        attrs=@html.Attrs::build().data_set("testid", "artifact-context"),
         style=["display:none"],
         disabled=owner.archived,
         match locale {

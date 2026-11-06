@@ -179,6 +179,7 @@ fn context_focus_id(next_id : Ref[Int32]) -> String? {
 
 ///|
 fn context_item(
+  key : String,
   label : String,
   title : String,
   icon : @html.Html,
@@ -186,6 +187,7 @@ fn context_item(
   enabled~ : Bool = true,
 ) -> Entry {
   Action({
+    key,
     label,
     title,
     icon: Some(icon),
@@ -196,8 +198,19 @@ fn context_item(
 }
 
 ///|
-fn copy_item(label : String, title : String, text : String) -> Entry {
-  context_item(label, title, @icons.icon_copy(), @clipboard.copy(Text(text)))
+fn copy_item(
+  key : String,
+  label : String,
+  title : String,
+  text : String,
+) -> Entry {
+  context_item(
+    key,
+    label,
+    title,
+    @icons.icon_copy(),
+    @clipboard.copy(Text(text)),
+  )
 }
 
 ///|
@@ -228,6 +241,7 @@ fn context_definition(
       if input.platform is Web {
         navigation.push(
           context_item(
+            "open-new-tab",
             ui(locale, OpenNewTab),
             ui(locale, OpenNewTab),
             @icons.icon_link_external(),
@@ -238,6 +252,7 @@ fn context_definition(
         if input.open_web_links_in_app {
           navigation.push(
             context_item(
+              "open",
               ui(locale, OpenLabel),
               ui(locale, OpenLabel),
               @icons.icon_link_external(),
@@ -247,6 +262,7 @@ fn context_definition(
         }
         navigation.push(
           context_item(
+            "open-external",
             ui(locale, OpenDefaultBrowser),
             ui(locale, OpenSystemBrowser),
             @icons.icon_link_external(),
@@ -255,12 +271,18 @@ fn context_definition(
         )
       }
       clipboard.push(
-        copy_item(ui(locale, CopyLink), ui(locale, CopyLinkAddress), url),
+        copy_item(
+          "copy-link",
+          ui(locale, CopyLink),
+          ui(locale, CopyLinkAddress),
+          url,
+        ),
       )
     }
     EmailLink(url~, address~) => {
       navigation.push(
         context_item(
+          "open",
           ui(locale, OpenLabel),
           ui(locale, OpenEmail),
           @icons.icon_link_external(),
@@ -268,12 +290,18 @@ fn context_definition(
         ),
       )
       clipboard.push(
-        copy_item(ui(locale, CopyEmail), ui(locale, CopyEmailHint), address),
+        copy_item(
+          "copy-email",
+          ui(locale, CopyEmail),
+          ui(locale, CopyEmailHint),
+          address,
+        ),
       )
     }
     FileLink(path, workspace_file~) => {
       navigation.push(
         context_item(
+          "open",
           ui(locale, OpenLabel),
           ui(locale, OpenFile),
           @icons.icon_link_external(),
@@ -284,6 +312,7 @@ fn context_definition(
         reveal_label(locale~, input.platform) is Some(label) {
         navigation.push(
           context_item(
+            "reveal-file",
             label,
             label,
             @icons.icon_folder_opened(),
@@ -294,6 +323,7 @@ fn context_definition(
       if input.share_files && workspace_file is Some(path) {
         navigation.push(
           context_item(
+            "share-file",
             ui(locale, ShareFile),
             ui(locale, ShareFile),
             @icons.icon_link_external(),
@@ -304,6 +334,7 @@ fn context_definition(
       if input.download_files && workspace_file is Some(path) {
         navigation.push(
           context_item(
+            "download-file",
             ui(locale, DownloadToLocal),
             ui(locale, DownloadToLocal),
             @icons.icon_arrow_down(),
@@ -313,14 +344,19 @@ fn context_definition(
         )
       }
       clipboard.push(
-        copy_item(ui(locale, CopyPath), ui(locale, CopyFilePath), path),
+        copy_item(
+          "copy-path",
+          ui(locale, CopyPath),
+          ui(locale, CopyFilePath),
+          path,
+        ),
       )
     }
   }
   if request.selected_text is Some(text) {
     clipboard.insert(
       0,
-      copy_item(ui(locale, CopyLabel), ui(locale, CopySelected), text),
+      copy_item("copy", ui(locale, CopyLabel), ui(locale, CopySelected), text),
     )
   }
   guard !navigation.is_empty() || !clipboard.is_empty() else { return None }
@@ -480,6 +516,7 @@ pub fn context_component(
                         on_select=item.command,
                         class="action-menu-item",
                         title=item.title,
+                        attrs=@html.Attrs::build().data_set("action", item.key),
                         item_children(item),
                       )
                   }

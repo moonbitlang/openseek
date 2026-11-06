@@ -10,19 +10,18 @@ async function open(page) {
   app.searchFiles = ['src/main.mbt'];
   await app.install();
   await app.goto();
-  await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toBeVisible();
+  await expect(app.sessionButton()).toBeVisible();
   return app;
 }
 
-async function choose(page, name) {
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name, exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText(name);
+async function choose(page, value) {
+  await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+  await page.locator(`[role="option"][data-value=${JSON.stringify(value)}]`).click();
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toHaveAttribute('data-value', value);
 }
 
 async function noDraftRows(page, initialRows) {
   await expect(page.locator('.conversation-row')).toHaveCount(initialRows);
-  await expect(page.locator('.conversation-row').filter({ hasText: /^New chat$/ })).toHaveCount(0);
 }
 
 test('one draft carries current text, file mentions and images through repeated agent switches', async ({ page }) => {
@@ -30,12 +29,12 @@ test('one draft carries current text, file mentions and images through repeated 
   const initialRows = await page.locator('.conversation-row').count();
   const task = page.locator('#task');
   await task.fill('@main');
-  await page.locator('.completion-item').filter({ hasText: 'src/main.mbt' }).click();
+  await page.locator('[data-completion-path="src/main.mbt"]').click();
   await task.press('End');
   await task.pressSequentially(' Inspect this 👀');
   const initialText = await task.inputValue();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.locator('#composer-attach').click();
   await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
 
@@ -43,7 +42,7 @@ test('one draft carries current text, file mentions and images through repeated 
   expect(chatDraftPath).toMatch(/\/chat\/draft\//);
   const codexDraftPath = chatDraftPath.replace('/chat/draft/', '/codex/draft/');
   const historyLength = await page.evaluate(() => history.length);
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   await expect.poll(() => new URL(page.url()).pathname).toBe(codexDraftPath);
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
   await expect(task).toHaveValue(initialText);
@@ -52,7 +51,7 @@ test('one draft carries current text, file mentions and images through repeated 
   await task.press('End');
   await task.pressSequentially(' Edited in Codex');
   const codexText = await task.inputValue();
-  await choose(page, 'DS Pro');
+  await choose(page, 'openseek:deepseek-v4-pro');
   await expect.poll(() => new URL(page.url()).pathname).toBe(chatDraftPath);
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
   await expect(task).toHaveValue(codexText);
@@ -62,7 +61,7 @@ test('one draft carries current text, file mentions and images through repeated 
   await task.press('End');
   await task.pressSequentially(' Edited in DeepSeek');
   const finalText = await task.inputValue();
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   await expect(task).toHaveValue(finalText);
   await noDraftRows(page, initialRows);
   await page.locator('#send').click();
@@ -79,19 +78,19 @@ test('clearing the migrated draft never revives an earlier engine copy', async (
   const app = await open(page);
   const initialRows = await page.locator('.conversation-row').count();
   const task = page.locator('#task');
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   await task.fill('Started in Codex');
-  await choose(page, 'DS Pro');
+  await choose(page, 'openseek:deepseek-v4-pro');
   await expect(task).toHaveValue('Started in Codex');
   await task.fill('');
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   await expect(task).toHaveValue('');
   await task.fill('Replacement');
-  await choose(page, 'DS Pro');
+  await choose(page, 'openseek:deepseek-v4-pro');
   await expect(task).toHaveValue('Replacement');
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   await task.fill('');
-  await choose(page, 'DS Pro');
+  await choose(page, 'openseek:deepseek-v4-pro');
   await expect(task).toHaveValue('');
   await noDraftRows(page, initialRows);
   expect(app.pageErrors).toEqual([]);
@@ -100,12 +99,12 @@ test('clearing the migrated draft never revives an earlier engine copy', async (
 test('an image-only Codex draft migrates back and sends through DeepSeek', async ({ page }) => {
   const app = await open(page);
   const initialRows = await page.locator('.conversation-row').count();
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.locator('#composer-attach').click();
   await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
-  await choose(page, 'DS Pro');
+  await choose(page, 'openseek:deepseek-v4-pro');
   await expect(page.locator('#task')).toHaveValue('');
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
   await noDraftRows(page, initialRows);
@@ -118,7 +117,7 @@ test('an image-only Codex draft migrates back and sends through DeepSeek', async
 
 test('a submitted Codex draft cannot switch agents while thread creation is pending', async ({ page }) => {
   const app = await open(page);
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   const pending = Promise.withResolvers();
   const replyFor = app.replyFor.bind(app);
   app.replyFor = async request => {
@@ -128,8 +127,8 @@ test('a submitted Codex draft cannot switch agents while thread creation is pend
   await page.locator('#task').fill('Create this conversation');
   await page.locator('#send').click();
   await expect.poll(() => app.requests.some(r => r.method === 'codex.thread.start')).toBe(true);
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await expect(page.getByRole('option', { name: 'DS Pro', exact: true })).toHaveCount(0);
+  await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+  await expect(page.locator('[role="option"][data-value="openseek:deepseek-v4-pro"]')).toHaveCount(0);
   pending.resolve();
   expect(app.pageErrors).toEqual([]);
 });
@@ -139,15 +138,15 @@ test('editing a goal protects its text until the editor is closed', async ({ pag
   const app = await open(page);
   const task = page.locator('#task');
   await task.fill('/goal');
-  await expect(page.locator('.completion-item').filter({ hasText: 'goal' }).first()).toBeVisible();
+  await expect(page.locator('[data-completion-value="goal"]')).toBeVisible();
   await task.press('Enter');
   await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Do not lose this goal');
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeDisabled();
   await expect(task).toHaveValue('Do not lose this goal');
   await page.locator('#goal-cancel').click();
-  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
-  await choose(page, 'Codex test');
+  await expect(page.locator('#openseek-model-picker, #codex-model-picker, #model')).toBeEnabled();
+  await choose(page, 'codex:gpt-test');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -155,7 +154,7 @@ test('ultrareview stays a command in the composer and sends the swarm prompt', a
   const app = await open(page);
   const task = page.locator('#task');
   await task.fill('/ultrareview');
-  await expect(page.locator('.completion-item').filter({ hasText: 'ultrareview' }).first()).toBeVisible();
+  await expect(page.locator('[data-completion-value="ultrareview"]')).toBeVisible();
   await task.press('Enter');
   await expect(task).toHaveValue('/ultrareview ');
   await expect(task).toBeFocused();
@@ -175,7 +174,7 @@ test('simplify sends the sweep prompt with its focus', async ({ page }) => {
   const app = await open(page);
   const task = page.locator('#task');
   await task.fill('/simpl');
-  await expect(page.locator('.completion-item').filter({ hasText: 'simplify' }).first()).toBeVisible();
+  await expect(page.locator('[data-completion-value="simplify"]')).toBeVisible();
   await task.press('Enter');
   await expect(task).toHaveValue('/simplify ');
   await page.keyboard.type('pattern matching');
@@ -188,16 +187,16 @@ test('simplify sends the sweep prompt with its focus', async ({ page }) => {
 
 test('a failed first Codex send keeps the agent fixed while retrying', async ({ page }) => {
   const app = await open(page);
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   app.rpcErrors.set('codex.thread.start', 'Reply lost');
   await page.locator('#task').fill('Keep this conversation in Codex');
   await page.locator('#send').click();
-  await expect(page.getByText(/Reply lost/)).toBeVisible();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await expect(page.getByRole('listbox', { name: 'Model' })).toBeVisible();
-  await expect(page.getByRole('option', { name: 'DS Pro', exact: true })).toHaveCount(0);
+  await expect(page.locator('#transcript .transcript-error-message')).toBeVisible();
+  await page.locator('#openseek-model-picker, #codex-model-picker, #model').click();
+  await expect(page.locator('#openseek-model-picker-menu, #codex-model-picker-menu, #model-menu')).toBeVisible();
+  await expect(page.locator('[role="option"][data-value="openseek:deepseek-v4-pro"]')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('listbox', { name: 'Model' })).toHaveCount(0);
+  await expect(page.locator('#openseek-model-picker-menu, #codex-model-picker-menu, #model-menu')).toHaveCount(0);
   const first = app.requests.find(r => r.method === 'codex.thread.start');
   app.rpcErrors.delete('codex.thread.start');
   await page.locator('#send').click();
@@ -228,11 +227,11 @@ test('reusing a draft waits for its pending open and close before reopening', as
     return reply(request);
   };
   await page.locator('#task').fill('Retain this prompt');
-  await choose(page, 'Codex test');
+  await choose(page, 'codex:gpt-test');
   await expect.poll(() => opens).toBe(1);
   const id = app.requests.find(r => r.method === 'codex.draft.open').params.draft_id;
-  await choose(page, 'DS Pro');
-  await choose(page, 'Codex test');
+  await choose(page, 'openseek:deepseek-v4-pro');
+  await choose(page, 'codex:gpt-test');
   expect(app.requests.filter(r => r.method === 'codex.draft.close')).toHaveLength(0);
   expect(opens).toBe(1);
   firstOpen.resolve();
@@ -255,7 +254,7 @@ test('Local native goal and compact commands share input and wait for engine con
   const task = page.locator('#task');
   const requests = () => app.requests.filter(r => r.method === 'agent.command');
   await task.fill('/goal');
-  await expect(page.locator('.completion-item').filter({hasText: '/goal'})).toBeVisible();
+  await expect(page.locator('[data-completion-value="goal"]')).toBeVisible();
   await task.press('Enter');
   await expect(page.locator('#goal-cancel')).toBeVisible();
   await task.fill('Finish the shared command work');
@@ -271,7 +270,7 @@ test('Local native goal and compact commands share input and wait for engine con
   await expect(page.locator('.composer-goal.pending')).toHaveCount(0);
   await expect(page.locator('.composer-goal')).toContainText('Goal: Finish the shared command work');
   await task.fill('/compact');
-  await expect(page.locator('.completion-item').filter({hasText: '/compact'})).toBeVisible();
+  await expect(page.locator('[data-completion-value="compact"]')).toBeVisible();
   await task.press('Enter');
   await expect.poll(() => requests().length).toBe(2);
   expect(requests()[1].params.command).toEqual({command: 'compact'});

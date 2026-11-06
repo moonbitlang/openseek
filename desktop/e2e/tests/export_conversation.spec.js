@@ -25,6 +25,7 @@ class ExportHarness extends DesktopBrowserHarness {
   }
 
   async openDesktop({ browser = false } = {}) {
+    this.channel = browser ? 'remote.device-a' : 'local';
     await this.install();
     await this.page.route('**/v2/shares', route => {
       this.clientUploads.push(route.request().url());
@@ -107,7 +108,7 @@ class ExportHarness extends DesktopBrowserHarness {
 
   async openExport() {
     await this.page.locator('[id="conversation-transfer:actions-trigger"]').click();
-    await this.page.locator('[id="conversation-transfer:actions-content"]').getByRole('menuitem').click();
+    await this.page.locator('[data-action="export"]:visible').click();
     const dialog = this.page.locator('#conversation-export-dialog');
     await expect(dialog).toBeVisible();
     return dialog;
@@ -121,12 +122,12 @@ test('export opens choices and downloads locally without publishing', async ({ p
   expect(app.count('session.export')).toBe(0);
   expect(app.hostShares.length).toBe(0);
   await expect(dialog).toContainText('Anyone with the link can view it for 7 days');
-  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
+  await dialog.getByTestId("export-download").click();
   await expect.poll(() => app.count('session.export')).toBe(1);
-  await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+  await expect(dialog.getByTestId("export-download")).toBeEnabled();
   await expect(dialog).toBeVisible(); // cancelling the native save is not an error
   app.downloadReply = { path: '/exports/conversation.html', opened: false };
-  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
+  await dialog.getByTestId("export-download").click();
   await expect(dialog).toContainText("couldn't open it automatically");
   expect(app.requests.find(request => request.method === 'session.export').params).toMatchObject({
     session: 'session-1', workspace: '/workspace', archived: false,
@@ -142,25 +143,25 @@ test('share publishes once and shows a selectable link with a copy button', asyn
   app.pendingShare = new Promise(resolve => { finish = resolve; });
   await app.openDesktop();
   const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Sharing…' })).toBeDisabled();
-  await expect(dialog.getByRole('button', { name: 'Download' })).toBeDisabled();
+  await dialog.getByTestId("export-share").click();
+  await expect(dialog.locator('[data-testid="export-share"]')).toBeDisabled();
+  await expect(dialog.getByTestId("export-download")).toBeDisabled();
   finish();
-  const link = dialog.getByRole('textbox', { name: 'Share link' });
+  const link = dialog.getByTestId("export-link");
   await expect(link).toHaveValue(app.shareReply.url);
-  await dialog.getByRole('button', { name: 'Copy share link' }).click();
-  const copied = dialog.getByRole('button', { name: 'Share link copied', exact: true });
+  await dialog.getByTestId("export-copy").click();
+  const copied = dialog.locator('[data-testid="export-copy"]');
   await expect(copied).toBeVisible();
   await expect(copied).toHaveClass(/export-copy-success/);
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(app.shareReply.url);
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeDisabled();
+  await expect(dialog.getByTestId("export-share")).toBeDisabled();
   expect(app.hostShares.length).toBe(1);
   expect(app.count('session.export')).toBe(0);
   // Downloading afterward keeps the completed link in the same dialog.
-  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+  await dialog.getByTestId("export-download").click();
+  await expect(dialog.getByTestId("export-download")).toBeEnabled();
   await expect(link).toHaveValue(app.shareReply.url);
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeDisabled();
+  await expect(dialog.getByTestId("export-share")).toBeDisabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -169,16 +170,16 @@ test('share offers sign-in and keeps upload failures actionable', async ({ page 
   app.accountSignedIn = false;
   await app.openDesktop();
   const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+  await dialog.getByTestId("export-share").click();
+  await dialog.getByTestId("export-signin").click();
+  await expect(dialog.getByTestId("export-share")).toBeEnabled();
   expect(app.count('auth.connect')).toBe(1);
   expect(app.hostShares.length).toBe(0); // sign-in does not silently publish
   app.shareReply = { status: 'failed', message: 'Sharing is unavailable on this server.' };
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await dialog.getByTestId("export-share").click();
   await expect(dialog).toContainText('Sharing is unavailable on this server.');
-  await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+  await expect(dialog.getByTestId("export-download")).toBeEnabled();
+  await expect(dialog.getByTestId("export-share")).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -188,14 +189,14 @@ test('sign-in errors preserve their cause and offer recovery', async ({ page }) 
   app.signInError = 'TLS certificate verification failed';
   await app.openDesktop();
   const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await dialog.getByTestId("export-share").click();
+  await dialog.getByTestId("export-signin").click();
   await expect(dialog).toContainText('TLS certificate verification failed');
   await expect(dialog).toContainText('You can try signing in again, or download this conversation.');
-  await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+  await expect(dialog.getByTestId("export-download")).toBeEnabled();
   app.signInError = null;
-  await dialog.getByRole('button', { name: 'Try signing in again', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+  await dialog.getByTestId("export-signin").click();
+  await expect(dialog.getByTestId("export-share")).toBeEnabled();
   await expect(dialog).not.toContainText('TLS certificate verification failed');
   expect(app.count('auth.connect')).toBe(2);
   expect(app.hostShares.length).toBe(0); // retrying sign-in does not publish
@@ -209,15 +210,15 @@ test('closing the dialog cancels a sign-in it started', async ({ page }) => {
   app.pendingSignIn = new Promise(resolve => { finish = resolve; });
   await app.openDesktop();
   const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await dialog.getByTestId("export-share").click();
+  await dialog.getByTestId("export-signin").click();
   await expect.poll(() => app.count('auth.connect')).toBe(1);
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
   await expect.poll(() => app.count('auth.cancel')).toBe(1);
   finish();
   await app.openExport();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+  await expect(dialog.getByTestId("export-share")).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -227,14 +228,14 @@ test('closing an upload ignores its late reply', async ({ page }) => {
   app.pendingShare = new Promise(resolve => { finish = resolve; });
   await app.openDesktop();
   const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await dialog.getByTestId("export-share").click();
   await expect.poll(() => app.hostShares.length).toBe(1);
-  await dialog.getByRole('button', { name: 'Close export dialog' }).click();
+  await dialog.locator('[data-slot="dialog-close"]').click();
   await expect(dialog).not.toBeVisible();
   await app.openExport();
   finish();
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveCount(0);
+  await expect(dialog.getByTestId("export-share")).toBeEnabled();
+  await expect(dialog.getByTestId("export-link")).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -243,8 +244,8 @@ test('browser Work sharing captures the selected host but publishes as the brows
   const app = new ExportHarness(page);
   await app.openDesktop({ browser: true });
   const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(app.shareReply.url);
+  await dialog.getByTestId("export-share").click();
+  await expect(dialog.getByTestId("export-link")).toHaveValue(app.shareReply.url);
   expect(app.hostShares).toHaveLength(1);
   expect(app.grantRequests).toHaveLength(1);
   expect(new URL(app.grantRequests[0].url).origin).toBe(new URL(page.url()).origin);
@@ -258,7 +259,7 @@ test('browser Work sharing captures the selected host but publishes as the brows
   expect(app.count('auth.connect')).toBe(0);
   expect(app.count('auth.disconnect')).toBe(0);
   const download = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
+  await dialog.getByTestId("export-download").click();
   expect((await download).suggestedFilename()).toBe('conversation.html');
   expect(app.count('session.export')).toBe(0);
   expect(app.pageErrors).toEqual([]);
@@ -270,15 +271,15 @@ test('a host share pending during account change never uses the new account or e
   app.pendingShare = new Promise(resolve => finish = resolve);
   await app.openDesktop();
   const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await dialog.getByTestId("export-share").click();
   await expect.poll(() => app.count('session.share')).toBe(1);
-  await dialog.getByRole('button', { name: 'Close export dialog' }).click();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const account = page.locator('.settings-group', { has: page.getByRole('heading', { name: 'Account · Remote access', exact: true }) });
-  await account.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(account.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
+  await dialog.locator('[data-slot="dialog-close"]').click();
+  await page.locator('#sidebar-settings').click();
+  const account = page.locator('#settings-account');
+  await account.locator('#settings-sign-out').click();
+  await expect(account.locator('#settings-sign-in')).toBeEnabled();
   app.userId = '456';
-  await account.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await account.locator('#settings-sign-in').click();
   await expect(account).toContainText('@user-456');
   app.shareReply = { status: 'sign_in_required' };
   finish();
@@ -297,7 +298,7 @@ test('host share phases stay indeterminate through retry and finish with the lin
   try {
     await app.openDesktop();
     const dialog = await app.openExport();
-    await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+    await dialog.getByTestId("export-share").click();
     await expect.poll(() => app.hostShares.length).toBe(1);
     await expect(dialog).toContainText('Preparing conversation');
     const generation = app.hostShares[0].generation;
@@ -313,7 +314,7 @@ test('host share phases stay indeterminate through retry and finish with the lin
     expect(app.count('session.snapshot')).toBe(0);
     expect(app.clientUploads).toEqual([]);
     finish();
-    await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
+    await expect(dialog.getByTestId("export-link")).toBeVisible();
     await expect(dialog.getByRole('progressbar')).toHaveCount(0);
     expect(app.pageErrors).toEqual([]);
   } finally { finish(); }
@@ -326,16 +327,16 @@ for (const status of [401, 403]) {
     app.grantStatus = status;
     await app.openDesktop({ browser: true });
     const dialog = await app.openExport();
-    await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+    await dialog.getByTestId("export-share").click();
     await expect.poll(() => app.grantRequests.length).toBe(1);
     expect(app.hostShares).toEqual([]);
     if (status === 401) {
-      await expect(dialog.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+      await expect(dialog.getByTestId("export-signin")).toBeVisible();
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
     } else {
       await expect(dialog).toContainText('Could not prepare sharing (HTTP 403)');
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_browser-account');
-      await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+      await expect(dialog.getByTestId("export-share")).toBeEnabled();
     }
     expect(app.pageErrors).toEqual([]);
   });
@@ -346,11 +347,11 @@ test('a rejected upload grant does not sign out the browser account', async ({ p
   app.shareReply = { status: 'failed', message: 'Sharing failed (HTTP 403): invalid_upload_grant' };
   await app.openDesktop({ browser: true });
   const dialog = await app.openExport();
-  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await dialog.getByTestId("export-share").click();
   await expect(dialog).toContainText('invalid_upload_grant');
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_browser-account');
   expect(app.count('auth.disconnect')).toBe(0);
-  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+  await expect(dialog.getByTestId("export-share")).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -364,8 +365,8 @@ test('share login stays retryable while rejected account cleanup is pending', as
   try {
     await app.openDesktop();
     const dialog = await app.openExport();
-    await dialog.getByRole('button', { name: 'Share', exact: true }).click();
-    const signIn = dialog.getByRole('button', { name: 'Sign in', exact: true });
+    await dialog.getByTestId("export-share").click();
+    const signIn = dialog.getByTestId("export-signin");
     await expect(signIn).toBeVisible();
     await expect.poll(() => app.count('auth.disconnect')).toBe(1);
     await signIn.click();
@@ -381,7 +382,7 @@ test('share login stays retryable while rejected account cleanup is pending', as
     }).toPass({ timeout: 5000 });
     await expect(dialog).toContainText('Complete sign-in in your browser, then click Share.');
     finishSignIn();
-    await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+    await expect(dialog.getByTestId("export-share")).toBeEnabled();
     expect(app.hostShares).toHaveLength(1); // sign-in returns to confirmation
     expect(app.pageErrors).toEqual([]);
   } finally {
@@ -401,22 +402,22 @@ for (const browser of [false, true]) {
     app.pendingShare = new Promise(resolve => { finish = resolve; });
     await app.openDesktop({ browser });
     await app.openReview();
-    await page.getByRole('tab', { name: 'Files', exact: true }).click();
-    const tree = page.getByRole('tree', { name: 'Workspace files', exact: true });
-    await tree.getByRole('treeitem', { name: 'src', exact: true }).click({ button: 'right' });
-    await expect(page.getByRole('menu', { name: 'Context menu', exact: true })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Share', exact: true })).toHaveCount(0);
-    await page.getByRole('menu', { name: 'Context menu', exact: true }).press('Escape');
-    const row = tree.getByRole('treeitem', { name: 'artifact.bin', exact: true });
+    await page.locator('#explorer-files-tab').click();
+    const tree = page.locator('#workspace-files');
+    await tree.locator('[data-path="src"]').click({ button: 'right' });
+    await expect(page.locator('[id="app-context-menu-content"]:visible')).toBeVisible();
+    await expect(page.locator('[role="menuitem"][data-action="share-file"]:visible')).toHaveCount(0);
+    await page.locator('[id="app-context-menu-content"]:visible').press('Escape');
+    const row = tree.locator('[data-path="artifact.bin"]');
     await row.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Share file', exact: true });
+    await page.locator('[role="menuitem"][data-action="share-file"]:visible').click();
+    const dialog = page.locator('#file-share-dialog');
     if (!browser) {
-      await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
-      await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+      await dialog.getByTestId("export-signin").click();
+      await expect(dialog.getByTestId("export-share")).toBeEnabled();
       expect(app.count('auth.connect')).toBe(1);
       expect(app.count('fs.share_file')).toBe(0);
-      await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+      await dialog.getByTestId("export-share").click();
     }
     await expect.poll(() => app.count('fs.share_file')).toBe(1);
     expect(app.hostShares[0]).toEqual({ source: { root: '/workspace', path: 'artifact.bin' }, idempotency_key: expect.any(String), authorization: browser ? { kind: 'upload_grant', upload_token: 'sug_fixture' } : { kind: 'local_account', user_id: '123' } });
@@ -426,38 +427,38 @@ for (const browser of [false, true]) {
     await expect(dialog).toBeHidden();
     // A hidden file upload must not occupy the conversation export instance.
     const conversation = await app.openExport();
-    await expect(conversation.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+    await expect(conversation.getByTestId("export-download")).toBeEnabled();
     if (browser) {
       const download = page.waitForEvent('download');
-      await conversation.getByRole('button', { name: 'Download', exact: true }).click();
+      await conversation.getByTestId("export-download").click();
       expect((await download).suggestedFilename()).toBe('conversation.html');
     } else {
-      await conversation.getByRole('button', { name: 'Download', exact: true }).click();
+      await conversation.getByTestId("export-download").click();
       await expect.poll(() => app.count('session.export')).toBe(1);
     }
-    await expect(conversation.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+    await expect(conversation.getByTestId("export-download")).toBeEnabled();
     await page.keyboard.press('Escape');
     await expect(conversation).toBeHidden();
     await row.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
-    await expect(dialog.getByRole('button', { name: 'Sharing…', exact: true })).toBeDisabled();
+    await page.locator('[role="menuitem"][data-action="share-file"]:visible').click();
+    await expect(dialog.locator('[data-testid="export-share"]')).toBeDisabled();
     expect(app.count('fs.share_file')).toBe(1);
     finish(); app.pendingShare = null;
-    await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(app.shareReply.url);
+    await expect(dialog.getByTestId("export-link")).toHaveValue(app.shareReply.url);
     await page.keyboard.press('Escape');
     await row.click();
-    await page.locator('.viewer-breadcrumb').getByRole('button', { name: 'Share', exact: true }).click();
+    await page.locator('#file-share').click();
     await expect.poll(() => app.count('fs.share_file')).toBe(2);
     expect(app.hostShares[1].idempotency_key).not.toBe(app.hostShares[0].idempotency_key);
     expect(app.clientUploads).toEqual([]);
     expect(app.count('session.share')).toBe(0);
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(app.shareReply.url);
+    await expect(dialog.getByTestId("export-link")).toHaveValue(app.shareReply.url);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
-    await page.getByTitle('Open ./artifact.bin:7', { exact: true }).click({ button: 'right' });
-    await expect(page.getByRole('menuitem', { name: 'Download to local', exact: true })).toHaveCount(0);
-    await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+    await page.locator('[data-context-file="./artifact.bin:7"]').click({ button: 'right' });
+    await expect(page.locator('[role="menuitem"][data-action="download-file"]:visible')).toHaveCount(0);
+    await page.locator('[role="menuitem"][data-action="share-file"]:visible').click();
     await expect.poll(() => app.count('fs.share_file')).toBe(3);
     expect(app.hostShares[2].source).toEqual({ root: '/workspace', path: 'artifact.bin' });
     expect(app.pageErrors).toEqual([]);
@@ -469,7 +470,7 @@ test('Back keeps a dialog above a panel that only covers the page after a resize
   await app.openDesktop();
   // A wide window shows the overview as a rail beside the conversation; a
   // phone-narrow one turns it into a panel over the transcript.
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  await page.locator('#conversation-overview-toggle[aria-pressed="false"]').click();
   const overview = page.locator('.conv-overview');
   await expect(overview).toBeVisible();
   const dialog = await app.openExport();

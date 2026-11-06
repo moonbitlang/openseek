@@ -68,6 +68,7 @@ pub(all) enum Entry {
 }
 
 pub(all) struct Item {
+  key : String
   label : String
   title : String
   icon : @html.Html?

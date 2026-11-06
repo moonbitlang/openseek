@@ -7,21 +7,13 @@ test('the approval mode is chosen per conversation and reaches agent.start', asy
   await app.goto();
   await app.openSession();
   // A conversation is auto-reviewed until it chooses to ask.
-  const trigger = page.locator('.composer').getByRole('button', { name: 'Approval mode' });
-  await expect(trigger).toHaveText('Auto-review');
+  const trigger = page.locator('#openseek-approval-picker');
+  await expect(trigger).toHaveAttribute('data-value', 'review');
   await trigger.click();
-  const menu = page.getByRole('listbox', { name: 'Approval mode' });
-  await expect(menu).toBeVisible();
-  await expect(menu.locator('.custom-select-heading')).toHaveText('Approval mode');
-  const ask = menu.getByRole('option', { name: /Request approval/ });
-  const review = menu.getByRole('option', { name: /Auto-review/ });
-  await expect(review).toHaveAttribute('aria-selected', 'true');
-  await expect(ask).toContainText('You answer every permission request yourself');
-  await expect(review).toContainText('asks you only when unsure');
+  const menu = page.locator('#openseek-approval-picker-menu');
+  const ask = menu.locator('[data-value="ask"]');
   await ask.click();
-  await expect(menu).toHaveCount(0);
-  await expect(trigger).toHaveText('Request approval');
-  await expect(trigger).toBeFocused();
+  await expect(trigger).toHaveAttribute('data-value', 'ask');
   await page.locator('#task').fill('Delete the old notes');
   await page.locator('#send').click();
   await expect

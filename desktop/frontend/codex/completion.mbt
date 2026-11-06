@@ -297,6 +297,7 @@ fn CodexPermissionPicker::confirmation_dialog(
           ),
           @html.button(
             class="button danger",
+            id="codex-permission-confirm",
             on_click=dispatch(ConfirmFullAccess),
             ui(locale, EnableFullAccess),
           ),

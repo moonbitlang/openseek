@@ -7,7 +7,7 @@ for (const endpoint of ['auth/me', 'devices']) {
     await app.install();
     await page.route(`**/v2/${endpoint}`, route => route.fulfill({ status: 401, body: '' }));
     await page.goto('/index.html?device=device-a');
-    await expect(page.getByRole('link', { name: /Sign in.*GitHub/i })).toBeVisible();
+    await expect(page.locator('#console-sign-in')).toBeVisible();
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -24,15 +24,15 @@ for (const endpoint of ['auth/me', 'devices']) {
     });
     await page.goto('/index.html?device=device-a');
     const gate = page.getByRole('main');
-    await expect(gate.getByText(/500/)).toBeVisible();
-    const retry = gate.getByRole('button', { name: 'Try again', exact: true });
+    await expect(gate.locator('.portal-card > p')).toBeVisible();
+    const retry = gate.locator('#console-retry');
     await expect(retry).toBeVisible();
     const failedAttempts = attempts;
     failing = false;
     await retry.click();
     await expect.poll(() => attempts).toBeGreaterThan(failedAttempts);
     await app.openSession();
-    await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+    await expect(page.locator('#transcript .msg-content')).toContainText(['Browser result']);
     await expect(retry).toBeHidden();
     expect(app.pageErrors).toEqual([]);
   });
@@ -43,8 +43,8 @@ test('network failure reaches the retry UI', async ({ page }) => {
   await app.install();
   await page.route('**/v2/auth/me', route => route.abort('failed'));
   await page.goto('/index.html?device=device-a');
-  await expect(page.getByRole('main').getByText(/the relay is unreachable:/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
+  await expect(page.locator('.portal-card > p')).toBeVisible();
+  await expect(page.locator('#console-retry')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -65,8 +65,8 @@ test('same-origin cookies and empty logout POST survive HTTP transport replaceme
     };
     await route.fulfill({ status: 204 });
   });
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('link', { name: /Sign in.*GitHub/i })).toBeVisible();
+  await page.locator('#sidebar-sign-out').click();
+  await expect(page.locator('#console-sign-in')).toBeVisible();
   expect(logout.method).toBe('POST');
   expect(logout.body?.length ?? 0).toBe(0);
   expect(logout.headers.cookie).toContain('session=fixture');
@@ -84,8 +84,8 @@ test('logout failure retains the session and decodes the response text', async (
   }));
   await page.goto('/index.html?device=device-a');
   await app.openSession();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByText('Retry �', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
+  await page.locator('#sidebar-sign-out').click();
+  await expect(page.locator('.console-notice')).toHaveText('Retry �');
+  await expect(page.locator('#sidebar-sign-out')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });

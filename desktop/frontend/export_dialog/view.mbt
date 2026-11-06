@@ -24,6 +24,7 @@ pub fn Model::view(
           class="button secondary export-download",
           disabled=busy,
           on_click=emit(Download),
+          attrs=@html.Attrs::build().data_set("testid", "export-download"),
           if content.operation is Downloading {
             ui(locale, SavingLabel)
           } else {
@@ -35,6 +36,7 @@ pub fn Model::view(
         class="button primary",
         disabled=busy || content.publication is Some(_),
         on_click=emit(Share),
+        attrs=@html.Attrs::build().data_set("testid", "export-share"),
         if content.operation is Sharing(_) {
           ui(locale, SharingLabel)
         } else {
@@ -67,6 +69,7 @@ pub fn Model::view(
           @html.button(
             class="button primary",
             on_click=emit(SignIn),
+            attrs=@html.Attrs::build().data_set("testid", "export-signin"),
             ui(locale, SignInLabel),
           ),
         ])
@@ -74,6 +77,7 @@ pub fn Model::view(
         @html.div([
           @html.p(
             class="export-error",
+            attrs=@html.Attrs::build().data_set("testid", "export-error"),
             if file {
               message
             } else {
@@ -83,10 +87,16 @@ pub fn Model::view(
           @html.button(
             class="button primary",
             on_click=emit(SignIn),
+            attrs=@html.Attrs::build().data_set("testid", "export-signin"),
             ui(locale, RetrySignIn),
           ),
         ])
-      Failed(message) => @html.div(class="export-error", message)
+      Failed(message) =>
+        @html.div(
+          class="export-error",
+          attrs=@html.Attrs::build().data_set("testid", "export-error"),
+          message,
+        )
       Saved(path~, opened~) =>
         @html.div(
           if opened {
@@ -107,7 +117,9 @@ pub fn Model::view(
               @html.input(
                 value=url,
                 read_only=true,
-                attrs=@html.Attrs::build().aria_label(ui(locale, ShareLink)),
+                attrs=@html.Attrs::build()
+                  .data_set("testid", "export-link")
+                  .aria_label(ui(locale, ShareLink)),
               ),
               @html.button(
                 class=if copy is Copied {
@@ -118,13 +130,15 @@ pub fn Model::view(
                 title=ui(locale, CopyClipboard),
                 // Keep success feedback in the icon; the accessible name
                 // also reports it without adding visible status text.
-                attrs=@html.Attrs::build().aria_label(
-                  if copy is Copied {
-                    ui(locale, LinkCopied)
-                  } else {
-                    ui(locale, CopyShareLink)
-                  },
-                ),
+                attrs=@html.Attrs::build()
+                  .data_set("testid", "export-copy")
+                  .aria_label(
+                    if copy is Copied {
+                      ui(locale, LinkCopied)
+                    } else {
+                      ui(locale, CopyShareLink)
+                    },
+                  ),
                 on_click=@clipboard.copy(
                   Text(url),
                   copied=emit(
@@ -155,9 +169,9 @@ pub fn Model::view(
                   escape=true,
                   class="button secondary",
                   title=ui(locale, OpenShareLink),
-                  attrs=@html.Attrs::build().aria_label(
-                    ui(locale, OpenShareLink),
-                  ),
+                  attrs=@html.Attrs::build()
+                    .data_set("testid", "export-open-link")
+                    .aria_label(ui(locale, OpenShareLink)),
                   @icons.icon_link_external(),
                 )
               } else {
@@ -167,7 +181,11 @@ pub fn Model::view(
             match copy {
               Available | Copied => @html.nothing
               Failed(_) =>
-                @html.div(class="export-error", ui(locale, CannotCopy))
+                @html.div(
+                  class="export-error",
+                  attrs=@html.Attrs::build().data_set("testid", "export-error"),
+                  ui(locale, CannotCopy),
+                )
             },
           ]),
         ),
@@ -198,7 +216,9 @@ pub fn Model::view(
           ),
           @html.div(
             class="export-status",
-            attrs=@html.Attrs::build().aria_live("polite"),
+            attrs=@html.Attrs::build()
+              .data_set("testid", "export-status")
+              .aria_live("polite"),
             status,
           ),
           ..publication,

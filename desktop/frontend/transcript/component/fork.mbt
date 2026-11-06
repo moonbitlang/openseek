@@ -50,7 +50,10 @@ fn ForkAction::render(
     type_="button",
     title=tooltip,
     disabled=self.disabled,
-    attrs=@html.Attrs::build().aria_label(label),
+    attrs=@html.Attrs::build()
+      .data_set("testid", "message-fork")
+      .data_set("fork-through", self.through.to_string())
+      .aria_label(label),
     on_click=fork(self.through),
     if self.pending {
       @html.span(class="message-fork-spinner", @icons.icon(@icons.icon_loading))

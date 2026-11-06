@@ -52,10 +52,17 @@ Chromium, WebKit, and their system dependencies. Keep `PLAYWRIGHT_IMAGE` in
 server stay on the Ubuntu runner; the container reuses that server through
 the host network, so it needs no MoonBit or C toolchain installation.
 
-Prefer accessible roles, labels, and visible text. Use classes only for
-product DOM whose presentation contract is itself under test. Mock network
-traffic with Playwright routes and use retrying assertions instead of fixed
-sleeps.
+Locate controls by stable IDs, action keys, or domain identity. Scope role
+locators to the owning component without matching translated names. Add a small
+stable data attribute when the component has no suitable identity; avoid menu
+positions and wording that includes descriptions, counts, or shortcuts.
+
+Check visibility independently of content. When a scenario tests rendered
+content, translations, or an accessible name, locate the target first and
+assert that content explicitly. Keep fixture values such as paths and session
+IDs separate from product copy. Use classes for presentation contracts. Mock
+network traffic with Playwright routes and use retrying assertions instead of
+fixed sleeps.
 
 Import `test` and `expect` from `tests/support/test.js`. Its pages run with CSS
 transitions and animations disabled, so clicks do not wait for moving targets.

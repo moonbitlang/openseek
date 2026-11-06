@@ -7,6 +7,7 @@ fn code_copy_button(
     locale~,
     source,
     class="button secondary chat-code-copy",
+    kind="code",
     title=match locale {
       SimplifiedChinese => "复制代码"
       TraditionalChinese => "複製程式碼"
@@ -30,6 +31,7 @@ pub fn copy_button(
   locale~ : @i18n.Locale = English,
   source : String,
   class~ : String,
+  kind~ : String = "content",
   title~ : String,
   label~ : String,
 ) -> @html.Html {
@@ -38,6 +40,7 @@ pub fn copy_button(
     type_="button",
     title~,
     attrs=@html.Attrs::build()
+      .data_set("copy-kind", kind)
       .aria_label(label)
       .on_click(event => {
         // Capture currentTarget while the event is being dispatched: the

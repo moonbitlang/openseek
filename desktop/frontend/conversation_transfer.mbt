@@ -100,6 +100,7 @@ fn conversation_transfer_menu(
   let entries : Array[@action_menu.Entry] = []
   entries.push(
     Action({
+      key: "export",
       label: shell_text(locale, ExportConversation),
       title: "",
       icon: Some(icon(icon_chat_export)),

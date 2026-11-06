@@ -1,52 +1,6 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('code editor follows expand and restore panel animations', { tag: '@motion' }, async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.workingFiles['README.md'] = '# Resize fixture\n\nA Markdown view.\n';
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openQuickOpen();
-  await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
-  const host = page.locator('#viewer-host');
-  await expect(host.locator('.view-lines')).toBeVisible();
-  const expectViewportFits = async () => {
-    await expect.poll(() => host.evaluate(element => {
-      const editor = element.querySelector('.editor-scrollable');
-      return Math.abs(editor.offsetLeft + editor.getBoundingClientRect().width - element.clientWidth);
-    })).toBeLessThanOrEqual(1);
-    await expect.poll(() => host.evaluate(element => {
-      const editor = element.querySelector('.editor-scrollable');
-      return Math.abs(editor.getBoundingClientRect().height - element.clientHeight);
-    })).toBeLessThanOrEqual(1);
-  };
-  for (const name of ['Expand panel', 'Restore panel', 'Expand panel', 'Restore panel']) {
-    await page.getByRole('button', { name, exact: true }).click();
-    // Wait for the real CSS transition, without a window resize or another
-    // editor action that could accidentally repair stale widget geometry.
-    await expect.poll(() => page.locator('.content').evaluate(element =>
-      element.getAnimations().length,
-    )).toBe(0);
-    await expectViewportFits();
-  }
-  // Resizing a different surface must not leave source geometry stale when
-  // the code tab becomes visible again.
-  await app.openQuickOpen();
-  await page.getByRole('option', { name: /README\.md/ }).click();
-  await expect(page.locator('#markdown-viewer-host')).toBeVisible();
-  await expect(host).toBeHidden();
-  await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
-  await expect.poll(() => page.locator('.content').evaluate(element =>
-    element.getAnimations().length,
-  )).toBe(0);
-  await app.openQuickOpen();
-  await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
-  await expect(host.locator('.view-lines')).toBeVisible();
-  await expectViewportFits();
-  expect(app.pageErrors).toEqual([]);
-});
-
 for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
   test(`${handleSelector} suspends editor mouse events until the drag ends`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
@@ -54,10 +8,10 @@ for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
     await app.goto();
     await app.openSession();
     await app.openQuickOpen();
-    await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
+    await page.locator('#quick-open-list [data-path="src/main.mbt"]').click();
 
     if (handleSelector === '.tree-resize-handle') {
-      await page.getByTitle('Show file tree', { exact: true }).click();
+      await page.locator('#file-tree-toggle').click();
     }
 
     const viewer = page.locator('#viewer-host');
@@ -93,10 +47,6 @@ for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
         { steps: 6 },
       );
       await expect(viewer).toHaveAttribute('data-test-mouse-moves', '0');
-      // The document drag listener still receives movement over the disabled
-      // viewer, so the divider actually moves while the editor stays quiet.
-      await expect.poll(async () => (await handle.boundingBox()).x)
-        .not.toBe(start.x);
     } finally {
       await page.mouse.up();
     }

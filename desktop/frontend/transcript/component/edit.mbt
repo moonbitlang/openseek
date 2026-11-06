@@ -288,6 +288,7 @@ fn MessageEditor::view(
             class="button secondary",
             disabled=action.sending,
             on_click=emit(CancelEdit),
+            attrs=@html.Attrs::build().data_set("testid", "message-edit-cancel"),
             cancel_label,
           ),
           @html.button(
@@ -295,6 +296,7 @@ fn MessageEditor::view(
             class="button primary",
             disabled=action.disabled || draft.is_blank(),
             on_click=emit(SendEdit),
+            attrs=@html.Attrs::build().data_set("testid", "message-edit-send"),
             if action.sending {
               sending_label
             } else {

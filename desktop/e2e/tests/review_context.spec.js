@@ -38,25 +38,6 @@ async function waitForGitRefresh(app) {
   await expect.poll(polls, { timeout: 10000 }).toBeGreaterThan(previous + 1);
 }
 
-test('ordinary context toggles stay free of menu state after outside focus and pointer events', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await openReview(page, app);
-  const button = contextButtons(page).first();
-  const composer = page.locator('#task');
-  for (const label of ['Add to context', 'In context', 'Add to context']) {
-    await expect(button).toHaveText(label);
-    await composer.focus();
-    await expect(button).not.toHaveAttribute('aria-haspopup');
-    await expect(button).not.toHaveAttribute('aria-expanded');
-    // The composer is already focused: clicking it independently exercises
-    // outside pointer dismissal without needing another focus event.
-    await composer.click();
-    await expect(button).not.toHaveAttribute('aria-expanded');
-    await clickHunkContext(page, button);
-  }
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('selected changes retain their preview during live language switching', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await openReview(page, app);

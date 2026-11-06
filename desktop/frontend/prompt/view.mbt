@@ -56,6 +56,7 @@ pub fn Model::view(
           text(locale, CustomPrompt),
           [
             @html.textarea(
+              id="prompt-custom-text",
               value=self.draft.unwrap_or(self.custom_text),
               disabled=!ready || saving,
               rows=6,
@@ -77,6 +78,7 @@ pub fn Model::view(
               ),
               @html.button(
                 class="button primary",
+                id="prompt-save",
                 type_="button",
                 disabled=!ready || saving || self.draft is None,
                 on_click=dispatch(Save),
