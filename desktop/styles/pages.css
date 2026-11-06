@@ -464,7 +464,6 @@ button.archived-chat-open:hover .archived-chat-title {
   min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
   font-size: var(--font-size-md);
