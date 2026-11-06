@@ -2,10 +2,10 @@
 
 ## Compile with the MoonBit Typst CLI
 
-Run the CLI directly with `moonx moonbitlang/typst/cli`:
+Run the CLI directly with `moonx cli/typst`:
 
 ```sh
-moonx moonbitlang/typst/cli -- compile slide.typ slide.pdf
+moonx cli/typst compile slide.typ slide.pdf
 ```
 
 Run this from the directory containing `slide.typ`. `moonx` resolves and runs
