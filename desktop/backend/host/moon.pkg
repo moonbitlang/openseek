@@ -18,7 +18,6 @@ import {
   "openseek_desktop/backend/internal/gitx",
   "openseek_desktop/backend/internal/search",
   "openseek_desktop/protocol",
-  "openseek_desktop/backend/shellenv",
   "openseek_desktop/backend/internal/skillmarket",
   "openseek_desktop/backend/internal/terminal",
   "openseek_desktop/backend/update",

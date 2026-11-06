@@ -1,40 +1,29 @@
-// The integrated terminal's transport-independent host ops. PTY output stays
-// byte-transparent across JSON by using base64; each emitted chunk also has a
-// per-session sequence so a later acknowledgement can cumulatively cover an
-// earlier request that did not reach the host.
+// The integrated terminal's request ops: open a session in the conversation
+// workspace with the selected toolchain first on PATH, and decode input.
 
 ///|
 fn @protocol.TerminalInputPayload::bytes(
   self : @protocol.TerminalInputPayload,
-) -> Bytes raise HostError {
+) -> Bytes raise TerminalError {
   match (self.data, self.data_base64) {
     (Some(data), None) => @utf8.encode(data)
     (None, Some(data)) =>
       @base64.decode(data) catch {
-        _ => raise HostError("terminal input contains invalid base64")
+        _ => raise TerminalError("terminal input contains invalid base64")
       }
-    _ => raise HostError("terminal input must contain exactly one data field")
+    _ =>
+      raise TerminalError("terminal input must contain exactly one data field")
   }
 }
 
 ///|
-priv struct TerminalOutputPayload {
-  id : String
-  sequence : Int32
-  data : String
-}
-
-///|
-priv struct TerminalExitPayload {
-  id : String
-  code : Int32
-}
-
-///|
-async fn terminal_open_op(
-  state : HostState,
-  terminals : @terminal.TerminalState,
+pub async fn terminal_open(
+  terminals : TerminalState,
   payload : @protocol.TerminalOpenPayload,
+  engine~ : String,
+  runtime_dir? : @pathx.Path,
+  source~ : @moonbit.ToolchainSource,
+  bin_dir? : String,
 ) -> @protocol.TerminalOpenReply {
   guard @work_dir.resolve_in_workspace(
       payload.session,
@@ -42,7 +31,7 @@ async fn terminal_open_op(
       workspace?=payload.workspace,
     )
     is Some(root) else {
-    raise HostError("terminal requires a conversation workspace")
+    raise TerminalError("terminal requires a conversation workspace")
   }
   // Match the engine and language services: packaged command-line tools and a
   // packaged MoonBit seed win when present. Queue one combined path update
@@ -50,11 +39,7 @@ async fn terminal_open_op(
   // Its entries leave the final order as moon-bin, packaged-bin, then the
   // shell's PATH. Unknown shells stay usable without receiving a command in
   // another shell's syntax. MOON_HOME remains the user's registry and caches.
-  let toolchain = @moonbit.resolve_toolchain(
-    state.engine,
-    runtime_dir?=state.runtime_dir,
-    source=state.resources.moonbit,
-  )
+  let toolchain = @moonbit.resolve_toolchain(engine, runtime_dir?, source~)
   let windows = @async.platform is Windows
   let shell_command = if windows {
     @sys.get_env_var("COMSPEC").unwrap_or("cmd.exe")
@@ -62,25 +47,22 @@ async fn terminal_open_op(
     @sys.get_env_var("SHELL").unwrap_or("/bin/sh")
   }
   let path_entries = [toolchain.bin_dir.to_string()]
-  if state.resources.bin_dir is Some(bin_dir) {
+  if bin_dir is Some(bin_dir) {
     path_entries.push(bin_dir)
   }
   // A `!` command is the session's only process: no login shell starts, so
   // there is no prompt to activate and the path rides the command's own argv.
   if payload.command is Some(command) {
     guard !command.is_blank() else {
-      raise HostError("terminal command must not be empty")
+      raise TerminalError("terminal command must not be empty")
     }
-    let id = @terminal.open_terminal(
+    let id = open_terminal(
       terminals,
       cwd=root.to_string(),
       cols=payload.cols,
       rows=payload.rows,
       command=command_argv(command, path_entries, shell=shell_command, windows~),
-    ) catch {
-      @terminal.TerminalError(message) => raise HostError(message)
-      error => raise error
-    }
+    )
     return { id, }
   }
   let activation_command = @shellenv.path_prepend_command(
@@ -88,25 +70,22 @@ async fn terminal_open_op(
     path_entries,
     windows~,
   )
-  let id = @terminal.open_terminal(
+  let id = open_terminal(
     terminals,
     cwd=root.to_string(),
     cols=payload.cols,
     rows=payload.rows,
-  ) catch {
-    @terminal.TerminalError(message) => raise HostError(message)
-    error => raise error
-  }
+  )
   if activation_command is Some(command) {
-    @terminal.write_terminal(terminals, id~, @utf8.encode(command)) catch {
-      @terminal.TerminalError(message) => {
-        @terminal.close_terminal(terminals, id~)
-        raise HostError(
+    write_terminal(terminals, id~, @utf8.encode(command)) catch {
+      TerminalError(message) => {
+        close_terminal(terminals, id~)
+        raise TerminalError(
           "could not activate terminal command-line tools: \{message}",
         )
       }
       error => {
-        @terminal.close_terminal(terminals, id~)
+        close_terminal(terminals, id~)
         raise error
       }
     }
@@ -201,44 +180,9 @@ test "a ! command runs under the user's shell with the toolchain first on PATH" 
 }
 
 ///|
-async fn terminal_input_op(
-  terminals : @terminal.TerminalState,
+pub async fn terminal_input(
+  terminals : TerminalState,
   payload : @protocol.TerminalInputPayload,
 ) -> Unit {
-  @terminal.write_terminal(terminals, id=payload.id, payload.bytes()) catch {
-    @terminal.TerminalError(message) => raise HostError(message)
-    error => raise error
-  }
-}
-
-///|
-fn terminal_resize_op(
-  terminals : @terminal.TerminalState,
-  payload : @protocol.TerminalResizePayload,
-) -> Unit raise {
-  @terminal.resize_terminal(
-    terminals,
-    id=payload.id,
-    cols=payload.cols,
-    rows=payload.rows,
-  ) catch {
-    @terminal.TerminalError(message) => raise HostError(message)
-    error => raise error
-  }
-}
-
-///|
-fn terminal_ack_op(
-  terminals : @terminal.TerminalState,
-  payload : @protocol.TerminalAckPayload,
-) -> Unit {
-  @terminal.ack_terminal(terminals, id=payload.id, sequence=payload.sequence)
-}
-
-///|
-fn terminal_close_op(
-  terminals : @terminal.TerminalState,
-  payload : @protocol.TerminalClosePayload,
-) -> Unit {
-  @terminal.close_terminal(terminals, id=payload.id)
+  write_terminal(terminals, id=payload.id, payload.bytes())
 }

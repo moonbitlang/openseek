@@ -139,24 +139,9 @@ pub async fn HostConnection::run(
     group.spawn_bg(allow_failure=true, () => {
       @terminal.run_terminal_pump(self.terminal, push => {
         match push {
-          Output(id~, sequence~, data~) => {
-            let payload : TerminalOutputPayload = {
-              id,
-              sequence,
-              data: @base64.encode(data),
-            }
-            emit(
-              TerminalOutput({
-                id: payload.id,
-                sequence: payload.sequence,
-                data: payload.data,
-              }),
-            )
-          }
-          Exited(id~, code~) => {
-            let payload : TerminalExitPayload = { id, code, }
-            emit(TerminalExit({ id: payload.id, code: payload.code, }))
-          }
+          Output(id~, sequence~, data~) =>
+            emit(TerminalOutput({ id, sequence, data: @base64.encode(data), }))
+          Exited(id~, code~) => emit(TerminalExit({ id, code, }))
         }
       })
     })
@@ -296,22 +281,38 @@ pub fn endpoints(
       create_directory_op(payload)
     }),
     Endpoint(@commands.terminal_open, payload => {
-      terminal_open_op(state, connection.terminal, payload)
+      @terminal.terminal_open(
+        connection.terminal,
+        payload,
+        engine=state.engine,
+        runtime_dir?=state.runtime_dir,
+        source=state.resources.moonbit,
+        bin_dir?=state.resources.bin_dir,
+      )
     }),
     Endpoint(@commands.terminal_input, payload => {
-      terminal_input_op(connection.terminal, payload)
+      @terminal.terminal_input(connection.terminal, payload)
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_resize, payload => {
-      terminal_resize_op(connection.terminal, payload)
+      @terminal.resize_terminal(
+        connection.terminal,
+        id=payload.id,
+        cols=payload.cols,
+        rows=payload.rows,
+      )
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_ack, payload => {
-      terminal_ack_op(connection.terminal, payload)
+      @terminal.ack_terminal(
+        connection.terminal,
+        id=payload.id,
+        sequence=payload.sequence,
+      )
       Acknowledged
     }),
     @endpoint.Endpoint::sync(@commands.terminal_close, payload => {
-      terminal_close_op(connection.terminal, payload)
+      @terminal.close_terminal(connection.terminal, id=payload.id)
       Acknowledged
     }),
     Endpoint(@commands.moon_package_graph, payload => {

@@ -11,6 +11,16 @@ pub suberror TerminalError {
 }
 
 ///|
+pub impl Show for TerminalError with fn output(self, logger) {
+  match self {
+    TerminalError(message) => logger.write_string(message)
+  }
+}
+
+///|
+pub extend TerminalError with Show::{output, to_string}
+
+///|
 /// The request queue uses this private error only to wake and stop its pump.
 /// Callers instead receive `TerminalError` from their individual reply queue.
 priv suberror TerminalPumpClosed {

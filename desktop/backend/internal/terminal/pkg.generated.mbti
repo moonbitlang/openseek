@@ -1,6 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/backend/internal/terminal"
 
+import {
+  "openseek_desktop/backend/moonbit",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
+}
+
 // Values
 pub fn ack_terminal(TerminalState, id~ : String, sequence~ : Int32) -> Unit
 
@@ -16,12 +22,19 @@ pub fn resize_terminal(TerminalState, id~ : String, cols~ : Int32, rows~ : Int32
 
 pub async fn run_terminal_pump(TerminalState, async (TerminalPush) -> Unit) -> Unit
 
+pub async fn terminal_input(TerminalState, @protocol.TerminalInputPayload) -> Unit
+
+pub async fn terminal_open(TerminalState, @protocol.TerminalOpenPayload, engine~ : String, runtime_dir? : @pathx.Path, source~ : @moonbit.ToolchainSource, bin_dir? : String) -> @protocol.TerminalOpenReply
+
 pub async fn write_terminal(TerminalState, id~ : String, Bytes) -> Unit
 
 // Errors
 pub suberror TerminalError {
   TerminalError(String)
 }
+pub fn TerminalError::output(Self, &Logger) -> Unit
+pub fn TerminalError::to_string(Self) -> String
+pub impl Show for TerminalError
 
 // Types and methods
 pub(all) enum TerminalPush {
