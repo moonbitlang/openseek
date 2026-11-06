@@ -66,13 +66,15 @@ test('shell panel control remains reachable when expanded and on narrow screens'
     document.documentElement.style.removeProperty('--native-titlebar-height');
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(toggle).toBeHidden();
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAccessibleName('Show panel');
   await app.openQuickOpen();
   await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAccessibleName('Hide panel');
   await toggle.click();
-  await expect(toggle).toBeHidden();
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAccessibleName('Show panel');
   expect(await original.evaluate(node => node.isConnected)).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
