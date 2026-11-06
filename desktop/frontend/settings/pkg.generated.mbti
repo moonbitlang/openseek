@@ -99,6 +99,10 @@ pub(all) enum Message {
   Settings
   Preferences
   Interface
+  TranscriptView
+  TranscriptViewDescription
+  MinimalView
+  DetailView
   Engine
   MaxSteps
   MaxStepsDescription

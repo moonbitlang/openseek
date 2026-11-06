@@ -20,9 +20,6 @@ priv enum ShellMessage {
   ArchivedReadOnly
   RestoreBeforeContinue
   RestoreLabel
-  ShowDetailed
-  ShowMinimal
-  DetailedMode
   ConversationTransfer
   ExportConversation
   ImportConversation
@@ -227,21 +224,6 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, RestoreLabel) => "恢复"
     (TraditionalChinese, RestoreLabel) => "恢復"
     (Japanese, RestoreLabel) => "復元"
-    (English, ShowDetailed) => "Show detailed conversation"
-    (Spanish, ShowDetailed) => "Mostrar conversación detallada"
-    (SimplifiedChinese, ShowDetailed) => "显示完整对话"
-    (TraditionalChinese, ShowDetailed) => "顯示完整對話"
-    (Japanese, ShowDetailed) => "チャット全体を表示"
-    (English, ShowMinimal) => "Show minimal conversation"
-    (Spanish, ShowMinimal) => "Mostrar conversación mínima"
-    (SimplifiedChinese, ShowMinimal) => "显示精简对话"
-    (TraditionalChinese, ShowMinimal) => "顯示精簡對話"
-    (Japanese, ShowMinimal) => "簡易チャットを表示"
-    (English, DetailedMode) => "Detailed mode"
-    (Spanish, DetailedMode) => "Modo detallado"
-    (SimplifiedChinese, DetailedMode) => "详细模式"
-    (TraditionalChinese, DetailedMode) => "詳細模式"
-    (Japanese, DetailedMode) => "詳細モード"
     (English, ConversationTransfer) => "Export and import"
     (Spanish, ConversationTransfer) => "Compartir e importar"
     (SimplifiedChinese, ConversationTransfer) => "导出与导入"

@@ -319,10 +319,6 @@ test('Cloud renders each text fragment and hands off two tool-loop replies to de
   await expect(page.locator('#transcript [aria-label="Copy assistant message as Markdown"]')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
   await expect(result).toHaveCount(1);
-  await page.getByRole('button', { name: 'Detailed mode', exact: true }).click();
-  await expect(answer).toHaveCount(1);
-  await expect(answer).toBeVisible();
-  await expect(result).toBeVisible();
   expect(cloud.device.pageErrors).toEqual([]);
 });
 

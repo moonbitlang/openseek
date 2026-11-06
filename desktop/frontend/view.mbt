@@ -1463,6 +1463,36 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     },
     @settings.group(icon_layout, @settings.text(locale, Interface), [
       @settings.row(
+        @settings.text(locale, TranscriptView),
+        [
+          @rui.button_group(
+            class="transcript-view-control",
+            aria_label=@settings.text(locale, TranscriptView),
+            [
+              @rui.button(
+                variant=Ghost,
+                size=Default,
+                on_click=dispatch(MinimalTranscriptChanged(true)),
+                attrs=@html.Attrs::build().aria_pressed(
+                  model.minimal_transcript.to_string(),
+                ),
+                @settings.text(locale, MinimalView),
+              ),
+              @rui.button(
+                variant=Ghost,
+                size=Default,
+                on_click=dispatch(MinimalTranscriptChanged(false)),
+                attrs=@html.Attrs::build().aria_pressed(
+                  (!model.minimal_transcript).to_string(),
+                ),
+                @settings.text(locale, DetailView),
+              ),
+            ],
+          ),
+        ],
+        desc=@settings.text(locale, TranscriptViewDescription),
+      ),
+      @settings.row(
         @settings.text(locale, Language),
         [
           LanguageMenu.setting_control(
@@ -1829,38 +1859,10 @@ fn session_tooltip(model : Model, conv : Conversation) -> String {
 }
 
 ///|
-/// The narrow layout always renders the minimal transcript: its titlebar has
-/// no detail toggle, and a phone has no room for the detailed view. The
-/// stored preference is preserved for the wide layout.
+/// The narrow layout always renders the minimal transcript. The Settings
+/// preference is preserved for the wide layout.
 fn Model::minimal_transcript_effective(self : Model) -> Bool {
   self.narrow || self.minimal_transcript
-}
-
-///|
-/// The debug icon is on for detailed mode. Both conversation sources use the
-/// inverse of the stored minimal preference, preserving existing choices.
-/// This local preference has no connection or run-state gate. Neighboring
-/// controls must clear their disabled state when Rabbita reuses their DOM
-/// for this button (see the Codex topbar).
-fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
-  @html.button(
-    class=if self.minimal_transcript {
-      "panel-toggle"
-    } else {
-      "panel-toggle active"
-    },
-    disabled=false,
-    title=if self.minimal_transcript {
-      shell_text(self.locale, ShowDetailed)
-    } else {
-      shell_text(self.locale, ShowMinimal)
-    },
-    attrs=@html.Attrs::build()
-      .aria_label(shell_text(self.locale, DetailedMode))
-      .aria_pressed((!self.minimal_transcript).to_string()),
-    on_click=dispatch(MinimalTranscriptChanged(!self.minimal_transcript)),
-    icon(@icons.icon_debug),
-  )
 }
 
 ///|
@@ -1917,9 +1919,6 @@ fn conversation_header(
     )
   }
   items.push(conversation_transfer_button(model.locale))
-  if !model.narrow {
-    items.push(model.detail_toggle(dispatch))
-  }
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
   if !model.narrow {
@@ -2232,7 +2231,6 @@ fn view(
     },
     transcript: transcript_html,
     composer: codex_composer_html,
-    detail_toggle: model.detail_toggle(dispatch),
   }
   let header = match model.screen {
     Chat =>
@@ -2263,11 +2261,6 @@ fn view(
               on_click=dispatch(OpenCloudExport),
               icon(icon_chat_export),
             )
-          } else {
-            @html.nothing
-          },
-          if model.cloud_identity() is Some(_) && !model.narrow {
-            model.detail_toggle(dispatch)
           } else {
             @html.nothing
           },
