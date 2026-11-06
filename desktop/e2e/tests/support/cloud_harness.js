@@ -660,7 +660,9 @@ export class CloudHarness {
 
   async open(id = sessionA) {
     await this.row(id).click();
-    await expect(this.row(id)).toHaveAttribute('aria-current', 'true');
+    // Wait on the main pane, not the row's sidebar state: every Cloud spec
+    // opens through here, and a sidebar regression belongs to the specs that
+    // assert it rather than to all of them.
     await expect(this.page.locator('main .topbar-title')).toHaveText(this.titles.get(id) || 'New chat');
     await this.page.locator('#task').waitFor();
   }
