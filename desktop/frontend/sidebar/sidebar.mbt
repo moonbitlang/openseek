@@ -243,6 +243,7 @@ pub fn component(
     }
     if !input.search.query().is_blank() && input.search_results().is_empty() {
       rows["search:empty"] = @html.div(
+        id="session-search-empty",
         class="conversation-row placeholder",
         @html.span(
           class="sidebar-label sidebar-notice",

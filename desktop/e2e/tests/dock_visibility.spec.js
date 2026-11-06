@@ -25,7 +25,7 @@ test('active dock tab stays visible when opening, switching, closing and resizin
   const openFile = async i => {
     await app.openQuickOpen();
     await page.locator('#quick-open-input').fill(`document_${i}`);
-    await page.getByRole('option', { name: new RegExp(`document_${i}`) }).click();
+    await page.locator(`#quick-open-list [data-path="${app.searchFiles[i]}"]`).click();
     await expect(page.locator('.editor-tab.active')).toContainText(`document_${i}`);
   };
   for (let i = 0; i < 8; i++) await openFile(i);
@@ -35,9 +35,9 @@ test('active dock tab stays visible when opening, switching, closing and resizin
   await expectActiveVisible(page);
   await openFile(7);
   await expectActiveVisible(page);
-  await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
+  await page.locator('#panel-expand').click();
   await expectActiveVisible(page);
-  await page.getByRole('button', { name: 'Restore panel', exact: true }).click();
+  await page.locator('#panel-expand[aria-pressed="true"]').click();
   await page.setViewportSize({ width: 1100, height: 900 });
   await expectActiveVisible(page);
   // A drag changes CSS geometry without a model message. Also exercise a

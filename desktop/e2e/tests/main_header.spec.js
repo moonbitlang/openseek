@@ -43,7 +43,7 @@ test('loading and failure retain the selected conversation title', async ({ page
   await app.install();
   await app.goto();
   await app.sessionRow('session-1').click();
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await expect(page.locator('#transcript')).toContainText('Browser result');
   const original = await page.locator('main > .topbar').elementHandle();
   app.rpcDelays.set('session.load', 700);
   app.rpcErrors.set('session.load', 'fixture unavailable');
@@ -55,7 +55,7 @@ test('loading and failure retain the selected conversation title', async ({ page
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
   app.rpcErrors.delete('session.load');
   await page.locator('#conversation-load-retry').click();
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await expect(page.locator('#transcript')).toContainText('Browser result');
   await expect(page.locator('main > .topbar h1')).not.toHaveText('SeekMoon');
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
   const title = await page.locator('main > .topbar h1').textContent();

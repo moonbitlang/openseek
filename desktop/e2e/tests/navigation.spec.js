@@ -51,7 +51,7 @@ test('local console opens a session without a device query', async ({ page }) =>
   });
   await page.goto('/device/host/chat/session/session-1');
   await expect.poll(() => signInChecks).toBe(1);
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await expect(page.locator('#transcript')).toContainText('Browser result');
   await page.reload();
   await expect.poll(() => signInChecks).toBe(2);
   await expect(page.locator('#task')).toBeVisible();
@@ -74,7 +74,7 @@ test('dialogs can open over an invalid route without changing it', async ({ page
 test('session deep links wait for catalogs and distinguish missing from failed loading', async ({ page }) => {
   const app = new DesktopBrowserHarness(page); app.rpcDelays.set('session.list', 500);
   await app.install(); await page.goto(path('chat/session/session-1'));
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await expect(page.locator('#transcript')).toContainText('Browser result');
   await page.goto(path('chat/session/does-not-exist')); await expect(page.locator('.navigation-notice')).toContainText('no longer exists');
   await page.goto(path('chat/draft/not-in-this-tab')); await expect(page).toHaveURL(new RegExp(path('chat/new') + '$'));
   await expect(page.locator('#task')).toHaveValue('');
@@ -158,7 +158,7 @@ test('history restores the project before creating the next conversation', async
   app.replyFor = request => { const result = fallback(request); if (request.method === 'session.load') result.session.id = request.params.session; return result; };
   await app.install(); await app.goto();
   for (const id of ['session-a', 'session-b']) {
-    await app.sessionButton(id, { root: `/project-${id.slice(-1)}` }).click(); await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+    await app.sessionButton(id, { root: `/project-${id.slice(-1)}` }).click(); await expect(page.locator('#transcript')).toContainText('Browser result');
   }
   await page.goBack(); await expect(page).toHaveURL(/session\/session-a$/);
   await expect(page.locator('.topbar-workspace')).toContainText('project-a');
@@ -181,7 +181,7 @@ for (const failure of ['rpc', 'store']) {
     await expect(page.locator('.navigation-notice')).not.toContainText('no longer exists');
     unavailable = false; app.rpcErrors.delete('session.list_archived');
     await page.locator('#navigation-retry').click();
-    await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+    await expect(page.locator('#transcript')).toContainText('Browser result');
     await expect(page.locator('.navigation-notice')).toHaveCount(0);
     expect(app.requests.some(r => r.method === 'session.load_archived')).toBe(true); expect(app.pageErrors).toEqual([]);
   });
@@ -198,7 +198,7 @@ test("Back closes the management dialog before it reaches the page", async ({ pa
   await expect(dialog(page)).toHaveAccessibleName('Skills');
   expect(await hostBack()).toBe(true);
   await expect(dialog(page)).not.toBeVisible();
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await expect(page.locator('#transcript')).toContainText('Browser result');
   expect(await hostBack()).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });

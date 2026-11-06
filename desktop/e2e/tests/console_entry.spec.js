@@ -19,13 +19,13 @@ test('a signed-out device page offers login and preserves the page return path',
   const app = await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
   await page.goto('/device/device-a/chat');
-  await expect(page.getByRole('link', { name: 'Sign in with GitHub' })).toHaveAttribute('href',
+  await expect(page.locator('#console-sign-in')).toHaveAttribute('href',
     '/v2/auth/login?prompt=select_account&return_to=%2Fdevice%2Fdevice-a%2Fchat');
   expect(app.socket).toBeNull();
   await assertFits(page);
   await page.route('**/v2/auth/login?*', route => route.fulfill({ contentType: 'text/html', body: '<h1>OAuth fixture</h1>' }));
-  await page.getByRole('link', { name: 'Sign in with GitHub' }).click();
-  await expect(page.getByRole('heading', { name: 'OAuth fixture' })).toBeVisible();
+  await page.locator('#console-sign-in').click();
+  await expect(page.locator('h1')).toHaveText('OAuth fixture');
   await expect(page).toHaveURL(/\/v2\/auth\/login\?/);
   expect(app.pageErrors).toEqual([]);
 });
@@ -40,15 +40,15 @@ test('the sidebar selector lists Cloud and online devices and switches between t
   // A Cloud page has no device; the selector names Cloud and connects nothing.
   await page.goto('/cloud');
   await page.locator('.sidebar-toggle').click();
-  const selector = page.getByRole('button', { name: 'Choose a device', exact: true });
+  const selector = page.locator('[id="sidebar:device-selector:actions-trigger"]');
   await expect(selector).toContainText('Cloud');
   expect(app.socket).toBeNull();
   await selector.click();
-  await expect(page.getByRole('menuitem', { name: 'Cloud', exact: true })).toBeDisabled();
-  await expect(page.getByRole('menuitem', { name: 'Test Mac', exact: true })).toBeEnabled();
-  await expect(page.getByRole('menuitem', { name: 'Studio', exact: true })).toBeEnabled();
-  await expect(page.getByRole('menuitem', { name: 'Office computer' })).toHaveCount(0);
-  await page.getByRole('menuitem', { name: 'Test Mac', exact: true }).click();
+  await expect(page.locator('[role="menuitem"][data-action="cloud"]:visible')).toBeDisabled();
+  await expect(page.locator('[role="menuitem"][data-action="device:device-a"]:visible')).toBeEnabled();
+  await expect(page.locator('[role="menuitem"][data-action="device:device-b"]:visible')).toBeEnabled();
+  await expect(page.locator('[role="menuitem"][data-action="device:offline"]:visible')).toHaveCount(0);
+  await page.locator('[role="menuitem"][data-action="device:device-a"]:visible').click();
   await expect(page).toHaveURL(/\/device\/device-a\/chat(\/new)?$/);
   await expect.poll(() => app.socket !== null).toBe(true);
   // On a device page it names that device and checks it in the menu.
@@ -56,16 +56,16 @@ test('the sidebar selector lists Cloud and online devices and switches between t
   await expect(selector).toContainText('Test Mac');
   await expect.poll(async () => Math.abs((await page.locator('aside').boundingBox()).x)).toBeLessThan(1);
   await selector.click();
-  await expect(page.getByRole('menuitem', { name: 'Test Mac', exact: true })).toBeDisabled();
-  await expect(page.getByRole('menuitem', { name: 'Office computer' })).toHaveCount(0);
+  await expect(page.locator('[role="menuitem"][data-action="device:device-a"]:visible')).toBeDisabled();
+  await expect(page.locator('[role="menuitem"][data-action="device:offline"]:visible')).toHaveCount(0);
   await assertFits(page);
-  await page.getByRole('menuitem', { name: 'Studio', exact: true }).click();
+  await page.locator('[role="menuitem"][data-action="device:device-b"]:visible').click();
   await expect(page).toHaveURL(/\/device\/device-b\/chat(\/new)?$/);
   // A device page returns to Cloud through the same menu.
   await page.locator('.sidebar-toggle').click();
   await selector.click();
-  await expect(page.getByRole('menuitem', { name: 'Studio', exact: true })).toBeDisabled();
-  await page.getByRole('menuitem', { name: 'Cloud', exact: true }).click();
+  await expect(page.locator('[role="menuitem"][data-action="device:device-b"]:visible')).toBeDisabled();
+  await page.locator('[role="menuitem"][data-action="cloud"]:visible').click();
   await expect(page).toHaveURL(/\/cloud$/);
   await page.locator('.sidebar-toggle').click();
   await expect(selector).toContainText('Cloud');
@@ -79,7 +79,7 @@ test('the device selector opens upward even when its menu would fit below', asyn
     { id: 'device-a', name: 'Test Mac', online: true },
   ] } }));
   await page.goto('/device/device-a/chat');
-  const selector = page.getByRole('button', { name: 'Choose a device', exact: true });
+  const selector = page.locator('[id="sidebar:device-selector:actions-trigger"]');
   await expect(selector).toContainText('Test Mac');
   await selector.click();
   const menu = page.getByRole('menu');
@@ -97,12 +97,12 @@ test('a device page whose roster failed can retry', async ({ page }) => {
     ? route.fulfill({ status: 502 })
     : route.fulfill({ json: { devices: [{ id: 'device-a', name: 'Test Mac', online: true }] } }));
   await page.goto('/device/device-a/chat');
-  await expect(page.getByRole('main').getByText(/HTTP 502/)).toBeVisible();
+  await expect(page.locator('.portal-card')).toContainText('HTTP 502');
   expect(app.socket).toBeNull();
   failed = false;
-  await page.getByRole('button', { name: 'Try again' }).click();
+  await page.locator('#console-retry').click();
   await expect.poll(() => app.socket !== null).toBe(true);
-  await expect(page.getByRole('main').getByText(/HTTP 502/)).toHaveCount(0);
+  await expect(page.locator('.portal-card')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -112,12 +112,12 @@ test('Chat is the signed-out launch page and a saved Work preference cannot repl
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
   await page.goto('/index.html');
   await expect(page).toHaveURL(/\/cloud$/);
-  await expect(page.getByRole('main').getByRole('heading', { name: 'Chats', level: 2, exact: true })).toBeVisible();
-  await expect(page.getByRole('main').getByRole('button', { name: 'Sign in with GitHub' })).toBeEnabled();
+  await expect(page.locator('.cloud-home')).toBeVisible();
+  await expect(page.getByRole('main').locator('#cloud-sign-in')).toBeEnabled();
   // Device choice lives in the signed-in sidebar, not on the Cloud home.
-  await expect(page.getByRole('main').getByRole('link', { name: 'Choose a device' })).toHaveCount(0);
+  await expect(page.locator('main [id="sidebar:device-selector:actions-trigger"]')).toHaveCount(0);
   // The phone drawer starts closed, so query the mode switch by markup.
-  await expect(page.locator('.sidebar-mode-option[aria-label="Chat"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#sidebar-chat-mode')).toHaveAttribute('aria-pressed', 'true');
   expect(app.socket).toBeNull();
   expect(app.pageErrors).toEqual([]);
 });

@@ -11,8 +11,10 @@ pub fn switch_control(
   on_click~ : @cmd.Cmd,
   disabled~ : Bool = false,
   title? : String,
+  id? : String,
 ) -> @html.Html {
   @html.button(
+    id?,
     class="setting-switch",
     type_="button",
     title=title.unwrap_or(label),
@@ -54,8 +56,9 @@ pub fn group(
   icon_image : () -> @html.Html,
   title : String,
   rows : Array[@html.Html],
+  id? : String,
 ) -> @html.Html {
-  @html.div(class="settings-group", [
+  @html.div(id?, class="settings-group", [
     @html.div(class="settings-group-head", [
       @icons.icon(icon_image),
       @html.h2(title),

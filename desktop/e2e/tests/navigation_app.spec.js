@@ -4,15 +4,15 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 test('dialogs remain reachable in narrow and native titlebars', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install(); await app.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await page.locator('#sidebar-settings').click();
+  const dialog = page.locator('#management-dialog');
   await expect(dialog).toBeVisible();
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 844 });
-    await expect(dialog.getByRole('button', { name: 'Dismiss', exact: true })).toBeInViewport();
+    await expect(dialog.locator('[data-slot="dialog-close"]')).toBeInViewport();
     expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
   }
-  await dialog.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await dialog.locator('[data-slot="dialog-close"]').click();
   await page.setViewportSize({ width: 1440, height: 844 });
   await expect(page.locator('.sidebar-backdrop')).toHaveCount(0);
   await expect.poll(() => page.locator('.app').evaluate(node => node.getAnimations().length)).toBe(0);

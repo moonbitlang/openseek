@@ -36,6 +36,7 @@ export class CloudHarness {
     this.cached = cached;
     this.accountSignedIn = cached;
     this.device = new DesktopBrowserHarness(page);
+    if (desktop) this.device.channel = 'local';
     this.requests = [];
     this.hostRequests = [];
     this.notifications = [];
@@ -673,7 +674,7 @@ export class CloudHarness {
   }
 
   async create() {
-    await this.page.locator(`[id="section:cloud.chats:${this.userId}:action"]`).click();
+    await this.page.locator('[id^="section:cloud.chats:"][id$=":action"]').click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
     await expect(this.page.locator('#conversation-export')).toHaveCount(0);
     await expect(this.page.locator('#model')).toBeDisabled();

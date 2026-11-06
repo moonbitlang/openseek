@@ -10,7 +10,7 @@ test('one connection notice replaces pending inventory failures and preserves th
   // Startup shows "Open a project" until workspace.list answers, then moves
   // to New chat. On a narrow layout that screen change closes the drawer, so
   // open it only once startup has settled.
-  await page.getByRole('heading', { name: 'New chat', exact: true }).waitFor();
+  await page.locator('#empty-project-trigger').waitFor();
   await page.locator('.sidebar-toggle').click();
   await app.openSession();
   await page.locator('#task').fill('Keep this unsent draft');
@@ -66,7 +66,7 @@ test('a host rejection with connection-like wording is still reported', async ({
   await expect.poll(() => app.socket !== null).toBe(true);
   app.rpcErrors.set('worktree.list', 'SeekMoon connection lost');
   app.notify('workspace.changed', { workspaces: ['/workspace', '/rejected-project'] });
-  await expect(page.locator('.notification').filter({ hasText: '/rejected-project' })).toContainText('SeekMoon connection lost');
+  await expect(page.locator('.notifications > .notification')).toContainText(['/rejected-project: SeekMoon connection lost']);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -75,9 +75,9 @@ test('Codex drafts use the same reconnecting notice and cannot send offline', as
   app.codexModels = [{ id: 'gpt-test', displayName: 'Codex offline', isDefault: true }];
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'Codex offline', exact: true }).click();
-  await expect(page.locator('#task')).toHaveAttribute('placeholder', /Ask Codex/);
+  await page.locator('#openseek-model-picker').click();
+  await page.locator('[role="option"][data-value="codex:gpt-test"]').click();
+  await expect(page.locator('#codex-model-picker')).toHaveAttribute('data-value', 'codex:gpt-test');
   await page.locator('#task').fill('Keep this Codex draft');
   app.connectionAvailable = false;
   app.socket.close({ code: 1001, reason: 'fixture offline' });

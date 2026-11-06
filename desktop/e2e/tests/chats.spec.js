@@ -3,7 +3,6 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { CloudHarness, sessionA } from './support/cloud_harness.js';
 
 const root = '/Users/test/Library/Application Support/SeekMoon/workspaces';
-const sidebarMode = (page, name) => page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name, exact: true });
 
 function localHistory(app) {
   app.workspaces = ['/workspace', `${root}/history`];
@@ -19,9 +18,9 @@ for (const legacy of [false, true]) {
     if (legacy) localHistory(cloud.device);
     await cloud.install();
     await cloud.goto();
-    const hint = page.locator('aside').getByText('Sign in to view conversations', { exact: true });
+    const hint = page.locator('[id="placeholder:cloud-sign-in"]');
     await expect(hint).toBeVisible();
-    await page.locator('aside').getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.locator('[id="placeholder:cloud-sign-in:action"]').click();
     await cloud.open();
     await expect(hint).toHaveCount(0);
     await expect(page.locator('#task')).toBeVisible();
@@ -29,14 +28,14 @@ for (const legacy of [false, true]) {
     const row = cloud.row(sessionA);
     await expect(row).toBeInViewport();
     await row.hover();
-    await page.getByRole('button', { name: 'Conversation actions' }).click();
-    await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+    await cloud.rowContainer(sessionA).locator('[id$=":actions-trigger"]').click();
+    await page.locator('[role="menuitem"][data-action="archive"]:visible').click();
     await expect(row).toHaveCount(0);
     await cloud.openArchived(sessionA);
     await expect(page.locator('.archived-read-only-text')).toBeVisible();
     if (legacy) {
-      await sidebarMode(page, 'Work').click();
-      await expect(page.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
+      await page.locator('#sidebar-work-mode').click();
+      await expect(cloud.device.projectControl('/workspace', 'disclosure')).toBeVisible();
       expect(cloud.device.workspaces).toContain(`${root}/history`);
       expect(cloud.device.liveSessions).toHaveLength(1);
     }
@@ -50,7 +49,7 @@ test('an empty Chat list starts a draft without creating a session', async ({ pa
   cloud.sessionIds = [];
   await cloud.install();
   await page.goto('https://openseek-api.moonbitlang.cn/console/index.html?device=device-a');
-  await sidebarMode(page, 'Chat').click();
+  await page.locator('#sidebar-chat-mode').click();
   await expect.poll(() => cloud.requests.some(request => request.method === 'GET' && request.path === '/v1/sessions')).toBe(true);
   await cloud.create();
   await page.locator('#task').fill('An unsent chat draft');
@@ -62,16 +61,16 @@ test('a project draft survives Chat navigation and account sign-out', async ({ p
   const cloud = new CloudHarness(page, { desktop: true });
   await cloud.install();
   await cloud.goto();
-  await sidebarMode(page, 'Work').click();
+  await page.locator('#sidebar-work-mode').click();
   await cloud.device.openSession();
   await page.locator('#task').fill('Keep this project draft');
-  await sidebarMode(page, 'Chat').click();
+  await page.locator('#sidebar-chat-mode').click();
   await cloud.open();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Settings', exact: true })
-    .getByRole('button', { name: 'Dismiss', exact: true }).click();
-  await sidebarMode(page, 'Work').click();
+  await page.locator('#sidebar-settings').click();
+  await page.locator('#settings-sign-out').click();
+  await page.locator('#management-dialog')
+    .locator('[data-slot="dialog-close"]').click();
+  await page.locator('#sidebar-work-mode').click();
   await cloud.device.openSession();
   await expect(page.locator('#task')).toHaveValue('Keep this project draft');
   await page.locator('#send').click();
@@ -96,7 +95,7 @@ test('a user project named Unnamed workspace remains a project', async ({ page }
   app.workspaces = ['/Users/test/Projects/Unnamed workspace'];
   await app.install();
   await app.goto();
-  await expect(page.getByRole('button', { name: 'Unnamed workspace', exact: true })).toBeVisible();
+  await expect(app.projectControl(app.workspaces[0], 'disclosure')).toBeVisible();
   const launchMode = page.locator('button.composer-worktree');
   await expect(launchMode).toHaveText('Local');
   await launchMode.click();
@@ -113,7 +112,7 @@ test('project history retries a failed directory snapshot without losing its des
   await expect(notice).toContainText('Directory unavailable');
   expect(app.requests.some(request => request.method === 'session.load')).toBe(false);
   app.rpcErrors.delete('workspace.list');
-  await notice.getByRole('button', { name: 'Retry', exact: true }).click();
+  await notice.locator('#navigation-retry').click();
   await expect(page.locator('#transcript')).toContainText('Browser result');
   await expect(page).toHaveURL(/chat\/session\/session-1$/);
   expect(app.pageErrors).toEqual([]);

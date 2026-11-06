@@ -6,7 +6,7 @@ test('a host built for another protocol revision is reported once and not retrie
   app.hostProtocol = 0;
   await app.install();
   await app.goto();
-  await expect(page.getByText("This computer runs a SeekMoon version this page can't control.", { exact: false }).first()).toBeVisible();
+  await expect(page.locator('#console-host-incompatible')).toBeVisible();
   const tickets = app.ticketRequests.length;
   // A dropped connection would request a new ticket within its backoff.
   await page.waitForTimeout(2000);
@@ -21,7 +21,7 @@ test('a host from before the protocol revision is reported, not left connecting'
   app.connectedParams = { ready: true };
   await app.install();
   await page.goto('/device/device-a/chat');
-  await expect(page.getByRole('main').getByText("This computer runs a SeekMoon version this page can't control.", { exact: false })).toBeVisible();
+  await expect(page.locator('#console-host-incompatible')).toBeVisible();
   expect(app.requests.map(request => request.method)).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
@@ -31,6 +31,6 @@ test('a host on the current protocol revision stays connected', async ({ page })
   await app.install();
   await app.goto();
   await app.openSession();
-  await expect(page.getByText("This computer runs a SeekMoon version this page can't control.", { exact: false })).toHaveCount(0);
+  await expect(page.locator('#console-host-incompatible')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

@@ -3,7 +3,7 @@ import { LocalConsoleHarness, browserAccount } from './support/local_console_har
 import { sessionA } from './support/cloud_harness.js';
 
 async function openLocalWork(page, local) {
-  await page.getByRole('button', { name: 'Work', exact: true }).click();
+  await page.locator('#sidebar-work-mode').click();
   await local.device.openSession();
   await expect(page.locator('#task')).toBeEnabled();
 }
@@ -25,13 +25,13 @@ test('local Console shows account storage failures and retries without reconnect
   });
   await local.goto();
   const home = page.locator('.cloud-home');
-  await expect(home.getByText(/Could not read account storage:/)).toBeVisible();
-  await expect(home.getByRole('button', { name: 'Sign in with GitHub' })).toHaveCount(0);
+  await expect(home.locator('p')).toContainText('Could not read account storage:');
+  await expect(home.locator('#cloud-sign-in')).toHaveCount(0);
   await expect.poll(() => local.localSockets.length).toBe(1);
   await page.evaluate(() => { window.accountStorageUnavailable = false; });
-  await home.getByRole('button', { name: 'Try again', exact: true }).click();
-  await expect(home.getByText(/Could not read account storage:/)).toHaveCount(0);
-  await expect(home.getByRole('button', { name: 'Sign in with GitHub' })).toBeVisible();
+  await home.locator('#console-retry').click();
+  await expect(home.locator('p')).toHaveCount(0);
+  await expect(home.locator('#cloud-sign-in')).toBeVisible();
   await openLocalWork(page, local);
   expect(local.localSockets).toHaveLength(1);
   expect(local.device.pageErrors).toEqual([]);
@@ -41,10 +41,10 @@ test('local Console signs in independently and keeps its account across reload a
   const local = new LocalConsoleHarness(page, baseURL);
   await local.install();
   await local.goto();
-  await expect(page.locator('.cloud-home').getByRole('button', { name: 'Sign in with GitHub' })).toBeVisible();
+  await expect(page.locator('.cloud-home').locator('#cloud-sign-in')).toBeVisible();
   await openLocalWork(page, local);
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
+  await page.locator('[id="placeholder:cloud-sign-in:action"]').click();
   await expect(local.row(sessionA)).toBeVisible();
   expect(local.localRequests.some(request => request.path === '/v2/auth/login')).toBe(true);
   expect(await storedAccount(page)).toEqual(browserAccount);
@@ -56,7 +56,7 @@ test('local Console signs in independently and keeps its account across reload a
   } }));
   await local.open();
   await page.locator('#task').fill('Cloud with my independent browser account');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect.poll(() => local.postCount).toBe(1);
   const requests = local.requests.filter(request => request.side === 'cloud');
   expect(requests.every(request => request.headers.authorization === `Bearer ${browserAccount.token}`)).toBe(true);
@@ -72,26 +72,26 @@ test('local Console logout clears only Cloud account state and preserves local w
   const local = new LocalConsoleHarness(page, baseURL);
   await local.install();
   await local.goto();
-  await page.locator('.cloud-home').getByRole('button', { name: 'Sign in with GitHub' }).click();
+  await page.locator('.cloud-home').locator('#cloud-sign-in').click();
   await expect(local.row(sessionA)).toBeVisible();
   await openLocalWork(page, local);
   await page.locator('#task').fill('Keep this local draft');
   const sockets = local.localSockets.length;
   local.logoutStatus = 503;
-  await page.locator('.console-account').getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByText('the relay answered HTTP 503', { exact: true })).toBeVisible();
+  await page.locator('.console-account').locator('#sidebar-sign-out').click();
+  await expect(page.locator('.console-notice')).toContainText('the relay answered HTTP 503');
   expect(await storedAccount(page)).toEqual(browserAccount);
   local.logoutStatus = 204;
-  await page.locator('.console-account').getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('.console-account').locator('#sidebar-sign-out').click();
   await expect(page.locator('.console-account')).toHaveCount(0);
   expect(await storedAccount(page)).toBeNull();
   await expect(page.locator('#task')).toHaveValue('Keep this local draft');
   expect(local.localSockets).toHaveLength(sockets);
   expect(local.localRequests.filter(request => request.path === '/v2/auth/logout').every(request =>
     request.headers.authorization === `Bearer ${browserAccount.token}`)).toBe(true);
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('#sidebar-chat-mode').click();
   await expect(local.row(sessionA)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.locator('[id="placeholder:cloud-sign-in:action"]')).toBeVisible();
 });
 
 test('a fresh browser opens the local host directly without a Cloud account or cookie', async ({ page, baseURL }) => {

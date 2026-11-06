@@ -236,6 +236,7 @@ fn Control::trigger_attrs(
 ) -> @html.Attrs {
   @html.Attrs::build()
   .id(self.id)
+  .data_set("value", self.selected)
   .aria_label(self.aria_label)
   .aria_haspopup("listbox")
   .aria_controls(self.menu_id())

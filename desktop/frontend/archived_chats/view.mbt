@@ -157,6 +157,7 @@ fn view(
         class="button compact archived-chats-back",
         type_="button",
         on_click=actions.back,
+        id="archived-chats-back",
         [
           @icons.icon(@icons.icon_arrow_left),
           @html.text(text(locale, BackToSettings)),
@@ -181,6 +182,7 @@ fn view(
           placeholder=text(locale, Filter),
           on_input=emit.map(query => QueryChanged(query)),
           attrs=@html.Attrs::build()
+            .id("archived-chats-filter")
             .aria_label(text(locale, Filter))
             .data_set("focus-target", ""),
         ),

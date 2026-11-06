@@ -83,10 +83,10 @@ async function installDesktop(page, { managed = false } = {}) {
 
 test('account sign-in remains independent of the remote access toggle and signs out cleanly', async ({ page }) => {
   const auth = await installDesktop(page);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
+  await page.locator('#sidebar-settings').click();
+  const section = page.locator('#settings-account');
 
-  const connect = section.getByRole('button', { name: 'Sign in', exact: true });
+  const connect = section.locator('#settings-sign-in');
   await expect(connect).toBeEnabled();
   await connect.click();
 
@@ -94,34 +94,34 @@ test('account sign-in remains independent of the remote access toggle and signs 
   await expect(waiting).toHaveText('Waiting for the browser…');
   const accountRow = section.locator('.setting-row', { has: page.getByRole('status') });
   await expect(accountRow.locator('.setting-name')).toHaveText('Account');
-  await expect(accountRow.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+  await expect(accountRow.locator('#settings-sign-in-cancel')).toBeEnabled();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
 
   auth.finishConnect();
-  const signOut = section.getByRole('button', { name: 'Sign out', exact: true });
-  await expect(section.getByText('@octocat', { exact: true })).toBeVisible();
+  const signOut = section.locator('#settings-sign-out');
+  await expect(section.locator('#settings-account-login')).toHaveText('@octocat');
   await expect(signOut).toBeEnabled();
-  const toggle = section.getByRole('switch', { name: 'Remote control', exact: true });
+  const toggle = section.locator('#settings-remote-control');
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   expect(auth.requests.filter(request => request.method === 'remote.access_set')).toEqual([]);
   await toggle.focus();
   await page.keyboard.press('Space');
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  await expect(section.getByText('online — reachable from your browser', { exact: true })).toBeVisible();
+  await expect(section.locator('.setting-row').filter({ has: page.locator('#settings-remote-control') }).locator('.setting-desc')).toHaveText('online — reachable from your browser');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect(signOut).toBeEnabled();
   expect(auth.account.token).toBe('ts_fixture');
   await signOut.click();
-  await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
+  await expect(section.locator('#settings-sign-in')).toBeEnabled();
   await expect(toggle).toBeDisabled();
   expect(auth.app.pageErrors).toEqual([]);
 });
 
 test('FPS overlay switch toggles with the keyboard and restores the saved preference', async ({ page }) => {
   const auth = await installDesktop(page);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const toggle = page.getByRole('switch', { name: 'FPS overlay', exact: true });
+  await page.locator('#sidebar-settings').click();
+  const toggle = page.locator('#settings-fps-overlay');
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.focus();
   await page.keyboard.press('Space');
@@ -129,7 +129,7 @@ test('FPS overlay switch toggles with the keyboard and restores the saved prefer
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.fps_overlay'))).toBe('true');
   await toggle.scrollIntoViewIfNeeded();
   await page.reload();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -139,16 +139,16 @@ test('FPS overlay switch toggles with the keyboard and restores the saved prefer
 
 test('environment-managed remote access keeps its connection while the account logs out', async ({ page }) => {
   const auth = await installDesktop(page, { managed: true });
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
+  await page.locator('#sidebar-settings').click();
+  const section = page.locator('#settings-account');
   await expect(section.getByRole('switch')).toHaveCount(0);
   await expect(section).toContainText('Signing out does not close this debug connection.');
-  await section.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await section.locator('#settings-sign-in').click();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
   auth.finishConnect();
-  await section.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
-  await expect(section.getByRole('link', { name: 'Open', exact: true })).toHaveAttribute('href', signedIn.device.url);
+  await section.locator('#settings-sign-out').click();
+  await expect(section.locator('#settings-sign-in')).toBeEnabled();
+  await expect(section.locator('#settings-device-page')).toHaveAttribute('href', signedIn.device.url);
   expect(auth.status.connected).toBe(true);
   expect(auth.requests.filter(request => request.method === 'remote.access_set')).toEqual([]);
   expect(auth.app.pageErrors).toEqual([]);

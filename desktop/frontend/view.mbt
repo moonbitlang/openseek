@@ -910,7 +910,7 @@ fn remote_access_rows(
       } else {
         @html.img(src=account.user.avatar_url, alt="", class="console-avatar")
       },
-      @html.span("@" + account.user.login),
+      @html.span(id="settings-account-login", "@" + account.user.login),
       @html.button(
         class="button secondary",
         attrs=@html.Attrs::build().disabled(
@@ -957,6 +957,7 @@ fn remote_access_rows(
       controls.push(
         @settings.switch_control(
           enabled~,
+          id="settings-content-improvement",
           label=@settings.text(model.locale, HelpImproveSeekMoon),
           disabled=preferences.pending ||
             model.remote_connecting ||
@@ -1009,6 +1010,7 @@ fn remote_access_rows(
           [
             @settings.switch_control(
               enabled~,
+              id="settings-remote-control",
               label=@settings.text(model.locale, RemoteControl),
               disabled=model.account is None ||
                 managed ||
@@ -1036,6 +1038,7 @@ fn remote_access_rows(
             target=Blank,
             rel="noopener noreferrer",
             class="button secondary setting-link",
+            id="settings-device-page",
             @settings.text(model.locale, Open),
           ),
         ]),
@@ -1463,6 +1466,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       " · " +
       @settings.text(locale, RemoteAccess),
       remote_access_rows(dispatch, model),
+      id="settings-account",
     ),
     ..if has_host {
       [
@@ -1470,6 +1474,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           icon_extensions,
           "Codex",
           codex_account_rows(dispatch, model),
+          id="settings-codex",
         ),
       ]
     },
@@ -1688,6 +1693,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             [
               @settings.switch_control(
                 enabled=model.fps_overlay_enabled,
+                id="settings-fps-overlay",
                 label=@settings.text(locale, FpsOverlay),
                 on_click=dispatch(FpsOverlayChanged(!model.fps_overlay_enabled)),
               ),
@@ -1881,6 +1887,7 @@ fn Model::minimal_transcript_effective(self : Model) -> Bool {
 fn Model::terminal_toggle(self : Model, toggle : @cmd.Cmd) -> @html.Html {
   @html.button(
     id="terminal-toggle",
+    attrs=@html.Attrs::build().aria_pressed(self.terminal.is_open().to_string()),
     class=if self.terminal.is_open() {
       "panel-toggle terminal-toggle active"
     } else {
@@ -2015,7 +2022,12 @@ fn console_gate_view(
     console.auth is AuthSignedIn(..) &&
     host_incompatible {
     card.push(@html.h2(shell_text(locale, DeviceUnavailable)))
-    card.push(@html.p(shell_text(locale, HostIncompatibleNotice)))
+    card.push(
+      @html.p(
+        id="console-host-incompatible",
+        shell_text(locale, HostIncompatibleNotice),
+      ),
+    )
   } else if console.page_device is Some(id) {
     match console.auth {
       AuthChecking => {
@@ -2031,6 +2043,7 @@ fn console_gate_view(
           card.push(
             @html.button(
               class="button primary",
+              id="console-retry",
               on_click=dispatch(Console(RefreshClicked)),
               shell_text(locale, TryAgain),
             ),
@@ -2061,6 +2074,7 @@ fn console_gate_view(
             card.push(
               @html.button(
                 class="button primary",
+                id="console-retry",
                 on_click=dispatch(Console(RefreshClicked)),
                 shell_text(locale, TryAgain),
               ),
@@ -2089,6 +2103,7 @@ fn console_gate_view(
             card.push(
               @html.button(
                 class="button primary",
+                id="console-retry",
                 on_click=dispatch(Console(RefreshClicked)),
                 shell_text(locale, RefreshLabel),
               ),
@@ -2524,7 +2539,9 @@ fn view(
       class="sidebar-toggle",
       title=sidebar_toggle_label,
       on_click=dispatch(ToggleSidebar),
-      attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
+      attrs=@html.Attrs::build()
+        .aria_label(sidebar_toggle_label)
+        .aria_expanded(model.sidebar_open.to_string()),
       icon(icon_layout_sidebar_left),
     ),
     sidebar_html,
@@ -2990,6 +3007,7 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.p(message),
         @html.button(
           class="button",
+          id="console-retry",
           on_click=dispatch(Console(RefreshClicked)),
           shell_text(model.locale, TryAgain),
         ),
@@ -3004,6 +3022,7 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         if model.console.notice is Some(_) {
           @html.button(
             class="button",
+            id="console-retry",
             on_click=dispatch(Console(RefreshClicked)),
             shell_text(model.locale, TryAgain),
           )

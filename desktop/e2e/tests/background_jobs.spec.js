@@ -8,7 +8,7 @@ test.afterEach(async () => { if (app) await app.cleanup(); app = null; });
 async function mount(page) {
   app = new BackgroundJobsHarness(page);
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('ready 你好🙂');
+  await expect(page.locator('#bg-job-output')).toContainText('ready 你好🙂');
 }
 
 async function expandHistory(page) {
@@ -21,35 +21,35 @@ test('real background output follows, pauses, resumes, copies its file and stops
   await mount(page);
   await expect(page.locator('.jobs-id').first()).toHaveText('bg-…456789ab');
   await expect(page.locator('.jobs-id').first()).toHaveAttribute('title', app.liveId);
-  await page.getByRole('button', { name: 'Copy job ID', exact: true }).click();
+  await page.locator('#jobs-copy-id').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(app.liveId);
-  const output = page.getByRole('region', { name: 'Job output' });
+  const output = page.locator('#bg-job-output');
   app.write('stdout without newline'); app.write('\nstderr captured\n', true);
   await expect(output).toContainText('stdout without newline');
   await expect(output).toContainText('stderr captured');
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.locator('#jobs-follow[aria-pressed="true"]').click();
   app.write('while paused\n');
   await expect.poll(() => readFileSync(app.livePath, 'utf8')).toContain('while paused');
   await expect(output).not.toContainText('while paused');
-  await page.getByRole('button', { name: 'Follow output', exact: true }).click();
+  await page.locator('#jobs-follow[aria-pressed="false"]').click();
   await expect(output).toContainText('while paused');
-  await page.getByRole('button', { name: 'Copy path', exact: true }).click();
+  await page.locator('#jobs-copy-path').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(app.livePath);
-  await page.getByRole('button', { name: 'Copy tail command', exact: true }).click();
+  await page.locator('#jobs-copy-tail').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("'\\''");
   app.write(Array.from({ length: 150 }, (_, i) => `build step ${i} passed\n`).join(''));
   await expect(output).toContainText('build step 149 passed');
   await expect.poll(() => output.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(25);
   await output.evaluate(el => { el.scrollTop = 0; });
-  await expect(page.getByRole('button', { name: 'Follow output', exact: true })).toBeVisible();
+  await expect(page.locator('#jobs-follow[aria-pressed="false"]')).toBeVisible();
   const top = await output.evaluate(el => el.scrollTop);
   app.write('new output while reading earlier lines\n');
   await expect.poll(() => readFileSync(app.livePath, 'utf8')).toContain('new output while reading');
   await expect.poll(() => output.evaluate(el => el.scrollTop)).toBe(top);
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.getByRole('button', { name: 'Stop job', exact: true }).click();
+  await page.locator('#jobs-stop').click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
-  await expect(page.getByRole('button', { name: 'Stop job', exact: true })).toHaveCount(0);
+  await expect(page.locator('#jobs-stop')).toHaveCount(0);
   expect(app.requests.filter(request => request.method === 'jobs.stop').map(request => request.params.generation)).toEqual(['runtime-new']);
   expect(readFileSync(app.livePath, 'utf8')).toContain('stderr captured');
   const stop = app.requests.find(r => r.method === 'jobs.stop');
@@ -65,35 +65,35 @@ test('historical selection rejects late reads, reports errors and fits a narrow 
   await expect.poll(() => app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(1);
   app.rpcDelays.delete('jobs.read');
   await expandHistory(page);
-  await page.getByRole('button', { name: /Earlier failing test run/ }).click();
-  const output = page.getByRole('region', { name: 'Job output' });
+  await page.locator('.jobs-row[data-job-generation="runtime-old"][data-job-id="bg-1"]').and(page.getByRole('button')).click();
+  const output = page.locator('#bg-job-output');
   await expect(output).toContainText('old failed job output');
   await expect(page.locator('.jobs-detail-title')).toContainText('Failed · exit 7');
-  await expect(page.getByRole('button', { name: 'Stop job', exact: true })).toHaveCount(0);
+  await expect(page.locator('#jobs-stop')).toHaveCount(0);
   await page.waitForTimeout(1400); // The deliberately delayed obsolete reply must arrive.
   await expect(output).not.toContainText('must stay with the live job');
   app.rpcErrors.set('jobs.read', 'Output file is missing: ENOENT');
-  await page.getByRole('button', { name: 'Reload tail', exact: true }).click();
+  await page.locator('#jobs-reload').click();
   await expect(page.getByRole('alert')).toContainText('Output file is missing');
   await expect(page.locator('.jobs-output-note')).toHaveText('Output unavailable · reload to retry.');
   app.rpcErrors.delete('jobs.read');
-  await page.getByRole('button', { name: 'Reload tail', exact: true }).click();
+  await page.locator('#jobs-reload').click();
   await expect(output).toContainText('old failed job output');
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  await expect(page.getByRole('button', { name: 'Copy tail command', exact: true })).toBeInViewport();
+  await expect(page.locator('#jobs-copy-tail')).toBeInViewport();
   expect(app.pageErrors).toEqual([]);
 });
 
 test('page reconnect recovers retained job identity and history', async ({ page }) => {
   await mount(page);
   app.write('persist across reconnect\n');
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('persist across reconnect');
+  await expect(page.locator('#bg-job-output')).toContainText('persist across reconnect');
   await page.reload(); await app.openSession(); await app.openJobs();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('persist across reconnect');
-  await expect(page.getByRole('button', { name: /Earlier failing test run/ })).toHaveCount(0);
+  await expect(page.locator('#bg-job-output')).toContainText('persist across reconnect');
+  await expect(page.locator('.jobs-row[data-job-generation="runtime-old"][data-job-id="bg-1"]').and(page.getByRole('button'))).toHaveCount(0);
   await expandHistory(page);
-  await expect(page.getByRole('button', { name: /Earlier failing test run/ })).toBeVisible();
+  await expect(page.locator('.jobs-row[data-job-generation="runtime-old"][data-job-id="bg-1"]').and(page.getByRole('button'))).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -101,10 +101,10 @@ test('switching conversations cannot display a late log from the previous sessio
   app = new BackgroundJobsHarness(page);
   app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('ready 你好🙂');
+  await expect(page.locator('#bg-job-output')).toContainText('ready 你好🙂');
   app.rpcDelays.set('jobs.read', 1200);
   const before = app.requests.filter(r => r.method === 'jobs.read').length;
-  await page.getByRole('button', { name: 'Reload tail', exact: true }).click();
+  await page.locator('#jobs-reload').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(before);
   await page.locator('.conversation-row[title="session-2"]').click();
   await app.openJobs();
@@ -113,7 +113,7 @@ test('switching conversations cannot display a late log from the previous sessio
   await expect(page.locator('.jobs-panel')).not.toContainText('ready 你好🙂');
   app.rpcDelays.delete('jobs.read');
   await page.locator('.conversation-row[title="session-1"]').click();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('ready 你好🙂');
+  await expect(page.locator('#bg-job-output')).toContainText('ready 你好🙂');
   expect(app.requests.some(r => r.method === 'jobs.list' && r.params.scope.session === 'session-2')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
@@ -129,10 +129,10 @@ test('selected job beyond the first history page keeps receiving terminal state'
   const selected = app.jobs.find(v => v.job.generation === 'runtime-old');
   selected.job.state = { kind: 'running' };
   await expandHistory(page);
-  await page.getByRole('button', { name: 'Load older jobs', exact: true }).click();
+  await page.locator('#jobs-more').click();
   await expandHistory(page);
-  await page.getByRole('button', { name: /Earlier failing test run/ }).click();
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.locator('.jobs-row[data-job-generation="runtime-old"][data-job-id="bg-1"]').and(page.getByRole('button')).click();
+  await page.locator('#jobs-follow[aria-pressed="true"]').click();
   selected.job.state = { kind: 'stopped', reason: 'user' };
   selected.job.revision++;
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
@@ -142,10 +142,10 @@ test('selected job beyond the first history page keeps receiving terminal state'
 
 test('follow catches up with a large completed burst without waiting one tick per page', async ({ page }) => {
   await mount(page);
-  const output = page.getByRole('region', { name: 'Job output' });
+  const output = page.locator('#bg-job-output');
   app.write('x'.repeat(65536 * 9) + '\nBURST FINISHED\n');
   await expect.poll(() => readFileSync(app.livePath, 'utf8').endsWith('BURST FINISHED\n')).toBe(true);
-  await page.getByRole('button', { name: 'Stop job', exact: true }).click();
+  await page.locator('#jobs-stop').click();
   await expect(output).toContainText('BURST FINISHED', { timeout: 5000 });
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   expect(await output.evaluate(el => el.textContent.length)).toBeLessThanOrEqual(262144);
@@ -168,17 +168,17 @@ test('pause resume and reload serialize reads and preserve manual paused refresh
   };
   try {
     await expect.poll(() => held).toBe(true);
-    await page.getByRole('button', { name: 'Pause', exact: true }).click();
-    await page.getByRole('button', { name: 'Follow output', exact: true }).click();
+    await page.locator('#jobs-follow[aria-pressed="true"]').click();
+    await page.locator('#jobs-follow[aria-pressed="false"]').click();
     expect(readCount).toBe(1);
-    await page.getByRole('button', { name: 'Pause', exact: true }).click();
+    await page.locator('#jobs-follow[aria-pressed="true"]').click();
     app.write('manual paused reload\n');
     await expect.poll(() => readFileSync(app.livePath, 'utf8')).toContain('manual paused reload');
-    await page.getByRole('button', { name: 'Reload tail', exact: true }).click();
+    await page.locator('#jobs-reload').click();
     expect(readCount).toBe(1);
     release();
-    await expect(page.getByRole('region', { name: 'Job output' })).toContainText('manual paused reload');
-    await expect(page.getByRole('button', { name: 'Follow output', exact: true })).toBeVisible();
+    await expect(page.locator('#bg-job-output')).toContainText('manual paused reload');
+    await expect(page.locator('#jobs-follow[aria-pressed="false"]')).toBeVisible();
     expect(readCount).toBe(2);
     expect(app.pageErrors).toEqual([]);
   } finally { release(); }
@@ -190,12 +190,12 @@ test('a controllable job without a log still exposes Stop and its full ID', asyn
   app.jobs[0].output_path = null;
   app.jobs[0].job.output_file = null;
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  await expect(page.getByRole('button', { name: 'Copy path', exact: true })).toHaveCount(0);
+  await expect(page.locator('#jobs-copy-path')).toHaveCount(0);
   await expect(page.locator('.jobs-output-note')).toHaveText('No retained log file for this job.');
-  await page.getByRole('button', { name: 'Copy job ID', exact: true }).click();
+  await page.locator('#jobs-copy-id').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(app.liveId);
-  await expect(page.getByRole('region', { name: 'Job output' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Stop job', exact: true }).click();
+  await expect(page.locator('#bg-job-output')).toHaveCount(0);
+  await page.locator('#jobs-stop').click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   expect(app.requests.filter(request => request.method === 'jobs.stop').map(request => request.params.generation)).toEqual(['runtime-new']);
   expect(app.pageErrors).toEqual([]);
@@ -211,14 +211,14 @@ test('UUID suffix collisions expand labels while selection and copying retain fu
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
   await expect(page.locator('.jobs-id')).toHaveText(['bg-…0123456789ab', 'bg-1', 'bg-…abcd456789ab']);
   await expandHistory(page);
-  await page.getByRole('button', { name: /Same short suffix/ }).click();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
-  await page.getByRole('button', { name: 'Copy job ID', exact: true }).click();
+  await page.locator(`.jobs-row[data-job-generation="runtime-new"][data-job-id="${otherId}"]`).click();
+  await expect(page.locator('#bg-job-output')).toContainText('old failed job output');
+  await page.locator('#jobs-copy-id').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(otherId);
   expect(app.requests.some(r => r.method === 'jobs.read' && r.params.target.job_id === otherId)).toBe(true);
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  await expect(page.getByRole('button', { name: 'Copy job ID', exact: true })).toBeInViewport();
+  await expect(page.locator('#jobs-copy-id')).toBeInViewport();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -241,23 +241,23 @@ test('groups lifecycle states and defaults to an active job even after newer his
   }
   app.jobs.splice(0, 1); app.jobs.splice(1, 0, live);
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('ready 你好🙂');
-  const active = page.getByRole('group', { name: 'In progress', exact: true });
-  const history = page.getByRole('group', { name: 'History', exact: true });
+  await expect(page.locator('#bg-job-output')).toContainText('ready 你好🙂');
+  const active = page.locator('#jobs-active');
+  const history = page.locator('#jobs-history');
   await expect(active.locator('.jobs-row')).toHaveCount(2);
   await expect(history.locator('.jobs-row')).toHaveCount(5);
   expect(await page.locator('.jobs-group').evaluateAll(groups => groups.map(el => el.getAttribute('aria-label')))).toEqual(['In progress', 'History']);
   await expect(page.locator('.jobs-history-toggle')).toHaveAttribute('aria-expanded', 'false');
   await expandHistory(page);
   for (const [id, , label] of fixtures) {
-    await page.getByRole('button', { name: new RegExp(`Lifecycle ${id}`) }).click();
+    await page.locator(`.jobs-row[data-job-generation="runtime-new"][data-job-id="${id}"]`).click();
     await expect(page.locator('.jobs-detail-title')).toContainText(label);
     if (id === 'stopping') {
-      await expect(page.getByRole('button', { name: 'Stopping…', exact: true })).toBeDisabled();
-      await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+      await expect(page.locator('#jobs-stop')).toBeDisabled();
+      await expect(page.locator('#jobs-follow[aria-pressed="true"]')).toBeVisible();
     } else {
       await expect(page.locator('.jobs-output-note')).toHaveText('Output ended');
-      await expect(page.getByRole('button', { name: /^(Stop job|Pause|Follow output)$/ })).toHaveCount(0);
+      await expect(page.locator('#jobs-stop, #jobs-follow')).toHaveCount(0);
       if (id === 'interrupted') {
         await expect(page.locator('.jobs-detail')).toContainText('End time unavailable');
         await expect(page.locator('.jobs-detail')).not.toContainText('Running for');
@@ -266,7 +266,7 @@ test('groups lifecycle states and defaults to an active job even after newer his
   }
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.setViewportSize({ width: 1000, height: 850 });
-  await page.getByRole('button', { name: /Lifecycle limited/ }).click();
+  await page.locator('.jobs-row[data-job-generation="runtime-new"][data-job-id="limited"]').click();
   await expect.poll(() => page.locator('.jobs-panel, .jobs-row, .jobs-status').evaluateAll(elements => elements.every(el => el.scrollWidth <= el.clientWidth + 1))).toBe(true);
   expect(app.requests.filter(r => r.method === 'jobs.stop')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
@@ -275,17 +275,17 @@ test('groups lifecycle states and defaults to an active job even after newer his
 test('completion drains paused output then stops log polling while history stays fresh', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await mount(page);
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.locator('#jobs-follow[aria-pressed="true"]').click();
   app.write('x'.repeat(65536 * 9) + '\nCOMPLETED WHILE PAUSED\n');
   app.child.stdin.end();
-  const output = page.getByRole('region', { name: 'Job output' });
+  const output = page.locator('#bg-job-output');
   await expect(page.locator('.jobs-detail-title')).toContainText('Completed');
-  await expect(page.getByRole('group', { name: 'In progress', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('group', { name: 'History', exact: true }).locator('.jobs-row.selected')).toContainText('Watch build output');
+  await expect(page.locator('#jobs-active')).toHaveCount(0);
+  await expect(page.locator('#jobs-history').locator('.jobs-row.selected')).toContainText('Watch build output');
   await expect(output).toContainText('COMPLETED WHILE PAUSED');
   await expect(page.locator('.jobs-output-note')).toContainText('Output ended');
-  await expect(page.getByRole('button', { name: /^(Stop job|Pause|Follow output)$/ })).toHaveCount(0);
-  const timing = page.locator('.jobs-detail-meta').filter({ hasText: 'Ended' });
+  await expect(page.locator('#jobs-stop, #jobs-follow')).toHaveCount(0);
+  const timing = page.locator('#jobs-detail-timing');
   const finalTiming = await timing.textContent();
   expect(finalTiming).toContain('Total');
   const reads = app.requests.filter(r => r.method === 'jobs.read').length;
@@ -293,9 +293,9 @@ test('completion drains paused output then stops log polling while history stays
   await expect.poll(() => app.requests.filter(r => r.method === 'jobs.list').length).toBeGreaterThan(lists + 1);
   expect(app.requests.filter(r => r.method === 'jobs.read')).toHaveLength(reads);
   await expect(timing).toHaveText(finalTiming);
-  await page.getByRole('button', { name: 'Copy tail command', exact: true }).click();
+  await page.locator('#jobs-copy-tail').click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).not.toContain(' -f ');
-  await page.getByRole('button', { name: 'Reload tail', exact: true }).click();
+  await page.locator('#jobs-reload').click();
   await expect(output).toContainText('COMPLETED WHILE PAUSED');
   await expect(page.locator('.jobs-output-note')).toContainText('Output ended');
   expect(app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(reads);
@@ -306,7 +306,7 @@ test('completion drains paused output then stops log polling while history stays
 
 test('interrupted jobs drain final diagnostics despite stale persisted byte counts', async ({ page }) => {
   await mount(page);
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.locator('#jobs-follow[aria-pressed="true"]').click();
   const original = app.replyFor.bind(app);
   app.replyFor = async request => {
     const reply = await original(request);
@@ -325,7 +325,7 @@ test('interrupted jobs drain final diagnostics despite stale persisted byte coun
   });
   app.child.kill();
   await expect(page.locator('.jobs-detail-title')).toContainText('Interrupted');
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('FINAL DIAGNOSTICS BEFORE ENGINE CRASH');
+  await expect(page.locator('#bg-job-output')).toContainText('FINAL DIAGNOSTICS BEFORE ENGINE CRASH');
   await expect(page.locator('.jobs-output-note')).toHaveText('Output ended');
   const reads = app.requests.filter(r => r.method === 'jobs.read').length;
   const lists = app.requests.filter(r => r.method === 'jobs.list').length;
@@ -337,12 +337,12 @@ test('interrupted jobs drain final diagnostics despite stale persisted byte coun
 test('history stays folded by default while active jobs remain visible across refreshes', async ({ page }) => {
   await mount(page);
   const toggle = page.locator('.jobs-history-toggle');
-  const active = page.getByRole('group', { name: 'In progress', exact: true });
-  const oldJob = page.getByRole('button', { name: /Earlier failing test run/ });
+  const active = page.locator('#jobs-active');
+  const oldJob = page.locator('.jobs-row[data-job-generation="runtime-old"][data-job-id="bg-1"]').and(page.getByRole('button'));
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(active.getByRole('button', { name: /Watch build output/ })).toBeVisible();
+  await expect(active.locator(`.jobs-row[data-job-generation="runtime-new"][data-job-id="${app.liveId}"]`)).toBeVisible();
   await expect(oldJob).toHaveCount(0);
-  await page.locator('.jobs-panel').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.locator('.jobs-panel').locator('#jobs-refresh').click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.focus(); await page.keyboard.press('Enter');
   await expect(oldJob).toBeVisible();
@@ -350,13 +350,13 @@ test('history stays folded by default while active jobs remain visible across re
   await expect.poll(() => app.requests.filter(r => r.method === 'jobs.list').length).toBeGreaterThan(lists);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await oldJob.click();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
+  await expect(page.locator('#bg-job-output')).toContainText('old failed job output');
   await toggle.click();
   await expect(oldJob).toHaveCount(0);
-  await expect(active.getByRole('button', { name: /Watch build output/ })).toBeVisible();
-  await active.getByRole('button', { name: /Watch build output/ }).click();
+  await expect(active.locator(`.jobs-row[data-job-generation="runtime-new"][data-job-id="${app.liveId}"]`)).toBeVisible();
+  await active.locator(`.jobs-row[data-job-generation="runtime-new"][data-job-id="${app.liveId}"]`).click();
   // A completing selection remains readable without opening its History group.
-  await page.getByRole('button', { name: 'Stop job', exact: true }).click();
+  await page.locator('#jobs-stop').click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(app.pageErrors).toEqual([]);
@@ -370,10 +370,10 @@ test('history-only sessions wait for explicit selection before loading a log', a
   await expect(page.locator('.jobs-detail')).toHaveCount(0);
   expect(app.requests.filter(r => r.method === 'jobs.read')).toHaveLength(0);
   await expandHistory(page);
-  await page.getByRole('button', { name: /Earlier failing test run/ }).click();
-  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
+  await page.locator('.jobs-row[data-job-generation="runtime-old"][data-job-id="bg-1"]').and(page.getByRole('button')).click();
+  await expect(page.locator('#bg-job-output')).toContainText('old failed job output');
   app.jobs.unshift(live);
-  await expect(page.getByRole('group', { name: 'In progress', exact: true })).toBeVisible();
+  await expect(page.locator('#jobs-active')).toBeVisible();
   await expect(page.locator('.jobs-detail-title')).toContainText('Failed');
   await expect(page.locator('.jobs-history-toggle')).toHaveAttribute('aria-expanded', 'true');
   expect(app.pageErrors).toEqual([]);
@@ -392,8 +392,8 @@ test('background program calls update live and retain edit diffs after reload', 
   job.data.ptc_calls[0].status = 'done';
   job.data.ptc_calls[0].result = { content: 'Updated note.txt', is_error: false };
   job.revision++;
-  await page.locator('.jobs-panel').getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(trace.getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
+  await page.locator('.jobs-panel').locator('#jobs-refresh').click();
+  await expect(trace.locator('.tool-status.succeeded')).toBeVisible();
   await expect(trace.locator('.tool-status-spinner')).toHaveCount(0);
   await page.reload(); await app.openSession(); await app.openJobs();
   await trace.locator(':scope > summary').click();
@@ -401,11 +401,11 @@ test('background program calls update live and retain edit diffs after reload', 
   await edit.locator(':scope > summary').click();
   await expect(edit).toContainText('before');
   await expect(edit).toContainText('after');
-  await expect(edit.getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
+  await expect(edit.locator('.tool-status.succeeded')).toBeVisible();
   job.cleanup_error = 'PTC script exited with unfinished tool calls';
   job.state = { kind: 'exited', code: 0 };
   job.revision++;
-  await page.locator('.jobs-panel').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.locator('.jobs-panel').locator('#jobs-refresh').click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Failed · cleanup incomplete');
   await expect(page.getByRole('alert')).toContainText('unfinished tool calls');
   job.cleanup_error = null;
@@ -414,9 +414,9 @@ test('background program calls update live and retain edit diffs after reload', 
   job.revision++;
   await page.reload(); await app.openSession(); await app.openJobs();
   await expandHistory(page);
-  await page.getByRole('button', { name: /Watch build output/ }).click();
+  await page.locator(`.jobs-row[data-job-generation="runtime-new"][data-job-id="${app.liveId}"]`).click();
   await trace.locator(':scope > summary').click();
-  await expect(trace.getByRole('img', { name: 'Tool failed' })).toBeVisible();
+  await expect(trace.locator('.tool-status.failed')).toBeVisible();
   await expect(trace.locator('.tool-status-spinner')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
@@ -440,18 +440,18 @@ test('subagent jobs read as agents with their outcome, spend and transcript', as
   };
   app.jobs.splice(0, app.jobs.length, live, done);
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
-  const active = page.getByRole('group', { name: 'In progress', exact: true });
+  const active = page.locator('#jobs-active');
   await expect(active.locator('.jobs-row')).toHaveCount(1);
   await expect(active.locator('.jobs-command')).toHaveText('explore: where is the parser built?');
   await expandHistory(page);
-  const history = page.getByRole('group', { name: 'History', exact: true });
+  const history = page.locator('#jobs-history');
   const row = history.locator('.jobs-row');
   await expect(row.locator('.jobs-command')).toHaveText('review: audit the CSV change');
   await expect(row.locator('.jobs-status')).toHaveText('Reported');
   await expect(row.locator('.jobs-row-meta')).toContainText('12 steps · 1200 tokens');
   await row.click();
   await expect(page.locator('.jobs-detail')).toContainText('Session: session-1-sr-2');
-  await expect(page.getByRole('button', { name: 'Open transcript', exact: true })).toBeVisible();
+  await expect(page.locator('#jobs-open-transcript')).toBeVisible();
   await page.emulateMedia({ colorScheme: 'dark' });
   expect(app.pageErrors).toEqual([]);
 });
@@ -484,14 +484,14 @@ test('a worker job shows its worktree, where its changes stand and why', async (
   app.jobs.splice(0, app.jobs.length, committed, rejected);
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
   await expandHistory(page);
-  const history = page.getByRole('group', { name: 'History', exact: true });
-  await history.locator('.jobs-row', { hasText: 'worker: handle escaped quotes' }).click();
+  const history = page.locator('#jobs-history');
+  await history.locator('.jobs-row[data-job-id="agent-worker"]').click();
   const detail = page.locator('.jobs-detail');
   await expect(detail).toContainText('Worktree csv-quotes · branch openseek/csv-quotes--1a2b3c4d-sr-3');
   await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: committed 9c41d2e8f0 on its branch, ready to take');
   await expect(detail).toContainText('/work/demo/.worktrees/csv-quotes');
-  await expect(page.getByRole('button', { name: 'Copy worktree path', exact: true })).toBeVisible();
-  await history.locator('.jobs-row', { hasText: 'worker: rename the reader' }).click();
+  await expect(page.locator('#jobs-copy-worktree')).toBeVisible();
+  await history.locator('.jobs-row[data-job-id="agent-stray"]').click();
   await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: not mergeable; kept for inspection');
   await expect(detail.locator('.jobs-worktree-reason')).toHaveText('out-of-scope changes (allowed: src/csv): src/main.mbt');
   await page.emulateMedia({ colorScheme: 'dark' });

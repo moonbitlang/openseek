@@ -9,6 +9,7 @@ const officeFixture = name =>
 export class DesktopBrowserHarness {
   constructor(page) {
     this.page = page;
+    this.channel = 'remote.device-a';
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
@@ -1117,24 +1118,24 @@ export class DesktopBrowserHarness {
     await this.page.locator('#sidebar-toggle').click();
   }
 
-  projectRow(root, channel = 'remote.device-a') {
+  projectRow(root, channel = this.channel) {
     // Match project identity, including its host, independently of tooltip text.
     const key = `project:openseek.projects:${channel}:${root}`;
     const trigger = this.page.locator(`[id=${JSON.stringify(key + ':context-trigger')}]`);
     return this.page.locator('.workspace-row').filter({ has: trigger });
   }
 
-  sessionButton(id = 'session-1', { root = '/workspace', channel = 'remote.device-a', source = 'openseek.live' } = {}) {
+  sessionButton(id = 'session-1', { root = '/workspace', channel = this.channel, source = 'openseek.live' } = {}) {
     const key = `conversation:${source}:${channel}:${id}:${root}:open`;
     return this.page.locator(`[id=${JSON.stringify(key)}]`);
   }
 
-  sessionRow(id = 'session-1', { root = '/workspace', channel = 'remote.device-a', source = 'openseek.live' } = {}) {
+  sessionRow(id = 'session-1', { root = '/workspace', channel = this.channel, source = 'openseek.live' } = {}) {
     const key = `conversation:${source}:${channel}:${id}:${root}:row`;
     return this.page.locator(`[id=${JSON.stringify(key)}]`);
   }
 
-  projectControl(root, action, channel = 'remote.device-a') {
+  projectControl(root, action, channel = this.channel) {
     const key = `project:openseek.projects:${channel}:${root}:${action}`;
     return this.page.locator(`[id=${JSON.stringify(key)}]`);
   }
