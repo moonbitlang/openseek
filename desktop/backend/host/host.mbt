@@ -241,19 +241,12 @@ pub fn endpoints(
       @search.cancel_search_semantic(connection.semantic_search, payload)
     }),
     Endpoint(@commands.pattern_repair, payload => {
-      match @engine.pattern_repair_environment(manager, model=payload.model) {
-        Ready(env) => pattern_repair_op(state, env, payload)
-        Configuration(message) =>
-          pattern_repair_failure(payload, Unavailable, None, message, [])
-        Unavailable =>
-          pattern_repair_failure(
-            payload,
-            Unavailable,
-            None,
-            "Pattern Repair settings are unavailable.",
-            [],
-          )
-      }
+      @pattern_repair.repair(
+        state.engine,
+        state.semantic_provider(),
+        @engine.pattern_repair_environment(manager, model=payload.model),
+        payload,
+      )
     }),
     Endpoint(@commands.fs_clear_file_search_cache, payload => {
       @search.clear_file_search_cache(connection.file_search, payload)

@@ -235,7 +235,7 @@ test "pattern repair trace remains bounded and retains recent events" {
 /// The child receives no workspace tools; its sole non-submit tool validates a
 /// pattern through the provider command selected by this Host.
 async fn request_pattern_repair_candidate(
-  state : HostState,
+  engine : String,
   agent_env : Map[String, String],
   provider : @search.ResolvedSemanticProvider,
   root : @pathx.Absolute,
@@ -284,7 +284,7 @@ async fn request_pattern_repair_candidate(
     args.push(thinking.wire())
   }
   let process = run_pattern_repair_process(
-    state.engine,
+    engine,
     args,
     request.to_json().stringify() + "\n",
     root.0,
@@ -345,12 +345,22 @@ fn pattern_repair_failure(
 }
 
 ///|
-async fn pattern_repair_op(
-  state : HostState,
-  agent_env : Map[String, String],
+/// Run a one-shot Pattern Repair Agent and validate its candidate before
+/// returning it. The caller supplies the engine's configuration result;
+/// provider preparation and the child's lifetime belong to this operation.
+pub async fn repair(
+  engine : String,
+  provider : @search.SemanticProvider,
+  environment : @engine.PatternRepairEnvironment,
   payload : @protocol.PatternRepairPayload,
 ) -> @protocol.PatternRepairReply {
-  guard state.engine != "" else {
+  let agent_env = match environment {
+    Ready(env) => env
+    Configuration(message)
+    | (Unavailable with message = "Pattern Repair settings are unavailable.") =>
+      return pattern_repair_failure(payload, Unavailable, None, message, [])
+  }
+  guard engine != "" else {
     return pattern_repair_failure(
       payload,
       Unavailable,
@@ -359,16 +369,11 @@ async fn pattern_repair_op(
       [],
     )
   }
-  let root = WirePath::parse(payload.root).absolute
-  let provider = try {
-    let toolchain = @moonbit.resolve_toolchain(
-      state.engine,
-      runtime_dir?=state.runtime_dir,
-      source=state.resources.moonbit,
-    )
-    toolchain.apply_to_env(agent_env)
-    state.semantic_provider().resolve(env=agent_env)
-  } catch {
+  guard @pathx.Absolute::from_uri_path(payload.root) is Some(root) else {
+    raise InvalidRoot
+  }
+  let root = root.normalize()
+  let provider = provider.resolve(env=agent_env) catch {
     error =>
       return pattern_repair_failure(
         payload,
@@ -379,7 +384,7 @@ async fn pattern_repair_op(
       )
   }
   let candidate = request_pattern_repair_candidate(
-    state,
+    engine,
     agent_env,
     provider,
     root,
