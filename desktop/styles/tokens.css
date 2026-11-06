@@ -93,38 +93,23 @@
     var(--dark-text-secondary)
   );
   --color-text-muted: light-dark(var(--light-text-muted), var(--dark-text-muted));
-  --color-text-faint: light-dark(var(--light-text-faint), var(--dark-text-faint));
+  --color-text-inline-code: light-dark(
+    var(--light-text-inline-code),
+    var(--dark-text-inline-code)
+  );
   --color-border: light-dark(var(--light-border), var(--dark-border));
-  --color-border-subtle: light-dark(
-    var(--light-border-subtle),
-    var(--dark-border-subtle)
-  );
+  --color-divider: light-dark(var(--light-border), var(--dark-border));
 
-  /* Structural seams should recede behind content. Persistent control
-     grouping comes from a quiet fill; the stronger border remains available
-     for fields, overlays, focus, and actions whose boundary carries meaning. */
-  --color-separator: color-mix(
-    in srgb,
-    var(--color-border-subtle) 68%,
-    transparent
-  );
+  --color-seam: light-dark(var(--light-seam), var(--dark-seam));
   --color-control-surface: color-mix(
     in srgb,
     var(--color-bg-subtle) 74%,
     transparent
   );
 
-  --color-accent: light-dark(var(--light-accent), var(--dark-accent));
-  --color-switch-on: #315fd5;
-  --color-accent-strong: light-dark(
-    var(--light-accent-strong),
-    var(--dark-accent-strong)
-  );
-  --color-on-accent: light-dark(var(--light-on-accent), var(--dark-on-accent));
-  --color-on-accent-strong: light-dark(
-    var(--light-on-accent-strong),
-    var(--dark-on-accent-strong)
-  );
+  --color-accent: #5686fe;
+  --color-switch-on: #257de0;
+  --color-on-accent: #ffffff;
   --color-accent-soft: light-dark(var(--light-accent-soft), var(--dark-accent-soft));
   --color-accent-border: light-dark(
     var(--light-accent-border),
@@ -146,8 +131,6 @@
     var(--dark-danger-border)
   );
   --color-warning: light-dark(var(--light-warning), var(--dark-warning));
-
-  --color-code: light-dark(var(--light-code), var(--dark-code));
 
   /* Keyboard focus must be obvious without turning every interactive surface
      into another accent claim. Blue remains for selection and primary action. */
@@ -265,8 +248,4 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-}
-
-* {
-  box-sizing: border-box;
 }

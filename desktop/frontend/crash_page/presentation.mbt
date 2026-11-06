@@ -60,8 +60,8 @@ let crash_style : String =
   #|      cursor: pointer;
   #|    }
   #|    #frontend-crash button:hover {
-  #|      border-color: var(--color-accent-strong, #2a55cc);
-  #|      background: var(--color-accent-strong, #2a55cc);
+  #|      border-color: var(--color-accent, #315fd5);
+  #|      background: var(--color-accent, #315fd5);
   #|    }
   #|    #frontend-crash button:focus-visible,
   #|    #frontend-crash summary:focus-visible {
@@ -71,7 +71,7 @@ let crash_style : String =
   #|    #frontend-crash details {
   #|      margin-top: 20px;
   #|      padding-top: 14px;
-  #|      border-top: 1px solid var(--color-border-subtle, #f0efea);
+  #|      border-top: 1px solid var(--color-divider, #f0efea);
   #|      color: var(--color-text-muted, #565d68);
   #|      font-size: var(--font-size-sm, 13px);
   #|    }
@@ -80,10 +80,10 @@ let crash_style : String =
   #|      max-height: 240px;
   #|      overflow: auto;
   #|      padding: 12px;
-  #|      border: 1px solid var(--color-border-subtle, #f0efea);
+  #|      border: 1px solid var(--color-border, #f0efea);
   #|      border-radius: var(--radius-sm, 6px);
   #|      background: var(--color-bg-subtle, #f6f6f3);
-  #|      color: var(--color-code, #2b2f36);
+  #|      color: var(--color-text-primary, #2b2f36);
   #|      font: 400 var(--font-size-sm, 13px)/var(--line-height-normal, 1.5)
   #|        var(--font-family-mono, ui-monospace, SFMono-Regular, Menlo, Monaco,
   #|          Consolas, "Liberation Mono", "Courier New", monospace);

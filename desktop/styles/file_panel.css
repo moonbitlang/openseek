@@ -37,7 +37,7 @@ button.panel-toggle:not(:disabled):hover {
 
 .panel-toggle.active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .file-reveal-button {
@@ -68,7 +68,7 @@ button.panel-toggle:not(:disabled):hover {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--color-separator);
+  border-left: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
   /* Own stacking context so the opaque editor always paints above the
      conversation column, never the other way around. */
@@ -90,6 +90,9 @@ button.panel-toggle:not(:disabled):hover {
    on the right. Always rendered — the editor's child order is
    structural (see panel_view). */
 .editor-tabsbar {
+  /* Keep the launcher attached to + as the panel and tab strip resize. */
+  position: relative;
+  anchor-scope: --dock-menu-trigger;
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
   display: flex;
   align-items: center;
@@ -97,7 +100,7 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 auto;
   height: var(--topbar-height);
   padding: 0 var(--panel-toggle-reserved-width) 0 calc(var(--font-size-base) * 12 / 14);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
 }
 
@@ -127,7 +130,7 @@ button.panel-toggle:not(:disabled):hover {
   max-width: min(200px, 100%);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
@@ -140,7 +143,7 @@ button.panel-toggle:not(:disabled):hover {
 .editor-tab.active {
   /* Match the selected conversation in the left sidebar. */
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 /* A tab whose file vanished from disk keeps its place, struck through
    until the file reappears or the tab is closed. */
@@ -318,7 +321,7 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 calc(var(--tree-size) * var(--tree-open-progress));
   min-height: 0;
   overflow: hidden;
-  border-top: calc(1px * var(--tree-open-progress)) solid var(--color-separator);
+  border-top: calc(1px * var(--tree-open-progress)) solid var(--color-seam);
   background: var(--color-bg-surface);
   visibility: var(--tree-visibility);
   transition:
@@ -346,7 +349,7 @@ button.panel-toggle:not(:disabled):hover {
   --tree-size: clamp(180px, var(--tree-width, 260px), calc(100% - 240px));
   min-width: 0;
   border-top: none;
-  border-left: calc(1px * var(--tree-open-progress)) solid var(--color-separator);
+  border-left: calc(1px * var(--tree-open-progress)) solid var(--color-seam);
 }
 .editor.tree-picker .file-tree-pane {
   flex-basis: var(--tree-size);
@@ -478,10 +481,6 @@ html:is(
 .editor.mode-picker.mode-search-picker .viewer-stack::after {
   content: "Select a search result to open";
 }
-/* Keep the launcher attached to + as the panel and tab strip resize. */
-.editor-tabsbar {
-  position: relative;
-}
 .tab-action {
   --tab-action-size: calc(var(--font-size-base) * 26 / 14);
   flex: 0 0 auto;
@@ -498,7 +497,7 @@ html:is(
 }
 .tab-action:hover:not(:disabled) {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .tab-action:disabled {
   opacity: 0.4;
@@ -506,9 +505,6 @@ html:is(
 }
 .tab-add.hidden {
   display: none;
-}
-.editor-tabsbar {
-  anchor-scope: --dock-menu-trigger;
 }
 .tab-add {
   anchor-name: --dock-menu-trigger;
@@ -580,7 +576,7 @@ html:is(
 }
 .dock-launcher-row:hover {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .dock-launcher-name {
   font-weight: 600;
@@ -609,7 +605,7 @@ html:is(
   gap: var(--space-3);
   flex: 0 0 auto;
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
 }
 .browser-nav-button {
   flex: 0 0 auto;
@@ -626,7 +622,7 @@ html:is(
 }
 .browser-nav-button:hover {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .browser-nav-button.browser-annotate:not(.active):hover {
   color: var(--color-text-secondary);
@@ -634,7 +630,7 @@ html:is(
 }
 .browser-nav-button.browser-annotate.active,
 .browser-nav-button.browser-annotate.active:hover {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -659,7 +655,7 @@ html:is(
 .browser-failure {
   flex: 0 0 auto;
   padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-danger);
   font-size: var(--font-size-sm);
 }
@@ -735,7 +731,7 @@ html:is(
 }
 .search-option.pressed {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-option > svg {
   display: block;
@@ -763,7 +759,7 @@ html:is(
   cursor: pointer;
 }
 .search-mode-button + .search-mode-button {
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-mode-button:hover {
   background: var(--color-bg-subtle);
@@ -771,7 +767,7 @@ html:is(
 }
 .search-mode-button.pressed {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-mode-options {
   flex: 0 0 auto;
@@ -808,7 +804,7 @@ html:is(
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-xs);
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font-family: var(--font-family-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -816,21 +812,21 @@ html:is(
 .search-semantic-pattern-results {
   min-width: 0;
   margin-left: var(--space-5);
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-semantic-pattern-results > .search-file-group {
   margin-left: var(--space-4);
 }
 .search-semantic-pattern-results .search-file-results {
   margin-left: var(--space-6);
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-divider);
 }
 .search-selection-toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
@@ -892,7 +888,7 @@ html:is(
   background: var(--color-accent-soft);
 }
 .search-semantic-hit.selected .search-semantic-select {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .search-semantic-hit:hover {
   background: var(--color-bg-hover, var(--color-bg-surface));
@@ -958,7 +954,7 @@ html:is(
   gap: var(--space-2);
   flex: 0 0 auto;
   padding: 0 var(--space-5) var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
 }
 .search-toolbar button {
   padding: var(--space-2) var(--space-4);
@@ -1046,7 +1042,7 @@ html:is(
   padding: 0 var(--space-2);
   border-radius: 9px;
   background: var(--color-bg-subtle);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   line-height: calc(18 / 12);
   text-align: center;
@@ -1162,7 +1158,7 @@ html:is(
   font-size: var(--font-size-xs);
 }
 .search-pattern-repair-status svg {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   flex: 0 0 auto;
 }
 .search-pattern-repair-status.error {
@@ -1216,7 +1212,7 @@ html:is(
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: inherit;
   text-decoration: underline;
@@ -1235,7 +1231,7 @@ html:is(
   flex: 0 0 auto;
   gap: var(--space-1);
   padding: var(--space-4) var(--space-2) var(--space-2);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
 }
 
 .explorer-tab {
@@ -1263,7 +1259,7 @@ html:is(
 }
 
 .explorer-tab.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -1429,7 +1425,7 @@ button.review-section-header:hover,
 .review-split-handle {
   position: relative;
   flex: 0 0 5px;
-  border-top: 1px solid var(--color-separator);
+  border-top: 1px solid var(--color-seam);
   border-bottom: 1px solid transparent;
   cursor: row-resize;
 }
@@ -1826,7 +1822,7 @@ button.git-history-file:focus-visible {
 }
 
 button.git-history-file.selected {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -1853,7 +1849,7 @@ button.git-history-file.selected {
 .git-history-file-status.status-added { color: var(--color-success); }
 .git-history-file-status.status-deleted { color: var(--color-danger); }
 .git-history-file-status.status-renamed,
-.git-history-file-status.status-copied { color: var(--color-accent-strong); }
+.git-history-file-status.status-copied { color: var(--color-accent); }
 
 .git-commit-files-message,
 .git-graph-message,
@@ -1901,7 +1897,7 @@ button.git-history-file.selected {
   border: 0;
   border-radius: 2px;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: var(--font-size-sm);
   line-height: calc(20 / 13);
@@ -1922,7 +1918,7 @@ button.git-history-file.selected {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   font: inherit;
   font-size: var(--font-size-sm);
   cursor: pointer;
@@ -1994,7 +1990,7 @@ button.git-history-file.selected {
 }
 
 .tree-row:focus-visible {
-  outline: 2px solid var(--color-accent-strong);
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -2004,7 +2000,7 @@ button.git-history-file.selected {
 
 .tree-row.selected {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .change-tree {
@@ -2038,7 +2034,7 @@ button.git-history-file.selected {
 
 .change-row.renamed .change-path,
 .change-status.renamed {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .change-row.modified .change-path,
@@ -2088,19 +2084,19 @@ button.git-history-file.selected {
   margin: 0 var(--space-1) 0 0;
   border: 1px solid color-mix(in srgb, var(--color-text-primary) 30%, transparent);
   border-radius: 3px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: transparent;
   cursor: pointer;
 }
 
 .change-review-checkbox[aria-checked="true"],
 .change-review-checkbox[aria-checked="mixed"] {
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
 .change-review-checkbox:hover:not(:disabled) {
-  border-color: var(--color-accent-strong);
+  border-color: var(--color-accent);
 }
 
 .change-review-checkbox:disabled {
@@ -2164,9 +2160,9 @@ button.git-history-file.selected {
   flex: 0 0 auto;
   height: 2.5rem;
   padding: 0 var(--space-6) 0 var(--space-5);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
   font-size: var(--font-size-xs);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   white-space: nowrap;
   overflow: visible;
   background: var(--color-bg-surface);
@@ -2193,7 +2189,7 @@ button.git-history-file.selected {
 }
 
 .viewer-breadcrumb-row {
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
 }
 
 .review-command-row {
@@ -2249,7 +2245,7 @@ button.git-history-file.selected {
 }
 .crumb-sep {
   flex: 0 0 auto;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 
 /* The tab already identifies an Office file. Keep its folder breadcrumb and
@@ -2321,7 +2317,7 @@ button.git-history-file.selected {
 }
 .office-viewer-control:hover:not(:disabled),
 .office-viewer-control.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 .office-viewer-control:disabled {
@@ -2331,7 +2327,7 @@ button.git-history-file.selected {
 }
 .office-viewer-zoom-value {
   min-width: 38px;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -2365,7 +2361,7 @@ button.git-history-file.selected {
   flex: 0 0 auto;
   min-height: 2.5rem;
   padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   background: var(--color-bg-subtle);
   font-size: var(--font-size-xs);
@@ -2440,7 +2436,7 @@ button.git-history-file.selected {
 }
 
 .breadcrumb-picker-row.selected {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -2536,7 +2532,7 @@ button.git-history-file.selected {
 .review-nav-position,
 .review-hunk-position {
   min-width: 2.75rem;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   text-align: center;
 }
@@ -2593,7 +2589,7 @@ button.git-history-file.selected {
 
 .review-mode-button.active,
 .review-layout-button.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 20%, transparent);
   font-weight: 600;
 }
@@ -2603,7 +2599,7 @@ button.git-history-file.selected {
   flex: 0 0 auto;
   width: 1px;
   height: 18px;
-  background: var(--color-border);
+  background: var(--color-divider);
 }
 
 .review-mode-divider {
@@ -2661,7 +2657,7 @@ button.git-history-file.selected {
 
 .review-comments-control.active,
 .review-tests-control.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 
@@ -2771,8 +2767,8 @@ button.git-history-file.selected {
   min-width: 0;
   margin: 0;
   border: 0;
-  border-top: 1px solid var(--color-separator);
-  border-bottom: 1px solid var(--color-separator);
+  border-top: 1px solid var(--color-seam);
+  border-bottom: 1px solid var(--color-seam);
   border-radius: 0;
   padding: var(--space-2) var(--space-2);
   color: var(--vscode-editor-foreground, var(--color-text-primary));
@@ -2881,7 +2877,7 @@ button.git-history-file.selected {
 }
 
 .semantic-review-host .semantic-entry-content {
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
   overflow: hidden;
 }
 
@@ -2901,8 +2897,8 @@ button.git-history-file.selected {
 
 .semantic-review-host .semantic-reorder {
   margin: var(--space-4) 0 0;
-  border-top: 1px solid var(--color-separator);
-  border-bottom: 1px solid var(--color-separator);
+  border-top: 1px solid var(--color-seam);
+  border-bottom: 1px solid var(--color-seam);
   padding: var(--space-4) var(--space-5);
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -3006,7 +3002,7 @@ button.git-history-file.selected {
   flex-wrap: wrap;
   gap: var(--space-4);
   padding: 0 var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -3143,7 +3139,7 @@ button.git-history-file.selected {
 .editor.mode-github .browser-chrome { display: none; }
 .editor.mode-github .github-panel { display: flex; }
 .github-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: row; overflow: hidden; color: var(--color-text-primary); }
-.github-inventory { display: flex; flex-direction: column; flex: 0 0 min(260px, 40%); min-width: 0; min-height: 0; padding: 0 var(--space-4) var(--space-4); border-left: 1px solid var(--color-separator); background: var(--color-bg-surface); overflow: hidden; }
+.github-inventory { display: flex; flex-direction: column; flex: 0 0 min(260px, 40%); min-width: 0; min-height: 0; padding: 0 var(--space-4) var(--space-4); border-left: 1px solid var(--color-seam); background: var(--color-bg-surface); overflow: hidden; }
 .github-detail-host { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; container: github-detail / inline-size; }
 .github-detail {
   --gh-bg: light-dark(#ffffff, #0d1117);
@@ -3265,7 +3261,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 .github-toolbar { flex: none; display: flex; align-items: center; gap: var(--space-4); min-height: 2.75rem; padding: 0 var(--space-2) 0 var(--space-4); }
 .github-repository { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
-.github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-border); }
+.github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-divider); }
 .github-pulls.expanded { flex: 2 1 0; }
 .github-issues.expanded { flex: 1 1 0; }
 .github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--space-1) 0 var(--space-4); scrollbar-width: thin; }
@@ -3315,7 +3311,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .jobs-summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
 .jobs-summary-active { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--color-text-primary); }
 .jobs-summary-active::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
-.jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border); }
+.jobs-host { padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-divider); }
 .jobs-list { display: flex; flex-direction: column; gap: var(--space-6); max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: var(--space-1); scrollbar-width: thin; }
 .jobs-group { flex-shrink: 0; min-width: 0; }
 .jobs-group-title { display: flex; align-items: center; gap: var(--space-4); margin: 0 0 var(--space-5); font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary); }
@@ -3342,7 +3338,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   }
 }
 .jobs-more { margin-top: var(--space-4); }
-.jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-border); }
+.jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-divider); }
 .jobs-group-count { min-width: 20px; padding: var(--space-1) var(--space-3); border-radius: 5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); font-size: var(--font-size-xs); text-align: center; font-variant-numeric: tabular-nums; }
 .jobs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18em,100%),1fr)); gap: var(--space-4); }
 .jobs-row { display: flex; flex-direction: column; gap: var(--space-4); text-align: left; padding: var(--space-5); border: 1px solid var(--color-border); border-left: 3px solid color-mix(in srgb, var(--job-color) 55%, var(--color-border)); background: var(--color-bg-surface); border-radius: 8px; color: inherit; min-width: 0; cursor: pointer; }
@@ -3368,7 +3364,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 @keyframes jobs-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .jobs-status-running::before { animation: none; } }
 .jobs-detail { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-height: 290px; min-width: 0; }
-.jobs-detail-title { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--color-border); padding-top: var(--space-6); }
+.jobs-detail-title { justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--color-divider); padding-top: var(--space-6); }
 .jobs-full-command { margin: 0; padding: var(--space-4) var(--space-5); font: var(--font-size-sm)/var(--line-height-normal) var(--font-family-mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-bg-surface); border-radius: 5px; max-height: 110px; overflow: auto; }
 .jobs-path { font-size: var(--font-size-sm); overflow-wrap: anywhere; line-height: var(--line-height-normal); }
 .jobs-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); }
@@ -3474,7 +3470,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 
 .review-filter-controls {
   flex: 0 0 auto;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .review-filter-layout > .review-git-layout {
@@ -3664,19 +3660,19 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 /* GitHub review threads share the existing Review shell and diff geometry. */
 .github-review-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
-.github-review-toggle { display: flex; align-items: center; gap: var(--space-4); height: 2rem; padding: 0 var(--space-4); border: 1px solid var(--color-separator); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
+.github-review-toggle { display: flex; align-items: center; gap: var(--space-4); height: 2rem; padding: 0 var(--space-4); border: 1px solid var(--color-seam); border-radius: 5px; font-size: var(--font-size-xs); color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
 .github-review-toggle svg { width: 1rem; height: 1rem; }
-.github-review-switch { display: inline-block; width: 2.25em; height: 1.25em; border-radius: 10px; background: var(--color-text-faint); padding: 0.125em; box-sizing: border-box; }
+.github-review-switch { display: inline-block; width: 2.25em; height: 1.25em; border-radius: 10px; background: var(--color-text-muted); padding: 0.125em; box-sizing: border-box; }
 .github-review-switch::after { content: ''; display: block; width: 1em; height: 1em; border-radius: 50%; background: white; }
 .github-review-switch.on { background: #0969da; }
 .github-review-switch.on::after { margin-left: 1em; }
 .github-review-refresh { font-size: var(--font-size-title); padding: 0 var(--space-2); cursor: pointer; }
-.github-review-status { font-size: var(--font-size-xs); padding: var(--space-2) var(--space-5); border-top: 1px solid var(--color-separator); color: var(--color-text-muted); white-space: normal; }
+.github-review-status { font-size: var(--font-size-xs); padding: var(--space-2) var(--space-5); border-top: 1px solid var(--color-seam); color: var(--color-text-muted); white-space: normal; }
 .github-review-status.hidden { display: none; }
 .github-review-error { color: var(--color-danger, #cf222e); white-space: pre-wrap; overflow-wrap: anywhere; }
 .github-review-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3) var(--space-5); padding: var(--space-2) 0; }
 .github-review-recovery > span { flex: 1 1 260px; }
-.github-review-update { flex: none; padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-update { flex: none; padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-update:disabled { opacity: .5; cursor: default; }
 .github-review-unplaced { margin-top: var(--space-2); }
 .github-review-unplaced summary { cursor: pointer; }
@@ -3684,12 +3680,12 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-inline-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 12; }
 .semantic-entry-editor-parent { position: relative; }
 .github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: var(--space-3) 0 var(--space-5); }
-.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
+.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-seam); border-radius: 6px; overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
 .github-review-thread + .github-review-thread { margin-top: var(--space-4); }
-.github-review-thread-location { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-text-muted); font-size: var(--font-size-caption); background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-separator); }
+.github-review-thread-location { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-text-muted); font-size: var(--font-size-caption); background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-seam); }
 .github-review-thread.resolved .github-review-thread-location { border-bottom: 0; }
 .github-review-resolved-toggle { margin-left: auto; cursor: pointer; color: var(--color-text-muted); }
-.github-review-comment + .github-review-comment { border-top: 1px solid var(--color-separator); }
+.github-review-comment + .github-review-comment { border-top: 1px solid var(--color-seam); }
 .github-review-comment-header { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5) var(--space-5) var(--space-2); min-width: 0; }
 .github-review-avatar { width: 26px; height: 26px; border-radius: 50%; flex: 0 0 26px; }
 .github-review-avatar-fallback { display: flex; align-items: center; justify-content: center; background: var(--color-bg-subtle); }
@@ -3702,22 +3698,22 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-markdown > :last-child { margin-bottom: 0; }
 .github-review-markdown pre { max-width: 100%; overflow: auto; padding: var(--space-4); background: var(--color-bg-subtle); }
 .github-review-markdown img { max-width: 100%; }
-.github-review-thread-footer { padding: var(--space-5) var(--space-5); border-top: 1px solid var(--color-separator); background: var(--color-bg-subtle); }
+.github-review-thread-footer { padding: var(--space-5) var(--space-5); border-top: 1px solid var(--color-seam); background: var(--color-bg-subtle); }
 .github-review-composer { padding: var(--space-5); }
 .github-review-thread-footer .github-review-composer { padding: 0; }
-.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; font: inherit; line-height: 1.5; }
+.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-seam); border-radius: 6px; font: inherit; line-height: 1.5; }
 .github-review-input:focus { border-color: #0969da; outline: 1px solid #0969da; outline-offset: -1px; }
 .github-review-composer-actions { display: flex; justify-content: flex-end; gap: var(--space-4); padding-top: var(--space-5); }
-.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
 .github-review-composer-actions .github-review-send { color: white; background: #1f883d; border-color: #1a7f37; font-weight: 600; }
 .github-review-thread button:disabled { opacity: .5; cursor: default; }
 .github-review-resolve { margin-top: var(--space-5); }
-.github-review-badge { padding: 0 var(--space-3); border: 1px solid var(--color-separator); border-radius: 9px; }
+.github-review-badge { padding: 0 var(--space-3); border: 1px solid var(--color-seam); border-radius: 9px; }
 .github-review-delete-confirm { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); padding: var(--space-4) var(--space-5); }
 .github-review-delete-confirm .danger { color: #cf222e; }
 .github-review-file-count { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: var(--font-size-caption); padding-left: var(--space-2); }
 .github-review-file-count svg { width: 13px; height: 13px; }
 
-.browser-annotation { flex: 0 0 auto; padding: var(--space-5); border-bottom: 1px solid var(--color-separator); display: flex; flex-direction: column; gap: var(--space-5); font-size: var(--font-size-sm); }
+.browser-annotation { flex: 0 0 auto; padding: var(--space-5); border-bottom: 1px solid var(--color-seam); display: flex; flex-direction: column; gap: var(--space-5); font-size: var(--font-size-sm); }
 .browser-annotation.hidden { display: none; }
-.browser-annotation button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-separator); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.browser-annotation button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }

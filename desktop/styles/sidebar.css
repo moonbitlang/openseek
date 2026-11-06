@@ -15,7 +15,7 @@ aside {
   min-height: 0;
   overflow: hidden;
   padding-bottom: 1rem;
-  border-right: 1px solid var(--color-separator);
+  border-right: 1px solid var(--color-seam);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   /* The width-resize grab strip on the right edge positions against the
@@ -90,7 +90,7 @@ html.is-resizing .sidebar-resize-handle {
 .sidebar-mode-option.active {
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
-  box-shadow: 0 0 0 1px var(--color-separator);
+  box-shadow: 0 0 0 1px var(--color-seam);
 }
 .sidebar-mode-option:focus-visible {
   outline: 2px solid var(--color-focus-ring);
@@ -99,8 +99,6 @@ html.is-resizing .sidebar-resize-handle {
 
 .sidebar-main {
   display: grid;
-  /* One scroll lane holds every peer section. Independent folds keep a long
-     source manageable without turning Codex and OpenSeek into nested panes. */
   align-content: start;
   min-width: 0;
   min-height: 0;
@@ -113,6 +111,7 @@ html.is-resizing .sidebar-resize-handle {
      and reserves nothing, so there the whole inset has to be real padding.
      `--scrollbar-lane` is the measured width of the gutter the bar claims. */
   padding-top: 0;
+  padding-bottom: 0.8em;
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
@@ -264,7 +263,7 @@ html.is-resizing .sidebar-resize-handle {
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-primary);
+  background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font: inherit;
   outline: 1px solid var(--color-accent-border);
@@ -276,7 +275,7 @@ html.is-resizing .sidebar-resize-handle {
 
 .conversation-row.active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 .conversation-row.load-failed {
@@ -287,7 +286,7 @@ html.is-resizing .sidebar-resize-handle {
   width: 12px;
   height: 12px;
   border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent-strong);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: conversation-load-spin 0.8s linear infinite;
 }
@@ -509,7 +508,7 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  min-height: 2em;
+  min-height: 2.5rem;
   padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
@@ -568,8 +567,6 @@ html.is-resizing .sidebar-resize-handle {
    pointer moves into the floating surface. */
 .workspace-menu-button[aria-expanded="true"] {
   visibility: visible;
-}
-.workspace-menu-button[aria-expanded="true"] {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
@@ -606,7 +603,7 @@ button.composer-worktree:hover {
 }
 .composer-worktree.on {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 /* A conversation nested under its workspace row: the twisty cell and the row
@@ -618,7 +615,8 @@ button.composer-worktree:hover {
 .project-show-more {
   width: 100%;
   min-height: 2em;
-  padding: 0 var(--space-4);
+  /* Align beneath titles: 2.5rem includes the leading twisty cell. */
+  padding: 0 var(--space-4) 0 2.5rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -627,12 +625,6 @@ button.composer-worktree:hover {
   font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
-}
-/* It sits under the titles of the rows it reveals. A top-level conversation
-   row indents its label 8 + 14 + 6 = 28px; a project's nested rows add their
-   own 16px pad on top, landing at 36px. */
-.project-show-more {
-  padding-left: 2.5rem;
 }
 .project-show-more:hover {
   background: var(--color-bg-subtle);
@@ -748,7 +740,7 @@ button.row-twisty:hover {
   padding-left: 2.5rem;
 }
 .conversation-row.subrun.active {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 
 #project-picker-dialog {
@@ -770,7 +762,7 @@ button.row-twisty:hover {
   border: 1px solid var(--color-accent-border);
   border-radius: 10px;
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-header-copy {
   min-width: 0;
@@ -786,7 +778,7 @@ button.row-twisty:hover {
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   background: var(--color-bg-subtle);
 }
 .picker-crumbs {
@@ -825,7 +817,7 @@ button.row-twisty:hover {
   --icon-size: var(--icon-sm);
   display: grid;
   place-items: center;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-path-editor input {
   width: 100%;
@@ -936,7 +928,7 @@ button.row-twisty:hover {
   justify-content: space-between;
   min-height: 2.25rem;
   padding: 0 var(--space-5) 0 3rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
   background: color-mix(
     in srgb,
     var(--color-bg-subtle) 88%,
@@ -962,7 +954,7 @@ button.row-twisty:hover {
   min-height: 2.75rem;
   padding: 0 var(--space-5) 0 var(--space-5);
   border: 0;
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-divider);
   border-radius: 0;
   background: transparent;
   font: inherit;
@@ -989,11 +981,11 @@ button.row-twisty:hover {
   place-items: center;
   flex: none;
   width: 20px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-row:not(:disabled):hover .picker-row-icon,
 .picker-row:not(:disabled):focus-visible .picker-row-icon {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-row-name {
   flex: 1 1 auto;
@@ -1034,7 +1026,7 @@ button.row-twisty:hover {
   place-items: center;
   width: 28px;
   height: 28px;
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-create-row input {
   width: 100%;
@@ -1063,9 +1055,9 @@ button.row-twisty:hover {
   color: var(--color-text-primary);
 }
 .picker-create-submit:not(:disabled):hover {
-  border-color: var(--color-accent-strong);
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent-strong);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 .picker-empty {
   display: grid;
@@ -1107,7 +1099,7 @@ button.row-twisty:hover {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-surface);
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .picker-current-copy {
   display: grid;
@@ -1239,8 +1231,8 @@ button.row-twisty:hover {
     }
 
     &:not(:disabled):hover {
-      background: var(--color-accent-strong);
-      color: var(--color-on-accent-strong);
+      background: var(--color-accent);
+      color: var(--color-on-accent);
     }
   }
 }
@@ -1255,7 +1247,7 @@ button.row-twisty:hover {
   margin: var(--space-4) var(--space-5) var(--space-5);
   width: calc(100% - 2 * var(--space-5));
   padding: 0 var(--space-4);
-  border: 1px solid var(--color-separator);
+  border: 1px solid var(--color-seam);
   border-radius: 7px;
   background: var(--color-bg-surface);
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
@@ -1283,10 +1275,6 @@ button.row-twisty:hover {
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
 
 /* Host identity and actions share the right edge without moving the title. */
-.workspace-row {
-  gap: var(--space-4);
-  min-height: 2.5rem;
-}
 .workspace-trailing {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

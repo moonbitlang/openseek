@@ -12,7 +12,7 @@
   overflow: hidden;
   flex-direction: column;
   background: var(--color-bg-surface);
-  border-top: 1px solid var(--color-separator);
+  border-top: 1px solid var(--color-seam);
   visibility: hidden;
   pointer-events: none;
   transform: translateY(100%);
@@ -67,7 +67,7 @@ html.is-resizing-terminal * {
   align-items: center;
   gap: var(--space-5);
   padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--color-separator);
+  border-bottom: 1px solid var(--color-seam);
   color: var(--color-text-secondary);
   font: 500 var(--font-size-sm)/var(--line-height-normal)
     var(--font-family-sans);
@@ -101,7 +101,7 @@ html.is-resizing-terminal * {
   cursor: pointer;
 }
 .terminal-tab.active .terminal-tab-select {
-  color: var(--color-accent-strong);
+  color: var(--color-accent);
 }
 .terminal-tab-failed {
   color: var(--color-danger);

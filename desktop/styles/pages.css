@@ -52,9 +52,9 @@
     --button-color: var(--color-on-accent);
     --button-border-color: var(--color-accent);
     --button-background: var(--color-accent);
-    --button-hover-color: var(--color-on-accent-strong);
-    --button-hover-border-color: var(--color-accent-strong);
-    --button-hover-background: var(--color-accent-strong);
+    --button-hover-color: var(--color-on-accent);
+    --button-hover-border-color: var(--color-accent);
+    --button-hover-background: var(--color-accent);
     --button-disabled-opacity: 0.7;
   }
 
@@ -201,7 +201,7 @@ h2 {
 }
 
 .settings-group-card {
-  background: var(--color-bg-surface);
+  background: var(--color-bg-canvas);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-1) var(--space-6);
@@ -219,7 +219,7 @@ h2 {
 .settings-group-card .skill-row + .skill-row,
 .settings-group-card .setup-guide + .setting-row,
 .setup-modal-form .setup-guide + .setting-row {
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--color-divider);
 }
 
 .setting-row.stack {
@@ -464,7 +464,6 @@ button.archived-chat-open:hover .archived-chat-title {
   min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
   font-size: var(--font-size-md);
@@ -863,7 +862,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-metadata-table th,
 .skill-metadata-table td {
   padding: var(--space-5) 1rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-divider);
   line-height: var(--line-height-normal);
   text-align: left;
   vertical-align: top;
@@ -913,7 +912,7 @@ button.archived-chat-open:hover .archived-chat-title {
   gap: var(--space-5);
   min-height: 40px;
   padding-block: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .skill-file-name {
@@ -979,7 +978,7 @@ button.archived-chat-open:hover .archived-chat-title {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
-  color: var(--color-code);
+  color: var(--color-text-primary);
   white-space: pre;
 }
 
@@ -992,7 +991,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-preview-markdown blockquote {
   margin: 0.55em 0;
   padding: var(--space-1) var(--space-5);
-  border-left: 3px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-divider);
   color: var(--color-text-secondary);
 }
 
@@ -1008,7 +1007,7 @@ button.archived-chat-open:hover .archived-chat-title {
 .skill-preview-markdown th,
 .skill-preview-markdown td {
   padding: var(--space-2) var(--space-5);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-divider);
 }
 
 .skill-preview-markdown th {
@@ -1041,7 +1040,7 @@ button.archived-chat-open:hover .archived-chat-title {
   border-radius: var(--radius-pill);
   padding: var(--space-2) var(--space-4);
   background: transparent;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   white-space: nowrap;
 }

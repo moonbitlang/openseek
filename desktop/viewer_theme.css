@@ -41,14 +41,13 @@
   --vscode-menu-background: var(--color-bg-surface);
   --vscode-menu-foreground: var(--color-text-primary);
   --vscode-menu-selectionBackground: var(--color-accent-soft);
-  --vscode-menu-selectionForeground: var(--color-accent-strong);
+  --vscode-menu-selectionForeground: var(--color-accent);
   --vscode-menu-separatorBackground: var(--color-border);
   --vscode-menu-border: var(--color-border);
 
   /* The code surface. file_panel.css paints the surrounding editor panel
      with --color-bg-surface; sharing it keeps the seam invisible. */
   --vscode-editor-background: var(--color-bg-surface);
-  --vscode-editor-foreground: var(--color-code);
   --vscode-editorLineNumber-foreground: var(--color-text-muted);
   --vscode-editorLineNumber-activeForeground: var(--color-text-secondary);
   --vscode-editorCursor-foreground: var(--color-text-primary);
@@ -94,10 +93,10 @@
     var(--color-text-muted) 45%,
     transparent
   );
-  --vscode-editorLink-activeForeground: var(--color-accent-strong);
+  --vscode-editorLink-activeForeground: var(--color-accent);
   /* One step below the documentation prose (`--color-text-secondary`), so a
      lens reads as a footnote rather than part of the doc above it. */
-  --vscode-editorCodeLens-foreground: var(--color-text-faint);
+  --vscode-editorCodeLens-foreground: var(--color-text-muted);
   --vscode-editorWarning-foreground: var(--color-warning);
   --vscode-editorError-foreground: var(--color-danger);
   --vscode-editorInfo-foreground: var(--color-accent);
@@ -167,7 +166,7 @@
   --vscode-inputValidation-infoBorder: var(--color-accent);
   --vscode-button-background: var(--color-accent);
   --vscode-button-foreground: var(--color-on-accent);
-  --vscode-button-hoverBackground: var(--color-accent-strong);
+  --vscode-button-hoverBackground: var(--color-accent);
   --vscode-button-border: transparent;
   --vscode-button-secondaryBackground: var(--color-bg-subtle);
   --vscode-button-secondaryForeground: var(--color-text-primary);
@@ -193,13 +192,13 @@
     transparent
   );
   --vscode-textLink-foreground: var(--color-accent);
-  --vscode-textLink-activeForeground: var(--color-accent-strong);
+  --vscode-textLink-activeForeground: var(--color-accent);
   --vscode-textCodeBlock-background: var(--color-bg-subtle);
   --vscode-badge-background: var(--color-accent-soft);
-  --vscode-badge-foreground: var(--color-accent-strong);
+  --vscode-badge-foreground: var(--color-accent);
   --vscode-list-hoverBackground: var(--color-hover-subtle);
   --vscode-list-activeSelectionBackground: var(--color-accent-soft);
-  --vscode-list-activeSelectionForeground: var(--color-accent-strong);
+  --vscode-list-activeSelectionForeground: var(--color-accent);
 
   /* Scrollbars derive from the muted text tone at increasing strengths. */
   --vscode-scrollbarSlider-background: color-mix(
@@ -226,6 +225,12 @@
   --vscode-shadow-hover: rgb(0 0 0 / 36%);
   --vscode-shadow-lg: var(--shadow-overlay);
   --vscode-editorUnnecessaryCode-opacity: 1;
+
+  /* `editor.foreground` (color id 1, the Plain token) is a theme color, so it
+     lives here with the other syntax values rather than in the app palette:
+     Dark Modern's default foreground. The light block below carries Light
+     Modern's. */
+  --vscode-editor-foreground: #cccccc;
 
   --vscode-token-keyword: #569cd6;
   --vscode-token-variable: #9cdcfe;
@@ -276,6 +281,8 @@
   --vscode-peekViewEditor-matchHighlightBackground: #f5d802de;
   --vscode-widget-shadow: rgb(0 0 0 / 16%);
   --vscode-shadow-hover: rgb(0 0 0 / 16%);
+
+  --vscode-editor-foreground: #3b3b3b;
 
   --vscode-token-keyword: #0000ff;
   --vscode-token-variable: #001080;
