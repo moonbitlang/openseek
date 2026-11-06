@@ -1,0 +1,15 @@
+import {
+  "moonbitlang/openseek/mcp/config",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async/fs",
+} for "test"
+
+supported_targets = "+wasm+native"
