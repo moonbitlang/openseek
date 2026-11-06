@@ -6,7 +6,6 @@ pub suberror SearchError {
   CacheRootMismatch
   IndexingFailed(String)
   RankingFailed(String)
-  Internal(String)
 }
 
 ///|
@@ -21,7 +20,6 @@ impl Show for SearchError with fn output(self, logger) {
       logger.write_string("failed to index workspace: \{detail}")
     RankingFailed(detail) =>
       logger.write_string("failed to rank workspace files: \{detail}")
-    Internal(message) => logger.write_string(message)
   }
 }
 
