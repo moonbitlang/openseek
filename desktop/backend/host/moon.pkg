@@ -1,13 +1,11 @@
 import {
   "openseek_desktop/commands",
   "openseek_desktop/backend/engine",
-  "openseek_desktop/backend/uuid",
   "openseek_desktop/backend/internal/development",
   "openseek_desktop/backend/internal/work_dir",
   "openseek_desktop/backend/endpoint",
   "openseek_desktop/backend/internal/env",
   "openseek_desktop/backend/internal/fsx",
-  "openseek_desktop/backend/internal/filekind",
   "openseek_desktop/backend/internal/home",
   "openseek_desktop/backend/moonbit",
   "openseek_desktop/backend/internal/openpath",

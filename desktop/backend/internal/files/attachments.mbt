@@ -28,12 +28,9 @@ async fn attachment_workspace(
   workspace : String,
 ) -> @pathx.Absolute {
   guard @work_dir.resolve_in_workspace(session, ".", workspace~) is Some(root) else {
-    raise HostError("this conversation has no accessible workspace")
+    raise InvalidRequest("this conversation has no accessible workspace")
   }
-  guard @pathx.Path(@fs.realpath(root.to_string())).to_absolute() is Some(root) else {
-    raise HostError("attachment workspace is not absolute")
-  }
-  root
+  @pathx.Path(@fs.realpath(root.to_string())).resolve()
 }
 
 ///|
@@ -42,16 +39,16 @@ async fn load_attachment(
 ) -> LoadedAttachment {
   let loaded = match source {
     AttachmentPath(path) => {
-      let path = WirePath::parse(path).absolute
+      let path = wire_path(path)
       let path = @pathx.Path(@fs.realpath(path.to_string())).resolve()
       guard @fs.kind(path.to_string()) is Regular else {
-        raise HostError("attachment must be a file")
+        raise InvalidRequest("attachment must be a file")
       }
       let file = @fs.open(path.to_string(), mode=ReadOnly)
       defer file.close()
       let size = file.size()
       guard size <= @openpath.MaxOfficeFileBytes.to_int64() else {
-        raise HostError("documents must be 20 MiB or smaller")
+        raise InvalidRequest("documents must be 20 MiB or smaller")
       }
       {
         name: path.to_path().basename().to_owned(),
@@ -61,24 +58,26 @@ async fn load_attachment(
     }
     AttachmentBytes(name~, data_base64~) => {
       guard data_base64.length() <= (@openpath.MaxOfficeFileBytes + 2) / 3 * 4 else {
-        raise HostError("documents must be 20 MiB or smaller")
+        raise InvalidRequest("documents must be 20 MiB or smaller")
       }
       let bytes = @base64.decode(data_base64) catch {
-        _ => raise HostError("invalid attachment bytes")
+        _ => raise InvalidRequest("invalid attachment bytes")
       }
       { name, bytes, path: None, }
     }
   }
   guard attachment_name_is_safe(loaded.name) else {
-    raise HostError("invalid attachment filename")
+    raise InvalidRequest("invalid attachment filename")
   }
-  guard !loaded.bytes.is_empty() else { raise HostError("attachment is empty") }
+  guard !loaded.bytes.is_empty() else {
+    raise InvalidRequest("attachment is empty")
+  }
   guard loaded.bytes.length() <= @openpath.MaxOfficeFileBytes else {
-    raise HostError("documents must be 20 MiB or smaller")
+    raise InvalidRequest("documents must be 20 MiB or smaller")
   }
   guard is_document_attachment(loaded.name) ||
     @filekind.classify(loaded.bytes) is Image(_) else {
-    raise HostError(
+    raise InvalidRequest(
       "choose PNG, JPEG, WebP, GIF, PDF, DOCX, XLSX or PPTX files",
     )
   }
@@ -86,7 +85,7 @@ async fn load_attachment(
 }
 
 ///|
-async fn prepare_attachment_op(
+pub async fn prepare_attachment(
   payload : @protocol.PrepareAttachmentPayload,
 ) -> @protocol.PrepareAttachmentReply {
   let root = attachment_workspace(payload.session, payload.workspace)
@@ -94,7 +93,7 @@ async fn prepare_attachment_op(
   if !is_document_attachment(file.name) &&
     @filekind.classify(file.bytes) is Image(media_type~) {
     guard file.bytes.length() <= 5 * 1024 * 1024 else {
-      raise HostError("each image must be 5 MiB or smaller")
+      raise InvalidRequest("each image must be 5 MiB or smaller")
     }
     return AttachmentImage(
       name=file.name,
@@ -105,7 +104,7 @@ async fn prepare_attachment_op(
     return WorkspaceAttachment(path=relative.to_string())
   }
   // Preparing never creates a directory or writes bytes. Only the explicit
-  // Upload action invokes import_attachment_op.
+  // Upload action invokes import_attachment.
   AttachmentUploadRequired(name=file.name)
 }
 
@@ -121,28 +120,28 @@ async fn ensure_attachment_directory(
   while !@fs.exists(parent.to_string()) {
     let next = parent.dirname()
     guard next != parent else {
-      raise HostError("attachment directory is unavailable")
+      raise InvalidRequest("attachment directory is unavailable")
     }
     parent = next
   }
   guard root.contains(@pathx.Path(@fs.realpath(parent.to_string())).resolve()) else {
-    raise HostError("attachment directory escapes the workspace")
+    raise InvalidRequest("attachment directory escapes the workspace")
   }
   @fs.mkdir(target.to_string(), recursive=true, allow_exist=true)
   guard root.contains(@pathx.Path(@fs.realpath(target.to_string())).resolve()) else {
-    raise HostError("attachment directory escapes the workspace")
+    raise InvalidRequest("attachment directory escapes the workspace")
   }
   target
 }
 
 ///|
-async fn import_attachment_op(
+pub async fn import_attachment(
   payload : @protocol.PrepareAttachmentPayload,
 ) -> @protocol.ImportAttachmentReply {
   let root = attachment_workspace(payload.session, payload.workspace)
   let file = load_attachment(payload.source)
   guard is_document_attachment(file.name) else {
-    raise HostError("only documents are imported into the workspace")
+    raise InvalidRequest("only documents are imported into the workspace")
   }
   if file.path is Some(path) && path.relative_to(root~) is Some(relative) {
     return { path: relative.to_string(), }
@@ -155,7 +154,7 @@ async fn import_attachment_op(
       workspace=payload.workspace,
     )
     is Some(_) else {
-    raise HostError("attachment directory escapes the workspace")
+    raise InvalidRequest("attachment directory escapes the workspace")
   }
   ignore(ensure_attachment_directory(root, directory))
   let relative = "\{directory}/\{file.name}"
@@ -168,11 +167,11 @@ async fn import_attachment_op(
 /// First-send worktree creation changes the execution directory. Carry only
 /// the message's imported originals into that checkout, retaining their
 /// relative references. Existing originals make retries idempotent.
-pub async fn stage_attachments_op(
+pub async fn stage_attachments(
   payload : @protocol.StageAttachmentsPayload,
 ) -> @protocol.EmptyReply {
   let root = attachment_workspace(payload.session, payload.workspace)
-  let source_root = WirePath::parse(payload.source_root).absolute
+  let source_root = wire_path(payload.source_root)
   let source_root = @pathx.Path(@fs.realpath(source_root.to_string())).resolve()
   for relative in payload.paths {
     guard relative.split("/").collect()
@@ -180,20 +179,20 @@ pub async fn stage_attachments_op(
       attachment_name_is_safe(id.to_owned()) &&
       attachment_name_is_safe(name.to_owned()) &&
       is_document_attachment(name.to_owned()) else {
-      raise HostError("only imported workspace attachments can be staged")
+      raise InvalidRequest("only imported workspace attachments can be staged")
     }
     let target = root.join((relative : @pathx.Relative))
     if @fs.exists(target.to_string()) {
       let existing = load_attachment(AttachmentPath(target.resource_path()))
       guard existing.path is Some(existing_path) && root.contains(existing_path) else {
-        raise HostError("attachment escapes the workspace")
+        raise InvalidRequest("attachment escapes the workspace")
       }
       continue
     }
     let source = source_root.join((relative : @pathx.Relative))
     let file = load_attachment(AttachmentPath(source.resource_path()))
     guard file.path is Some(source_path) && source_root.contains(source_path) else {
-      raise HostError("attachment source escapes the workspace")
+      raise InvalidRequest("attachment source escapes the workspace")
     }
     ignore(
       ensure_attachment_directory(
@@ -205,7 +204,7 @@ pub async fn stage_attachments_op(
       @os_error.OSError(_) as error if error.is_EEXIST() => {
         let existing = load_attachment(AttachmentPath(target.resource_path()))
         guard existing.bytes == file.bytes else {
-          raise HostError(
+          raise InvalidRequest(
             "an attachment already exists with different contents",
           )
         }

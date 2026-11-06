@@ -24,10 +24,10 @@ async test "workspace documents become references without creating an upload" {
     source: AttachmentPath(source.resource_path()),
   }
   assert_eq(
-    prepare_attachment_op(payload),
+    @files.prepare_attachment(payload),
     WorkspaceAttachment(path="report.pdf"),
   )
-  assert_eq(import_attachment_op(payload).path, "report.pdf")
+  assert_eq(@files.import_attachment(payload).path, "report.pdf")
   assert_false(@fs.exists(root.join(".openseek").to_string()))
   assert_eq(@fs.read_file(source.to_string()).binary(), bytes)
 }
@@ -51,12 +51,12 @@ async test "external imports require preparation and preserve original bytes and
     source: AttachmentPath(original),
   }
   assert_eq(
-    prepare_attachment_op(payload),
+    @files.prepare_attachment(payload),
     AttachmentUploadRequired(name="下载-5-1.pdf"),
   )
   assert_false(@fs.exists(root.join(".openseek").to_string()))
-  let first = import_attachment_op(payload)
-  let second = import_attachment_op(payload)
+  let first = @files.import_attachment(payload)
+  let second = @files.import_attachment(payload)
   assert_true(first.path != second.path)
   assert_true(first.path.has_suffix("/下载-5-1.pdf"))
   for imported in [first, second] {
@@ -84,11 +84,14 @@ async test "browser document bytes import one original file and reject traversal
       workspace: root.resource_path(),
       source: AttachmentBytes(name~, data_base64=@base64.encode(bytes)),
     }
-    assert_eq(prepare_attachment_op(payload), AttachmentUploadRequired(name~))
+    assert_eq(
+      @files.prepare_attachment(payload),
+      AttachmentUploadRequired(name~),
+    )
     assert_eq(
       @fs.read_file(
         root
-        .join((import_attachment_op(payload).path : @pathx.Relative))
+        .join((@files.import_attachment(payload).path : @pathx.Relative))
         .to_string(),
       ).binary(),
       bytes,
@@ -96,7 +99,7 @@ async test "browser document bytes import one original file and reject traversal
   }
   let rejected = try {
     ignore(
-      import_attachment_op({
+      @files.import_attachment({
         session,
         workspace: root.resource_path(),
         source: AttachmentBytes(
@@ -125,7 +128,7 @@ async test "attachment imports reject escaping directory links before writing" {
   @fs.symlink(target=outside, root.join(".openseek").to_string())
   let rejected = try {
     ignore(
-      import_attachment_op({
+      @files.import_attachment({
         session,
         workspace: root.resource_path(),
         source: AttachmentBytes(
@@ -152,7 +155,7 @@ async test "attachment preparation rejects unavailable workspace empty and overs
   })
   let unknown = try {
     ignore(
-      prepare_attachment_op({
+      @files.prepare_attachment({
         session: "attachment-unbound",
         workspace: root.resource_path(),
         source: AttachmentBytes(name="report.pdf", data_base64="JVBERg=="),
@@ -166,7 +169,7 @@ async test "attachment preparation rejects unavailable workspace empty and overs
   for bytes in [b"", Bytes::make(@openpath.MaxOfficeFileBytes + 1, b'0')] {
     let rejected = try {
       ignore(
-        prepare_attachment_op({
+        @files.prepare_attachment({
           session,
           workspace: root.resource_path(),
           source: AttachmentBytes(
@@ -197,7 +200,7 @@ async test "imported originals reach a newly bound worktree and remain available
     @work_dir.revoke_host_workspace(session)
   })
   let bytes = b"%PDF-worktree original"
-  let imported = import_attachment_op({
+  let imported = @files.import_attachment({
     session,
     workspace: source.resource_path(),
     source: AttachmentBytes(
@@ -212,7 +215,7 @@ async test "imported originals reach a newly bound worktree and remain available
     source_root: source.resource_path(),
     paths: [imported.path],
   }
-  ignore(stage_attachments_op(payload))
+  ignore(@files.stage_attachments(payload))
   let target = checkout.join((imported.path : @pathx.Relative))
   assert_eq(@fs.read_file(target.to_string()).binary(), bytes)
   assert_eq(@fs.readdir(target.to_path().dirname().to_string()), ["report.pdf"])
@@ -222,7 +225,7 @@ async test "imported originals reach a newly bound worktree and remain available
   )
   // A user's later edit is retained when the same pending message is retried.
   @fs.write_file(target.to_string(), b"%PDF-user edit")
-  ignore(stage_attachments_op(payload))
+  ignore(@files.stage_attachments(payload))
   assert_eq(@fs.read_file(target.to_string()).binary(), b"%PDF-user edit")
 }
 
@@ -252,7 +255,7 @@ async test "attachment staging rejects non-imported paths and escaping source li
     ] {
     let rejected = try {
       ignore(
-        stage_attachments_op({
+        @files.stage_attachments({
           session,
           workspace: root.resource_path(),
           source_root: source.resource_path(),

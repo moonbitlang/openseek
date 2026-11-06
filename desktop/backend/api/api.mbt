@@ -585,7 +585,7 @@ pub fn endpoints(
         start=start => {
           if !payload.attachment_paths.is_empty() {
             ignore(
-              @host.stage_attachments_op({
+              @files.stage_attachments({
                 session: start.session,
                 workspace: payload.workspace,
                 source_root: payload.workspace,
