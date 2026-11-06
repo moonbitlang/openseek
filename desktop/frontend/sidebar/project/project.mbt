@@ -199,6 +199,7 @@ pub fn Input::menu_entries(
 ) -> Array[@action_menu.Entry] {
   [
     Action({
+      key: "import",
       label: @messages.text(locale, ImportConversation),
       title: "",
       icon: Some(@icons.icon(@icons.icon_chat_import)),
@@ -207,6 +208,7 @@ pub fn Input::menu_entries(
       command: (actions.import_conversation)(self.id),
     }),
     Action({
+      key: "settings",
       label: @messages.text(locale, WorkspaceSettings),
       title: @messages.text(locale, WorkspaceDefaults),
       icon: Some(@icons.icon(@icons.icon_settings_gear)),
@@ -217,6 +219,7 @@ pub fn Input::menu_entries(
     ..if self.host is Some({ details: true, .. }) {
       [
         @action_menu.Action({
+          key: "connection-details",
           label: "Connection details",
           title: "Connection details",
           icon: Some(@icons.icon(@icons.icon_server)),
@@ -230,6 +233,7 @@ pub fn Input::menu_entries(
     },
     Separator,
     Action({
+      key: "detach",
       label: @messages.text(locale, DetachProject),
       title: @messages.text(locale, DetachDescription),
       icon: Some(@icons.icon(@icons.icon_close)),
@@ -327,6 +331,7 @@ pub fn component(
       @html.div(
         class="workspace-content",
         @html.button(
+          id=input.id.key() + ":disclosure",
           class="workspace-disclosure",
           type_="button",
           title=input.title,
@@ -394,6 +399,7 @@ pub fn component(
         @html.button(
           class="row-archive",
           type_="button",
+          id=input.id.key() + ":new-conversation",
           title=@messages.text(locale, NewProjectConversation),
           on_click=(actions.new_conversation)(input.id),
           attrs=@html.Attrs::build().aria_label(
@@ -443,6 +449,7 @@ pub fn component(
     }
     if !searching && state.has_hidden_conversation(input) {
       rows["\{input.id.key()}:more"] = @html.button(
+        id=input.id.key() + ":show-more",
         class="project-show-more",
         type_="button",
         title=@messages.text(locale, ShowMoreChats),

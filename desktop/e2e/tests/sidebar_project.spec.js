@@ -5,13 +5,11 @@ test('project host yields its right-aligned slot to pointer and keyboard actions
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
-  const row = page.locator('.workspace-row').filter({
-    has: page.getByRole('button', { name: 'workspace', exact: true }),
-  });
+  const row = app.projectRow('/workspace');
   const host = row.locator('.workspace-host');
-  const disclosure = row.getByRole('button', { name: 'workspace', exact: true });
+  const disclosure = app.projectControl('/workspace', 'disclosure');
   const menu = row.locator('.workspace-menu-button');
-  const newChat = row.getByTitle('New conversation in this project');
+  const newChat = app.projectControl('/workspace', 'new-conversation');
   await expect(row.locator('[data-slot="context-menu-trigger"] .workspace-disclosure')).toBeVisible();
   await expect(host).toHaveText('Test Mac');
   await expect(menu).toBeHidden();
@@ -42,10 +40,10 @@ test('project host yields its right-aligned slot to pointer and keyboard actions
   await expect(newChat).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('menuitem', { name: 'Workspace settings' })).toBeVisible();
+  await expect(page.getByRole('menu').locator('[data-action="settings"]')).toBeVisible();
   await expect(host).toBeHidden();
   await expect(menu).toBeVisible();
-  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  await expect(page.getByRole('dialog', { name: 'Workspace settings' })).toBeVisible();
+  await page.getByRole('menu').locator('[data-action="settings"]').click();
+  await expect(page.locator('#workspace-settings-dialog')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });

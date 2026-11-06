@@ -77,7 +77,7 @@ test('the terminal uses the panel width on first open and after resizing', async
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByTitle('Show terminal (Ctrl+`)').click();
+  await page.locator('#terminal-toggle').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'terminal.open').length).toBe(1);
   for (const width of [null, 1120, 900]) {
     if (width !== null) await page.setViewportSize({ width, height: 760 });

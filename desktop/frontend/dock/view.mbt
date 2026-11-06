@@ -71,10 +71,11 @@ fn LauncherActions::rows(
   self : LauncherActions,
   popup~ : Bool = false,
 ) -> Array[@html.Html] {
-  let entries : Array[(String, String, () -> @html.Html, @cmd.Cmd)] = []
+  let entries : Array[(String, String, String, () -> @html.Html, @cmd.Cmd)] = []
   if self.browser is Some(open_browser) && self.host_tools {
     entries.push(
       (
+        "browser",
         ui(locale, BrowseLabel),
         ui(locale, BrowseHint),
         @icons.icon_globe,
@@ -84,6 +85,7 @@ fn LauncherActions::rows(
   }
   entries.push(
     (
+      "search",
       ui(locale, SearchLabel),
       ui(locale, SearchHint),
       @icons.icon_search,
@@ -92,6 +94,7 @@ fn LauncherActions::rows(
   )
   entries.push(
     (
+      "files",
       ui(locale, FilesLabel),
       ui(locale, FilesHint),
       @icons.icon_folder,
@@ -101,6 +104,7 @@ fn LauncherActions::rows(
   if self.host_tools {
     entries.push(
       (
+        "review",
         ui(locale, ReviewLabel),
         ui(locale, ReviewHint),
         @icons.icon_diff_multiple,
@@ -108,10 +112,17 @@ fn LauncherActions::rows(
       ),
     )
     entries.push(
-      ("GitHub", ui(locale, GithubHint), @icons.icon_github, self.github),
+      (
+        "github",
+        "GitHub",
+        ui(locale, GithubHint),
+        @icons.icon_github,
+        self.github,
+      ),
     )
     entries.push(
       (
+        "workflows",
         ui(locale, WorkflowsLabel),
         ui(locale, WorkflowsHint),
         @icons.icon_organization,
@@ -120,6 +131,7 @@ fn LauncherActions::rows(
     )
     entries.push(
       (
+        "jobs",
         ui(locale, JobsLabel),
         ui(locale, JobsHint),
         @icons.icon_tasklist,
@@ -129,7 +141,7 @@ fn LauncherActions::rows(
   }
   let rows : Array[@html.Html] = []
   for entry in entries {
-    let (label, hint, image, choose) = entry
+    let (action, label, hint, image, choose) = entry
     rows.push(
       @html.button(
         class=if popup {
@@ -139,9 +151,12 @@ fn LauncherActions::rows(
         },
         on_click=choose,
         attrs=if popup {
-          @html.Attrs::build().role("menuitem").aria_label(label)
-        } else {
           @html.Attrs::build()
+          .role("menuitem")
+          .aria_label(label)
+          .data_set("dock-action", action)
+        } else {
+          @html.Attrs::build().data_set("dock-action", action)
         },
         [
           @icons.icon(image),
@@ -204,6 +219,13 @@ pub fn tabs_bar(
       class=classes,
       title=chip.title,
       attrs=@action_menu.context_attrs(target)
+        .data_set(
+          "path",
+          match tab {
+            File(path~) => path.path
+            _ => ""
+          },
+        )
         .tabindex(0)
         .on_keydown(event => {
           if event.target().to_element() is Some(element) &&
@@ -238,6 +260,7 @@ pub fn tabs_bar(
   let children : Array[@html.Html] = [
     @html.div(class="editor-tabs", tabs),
     @html.button(
+      id="dock-close-all",
       class="tab-action tab-close-all",
       title=ui(locale, CloseAllTabs),
       attrs=@html.Attrs::build()
@@ -262,6 +285,7 @@ pub fn tabs_bar(
       @icons.icon(@icons.icon_add),
     ),
     @html.button(
+      id="panel-expand",
       class="panel-toggle panel-expand",
       title=if expanded {
         ui(locale, RestorePanel)

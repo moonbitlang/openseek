@@ -271,6 +271,7 @@ fn Input::menu_entries_for_kind(
     LiveMenu => {
       let entries : Array[@action_menu.Entry] = [
         Action({
+          key: "rename",
           label: ui(locale, RenameLabel),
           title: ui(locale, RenameConversation),
           icon: None,
@@ -280,6 +281,7 @@ fn Input::menu_entries_for_kind(
         }),
         Separator,
         Action({
+          key: "archive",
           label: ui(locale, ArchiveLabel),
           // The menu is the row's only Archive control, so it carries the
           // source's own hint about what archiving keeps.
@@ -301,6 +303,7 @@ fn Input::menu_entries_for_kind(
         is Some(Delete(title~)) {
         entries.push(
           Action({
+            key: "delete",
             label: ui(locale, DeleteLabel),
             title,
             icon: Some(@icons.icon(@icons.icon_close)),
@@ -315,6 +318,7 @@ fn Input::menu_entries_for_kind(
     OpenSeekArchivedMenu =>
       [
         Action({
+          key: "restore",
           label: ui(locale, RestoreLabel),
           title: ui(locale, RestoreConversation),
           icon: Some(@icons.icon(@icons.icon_arrow_up)),
@@ -324,6 +328,7 @@ fn Input::menu_entries_for_kind(
         }),
         Separator,
         Action({
+          key: "delete",
           label: ui(locale, DeleteLabel),
           title: if delete_enabled {
             ui(locale, DeletePermanently)
@@ -339,6 +344,7 @@ fn Input::menu_entries_for_kind(
     CodexArchivedMenu =>
       [
         Action({
+          key: "restore",
           label: ui(locale, RestoreLabel),
           title: ui(locale, RestoreConversation),
           icon: Some(@icons.icon(@icons.icon_arrow_up)),
@@ -817,7 +823,10 @@ pub fn component(
           } else {
             "sidebar-conversation sidebar-branch"
           },
-          [@html.div(class~, title~, [context, ..trailing]), children],
+          [
+            @html.div(id=id + ":row", class~, title~, [context, ..trailing]),
+            children,
+          ],
         ),
       ),
     ]

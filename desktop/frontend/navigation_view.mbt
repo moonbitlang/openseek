@@ -19,6 +19,7 @@ fn navigation_notice(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html? {
       if !cloud && model.navigation.phase is (Failed(_) | Missing) {
         @html.button(
           class="button",
+          id="navigation-retry",
           on_click=dispatch(Navigation(Retry)),
           shell_text(model.locale, NavigationRetry),
         )

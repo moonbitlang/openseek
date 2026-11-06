@@ -20,19 +20,19 @@ test('management dialogs preserve the empty project header', async ({ page }) =>
   await app.goto();
   await expectHeader(page, 'SeekMoon');
   const original = await page.locator('main > .topbar').elementHandle();
-  for (const [button, title] of [['Settings', 'Settings'], ['Skills', 'Skills'], ['Scheduled', 'Scheduled tasks']]) {
-    await page.getByRole('button', { name: button, exact: true }).click();
+  for (const [button, title] of [['#sidebar-settings', 'Settings'], ['#sidebar-skills', 'Skills'], ['#sidebar-schedules', 'Scheduled tasks']]) {
+    await page.locator(button).click();
     await expect(page.getByRole('dialog')).toHaveAccessibleName(title);
     expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
     await expect(page.locator('main h1')).toHaveCount(1);
-    await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
+    await page.getByRole('dialog').locator('[data-slot="dialog-close"]').click();
     await expectHeader(page, 'SeekMoon');
   }
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
-  await expect(page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true })).toBeInViewport();
-  await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect(page.locator('#management-dialog')).toBeVisible();
+  await expect(page.getByRole('dialog').locator('[data-slot="dialog-close"]')).toBeInViewport();
+  await page.getByRole('dialog').locator('[data-slot="dialog-close"]').click();
   await expectHeader(page, 'SeekMoon');
   expect(app.pageErrors).toEqual([]);
 });
@@ -42,27 +42,27 @@ test('loading and failure retain the selected conversation title', async ({ page
   app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 2 });
   await app.install();
   await app.goto();
-  await page.locator('.conversation-row[title="session-1"]').click();
+  await app.sessionRow('session-1').click();
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
   const original = await page.locator('main > .topbar').elementHandle();
   app.rpcDelays.set('session.load', 700);
   app.rpcErrors.set('session.load', 'fixture unavailable');
-  await page.locator('.conversation-row[title="session-2"]').click();
-  await expect(page.getByText('Loading conversation…', { exact: true })).toBeVisible();
+  await app.sessionRow('session-2').click();
+  await expect(page.locator('#conversation-loading')).toBeVisible();
   await expectHeader(page, 'Second conversation');
-  await expect(page.getByText('Could not load conversation', { exact: true })).toBeVisible();
+  await expect(page.locator('#conversation-load-error')).toBeVisible();
   await expectHeader(page, 'Second conversation');
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
   app.rpcErrors.delete('session.load');
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await page.locator('#conversation-load-retry').click();
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
   await expect(page.locator('main > .topbar h1')).not.toHaveText('SeekMoon');
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
   const title = await page.locator('main > .topbar h1').textContent();
-  const composer = page.getByRole('textbox', { name: 'Ask SeekMoon to inspect, edit, or explain this workspace.' });
+  const composer = page.locator('#task');
   await composer.fill('Keep my unfinished draft');
-  for (const name of ['Settings', 'Skills', 'Scheduled']) {
-    await page.getByRole('button', { name, exact: true }).click();
+  for (const selector of ['#sidebar-settings', '#sidebar-skills', '#sidebar-schedules']) {
+    await page.locator(selector).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).not.toBeVisible();

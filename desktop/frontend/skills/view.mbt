@@ -415,6 +415,7 @@ fn list_page(
       [
         icon(icon_search),
         @html.input(
+          id="skills-search",
           input_type=@html.InputType::Search,
           value=state.query,
           placeholder=ui(locale, Search),

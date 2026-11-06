@@ -1,3 +1,4 @@
+import { expect } from './test.js';
 import { posix } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
@@ -1112,8 +1113,8 @@ export class DesktopBrowserHarness {
   // the new-chat home settling its project once `workspace.list` answers. Open
   // the drawer after that startup selection so it stays open.
   async showSidebar() {
-    await this.page.getByRole('button', { name: /^Choose project/ }).first().waitFor();
-    await this.page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+    await this.page.locator('#empty-project-trigger').waitFor();
+    await this.page.locator('#sidebar-toggle').click();
   }
 
   projectRow(root, channel = 'remote.device-a') {
@@ -1123,11 +1124,25 @@ export class DesktopBrowserHarness {
     return this.page.locator('.workspace-row').filter({ has: trigger });
   }
 
+  sessionButton(id = 'session-1', { root = '/workspace', channel = 'remote.device-a', source = 'openseek.live' } = {}) {
+    const key = `conversation:${source}:${channel}:${id}:${root}:open`;
+    return this.page.locator(`[id=${JSON.stringify(key)}]`);
+  }
+
+  sessionRow(id = 'session-1', { root = '/workspace', channel = 'remote.device-a', source = 'openseek.live' } = {}) {
+    const key = `conversation:${source}:${channel}:${id}:${root}:row`;
+    return this.page.locator(`[id=${JSON.stringify(key)}]`);
+  }
+
+  projectControl(root, action, channel = 'remote.device-a') {
+    const key = `project:openseek.projects:${channel}:${root}:${action}`;
+    return this.page.locator(`[id=${JSON.stringify(key)}]`);
+  }
+
   async openSession() {
-    await this.page.getByText('Rabbita browser fixture', { exact: true }).first().click();
-    await this.page.locator('.transcript .msg-content', {
-      hasText: 'Show the browser fixture',
-    }).waitFor();
+    await this.sessionButton().click();
+    await expect(this.page.locator('#transcript')).toHaveAttribute('data-transcript-session', 'session-1');
+    await expect(this.page.locator('#transcript .msg-content')).toContainText(['Show the browser fixture']);
   }
 
   async openQuickOpen() {
@@ -1144,10 +1159,9 @@ export class DesktopBrowserHarness {
     const shortcut = await this.page.evaluate(() =>
       navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
     await this.page.keyboard.press(shortcut);
-    const tabs = this.page.getByRole('tablist', { name: 'Explorer views' });
-    await tabs.getByRole('tab', { name: /Changes/ }).click();
+    await this.page.locator('#explorer-changes-tab').click();
     if (waitForHistory) {
-      await this.page.getByRole('tree', { name: 'Git commit history' }).waitFor();
+      await this.page.locator('#git-commit-history').waitFor();
     }
   }
 

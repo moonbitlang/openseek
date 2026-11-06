@@ -129,6 +129,7 @@ fn Actions::placeholder_component(
         @html.button(
           class="console-account-action",
           disabled=action.disabled,
+          id="placeholder:" + row.id + ":action",
           on_click=(self.placeholder)(row.id),
           action.title,
         ),
@@ -138,6 +139,7 @@ fn Actions::placeholder_component(
       (
         "placeholder:\{row.id}",
         @html.div(
+          id="placeholder:" + row.id,
           class~,
           on_click=if row.openable {
             (self.placeholder)(row.id)
@@ -228,13 +230,18 @@ pub fn component(
       class += " active"
     }
     let heading : Array[@html.Html] = [
-      @html.span(class="sidebar-label section-label", input.label),
+      @html.span(
+        id=input.id.key() + ":label",
+        class="sidebar-label section-label",
+        input.label,
+      ),
     ]
     if input.action is Some(action) {
       heading.push(
         @html.button(
           class="section-primary-action",
           type_="button",
+          id=input.id.key() + ":action",
           title=action.title,
           disabled=action.disabled,
           attrs=@html.Attrs::build().aria_label(action.title),

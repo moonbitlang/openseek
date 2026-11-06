@@ -6,13 +6,13 @@ test('conversation titles support keyboard activation and independent row action
   app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 2 });
   await app.install();
   await app.goto();
-  const first = page.locator('.conversation-row[title="session-1"]');
-  const second = page.locator('.conversation-row[title="session-2"]');
-  const openFirst = first.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
-  const openSecond = second.getByRole('button', { name: 'Second conversation', exact: true });
+  const first = app.sessionRow('session-1');
+  const second = app.sessionRow('session-2');
+  const openFirst = app.sessionButton('session-1');
+  const openSecond = app.sessionButton('session-2');
   await expect(openFirst).toBeVisible();
   // Reach the title using actual Tab navigation rather than focusing it directly.
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).focus();
+  await page.locator('#sidebar-toggle').focus();
   for (let i = 0; i < 30 && !(await openFirst.evaluate(el => el === document.activeElement)); i++) {
     await page.keyboard.press('Tab');
   }
@@ -24,7 +24,7 @@ test('conversation titles support keyboard activation and independent row action
   await expect.poll(() => app.requests.filter(r => r.method === 'session.load' && r.params?.session === 'session-1').length).toBe(1);
   await page.keyboard.press('Tab');
   // A live row's actions sit behind one overflow trigger.
-  const actions = first.getByRole('button', { name: 'Conversation actions' });
+  const actions = first.locator('[id$=":actions-trigger"]');
   await expect(first.locator('[data-slot="context-menu-trigger"] .conversation-open')).toBeVisible();
   expect(await actions.evaluate(node => node.closest('.sidebar-context-trigger'))).toBeNull();
   await expect(actions).toBeFocused();
@@ -45,8 +45,8 @@ test('conversation titles support keyboard activation and independent row action
   await page.keyboard.press('Tab');
   await expect(actions).toBeFocused();
   await page.keyboard.press('Enter');
-  const menu = page.getByRole('menu', { name: 'Conversation actions' });
-  await menu.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+  const menu = page.getByRole('menu');
+  await menu.getByRole('menuitem').and(page.locator('[data-action="archive"]')).click();
   // Archived conversations leave the sidebar for Settings' archived page.
   await expect(first).toHaveCount(0);
   await expect(second).toHaveClass(/active/);
@@ -60,8 +60,8 @@ test('pointer selection keeps the status slot instead of revealing row actions',
   app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 2 });
   await app.install();
   await app.goto();
-  const first = page.locator('.conversation-row[title="session-1"]');
-  const openFirst = first.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
+  const first = app.sessionRow('session-1');
+  const openFirst = app.sessionButton('session-1');
   // By class: the hidden trigger is outside the accessibility tree.
   const actions = first.locator('.row-menu-button');
   await expect(actions).toHaveCount(1);
@@ -78,7 +78,7 @@ test('pointer selection keeps the status slot instead of revealing row actions',
   await expect(actions).toBeVisible();
   // An open menu keeps its trigger in place after the pointer leaves the row.
   await actions.click();
-  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+  await expect(page.getByRole('menu')).toBeVisible();
   await page.mouse.move(1439, 899);
   await expect(actions).toBeVisible();
   await expect(actions).toHaveAttribute('aria-expanded', 'true');
@@ -92,23 +92,23 @@ test('opening another conversation saves a title being edited', async ({ page })
   app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 2 });
   await app.install();
   await app.goto();
-  const first = page.locator('.conversation-row[title="session-1"]');
-  const second = page.locator('.conversation-row[title="session-2"]');
+  const first = app.sessionRow('session-1');
+  const second = app.sessionRow('session-2');
   await first.locator('.conversation-open').click({ button: 'right' });
-  await expect(page.getByRole('menu', { name: 'Conversation actions' }))
+  await expect(page.getByRole('menu'))
     .toHaveAttribute('data-slot', 'context-menu-content');
-  await page.getByRole('menuitem', { name: 'Rename…' }).click();
-  const input = first.getByRole('textbox', { name: 'Rename conversation' });
+  await page.getByRole('menuitem').and(page.locator('[data-action="rename"]')).click();
+  const input = first.locator('#conversation-rename-input');
   await expect(input).toBeFocused();
   await input.fill('Saved by opening another');
   // A title's pointer press keeps focus where it was, so the field never sees
   // focus leave; opening the other conversation still commits the edit.
-  await second.getByRole('button', { name: 'Second conversation', exact: true }).click();
+  await app.sessionButton('session-2').click();
   await expect(second).toHaveClass(/active/);
   await expect(input).toHaveCount(0);
   await expect(
-    first.getByRole('button', { name: 'Saved by opening another', exact: true }),
-  ).toBeVisible();
+    app.sessionButton('session-1'),
+  ).toHaveAccessibleName('Saved by opening another');
   expect(app.requests.filter(r => r.method === 'session.rename').map(r => r.params.title))
     .toEqual(['Saved by opening another']);
   // The renamed row is left at rest: focus was not handed back to it, so its
@@ -128,11 +128,11 @@ test('a background reorder does not end or save a title being edited', async ({ 
   const order = () => page.locator('.conversation-row').evaluateAll(
     rows => rows.map(row => row.getAttribute('title')));
   await expect.poll(order).toEqual(['session-3', 'session-2', 'session-1']);
-  const row = page.locator('.conversation-row[title="session-3"]');
+  const row = app.sessionRow('session-3');
   await row.hover();
   await row.locator('.row-menu-button').click();
-  await page.getByRole('menuitem', { name: 'Rename…' }).click();
-  const input = row.getByRole('textbox', { name: 'Rename conversation' });
+  await page.getByRole('menuitem').and(page.locator('[data-action="rename"]')).click();
+  const input = row.locator('#conversation-rename-input');
   await expect(input).toBeFocused();
   await input.pressSequentially('Half');
   // The edited row drops to the end: the list re-inserts its node, which
@@ -154,25 +154,25 @@ test('a failed rename is reported even after its project is folded', async ({ pa
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
-  const row = page.locator('.conversation-row[title="session-1"]');
+  const row = app.sessionRow('session-1');
   await row.hover();
   await row.locator('.row-menu-button').click();
-  await page.getByRole('menuitem', { name: 'Rename…' }).click();
-  const input = row.getByRole('textbox', { name: 'Rename conversation' });
+  await page.getByRole('menuitem').and(page.locator('[data-action="rename"]')).click();
+  const input = row.locator('#conversation-rename-input');
   await expect(input).toBeFocused();
   await input.fill('Will not save');
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
   app.rpcDelays.set('session.rename', 400);
   // Folding the project moves focus away, which starts the save; the row is
   // hidden and inert by the time the host refuses it.
-  const disclosure = page.getByRole('button', { name: 'workspace', exact: true });
+  const disclosure = app.projectControl('/workspace', 'disclosure');
   await disclosure.click();
   await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('.notification')).toContainText(
     'Rename failed: fixture rename unavailable',
   );
   await disclosure.click();
-  await expect(row.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toBeVisible();
+  await expect(app.sessionButton('session-1')).toBeVisible();
   await expect(input).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
@@ -221,14 +221,14 @@ test('folding a project retains its expanded preview and reopens with five chats
   const project = page.locator('.sidebar-project').first();
   const disclosure = project.locator('.workspace-disclosure');
   const rows = project.locator('.conversation-row');
-  await project.getByRole('button', { name: 'Show more', exact: true }).click();
+  await app.projectControl('/workspace', 'show-more').click();
   await expect(rows).toHaveCount(12);
   const first = await rows.first().elementHandle();
   await expectRetainedFold(disclosure);
   await expect(rows).toHaveCount(12);
   await disclosure.click();
   await expect(rows).toHaveCount(5);
-  await expect(rows.first().getByRole('button', { name: 'Conversation 1', exact: true })).toBeVisible();
+  await expect(app.sessionButton('session-1')).toBeVisible();
   expect(await first.evaluate(node => node === document.querySelector('.project-conversations .conversation-row'))).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
@@ -243,14 +243,14 @@ test('sub-runs retain their DOM across their own and project folds', { tag: '@mo
   await expect(child).toHaveCount(1);
   const node = await child.elementHandle();
   await disclosure.click();
-  await expect(child.getByRole('button', { name: /Inspect animation/ })).toBeVisible();
+  await expect(child.getByRole('button').and(app.sessionButton('session-1-sr-1'))).toBeVisible();
   await expectRetainedFold(disclosure);
   await disclosure.click();
   await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
   const projectDisclosure = page.locator('.workspace-disclosure').first();
   await expectRetainedFold(projectDisclosure);
   await projectDisclosure.click();
-  await expect(child.getByRole('button', { name: /Inspect animation/ })).toBeVisible();
+  await expect(child.getByRole('button').and(app.sessionButton('session-1-sr-1'))).toBeVisible();
   expect(await node.evaluate(node => node === document.querySelector('.conversation-row.subrun'))).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });

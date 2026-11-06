@@ -92,9 +92,9 @@ export class BackgroundJobsHarness extends DesktopBrowserHarness {
     return super.replyFor(request);
   }
   async openJobs() {
-    const show = this.page.getByRole('button', { name: 'Show panel', exact: true });
-    if (await show.isVisible()) await show.click();
-    await this.page.getByRole('button', { name: /Jobs Follow background/ }).click();
+    const show = this.page.locator('#right-panel-toggle');
+    if (await show.getAttribute('aria-expanded') === 'false') await show.click();
+    await this.page.locator('.dock-launcher-menu [data-dock-action="jobs"]').click();
     await this.page.locator('.jobs-panel').waitFor();
   }
   async cleanup() {

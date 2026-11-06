@@ -80,6 +80,7 @@ fn panel_view(
   if ctx.placement is Some(placement) && placement.is_ready() {
     items.push(
       @html.button(
+        id="terminal-new",
         class="terminal-new",
         title=ui(locale, NewTerminal),
         on_click=dispatch(NewTerminal),
@@ -165,6 +166,7 @@ fn panel_view(
   )
   items.push(
     @html.button(
+      id="terminal-maximize",
       class="terminal-maximize",
       title=maximize_label,
       attrs=@html.Attrs::build()

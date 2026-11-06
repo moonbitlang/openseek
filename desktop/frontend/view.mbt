@@ -748,6 +748,7 @@ fn archived_read_only_view(
         shell_text(locale, ArchivedReadOnly),
       ),
       @html.button(
+        id="archived-conversation-restore",
         class="archived-read-only-restore",
         type_="button",
         title=shell_text(locale, RestoreBeforeContinue),
@@ -785,6 +786,7 @@ fn codex_account_rows(
           @html.button(
             class="button secondary",
             disabled=codex.is_busy() || model.codex_project_adoption_pending(),
+            id="codex-logout",
             on_click=dispatch(Codex(channel~, @codex.Msg::logout())),
             @settings.text(model.locale, SignOut),
           ),
@@ -800,6 +802,7 @@ fn codex_account_rows(
           @html.button(
             class="button primary",
             disabled=codex.is_busy() || model.codex_project_adoption_pending(),
+            id="codex-login",
             on_click=dispatch(Codex(channel~, @codex.Msg::login())),
             @settings.text(model.locale, SignInChatGPT),
           ),
@@ -816,6 +819,7 @@ fn codex_account_rows(
           // The shared external-link listener keeps the desktop webview in
           // place and hands this URL to the system browser.
           @html.a(
+            id="codex-login-open",
             class="button secondary setting-link",
             href=url,
             target=Blank,
@@ -828,6 +832,7 @@ fn codex_account_rows(
           @html.button(
             class="button secondary",
             disabled=codex.is_busy() || model.codex_project_adoption_pending(),
+            id="codex-login-cancel",
             on_click=dispatch(Codex(channel~, @codex.Msg::cancel_login())),
             @settings.text(model.locale, CancelSignIn),
           ),
@@ -858,6 +863,7 @@ fn codex_account_rows(
       [
         @html.button(
           class="button secondary",
+          id="codex-open-config",
           on_click=dispatch(OpenCodexConfig),
           @settings.text(model.locale, OpenConfig),
         ),
@@ -910,6 +916,7 @@ fn remote_access_rows(
         attrs=@html.Attrs::build().disabled(
           model.remote_connecting || model.console.busy,
         ),
+        id="settings-sign-out",
         on_click=dispatch(RemoteDisconnectClicked),
         @settings.text(model.locale, SignOut),
       ),
@@ -926,6 +933,7 @@ fn remote_access_rows(
     [
       @html.button(
         class="button primary",
+        id="settings-sign-in",
         on_click=dispatch(RemoteConnectClicked),
         @settings.text(model.locale, SignIn),
       ),
@@ -935,6 +943,7 @@ fn remote_access_rows(
     controls.push(
       @html.button(
         class="button secondary",
+        id="settings-sign-in-cancel",
         on_click=dispatch(RemoteCancelClicked),
         @settings.text(model.locale, Cancel),
       ),
@@ -1312,6 +1321,7 @@ fn api_settings_rows(
         [
           @html.input(
             input_type=@html.InputType::Text,
+            id=id_prefix + "-url",
             value=model.custom_api_url,
             placeholder="https://host/chat/completions",
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
@@ -1342,6 +1352,7 @@ fn api_settings_rows(
         key_label,
         [
           @html.input(
+            id=id_prefix + "-key",
             input_type=@html.InputType::Password,
             value=model.setup_api_key,
             placeholder=if key_saved {
@@ -1356,6 +1367,7 @@ fn api_settings_rows(
               .disabled(!settings_loaded),
           ),
           @html.button(
+            id=id_prefix + "-save-key",
             class="button primary save-api-key",
             disabled=!settings_loaded || model.setup_api_key.is_blank(),
             on_click=dispatch(SaveApiKey),
@@ -1868,6 +1880,7 @@ fn Model::minimal_transcript_effective(self : Model) -> Bool {
 ///|
 fn Model::terminal_toggle(self : Model, toggle : @cmd.Cmd) -> @html.Html {
   @html.button(
+    id="terminal-toggle",
     class=if self.terminal.is_open() {
       "panel-toggle terminal-toggle active"
     } else {
@@ -2030,6 +2043,7 @@ fn console_gate_view(
         card.push(
           // The relay's sign-in is a page load, not an application route.
           @html.a(
+            id="console-sign-in",
             class="portal-button-link",
             href=console.login_url(),
             escape=true,
@@ -2093,6 +2107,7 @@ fn console_gate_view(
       @html.button(
         class="button secondary",
         disabled=console.busy,
+        id="console-sign-out",
         on_click=dispatch(Console(SignOutClicked)),
         if console.busy {
           shell_text(locale, SigningOut)
@@ -2164,6 +2179,7 @@ fn Model::selected_conversation_loaded(self : Model) -> Bool {
 ///|
 fn conversation_loading_view(locale~ : @i18n.Locale = English) -> @html.Html {
   @html.div(
+    id="conversation-loading",
     class="conversation-load-state",
     shell_text(locale, LoadingConversation),
   )
@@ -2177,6 +2193,7 @@ fn conversation_load_failed_view(
   retry~ : Bool = true,
 ) -> @html.Html {
   @html.div(
+    id="conversation-load-error",
     class="conversation-load-state failed",
     [
       @html.strong(shell_text(locale, CannotLoadConversation)),
@@ -2186,6 +2203,7 @@ fn conversation_load_failed_view(
           @html.button(
             class="button secondary",
             type_="button",
+            id="conversation-load-retry",
             on_click=dispatch(RetrySelectedConversation),
             shell_text(locale, RetryLabel),
           ),
@@ -2258,6 +2276,7 @@ fn view(
             @html.button(
               class="panel-toggle",
               title=shell_text(model.locale, ExportConversation),
+              id="conversation-export",
               on_click=dispatch(OpenCloudExport),
               icon(icon_chat_export),
             )
@@ -2385,6 +2404,7 @@ fn view(
                       shell_text(model.locale, ScheduleReadOnly),
                     ),
                     @html.button(
+                      id="scheduled-session-open",
                       class="archived-read-only-restore",
                       on_click=dispatch(OpenSchedules),
                       shell_text(model.locale, ViewTask),
@@ -2500,6 +2520,7 @@ fn view(
     // Keep reading order aligned with the control's top-left position,
     // outside all animated content tracks.
     @html.button(
+      id="sidebar-toggle",
       class="sidebar-toggle",
       title=sidebar_toggle_label,
       on_click=dispatch(ToggleSidebar),
@@ -2510,6 +2531,7 @@ fn view(
     @html.div(class=content_class, [
       // One fixed control owns both states, outside the animated pane tracks.
       @html.button(
+        id="right-panel-toggle",
         class=if panel_toggle_visible {
           "panel-toggle right-panel-toggle"
         } else {
@@ -2724,6 +2746,7 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.div(api_settings_rows(dispatch, model, id_prefix="setup-api")),
       @rui.dialog_footer([
         @html.button(
+          id="api-setup-dismiss",
           class="button secondary",
           on_click=dispatch(DismissApiSetup),
           shell_text(model.locale, NotNow),
@@ -2991,6 +3014,7 @@ fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       @html.button(
         class="button primary",
+        id="cloud-sign-in",
         on_click=dispatch(RemoteConnectClicked),
         shell_text(model.locale, SignInGitHub),
       )

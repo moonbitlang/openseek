@@ -15,7 +15,7 @@ for (const failure of ['reply', 'transport']) {
     }
     await app.install();
     await app.goto();
-    await expect(page.getByText(`Workspace error: ${message}`, { exact: true }).first()).toBeVisible();
+    await expect(page.locator('.notifications > .notification:visible')).toContainText([`Workspace error: ${message}`]);
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -24,7 +24,7 @@ test('a failed project listing reports its cause and keeps previously loaded con
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
-  const conversation = page.locator('.conversation-row[title="session-1"]');
+  const conversation = app.sessionRow('session-1');
   await expect(conversation).toBeVisible();
 
   const replyFor = app.replyFor.bind(app);
@@ -33,7 +33,7 @@ test('a failed project listing reports its cause and keeps previously loaded con
     ? { groups: [{ workspace: '/workspace', name: 'workspace', session_root: '/workspace/.openseek', sessions: [], error: 'failed to run engine: file not found' }] }
     : replyFor(request);
   app.notify('session.changed', { change: 'created', session: 'session-1', workspace: '/workspace' });
-  await expect(page.getByText('Session list unavailable: /workspace: failed to run engine: file not found', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('.notifications > .notification:visible')).toContainText(['Session list unavailable: /workspace: failed to run engine: file not found']);
   await expect(conversation).toBeVisible();
 
   // A later successful, empty reply really does remove the old inventory.
@@ -52,6 +52,6 @@ test('a project listing failure on startup is reported', async ({ page }) => {
     : replyFor(request);
   await app.install();
   await app.goto();
-  await expect(page.getByText('Session list unavailable: /workspace: failed to run engine: file not found', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('.notifications > .notification:visible')).toContainText(['Session list unavailable: /workspace: failed to run engine: file not found']);
   expect(app.pageErrors).toEqual([]);
 });

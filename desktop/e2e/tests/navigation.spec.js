@@ -14,17 +14,17 @@ test('management dialogs preserve the work surface, draft and browser entry', as
   const entries = await page.evaluate(() => history.length);
   const originalComposer = await composer.elementHandle();
   for (const [entry, title] of [
-    ['Settings', 'Settings'],
-    ['Skills', 'Skills'],
-    ['Scheduled', 'Scheduled tasks'],
+    ['#sidebar-settings', 'Settings'],
+    ['#sidebar-skills', 'Skills'],
+    ['#sidebar-schedules', 'Scheduled tasks'],
   ]) {
-    await page.getByRole('button', { name: entry, exact: true }).click();
+    await page.locator(entry).click();
     await expect(dialog(page)).toHaveAccessibleName(title);
     await expect(dialog(page)).toBeVisible();
     await expect(page).toHaveURL(url);
     expect(await page.evaluate(() => history.length)).toBe(entries);
     expect(await originalComposer.evaluate(node => node.isConnected)).toBe(true);
-    await dialog(page).getByRole('button', { name: 'Dismiss', exact: true }).click();
+    await dialog(page).locator('[data-slot="dialog-close"]').click();
     await expect(page.locator('#management-dialog')).not.toBeVisible();
     await expect(composer).toHaveValue('Unsent input survives dialogs');
   }
@@ -65,7 +65,7 @@ test('dialogs can open over an invalid route without changing it', async ({ page
   const app = new DesktopBrowserHarness(page); await app.install();
   const invalid = '/device/%64evice-a/not-a-page';
   await page.goto(invalid); await expect(page.locator('.navigation-notice')).toBeVisible();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   await expect(dialog(page)).toBeVisible(); await expect(page).toHaveURL(new RegExp(invalid + '$'));
   await page.keyboard.press('Escape'); await expect(page.locator('.navigation-notice')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
@@ -90,7 +90,7 @@ test('first send promotes an OpenSeek draft in place without adding a history en
   await page.locator('#task').fill('Promote this draft'); await expect(page).toHaveURL(/\/chat\/draft\//);
   const draft = new URL(page.url()).pathname;
   const entries = await page.evaluate(() => history.length);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#sidebar-settings').click();
   await expect(dialog(page)).toBeVisible();
   await page.keyboard.press('Escape'); await expect(dialog(page)).not.toBeVisible();
   await expect(page.locator('#task')).toHaveValue('Promote this draft');
@@ -112,11 +112,11 @@ for (const refresh of [false, true]) {
     };
     await app.install(); await app.goto();
     await page.locator('#task').fill('Transfer this addressed draft'); await expect(page).toHaveURL(/\/chat\/draft\//);
-    await page.getByRole('button', { name: 'Model', exact: true }).click();
-    await page.getByRole('option', { name: 'Navigation Codex', exact: true }).click(); await expect(page).toHaveURL(/\/codex\/draft\//);
+    await page.locator('#openseek-model-picker').click();
+    await page.locator('#openseek-model-picker-menu [data-value="codex:gpt-test"]').click(); await expect(page).toHaveURL(/\/codex\/draft\//);
     const entries = await page.evaluate(() => history.length);
     await page.locator('#send').click();
-    await page.getByRole('button', { name: 'Settings', exact: true }).click(); await expect(dialog(page)).toBeVisible();
+    await page.locator('#sidebar-settings').click(); await expect(dialog(page)).toBeVisible();
     finishStart(); await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
     await expect(page).toHaveURL(new RegExp(path('codex/thread/codex-thread-e2e') + '$'));
     await expect(dialog(page)).toBeVisible();
@@ -134,7 +134,7 @@ for (const engine of ['chat', 'codex']) {
     await app.install(); await page.goto(path(`${engine}/new`)); await expect(page.locator('#task')).toBeEditable();
     const entries = await page.evaluate(() => history.length);
     await page.locator('.workspace-row').hover();
-    const newChat = page.getByRole('button', { name: 'New conversation in this project', exact: true });
+    const newChat = app.projectControl('/workspace', 'new-conversation');
     await newChat.click(); await newChat.click();
     await expect(page).toHaveURL(new RegExp(path(`${engine}/new`) + '$'));
     expect(await page.evaluate(() => history.length)).toBe(entries);
@@ -158,7 +158,7 @@ test('history restores the project before creating the next conversation', async
   app.replyFor = request => { const result = fallback(request); if (request.method === 'session.load') result.session.id = request.params.session; return result; };
   await app.install(); await app.goto();
   for (const id of ['session-a', 'session-b']) {
-    await page.locator(`.conversation-row[title="${id}"]`).click(); await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+    await app.sessionButton(id, { root: `/project-${id.slice(-1)}` }).click(); await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
   }
   await page.goBack(); await expect(page).toHaveURL(/session\/session-a$/);
   await expect(page.locator('.topbar-workspace')).toContainText('project-a');
@@ -180,7 +180,7 @@ for (const failure of ['rpc', 'store']) {
     await expect(page.locator('.navigation-notice')).toContainText('Archive unavailable');
     await expect(page.locator('.navigation-notice')).not.toContainText('no longer exists');
     unavailable = false; app.rpcErrors.delete('session.list_archived');
-    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await page.locator('#navigation-retry').click();
     await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
     await expect(page.locator('.navigation-notice')).toHaveCount(0);
     expect(app.requests.some(r => r.method === 'session.load_archived')).toBe(true); expect(app.pageErrors).toEqual([]);
@@ -194,7 +194,7 @@ test("Back closes the management dialog before it reaches the page", async ({ pa
   // when a layer took it.
   const hostBack = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
   expect(await hostBack()).toBe(false);
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await page.locator('#sidebar-skills').click();
   await expect(dialog(page)).toHaveAccessibleName('Skills');
   expect(await hostBack()).toBe(true);
   await expect(dialog(page)).not.toBeVisible();

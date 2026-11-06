@@ -140,6 +140,7 @@ fn archived_chats_settings(
         @html.button(
           class="button secondary",
           type_="button",
+          id="archived-chats-manage",
           on_click=dispatch(OpenArchivedChats),
           @archived_chats.text(locale, Manage),
         ),

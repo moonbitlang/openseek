@@ -54,7 +54,7 @@ test('Back closes the topmost layer first and reports when none is open', async 
   await page.locator('.sidebar-toggle').click();
   await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
   await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
-  const menu = page.getByRole('menu', { name: 'Workspace actions' });
+  const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
   // The menu opened over the drawer, so it closes first.
   expect(await back()).toBe(true);
@@ -89,7 +89,7 @@ test('a browser close request closes one layer at a time, as Back does in an ins
   await page.locator('.sidebar-toggle').click();
   await expect(page.locator('.sidebar-backdrop')).toHaveClass(/open/);
   await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
-  const menu = page.getByRole('menu', { name: 'Workspace actions' });
+  const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
@@ -110,7 +110,7 @@ test('a held, modified or consumed Escape closes only what one press would', asy
   await page.keyboard.press('Shift+Escape');
   await expect(drawer).toHaveClass(/open/);
   // A focused control that consumes Escape by stopping it keeps it.
-  const search = page.getByRole('textbox', { name: 'Search conversations' });
+  const search = page.locator('#session-search-input');
   await search.evaluate(input => input.addEventListener('keydown', event => {
     if (event.key === 'Escape') event.stopPropagation();
   }));
@@ -118,7 +118,7 @@ test('a held, modified or consumed Escape closes only what one press would', asy
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveClass(/open/);
   await page.locator('.workspace-row').first().click({ button: 'right', position: { x: 24, y: 16 } });
-  const menu = page.getByRole('menu', { name: 'Workspace actions' });
+  const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
   // The second keydown of a held key repeats.
   await page.keyboard.down('Escape');
@@ -142,8 +142,9 @@ test('long engine-start failures remain readable within the phone viewport and r
   await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
   await page.locator('#task').fill('Retryable draft');
   await page.locator('#send').click();
-  const notice = page.locator('.notification').filter({ hasText: 'Engine failed to start' });
+  const notice = page.locator('.notifications > .notification');
   await expect(notice).toBeVisible();
+  await expect(notice).toHaveText(failure);
   await expect(page.locator('#task')).toHaveValue('Retryable draft');
   const bounds = await notice.boundingBox();
   expect(bounds.y).toBeGreaterThanOrEqual(0);
@@ -206,7 +207,7 @@ test('signed-out entry fits a small phone and remains scrollable at reduced heig
   await installConsole(page);
   await page.route('**/v2/auth/me', route => route.fulfill({ status: 401 }));
   await page.goto('/device/device-a/chat');
-  const login = page.getByRole('link', { name: 'Sign in with GitHub' });
+  const login = page.locator('#console-sign-in');
   await expect(login).toBeVisible();
   await assertFits(page);
   const box = await login.boundingBox();
@@ -226,7 +227,7 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   await page.goto(`${authOrigin}/cloud`);
   await expect(page.locator('#task')).toBeEnabled();
   await page.locator('#task').fill('A mobile browser Cloud message');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.locator('#send').click();
   await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue('');
   await page.locator('#task').fill('An unsent follow-up\nwith a second line\nand a third line');
@@ -239,7 +240,7 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
     expect(box.x + box.width).toBeLessThanOrEqual(320);
   }
   await expect(page.locator('#task')).toHaveValue('An unsent follow-up\nwith a second line\nand a third line');
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(page.locator('#send')).toBeEnabled();
   expect(cloud.postCount).toBe(1);
   expect(cloud.device.ticketRequests).toHaveLength(0);
   expect(cloud.device.socket).toBeNull();
